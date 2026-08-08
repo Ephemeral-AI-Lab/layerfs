@@ -1,0 +1,10 @@
+[package]
+name = "layerfs-storage"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+name = "layerfs_storage"
+path = "src/lib.rs"
+

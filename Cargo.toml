@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/layerfs-sdk",
+    "crates/layerfs-storage",
+    "crates/layerfs-driver",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+

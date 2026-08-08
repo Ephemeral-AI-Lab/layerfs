@@ -1,0 +1,13 @@
+[package]
+name = "layerfs-driver"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+name = "layerfs_driver"
+path = "src/lib.rs"
+
+[dependencies]
+layerfs-storage = { path = "../layerfs-storage" }
+
