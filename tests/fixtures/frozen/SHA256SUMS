@@ -1,0 +1,7 @@
+# Byte-preserved local copies of frozen Phase 1 authority artifacts.
+8fe7bdbf9946cfa88cf08091a3c5f2f6dca20d35452eff0674fdf00354f00171  tests/fixtures/frozen/m6-0/M6_0_CHANGE_RECEIPT_V1.md
+7e0ae75e32bd38111f9271c551efacc580a42287a9f31b6999157e1da3710d7a  tests/fixtures/frozen/m6-0/M6_0_GOLDEN_VECTORS.md
+fd249cef99b3feb4f6d1569dba8ac80502317c7fd0719ed0ead3b1ab9a2c7bcd  tests/fixtures/frozen/m6-0/m6-vectors/README.md
+431ce15864631f5b17b634ade4f6562946937e8c0a4d67be107d2a19c24172a7  tests/fixtures/frozen/m6-0/m6-vectors/main.rs
+faa540c04b76acd6847ab476fe050cbbbee83a60cd56e9701713ba4e7f70d965  tests/fixtures/frozen/m6-1-2/M6_1_2_VERIFICATION_RECEIPT.md
+ab4797e90743554f9e4e30f00e0bd4bcb8519b3216aab88c7dae8f8e6a49db32  tests/fixtures/frozen/m6-1-2/M6_1_SPEC.md

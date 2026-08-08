@@ -2,9 +2,15 @@
 name = "layerfs-storage"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [lib]
 name = "layerfs_storage"
 path = "src/lib.rs"
 
+[dev-dependencies]
+# L0 uses BLAKE3 only to verify the frozen M6.0 identity fixtures. Runtime
+# storage dependencies remain empty until the later CAS implementation stage.
+blake3.workspace = true

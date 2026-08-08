@@ -4,9 +4,11 @@ LayerFS V2.1 is a standalone Rust storage and workspace engine for immutable
 content-addressed state, copy-on-write workspaces, structural diff, and
 generic conditional publication.
 
-This repository is the initial implementation scaffold. It contains the
-three-crate dependency shape required by the V2.1 architecture; runtime
-behavior is implemented incrementally according to the staged plan.
+L0 is implemented. It contains the three-crate dependency shape required by
+the V2.1 architecture, the checked M6.1.2 canonical codec/error/path surface,
+and byte-preserved custody fixtures for the frozen M6.0 identity vectors.
+Storage behavior beyond these primitives is implemented incrementally
+according to the staged plan.
 
 ## Crates
 
@@ -38,7 +40,13 @@ documentation repository:
 ## Local checks
 
 ```sh
+cargo fmt --all -- --check
 cargo check --workspace
 cargo test --workspace
+cargo tree --workspace --edges normal
+shasum -a 256 -c tests/fixtures/frozen/SHA256SUMS
 ```
 
+The L0 runtime crates have no normal external dependencies. The storage crate
+has one dev-only BLAKE3 dependency so tests can recompute the frozen M6.0
+structural identity vectors; it is not part of the runtime dependency graph.

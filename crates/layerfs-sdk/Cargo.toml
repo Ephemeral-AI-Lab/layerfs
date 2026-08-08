@@ -2,6 +2,8 @@
 name = "layerfs-sdk"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 publish = true
 
 [lib]
@@ -11,4 +13,3 @@ path = "src/lib.rs"
 [dependencies]
 layerfs-driver = { path = "../layerfs-driver" }
 layerfs-storage = { path = "../layerfs-storage" }
-

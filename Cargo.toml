@@ -9,4 +9,8 @@ members = [
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
+rust-version = "1.85"
+license = "MIT"
 
+[workspace.dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
