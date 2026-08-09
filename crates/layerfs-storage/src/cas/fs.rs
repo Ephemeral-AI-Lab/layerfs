@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::catalog::{decode_catalog_marker, encode_catalog_marker, CATALOG_MARKER_BYTES};
 use crate::cas::{
     admit_complete_immutable_v1, AdmissionBuffersV1, AdmittedClosureV1,
     CompleteImmutableClosureReadPortV1, ImmutablePortErrorV1, OccupiedImmutableReadPortV1,
@@ -32,8 +33,6 @@ use crate::pack::{
 };
 use crate::{CoreError, CoreResult};
 
-const CATALOG_MAGIC: &[u8; 8] = b"LFSCAT01";
-const CATALOG_MARKER_BYTES: usize = 64;
 const OBJECT_LOCATOR_MAGIC: &[u8; 8] = b"LFSOBJ01";
 const OBJECT_LOCATOR_BYTES: usize = 160;
 const GENERATION_MAGIC: &[u8; 8] = b"LFSGEN01";
@@ -1026,7 +1025,7 @@ impl FsCasV1 {
         reservation: &OperationReservationV1<'_>,
         counters: &mut OperationCountersV1,
         buffers: AdmissionBuffersV1<'_>,
-        algorithm: crate::cdc::algorithms::C3CdcAlgorithmV1,
+        algorithm: crate::cdc::C3CdcAlgorithmV1,
     ) -> CoreResult<(AdmittedClosureV1, CompleteValidatedClosureV1)>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -1042,7 +1041,7 @@ impl FsCasV1 {
         operation.admission_started = true;
         let mut occupied = self.occupied().map_err(|_| CoreError::SinkRefused)?;
         let mut fence = FsClosureFenceV1::new(self.clone(), operation.nonce);
-        let admitted = crate::cas_stream::admit_complete_immutable_borrowed_v1(
+        let admitted = crate::cas::admission::admit_complete_immutable_borrowed_v1(
             closure,
             expected_version_record,
             &mut occupied,
@@ -2071,43 +2070,9 @@ fn read_sealed_shape(pack: &mut FilePackReadV1) -> Result<SealedPackV1, FsCasErr
     ))
 }
 
-fn encode_catalog_marker(sealed: SealedPackV1) -> [u8; CATALOG_MARKER_BYTES] {
-    let mut bytes = [0_u8; CATALOG_MARKER_BYTES];
-    bytes[..8].copy_from_slice(CATALOG_MAGIC);
-    bytes[8..40].copy_from_slice(sealed.id().as_bytes());
-    bytes[40..48].copy_from_slice(&sealed.pack_len().to_be_bytes());
-    bytes[48..52].copy_from_slice(&sealed.record_count().to_be_bytes());
-    bytes[56..64].copy_from_slice(&sealed.index_offset().to_be_bytes());
-    bytes
-}
-
 fn read_catalog_marker(path: &Path) -> Result<SealedPackV1, FsCasErrorV1> {
     let bytes = read_exact_regular_file::<CATALOG_MARKER_BYTES>(path)?;
-    if &bytes[..8] != CATALOG_MAGIC || bytes[52..56] != [0_u8; 4] {
-        return Err(FsCasErrorV1::Integrity);
-    }
-    let id = <[u8; 32]>::try_from(&bytes[8..40]).map_err(|_| FsCasErrorV1::Integrity)?;
-    let pack_len = u64::from_be_bytes(
-        bytes[40..48]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    let record_count = u32::from_be_bytes(
-        bytes[48..52]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    let index_offset = u64::from_be_bytes(
-        bytes[56..64]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    Ok(SealedPackV1::from_validated_parts(
-        PackIdV1::from_digest(id),
-        pack_len,
-        record_count,
-        index_offset,
-    ))
+    decode_catalog_marker(bytes)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

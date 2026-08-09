@@ -1,8 +1,17 @@
-//! One-pass Create and explicit Replace pipelines.
+//! One-pass Create, explicit Replace, and bounded Update construction.
 //!
 //! Variable chunk-reference metadata is written to a caller-owned replayable
 //! spool. The engine retains one CDC ring, one source buffer, hash state, and
 //! scalar counters; it never retains the complete source or chunk list.
+
+#[cfg(feature = "c3-polymorphism")]
+mod create;
+mod replace;
+pub mod update;
+
+#[cfg(feature = "c3-polymorphism")]
+pub use create::*;
+pub use replace::replace_file_v1;
 
 use crate::cdc::{
     BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1,
@@ -218,43 +227,8 @@ where
     )
 }
 
-/// Explicit Replace entry point. It shares the bounded constructor but is not
-/// reachable from Update and records no fallback attempt.
 #[allow(clippy::too_many_arguments)]
-pub fn replace_file_v1<S, O, R, C>(
-    path: &[u8],
-    mode: u16,
-    declared_len: u64,
-    source: &mut S,
-    objects: &mut O,
-    references: &mut R,
-    buffers: ContentBuffersV1<'_>,
-    control: &mut C,
-    ledger: &ResourceLedgerV1,
-    counters: &mut OperationCountersV1,
-) -> CoreResult<PreparedFileV1>
-where
-    S: ContentSourceV1 + ?Sized,
-    O: PreparedObjectSinkV1 + ?Sized,
-    R: ChunkReferenceSpoolV1 + ?Sized,
-    C: CdcControlV1 + ?Sized,
-{
-    prepare_file_v1(
-        path,
-        mode,
-        declared_len,
-        source,
-        objects,
-        references,
-        buffers,
-        control,
-        ledger,
-        counters,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn prepare_file_v1<S, O, R, C>(
+pub(super) fn prepare_file_v1<S, O, R, C>(
     path: &[u8],
     mode: u16,
     declared_len: u64,
@@ -326,7 +300,7 @@ pub(crate) fn create_file_c3_borrowed_v1<S, O, R, C>(
     buffers: ContentBuffersV1<'_>,
     control: &mut C,
     reservation: &OperationReservationV1<'_>,
-    algorithm: crate::cdc::algorithms::C3CdcAlgorithmV1,
+    algorithm: crate::cdc::C3CdcAlgorithmV1,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<PreparedFileV1>
 where
@@ -379,13 +353,13 @@ where
 enum ContentCdcV1 {
     FastCdc,
     #[cfg(feature = "c3-polymorphism")]
-    Selected(crate::cdc::algorithms::C3CdcAlgorithmV1),
+    Selected(crate::cdc::C3CdcAlgorithmV1),
 }
 
 enum ContentCdcStreamV1<'ring> {
     FastCdc(crate::cdc::FastCdcV1Stream<'ring>),
     #[cfg(feature = "c3-polymorphism")]
-    Selected(crate::cdc::algorithms::C3CdcStreamV1<'ring>),
+    Selected(crate::cdc::C3CdcStreamV1<'ring>),
 }
 
 impl ContentCdcV1 {

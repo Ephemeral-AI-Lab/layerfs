@@ -88,7 +88,7 @@ fn forbidden_work_counters_are_writable_and_checked() {
 
 #[test]
 fn update_has_no_static_replace_retry_or_publication_path() {
-    let source = include_str!("../src/update.rs");
+    let source = include_str!("../src/content/update.rs");
     assert!(!source.contains("replace_file_v1"));
     assert!(!source.contains("record_fallback_attempt"));
     assert!(!source.contains("record_retry_or_redispatch"));

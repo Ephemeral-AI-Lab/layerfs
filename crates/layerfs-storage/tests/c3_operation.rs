@@ -2,17 +2,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use layerfs_storage::c3::{
+use layerfs_storage::cas::{FsCasControlV1, FsCasV1, FsPackAdmissionOutcomeV1};
+use layerfs_storage::cdc::C3CdcAlgorithmV1;
+use layerfs_storage::cdc::{CdcControlV1, MAXIMUM_CHUNK_BYTES};
+use layerfs_storage::content::{
     run_c3_create_v1, C3OperationBuffersV1, C3SourceSupplierV1, FileChunkReferenceSpoolV1,
     FilePackIndexSpoolV1,
 };
-use layerfs_storage::cdc::algorithms::C3CdcAlgorithmV1;
-use layerfs_storage::cdc::{CdcControlV1, MAXIMUM_CHUNK_BYTES};
 use layerfs_storage::content::{ContentSourceErrorV1, ContentSourceV1};
-use layerfs_storage::fscas::{FsCasControlV1, FsCasV1, FsPackAdmissionOutcomeV1};
+use layerfs_storage::cow::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
 use layerfs_storage::identity::COMPARISON_WINDOW_BYTES;
 use layerfs_storage::limits::{OperationCountersV1, ResourceLedgerV1, MEMORY_PROFILE_32_MIB};
-use layerfs_storage::tree::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
 use layerfs_storage::CoreResult;
 
 static NEXT_ROOT: AtomicU64 = AtomicU64::new(1);

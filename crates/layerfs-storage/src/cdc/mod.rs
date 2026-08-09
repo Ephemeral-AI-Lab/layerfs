@@ -1,23 +1,24 @@
-//! Exact FastCDC V1 boundary engine and bounded borrowed streaming adapter.
+//! Bounded CDC engines and borrowed streaming adapters.
 //!
-//! The implementation has no FastCDC runtime dependency. It reads the single
-//! frozen GEAR authority also used to encode `ChunkerSpecV1`.
+//! FastCDC/OF is the selected canonical implementation. SeqCDC/OS is the
+//! closed alternate selected explicitly by the qualification operation; the
+//! implementation has no external CDC runtime dependency or fallback path.
 
 use crate::{CoreError, CoreResult};
 
-#[cfg(feature = "c3-polymorphism")]
-#[doc(hidden)]
-#[path = "cdc/algorithms.rs"]
-pub mod algorithms;
-#[path = "cdc/engine.rs"]
 mod engine;
-#[path = "cdc/fastcdc.rs"]
 mod fastcdc;
+mod resync;
 #[cfg(feature = "c3-polymorphism")]
-#[path = "cdc/seqcdc.rs"]
 mod seqcdc;
 
 pub use fastcdc::{FastCdcV1, FastCdcV1Stream};
+pub use resync::{
+    MAX_UPDATE_ANCHOR_SCAN_BYTES, MAX_UPDATE_REJOIN_VERIFICATION_BYTES,
+    MAX_UPDATE_RESYNCHRONIZATION_BYTES,
+};
+#[cfg(feature = "c3-polymorphism")]
+pub use seqcdc::{SeqCdcV1, SeqCdcV1Stream};
 
 pub const MINIMUM_CHUNK_BYTES: usize = 8_192;
 pub const TARGET_CHUNK_BYTES: usize = 16_384;
@@ -28,6 +29,7 @@ pub const SMALL_MASK: u64 = 0x0000_d903_0353_7000;
 pub const LARGE_MASK: u64 = 0x0000_d901_0353_0000;
 pub const SHIFTED_SMALL_MASK: u64 = 0x0001_b206_06a6_e000;
 pub const SHIFTED_LARGE_MASK: u64 = 0x0001_b202_06a6_0000;
+pub(crate) const FASTCDC_ALGORITHM_TAG_V1: [u8; 8] = fastcdc::ALGORITHM_TAG;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CdcSourceErrorV1 {
@@ -162,6 +164,110 @@ pub struct SeqCdcCountersV1 {
     pub opposing_slopes: u64,
     pub jumps: u64,
     pub jump_bytes: u64,
+}
+
+/// Closed CDC algorithm set used by the bounded create operation.
+///
+/// This is not a provider registry: the choice is explicit, statically
+/// dispatched, and cannot fall back or redispatch during an operation.
+#[cfg(feature = "c3-polymorphism")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum C3CdcAlgorithmV1 {
+    FastCdc,
+    SeqCdc,
+}
+
+#[cfg(feature = "c3-polymorphism")]
+impl C3CdcAlgorithmV1 {
+    pub const fn evidence_tag(self) -> [u8; 8] {
+        match self {
+            Self::FastCdc => fastcdc::ALGORITHM_TAG,
+            Self::SeqCdc => seqcdc::ALGORITHM_TAG,
+        }
+    }
+
+    pub fn stream<'ring, C: CdcControlV1 + ?Sized>(
+        self,
+        ring: &'ring mut [u8],
+        control: &mut C,
+    ) -> CoreResult<C3CdcStreamV1<'ring>> {
+        match self {
+            Self::FastCdc => FastCdcV1::new()
+                .stream(ring, control)
+                .map(C3CdcStreamV1::FastCdc),
+            Self::SeqCdc => SeqCdcV1::new()
+                .stream(ring, control)
+                .map(C3CdcStreamV1::SeqCdc),
+        }
+    }
+}
+
+#[cfg(feature = "c3-polymorphism")]
+pub enum C3CdcStreamV1<'ring> {
+    FastCdc(FastCdcV1Stream<'ring>),
+    SeqCdc(SeqCdcV1Stream<'ring>),
+}
+
+#[cfg(feature = "c3-polymorphism")]
+impl C3CdcStreamV1<'_> {
+    pub const fn counters(&self) -> CdcStreamCountersV1 {
+        match self {
+            Self::FastCdc(stream) => stream.counters(),
+            Self::SeqCdc(stream) => stream.counters(),
+        }
+    }
+
+    pub const fn seqcdc_counters(&self) -> Option<SeqCdcCountersV1> {
+        match self {
+            Self::FastCdc(_) => None,
+            Self::SeqCdc(stream) => Some(stream.seqcdc_counters()),
+        }
+    }
+
+    pub fn push<C: CdcControlV1 + ?Sized, B: BoundaryConsumerV1 + ?Sized>(
+        &mut self,
+        fragment: Result<&[u8], CdcSourceErrorV1>,
+        control: &mut C,
+        consumer: &mut B,
+    ) -> CoreResult<()> {
+        match self {
+            Self::FastCdc(stream) => stream.push(fragment, control, consumer),
+            Self::SeqCdc(stream) => stream.push(fragment, control, consumer),
+        }
+    }
+
+    pub fn push_until_consumer_pause<C: CdcControlV1 + ?Sized, B: BoundaryConsumerV1 + ?Sized>(
+        &mut self,
+        fragment: Result<&[u8], CdcSourceErrorV1>,
+        control: &mut C,
+        consumer: &mut B,
+    ) -> CoreResult<usize> {
+        match self {
+            Self::FastCdc(stream) => stream.push_until_consumer_pause(fragment, control, consumer),
+            Self::SeqCdc(stream) => stream.push_until_consumer_pause(fragment, control, consumer),
+        }
+    }
+
+    pub fn finish<C: CdcControlV1 + ?Sized, B: BoundaryConsumerV1 + ?Sized>(
+        &mut self,
+        control: &mut C,
+        consumer: &mut B,
+    ) -> CoreResult<()> {
+        match self {
+            Self::FastCdc(stream) => stream.finish(control, consumer),
+            Self::SeqCdc(stream) => stream.finish(control, consumer),
+        }
+    }
+
+    pub fn finish_at_accepted_boundary<C: CdcControlV1 + ?Sized>(
+        &mut self,
+        control: &mut C,
+    ) -> CoreResult<()> {
+        match self {
+            Self::FastCdc(stream) => stream.finish_at_accepted_boundary(control),
+            Self::SeqCdc(stream) => stream.finish_at_accepted_boundary(control),
+        }
+    }
 }
 
 fn sample_control<C: CdcControlV1 + ?Sized>(control: &mut C) -> CoreResult<()> {

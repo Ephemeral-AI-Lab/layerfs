@@ -1,4 +1,5 @@
 //! Transaction-private immutable object ports.
+
 //!
 //! Complete-closure admission is implemented over a bounded random-readable
 //! spool. `ClosureObjectV1` remains only as the direct dense-pack builder's
@@ -13,11 +14,6 @@ use crate::object::{
     TypedPhysicalObjectIdV1,
 };
 use crate::{CoreError, CoreResult};
-
-pub use crate::cas_stream::{
-    admit_complete_immutable_v1, compare_closure_object_ids_v1, AdmissionBuffersV1,
-    AdmittedClosureV1, CompleteImmutableClosureReadPortV1,
-};
 
 /// Borrowed input record for direct dense-pack construction. This type is not
 /// a closure-admission source and therefore cannot bypass the bounded spool

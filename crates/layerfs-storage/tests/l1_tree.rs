@@ -1,4 +1,15 @@
 use blake3::hazmat::HasherExt;
+use layerfs_storage::cow::{
+    add_directory_entry_cow_v1, build_canonical_directory_v1, preflight_canonical_tree_v1,
+    remove_directory_entry_cow_v1, replace_directory_entry_cow_v1,
+    AuthenticatedTreeMutationEvidenceV1, AuthenticatedTreeReplacementEvidenceV1,
+    CanonicalDirectoryTreeV1, CanonicalTreeChildV1, CanonicalTreeEntryV1,
+    CanonicalTreeMutationSourceV1, DirectoryBuildModeV1, DirectoryHashProofV1,
+    DirectoryHashSubtreeV1, DirectoryLogicalIdentityV1, DirectoryMutationHashProofV1,
+    PreparedTreeSinkV1, TreeMutationSourceErrorV1, TreeObjectDispositionV1, TreePageBoundaryV1,
+    TreePageSummaryV1, TreeSinkErrorV1, MAX_COW_TREE_PAGE_SUMMARIES,
+    MAX_DIRECTORY_HASH_PROOF_NODES, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES,
+};
 use layerfs_storage::format::{
     ValidatedComponent, ValidatedSymlinkTarget, ROOT_DIRECTORY_MODE_SENTINEL_V1,
 };
@@ -12,17 +23,6 @@ use layerfs_storage::object::{
     decode_physical_object_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1, TreeRecordV1,
 };
 use layerfs_storage::profile::ProfileSpecV1;
-use layerfs_storage::tree::{
-    add_directory_entry_cow_v1, build_canonical_directory_v1, preflight_canonical_tree_v1,
-    remove_directory_entry_cow_v1, replace_directory_entry_cow_v1,
-    AuthenticatedTreeMutationEvidenceV1, AuthenticatedTreeReplacementEvidenceV1,
-    CanonicalDirectoryTreeV1, CanonicalTreeChildV1, CanonicalTreeEntryV1,
-    CanonicalTreeMutationSourceV1, DirectoryBuildModeV1, DirectoryHashProofV1,
-    DirectoryHashSubtreeV1, DirectoryLogicalIdentityV1, DirectoryMutationHashProofV1,
-    PreparedTreeSinkV1, TreeMutationSourceErrorV1, TreeObjectDispositionV1, TreePageBoundaryV1,
-    TreePageSummaryV1, TreeSinkErrorV1, MAX_COW_TREE_PAGE_SUMMARIES,
-    MAX_DIRECTORY_HASH_PROOF_NODES, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES,
-};
 use layerfs_storage::{CoreError, CoreResult};
 
 fn object(kind: u8, payload: &[u8]) -> Vec<u8> {

@@ -3,11 +3,11 @@
 #[path = "reference/naive_seqcdc.rs"]
 mod naive_seqcdc;
 
-use layerfs_storage::cdc::algorithms::{SeqCdcV1, SeqCdcV1Stream};
 use layerfs_storage::cdc::{
     BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1,
     CdcSourceErrorV1, ChunkBoundaryV1, ContinueCdcControlV1, MAXIMUM_CHUNK_BYTES,
 };
+use layerfs_storage::cdc::{SeqCdcV1, SeqCdcV1Stream};
 use layerfs_storage::CoreError;
 use naive_seqcdc::OracleResult;
 

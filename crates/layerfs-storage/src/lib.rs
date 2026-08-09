@@ -7,22 +7,16 @@
 
 #![forbid(unsafe_code)]
 
-mod cas_stream;
 mod error;
 
-#[cfg(feature = "c3-polymorphism")]
-pub mod c3;
 #[cfg(feature = "c3-polymorphism")]
 pub mod cas;
 #[cfg(not(feature = "c3-polymorphism"))]
 pub(crate) mod cas;
 pub mod cdc;
 pub mod content;
+pub mod cow;
 pub mod format;
-#[cfg(feature = "c3-polymorphism")]
-pub mod fscas;
-#[cfg(not(feature = "c3-polymorphism"))]
-pub(crate) mod fscas;
 pub mod identity;
 pub mod limits;
 pub mod object;
@@ -31,7 +25,5 @@ pub mod pack;
 #[cfg(not(feature = "c3-polymorphism"))]
 pub(crate) mod pack;
 pub mod profile;
-pub mod tree;
-pub mod update;
 
 pub use error::{CoreError, CoreResult, OutcomeCode};

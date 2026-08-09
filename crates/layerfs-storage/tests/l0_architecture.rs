@@ -96,3 +96,56 @@ fn fscas_remains_private_to_the_unpublished_storage_implementation() {
         }
     }
 }
+
+#[test]
+fn storage_source_follows_the_domain_responsibility_map() {
+    let lib = include_str!("../src/lib.rs");
+    for forbidden_module in [
+        "mod c3;",
+        "mod cas_stream;",
+        "mod fscas;",
+        "mod tree;",
+        "mod update;",
+    ] {
+        assert!(
+            !lib.contains(forbidden_module),
+            "legacy ownership module remains in lib.rs: {forbidden_module}"
+        );
+    }
+
+    let required_domain_files = [
+        include_str!("../src/identity/mod.rs"),
+        include_str!("../src/identity/framing.rs"),
+        include_str!("../src/identity/logical.rs"),
+        include_str!("../src/identity/physical.rs"),
+        include_str!("../src/cdc/mod.rs"),
+        include_str!("../src/cdc/engine.rs"),
+        include_str!("../src/cdc/resync.rs"),
+        include_str!("../src/cdc/fastcdc/mod.rs"),
+        include_str!("../src/cdc/fastcdc/scanner.rs"),
+        include_str!("../src/cdc/fastcdc/gear.rs"),
+        include_str!("../src/cdc/fastcdc/rejoin.rs"),
+        include_str!("../src/cdc/seqcdc/mod.rs"),
+        include_str!("../src/cdc/seqcdc/scanner.rs"),
+        include_str!("../src/cdc/seqcdc/rejoin.rs"),
+        include_str!("../src/content/mod.rs"),
+        include_str!("../src/content/create.rs"),
+        include_str!("../src/content/replace.rs"),
+        include_str!("../src/content/update.rs"),
+        include_str!("../src/cas/mod.rs"),
+        include_str!("../src/cas/port.rs"),
+        include_str!("../src/cas/fs.rs"),
+        include_str!("../src/cas/admission.rs"),
+        include_str!("../src/cas/catalog.rs"),
+        include_str!("../src/cas/closure.rs"),
+        include_str!("../src/cow/mod.rs"),
+        include_str!("../src/cow/file.rs"),
+        include_str!("../src/cow/tree.rs"),
+    ];
+    assert!(
+        required_domain_files
+            .iter()
+            .all(|source| !source.is_empty()),
+        "a required domain ownership file is empty"
+    );
+}

@@ -9,7 +9,7 @@ use layerfs_storage::cas::{
     AdmissionBuffersV1, CompleteImmutableClosureReadPortV1, ImmutablePortErrorV1,
     OccupiedImmutableReadPortV1,
 };
-use layerfs_storage::fscas::{
+use layerfs_storage::cas::{
     FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasV1,
     FsPackAdmissionOutcomeV1, FsPrivatePackV1,
 };

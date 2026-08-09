@@ -1,4 +1,4 @@
-//! Closed C3 operation and portable fixed-record file spools.
+//! Complete bounded create operation composing CDC, CAS, and structural COW.
 //!
 //! This module exists only behind the C3 polymorphism feature. It deliberately
 //! exposes no publication authority: the terminal result is a synchronous,
@@ -11,18 +11,23 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::cas::AdmissionBuffersV1;
-use crate::cdc::{algorithms::C3CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
+use crate::cas::{
+    FsCasControlV1, FsCasErrorV1, FsCasV1, FsPackAdmissionOutcomeV1, FsPrivatePackV1,
+};
+use crate::cdc::{C3CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
 use crate::content::{
     create_file_c3_borrowed_v1, ChunkReferenceSpoolV1, ContentBuffersV1, ContentSourceV1,
     ObjectDispositionV1, PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1,
     PreparedSinkErrorV1,
 };
+use crate::cow::{
+    build_canonical_directory_borrowed_v1, CanonicalTreeChildV1, CanonicalTreeEntryV1,
+    DirectoryBuildModeV1, DirectoryLogicalIdentityV1, PreparedTreeSinkV1, TreeObjectDispositionV1,
+    TreePageSummaryV1, TreeSinkErrorV1, MAX_TREE_OBJECT_BYTES,
+};
 use crate::format::{
     validate_chunk_refs_per_file, validate_physical_object_len, PhysicalObjectKindV1,
     ValidatedComponent,
-};
-use crate::fscas::{
-    FsCasControlV1, FsCasErrorV1, FsCasV1, FsPackAdmissionOutcomeV1, FsPrivatePackV1,
 };
 use crate::identity::{
     derive_file_node_v1, derive_physical_version_record_id_v1, derive_version_v1, FramedHasherV1,
@@ -40,11 +45,6 @@ use crate::pack::{
     SealedPackV1, MAX_PACK_BYTES, MAX_PACK_RECORDS, PACK_INDEX_ENTRY_BYTES, PACK_TRAILER_BYTES,
 };
 use crate::profile::{ChunkerSpecV1, DigestSpecV1};
-use crate::tree::{
-    build_canonical_directory_borrowed_v1, CanonicalTreeChildV1, CanonicalTreeEntryV1,
-    DirectoryBuildModeV1, DirectoryLogicalIdentityV1, PreparedTreeSinkV1, TreeObjectDispositionV1,
-    TreePageSummaryV1, TreeSinkErrorV1, MAX_TREE_OBJECT_BYTES,
-};
 use crate::{CoreError, CoreResult};
 
 const CHUNK_REFERENCE_RECORD_BYTES: u64 = 68;

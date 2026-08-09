@@ -1,6 +1,11 @@
 mod support;
 
 use layerfs_storage::cdc::{ContinueCdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES};
+use layerfs_storage::content::update::{
+    update_file_v1, AuthenticatedBaseByteReaderV1, AuthenticatedBaseFileV1,
+    BaseChunkEvidenceSourceV1, BaseChunkEvidenceV1, BaseReadErrorV1, UpdateBuffersV1,
+    UpdateRangeV1, MAX_UPDATE_RESYNCHRONIZATION_BYTES,
+};
 use layerfs_storage::content::{
     ChunkReferenceSpoolV1, ContentSourceErrorV1, ContentSourceV1, ObjectDispositionV1,
     PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1, PreparedSinkErrorV1,
@@ -14,11 +19,6 @@ use layerfs_storage::identity::{
 use layerfs_storage::limits::{OperationCountersV1, ResourceLedgerV1, BASE_LEDGER_BYTES};
 use layerfs_storage::object::TypedPhysicalObjectIdV1;
 use layerfs_storage::profile::ProfileSpecV1;
-use layerfs_storage::update::{
-    update_file_v1, AuthenticatedBaseByteReaderV1, AuthenticatedBaseFileV1,
-    BaseChunkEvidenceSourceV1, BaseChunkEvidenceV1, BaseReadErrorV1, UpdateBuffersV1,
-    UpdateRangeV1, MAX_UPDATE_RESYNCHRONIZATION_BYTES,
-};
 use layerfs_storage::CoreError;
 
 #[derive(Default)]

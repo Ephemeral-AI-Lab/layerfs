@@ -7,21 +7,25 @@
 
 use crate::cdc::{
     BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1, ChunkBoundaryV1,
-    FastCdcV1, MAXIMUM_CHUNK_BYTES,
+    FastCdcV1, FASTCDC_ALGORITHM_TAG_V1, MAXIMUM_CHUNK_BYTES,
+};
+pub use crate::cdc::{
+    MAX_UPDATE_ANCHOR_SCAN_BYTES, MAX_UPDATE_REJOIN_VERIFICATION_BYTES,
+    MAX_UPDATE_RESYNCHRONIZATION_BYTES,
 };
 use crate::content::{
     file_object_lengths_v1, object_header, write_chunk_object, write_file_object_and_logical,
     ChunkReferenceSpoolV1, ContentSourceErrorV1, ContentSourceV1, ObjectDispositionV1,
     PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1, PreparedSinkErrorV1,
 };
+pub use crate::cow::file::{AuthenticatedBaseFileV1, UpdateRangeV1};
 use crate::format::{
     validate_chunk_reference_len, validate_chunk_refs_per_file, validate_file_mode,
     validate_logical_length, PhysicalObjectKindV1, ValidatedPath,
 };
 use crate::identity::{
     derive_logical_chunk_spans_v1, FramedHasherV1, LogicalChunkIdV1, LogicalFileHasherV1,
-    LogicalFileIdentityV1, PhysicalChunkIdV1, PhysicalFileIdV1, IDENTITY_HASHER_BYTES_V1,
-    TAG_PHYSICAL_FILE,
+    PhysicalChunkIdV1, PhysicalFileIdV1, IDENTITY_HASHER_BYTES_V1, TAG_PHYSICAL_FILE,
 };
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
@@ -29,10 +33,6 @@ use crate::limits::{
 use crate::profile::ChunkerSpecV1;
 use crate::{CoreError, CoreResult};
 
-pub const MAX_UPDATE_ANCHOR_SCAN_BYTES: u64 = 65_536;
-pub const MAX_UPDATE_REJOIN_VERIFICATION_BYTES: u64 = MAXIMUM_CHUNK_BYTES as u64;
-pub const MAX_UPDATE_RESYNCHRONIZATION_BYTES: u64 =
-    MAX_UPDATE_ANCHOR_SCAN_BYTES + MAX_UPDATE_REJOIN_VERIFICATION_BYTES;
 const CHUNK_REFERENCE_METADATA_BYTES: u64 = 36;
 
 pub struct UpdateBuffersV1<'buffers> {
@@ -46,77 +46,6 @@ impl<'buffers> UpdateBuffersV1<'buffers> {
         cdc_ring: &'buffers mut [u8; MAXIMUM_CHUNK_BYTES],
     ) -> Self {
         Self { source, cdc_ring }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct AuthenticatedBaseFileV1 {
-    identity: LogicalFileIdentityV1,
-    physical_file: PhysicalFileIdV1,
-    mode: u16,
-    chunk_count: u32,
-}
-
-impl AuthenticatedBaseFileV1 {
-    pub const fn new(
-        identity: LogicalFileIdentityV1,
-        physical_file: PhysicalFileIdV1,
-        mode: u16,
-        chunk_count: u32,
-    ) -> Self {
-        Self {
-            identity,
-            physical_file,
-            mode,
-            chunk_count,
-        }
-    }
-
-    pub const fn identity(self) -> LogicalFileIdentityV1 {
-        self.identity
-    }
-
-    pub const fn chunk_count(self) -> u32 {
-        self.chunk_count
-    }
-
-    pub const fn physical_file(self) -> PhysicalFileIdV1 {
-        self.physical_file
-    }
-
-    pub const fn mode(self) -> u16 {
-        self.mode
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct UpdateRangeV1 {
-    start: u64,
-    end: u64,
-}
-
-impl UpdateRangeV1 {
-    pub fn new(start: u64, end: u64, base_len: u64) -> CoreResult<Self> {
-        if start > end || end > base_len {
-            return Err(CoreError::RangeResyncFailed);
-        }
-        Ok(Self { start, end })
-    }
-
-    pub const fn start(self) -> u64 {
-        self.start
-    }
-
-    pub const fn end(self) -> u64 {
-        self.end
-    }
-
-    pub const fn len(self) -> u64 {
-        self.end - self.start
-    }
-
-    pub const fn is_empty(self) -> bool {
-        self.start == self.end
     }
 }
 
@@ -187,7 +116,7 @@ struct UpdateOperationBindingV1 {
 impl UpdateOperationBindingV1 {
     fn frozen_fast() -> Self {
         Self {
-            algorithm: *b"NFCDC001",
+            algorithm: FASTCDC_ALGORITHM_TAG_V1,
             chunker_profile: *ChunkerSpecV1::frozen().id().as_bytes(),
         }
     }
