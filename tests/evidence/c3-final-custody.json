@@ -1,0 +1,168 @@
+{
+  "schema": "layerfs-c3-final-custody-v1",
+  "work_key": "C3-LAUNCH-COMPARE",
+  "captured_at": "2026-08-10",
+  "decision": "No Selection",
+  "scope": {
+    "executed_target": "aarch64-apple-darwin",
+    "second_platform": "explicitly deferred by user; unchecked and not passed",
+    "phase_closed": true,
+    "full_two_platform_package_complete": false
+  },
+  "repository_heads": {
+    "implementation": "7bec6b7ee20f2356580fd85ac71f8184161c0b8a",
+    "documentation": "a92138dec8fdb4905866bf088b7ecdc0c955fcb3"
+  },
+  "scoped_dirty_paths": {
+    "meaning": "exact final dirty-path inventory in the two task scopes; this records state, not authorship, because substantial correct uncommitted work predated this phase",
+    "implementation": [
+      "Cargo.lock",
+      "crates/layerfs-storage/Cargo.toml",
+      "crates/layerfs-storage/src/cas.rs",
+      "crates/layerfs-storage/src/cas_stream.rs",
+      "crates/layerfs-storage/src/cdc.rs",
+      "crates/layerfs-storage/src/content.rs",
+      "crates/layerfs-storage/src/lib.rs",
+      "crates/layerfs-storage/src/limits.rs",
+      "crates/layerfs-storage/src/pack.rs",
+      "crates/layerfs-storage/src/tree.rs",
+      "crates/layerfs-storage/src/update.rs",
+      "crates/layerfs-storage/tests/l0_architecture.rs",
+      "crates/layerfs-storage/tests/l1_cas.rs",
+      "crates/layerfs-storage/tests/l1_content.rs",
+      "crates/layerfs-storage/tests/l1_resources.rs",
+      "crates/layerfs-storage/tests/l1_tree.rs",
+      "crates/layerfs-storage/src/bin/c3_qualification.rs",
+      "crates/layerfs-storage/src/c3.rs",
+      "crates/layerfs-storage/src/cdc/comparison.rs",
+      "crates/layerfs-storage/src/cdc/engine.rs",
+      "crates/layerfs-storage/src/cdc/seqcdc.rs",
+      "crates/layerfs-storage/src/fscas.rs",
+      "crates/layerfs-storage/tests/c3_fastcdc_compare.rs",
+      "crates/layerfs-storage/tests/c3_fscas.rs",
+      "crates/layerfs-storage/tests/c3_operation.rs",
+      "crates/layerfs-storage/tests/c3_seqcdc_compare.rs",
+      "crates/layerfs-storage/tests/fixtures/c3-registry-v1.tsv",
+      "crates/layerfs-storage/tests/reference/naive_fastcdc.rs",
+      "crates/layerfs-storage/tests/reference/naive_seqcdc.rs",
+      "tests/evidence/c3-c30-05-anchor.jsonl",
+      "tests/evidence/c3-complete-prng-8m.jsonl",
+      "tests/evidence/c3-complete-repeated-8m.jsonl",
+      "tests/evidence/c3-final-custody.json",
+      "tests/evidence/c3-fscas-targeted.json",
+      "tests/evidence/c3-qualification-evidence.json",
+      "tests/evidence/c3-qualification-wall.jsonl",
+      "tests/evidence/c3-smoke-wall.jsonl",
+      "tests/evidence/c3-source-manifest.json"
+    ],
+    "documentation": [
+      "ephemelra-sanbdox-v2.1/layefs/l1.5/IMPLEMENTATION_HANDOFF.md",
+      "ephemelra-sanbdox-v2.1/layefs/l1.5/benchmark.md",
+      "ephemelra-sanbdox-v2.1/layefs/l1.5/checklist.md",
+      "ephemelra-sanbdox-v2.1/layefs/l1.5/decision-record.md",
+      "ephemelra-sanbdox-v2.1/layefs/l1.5/spec.md"
+    ]
+  },
+  "toolchain": {
+    "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+    "rustc_commit": "ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96",
+    "cargo": "1.96.0 (30a34c682 2026-05-25)",
+    "cargo_commit": "30a34c6821b57de0aaec83a901aca39f88f6778c",
+    "llvm": "22.1.2",
+    "profile": "release",
+    "features": ["c3-compare"],
+    "target": "aarch64-apple-darwin"
+  },
+  "environment": {
+    "cpu": "Apple M3 Max",
+    "cpu_cores": 14,
+    "memory_bytes": 38654705664,
+    "os": "macOS 26.4.1 build 25E253",
+    "filesystem": "APFS",
+    "filesystem_block_bytes": 4096,
+    "metadata_only_note": "Apple CPU, OS, and APFS are environment metadata; no Apple-only production or benchmark operation/measurement API was used"
+  },
+  "documents_sha256": {
+    "l1.5/spec.md": "9dbab807acfd75f6bfcc577b44a652ed5ef2ac796ede8f2a27f2cfb4d0a6be46",
+    "l1.5/benchmark.md": "cab61b3bf6d02e7853861cfa998c80025b606c86bf890615872999692383ca54",
+    "l1.5/checklist.md": "aa0ec748dbb28d7fe54a79d84e002884bf3438ab1e362fd4f90b2f6f3cf28656",
+    "l1.5/decision-record.md": "9fb7c0a9d47198e12de8333804c1d141dd26491f77b211b4a0718cf9c75feeac",
+    "l1.5/IMPLEMENTATION_HANDOFF.md": "04b1269ac6391cdb9795e8bed9cd069694f3fc0a26123d17a6d8ac7b91590334",
+    "original_handoff_attachment": "04b1269ac6391cdb9795e8bed9cd069694f3fc0a26123d17a6d8ac7b91590334"
+  },
+  "primary_evidence_sha256": {
+    "tests/evidence/c3-source-manifest.json": "303a193a4320a98085531880fd2c37104b1946747dfa87605dbd1c1c525ddf11",
+    "tests/evidence/c3-fscas-targeted.json": "64084dc60a0358dc3314540aa5a6569341e658efef11c6de7f39ad3b6fb4415a",
+    "tests/evidence/c3-qualification-evidence.json": "b12f313e2e022353b718234e023664b6317602a6c8e15d4196f7c83077fce8e1"
+  },
+  "benchmark_artifacts_sha256": {
+    "tests/evidence/c3-complete-prng-8m.jsonl": "bed680fab0a1c4345105ade0ec5e04cb21ca86ab57ed60c8671337976a9a283d",
+    "tests/evidence/c3-complete-repeated-8m.jsonl": "cea06799357759074bad98a67353ec47f47018df73be7dc1761b0f2975d23b43",
+    "tests/evidence/c3-c30-05-anchor.jsonl": "8a536ddaec1a5654b2850c0928b3a98b9353a6f511de1d8eeff750adc36a3e7a",
+    "tests/evidence/c3-smoke-wall.jsonl": "a0aae6927f937e96db84dbf64d43c095e6cec90b3d273883a58613bd206d43da",
+    "tests/evidence/c3-qualification-wall.jsonl": "34d123b48c4b3d6afe62770595be7e686c9d99ef7e62aa68d62de36a0a52624b"
+  },
+  "fixture_registry_executable_sha256": {
+    "tests/fixtures/frozen/SHA256SUMS": "5ec12584d094b25046d6de2b9b1545fe8d6697a6983247044499acfe4244ab86",
+    "crates/layerfs-storage/tests/fixtures/c3-registry-v1.tsv": "d586110a2ab07b553163eee44917323d694934a5722d571eddba7fa041111942",
+    "crates/layerfs-storage/tests/reference/naive_fastcdc.rs": "887c3afa063356075f7fa156d96280e2530b09ef46f80730d9f60385a6959a1d",
+    "target/release/c3-qualification": "7427047133aba5517bae647baa6df507fccf8b8655c13abfd7e8baf9ee776e3f"
+  },
+  "benchmark_commands": {
+    "serialization": "UTF-8, one command per line, LF after every line, in listed order",
+    "bytes": 620,
+    "sha256": "03374974944ef49e150b8da5506ab7105c1a71046c931e77fb4cf28b89ada1df",
+    "lines": [
+      "cargo build --release -p layerfs-storage --features c3-compare --bin c3-qualification",
+      "./target/release/c3-qualification --validate-registry",
+      "./target/release/c3-qualification --measure tests/evidence/c3-complete-prng-8m.jsonl 15 8388608 prng",
+      "./target/release/c3-qualification --measure tests/evidence/c3-complete-repeated-8m.jsonl 15 8388608 repeated",
+      "./target/release/c3-qualification --anchor tests/evidence/c3-c30-05-anchor.jsonl 67108864",
+      "./target/release/c3-qualification --wall smoke tests/evidence/c3-smoke-wall.jsonl",
+      "./target/release/c3-qualification --wall qualification tests/evidence/c3-qualification-wall.jsonl"
+    ]
+  },
+  "verification": {
+    "code_stable_before_final_sweep": true,
+    "commands_passed": [
+      "cargo fmt --all -- --check",
+      "cargo check --workspace",
+      "cargo check --workspace --all-targets --all-features --offline",
+      "cargo test --workspace",
+      "cargo test --workspace --all-features",
+      "cargo test --release --workspace",
+      "cargo test --release --workspace --all-features",
+      "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "shasum -a 256 -c tests/fixtures/frozen/SHA256SUMS",
+      "./target/release/c3-qualification --validate-registry",
+      "cargo tree --workspace --edges normal",
+      "git diff --check",
+      "git status --short"
+    ],
+    "debug_default_tests": 66,
+    "debug_all_feature_tests": 133,
+    "release_default_tests": 66,
+    "release_all_feature_tests": 133,
+    "focused_tests": 61,
+    "failures": 0
+  },
+  "measurement_labels": {
+    "representative_handle_logical_allocation_bytes": 202,
+    "representative_handle_is_rss": false,
+    "exact_one_slot_ledger_ceiling_bytes": 12582912,
+    "ledger_ceiling_is_observed_memory": false,
+    "allocator_high_water": null,
+    "rss_high_water": null,
+    "post_return_descriptor_count": null,
+    "null_meaning": "unavailable portable observation, not zero"
+  },
+  "custody_protocol": {
+    "order": "final source and docs; final executable and measurements; reread all hashes; write this record last",
+    "self_hash_embedded": false,
+    "documents_embed_this_record_hash": false,
+    "reason": "avoid a cyclic custody hash; this file's SHA-256 is reported out of band",
+    "commit_performed": false,
+    "push_performed": false,
+    "unrelated_dirty_state_preserved": true
+  }
+}

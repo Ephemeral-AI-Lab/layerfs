@@ -17,7 +17,8 @@ use crate::identity::{
     COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1, TAG_OBJECT_CHECKSUM, TAG_PACK,
 };
 use crate::limits::{
-    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
+    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
+    OperationReservationV1, ResourceLedgerV1,
 };
 use crate::object::{
     decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectReadPortV1,
@@ -98,6 +99,20 @@ pub struct PackIndexEntryV1 {
 }
 
 impl PackIndexEntryV1 {
+    pub(crate) const fn from_validated_parts(
+        id: TypedPhysicalObjectIdV1,
+        absolute_offset: u64,
+        object_len: u32,
+        object_checksum: ObjectChecksumV1,
+    ) -> Self {
+        Self {
+            id,
+            absolute_offset,
+            object_len,
+            object_checksum,
+        }
+    }
+
     pub const fn id(self) -> TypedPhysicalObjectIdV1 {
         self.id
     }
@@ -134,6 +149,12 @@ pub trait PackIndexSpoolV1 {
     /// LayerFS charges this declaration before construction or validation;
     /// spill-file bytes themselves are not resident memory.
     fn resident_memory_bound_bytes(&self, maximum_entries: u32) -> CoreResult<u64>;
+    /// Exact external spill bytes currently occupied when the implementation
+    /// can report them portably. `None` is unavailable, never an inferred
+    /// zero.
+    fn storage_bytes_observation(&self) -> CoreResult<Option<u64>> {
+        Ok(None)
+    }
     fn reset(&mut self, maximum_entries: u32) -> Result<(), PackPortErrorV1>;
     fn push(&mut self, entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1>;
     fn sort_by_key(&mut self) -> Result<(), PackPortErrorV1>;
@@ -152,6 +173,20 @@ pub struct SealedPackV1 {
 }
 
 impl SealedPackV1 {
+    pub(crate) const fn from_validated_parts(
+        id: PackIdV1,
+        pack_len: u64,
+        record_count: u32,
+        index_offset: u64,
+    ) -> Self {
+        Self {
+            id,
+            pack_len,
+            record_count,
+            index_offset,
+        }
+    }
+
     pub const fn id(self) -> PackIdV1 {
         self.id
     }
@@ -167,6 +202,75 @@ impl SealedPackV1 {
     pub const fn index_offset(self) -> u64 {
         self.index_offset
     }
+}
+
+/// Checked location of one canonical object inside a validated dense pack.
+///
+/// This is an internal carrier fact, not an independently trusted catalog
+/// record. Callers must first validate the complete pack and retain the pack's
+/// immutable bytes for the lifetime of the location.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PackObjectLocationV1 {
+    pub(crate) object_offset: u64,
+    pub(crate) object_len: u64,
+}
+
+/// Read the unique canonical index entry for `expected` from an immutable pack
+/// whose complete seal was already validated at admission.
+pub(crate) fn locate_validated_pack_index_entry_v1<P>(
+    pack: &mut P,
+    sealed: SealedPackV1,
+    expected: TypedPhysicalObjectIdV1,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<Option<PackIndexEntryV1>>
+where
+    P: PackReadPortV1 + ?Sized,
+{
+    if pack.len().map_err(map_read_port)? != sealed.pack_len {
+        return Err(CoreError::PackInvalid);
+    }
+    let mut low = 0_u32;
+    let mut high = sealed.record_count;
+    while low < high {
+        let middle = low + (high - low) / 2;
+        let offset = sealed
+            .index_offset
+            .checked_add(
+                u64::from(middle)
+                    .checked_mul(PACK_INDEX_ENTRY_BYTES)
+                    .ok_or(CoreError::IntegerOverflow)?,
+            )
+            .ok_or(CoreError::IntegerOverflow)?;
+        let entry = decode_index_entry(&read_array::<80, _>(pack, offset, counters)?)?;
+        match compare_typed_key(entry.id, expected) {
+            Ordering::Less => low = middle.checked_add(1).ok_or(CoreError::IntegerOverflow)?,
+            Ordering::Greater => high = middle,
+            Ordering::Equal => return Ok(Some(entry)),
+        }
+    }
+    Ok(None)
+}
+
+/// Revalidate every canonical byte named by one admitted index entry. This is
+/// used for object-level incumbent validation without trusting the locator as
+/// an identity oracle.
+pub(crate) fn validate_validated_pack_object_v1<P>(
+    pack: &mut P,
+    entry: PackIndexEntryV1,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    counters: &mut OperationCountersV1,
+) -> CoreResult<PackObjectLocationV1>
+where
+    P: PackReadPortV1 + ?Sized,
+{
+    validate_record(pack, entry, ProfileSpecV1::frozen().id(), scratch, counters)?;
+    Ok(PackObjectLocationV1 {
+        object_offset: entry
+            .absolute_offset
+            .checked_add(4)
+            .ok_or(CoreError::IntegerOverflow)?,
+        object_len: u64::from(entry.object_len),
+    })
 }
 
 pub fn build_dense_pack_v1<O, P, M>(
@@ -383,6 +487,39 @@ where
         .charge(MemoryComponentV1::MetadataWindow, metadata_bytes)?;
     let _reservation = ledger.reserve_operation_with_plan(memory)?;
     counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+    validate_pack_inner_v1(pack, metadata, scratch, counters, maximum_entries)
+}
+
+#[cfg(feature = "c3-polymorphism")]
+pub(crate) fn validate_pack_borrowed_v1<P, M>(
+    pack: &mut P,
+    metadata: &mut M,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    maximum_entries: u32,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<SealedPackV1>
+where
+    P: PackReadPortV1 + ?Sized,
+    M: PackIndexSpoolV1 + ?Sized,
+{
+    if maximum_entries == 0 || u64::from(maximum_entries) > MAX_PACK_RECORDS {
+        return Err(CoreError::ResourceRefused);
+    }
+    let metadata_bytes = metadata
+        .resident_memory_bound_bytes(maximum_entries)?
+        .checked_add(pack.resident_memory_bound_bytes()?)
+        .ok_or(CoreError::IntegerOverflow)?;
+    let memory = OperationMemoryPlanV1::empty()
+        .charge(MemoryComponentV1::ComparisonWindow, scratch.len() as u64)?
+        .charge(
+            MemoryComponentV1::HashState,
+            IDENTITY_HASHER_BYTES_V1
+                .checked_mul(2)
+                .ok_or(CoreError::IntegerOverflow)?,
+        )?
+        .charge(MemoryComponentV1::MetadataWindow, metadata_bytes)?;
+    reservation.require(memory)?;
     validate_pack_inner_v1(pack, metadata, scratch, counters, maximum_entries)
 }
 
@@ -669,7 +806,7 @@ fn preflight<O: PackObjectSourceV1 + ?Sized>(
     Ok((record_count, index_offset, pack_len))
 }
 
-fn record_padding(object_len: u64) -> CoreResult<u8> {
+pub(crate) fn record_padding(object_len: u64) -> CoreResult<u8> {
     let unpadded = object_len
         .checked_add(4)
         .ok_or(CoreError::IntegerOverflow)?;
@@ -683,7 +820,7 @@ fn record_len(object_len: u64) -> CoreResult<u64> {
         .ok_or(CoreError::IntegerOverflow)
 }
 
-fn encode_header(record_count: u32, index_offset: u64) -> [u8; 64] {
+pub(crate) fn encode_header(record_count: u32, index_offset: u64) -> [u8; 64] {
     let mut bytes = [0_u8; 64];
     bytes[..8].copy_from_slice(PACK_MAGIC);
     bytes[8..10].copy_from_slice(&1_u16.to_be_bytes());
@@ -695,7 +832,7 @@ fn encode_header(record_count: u32, index_offset: u64) -> [u8; 64] {
     bytes
 }
 
-fn encode_index_entry(entry: PackIndexEntryV1) -> [u8; 80] {
+pub(crate) fn encode_index_entry(entry: PackIndexEntryV1) -> [u8; 80] {
     let mut bytes = [0_u8; 80];
     bytes[0] = kind_byte(entry.id.kind());
     bytes[4..36].copy_from_slice(entry.id.as_bytes());
@@ -705,7 +842,7 @@ fn encode_index_entry(entry: PackIndexEntryV1) -> [u8; 80] {
     bytes
 }
 
-fn decode_index_entry(bytes: &[u8; 80]) -> CoreResult<PackIndexEntryV1> {
+pub(crate) fn decode_index_entry(bytes: &[u8; 80]) -> CoreResult<PackIndexEntryV1> {
     if bytes[1] != 0 || be_u16(&bytes[2..4]) != 0 {
         return Err(CoreError::PackInvalid);
     }
@@ -720,7 +857,7 @@ fn decode_index_entry(bytes: &[u8; 80]) -> CoreResult<PackIndexEntryV1> {
     })
 }
 
-fn encode_trailer_prefix(
+pub(crate) fn encode_trailer_prefix(
     pack_len: u64,
     index_offset: u64,
     index_len: u64,
@@ -757,7 +894,7 @@ fn append_hashed<P: PrivatePackPortV1 + ?Sized>(
     counters.add(CounterFieldV1::BytesWritten, bytes.len() as u64)
 }
 
-fn hash_port_range<P: PackReadPortV1 + ?Sized>(
+pub(crate) fn hash_port_range<P: PackReadPortV1 + ?Sized>(
     pack: &mut P,
     start: u64,
     len: u64,
@@ -804,6 +941,12 @@ const fn kind_byte(kind: PhysicalObjectKindV1) -> u8 {
         PhysicalObjectKindV1::Symlink => 0x04,
         PhysicalObjectKindV1::Chunk => 0x05,
     }
+}
+
+fn compare_typed_key(left: TypedPhysicalObjectIdV1, right: TypedPhysicalObjectIdV1) -> Ordering {
+    kind_byte(left.kind())
+        .cmp(&kind_byte(right.kind()))
+        .then_with(|| left.as_bytes().cmp(right.as_bytes()))
 }
 
 fn typed_id_from_digest(kind: PhysicalObjectKindV1, digest: [u8; 32]) -> TypedPhysicalObjectIdV1 {

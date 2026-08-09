@@ -2,7 +2,7 @@ use layerfs_storage::cas::{
     admit_complete_immutable_v1, compare_closure_object_ids_v1, read_complete_immutable_v1,
     AdmissionBuffersV1, BoundedImmutableReadSinkV1, ClosureObjectV1,
     CompleteImmutableClosureReadPortV1, ImmutablePortErrorV1, OccupiedImmutableReadPortV1,
-    PreparedImmutableClosurePortV1,
+    PreparedImmutableClosurePortV1, ValidatedOccupiedObjectV1,
 };
 use layerfs_storage::format::{ValidatedComponent, ValidatedSymlinkTarget};
 use layerfs_storage::identity::{
@@ -546,9 +546,9 @@ impl PreparedImmutableClosurePortV1 for Sink {
 
     fn note_reused_object(
         &mut self,
-        id: TypedPhysicalObjectIdV1,
+        validated: ValidatedOccupiedObjectV1,
     ) -> Result<(), ImmutablePortErrorV1> {
-        self.reused.push(id);
+        self.reused.push(validated.id());
         Ok(())
     }
 

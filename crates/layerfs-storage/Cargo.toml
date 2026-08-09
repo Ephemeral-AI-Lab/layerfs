@@ -6,6 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+default = []
+# Closed C3 CDC polymorphism and its externally supervised qualification
+# harness. FastCDC is the selected baseline; SeqCDC is the explicit alternate.
+c3-polymorphism = []
+
 [lib]
 name = "layerfs_storage"
 path = "src/lib.rs"
@@ -14,3 +20,33 @@ path = "src/lib.rs"
 # Frozen L1 identity adapter: unkeyed BLAKE3-256 only, with the exact audited
 # version and no optional/default features.
 blake3.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# POSIX process CPU clocks for the portable qualification adapter. Non-Unix
+# targets report the metric as unavailable rather than inventing a substitute.
+libc = { version = "=0.2.189", default-features = false }
+
+[[bin]]
+name = "c3-qualification"
+path = "src/bin/c3_qualification.rs"
+required-features = ["c3-polymorphism"]
+
+[[test]]
+name = "l1_cas"
+path = "tests/l1_cas.rs"
+required-features = ["c3-polymorphism"]
+
+[[test]]
+name = "l1_pack"
+path = "tests/l1_pack.rs"
+required-features = ["c3-polymorphism"]
+
+[[test]]
+name = "c3_fscas"
+path = "tests/c3_fscas.rs"
+required-features = ["c3-polymorphism"]
+
+[[test]]
+name = "c3_operation"
+path = "tests/c3_operation.rs"
+required-features = ["c3-polymorphism"]

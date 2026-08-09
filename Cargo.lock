@@ -85,6 +85,7 @@ name = "layerfs-storage"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "libc",
 ]
 
 [[package]]

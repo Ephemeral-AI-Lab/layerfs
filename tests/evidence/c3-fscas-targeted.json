@@ -1,0 +1,211 @@
+{
+  "schema": "layerfs-c3-targeted-evidence-v2",
+  "work_key": "C3-LAUNCH-COMPARE",
+  "captured_at": "2026-08-10",
+  "status": "implementation-and-targeted-verification-pass-with-selection-gaps",
+  "decision": "No Selection",
+  "custody": {
+    "source_manifest": "tests/evidence/c3-source-manifest.json",
+    "source_manifest_sha256": "303a193a4320a98085531880fd2c37104b1946747dfa87605dbd1c1c525ddf11",
+    "implementation_head": "7bec6b7ee20f2356580fd85ac71f8184161c0b8a",
+    "dirty_task_changes_expected": true,
+    "commit_performed": false,
+    "push_performed": false
+  },
+  "scope": {
+    "executed_platform": "aarch64-apple-darwin",
+    "second_platform": "user-deferred; unavailable-not-run; not passed",
+    "production_operations": "portable filesystem and POSIX process-clock operations only",
+    "apple_only_operation_or_measurement_api_used": false
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "result": "pass"
+    },
+    {
+      "command": "cargo check --workspace",
+      "result": "pass"
+    },
+    {
+      "command": "cargo check --workspace --all-targets --all-features --offline",
+      "result": "pass"
+    },
+    {
+      "command": "cargo test --workspace",
+      "result": "pass",
+      "passed": 66,
+      "failed": 0
+    },
+    {
+      "command": "cargo test --workspace --all-features",
+      "result": "pass",
+      "passed": 133,
+      "failed": 0
+    },
+    {
+      "command": "cargo test --release --workspace",
+      "result": "pass",
+      "passed": 66,
+      "failed": 0
+    },
+    {
+      "command": "cargo test --release --workspace --all-features",
+      "result": "pass",
+      "passed": 133,
+      "failed": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "shasum -a 256 -c tests/fixtures/frozen/SHA256SUMS",
+      "result": "pass",
+      "files_verified": 6
+    },
+    {
+      "command": "./target/release/c3-qualification --validate-registry",
+      "result": "pass",
+      "rows": 207,
+      "exact_equivalence_rows": 79
+    },
+    {
+      "command": "cargo tree --workspace --edges normal",
+      "result": "pass"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    },
+    {
+      "command": "git status --short --branch",
+      "result": "pass; expected task and unrelated dirty state retained"
+    }
+  ],
+  "focused_test_slices": {
+    "c3_fastcdc_compare": {
+      "passed": 4,
+      "failed": 0
+    },
+    "c3_fscas": {
+      "passed": 31,
+      "failed": 0
+    },
+    "c3_operation": {
+      "passed": 1,
+      "failed": 0
+    },
+    "c3_seqcdc_compare": {
+      "passed": 4,
+      "failed": 0
+    },
+    "l1_update": {
+      "passed": 5,
+      "failed": 0
+    },
+    "l1_tree": {
+      "passed": 16,
+      "failed": 0
+    },
+    "focused_total": {
+      "passed": 61,
+      "failed": 0
+    }
+  },
+  "complete_c3_operation": {
+    "pipeline": "source supplier -> selected canonical CDC/content/IDs -> direct bounded pack/index -> real FsCas admission -> complete closure validation/fence -> COW candidate root -> synchronous handoff",
+    "operation_slot_reserved_before_source_invocation": true,
+    "same_slot_borrowed_through_lower_layers": true,
+    "one_32768_byte_ring": true,
+    "at_most_two_borrowed_spans": true,
+    "source_sized_staging": false,
+    "whole_pack_copy": false,
+    "memory_backend": false,
+    "automatic_fallback": false,
+    "publication_authority": false
+  },
+  "fscas": {
+    "root_wide_shared_owner_across_reopened_handles": true,
+    "simultaneous_independent_reopened_callers_tested": true,
+    "visibility_lock_excludes_private_candidate_validation": true,
+    "catalog_before_complete_validated_carrier": false,
+    "root_before_complete_bound_closure_fence": false,
+    "equal_complete_typed_object_reuses_canonical_locator": true,
+    "unequal_or_malformed_occupant_fails_closed": true,
+    "sequential_and_concurrent_overlap_tested": true,
+    "cancellation_deadline_boundary_and_cleanup_faults_tested": true,
+    "closure_capability": "opaque, non-Copy, FsCas-generation/operation/root/transcript-bound",
+    "spoof_nonexistent_duplicate_wrong_version_cross_fscas_cross_operation_and_replay_rejected": true,
+    "cleanup_failure_invalidates_shared_owner_and_stale_handles": true,
+    "open_existing_refuses_invalidation_marker": true,
+    "hard_link_unavailable": "typed Unsupported with zero fallback"
+  },
+  "update": {
+    "fastcdc_verified_rejoin": "private non-cloneable operation-bound evidence, exact algorithm/profile binding, bounded exact-byte validation before authenticated suffix reuse",
+    "replace_from_update_calls": 0,
+    "full_base_payload_fallback_calls": 0,
+    "seqcdc_production_update": "unavailable; candidate absolute gate fails"
+  },
+  "large_cow_locality": {
+    "semantic_equivalence_to_full_rebuild": true,
+    "head_add": {
+      "created_pages": 96,
+      "reused_pages": 0,
+      "created_bytes": 784720,
+      "base_reads": 54194,
+      "result_reads": 54191
+    },
+    "middle_add": {
+      "created_pages": 50,
+      "reused_pages": 46,
+      "created_bytes": 402369,
+      "base_reads": 27197,
+      "result_reads": 27361
+    },
+    "head_remove": {
+      "created_pages": 96,
+      "reused_pages": 0,
+      "created_bytes": 784634,
+      "base_reads": 54194,
+      "result_reads": 54185
+    },
+    "middle_remove": {
+      "created_pages": 50,
+      "reused_pages": 46,
+      "created_bytes": 402282,
+      "base_reads": 27197,
+      "result_reads": 27355
+    },
+    "affected_leaf_and_ancestors_only_claim": false,
+    "diagnosis": "current positional pages cause suffix rebuild; head edits rebuild the entire tree and middle edits rebuild the suffix"
+  },
+  "resource_and_forbidden_work": {
+    "operation_slots_after_tested_returns": 0,
+    "ring_state_after_tested_returns": 0,
+    "preparation_entries_after_tested_returns": 0,
+    "unreachable_residue_bytes_after_complete_samples": 0,
+    "retry": 0,
+    "redispatch": 0,
+    "fallback": 0,
+    "provider_switch": 0,
+    "cdc_switch": 0,
+    "publication_dispatch": 0,
+    "replace_from_update": 0,
+    "file_sync": 0,
+    "directory_sync": 0,
+    "wal_or_recovery": 0,
+    "memory_backend": 0,
+    "whole_pack_copy": 0,
+    "layerfs_created_threads": 0,
+    "rayon": 0
+  },
+  "known_failed_or_deferred_gates": [
+    "OS admitted carrier retains the frozen FastCDC profile; SeqCDC closure validation is not authenticated by the carrier profile",
+    "OS production Update/rejoin is unavailable",
+    "large head/middle COW edits do not meet affected-leaf-and-ancestors-only locality",
+    "smoke and qualification registry walls fail because most rows lack independent row executors",
+    "allocator/RSS/open-descriptor high-water are unavailable rather than reported as zero",
+    "second-platform execution is explicitly deferred and not passed"
+  ]
+}

@@ -232,10 +232,21 @@ fn create_and_explicit_replace_produce_exact_prepared_closures() {
     assert_eq!(sink.completed, Some(created));
     assert_eq!(source.offset, data.len());
     assert_eq!(counters.bytes_read, data.len() as u64);
+    assert_eq!(counters.source_read_calls, 5);
     assert_eq!(counters.bytes_copied, data.len() as u64);
-    assert_eq!(counters.fallback_attempts, 0);
-    assert_eq!(counters.retries_or_redispatches, 0);
-    assert_eq!(counters.publication_dispatches, 0);
+    // Four non-empty source fragments cross the circular-ring end three times.
+    // The work counters report actual contiguous writes/scans, not source reads.
+    assert_eq!(counters.ring_fills, 6);
+    assert_eq!(counters.ring_wrap_spans, 3);
+    assert_eq!(counters.cdc_scan_calls, 11);
+    assert_eq!(counters.cdc_scan_bytes, data.len() as u64);
+    assert!(counters.bytes_boundary_inspected > 0);
+    assert!(counters.bytes_boundary_inspected <= counters.cdc_scan_bytes);
+    assert_eq!(counters.logical_hash_bytes, data.len() as u64);
+    assert!(counters.logical_hash_update_calls > 0);
+    assert!(counters.physical_hash_bytes > data.len() as u64);
+    assert!(counters.physical_hash_update_calls > 0);
+    assert!(counters.has_zero_forbidden_work());
     assert_eq!(ledger.admitted_slots(), 0);
     assert_eq!(created.chunk_count() as usize, spool.values.len());
 
@@ -280,7 +291,7 @@ fn create_and_explicit_replace_produce_exact_prepared_closures() {
     assert_eq!(replaced, created);
     assert!(counters.logical_chunks_reused > 0);
     assert!(counters.physical_objects_reused > 0);
-    assert_eq!(counters.fallback_attempts, 0);
+    assert!(counters.has_zero_forbidden_work());
 }
 
 #[test]

@@ -74,3 +74,25 @@ fn prohibited_runtime_dependencies_are_not_present() {
         );
     }
 }
+
+#[test]
+fn fscas_remains_private_to_the_unpublished_storage_implementation() {
+    let storage_manifest = include_str!("../Cargo.toml");
+    let sdk = include_str!("../../layerfs-sdk/src/lib.rs");
+    let driver = include_str!("../../layerfs-driver/src/lib.rs");
+
+    assert!(storage_manifest.contains("publish = false"));
+    for public_surface in [sdk, driver] {
+        for private_name in [
+            "FsCas",
+            "fscas",
+            "FsPrivatePack",
+            "CompleteValidatedClosure",
+        ] {
+            assert!(
+                !public_surface.contains(private_name),
+                "private storage name {private_name} leaked into an SDK/driver surface"
+            );
+        }
+    }
+}

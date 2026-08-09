@@ -5,10 +5,14 @@
 
 use crate::cas::{
     ImmutablePortErrorV1, OccupiedImmutableReadPortV1, PreparedImmutableClosurePortV1,
+    ValidatedOccupiedObjectV1,
 };
+#[cfg(feature = "c3-polymorphism")]
+use crate::cdc::algorithms::{C3CdcAlgorithmV1, C3CdcStreamV1};
 use crate::cdc::{
-    BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, ChunkBoundaryV1,
-    ContinueCdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES,
+    BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1,
+    CdcSourceErrorV1, ChunkBoundaryV1, ContinueCdcControlV1, FastCdcV1, FastCdcV1Stream,
+    MAXIMUM_CHUNK_BYTES,
 };
 use crate::format::{
     DirectoryModeContext, ExtentTagV1, PhysicalTreeChildKindV1, TreeSubtypeV1, ValidatedComponent,
@@ -22,7 +26,8 @@ use crate::identity::{
     PhysicalVersionRecordIdV1, SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
 use crate::limits::{
-    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
+    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
+    OperationReservationV1, ResourceLedgerV1,
 };
 use crate::object::{
     decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1,
@@ -36,6 +41,64 @@ const MAX_CLOSURE_TRAVERSAL_DEPTH: usize = 1_028;
 const MAX_COMPONENT_BYTES: usize = 255;
 const CHARGED_TRAVERSAL_FRAME_BYTES: u64 = 512;
 
+#[derive(Clone, Copy)]
+enum ClosureCdcV1 {
+    FastCdc,
+    #[cfg(feature = "c3-polymorphism")]
+    Selected(C3CdcAlgorithmV1),
+}
+
+impl ClosureCdcV1 {
+    fn stream<'ring, C: CdcControlV1 + ?Sized>(
+        self,
+        ring: &'ring mut [u8],
+        control: &mut C,
+    ) -> CoreResult<ClosureCdcStreamV1<'ring>> {
+        match self {
+            Self::FastCdc => FastCdcV1::new()
+                .stream(ring, control)
+                .map(ClosureCdcStreamV1::FastCdc),
+            #[cfg(feature = "c3-polymorphism")]
+            Self::Selected(algorithm) => algorithm
+                .stream(ring, control)
+                .map(ClosureCdcStreamV1::Selected),
+        }
+    }
+}
+
+enum ClosureCdcStreamV1<'ring> {
+    FastCdc(FastCdcV1Stream<'ring>),
+    #[cfg(feature = "c3-polymorphism")]
+    Selected(C3CdcStreamV1<'ring>),
+}
+
+impl ClosureCdcStreamV1<'_> {
+    fn push<C: CdcControlV1 + ?Sized, B: BoundaryConsumerV1 + ?Sized>(
+        &mut self,
+        fragment: Result<&[u8], CdcSourceErrorV1>,
+        control: &mut C,
+        consumer: &mut B,
+    ) -> CoreResult<()> {
+        match self {
+            Self::FastCdc(stream) => stream.push(fragment, control, consumer),
+            #[cfg(feature = "c3-polymorphism")]
+            Self::Selected(stream) => stream.push(fragment, control, consumer),
+        }
+    }
+
+    fn finish<C: CdcControlV1 + ?Sized, B: BoundaryConsumerV1 + ?Sized>(
+        &mut self,
+        control: &mut C,
+        consumer: &mut B,
+    ) -> CoreResult<()> {
+        match self {
+            Self::FastCdc(stream) => stream.finish(control, consumer),
+            #[cfg(feature = "c3-polymorphism")]
+            Self::Selected(stream) => stream.finish(control, consumer),
+        }
+    }
+}
+
 /// Immutable random-readable view of a canonical, typed closure spool.
 ///
 /// The source owns its exact index and payload carrier. `object_id_at` must be
@@ -46,6 +109,11 @@ pub trait CompleteImmutableClosureReadPortV1 {
     /// Side-effect-free declaration queried before admission. It must not
     /// allocate, cache, read closure metadata, or consume the source.
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64>;
+    /// Exact direct storage reads performed by the immutable closure carrier.
+    /// Memory-backed and synthetic ports may retain the zero default.
+    fn direct_storage_read_observation(&self) -> Result<(u64, u64), ImmutablePortErrorV1> {
+        Ok((0, 0))
+    }
     fn object_id_at(
         &mut self,
         ordinal: u64,
@@ -146,12 +214,71 @@ where
     O: OccupiedImmutableReadPortV1 + ?Sized,
     S: PreparedImmutableClosurePortV1 + ?Sized,
 {
-    if !matches!(
+    validate_expected_version(expected_version_record)?;
+    let memory = admission_memory_plan(closure, occupied, sink, &buffers)?;
+    let _reservation = ledger.reserve_operation_with_plan(memory)?;
+    counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+    admit_complete_after_admission(
+        closure,
         expected_version_record,
-        TypedPhysicalObjectIdV1::VersionRecord(_)
-    ) {
-        return Err(CoreError::TypeDomain);
+        occupied,
+        sink,
+        counters,
+        buffers,
+        ClosureCdcV1::FastCdc,
+    )
+}
+
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn admit_complete_immutable_borrowed_v1<C, O, S>(
+    closure: &mut C,
+    expected_version_record: TypedPhysicalObjectIdV1,
+    occupied: &mut O,
+    sink: &mut S,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    buffers: AdmissionBuffersV1<'_>,
+    algorithm: C3CdcAlgorithmV1,
+) -> CoreResult<AdmittedClosureV1>
+where
+    C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    O: OccupiedImmutableReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    validate_expected_version(expected_version_record)?;
+    let memory = admission_memory_plan(closure, occupied, sink, &buffers)?;
+    reservation.require(memory)?;
+    admit_complete_after_admission(
+        closure,
+        expected_version_record,
+        occupied,
+        sink,
+        counters,
+        buffers,
+        ClosureCdcV1::Selected(algorithm),
+    )
+}
+
+fn validate_expected_version(expected: TypedPhysicalObjectIdV1) -> CoreResult<()> {
+    if matches!(expected, TypedPhysicalObjectIdV1::VersionRecord(_)) {
+        Ok(())
+    } else {
+        Err(CoreError::TypeDomain)
     }
+}
+
+fn admission_memory_plan<C, O, S>(
+    closure: &C,
+    occupied: &O,
+    sink: &S,
+    buffers: &AdmissionBuffersV1<'_>,
+) -> CoreResult<OperationMemoryPlanV1>
+where
+    C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    O: OccupiedImmutableReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
     let closure_resident = closure.resident_memory_bound_bytes()?;
     let occupied_resident = occupied.resident_memory_bound_bytes()?;
     let sink_resident = sink.resident_memory_bound_bytes()?;
@@ -159,7 +286,7 @@ where
         .checked_add(occupied_resident)
         .and_then(|bytes| bytes.checked_add(sink_resident))
         .ok_or(CoreError::IntegerOverflow)?;
-    let memory = OperationMemoryPlanV1::empty()
+    OperationMemoryPlanV1::empty()
         .charge(
             MemoryComponentV1::ComparisonWindow,
             (2 * COMPARISON_WINDOW_BYTES) as u64,
@@ -181,10 +308,24 @@ where
                 .ok_or(CoreError::IntegerOverflow)?,
         )?
         .charge(MemoryComponentV1::MetadataWindow, source_resident)?
-        .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)?;
-    let _reservation = ledger.reserve_operation_with_plan(memory)?;
-    counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+        .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)
+}
 
+#[allow(clippy::too_many_arguments)]
+fn admit_complete_after_admission<C, O, S>(
+    closure: &mut C,
+    expected_version_record: TypedPhysicalObjectIdV1,
+    occupied: &mut O,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    buffers: AdmissionBuffersV1<'_>,
+    validation_cdc: ClosureCdcV1,
+) -> CoreResult<AdmittedClosureV1>
+where
+    C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    O: OccupiedImmutableReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
     let object_count = closure.object_count().map_err(map_source_port)?;
     crate::format::validate_total_object_count(object_count)?;
     let object_count_usize =
@@ -202,7 +343,7 @@ where
     buffers.traversal_state[..required_traversal_bytes].fill(0);
     sink.begin_private_closure(object_count)
         .map_err(map_sink_port)?;
-    let result = admit_inner(
+    let validation = admit_inner(
         closure,
         object_count,
         expected_version_record,
@@ -211,7 +352,34 @@ where
         counters,
         buffers,
         required_traversal_bytes,
+        validation_cdc,
     );
+    let source_read_accounting = closure
+        .direct_storage_read_observation()
+        .map_err(map_source_port)
+        .and_then(|(bytes, calls)| counters.record_fscas_read(bytes, calls));
+    let occupied_read_accounting = occupied
+        .direct_storage_read_observation()
+        .map_err(map_source_port)
+        .and_then(|(bytes, calls)| counters.record_fscas_read(bytes, calls));
+    let result = match (validation, source_read_accounting, occupied_read_accounting) {
+        (Err(error), _, _) => Err(error),
+        (Ok(_), Err(error), _) | (Ok(_), Ok(()), Err(error)) => Err(error),
+        (Ok(admitted), Ok(()), Ok(())) => {
+            // All fallible accounting precedes the only visibility
+            // transition. Assigning the checked snapshot afterward cannot
+            // turn a visible complete closure into an accounting failure.
+            let visibility = (|| {
+                let mut visible_counters = *counters;
+                visible_counters.record_closure_fence()?;
+                sink.make_closure_visible(expected_version_record)
+                    .map_err(map_sink_port)?;
+                *counters = visible_counters;
+                Ok(())
+            })();
+            visibility.map(|()| admitted)
+        }
+    };
     if result.is_err() {
         sink.abort_private_closure();
     }
@@ -228,6 +396,7 @@ fn admit_inner<C, O, S>(
     counters: &mut OperationCountersV1,
     buffers: AdmissionBuffersV1<'_>,
     required_traversal_bytes: usize,
+    validation_cdc: ClosureCdcV1,
 ) -> CoreResult<AdmittedClosureV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -270,7 +439,7 @@ where
             .map_err(map_source_port)?
         {
             Some(occupied_len) => {
-                validate_and_compare_occupied(
+                let validated = validate_and_compare_occupied(
                     closure,
                     ordinal,
                     len,
@@ -281,8 +450,7 @@ where
                     buffers.incoming_comparison,
                     buffers.occupied_comparison,
                 )?;
-                sink.note_reused_object(expected_id)
-                    .map_err(map_sink_port)?;
+                sink.note_reused_object(validated).map_err(map_sink_port)?;
                 reused_count = reused_count
                     .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?;
@@ -325,6 +493,7 @@ where
         &mut buffers.traversal_state[..required_traversal_bytes],
         &mut visited,
         1,
+        validation_cdc,
     )?;
     traversal_finish(
         &mut buffers.traversal_state[..required_traversal_bytes],
@@ -338,8 +507,6 @@ where
         return Err(CoreError::IdMismatch);
     }
 
-    sink.make_closure_visible(expected_version_record)
-        .map_err(map_sink_port)?;
     Ok(AdmittedClosureV1 {
         version_record: expected_version_record,
         object_count,
@@ -521,7 +688,7 @@ fn validate_and_compare_occupied<C, O>(
     counters: &mut OperationCountersV1,
     incoming_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     occupied_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
-) -> CoreResult<()>
+) -> CoreResult<ValidatedOccupiedObjectV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
     O: OccupiedImmutableReadPortV1 + ?Sized,
@@ -583,7 +750,11 @@ where
             .ok_or(CoreError::IntegerOverflow)?;
     }
     if equal {
-        Ok(())
+        Ok(ValidatedOccupiedObjectV1::new(
+            ordinal,
+            expected_id,
+            occupied_len,
+        ))
     } else {
         Err(CoreError::OccupiedSameIdDifferentBytes)
     }
@@ -1001,6 +1172,7 @@ fn reconstruct_root_directory<C>(
     states: &mut [u8],
     visited: &mut u64,
     depth: usize,
+    validation_cdc: ClosureCdcV1,
 ) -> CoreResult<ImplicitRootDirectoryV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -1016,6 +1188,7 @@ where
         states,
         visited,
         depth,
+        validation_cdc,
     )? {
         ReconstructedDirectoryV1::ImplicitRoot(root) => Ok(root),
         ReconstructedDirectoryV1::Explicit(_) => Err(CoreError::RootSentinel),
@@ -1033,6 +1206,7 @@ fn reconstruct_explicit_directory<C>(
     states: &mut [u8],
     visited: &mut u64,
     depth: usize,
+    validation_cdc: ClosureCdcV1,
 ) -> CoreResult<ExplicitDirectoryNodeV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -1048,6 +1222,7 @@ where
         states,
         visited,
         depth,
+        validation_cdc,
     )? {
         ReconstructedDirectoryV1::Explicit(directory) => Ok(directory),
         ReconstructedDirectoryV1::ImplicitRoot(_) => Err(CoreError::ChildMode),
@@ -1066,6 +1241,7 @@ fn reconstruct_directory<C>(
     states: &mut [u8],
     visited: &mut u64,
     depth: usize,
+    validation_cdc: ClosureCdcV1,
 ) -> CoreResult<ReconstructedDirectoryV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -1104,6 +1280,7 @@ where
             states,
             visited,
             depth + 1,
+            validation_cdc,
         )?;
         if facts.entry_count != entry_count || facts.depth != page_depth {
             return Err(CoreError::IdMismatch);
@@ -1145,6 +1322,7 @@ fn stream_page_entries<C>(
     states: &mut [u8],
     visited: &mut u64,
     traversal_depth: usize,
+    validation_cdc: ClosureCdcV1,
 ) -> CoreResult<PageFactsV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -1181,6 +1359,7 @@ where
                     states,
                     visited,
                     traversal_depth + 1,
+                    validation_cdc,
                 )?;
                 let component = ValidatedComponent::new(&name[..name_len])?;
                 hasher.push(LogicalDirectoryEntryV1::new(component, child))?;
@@ -1233,6 +1412,7 @@ where
                     states,
                     visited,
                     traversal_depth + 1,
+                    validation_cdc,
                 )?;
                 if facts.depth.checked_add(1) != Some(expected_depth)
                     || facts.entry_count != declared_count
@@ -1284,6 +1464,7 @@ fn reconstruct_child<C>(
     states: &mut [u8],
     visited: &mut u64,
     depth: usize,
+    validation_cdc: ClosureCdcV1,
 ) -> CoreResult<LogicalChildIdV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -1299,6 +1480,7 @@ where
             states,
             visited,
             depth,
+            validation_cdc,
         )
         .map(LogicalChildIdV1::Directory),
         PhysicalTreeChildKindV1::File => reconstruct_file(
@@ -1311,6 +1493,7 @@ where
             states,
             visited,
             depth,
+            validation_cdc,
         )
         .map(LogicalChildIdV1::File),
         PhysicalTreeChildKindV1::Symlink => reconstruct_symlink(
@@ -1379,6 +1562,7 @@ fn reconstruct_file<C>(
     states: &mut [u8],
     visited: &mut u64,
     depth: usize,
+    validation_cdc: ClosureCdcV1,
 ) -> CoreResult<FileNodeIdV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
@@ -1388,7 +1572,7 @@ where
     let first_visit = traversal_enter(states, ordinal)?;
     let mut count_control = ContinueCdcControlV1;
     let mut count_consumer = ChunkCountConsumerV1 { count: 0 };
-    let mut count_stream = FastCdcV1::new().stream(cdc_ring, &mut count_control)?;
+    let mut count_stream = validation_cdc.stream(cdc_ring, &mut count_control)?;
     let (mode, logical_len) = stream_file_bytes(
         closure,
         object_count,
@@ -1407,7 +1591,7 @@ where
         hasher: LogicalFileHasherV1::new(logical_len, count_consumer.count)?,
         failure: None,
     };
-    let mut hash_stream = FastCdcV1::new().stream(cdc_ring, &mut hash_control)?;
+    let mut hash_stream = validation_cdc.stream(cdc_ring, &mut hash_control)?;
     let (second_mode, second_len) = stream_file_bytes(
         closure,
         object_count,

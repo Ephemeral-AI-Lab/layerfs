@@ -26,12 +26,14 @@ use crate::identity::{
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
 };
+use crate::profile::ChunkerSpecV1;
 use crate::{CoreError, CoreResult};
 
 pub const MAX_UPDATE_ANCHOR_SCAN_BYTES: u64 = 65_536;
 pub const MAX_UPDATE_REJOIN_VERIFICATION_BYTES: u64 = MAXIMUM_CHUNK_BYTES as u64;
 pub const MAX_UPDATE_RESYNCHRONIZATION_BYTES: u64 =
     MAX_UPDATE_ANCHOR_SCAN_BYTES + MAX_UPDATE_REJOIN_VERIFICATION_BYTES;
+const CHUNK_REFERENCE_METADATA_BYTES: u64 = 36;
 
 pub struct UpdateBuffersV1<'buffers> {
     source: &'buffers mut [u8; MAXIMUM_CHUNK_BYTES],
@@ -169,6 +171,58 @@ impl BaseChunkEvidenceV1 {
 
     fn prepared(self) -> PreparedChunkRefV1 {
         PreparedChunkRefV1::from_parts(self.logical_id, self.physical_id, self.len)
+    }
+}
+
+/// Private proof binding for a single Update invocation. The pointer identity
+/// of this value is deliberately part of token validation: a verified rejoin
+/// cannot be replayed into a later operation, even when both operations use
+/// the same algorithm and profile.
+#[derive(Debug, Eq, PartialEq)]
+struct UpdateOperationBindingV1 {
+    algorithm: [u8; 8],
+    chunker_profile: [u8; 32],
+}
+
+impl UpdateOperationBindingV1 {
+    fn frozen_fast() -> Self {
+        Self {
+            algorithm: *b"NFCDC001",
+            chunker_profile: *ChunkerSpecV1::frozen().id().as_bytes(),
+        }
+    }
+}
+
+/// Opaque, non-cloneable proof that a candidate boundary was authenticated by
+/// exact bounded byte comparison for this algorithm, profile, and operation.
+/// It remains crate-private and is consumed before suffix references can be
+/// structurally reused.
+#[derive(Debug)]
+struct VerifiedRejoinV1<'operation> {
+    evidence: BaseChunkEvidenceV1,
+    algorithm: [u8; 8],
+    chunker_profile: [u8; 32],
+    operation: &'operation UpdateOperationBindingV1,
+}
+
+impl<'operation> VerifiedRejoinV1<'operation> {
+    fn new(evidence: BaseChunkEvidenceV1, operation: &'operation UpdateOperationBindingV1) -> Self {
+        Self {
+            evidence,
+            algorithm: operation.algorithm,
+            chunker_profile: operation.chunker_profile,
+            operation,
+        }
+    }
+
+    fn consume(self, operation: &UpdateOperationBindingV1) -> CoreResult<BaseChunkEvidenceV1> {
+        if !core::ptr::eq(self.operation, operation)
+            || self.algorithm != operation.algorithm
+            || self.chunker_profile != operation.chunker_profile
+        {
+            return Err(CoreError::RangeResyncFailed);
+        }
+        Ok(self.evidence)
     }
 }
 
@@ -345,16 +399,17 @@ where
         .map_err(|_| CoreError::RangeResyncFailed)?;
     let _reservation = ledger.reserve_operation_with_plan(memory)?;
     counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
-    authenticate_base(base, evidence)?;
+    authenticate_base(base, evidence, counters)?;
 
     let predecessor = if base_len == 0 {
         None
     } else {
-        evidence
+        let predecessor = evidence
             .containing(range.start, range.start == base_len)
             .map_err(map_evidence)?
-            .ok_or(CoreError::RangeResyncFailed)?
-            .into()
+            .ok_or(CoreError::RangeResyncFailed)?;
+        counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
+        Some(predecessor)
     };
     let predecessor_start = predecessor.map_or(0, BaseChunkEvidenceV1::start);
     let prefix_len = range
@@ -370,6 +425,7 @@ where
         objects.abort_closure();
         return Err(error);
     }
+    let operation_binding = UpdateOperationBindingV1::frozen_fast();
     let result = (|| {
         let prefix_chunk_count =
             copy_untouched_prefix(evidence, output, predecessor_start, counters)?;
@@ -386,6 +442,7 @@ where
                 suffix_origin,
                 base_suffix_origin: range.end,
                 chunk_count: prefix_chunk_count,
+                operation_binding: &operation_binding,
                 rejoin: None,
                 failure: None,
             };
@@ -412,6 +469,7 @@ where
             while inserted_remaining != 0 {
                 let request = usize::try_from(inserted_remaining.min(MAXIMUM_CHUNK_BYTES as u64))
                     .map_err(|_| CoreError::IntegerOverflow)?;
+                consumer.counters.add(CounterFieldV1::SourceReadCalls, 1)?;
                 let read = inserted
                     .read(&mut buffers.source[..request])
                     .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure)?;
@@ -422,20 +480,22 @@ where
                     return Err(CoreError::Truncated);
                 }
                 let read_u64 = u64::try_from(read).map_err(|_| CoreError::IntegerOverflow)?;
-                consumer.counters.add(CounterFieldV1::BytesRead, read_u64)?;
+                consumer.counters.record_source_bytes_read(read_u64)?;
                 consumer
                     .counters
                     .add(CounterFieldV1::BytesCopied, read_u64)?;
+                consumer.counters.record_update_inserted(read_u64)?;
                 inserted_remaining = inserted_remaining
                     .checked_sub(read_u64)
                     .ok_or(CoreError::TrailingBytes)?;
                 push_update(&mut stream, &buffers.source[..read], control, &mut consumer)?;
             }
+            consumer.counters.add(CounterFieldV1::SourceReadCalls, 1)?;
             let probe = inserted
                 .read(&mut buffers.source[..1])
                 .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure)?;
             if probe != 0 {
-                consumer.counters.add(CounterFieldV1::BytesRead, 1)?;
+                consumer.counters.record_source_bytes_read(1)?;
                 return Err(CoreError::TrailingBytes);
             }
 
@@ -447,6 +507,9 @@ where
                     .containing(base_cursor, false)
                     .map_err(map_evidence)?
                     .ok_or(CoreError::RangeResyncFailed)?;
+                consumer
+                    .counters
+                    .record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
                 let segment_end = containing.end()?;
                 let segment_len = segment_end
                     .checked_sub(base_cursor)
@@ -484,11 +547,11 @@ where
                 resynchronization_bytes = next_total;
             }
 
-            let rejoin = if let Some(rejoin) = consumer.rejoin {
+            let rejoin = if let Some(rejoin) = consumer.rejoin.take() {
                 stream.finish_at_accepted_boundary(control)?;
                 Some(rejoin)
             } else if base_cursor == base_len {
-                stream.finish(control, &mut consumer)?;
+                finish_update(&mut stream, control, &mut consumer)?;
                 None
             } else {
                 return Err(CoreError::RangeResyncFailed);
@@ -497,6 +560,7 @@ where
         };
 
         let suffix_chunk_count = if let Some(rejoin) = rejoin {
+            let rejoin = rejoin.consume(&operation_binding)?;
             copy_untouched_suffix(evidence, output, rejoin.end()?, counters)?
         } else {
             0
@@ -525,6 +589,7 @@ where
 fn authenticate_base<E: BaseChunkEvidenceSourceV1 + ?Sized>(
     base: AuthenticatedBaseFileV1,
     evidence: &mut E,
+    counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
     validate_file_mode(base.mode).map_err(|_| CoreError::RangeResyncFailed)?;
     evidence.rewind().map_err(map_evidence)?;
@@ -559,6 +624,7 @@ fn authenticate_base<E: BaseChunkEvidenceSourceV1 + ?Sized>(
             .next()
             .map_err(map_evidence)?
             .ok_or(CoreError::RangeResyncFailed)?;
+        counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         validate_chunk_reference_len(u64::from(chunk.len))
             .map_err(|_| CoreError::RangeResyncFailed)?;
         if chunk.start != expected_start {
@@ -604,6 +670,7 @@ where
     evidence.rewind().map_err(map_evidence)?;
     let mut copied = 0_u64;
     while let Some(chunk) = evidence.next().map_err(map_evidence)? {
+        counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         if chunk.start == predecessor_start {
             break;
         }
@@ -631,6 +698,7 @@ where
     let mut copied = 0_u64;
     let mut final_end = 0_u64;
     while let Some(chunk) = evidence.next().map_err(map_evidence)? {
+        counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         final_end = chunk.end()?;
         if chunk.start >= suffix_start {
             if chunk.start != suffix_start {
@@ -646,6 +714,7 @@ where
         return Err(CoreError::RangeResyncFailed);
     }
     while let Some(chunk) = evidence.next().map_err(map_evidence)? {
+        counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         reuse_ref(output, chunk, counters)?;
         copied = copied.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
     }
@@ -666,7 +735,7 @@ fn reuse_ref<R: ChunkReferenceSpoolV1 + ?Sized>(
     counters.add(CounterFieldV1::PhysicalObjectsReused, 1)
 }
 
-struct UpdateConsumerV1<'a, E: ?Sized, O: ?Sized, R: ?Sized, B: ?Sized> {
+struct UpdateConsumerV1<'a, 'operation, E: ?Sized, O: ?Sized, R: ?Sized, B: ?Sized> {
     evidence: &'a mut E,
     objects: &'a mut O,
     output: &'a mut R,
@@ -675,11 +744,12 @@ struct UpdateConsumerV1<'a, E: ?Sized, O: ?Sized, R: ?Sized, B: ?Sized> {
     suffix_origin: u64,
     base_suffix_origin: u64,
     chunk_count: u64,
-    rejoin: Option<BaseChunkEvidenceV1>,
+    operation_binding: &'operation UpdateOperationBindingV1,
+    rejoin: Option<VerifiedRejoinV1<'operation>>,
     failure: Option<CoreError>,
 }
 
-impl<E, O, R, B> BoundaryConsumerV1 for UpdateConsumerV1<'_, E, O, R, B>
+impl<E, O, R, B> BoundaryConsumerV1 for UpdateConsumerV1<'_, '_, E, O, R, B>
 where
     E: BaseChunkEvidenceSourceV1 + ?Sized,
     O: PreparedObjectSinkV1 + ?Sized,
@@ -704,7 +774,7 @@ where
     }
 }
 
-impl<E, O, R, B> UpdateConsumerV1<'_, E, O, R, B>
+impl<E, O, R, B> UpdateConsumerV1<'_, '_, E, O, R, B>
 where
     E: BaseChunkEvidenceSourceV1 + ?Sized,
     O: PreparedObjectSinkV1 + ?Sized,
@@ -719,6 +789,13 @@ where
         if self.rejoin.is_some() {
             return Err(CoreError::RangeResyncFailed);
         }
+        let chunk_len = u64::try_from(chunk.len()).map_err(|_| CoreError::IntegerOverflow)?;
+        self.counters
+            .add(CounterFieldV1::LogicalHashBytes, chunk_len)?;
+        self.counters.add(
+            CounterFieldV1::LogicalHashUpdateCalls,
+            u64::from(!chunk.first().is_empty()) + u64::from(!chunk.second().is_empty()),
+        )?;
         let logical = derive_logical_chunk_spans_v1(chunk.first(), chunk.second())?;
         if boundary.start() >= self.suffix_origin {
             let base_start = self
@@ -727,6 +804,8 @@ where
                 .ok_or(CoreError::RangeResyncFailed)?;
             self.counters.add(CounterFieldV1::AnchorAttempts, 1)?;
             if let Some(base) = self.evidence.at_start(base_start).map_err(map_evidence)? {
+                self.counters
+                    .record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
                 if u64::from(base.len) == boundary.len()
                     && base.logical_id == logical.id()
                     && exact_rejoin_bytes(self.base_bytes, base, chunk, self.counters)?
@@ -736,7 +815,7 @@ where
                         .chunk_count
                         .checked_add(1)
                         .ok_or(CoreError::IntegerOverflow)?;
-                    self.rejoin = Some(base);
+                    self.rejoin = Some(VerifiedRejoinV1::new(base, self.operation_binding));
                     return Ok(());
                 }
             }
@@ -770,7 +849,7 @@ fn push_update<C, E, O, R, B>(
     stream: &mut crate::cdc::FastCdcV1Stream<'_>,
     bytes: &[u8],
     control: &mut C,
-    consumer: &mut UpdateConsumerV1<'_, E, O, R, B>,
+    consumer: &mut UpdateConsumerV1<'_, '_, E, O, R, B>,
 ) -> CoreResult<()>
 where
     C: CdcControlV1 + ?Sized,
@@ -779,17 +858,22 @@ where
     R: ChunkReferenceSpoolV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
 {
-    match stream.push(Ok(bytes), control, consumer) {
+    let before = stream.counters();
+    let result = match stream.push(Ok(bytes), control, consumer) {
         Ok(()) => Ok(()),
         Err(error) => Err(consumer.failure.take().unwrap_or(error)),
-    }
+    };
+    consumer
+        .counters
+        .add_cdc_stream(stream.counters().checked_delta(before)?)?;
+    result
 }
 
 fn push_update_until_pause<C, E, O, R, B>(
     stream: &mut crate::cdc::FastCdcV1Stream<'_>,
     bytes: &[u8],
     control: &mut C,
-    consumer: &mut UpdateConsumerV1<'_, E, O, R, B>,
+    consumer: &mut UpdateConsumerV1<'_, '_, E, O, R, B>,
 ) -> CoreResult<usize>
 where
     C: CdcControlV1 + ?Sized,
@@ -798,10 +882,38 @@ where
     R: ChunkReferenceSpoolV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
 {
-    match stream.push_until_consumer_pause(Ok(bytes), control, consumer) {
+    let before = stream.counters();
+    let result = match stream.push_until_consumer_pause(Ok(bytes), control, consumer) {
         Ok(consumed) => Ok(consumed),
         Err(error) => Err(consumer.failure.take().unwrap_or(error)),
-    }
+    };
+    consumer
+        .counters
+        .add_cdc_stream(stream.counters().checked_delta(before)?)?;
+    result
+}
+
+fn finish_update<C, E, O, R, B>(
+    stream: &mut crate::cdc::FastCdcV1Stream<'_>,
+    control: &mut C,
+    consumer: &mut UpdateConsumerV1<'_, '_, E, O, R, B>,
+) -> CoreResult<()>
+where
+    C: CdcControlV1 + ?Sized,
+    E: BaseChunkEvidenceSourceV1 + ?Sized,
+    O: PreparedObjectSinkV1 + ?Sized,
+    R: ChunkReferenceSpoolV1 + ?Sized,
+    B: AuthenticatedBaseByteReaderV1 + ?Sized,
+{
+    let before = stream.counters();
+    let result = match stream.finish(control, consumer) {
+        Ok(()) => Ok(()),
+        Err(error) => Err(consumer.failure.take().unwrap_or(error)),
+    };
+    consumer
+        .counters
+        .add_cdc_stream(stream.counters().checked_delta(before)?)?;
+    result
 }
 
 fn exact_rejoin_bytes<B: AuthenticatedBaseByteReaderV1 + ?Sized>(
@@ -829,7 +941,9 @@ fn exact_rejoin_bytes<B: AuthenticatedBaseByteReaderV1 + ?Sized>(
         .compare_exact_at(evidence.start, candidate.first(), candidate.second())
         .map_err(|_| CoreError::RangeResyncFailed)?;
     counters.add(CounterFieldV1::BytesRead, len_u64)?;
+    counters.record_update_base_payload(len_u64)?;
     counters.add(CounterFieldV1::UpdateResynchronizationBytes, len_u64)?;
+    counters.record_exact_rejoin(len_u64, equal)?;
     Ok(equal)
 }
 
@@ -845,6 +959,7 @@ fn read_base_exact<B: AuthenticatedBaseByteReaderV1 + ?Sized>(
     let len = u64::try_from(destination.len()).map_err(|_| CoreError::IntegerOverflow)?;
     counters.add(CounterFieldV1::BytesRead, len)?;
     counters.add(CounterFieldV1::BytesCopied, len)?;
+    counters.record_update_base_payload(len)?;
     if resynchronization {
         counters.add(CounterFieldV1::UpdateResynchronizationBytes, len)?;
     }

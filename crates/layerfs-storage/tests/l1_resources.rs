@@ -68,12 +68,22 @@ fn memory_plan_rejects_double_charging_and_slot_overflow() {
 #[test]
 fn forbidden_work_counters_are_writable_and_checked() {
     let mut counters = OperationCountersV1::default();
+    assert!(counters.has_zero_forbidden_work());
     counters.record_fallback_attempt().unwrap();
     counters.record_retry_or_redispatch().unwrap();
+    counters.record_provider_switch().unwrap();
+    counters.record_cdc_switch().unwrap();
     counters.record_publication_dispatch().unwrap();
+    counters.record_file_sync().unwrap();
+    counters.record_directory_sync().unwrap();
     assert_eq!(counters.fallback_attempts, 1);
     assert_eq!(counters.retries_or_redispatches, 1);
+    assert_eq!(counters.provider_switches, 1);
+    assert_eq!(counters.cdc_switches, 1);
     assert_eq!(counters.publication_dispatches, 1);
+    assert_eq!(counters.file_sync_calls, 1);
+    assert_eq!(counters.directory_sync_calls, 1);
+    assert!(!counters.has_zero_forbidden_work());
 }
 
 #[test]

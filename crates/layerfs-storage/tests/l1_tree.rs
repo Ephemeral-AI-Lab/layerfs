@@ -1040,6 +1040,163 @@ fn depth_two_tail_add_and_remove_use_only_bounded_evidence_and_suffix_reads() {
 }
 
 #[test]
+fn large_head_and_middle_add_remove_report_exact_suffix_rebuild_locality() {
+    let names = fixed_names(18_000);
+    let entries = entries_for(&names, symlink_child(b"stable-target"));
+    let base = build(DirectoryBuildModeV1::ImplicitRoot, &entries).unwrap();
+    assert_eq!(base.directory.page_depth(), 1);
+    assert_eq!(base.directory.leaf_count(), 94);
+
+    let head_name = b"a0000000".to_vec();
+    let middle_name = b"n0008999x".to_vec();
+    let head_added = CanonicalTreeEntryV1::new(
+        ValidatedComponent::new(&head_name).unwrap(),
+        symlink_child(b"head-added"),
+    );
+    let middle_added = CanonicalTreeEntryV1::new(
+        ValidatedComponent::new(&middle_name).unwrap(),
+        symlink_child(b"middle-added"),
+    );
+    let mut head_add_result = entries.clone();
+    head_add_result.insert(0, head_added);
+    let mut middle_add_result = entries.clone();
+    middle_add_result.insert(9_000, middle_added);
+    let mut head_remove_result = entries.clone();
+    let head_removed = head_remove_result.remove(0);
+    let mut middle_remove_result = entries.clone();
+    let middle_removed = middle_remove_result.remove(9_000);
+
+    let cases = [
+        (
+            "head-add",
+            true,
+            0,
+            head_added,
+            &head_add_result,
+            0,
+            96,
+            784_720,
+            54_194,
+            54_191,
+        ),
+        (
+            "middle-add",
+            true,
+            9_000,
+            middle_added,
+            &middle_add_result,
+            46,
+            50,
+            402_369,
+            27_197,
+            27_361,
+        ),
+        (
+            "head-remove",
+            false,
+            0,
+            head_removed,
+            &head_remove_result,
+            0,
+            96,
+            784_634,
+            54_194,
+            54_185,
+        ),
+        (
+            "middle-remove",
+            false,
+            9_000,
+            middle_removed,
+            &middle_remove_result,
+            46,
+            50,
+            402_282,
+            27_197,
+            27_355,
+        ),
+    ];
+
+    for (
+        label,
+        add,
+        index,
+        changed,
+        result_entries,
+        expected_reused,
+        expected_created,
+        expected_created_bytes,
+        expected_base_reads,
+        expected_result_reads,
+    ) in cases
+    {
+        let evidence = mutation_fixture(DirectoryBuildModeV1::ImplicitRoot, &entries, &base, index);
+        let mut source = MutationSource::new(&entries, result_entries);
+        let mut sink = VecTreeSink::default();
+        let mut counters = OperationCountersV1::default();
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut object_scratch = [0_u8; MAX_TREE_OBJECT_BYTES];
+        let mut logical_scratch = [0_u8; 65_536];
+        let mut page_scratch = [None; MAX_COW_TREE_PAGE_SUMMARIES];
+        let cow = if add {
+            add_directory_entry_cow_v1(
+                base.directory,
+                evidence.evidence(base.directory),
+                index,
+                changed,
+                &mut source,
+                &mut sink,
+                &ledger,
+                &mut counters,
+                &mut object_scratch,
+                &mut logical_scratch,
+                &mut page_scratch,
+            )
+        } else {
+            remove_directory_entry_cow_v1(
+                base.directory,
+                evidence.evidence(base.directory),
+                index,
+                changed,
+                &mut source,
+                &mut sink,
+                &ledger,
+                &mut counters,
+                &mut object_scratch,
+                &mut logical_scratch,
+                &mut page_scratch,
+            )
+        }
+        .unwrap_or_else(|error| panic!("{label}: {error:?}"));
+        let rebuilt = build(DirectoryBuildModeV1::ImplicitRoot, result_entries).unwrap();
+        assert_eq!(cow.directory(), rebuilt.directory, "{label}");
+        assert_eq!(cow.structurally_reused_leaves(), expected_reused, "{label}");
+        assert_eq!(cow.structurally_reused_level_one(), 0, "{label}");
+        assert_eq!(cow.emitted_objects(), expected_created, "{label}");
+        assert_eq!(
+            counters.tree_nodes_reused,
+            u64::from(expected_reused),
+            "{label}"
+        );
+        assert_eq!(
+            counters.tree_nodes_created,
+            u64::from(expected_created),
+            "{label}"
+        );
+        assert_eq!(sink.committed.len(), expected_created as usize, "{label}");
+        assert_eq!(ledger.admitted_slots(), 0, "{label}");
+        let created_bytes: usize = sink.committed.iter().map(|(_, bytes)| bytes.len()).sum();
+        assert_eq!(created_bytes, expected_created_bytes, "{label}");
+        assert_eq!(source.base_reads, expected_base_reads, "{label}");
+        assert_eq!(source.result_reads, expected_result_reads, "{label}");
+        println!(
+            "{label}: created_pages={expected_created} reused_pages={expected_reused} created_bytes={created_bytes} base_reads={} result_reads={}",
+            source.base_reads, source.result_reads
+        );
+    }
+}
+
+#[test]
 fn depth_two_remove_rejects_corruption_across_every_sparse_proof_region_before_staging() {
     let names = fixed_names(18_433);
     let entries = entries_for(&names, symlink_child(b"stable-target"));

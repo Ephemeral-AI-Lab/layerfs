@@ -16,6 +16,8 @@ use crate::identity::{
     LogicalChildIdV1, LogicalDirectoryEntryV1, PhysicalFileIdV1, PhysicalSymlinkIdV1,
     PhysicalTreeIdV1, SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
+#[cfg(feature = "c3-polymorphism")]
+use crate::limits::OperationReservationV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
 };
@@ -578,6 +580,57 @@ pub fn build_canonical_directory_v1<S: PreparedTreeSinkV1 + ?Sized>(
         )?;
     let _reservation = ledger.reserve_operation_with_plan(memory)?;
     counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+    let logical = derive_logical(mode, entries.len(), entries.iter().copied())?;
+    sink.begin_private_tree_set(plan.tree_object_count)
+        .map_err(map_sink)?;
+    let result = build_directory_inner(
+        mode,
+        entries,
+        logical,
+        plan,
+        sink,
+        counters,
+        object_scratch,
+        page_scratch,
+    );
+    if result.is_err() {
+        sink.abort_private_tree_set();
+    }
+    result
+}
+
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_canonical_directory_borrowed_v1<S: PreparedTreeSinkV1 + ?Sized>(
+    mode: DirectoryBuildModeV1,
+    entries: &[CanonicalTreeEntryV1<'_>],
+    sink: &mut S,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+) -> CoreResult<CanonicalDirectoryTreeV1> {
+    let plan = TreePlanV1::for_count(entries.len())?;
+    validate_entries(entries)?;
+    mode.wire_mode()?;
+    if page_scratch.len() < plan.summary_count {
+        return Err(CoreError::ResourceRefused);
+    }
+    let memory = OperationMemoryPlanV1::empty()
+        .charge(
+            MemoryComponentV1::ObjectScratch,
+            object_scratch.len() as u64,
+        )?
+        .charge(
+            MemoryComponentV1::PageSummaries,
+            core::mem::size_of_val(page_scratch) as u64,
+        )?
+        .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)?
+        .charge(
+            MemoryComponentV1::MetadataWindow,
+            sink.resident_memory_bound_bytes()?,
+        )?;
+    reservation.require(memory)?;
     let logical = derive_logical(mode, entries.len(), entries.iter().copied())?;
     sink.begin_private_tree_set(plan.tree_object_count)
         .map_err(map_sink)?;

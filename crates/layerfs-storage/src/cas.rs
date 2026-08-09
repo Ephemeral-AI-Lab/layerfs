@@ -58,6 +58,13 @@ pub trait OccupiedImmutableReadPortV1 {
     /// declaration is queried before any occupied-key lookup and must not
     /// allocate, cache, or perform I/O.
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64>;
+    /// Exact direct storage reads performed by this adapter since it was
+    /// created. This is a side-effect-free accounting observation; the
+    /// filesystem implementation uses it to preflight raw FsCas counters
+    /// before closure visibility.
+    fn direct_storage_read_observation(&self) -> Result<(u64, u64), ImmutablePortErrorV1> {
+        Ok((0, 0))
+    }
     fn occupied_len(
         &mut self,
         id: TypedPhysicalObjectIdV1,
@@ -92,13 +99,46 @@ pub trait PreparedImmutableClosurePortV1 {
     ) -> Result<(), ImmutablePortErrorV1>;
     fn note_reused_object(
         &mut self,
-        id: TypedPhysicalObjectIdV1,
+        validated: ValidatedOccupiedObjectV1,
     ) -> Result<(), ImmutablePortErrorV1>;
     fn make_closure_visible(
         &mut self,
         version_record: TypedPhysicalObjectIdV1,
     ) -> Result<(), ImmutablePortErrorV1>;
     fn abort_private_closure(&mut self);
+}
+
+/// Opaque acknowledgment minted only after complete occupied-byte validation.
+///
+/// Its fields are deliberately private: a sink may inspect the validated
+/// transcript item, but only crate-owned complete admission can construct it.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ValidatedOccupiedObjectV1 {
+    ordinal: u64,
+    id: TypedPhysicalObjectIdV1,
+    canonical_len: u64,
+}
+
+impl ValidatedOccupiedObjectV1 {
+    pub(crate) const fn new(ordinal: u64, id: TypedPhysicalObjectIdV1, canonical_len: u64) -> Self {
+        Self {
+            ordinal,
+            id,
+            canonical_len,
+        }
+    }
+
+    pub const fn ordinal(&self) -> u64 {
+        self.ordinal
+    }
+
+    pub const fn id(&self) -> TypedPhysicalObjectIdV1 {
+        self.id
+    }
+
+    pub const fn canonical_len(&self) -> u64 {
+        self.canonical_len
+    }
 }
 
 /// Bounded destination for a validated immutable-object read. No unvalidated
