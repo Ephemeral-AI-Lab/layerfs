@@ -38,6 +38,11 @@ pub enum OutcomeCode {
     ResourceRefused,
     Cancelled,
     Deadline,
+    MalformedOccupant,
+    MissingClosureEdge,
+    Cycle,
+    RangeResyncFailed,
+    PackInvalid,
 }
 
 impl OutcomeCode {
@@ -76,6 +81,11 @@ impl OutcomeCode {
             Self::ResourceRefused => "S_RESOURCE_REFUSED",
             Self::Cancelled => "S_CANCELLED",
             Self::Deadline => "S_DEADLINE",
+            Self::MalformedOccupant => "S_MALFORMED_OCCUPANT",
+            Self::MissingClosureEdge => "S_MISSING_CLOSURE_EDGE",
+            Self::Cycle => "S_CYCLE",
+            Self::RangeResyncFailed => "S_RANGE_RESYNC_FAILED",
+            Self::PackInvalid => "S_PACK_INVALID",
         }
     }
 }
@@ -115,6 +125,11 @@ pub enum CoreError {
     ResourceRefused,
     Cancelled,
     Deadline,
+    MalformedOccupant,
+    MissingClosureEdge,
+    Cycle,
+    RangeResyncFailed,
+    PackInvalid,
 }
 
 impl CoreError {
@@ -153,6 +168,11 @@ impl CoreError {
             Self::ResourceRefused => OutcomeCode::ResourceRefused,
             Self::Cancelled => OutcomeCode::Cancelled,
             Self::Deadline => OutcomeCode::Deadline,
+            Self::MalformedOccupant => OutcomeCode::MalformedOccupant,
+            Self::MissingClosureEdge => OutcomeCode::MissingClosureEdge,
+            Self::Cycle => OutcomeCode::Cycle,
+            Self::RangeResyncFailed => OutcomeCode::RangeResyncFailed,
+            Self::PackInvalid => OutcomeCode::PackInvalid,
         }
     }
 }

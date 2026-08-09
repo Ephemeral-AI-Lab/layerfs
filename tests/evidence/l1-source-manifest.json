@@ -1,0 +1,149 @@
+{
+  "schema": "layerfs-l1-source-manifest-v1",
+  "captured_at": "2026-08-09",
+  "baseline_commit": "1647525c43e056115088954ad9ac4687bce867bd",
+  "runtime_digest_adapter": {
+    "crate": "blake3",
+    "version": "1.8.5",
+    "default_features": false,
+    "enabled_features": [],
+    "mode": "unkeyed-blake3-256-only"
+  },
+  "dependency_audit": {
+    "command": "cargo tree --workspace --edges normal",
+    "offline_check": "cargo check --workspace --offline",
+    "offline_check_result": "passed",
+    "normal_runtime_graph": {
+      "layerfs-storage": [
+        "blake3 =1.8.5"
+      ],
+      "blake3": [
+        "arrayref 0.3.9",
+        "arrayvec 0.7.8",
+        "cfg-if 1.0.4",
+        "constant_time_eq 0.4.2"
+      ]
+    },
+    "fastcdc_runtime_dependency": false,
+    "provider_or_os_specific_runtime_dependency": false
+  },
+  "frozen_sources": [
+    {
+      "name": "L1_SPEC",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/l1/spec.md",
+      "sha256": "d73df1fd275eeaa5bf5c01d3a1f573b310e4bdc524a12968a14958ed77661d2d",
+      "bytes": 25348,
+      "lines": 720
+    },
+    {
+      "name": "L1_CHECKLIST_INITIAL",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/l1/checklist.md",
+      "sha256": "248a9acfd0296cb9ec816953b9cddec4710cf7a7e2b702fb6c68ec59bb75e383",
+      "bytes": 23773,
+      "lines": 576
+    },
+    {
+      "name": "V2_1_SPEC",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/SPEC.md",
+      "sha256": "56445b08b1b624a37bc46a0308069f84619040692f202af875e887e336386e8b",
+      "bytes": 114492,
+      "lines": 1646
+    },
+    {
+      "name": "V2_1_ARCHITECTURE",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/ARCHITECTURE.md",
+      "sha256": "b54ef580e4b111a154b4e5310faca4cb82296ae0657067d16d633a9e92b9669d",
+      "bytes": 25095,
+      "lines": 446
+    },
+    {
+      "name": "V2_1_STORAGE_AND_PERFORMANCE",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/STORAGE_AND_PERFORMANCE.md",
+      "sha256": "645cb1c18f4ea56a084b01b78fa99c6e7b5e53bc41d3f93c1de8b129680e036d",
+      "bytes": 50574,
+      "lines": 818
+    },
+    {
+      "name": "V2_1_IMPLEMENTATION_PLAN",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/IMPLEMENTATION_PLAN.md",
+      "sha256": "e1d66a7c5a41fff1ab93cb47e0e086df6f694ade7f858ede78cef6bd15c17855",
+      "bytes": 26748,
+      "lines": 346
+    },
+    {
+      "name": "M6_0_GOLDEN_VECTORS",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemeral-sandbox-v2/phases/01-choose-design/M6_0_GOLDEN_VECTORS.md",
+      "sha256": "7e0ae75e32bd38111f9271c551efacc580a42287a9f31b6999157e1da3710d7a",
+      "bytes": 82670,
+      "lines": 510
+    },
+    {
+      "name": "M6_1_2_SPEC",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemeral-sandbox-v2/phases/01-choose-design/M6_1_SPEC.md",
+      "sha256": "ab4797e90743554f9e4e30f00e0bd4bcb8519b3216aab88c7dae8f8e6a49db32",
+      "bytes": 42857,
+      "lines": 883
+    },
+    {
+      "name": "A1_CANONICAL_VERSION_IDENTITY",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemeral-sandbox-v2/algorithm/01-identity-and-admission/01-canonical-version-identity.md",
+      "sha256": "76c2a1d15e17696f6c975404ede05bec135c5b03eae1f7de6c60cab8f661395d",
+      "bytes": 8274,
+      "lines": 163
+    },
+    {
+      "name": "A2_COMPLETE_VERSION_ADMISSION",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemeral-sandbox-v2/algorithm/01-identity-and-admission/02-complete-version-admission.md",
+      "sha256": "c26a7447276349b29bce2a38cc0f6e9287df1dce97b33561ab6cfce3c2927212",
+      "bytes": 2123,
+      "lines": 43
+    },
+    {
+      "name": "A3_COMPLETE_VERSION_CONTENT_ADDRESSING",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemeral-sandbox-v2/algorithm/01-identity-and-admission/03-complete-version-content-addressing.md",
+      "sha256": "bf20db79e012c19572f672f45af9793cfda2d144adf01212811a52cd1ce05520",
+      "bytes": 2182,
+      "lines": 47
+    },
+    {
+      "name": "A4_CDC_NON_SELECTION_AND_REOPEN_GATE",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemeral-sandbox-v2/algorithm/01-identity-and-admission/04-cdc-non-selection-and-reopen-gate.md",
+      "sha256": "d2162512620f9dba862433ec61206b0c491cd15c6c4b52e81490fdf5a1a70f75",
+      "bytes": 1337,
+      "lines": 30
+    },
+    {
+      "name": "A5_FASTCDC_V1_PORT_AND_MODULE_CONTRACT",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemeral-sandbox-v2/algorithm/01-identity-and-admission/05-fastcdc-v1-port-and-module-contract.md",
+      "sha256": "010c3d8e613ee6baad4cdf2bae4e813130f3a2ff9635eee5f6e545786358309f",
+      "bytes": 11279,
+      "lines": 292
+    }
+  ],
+  "copied_fixture_manifest": {
+    "path": "tests/fixtures/frozen/SHA256SUMS",
+    "validation": "shasum -a 256 -c tests/fixtures/frozen/SHA256SUMS",
+    "result": "all entries OK"
+  },
+  "final_custody_revalidation": {
+    "parent_document_hashes_match_manifest": false,
+    "frozen_fixture_hashes_match_manifest": true,
+    "phase_1_product_worktree_status": "## ephemeral-sandbox-v2",
+    "source_disagreements": [
+      {
+        "path": "/Users/yifanxu/Ephemeral-AI-Lab/ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/IMPLEMENTATION_PLAN.md",
+        "intake_sha256": "e1d66a7c5a41fff1ab93cb47e0e086df6f694ade7f858ede78cef6bd15c17855",
+        "current_sha256": "bd5745002a739b77e6cb5990d52779f38965384b7a9283e5acec3ba1ad0c1f47",
+        "disposition": "external parent-document drift; L1 did not select, restore, or modify either version; handoff requires owner rebaseline or restoration"
+      }
+    ]
+  },
+  "custody": {
+    "tracked_changes_before_l1": [],
+    "untracked_unrelated_files": [
+      ".DS_Store",
+      "crates/.DS_Store",
+      "crates/layerfs-sdk/.DS_Store"
+    ]
+  }
+}

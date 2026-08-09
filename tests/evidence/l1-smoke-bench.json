@@ -1,0 +1,78 @@
+{
+  "schema": "layerfs-l1-tiny-smoke-v1",
+  "captured_at": "2026-08-09",
+  "qualification_status": "diagnostic-only-not-an-m8-m9-benchmark",
+  "environment": {
+    "cpu": "Apple M3 Max",
+    "architecture": "arm64",
+    "host_memory_bytes": 38654705664,
+    "os": "macOS 26.4.1 (25E253)",
+    "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+    "profile": "release"
+  },
+  "prebuild_command": "cargo test --release --workspace --no-run",
+  "prebuild_result": "passed",
+  "measurement_command_template": "/usr/bin/time -l target/release/deps/<test-binary> --test-threads=1",
+  "samples_per_suite": 3,
+  "suite_results": [
+    {
+      "suite": "l1_content",
+      "tests": 5,
+      "real_seconds": [0.31, 0.31, 0.31],
+      "median_real_seconds": 0.31,
+      "maximum_resident_set_size_bytes": [2736128, 2736128, 2637824],
+      "median_maximum_resident_set_size_bytes": 2736128
+    },
+    {
+      "suite": "l1_update",
+      "tests": 5,
+      "real_seconds": [0.02, 0.02, 0.02],
+      "median_real_seconds": 0.02,
+      "maximum_resident_set_size_bytes": [3063808, 3211264, 3145728],
+      "median_maximum_resident_set_size_bytes": 3145728
+    },
+    {
+      "suite": "l1_pack",
+      "tests": 12,
+      "real_seconds": [0.03, 0.03, 0.03],
+      "median_real_seconds": 0.03,
+      "maximum_resident_set_size_bytes": [7340032, 8142848, 7307264],
+      "median_maximum_resident_set_size_bytes": 7340032
+    },
+    {
+      "suite": "l1_tree",
+      "tests": 15,
+      "real_seconds": [0.49, 0.05, 0.05],
+      "median_real_seconds": 0.05,
+      "maximum_resident_set_size_bytes": [16072704, 14761984, 14614528],
+      "median_maximum_resident_set_size_bytes": 14761984
+    },
+    {
+      "suite": "l1_cas",
+      "tests": 15,
+      "real_seconds": [0.0, 0.0, 0.0],
+      "median_real_seconds": 0.0,
+      "timer_resolution_note": "below the displayed 0.01-second resolution",
+      "maximum_resident_set_size_bytes": [3096576, 3014656, 3031040],
+      "median_maximum_resident_set_size_bytes": 3031040
+    }
+  ],
+  "streaming_content_probe": {
+    "test": "large_source_uses_fixed_io_windows_and_the_qualified_memory_ledger",
+    "logical_input_bytes": 67108864,
+    "real_seconds": [0.3, 0.3, 0.31],
+    "median_real_seconds": 0.3,
+    "derived_mib_per_second": 213.33333333333334,
+    "maximum_resident_set_size_bytes": [2424832, 2441216, 2441216],
+    "median_maximum_resident_set_size_bytes": 2441216,
+    "source": "deterministic generated PatternSource",
+    "sink": "bounded in-memory MeasuringSink with no retained payload"
+  },
+  "interpretation_limits": [
+    "These are tiny test-binary smoke measurements, not a statistically qualified product benchmark.",
+    "The test fixtures, assertions, process startup, and test harness are included in suite timings and RSS.",
+    "No durable backend, authority publication, workspace materialization, OverlayFS activation, fork, checkpoint, or rollback implementation is present in L1.",
+    "Historical Stage 04.6 observations are permanently incomparable and are not a denominator for these samples.",
+    "The 32/48/72 MiB ledger is logical admission accounting; these process RSS observations do not replace aggregate concurrency and backend qualification."
+  ]
+}

@@ -37,9 +37,17 @@ fn workspace_shape_and_package_boundaries_are_stable() {
     assert!(driver.contains("publish = false"));
 
     let storage_dependencies = section(storage, "dependencies");
-    assert!(
-        storage_dependencies.trim().is_empty(),
-        "runtime storage dependencies must remain empty"
+    assert!(storage_dependencies.contains("blake3.workspace = true"));
+    assert_eq!(
+        storage_dependencies
+            .lines()
+            .filter(|line| {
+                let line = line.trim();
+                !line.is_empty() && !line.starts_with('#')
+            })
+            .count(),
+        1,
+        "BLAKE3 must be the sole private L1 runtime dependency"
     );
     let driver_dependencies = section(driver, "dependencies");
     assert!(driver_dependencies.contains("layerfs-storage"));
@@ -52,12 +60,11 @@ fn workspace_shape_and_package_boundaries_are_stable() {
 }
 
 #[test]
-fn prohibited_l0_runtime_dependencies_are_not_present() {
+fn prohibited_runtime_dependencies_are_not_present() {
     let workspace = include_str!("../../../Cargo.toml");
     let storage = include_str!("../Cargo.toml");
     assert!(workspace.contains("blake3 = { version = \"=1.8.5\", default-features = false }"));
-    assert!(storage.contains("[dev-dependencies]"));
-    assert!(!section(storage, "dependencies").contains("blake3"));
+    assert!(section(storage, "dependencies").contains("blake3.workspace = true"));
     for forbidden in [
         "serde", "bincode", "opendal", "git2", "fuser", "wasmtime", "oci",
     ] {
