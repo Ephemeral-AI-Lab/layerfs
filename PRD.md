@@ -370,11 +370,14 @@ not as a public production engine.
 ## Open decisions
 
 - Which Node.js SQLite library should the first adapter use?
-- Should the core expose streaming file reads in version 0.1 or add them after
-  byte-array conformance?
-- Which metadata fields must be stable across Computer and Node.js hosts?
-- How long should terminal branch records and publication results be retained?
-- Should chunking parameters be fixed per filesystem or versioned per manifest?
+- Which durable identifier representation should version 0.1 use for inodes
+  and filesystems?
+
+The technical specification resolves the other product-level choices:
+version 0.1 includes snapshot streaming reads; exposes type, size, mode,
+timestamps, link count, and stable inode identity; defaults terminal branches
+and publication results to 30-day retention; and persists or versions every
+chunking parameter needed to interpret stored content.
 
 ## Licensing and provenance
 
