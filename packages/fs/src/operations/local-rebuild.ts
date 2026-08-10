@@ -1,7 +1,8 @@
 import { sha256 } from "../cas/sha256.js";
 import { findFastCdcBoundary, type FastCdcConfiguration } from "../cdc/fastcdc.js";
 import { decodeManifestRoot, encodeManifestNode, encodeManifestRoot, type ManifestChild, type ManifestEntry, type ManifestInternal, type ManifestLeaf, type ManifestNode } from "../manifests/codec.js";
-import type { BuiltManifest, EncodedManifestNode } from "../manifests/builder.js";
+import type { EncodedManifestNode } from "../manifests/builder.js";
+import type { DiagnosticBuiltManifest } from "./full-rebuild.js";
 import { bytesToHex } from "../cas/bytes.js";
 import { checkedAdd } from "../resources/safe-integers.js";
 import { advanceManifestGroupingState, isManifestGroupBoundary } from "../manifests/grouping.js";
@@ -16,6 +17,12 @@ export interface LocalContentEdit {
   readonly deleteLength: number;
   readonly insertBytes: Uint8Array;
 }
+
+export interface LocalRebuildLimits {
+  readonly maxRetainedEntries: number; readonly maxRetainedNodes: number; readonly maxAffectedEntries: number; readonly maxAffectedBytes: number;
+}
+export const DEFAULT_LOCAL_REBUILD_LIMITS: Readonly<LocalRebuildLimits> = Object.freeze({ maxRetainedEntries: 16_384, maxRetainedNodes: 32_768, maxAffectedEntries: 4096, maxAffectedBytes: 16 * 1024 * 1024 });
+export class LocalRebuildLimitError extends RangeError { readonly name = "LocalRebuildLimitError"; }
 
 export interface ManifestEntrySplice {
   readonly start: number;
@@ -105,7 +112,7 @@ function reconnectGroupFor(groups: readonly GroupBounds[], recordIndex: number, 
   return undefined;
 }
 
-function makeNode(level: number, records: readonly RecordValue[], old: BuiltManifest, newNodes: Map<string, EncodedManifestNode>): EncodedManifestNode {
+function makeNode(level: number, records: readonly RecordValue[], old: DiagnosticBuiltManifest, newNodes: Map<string, EncodedManifestNode>): EncodedManifestNode {
   let node: ManifestNode;
   if (level === 0) {
     const entries = records as readonly ManifestEntry[];
@@ -131,7 +138,7 @@ function regroupLevel(
   spliceStart: number,
   spliceEnd: number,
   replacement: readonly RecordValue[],
-  old: BuiltManifest,
+  old: DiagnosticBuiltManifest,
   newNodes: Map<string, EncodedManifestNode>,
 ): RegroupedLevel {
   if (spliceStart < 0 || spliceEnd < spliceStart || spliceEnd > oldRecords.length) throw new RangeError("invalid manifest level splice");
@@ -189,7 +196,7 @@ function onlyNode(level: RegroupedLevel): EncodedManifestNode {
   throw new Error("manifest level lost its root node");
 }
 
-function orderedLevels(old: BuiltManifest): EncodedManifestNode[][] {
+function orderedLevels(old: DiagnosticBuiltManifest): EncodedManifestNode[][] {
   const root = decodeManifestRoot(old.root, old.rootHash);
   const levels: EncodedManifestNode[][] = [];
   const visit = (hash: Uint8Array, depth: number): number => {
@@ -229,9 +236,12 @@ function containingEntry(offsets: readonly number[], offset: number): number {
   return Math.max(0, low - 1);
 }
 
-export function rebuildManifestLocally(source: RandomAccessContentSource, old: BuiltManifest, edit: LocalContentEdit): LocallyRebuiltManifest {
+export function rebuildManifestLocally(source: RandomAccessContentSource, old: DiagnosticBuiltManifest, edit: LocalContentEdit, limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS): LocallyRebuiltManifest {
   if (!Number.isSafeInteger(source.size) || source.size < 0) throw new RangeError("source size must be a nonnegative safe integer");
   if (!Number.isSafeInteger(edit.offset) || edit.offset < 0 || !Number.isSafeInteger(edit.deleteLength) || edit.deleteLength < 0 || edit.offset > source.size || edit.deleteLength > source.size - edit.offset) throw new RangeError("local edit is outside the source");
+  for (const [name, value] of Object.entries(limits)) if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`);
+  if (old.entries.length > limits.maxRetainedEntries || old.nodes.size > limits.maxRetainedNodes) throw new LocalRebuildLimitError("diagnostic local-rebuild state exceeds its fixed retained-entry/node limit; use the streamed workspace fallback");
+  if (edit.insertBytes.byteLength > limits.maxAffectedBytes) throw new LocalRebuildLimitError("local edit insertion exceeds the affected-byte window; use the streamed workspace fallback");
   const insertBytes = edit.insertBytes.slice();
   const oldLayout = entryOffsets(old.entries);
   if (oldLayout.size !== source.size) throw new Error("source size does not match old manifest entries");
@@ -302,6 +312,7 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: B
     const hash = sha256(chunk); const key = bytesToHex(hash);
     bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
     affectedEntries.push(Object.freeze({ hash, length: chunk.byteLength }));
+    if (affectedEntries.length > limits.maxAffectedEntries || bytesHashed > limits.maxAffectedBytes) throw new LocalRebuildLimitError("local reconnection exceeded its fixed affected window; use the streamed workspace fallback");
     const firstAffectedOccurrence = !affectedObjects.has(key);
     if (firstAffectedOccurrence) affectedObjects.set(key, chunk);
     if (firstAffectedOccurrence && !oldObjectIds.has(key)) newObjectCount += 1;
@@ -365,13 +376,14 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: B
   });
 }
 
-export function applyEntrySplice(entries: readonly ManifestEntry[], splice: ManifestEntrySplice): ManifestEntry[] {
+export function applyEntrySplice(entries: readonly ManifestEntry[], splice: ManifestEntrySplice, maxEntries = DEFAULT_LOCAL_REBUILD_LIMITS.maxRetainedEntries): ManifestEntry[] {
   if (!Number.isSafeInteger(splice.start) || splice.start < 0 || !Number.isSafeInteger(splice.deleteCount) || splice.deleteCount < 0 || splice.start + splice.deleteCount > entries.length) throw new RangeError("invalid manifest entry splice");
+  if (entries.length - splice.deleteCount + splice.entries.length > maxEntries) throw new LocalRebuildLimitError("entry splice exceeds its fixed in-memory limit; use a streamed workspace");
   return [...entries.slice(0, splice.start), ...splice.entries, ...entries.slice(splice.start + splice.deleteCount)];
 }
 
-export function rebuildManifestLocallyWithParameters(source: RandomAccessContentSource, old: BuiltManifest, edit: LocalContentEdit, parameters: FastCdcConfiguration): LocallyRebuiltManifest {
+export function rebuildManifestLocallyWithParameters(source: RandomAccessContentSource, old: DiagnosticBuiltManifest, edit: LocalContentEdit, parameters: FastCdcConfiguration, limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS): LocallyRebuiltManifest {
   const root = decodeManifestRoot(old.root, old.rootHash);
   if (root.parameters.minimum !== parameters.minimum || root.parameters.average !== parameters.average || root.parameters.maximum !== parameters.maximum) throw new Error("local rebuild parameters must match the old manifest");
-  return rebuildManifestLocally(source, old, edit);
+  return rebuildManifestLocally(source, old, edit, limits);
 }

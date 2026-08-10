@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { bytesToHex } from "../../packages/fs/dist/cas/bytes.js";
+import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
 import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
+import { buildManifestFromEntries } from "../../packages/fs/dist/manifests/builder.js";
 import { decodeManifestNode, decodeManifestRoot } from "../../packages/fs/dist/manifests/codec.js";
 import { lookupManifest, ManifestSequentialCursor, validateManifestTree } from "../../packages/fs/dist/manifests/cursor.js";
 import { applyEntrySplice, rebuildManifestLocally } from "../../packages/fs/dist/operations/local-rebuild.js";
+import { rebuildManifestLocallyOrStream } from "../../packages/fs/dist/operations/streamed-rebuild.js";
 
 function fixture(length, seed = 0x12345678) {
   const bytes = new Uint8Array(length); let state = seed >>> 0;
@@ -13,6 +20,20 @@ function fixture(length, seed = 0x12345678) {
 }
 
 const defaults = { minimum: 32768, average: 131072, maximum: 524288 };
+
+class DurableManifestWorkspace {
+  constructor(filename) {
+    this.database = new DatabaseSync(filename); this.database.exec("PRAGMA journal_mode=WAL; CREATE TABLE records(level INTEGER NOT NULL, record_index INTEGER NOT NULL, hash BLOB NOT NULL, span INTEGER NOT NULL, entry_count INTEGER NOT NULL, encoded BLOB NOT NULL, PRIMARY KEY(level,record_index)); CREATE INDEX records_hash ON records(hash); CREATE TABLE objects(hash BLOB PRIMARY KEY, bytes BLOB NOT NULL)");
+    this.insert = this.database.prepare("INSERT INTO records(level,record_index,hash,span,entry_count,encoded) VALUES(?,?,?,?,?,?)");
+    this.page = this.database.prepare("SELECT record_index,hash,span,entry_count FROM records WHERE level=? AND record_index>? ORDER BY record_index LIMIT ?");
+    this.node = this.database.prepare("SELECT encoded FROM records WHERE hash=? LIMIT 1"); this.object = this.database.prepare("INSERT OR IGNORE INTO objects(hash,bytes) VALUES(?,?)"); this.largestPage = 0;
+  }
+  writeNode(record) { this.insert.run(record.level, record.index, record.child.hash, record.child.span, record.child.entryCount, record.value.encoded); }
+  readLevel(level, afterIndex, limit) { const rows = this.page.all(level, afterIndex, limit); this.largestPage = Math.max(this.largestPage, rows.length); return rows.map((row) => ({ index: row.record_index, child: { hash: row.hash, span: row.span, entryCount: row.entry_count } })); }
+  putObject(hash, bytes) { this.object.run(hash, bytes); }
+  get(hash) { return this.node.get(hash)?.encoded; }
+  close() { this.database.close(); }
+}
 
 test("segmented manifest root and leaf match checked golden hashes", () => {
   const manifest = buildManifest(fixture(2 * 1024 * 1024), defaults);
@@ -51,6 +72,28 @@ test("manifest trees are canonical, bounded, corruption-detecting, and lookup ex
   const corruptNode = encodedNode.encoded.slice(); corruptNode[16] ^= 1;
   const corruptReader = { get(hash) { const key = bytesToHex(hash); return key === nodeHash ? corruptNode : first.nodes.get(key)?.encoded; } };
   assert.throws(() => validateManifestTree(first.root, corruptReader, first.rootHash), /digest mismatch/);
+});
+
+test("100001-entry canonical construction retains only a group and keyset page", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "efs-m1-builder-")); const workspace = new DurableManifestWorkspace(path.join(directory, "manifest.db"));
+  try {
+    const entryHash = sha256(Uint8Array.of(7));
+    function* entries() { for (let index = 0; index < 100_001; index += 1) yield { hash: entryHash, length: 1 }; }
+    const built = buildManifestFromEntries(entries(), { minimum: 1, average: 2, maximum: 4 }, workspace, { readBatchRecords: 17, maxDepth: 8 });
+    assert.equal(built.entryCount, 100_001); assert.equal(built.fileSize, 100_001); assert.ok(built.nodeCount > 390);
+    assert.ok(built.peakRetainedRecords <= 256 + 17); assert.ok(workspace.largestPage <= 17);
+    validateManifestTree(built.root, workspace, built.rootHash, 8);
+  } finally { workspace.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("local rebuild crosses a fixed cap into a durable streamed fallback", () => {
+  const parameters = { minimum: 64, average: 128, maximum: 512 }; const original = fixture(64 * 1024 + 19, 0xa11ce); const before = buildManifest(original, parameters);
+  const edit = { offset: 25_000, deleteLength: 1, insertBytes: Uint8Array.of(42) }; const directory = mkdtempSync(path.join(tmpdir(), "efs-m1-fallback-")); const workspace = new DurableManifestWorkspace(path.join(directory, "fallback.db"));
+  try {
+    const result = rebuildManifestLocallyOrStream({ size: original.length, read(offset, length) { return original.slice(offset, offset + length); } }, before, edit, parameters, workspace, workspace, { maxRetainedEntries: 1, maxRetainedNodes: 1, maxAffectedEntries: 1, maxAffectedBytes: 1 }, { readWindowBytes: 257, manifestReadBatchRecords: 11, maxManifestDepth: 8 });
+    assert.equal(result.mode, "streamed-fallback"); assert.match(result.localLimitReason, /streamed workspace fallback/); assert.ok(result.metrics.largestSourceRead <= 257); assert.ok(result.metrics.peakRetainedRecords <= 267); assert.equal(result.metrics.sourceBytesRead, original.length - 1);
+    const edited = original.slice(); edited[edit.offset] = 42; const canonical = buildManifest(edited, parameters); assert.equal(bytesToHex(result.manifest.rootHash), canonical.id); validateManifestTree(result.manifest.root, workspace, result.manifest.rootHash, 8);
+  } finally { workspace.close(); rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("local CDC reconnection and manifest-spine rebuilding equal a canonical full scan", () => {
