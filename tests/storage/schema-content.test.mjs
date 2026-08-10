@@ -12,6 +12,7 @@ import {
 } from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { NamespaceRepository } from "../../packages/fs/dist/sqlite/namespace-repository.js";
+import { StagingRepository } from "../../packages/fs/dist/sqlite/staging-repository.js";
 import { UsageRepository } from "../../packages/fs/dist/sqlite/usage-repository.js";
 import {
   EFS_APPLICATION_ID,
@@ -396,6 +397,71 @@ test("two connections serialize quota admission against the authoritative usage 
     second.close();
     first.close();
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("two connections serialize staging metadata admission without an orphan row", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-stage-meta-race-"));
+  const filename = path.join(directory, "filesystem.db");
+  let first;
+  let second;
+  try {
+    first = await openNodeSqlite({ filename });
+    initializeOrValidateSchema(first);
+    second = await openNodeSqlite({ filename });
+    initializeOrValidateSchema(second);
+    const limits = constrainStorageLimits(
+      {
+        maxChargedMetadataBytes: 448,
+        maxManagedPayloadBytes: 1024 * 1024,
+        maintenanceReserveBytes: 1024,
+      },
+      first.capabilities,
+    );
+    first.transaction("write", (tx) =>
+      new StagingRepository(tx, limits).begin({
+        leaseId: "first",
+        ownerId: "owner",
+        ownerNonce: new Uint8Array(16).fill(1),
+        now: 1,
+        expiresAt: 100,
+      }),
+    );
+    assert.throws(
+      () =>
+        second.transaction("write", (tx) =>
+          new StagingRepository(tx, limits).begin({
+            leaseId: "second",
+            ownerId: "owner",
+            ownerNonce: new Uint8Array(16).fill(2),
+            now: 1,
+            expiresAt: 100,
+          }),
+        ),
+      /charged metadata quota/,
+    );
+    assert.deepEqual(
+      second.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT charged_metadata_bytes,(SELECT count(*) FROM efs_leases) leases,(SELECT count(*) FROM efs_staging_certificates) certificates FROM efs_usage",
+            [],
+            { maxRows: 1, maxBytes: 256 },
+          )[0],
+      ),
+      { charged_metadata_bytes: 448, leases: 1, certificates: 1 },
+    );
+    second.close();
+    first.close();
+  } finally {
+    try {
+      second?.close();
+    } catch {}
+    try {
+      first?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });

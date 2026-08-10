@@ -86,13 +86,13 @@ function output(value: SQLOutputValue): SqliteValue {
   return value;
 }
 
-function rowBytes(row: SqliteRow): number {
+function sqliteOutputRowBytes(row: Record<string, SQLOutputValue>): number {
   let bytes = 32;
   for (const [name, value] of Object.entries(row))
     bytes +=
       name.length * 2 +
       (value instanceof Uint8Array
-        ? value.byteLength
+        ? intrinsicBytes(value).byteLength
         : typeof value === "string"
           ? value.length * 2
           : 8);
@@ -328,12 +328,13 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             .iterate(...bindings.map((value) => binding(value, this.capabilities)))) {
             if (result.length >= budget.maxRows)
               throw new RangeError("SQLite result row budget exceeded");
+            const nextBytes = sqliteOutputRowBytes(raw);
+            if (bytes + nextBytes > budget.maxBytes)
+              throw new RangeError("SQLite result byte budget exceeded");
+            bytes += nextBytes;
             const normalized = Object.fromEntries(
               Object.entries(raw).map(([name, value]) => [name, output(value)]),
             ) as Row;
-            bytes += rowBytes(normalized);
-            if (bytes > budget.maxBytes)
-              throw new RangeError("SQLite result byte budget exceeded");
             result.push(Object.freeze(normalized));
           }
           return Object.freeze(result);

@@ -158,6 +158,11 @@ export class OverlayRepository {
         maxBytes: this.#limits.maxQueryBatchSize * 96,
       },
     );
+    if (rows.length)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { charged_metadata_bytes: rows.length * CHARGED_ROW_BYTES },
+        "leased COW page membership",
+      );
     for (const row of rows)
       this.#tx.run(
         "INSERT INTO efs_lease_cow_pages(lease_id,branch_id,inode_id,page_index,generation) VALUES(?,?,?,?,?)",

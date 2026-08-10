@@ -482,6 +482,113 @@ test("staging payload quota is exact across rollback, release, and reopen", asyn
   }
 });
 
+test("staging row metadata is exact at limit, rolls back at plus one, recounts, and releases", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-stage-metadata-"));
+  const filename = path.join(directory, "filesystem.db");
+  const nonce = new Uint8Array(16).fill(14);
+  const bytes = Uint8Array.of(9);
+  const hash = sha256(bytes);
+  const metadataLimit = 256 + 96 + 3 * 96;
+  try {
+    let driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    initializeOrValidateSchema(driver);
+    let storage = constrainStorageLimits(
+      {
+        maxManagedPayloadBytes: 16 * 1024 * 1024,
+        maintenanceReserveBytes: 1024,
+        maxChargedMetadataBytes: metadataLimit,
+      },
+      driver.capabilities,
+    );
+    driver.transaction("write", (tx) =>
+      new ContentRepository(tx, storage).putObject(hash, bytes),
+    );
+    driver.transaction("write", (tx) => {
+      const staging = new StagingRepository(tx, storage);
+      staging.begin({
+        leaseId: "metadata",
+        ownerId: "owner",
+        ownerNonce: nonce,
+        now: 1,
+        expiresAt: 100,
+      });
+      staging.putEntry("metadata", 0, hash, 1);
+    });
+    assert.throws(
+      () =>
+        driver.transaction("write", (tx) =>
+          new StagingRepository(tx, storage).appendBatch("metadata", nonce, [
+            { kind: "object", hash, size: 1 },
+          ]),
+        ),
+      /charged metadata quota/,
+    );
+    driver.close();
+
+    driver = await openNodeSqlite({
+      filename,
+      create: false,
+      durability: "relaxed-test",
+    });
+    initializeOrValidateSchema(driver);
+    storage = constrainStorageLimits(
+      {
+        maxManagedPayloadBytes: 16 * 1024 * 1024,
+        maintenanceReserveBytes: 1024,
+        maxChargedMetadataBytes: metadataLimit,
+      },
+      driver.capabilities,
+    );
+    const recounted = driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT charged_metadata_bytes,256+96*((SELECT count(*) FROM efs_cas_objects)+(SELECT count(*) FROM efs_leases)+(SELECT count(*) FROM efs_lease_manifests)+(SELECT count(*) FROM efs_lease_objects)+(SELECT count(*) FROM efs_lease_staged_manifests)+(SELECT count(*) FROM efs_staging_entries)+(SELECT count(*) FROM efs_staging_level_records)+(SELECT count(*) FROM efs_lease_cow_pages)+(SELECT count(*) FROM efs_lease_patches)+(SELECT count(*) FROM efs_staging_certificates)+(SELECT count(*) FROM efs_staging_reconciliations)+(SELECT count(*) FROM efs_staging_reconciliation_queue)+(SELECT count(*) FROM efs_staging_workspaces)) direct,(SELECT count(*) FROM efs_lease_objects) members,staging_bytes FROM efs_usage",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    );
+    assert.deepEqual(recounted, {
+      charged_metadata_bytes: metadataLimit,
+      direct: metadataLimit,
+      members: 0,
+      staging_bytes: 0,
+    });
+    driver.transaction("write", (tx) =>
+      new StagingRepository(tx, storage).release("metadata", nonce, false),
+    );
+    for (let batches = 0; batches < 16; batches += 1) {
+      const exists = driver.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT id FROM efs_leases WHERE id='metadata'", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          }).length,
+      );
+      if (!exists) break;
+      driver.transaction("write", (tx) =>
+        new StagingRepository(tx, storage).cleanupBatch(8),
+      );
+    }
+    assert.deepEqual(
+      driver.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT charged_metadata_bytes,(SELECT count(*) FROM efs_leases) leases FROM efs_usage",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0],
+      ),
+      { charged_metadata_bytes: 352, leases: 0 },
+    );
+    driver.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("maintenance expiry atomically releases partial and sealed staging charges after reopen", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-stage-expiry-"));
   const filename = path.join(directory, "filesystem.db");
@@ -1036,32 +1143,20 @@ test(
     );
     const total = 100_001;
     const batchSize = 128;
+    const sharedBytes = new Uint8Array(8).fill(23);
+    const sharedHash = sha256(sharedBytes);
+    runUnitOfWork(driver, "write", budget, (tx) => {
+      new ContentRepository(tx, storage).putObject(sharedHash, sharedBytes);
+      new StagingRepository(tx, storage).appendBatch(leaseId, nonce, [
+        { kind: "object", hash: sharedHash, size: sharedBytes.length },
+      ]);
+    });
     for (let start = 0; start < total; start += batchSize) {
-      const batch = [];
-      for (let index = start; index < Math.min(total, start + batchSize); index += 1) {
-        const bytes = new Uint8Array(8);
-        new DataView(bytes.buffer).setBigUint64(0, BigInt(index), true);
-        batch.push({ hash: sha256(bytes), bytes });
-      }
+      const end = Math.min(total, start + batchSize);
       runUnitOfWork(driver, "write", budget, (tx) => {
         const staging = new StagingRepository(tx, storage);
-        new ContentRepository(tx, storage).putObjectsBatch(batch);
-        for (let index = 0; index < batch.length; index += 1)
-          staging.putEntry(
-            leaseId,
-            start + index,
-            batch[index].hash,
-            batch[index].bytes.length,
-          );
-        staging.appendBatch(
-          leaseId,
-          nonce,
-          batch.map((item) => ({
-            kind: "object",
-            hash: item.hash,
-            size: item.bytes.length,
-          })),
-        );
+        for (let index = start; index < end; index += 1)
+          staging.putEntry(leaseId, index, sharedHash, sharedBytes.length);
       });
     }
     const workspace = {
@@ -1208,25 +1303,35 @@ test(
       new StagingRepository(tx, storage).validateSealed(certificate, 2),
     );
     assert.equal(built.entryCount, total);
-    assert.equal(certificate.objectCount, total);
+    assert.equal(certificate.objectCount, 1);
     assert.deepEqual(reconciliation, {
-      object_count: total,
+      object_count: 1,
       node_count: certificate.nodeCount,
       membership_count: certificate.membershipCount,
       complete: 1,
     });
     assert.equal(finalStatements, 1);
     assert.ok(
-      reconciliationStatements < certificate.membershipCount * 8,
+      reconciliationStatements < total * 8,
       `unexpected reconciliation SQL amplification: ${reconciliationStatements}`,
     );
+    const metadata = driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT charged_metadata_bytes,(SELECT count(*) FROM efs_staging_entries WHERE lease_id=?) entries FROM efs_usage",
+          [leaseId],
+          { maxRows: 1, maxBytes: 128 },
+        )[0],
+    );
+    assert.equal(metadata.entries, total);
+    assert.ok(metadata.charged_metadata_bytes >= 256 + total * 96);
     t.diagnostic(
       JSON.stringify({
         manifestEntries: total,
         uniqueClosureMembers: certificate.membershipCount,
         reconciliationStatements,
-        statementsPerClosureMember:
-          reconciliationStatements / certificate.membershipCount,
+        statementsPerManifestEntry: reconciliationStatements / total,
         finalValidationStatements: finalStatements,
       }),
     );

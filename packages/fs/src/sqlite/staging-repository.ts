@@ -161,6 +161,7 @@ export class StagingRepository {
     counters([options.now, options.expiresAt]);
     if (options.expiresAt <= options.now)
       throw new RangeError("staging lease expiry must be in the future");
+    this.#changeMetadataRows(2, "staging lease and certificate");
     this.#tx.run(
       "INSERT INTO efs_leases(id,kind,owner_id,owner_nonce,branch_id,generation,created_at_ms,last_renewal_at_ms,expires_at_ms,state) VALUES(?,?,?,?,?,?,?,?,?,0)",
       [
@@ -187,6 +188,7 @@ export class StagingRepository {
     objectHash: Uint8Array,
     length: number,
   ): void {
+    this.#changeMetadataRows(1, "staging entry");
     this.#tx.run(
       "INSERT INTO efs_staging_entries(lease_id,entry_index,object_hash,length) VALUES(?,?,?,?)",
       [leaseId, entryIndex, objectHash, length],
@@ -212,6 +214,7 @@ export class StagingRepository {
     span: number,
     entryCount: number,
   ): void {
+    this.#changeMetadataRows(1, "staging level record");
     this.#tx.run(
       "INSERT INTO efs_staging_level_records(lease_id,level,record_index,node_hash,span,entry_count) VALUES(?,?,?,?,?,?)",
       [leaseId, level, recordIndex, nodeHash, span, entryCount],
@@ -291,6 +294,7 @@ export class StagingRepository {
     manifestHash: Uint8Array,
     expiresAt: number,
   ): void {
+    this.#changeMetadataRows(2, "read lease and root link");
     this.#tx.run(
       "INSERT INTO efs_leases(id,kind,owner_id,expires_at_ms,state) VALUES(?,0,?,?,1)",
       [leaseId, ownerId, expiresAt],
@@ -381,6 +385,7 @@ export class StagingRepository {
         cleanup.lease_id,
         limit,
       ]).changes;
+      this.#changeMetadataRows(-deletedRows, "bounded lease child cleanup");
       if (deletedRows < limit) this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
@@ -389,6 +394,7 @@ export class StagingRepository {
         "DELETE FROM efs_staging_reconciliations WHERE lease_id=?",
         [cleanup.lease_id],
       ).changes;
+      this.#changeMetadataRows(-deletedRows, "staging reconciliation cleanup");
       this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
@@ -397,6 +403,7 @@ export class StagingRepository {
         "DELETE FROM efs_staging_workspaces WHERE lease_id=?",
         [cleanup.lease_id],
       ).changes;
+      this.#changeMetadataRows(-deletedRows, "staging workspace cleanup");
       this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
@@ -418,7 +425,11 @@ export class StagingRepository {
     if (deletedLeases !== 1)
       throw new Error("ECORRUPT: tombstoned lease disappeared during cleanup");
     new UsageRepository(this.#tx, this.#limits).apply(
-      { maintenance_bytes: -CHARGED_ROW_BYTES },
+      {
+        maintenance_bytes: -CHARGED_ROW_BYTES,
+        charged_metadata_bytes:
+          -(deletedRows + deletedLeases) * CHARGED_ROW_BYTES,
+      },
       "lease cleanup completion",
     );
     return Object.freeze({ worked: true, deletedRows, deletedLeases });
@@ -455,6 +466,7 @@ export class StagingRepository {
     let nodeCount = row.node_count;
     let nodeBytes = row.node_bytes;
     let stagedDelta = 0;
+    let insertedRows = 0;
     for (const member of members) {
       if (member.hash.byteLength !== 32)
         throw new RangeError("staging member hash must be 32 bytes");
@@ -487,10 +499,12 @@ export class StagingRepository {
         nodeBytes = checkedAdd(nodeBytes, member.size);
       }
       stagedDelta = checkedAdd(stagedDelta, member.size);
+      insertedRows += 1;
       chain = extendChain(chain, sequence, member);
       sequence += 1;
     }
     this.#admitStagingBytes(stagedDelta);
+    this.#changeMetadataRows(insertedRows, "staging membership");
     this.#tx.run(
       "UPDATE efs_staging_certificates SET chain_digest=?,object_count=?,object_bytes=?,node_count=?,node_bytes=?,membership_count=?,next_sequence=? WHERE lease_id=? AND sealed=0",
       [
@@ -553,6 +567,7 @@ export class StagingRepository {
         throw new Error("ECORRUPT: reconciliation identity mismatch");
       return;
     }
+    this.#changeMetadataRows(1, "staging reconciliation state");
     this.#tx.run(
       "INSERT INTO efs_staging_reconciliations(lease_id,owner_nonce,manifest_hash,next_sequence,object_count,object_bytes,node_count,node_bytes,membership_count,complete) VALUES(?,?,?,0,0,0,0,0,0,0)",
       [leaseId, ownerNonce, manifestHash],
@@ -706,6 +721,7 @@ export class StagingRepository {
       "INSERT INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
       [certificate.leaseId, certificate.manifestHash],
     );
+    this.#changeMetadataRows(1, "sealed staging root link");
     this.#tx.run(
       "UPDATE efs_staging_certificates SET manifest_hash=?,sealed=1,verified=1 WHERE lease_id=? AND sealed=0",
       [certificate.manifestHash, certificate.leaseId],
@@ -850,6 +866,7 @@ export class StagingRepository {
         throw new Error("ECORRUPT: repeated manifest closure edge disagrees");
       return;
     }
+    this.#changeMetadataRows(1, "staging reconciliation queue");
     const object = kind === 0 ? 1 : 0;
     const node = kind === 0 ? 0 : 1;
     this.#tx.run(
@@ -913,6 +930,14 @@ export class StagingRepository {
     new UsageRepository(this.#tx, this.#limits).apply(
       { staging_bytes: -bytes },
       "staging payload release",
+    );
+  }
+
+  #changeMetadataRows(rows: number, reason: string): void {
+    if (rows === 0) return;
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { charged_metadata_bytes: rows * CHARGED_ROW_BYTES },
+      reason,
     );
   }
 
