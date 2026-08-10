@@ -1,0 +1,13 @@
+{
+  "schema": "efs-correctness-result-v1",
+  "commit": "5bc1ed13a13d5eabd753bde5bb7a31fb7c9ad3f0",
+  "adapter": "workspace-foundation",
+  "schemaVersion": 1,
+  "formatVersion": "efs-merkle-manifest-v1",
+  "seed": 1592639710,
+  "fixtureDigest": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086",
+  "faultPoint": null,
+  "passed": 36,
+  "failed": 0,
+  "elapsedMs": 9100
+}
