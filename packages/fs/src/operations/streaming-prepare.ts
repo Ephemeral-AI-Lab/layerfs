@@ -33,7 +33,7 @@ import {
   intrinsicByteLength,
   intrinsicByteRange,
 } from "../cas/bytes.js";
-import { checkedAdd } from "../resources/safe-integers.js";
+import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 interface PreparedNode {
   readonly hash: Uint8Array;
   readonly encoded: Uint8Array;
@@ -57,6 +57,34 @@ function randomNonce(): Uint8Array {
   return globalThis.crypto.getRandomValues(new Uint8Array(16));
 }
 
+function ingestReservationBytes(declaredBytes: number, storage: StorageLimits): number {
+  const maximumEntries = checkedAdd(
+    Math.ceil(declaredBytes / DEFAULT_FASTCDC.minimum),
+    1,
+    "declared stream entry envelope",
+  );
+  let manifestBytes = checkedMultiply(
+    maximumEntries,
+    256,
+    "declared stream manifest envelope",
+  );
+  manifestBytes = checkedAdd(
+    manifestBytes,
+    checkedMultiply(
+      storage.maxManifestDepth,
+      storage.maxManifestNodeBytes,
+      "declared stream manifest depth envelope",
+    ),
+    "declared stream manifest envelope",
+  );
+  manifestBytes = checkedAdd(manifestBytes, 68, "declared stream root envelope");
+  return checkedMultiply(
+    checkedAdd(declaredBytes, manifestBytes, "declared stream payload envelope"),
+    2,
+    "declared stream physical and logical envelope",
+  );
+}
+
 export async function prepareContentStreaming(
   port: OperationsStorage,
   input: Uint8Array | ReadableStream<Uint8Array>,
@@ -66,6 +94,7 @@ export async function prepareContentStreaming(
   signal?: AbortSignal,
   cache?: ContentCache,
   clock: () => number = Date.now,
+  declaredMaxBytes?: number,
 ): Promise<StreamPreparedManifest> {
   const borrowedBufferedInput = input instanceof Uint8Array ? input : undefined;
   const bufferedLength = borrowedBufferedInput
@@ -76,6 +105,17 @@ export async function prepareContentStreaming(
   const streamInput = borrowedBufferedInput
     ? undefined
     : (input as ReadableStream<Uint8Array>);
+  const declaredBytes = borrowedBufferedInput ? bufferedLength : declaredMaxBytes;
+  if (
+    declaredBytes === undefined ||
+    !Number.isSafeInteger(declaredBytes) ||
+    declaredBytes < 0 ||
+    declaredBytes > storage.maxFileBytes
+  )
+    throw new RangeError(
+      "streamed writes require a declared maximum byte length within maxFileBytes",
+    );
+  const durableIngestReservation = ingestReservationBytes(declaredBytes, storage);
   const leaseId = globalThis.crypto.randomUUID();
   const ownerId = globalThis.crypto.randomUUID();
   const ownerNonce = randomNonce();
@@ -112,6 +152,7 @@ export async function prepareContentStreaming(
   let leaseBegun = false;
   let chunker!: StreamingFastCdc;
   let total = 0;
+  let sourceBytes = 0;
   let entryIndex = 0;
   let pendingBytes = 0;
   const pending: ContentObjectInput[] = [];
@@ -120,14 +161,26 @@ export async function prepareContentStreaming(
     const batch = pending.splice(0);
     pendingBytes = 0;
     port.transaction("write", workBudget, (tx) => {
-      const repository = tx.content(storage);
-      repository.putObjectsBatch(batch);
       const staging = tx.staging(storage);
-      for (const item of batch)
-        staging.putEntry(leaseId, entryIndex++, item.hash, item.bytes.byteLength);
       const unique = [
         ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
       ];
+      staging.consumeIngestReservation(
+        leaseId,
+        ownerNonce,
+        unique.reduce(
+          (sum, item) => checkedAdd(sum, intrinsicByteLength(item.bytes)),
+          0,
+        ),
+      );
+      tx.content(storage).putObjectsBatch(batch);
+      for (const item of batch)
+        staging.putEntry(
+          leaseId,
+          entryIndex++,
+          item.hash,
+          intrinsicByteLength(item.bytes),
+        );
       staging.appendBatch(
         leaseId,
         ownerNonce,
@@ -135,7 +188,7 @@ export async function prepareContentStreaming(
           Object.freeze({
             kind: "object" as const,
             hash: item.hash,
-            size: item.bytes.byteLength,
+            size: intrinsicByteLength(item.bytes),
           }),
         ),
       );
@@ -143,29 +196,30 @@ export async function prepareContentStreaming(
     });
   };
   const acceptChunk = (chunk: Uint8Array): void => {
+    const chunkLength = intrinsicByteLength(chunk);
     chunk = copyBytes(chunk);
-    total = checkedAdd(total, chunk.byteLength);
+    total = checkedAdd(total, chunkLength);
     if (total > storage.maxFileBytes) throw new RangeError("file exceeds maxFileBytes");
     if (
       pending.length >= storage.maxQueryBatchSize ||
-      pendingBytes + chunk.byteLength > pendingLimit
+      checkedAdd(pendingBytes, chunkLength) > pendingLimit
     )
       flushObjects();
     pending.push(Object.freeze({ hash: sha256(chunk), bytes: chunk }));
-    pendingBytes += chunk.byteLength;
+    pendingBytes = checkedAdd(pendingBytes, chunkLength);
   };
   const feed = (bytes: Uint8Array): void => {
     bytes = intrinsicByteRange(bytes);
     for (
       let offset = 0;
-      offset < bytes.byteLength;
+      offset < intrinsicByteLength(bytes);
       offset += runtime.maxWriteSessionBytes
     )
       chunker.drain(
         intrinsicByteRange(
           bytes,
           offset,
-          Math.min(bytes.byteLength, offset + runtime.maxWriteSessionBytes),
+          Math.min(intrinsicByteLength(bytes), offset + runtime.maxWriteSessionBytes),
         ),
         acceptChunk,
       );
@@ -185,6 +239,7 @@ export async function prepareContentStreaming(
         ownerNonce,
         now,
         expiresAt: now + storage.stagingLeaseMs,
+        ingestReservationBytes: durableIngestReservation,
       });
       staging.bumpRoot(5, leaseId);
     });
@@ -209,6 +264,11 @@ export async function prepareContentStreaming(
           const valueLength = intrinsicByteLength(value);
           if (valueLength > runtime.maxWriteSessionBytes)
             throw new RangeError("write stream chunk exceeds maxWriteSessionBytes");
+          sourceBytes = checkedAdd(sourceBytes, valueLength, "streamed input bytes");
+          if (sourceBytes > declaredBytes)
+            throw new RangeError(
+              "write stream exceeds its declared maximum byte length",
+            );
           cache?.makeRoom(valueLength);
           const releaseInput = admission.reserve(valueLength);
           try {
@@ -241,6 +301,7 @@ export async function prepareContentStreaming(
       DEFAULT_FASTCDC,
       total,
       entryIndex,
+      true,
     );
   } catch (error) {
     if (leaseBegun)
@@ -297,9 +358,19 @@ export async function prepareContentEntriesStreaming(
       Math.floor(storage.maxFinalTransactionBytes / 2),
     ),
   );
+  const entryMetadataBudget = checkedMultiply(
+    storage.maxQueryBatchSize,
+    32,
+    "staged entry hash snapshots",
+  );
+  const entrySnapshotBudget = checkedAdd(
+    pendingLimit,
+    entryMetadataBudget,
+    "staged entry snapshots",
+  );
   const builderBudget = Math.min(
     runtime.maxQueryBatchBytes + storage.maxManifestNodeBytes * 2,
-    runtime.maxManagedResidentBytes - parameters.maximum - pendingLimit,
+    runtime.maxManagedResidentBytes - entrySnapshotBudget,
   );
   if (builderBudget <= 0)
     throw new RangeError(
@@ -315,41 +386,46 @@ export async function prepareContentEntriesStreaming(
     readonly hash: Uint8Array;
     readonly length: number;
     readonly bytes?: Uint8Array;
+    readonly release: () => void;
   }> = [];
   const flush = (): void => {
     if (!pending.length) return;
     const batch = pending.splice(0);
     pendingBytes = 0;
-    port.transaction("write", workBudget, (tx) => {
-      const objects = batch
-        .filter(
-          (item): item is typeof item & { readonly bytes: Uint8Array } =>
-            item.bytes !== undefined,
-        )
-        .map((item) => Object.freeze({ hash: item.hash, bytes: item.bytes }));
-      if (objects.length) tx.content(storage).putObjectsBatch(objects);
-      const staging = tx.staging(storage);
-      for (const item of batch)
-        staging.putEntry(leaseId, entryIndex++, item.hash, item.length);
-      const unique = [
-        ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
-      ];
-      staging.appendBatch(
-        leaseId,
-        ownerNonce,
-        unique.map((item) =>
-          Object.freeze({
-            kind: "object" as const,
-            hash: item.hash,
-            size: item.length,
-          }),
-        ),
-      );
-      staging.bumpRoot(5, leaseId);
-    });
+    try {
+      port.transaction("write", workBudget, (tx) => {
+        const objects = batch
+          .filter(
+            (item): item is typeof item & { readonly bytes: Uint8Array } =>
+              item.bytes !== undefined,
+          )
+          .map((item) => Object.freeze({ hash: item.hash, bytes: item.bytes }));
+        if (objects.length) tx.content(storage).putObjectsBatch(objects);
+        const staging = tx.staging(storage);
+        for (const item of batch)
+          staging.putEntry(leaseId, entryIndex++, item.hash, item.length);
+        const unique = [
+          ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
+        ];
+        staging.appendBatch(
+          leaseId,
+          ownerNonce,
+          unique.map((item) =>
+            Object.freeze({
+              kind: "object" as const,
+              hash: item.hash,
+              size: item.length,
+            }),
+          ),
+        );
+        staging.bumpRoot(5, leaseId);
+      });
+    } finally {
+      for (const item of batch) item.release();
+    }
   };
   try {
-    cache?.makeRoom(parameters.maximum + pendingLimit + builderBudget);
+    cache?.makeRoom(entrySnapshotBudget + builderBudget);
     port.transaction("write", workBudget, (tx) => {
       const staging = tx.staging(storage);
       staging.begin({
@@ -362,36 +438,51 @@ export async function prepareContentEntriesStreaming(
       staging.bumpRoot(5, leaseId);
     });
     leaseBegun = true;
-    releases.push(admission.reserve(parameters.maximum));
-    releases.push(admission.reserve(pendingLimit));
     releases.push(admission.reserve(builderBudget));
     for (const borrowed of entries) {
-      const hash = copyBytes(borrowed.hash);
       const length = borrowed.length;
+      const borrowedHash = borrowed.hash;
+      const borrowedBytes = borrowed.bytes;
+      const hashLength = intrinsicByteLength(borrowedHash);
+      const bytesLength =
+        borrowedBytes === undefined ? 0 : intrinsicByteLength(borrowedBytes);
       if (
-        hash.byteLength !== 32 ||
+        hashLength !== 32 ||
         !Number.isSafeInteger(length) ||
         length <= 0 ||
-        length > parameters.maximum
+        length > parameters.maximum ||
+        (borrowedBytes !== undefined && bytesLength !== length)
       )
         throw new RangeError("invalid staged manifest entry");
       if (previousLength !== undefined && previousLength < parameters.minimum)
         throw new Error("ECORRUPT: non-final manifest entry is below FastCDC minimum");
       previousLength = length;
-      const bytes =
-        borrowed.bytes === undefined ? undefined : copyBytes(borrowed.bytes);
-      if (bytes && intrinsicByteLength(bytes) !== length)
-        throw new Error("staged object length differs from its manifest entry");
       total = checkedAdd(total, length);
       if (total > expectedSize)
         throw new Error("staged entry stream exceeds declared file size");
       if (
         pending.length >= storage.maxQueryBatchSize ||
-        (bytes !== undefined && pendingBytes + bytes.byteLength > pendingLimit)
+        pendingBytes + bytesLength > pendingLimit
       )
         flush();
-      pending.push(Object.freeze({ hash, length, ...(bytes ? { bytes } : {}) }));
-      pendingBytes += bytes?.byteLength ?? 0;
+      const release = admission.reserve(checkedAdd(32, bytesLength));
+      try {
+        const hash = copyBytes(borrowedHash);
+        const bytes =
+          borrowedBytes === undefined ? undefined : copyBytes(borrowedBytes);
+        pending.push(
+          Object.freeze({
+            hash,
+            length,
+            ...(bytes === undefined ? {} : { bytes }),
+            release,
+          }),
+        );
+        pendingBytes = checkedAdd(pendingBytes, bytesLength);
+      } catch (error) {
+        release();
+        throw error;
+      }
       if (entryIndex + pending.length > storage.maxManifestEntries)
         throw new RangeError("manifest entry count exceeds configured limit");
     }
@@ -410,6 +501,7 @@ export async function prepareContentEntriesStreaming(
       parameters,
       total,
       entryIndex,
+      false,
     );
   } catch (error) {
     if (leaseBegun)
@@ -420,6 +512,8 @@ export async function prepareContentEntriesStreaming(
       } catch {}
     throw error;
   } finally {
+    for (const item of pending) item.release();
+    pending.length = 0;
     for (let index = releases.length - 1; index >= 0; index -= 1) releases[index]!();
   }
 }
@@ -439,6 +533,7 @@ function finalizeStagedManifest(
   parameters: ManifestParameters,
   total: number,
   entryIndex: number,
+  reservedIngest: boolean,
 ): StreamPreparedManifest {
   const rootNode = buildManifestLevels(
     port,
@@ -447,6 +542,7 @@ function finalizeStagedManifest(
     leaseId,
     ownerNonce,
     workBudget,
+    reservedIngest,
   );
   const root = encodeManifestRoot({
     parameters,
@@ -456,11 +552,16 @@ function finalizeStagedManifest(
   });
   const rootHash = sha256(root);
   const certificate = port.transaction("write", workBudget, (tx) => {
-    const repository = tx.content(storage);
-    repository.putManifestRoot(rootHash, root);
     const staging = tx.staging(storage);
+    if (reservedIngest)
+      staging.consumeIngestReservation(leaseId, ownerNonce, intrinsicByteLength(root));
+    tx.content(storage).putManifestRoot(rootHash, root);
     staging.appendBatch(leaseId, ownerNonce, [
-      Object.freeze({ kind: "manifest-root", hash: rootHash, size: root.byteLength }),
+      Object.freeze({
+        kind: "manifest-root",
+        hash: rootHash,
+        size: intrinsicByteLength(root),
+      }),
     ]);
     staging.beginReconciliation(leaseId, ownerNonce, rootHash);
     return Object.freeze({
@@ -481,7 +582,10 @@ function finalizeStagedManifest(
             ownerNonce,
             Math.max(
               1,
-              Math.min(storage.maxQueryBatchSize, storage.maxFinalTransactionRows - 8),
+              Math.min(
+                storage.maxQueryBatchSize,
+                Math.floor((storage.maxFinalTransactionRows - 8) / 4),
+              ),
             ),
           ).complete,
     );
@@ -500,6 +604,7 @@ function buildManifestLevels(
   leaseId: string,
   ownerNonce: Uint8Array,
   budget: { readonly maxRows: number; readonly maxBytes: number },
+  reservedIngest: boolean,
 ): PreparedNode {
   let level = 0;
   let sourceKind: "entries" | "level" = "entries";
@@ -514,11 +619,19 @@ function buildManifestLevels(
       if (!pendingNodes.length) return;
       const nodes = pendingNodes.splice(0);
       port.transaction("write", budget, (tx) => {
-        const repository = tx.content(storage);
-        repository.putManifestNodesBatch(
+        const staging = tx.staging(storage);
+        if (reservedIngest)
+          staging.consumeIngestReservation(
+            leaseId,
+            ownerNonce,
+            nodes.reduce(
+              (sum, node) => checkedAdd(sum, intrinsicByteLength(node.encoded)),
+              0,
+            ),
+          );
+        tx.content(storage).putManifestNodesBatch(
           nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
         );
-        const staging = tx.staging(storage);
         for (const node of nodes)
           staging.putLevelRecord(
             leaseId,
@@ -538,7 +651,7 @@ function buildManifestLevels(
             Object.freeze({
               kind: "manifest-node" as const,
               hash: node.hash,
-              size: node.encoded.byteLength,
+              size: intrinsicByteLength(node.encoded),
             }),
           ),
         );
@@ -582,8 +695,10 @@ function buildManifestLevels(
       state = 0n;
       if (
         pendingNodes.length >= Math.min(storage.maxQueryBatchSize, 64) ||
-        pendingNodes.reduce((sum, item) => sum + item.encoded.byteLength, 0) >=
-          Math.floor(storage.maxFinalTransactionBytes / 2)
+        pendingNodes.reduce(
+          (sum, item) => checkedAdd(sum, intrinsicByteLength(item.encoded)),
+          0,
+        ) >= Math.floor(storage.maxFinalTransactionBytes / 2)
       )
         flushNodes();
     };

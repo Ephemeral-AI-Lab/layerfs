@@ -12,6 +12,7 @@ import {
 } from "../../packages/fs/dist/resources/limits.js";
 import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { prepareContent } from "../../packages/fs/dist/operations/manifest-io.js";
+import { prepareContentEntriesStreaming } from "../../packages/fs/dist/operations/streaming-prepare.js";
 import { MaintenanceManager } from "../../packages/fs/dist/operations/maintenance.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { OverlayRepository } from "../../packages/fs/dist/sqlite/overlay-repository.js";
@@ -30,6 +31,17 @@ function limits(driver) {
     },
     driver.capabilities,
   );
+}
+function readObject(repository, hash, size) {
+  const output = new Uint8Array(size);
+  assert.equal(repository.readObjectInto(hash, size, 0, output, 0, size), true);
+  return output;
+}
+function maintenanceCache() {
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  return new ContentCache(DEFAULT_RUNTIME_LIMITS.maxCacheBytes, admission);
 }
 function createBranch(driver, id = "branch") {
   driver.transaction("write", (tx) => {
@@ -237,13 +249,13 @@ test("byte-weighted cache verifies once, remains bounded, and eviction preserves
     ),
   );
   const first = driver.transaction("read", (tx) =>
-    new ContentRepository(tx, storage, cache).getObject(hash, bytes.length),
+    readObject(new ContentRepository(tx, storage, cache), hash, bytes.length),
   );
   assert.deepEqual(first, bytes);
   first.fill(0);
   assert.deepEqual(
     driver.transaction("read", (tx) =>
-      new ContentRepository(tx, storage, cache).getObject(hash, bytes.length),
+      readObject(new ContentRepository(tx, storage, cache), hash, bytes.length),
     ),
     bytes,
   );
@@ -252,12 +264,15 @@ test("byte-weighted cache verifies once, remains bounded, and eviction preserves
   cache.clear();
   assert.equal(admission.usedBytes, 0);
   driver.transaction("write", (tx) =>
-    tx.run("UPDATE efs_cas_objects SET bytes=zeroblob(size) WHERE hash=?", [hash]),
+    tx.run("UPDATE efs_cas_objects SET bytes=? WHERE hash=?", [
+      new Uint8Array(bytes.length),
+      hash,
+    ]),
   );
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
-        new ContentRepository(tx, storage, cache).getObject(hash, bytes.length),
+        readObject(new ContentRepository(tx, storage, cache), hash, bytes.length),
       ),
     /digest mismatch/,
   );
@@ -289,12 +304,12 @@ test("content cache owns Buffer and subclass inputs and detaches every outward h
       new ContentRepository(tx, storage, cache).putObject(hash, borrowed),
     );
     const first = driver.transaction("read", (tx) =>
-      new ContentRepository(tx, storage, cache).getObject(hash, expected.length),
+      readObject(new ContentRepository(tx, storage, cache), hash, expected.length),
     );
     assert.equal(Object.getPrototypeOf(first), Uint8Array.prototype);
     first.fill(255);
     const second = driver.transaction("read", (tx) =>
-      new ContentRepository(tx, storage, cache).getObject(hash, expected.length),
+      readObject(new ContentRepository(tx, storage, cache), hash, expected.length),
     );
     assert.equal(Object.getPrototypeOf(second), Uint8Array.prototype);
     assert.deepEqual(second, expected);
@@ -382,6 +397,7 @@ test("an oversized hostile stream chunk is intrinsically preflighted and cancell
       undefined,
       undefined,
       () => 7,
+      3 * 1024 * 1024,
     ),
     /maxWriteSessionBytes/,
   );
@@ -405,6 +421,267 @@ test("an oversized hostile stream chunk is intrinsically preflighted and cancell
     staging_bytes: 0,
   });
   driver.close();
+});
+
+test("declared streamed-ingest quota is reserved before the first producer pull", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const port = createSqliteOperationsStorage(driver);
+  initializeOrValidateSchema(driver);
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 2 * 1024 * 1024,
+      maintenanceReserveBytes: 1024,
+    },
+    driver.capabilities,
+  );
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  let pulls = 0;
+  const stream = new ReadableStream(
+    {
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(Uint8Array.of(1));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  await assert.rejects(
+    prepareContent(
+      port,
+      stream,
+      storage,
+      DEFAULT_RUNTIME_LIMITS,
+      admission,
+      undefined,
+      undefined,
+      () => 8,
+      2 * 1024 * 1024,
+    ),
+    /aggregate managed payload quota/,
+  );
+  assert.equal(pulls, 0);
+  assert.deepEqual(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT ingest_reservation_bytes,(SELECT count(*) FROM efs_leases) leases,(SELECT count(*) FROM efs_cas_objects) objects FROM efs_usage",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    ),
+    { ingest_reservation_bytes: 0, leases: 0, objects: 0 },
+  );
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
+test("borrowed entry streams reject intrinsic oversized views before detached copies", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const port = createSqliteOperationsStorage(driver);
+  initializeOrValidateSchema(driver);
+  const storage = limits(driver);
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  class HostileBytes extends Uint8Array {
+    get byteLength() {
+      return 1;
+    }
+    slice() {
+      throw new Error("subclass slice must not be called");
+    }
+    subarray() {
+      throw new Error("subclass subarray must not be called");
+    }
+  }
+  for (const entry of [
+    {
+      hash: new HostileBytes(2 * 1024 * 1024),
+      length: 1,
+      bytes: Uint8Array.of(1),
+    },
+    {
+      hash: new Uint8Array(32),
+      length: 1,
+      bytes: new HostileBytes(2 * 1024 * 1024),
+    },
+  ])
+    await assert.rejects(
+      prepareContentEntriesStreaming(
+        port,
+        [entry],
+        { minimum: 1, average: 1, maximum: 1 },
+        1,
+        storage,
+        DEFAULT_RUNTIME_LIMITS,
+        admission,
+      ),
+      /invalid staged manifest entry/,
+    );
+  assert.equal(admission.usedBytes, 0);
+  assert.equal(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all("SELECT count(*) count FROM efs_cas_objects", [], {
+          maxRows: 1,
+          maxBytes: 128,
+        })[0].count,
+    ),
+    0,
+  );
+  driver.close();
+});
+
+test("a 100 MiB streamed write stays chunk-bounded and a buffered peer rejects before copy", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-100m-stream-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver = await openNodeSqlite({ filename });
+  let port = createSqliteOperationsStorage(driver);
+  t.after(async () => {
+    try {
+      await port.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  });
+  port.initialize();
+  let storage = limits(driver);
+  const runtime = {
+    ...DEFAULT_RUNTIME_LIMITS,
+    maxWriteSessionBytes: 1024 * 1024,
+  };
+  const admission = new AdmissionController(runtime.maxManagedResidentBytes);
+  const producerChunkBytes = 1024 * 1024;
+  let pulls = 0;
+  const stream = new ReadableStream({
+    pull(controller) {
+      if (pulls === 100) {
+        controller.close();
+        return;
+      }
+      let state = (pulls + 1) * 0x9e3779b1;
+      const producerChunk = new Uint8Array(producerChunkBytes);
+      for (let index = 0; index < producerChunk.length; index += 1) {
+        state ^= state << 13;
+        state ^= state >>> 17;
+        state ^= state << 5;
+        producerChunk[index] = state;
+      }
+      pulls += 1;
+      controller.enqueue(producerChunk);
+    },
+  });
+  const prepared = await prepareContent(
+    port,
+    stream,
+    storage,
+    runtime,
+    admission,
+    undefined,
+    undefined,
+    () => 20,
+    100 * 1024 * 1024,
+  );
+  assert.equal(prepared.size, 100 * 1024 * 1024);
+  assert.equal(pulls, 100);
+  assert.ok(admission.peakBytes < 16 * 1024 * 1024);
+  assert.equal(admission.usedBytes, 0);
+  const durable = driver.transaction(
+    "read",
+    (tx) =>
+      tx.all(
+        "SELECT object_bytes,staging_bytes,ingest_reservation_bytes FROM efs_usage",
+        [],
+        { maxRows: 1, maxBytes: 256 },
+      )[0],
+  );
+  assert.ok(durable.object_bytes > 90 * 1024 * 1024);
+  assert.ok(durable.staging_bytes > 90 * 1024 * 1024);
+  assert.equal(durable.ingest_reservation_bytes, 0);
+  const pinned = await new MaintenanceManager(
+    port,
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    () => 21,
+    maintenanceCache(),
+  ).collectGarbage({ runId: "pinned-100m" });
+  assert.equal(pinned.deletedObjectCount, 0);
+  const physicalBeforeReopen = port.physicalStorage();
+  class HostileBuffered extends Uint8Array {
+    get byteLength() {
+      return 1;
+    }
+    slice() {
+      throw new Error("oversized buffered input must not be sliced");
+    }
+    subarray() {
+      throw new Error("oversized buffered input must not be viewed");
+    }
+  }
+  await assert.rejects(
+    prepareContent(
+      port,
+      new HostileBuffered(100 * 1024 * 1024),
+      storage,
+      runtime,
+      admission,
+    ),
+    /buffered write exceeds maxWriteBytes/,
+  );
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+  driver = await openNodeSqlite({ filename, create: false });
+  port = createSqliteOperationsStorage(driver);
+  port.initialize();
+  storage = limits(driver);
+  port.transaction("read", { maxRows: 64, maxBytes: 64 * 1024 }, (tx) =>
+    tx.staging(storage).validateSealed(prepared.certificate, 22),
+  );
+  port.transaction("write", { maxRows: 1024, maxBytes: 1024 * 1024 }, (tx) =>
+    assert.equal(
+      tx
+        .staging(storage)
+        .release(prepared.certificate.leaseId, prepared.certificate.ownerNonce, true),
+      true,
+    ),
+  );
+  const reclaimed = await new MaintenanceManager(
+    port,
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    () => 23,
+    maintenanceCache(),
+  ).collectGarbage({ runId: "reclaim-100m" });
+  assert.ok(reclaimed.deletedObjectCount > 0);
+  const afterGc = driver.transaction(
+    "read",
+    (tx) =>
+      tx.all(
+        "SELECT object_count,object_bytes,staging_bytes,ingest_reservation_bytes FROM efs_usage",
+        [],
+        { maxRows: 1, maxBytes: 256 },
+      )[0],
+  );
+  assert.deepEqual(afterGc, {
+    object_count: 0,
+    object_bytes: 0,
+    staging_bytes: 0,
+    ingest_reservation_bytes: 0,
+  });
+  t.diagnostic(
+    JSON.stringify({
+      streamedBytes: prepared.size,
+      producerOwnedChunkBytes: producerChunkBytes,
+      managedPeakBytes: admission.peakBytes,
+      callerOwnedInputExcluded: true,
+      physicalBeforeReopen,
+      pinnedDeletedObjects: pinned.deletedObjectCount,
+      reclaimedObjects: reclaimed.deletedObjectCount,
+    }),
+  );
 });
 
 test("staging payload quota is exact across rollback, release, and reopen", async () => {
@@ -490,9 +767,10 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
   const nonce = new Uint8Array(16).fill(14);
   const bytes = Uint8Array.of(9);
   const hash = sha256(bytes);
-  const metadataLimit = 256 + 96 + 3 * 96;
+  const metadataLimit = 288 + 96 + 3 * 96;
+  let driver;
   try {
-    let driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
     initializeOrValidateSchema(driver);
     let storage = constrainStorageLimits(
       {
@@ -545,7 +823,7 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
       "read",
       (tx) =>
         tx.all(
-          "SELECT charged_metadata_bytes,256+96*((SELECT count(*) FROM efs_cas_objects)+(SELECT count(*) FROM efs_leases)+(SELECT count(*) FROM efs_lease_manifests)+(SELECT count(*) FROM efs_lease_objects)+(SELECT count(*) FROM efs_lease_staged_manifests)+(SELECT count(*) FROM efs_staging_entries)+(SELECT count(*) FROM efs_staging_level_records)+(SELECT count(*) FROM efs_lease_cow_pages)+(SELECT count(*) FROM efs_lease_patches)+(SELECT count(*) FROM efs_staging_certificates)+(SELECT count(*) FROM efs_staging_reconciliations)+(SELECT count(*) FROM efs_staging_reconciliation_queue)+(SELECT count(*) FROM efs_staging_workspaces)+(SELECT count(*) FROM efs_staging_reused_subtrees)) direct,(SELECT count(*) FROM efs_lease_objects) members,staging_bytes FROM efs_usage",
+          "SELECT charged_metadata_bytes,96*((SELECT count(*) FROM efs_cas_objects)+(SELECT count(*) FROM efs_manifest_nodes)+(SELECT count(*) FROM efs_manifest_roots)+(SELECT count(*) FROM efs_revisions)+(SELECT count(*) FROM efs_inodes)+(SELECT count(*) FROM efs_entries)+(SELECT count(*) FROM efs_inode_revisions)+(SELECT count(*) FROM efs_revision_manifest_roots)+(SELECT count(*) FROM efs_entry_revisions)+(SELECT count(*) FROM efs_branches)+(SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_branch_changes)+(SELECT count(*) FROM efs_branch_inode_expectations)+(SELECT count(*) FROM efs_branch_manifest_roots)+(SELECT count(*) FROM efs_cow_page_versions)+(SELECT count(*) FROM efs_cow_page_heads)+(SELECT count(*) FROM efs_patches)+(SELECT count(*) FROM efs_patch_segments)+(SELECT count(*) FROM efs_leases)+(SELECT count(*) FROM efs_lease_manifests)+(SELECT count(*) FROM efs_lease_objects)+(SELECT count(*) FROM efs_lease_staged_manifests)+(SELECT count(*) FROM efs_staging_entries)+(SELECT count(*) FROM efs_staging_level_records)+(SELECT count(*) FROM efs_lease_cow_pages)+(SELECT count(*) FROM efs_lease_patches)+(SELECT count(*) FROM efs_staging_certificates)+(SELECT count(*) FROM efs_staging_reconciliations)+(SELECT count(*) FROM efs_staging_reconciliation_queue)+(SELECT count(*) FROM efs_staging_workspaces)+(SELECT count(*) FROM efs_staging_reused_subtrees)+(SELECT count(*) FROM efs_operation_ids)+(SELECT count(*) FROM efs_operation_results)) direct,(SELECT count(*) FROM efs_lease_objects) members,staging_bytes FROM efs_usage",
           [],
           { maxRows: 1, maxBytes: 256 },
         )[0],
@@ -583,10 +861,14 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
             { maxRows: 1, maxBytes: 128 },
           )[0],
       ),
-      { charged_metadata_bytes: 352, leases: 0 },
+      { charged_metadata_bytes: 384, leases: 0 },
     );
     driver.close();
+    driver = undefined;
   } finally {
+    try {
+      driver?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -658,6 +940,7 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
       storage,
       DEFAULT_RUNTIME_LIMITS,
       () => 100,
+      maintenanceCache(),
     );
     const zero = await maintenance.collectGarbage({
       runId: "expiry-accounting",
@@ -985,6 +1268,7 @@ test("lease maintenance observes aborts between bounded committed batches", asyn
     storage,
     DEFAULT_RUNTIME_LIMITS,
     () => 10,
+    maintenanceCache(),
   );
   let checks = 0;
   const signal = {
@@ -1061,6 +1345,15 @@ test("sealed recovery rows reject raw mutation until tombstoned cleanup", async 
       /sealed staging/,
       sql,
     );
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) => {
+        tx.run("UPDATE efs_leases SET state=2 WHERE id=?", [leaseId]);
+        tx.run("DELETE FROM efs_staging_certificates WHERE lease_id=?", [leaseId]);
+      }),
+    /sealed staging certificate is immutable/,
+    "a raw tombstone without its authenticated cleanup authority bypassed sealing",
+  );
   driver.close();
   driver = await openNodeSqlite({ filename });
   port = createSqliteOperationsStorage(driver);

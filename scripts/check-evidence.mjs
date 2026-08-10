@@ -53,14 +53,22 @@ function ownedByMilestone(milestone, filename) {
     filename.startsWith("tests/architecture/") ||
     filename.startsWith("tests/fixtures/");
   if (milestone === "m0") return m0;
-  return (
+  const m1 =
     m0 ||
     filename.startsWith("tests/algorithms/") ||
     filename.startsWith("tests/workerd/") ||
     filename === "scripts/check-workerd-algorithms.mjs" ||
     filename.startsWith("docs/spec/") ||
     filename.startsWith("docs/testing/") ||
-    filename === "docs/implementation/implementation-plan.md"
+    filename === "docs/implementation/implementation-plan.md";
+  if (milestone === "m1") return m1;
+  return (
+    m1 ||
+    filename.startsWith("packages/fs/src/") ||
+    filename.startsWith("packages/sqlite-node/src/") ||
+    filename.startsWith("tests/storage/") ||
+    filename.startsWith("tests/node-integration/") ||
+    filename.startsWith("tests/maintenance/")
   );
 }
 const m1SourceEntrypoints = [
@@ -229,6 +237,15 @@ async function validateMilestone(name, requiredMetrics) {
   return { artifact, exit, candidate };
 }
 
+if (process.argv[2] === "--owned-tree-digest") {
+  const milestone = process.argv[3];
+  const commit = process.argv[4] ?? "HEAD";
+  if (!new Set(["m0", "m1", "m2"]).has(milestone))
+    throw new Error("owned-tree digest milestone must be m0, m1, or m2");
+  console.log(await ownedTreeDigest(milestone, commit));
+  process.exit(0);
+}
+
 const m0 = await validateMilestone("m0", [
   "operatingSystems",
   "nodeVersions",
@@ -270,6 +287,34 @@ const predecessor = m1.exit.match(
 if (predecessor !== m0.candidate)
   throw new Error("m1 sequential predecessor differs from the accepted m0 candidate");
 
+const m2 = await validateMilestone("m2", [
+  "operatingSystems",
+  "nodeVersions",
+  "matrixRuns",
+  "nodeStorageTests",
+  "maintenanceTests",
+  "streamedBytes",
+  "streamManagedPeakBytes",
+  "fallbackManagedPeakBytes",
+  "fallbackSourceReadCalls",
+  "fallbackStorageTransactions",
+  "observedWalBytes",
+  "sealedManifestEntries",
+  "finalCertificateValidationStatements",
+]);
+if (
+  m2.artifact.passed !==
+  m2.artifact.metrics.nodeStorageTests + m2.artifact.metrics.maintenanceTests
+)
+  throw new Error("m2 passed count differs from storage plus maintenance checks");
+if (m2.artifact.independentAudit !== "approved")
+  throw new Error("m2 correctness artifact lacks independent audit approval");
+const m2Predecessor = m2.exit.match(
+  /Sequential predecessor:[\s\S]*?`([0-9a-f]{40})`/u,
+)?.[1];
+if (m2Predecessor !== m1.candidate)
+  throw new Error("m2 sequential predecessor differs from the accepted m1 candidate");
+
 console.log(
-  `evidence: M0/M1 schemas, zero-failure results, candidate parents, sequential predecessor, and required metrics are internally consistent`,
+  `evidence: M0/M1/M2 schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,
 );

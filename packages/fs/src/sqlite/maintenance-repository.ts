@@ -19,6 +19,7 @@ export interface GcRunRow extends SqliteRow {
 export interface GcMarkRow extends SqliteRow {
   kind: number;
   hash: Uint8Array;
+  edge_cursor: number;
 }
 export interface PayloadRow extends SqliteRow {
   hash: Uint8Array;
@@ -77,7 +78,6 @@ export class MaintenanceRepository {
       "INSERT INTO efs_gc_runs(id,state,high_water,root_generation,cursor_kind,cursor_value,created_at_ms) VALUES(?,0,?,?,0,NULL,?)",
       [runId, meta.next_allocation_sequence - 1, meta.root_mutation_generation, now],
     );
-    this.addRoots(runId);
   }
   abandonRun(runId: string, completeState: number, abandonedState: number): void {
     this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=? AND state<>?", [
@@ -145,7 +145,7 @@ export class MaintenanceRepository {
   }
   pendingMarks(runId: string, limit: number, maxBytes: number): readonly GcMarkRow[] {
     return this.#tx.all<GcMarkRow>(
-      "SELECT kind,hash FROM efs_gc_marks WHERE run_id=? AND processed=0 ORDER BY kind,hash LIMIT ?",
+      "SELECT kind,hash,edge_cursor FROM efs_gc_marks WHERE run_id=? AND processed=0 ORDER BY kind,hash LIMIT ?",
       [runId, limit],
       { maxRows: limit, maxBytes },
     );
@@ -161,10 +161,16 @@ export class MaintenanceRepository {
         "garbage-collection mark",
       );
   }
-  markProcessed(runId: string, kind: number, hash: Uint8Array): void {
+  advanceMark(
+    runId: string,
+    kind: number,
+    hash: Uint8Array,
+    edgeCursor: number,
+    processed: boolean,
+  ): void {
     this.#tx.run(
-      "UPDATE efs_gc_marks SET processed=1 WHERE run_id=? AND kind=? AND hash=?",
-      [runId, kind, hash],
+      "UPDATE efs_gc_marks SET edge_cursor=?,processed=? WHERE run_id=? AND kind=? AND hash=?",
+      [edgeCursor, processed ? 1 : 0, runId, kind, hash],
     );
   }
   addExamined(runId: string, roots: number, nodes: number, objects: number): void {
@@ -173,13 +179,51 @@ export class MaintenanceRepository {
       [roots, nodes, objects, runId],
     );
   }
-  reconcileRoots(runId: string): void {
-    const added = this.addRoots(runId);
-    this.#tx.run("UPDATE efs_gc_runs SET root_generation=? WHERE id=?", [
-      this.generation(),
+  seedRootsBatch(runId: string, limit: number, maxBytes: number): boolean {
+    if (!Number.isSafeInteger(limit) || limit <= 0)
+      throw new RangeError("invalid GC root batch limit");
+    const run = this.#tx.all<
+      {
+        cursor_kind: number;
+        cursor_value: Uint8Array | null;
+        root_generation: number;
+      } & SqliteRow
+    >(
+      "SELECT cursor_kind,cursor_value,root_generation FROM efs_gc_runs WHERE id=? AND state=0",
+      [runId],
+      { maxRows: 1, maxBytes: 512 },
+    )[0];
+    if (!run) throw new Error("ECORRUPT: missing active garbage-collection run");
+    if (!Number.isSafeInteger(run.cursor_kind) || run.cursor_kind < 0)
+      throw new Error("ECORRUPT: invalid garbage-collection root cursor");
+    if (run.cursor_kind >= 5) return this.#finishRootPass(runId, run.root_generation);
+    const after = run.cursor_value ?? new Uint8Array();
+    const queries = [
+      "SELECT DISTINCT manifest_hash hash FROM efs_inodes WHERE manifest_hash IS NOT NULL AND manifest_hash>? ORDER BY manifest_hash LIMIT ?",
+      "SELECT DISTINCT manifest_hash hash FROM efs_revision_manifest_roots WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
+      "SELECT DISTINCT manifest_hash hash FROM efs_branch_manifest_roots WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
+      "SELECT DISTINCT lm.manifest_hash hash FROM efs_lease_manifests lm JOIN efs_leases l ON l.id=lm.lease_id WHERE l.state IN (0,1) AND lm.manifest_hash>? ORDER BY lm.manifest_hash LIMIT ?",
+      "SELECT DISTINCT c.manifest_hash hash FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id WHERE c.sealed=1 AND l.state=1 AND c.manifest_hash>? ORDER BY c.manifest_hash LIMIT ?",
+    ] as const;
+    const rows = this.#tx.all<{ hash: Uint8Array } & SqliteRow>(
+      queries[run.cursor_kind]!,
+      [after, limit],
+      { maxRows: limit, maxBytes },
+    );
+    for (const row of rows) this.addMark(runId, 0, row.hash);
+    if (rows.length === limit) {
+      this.#tx.run("UPDATE efs_gc_runs SET cursor_value=? WHERE id=?", [
+        rows.at(-1)!.hash,
+        runId,
+      ]);
+      return false;
+    }
+    const nextKind = run.cursor_kind + 1;
+    this.#tx.run("UPDATE efs_gc_runs SET cursor_kind=?,cursor_value=NULL WHERE id=?", [
+      nextKind,
       runId,
     ]);
-    if (!added) this.#tx.run("UPDATE efs_gc_runs SET state=1 WHERE id=?", [runId]);
+    return nextKind >= 5 ? this.#finishRootPass(runId, run.root_generation) : false;
   }
   sweepCandidates(
     runId: string,
@@ -279,24 +323,20 @@ export class MaintenanceRepository {
       }
     }
   }
-  addRoots(runId: string): number {
-    let changes = 0;
-    for (const sql of [
-      "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_inodes WHERE manifest_hash IS NOT NULL",
-      "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_revision_manifest_roots",
-      "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_branch_manifest_roots",
-      "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,lm.manifest_hash,0 FROM efs_lease_manifests lm JOIN efs_leases l ON l.id=lm.lease_id WHERE l.state IN (0,1)",
-      "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,c.manifest_hash,0 FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id WHERE c.sealed=1 AND l.state=1",
-    ]) {
-      const inserted = this.#tx.run(sql, [runId]).changes;
-      changes += inserted;
-      if (inserted)
-        new UsageRepository(this.#tx, this.#limits).apply(
-          { maintenance_bytes: inserted * CHARGED_ROW_BYTES },
-          "garbage-collection roots",
-        );
+  #finishRootPass(runId: string, expectedGeneration: number): boolean {
+    const generation = this.generation();
+    if (generation !== expectedGeneration) {
+      this.#tx.run(
+        "UPDATE efs_gc_runs SET root_generation=?,cursor_kind=0,cursor_value=NULL WHERE id=?",
+        [generation, runId],
+      );
+      return false;
     }
-    return changes;
+    this.#tx.run(
+      "UPDATE efs_gc_runs SET state=1,cursor_kind=5,cursor_value=NULL WHERE id=? AND state=0",
+      [runId],
+    );
+    return true;
   }
   #scalar(sql: string): number {
     const value = this.#tx.all<{ value: number } & SqliteRow>(sql, [], {

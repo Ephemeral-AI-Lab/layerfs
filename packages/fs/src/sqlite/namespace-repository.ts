@@ -3,7 +3,7 @@ import type { FilesystemLimits, StorageLimits } from "../resources/limits.js";
 import { canonicalizePath, type CanonicalPath } from "../namespace/paths.js";
 import { fsError } from "../filesystem/errors.js";
 import { encodeUtf8 } from "../namespace/utf8.js";
-import { bytesToHex } from "../cas/bytes.js";
+import { bytesToHex, intrinsicByteLength } from "../cas/bytes.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 
 export interface InodeRow extends SqliteRow {
@@ -196,7 +196,7 @@ export class NamespaceRepository {
       throw new Error("ENOSPC: revision or generation space exhausted");
     const rootId = encodeUtf8(String(revision));
     new UsageRepository(this.#tx, this.#storage).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES + rootId.byteLength },
+      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
       "namespace root journal",
     );
     this.#tx.run(
@@ -422,7 +422,7 @@ export class NamespaceRepository {
     const generation = this.meta().root_mutation_generation + 1;
     const rootId = encodeUtf8(id);
     new UsageRepository(this.#tx, this.#storage).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES + rootId.byteLength },
+      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
       "namespace root journal",
     );
     this.#tx.run("UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1", [

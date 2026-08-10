@@ -21,6 +21,10 @@ export declare class ContentCache {
     #private;
     constructor(limitBytes: number, admission: AdmissionController);
     get(kind: ContentCacheKind, hash: Uint8Array): Uint8Array | undefined;
+    copyInto(kind: ContentCacheKind, hash: Uint8Array, expectedSize: number, sourceOffset: number, destination: Uint8Array, destinationOffset: number, length: number): boolean | undefined;
+    containsExact(kind: ContentCacheKind, hash: Uint8Array, expectedSize: number): boolean | undefined;
+    reserveOperation(weight: number): () => void;
+    tryReserve(weight: number): ContentCacheReservation | undefined;
     reserve(weight: number): ContentCacheReservation | undefined;
     admit(kind: ContentCacheKind, hash: Uint8Array, bytes: Uint8Array, reservation: ContentCacheReservation): void;
     makeRoom(additionalBytes: number): void;
@@ -122,6 +126,8 @@ export interface WriteFileOptions {
     readonly mode?: number;
     readonly exclusive?: boolean;
     readonly signal?: AbortSignal;
+    /** Required upper bound for a streamed write; buffered values infer their length. */
+    readonly maxBytes?: number;
 }
 export interface MkdirOptions {
     readonly recursive?: boolean;
@@ -478,7 +484,8 @@ export interface AuthenticatedManifestEntry {
 export interface ContentStore {
     putObject(hash: Uint8Array, bytes: Uint8Array): boolean;
     putObjectsBatch(input: readonly ContentObjectInput[]): ContentBatchResult;
-    getObject(hash: Uint8Array, expectedSize?: number): Uint8Array | undefined;
+    readObjectInto(hash: Uint8Array, expectedSize: number, sourceOffset: number, destination: Uint8Array, destinationOffset: number, length: number): boolean;
+    verifyObject(hash: Uint8Array, expectedSize?: number, forceStorage?: boolean): boolean;
     putManifestNode(hash: Uint8Array, encoded: Uint8Array): boolean;
     putManifestNodesBatch(nodes: readonly {
         readonly hash: Uint8Array;
@@ -707,7 +714,9 @@ export interface StagingStore {
         readonly kind?: number;
         readonly branchId?: string;
         readonly generation?: number;
+        readonly ingestReservationBytes?: number;
     }): void;
+    consumeIngestReservation(leaseId: string, ownerNonce: Uint8Array, bytes: number): void;
     putEntry(leaseId: string, entryIndex: number, objectHash: Uint8Array, length: number): void;
     entriesAfter(leaseId: string, cursor: number, limit: number, maxBytes: number): readonly StagingEntryRow[];
     putLevelRecord(leaseId: string, level: number, recordIndex: number, nodeHash: Uint8Array, span: number, entryCount: number): void;
@@ -743,6 +752,7 @@ export interface GcRunRow {
 export interface GcMarkRow {
     readonly kind: number;
     readonly hash: Uint8Array;
+    readonly edge_cursor: number;
 }
 export interface PayloadRow {
     readonly hash: Uint8Array;
@@ -791,9 +801,9 @@ export interface MaintenanceStore {
     inodes(after: string, limit: number, maxBytes: number): readonly InodeVerifyRow[];
     pendingMarks(runId: string, limit: number, maxBytes: number): readonly GcMarkRow[];
     addMark(runId: string, kind: number, hash: Uint8Array): void;
-    markProcessed(runId: string, kind: number, hash: Uint8Array): void;
+    advanceMark(runId: string, kind: number, hash: Uint8Array, edgeCursor: number, processed: boolean): void;
     addExamined(runId: string, roots: number, nodes: number, objects: number): void;
-    reconcileRoots(runId: string): void;
+    seedRootsBatch(runId: string, limit: number, maxBytes: number): boolean;
     sweepCandidates(runId: string, state: number, highWater: number, limit: number, maxBytes: number): readonly PayloadRow[];
     applySweep(runId: string, state: number, rows: readonly PayloadRow[], completeState: number): void;
 }

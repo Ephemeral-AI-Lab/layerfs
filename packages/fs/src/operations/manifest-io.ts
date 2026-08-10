@@ -25,6 +25,7 @@ export async function prepareContent(
   signal?: AbortSignal,
   cache?: ContentCache,
   clock?: () => number,
+  declaredMaxBytes?: number,
 ): Promise<PreparedManifest> {
   return prepareContentStreaming(
     port,
@@ -35,6 +36,7 @@ export async function prepareContent(
     signal,
     cache,
     clock,
+    declaredMaxBytes,
   );
 }
 

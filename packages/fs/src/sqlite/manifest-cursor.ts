@@ -1,5 +1,4 @@
-import { copyBytes, intrinsicByteRange } from "../cas/bytes.js";
-import { verifyCasObject } from "../cas/sha256.js";
+import { copyBytes, intrinsicByteLength, intrinsicByteRange } from "../cas/bytes.js";
 import { ManifestSequentialCursor } from "../manifests/cursor.js";
 import {
   decodeManifestRoot,
@@ -14,7 +13,14 @@ export interface SQLiteAuthenticatedManifestEntry {
 }
 
 export interface SQLiteManifestContentSource {
-  getObject(hash: Uint8Array, expectedSize?: number): Uint8Array | undefined;
+  readObjectInto(
+    hash: Uint8Array,
+    expectedSize: number,
+    sourceOffset: number,
+    destination: Uint8Array,
+    destinationOffset: number,
+    length: number,
+  ): boolean;
   getManifestRoot(hash: Uint8Array): Uint8Array | undefined;
   getManifestNode(hash: Uint8Array): Uint8Array | undefined;
 }
@@ -89,7 +95,7 @@ export class SQLiteAuthenticatedManifestCursor {
       destinationOffset < 0 ||
       !Number.isSafeInteger(length) ||
       length < 0 ||
-      destinationOffset + length > destination.byteLength
+      destinationOffset + length > intrinsicByteLength(destination)
     )
       throw new RangeError("invalid authenticated manifest destination range");
     const available = Math.min(length, this.fileSize - this.#position);
@@ -101,21 +107,19 @@ export class SQLiteAuthenticatedManifestCursor {
       const entryEnd = checkedAdd(selected.offset, selected.entry.length);
       if (this.#position < selected.offset || this.#position >= entryEnd)
         throw new Error("ECORRUPT: manifest cursor position is outside its entry");
-      const object = this.#source.getObject(
-        copyBytes(selected.entry.hash),
-        selected.entry.length,
-      );
-      if (!object) throw new Error("ECORRUPT: missing CAS object");
-      const objectBytes = intrinsicByteRange(object);
-      if (objectBytes.byteLength !== selected.entry.length)
-        throw new Error("ECORRUPT: CAS object length disagrees with manifest");
-      verifyCasObject(selected.entry.hash, objectBytes);
       const objectOffset = this.#position - selected.offset;
       const take = Math.min(available - written, selected.entry.length - objectOffset);
-      destination.set(
-        intrinsicByteRange(objectBytes, objectOffset, objectOffset + take),
-        destinationOffset + written,
-      );
+      if (
+        !this.#source.readObjectInto(
+          copyBytes(selected.entry.hash),
+          selected.entry.length,
+          objectOffset,
+          destination,
+          destinationOffset + written,
+          take,
+        )
+      )
+        throw new Error("ECORRUPT: missing CAS object");
       written += take;
       this.#position = checkedAdd(this.#position, take);
       if (this.#position === entryEnd) this.nextEntry();

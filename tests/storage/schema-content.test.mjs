@@ -8,9 +8,11 @@ import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js
 import {
   DEFAULT_FILESYSTEM_LIMITS,
   MAX_CONTENT_OBJECT_BYTES,
+  AdmissionController,
   constrainStorageLimits,
 } from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
+import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { NamespaceRepository } from "../../packages/fs/dist/sqlite/namespace-repository.js";
 import { StagingRepository } from "../../packages/fs/dist/sqlite/staging-repository.js";
 import { UsageRepository } from "../../packages/fs/dist/sqlite/usage-repository.js";
@@ -21,7 +23,14 @@ import {
 } from "../../packages/fs/dist/sqlite/schema.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { createV1Schema } from "../fixtures/schema-v1.mjs";
+import { createV2Schema } from "../fixtures/schema-v2.mjs";
 import { createV3Schema } from "../fixtures/schema-v3.mjs";
+
+function admittedRepository(tx, storage, managedBytes = 128 * 1024 * 1024) {
+  const admission = new AdmissionController(managedBytes);
+  const cache = new ContentCache(1, admission);
+  return new ContentRepository(tx, storage, cache);
+}
 
 test("schema initialization is deterministic, persisted, and read-only reopen-safe", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-schema-"));
@@ -56,6 +65,44 @@ test("schema initialization is deterministic, persisted, and read-only reopen-sa
       /ESCHEMA/,
     );
     readOnly.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("current schema recovery authority is revalidated after physical reopen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-schema-recovery-"));
+  try {
+    const corruptions = [
+      {
+        name: "usage",
+        mutate: (tx) => tx.run("DELETE FROM efs_usage WHERE singleton=1"),
+        expected: /missing usage singleton/,
+      },
+      {
+        name: "metadata",
+        mutate: (tx) =>
+          tx.run(
+            "UPDATE efs_usage SET charged_metadata_bytes=charged_metadata_bytes+96 WHERE singleton=1",
+          ),
+        expected: /charged metadata differs from direct recount/,
+      },
+      {
+        name: "trigger",
+        mutate: (tx) => tx.run("DROP TRIGGER efs_sealed_certificate_delete"),
+        expected: /required schema-v4 table, index, or trigger is missing/,
+      },
+    ];
+    for (const corruption of corruptions) {
+      const filename = path.join(directory, `${corruption.name}.db`);
+      let driver = await openNodeSqlite({ filename });
+      initializeOrValidateSchema(driver);
+      driver.transaction("write", corruption.mutate);
+      driver.close();
+      driver = await openNodeSqlite({ filename, create: false });
+      assert.throws(() => initializeOrValidateSchema(driver), corruption.expected);
+      driver.close();
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -126,36 +173,110 @@ test("schema v1 migrates data to the current schema and every migration-statemen
   assert.deepEqual(migrated.segment.bytes, Uint8Array.of(4, 5, 6));
   probe.close();
   assert.ok(count.value > 20);
-  for (let failAt = 1; failAt <= count.value; failAt += 1) {
-    const base = await openNodeSqlite({ filename: ":memory:" });
-    createV1Schema(base);
-    const faultCount = { value: 0 };
+  const faultDirectory = await mkdtemp(path.join(tmpdir(), "efs-schema-v1-fault-"));
+  try {
+    for (let failAt = 1; failAt <= count.value; failAt += 1) {
+      const filename = path.join(faultDirectory, `fault-${failAt}.db`);
+      let base = await openNodeSqlite({ filename });
+      createV1Schema(base);
+      const faultCount = { value: 0 };
+      assert.throws(
+        () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
+        new RegExp(`migration fault ${failAt}`),
+      );
+      base.close();
+      base = await openNodeSqlite({ filename, create: false });
+      const state = base.transaction("read", (tx) => ({
+        version: tx.all("SELECT user_version value FROM pragma_user_version", [], {
+          maxRows: 1,
+          maxBytes: 128,
+        })[0].value,
+        meta: tx.all("SELECT schema_version FROM efs_meta", [], {
+          maxRows: 1,
+          maxBytes: 128,
+        })[0].schema_version,
+        oldPages: tx.all(
+          "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_pages'",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].count,
+        newPages: tx.all(
+          "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_page_versions'",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].count,
+      }));
+      assert.deepEqual(state, { version: 1, meta: 1, oldPages: 1, newPages: 0 });
+      base.close();
+    }
+  } finally {
+    await rm(faultDirectory, { recursive: true, force: true });
+  }
+});
+
+test("released schema v2 migrates through v3 to v4 and file-backed faults reopen as intact v2", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-schema-v2-"));
+  try {
+    const filename = path.join(directory, "normal.db");
+    let driver = await openNodeSqlite({ filename });
+    createV2Schema(driver);
+    driver.close();
+    const readOnly = await openNodeSqlite({ filename, readOnly: true });
     assert.throws(
-      () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
-      new RegExp(`migration fault ${failAt}`),
+      () => initializeOrValidateSchema(readOnly),
+      /schema v2 requires a writable migration/,
     );
-    const state = base.transaction("read", (tx) => ({
-      version: tx.all("SELECT user_version value FROM pragma_user_version", [], {
-        maxRows: 1,
-        maxBytes: 128,
-      })[0].value,
-      meta: tx.all("SELECT schema_version FROM efs_meta", [], {
-        maxRows: 1,
-        maxBytes: 128,
-      })[0].schema_version,
-      oldPages: tx.all(
-        "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_pages'",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0].count,
-      newPages: tx.all(
-        "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_page_versions'",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0].count,
-    }));
-    assert.deepEqual(state, { version: 1, meta: 1, oldPages: 1, newPages: 0 });
-    base.close();
+    readOnly.close();
+    driver = await openNodeSqlite({ filename, create: false });
+    initializeOrValidateSchema(driver);
+    assert.deepEqual(
+      driver.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT (SELECT user_version FROM pragma_user_version) version,(SELECT schema_version FROM efs_meta) meta,(SELECT count(*) FROM efs_staging_reconciliations) reconciliations,(SELECT count(*) FROM pragma_table_info('efs_gc_marks') WHERE name='edge_cursor') edge_cursor",
+            [],
+            { maxRows: 1, maxBytes: 256 },
+          )[0],
+      ),
+      { version: 4, meta: 4, reconciliations: 0, edge_cursor: 1 },
+    );
+    driver.close();
+
+    const probe = await openNodeSqlite({ filename: ":memory:" });
+    createV2Schema(probe);
+    const count = { value: 0 };
+    initializeOrValidateSchema(migrationDriver(probe, Number.POSITIVE_INFINITY, count));
+    probe.close();
+    assert.ok(count.value > 10);
+
+    for (let failAt = 1; failAt <= count.value; failAt += 1) {
+      const faultFile = path.join(directory, `fault-${failAt}.db`);
+      let base = await openNodeSqlite({ filename: faultFile });
+      createV2Schema(base);
+      const faultCount = { value: 0 };
+      assert.throws(
+        () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
+        new RegExp(`migration fault ${failAt}`),
+      );
+      base.close();
+      base = await openNodeSqlite({ filename: faultFile, create: false });
+      assert.deepEqual(
+        base.transaction(
+          "read",
+          (tx) =>
+            tx.all(
+              "SELECT (SELECT user_version FROM pragma_user_version) version,(SELECT schema_version FROM efs_meta) meta,(SELECT count(*) FROM sqlite_schema WHERE name='efs_staging_reconciliations') v3,(SELECT count(*) FROM sqlite_schema WHERE name='efs_lease_cleanups') v4",
+              [],
+              { maxRows: 1, maxBytes: 256 },
+            )[0],
+        ),
+        { version: 2, meta: 2, v3: 0, v4: 0 },
+      );
+      base.close();
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -199,41 +320,49 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
   assert.ok(count.value >= 8);
   probe.close();
 
-  for (let failAt = 1; failAt <= count.value; failAt += 1) {
-    const base = await openNodeSqlite({ filename: ":memory:" });
-    createV3Schema(base);
-    const faultCount = { value: 0 };
-    assert.throws(
-      () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
-      new RegExp(`migration fault ${failAt}`),
-    );
-    const state = base.transaction("read", (tx) => ({
-      userVersion: tx.all("SELECT user_version value FROM pragma_user_version", [], {
-        maxRows: 1,
-        maxBytes: 128,
-      })[0].value,
-      metaVersion: tx.all("SELECT schema_version value FROM efs_meta", [], {
-        maxRows: 1,
-        maxBytes: 128,
-      })[0].value,
-      mutationColumn: tx.all(
-        "SELECT count(*) count FROM pragma_table_info('efs_usage') WHERE name='mutation_sequence'",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0].count,
-      cleanupTable: tx.all(
-        "SELECT count(*) count FROM sqlite_schema WHERE name='efs_lease_cleanups'",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0].count,
-    }));
-    assert.deepEqual(state, {
-      userVersion: 3,
-      metaVersion: 3,
-      mutationColumn: 0,
-      cleanupTable: 0,
-    });
-    base.close();
+  const faultDirectory = await mkdtemp(path.join(tmpdir(), "efs-schema-v3-fault-"));
+  try {
+    for (let failAt = 1; failAt <= count.value; failAt += 1) {
+      const filename = path.join(faultDirectory, `fault-${failAt}.db`);
+      let base = await openNodeSqlite({ filename });
+      createV3Schema(base);
+      const faultCount = { value: 0 };
+      assert.throws(
+        () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
+        new RegExp(`migration fault ${failAt}`),
+      );
+      base.close();
+      base = await openNodeSqlite({ filename, create: false });
+      const state = base.transaction("read", (tx) => ({
+        userVersion: tx.all("SELECT user_version value FROM pragma_user_version", [], {
+          maxRows: 1,
+          maxBytes: 128,
+        })[0].value,
+        metaVersion: tx.all("SELECT schema_version value FROM efs_meta", [], {
+          maxRows: 1,
+          maxBytes: 128,
+        })[0].value,
+        mutationColumn: tx.all(
+          "SELECT count(*) count FROM pragma_table_info('efs_usage') WHERE name='mutation_sequence'",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].count,
+        cleanupTable: tx.all(
+          "SELECT count(*) count FROM sqlite_schema WHERE name='efs_lease_cleanups'",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].count,
+      }));
+      assert.deepEqual(state, {
+        userVersion: 3,
+        metaVersion: 3,
+        mutationColumn: 0,
+        cleanupTable: 0,
+      });
+      base.close();
+    }
+  } finally {
+    await rm(faultDirectory, { recursive: true, force: true });
   }
 });
 
@@ -280,6 +409,53 @@ test("one usage authority enforces aggregate and category quotas transactionally
   assert.equal(usage.maintenance_bytes, 100);
   assert.equal(usage.permanent_identifiers, 1);
   assert.equal(usage.mutation_sequence, 6);
+  driver.close();
+});
+
+test("staging identities and nonces are intrinsically bounded before durable admission", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const limits = constrainStorageLimits(undefined, driver.capabilities);
+  for (const options of [
+    {
+      leaseId: "x".repeat(129),
+      ownerId: "owner",
+      ownerNonce: new Uint8Array(16),
+    },
+    {
+      leaseId: "lease",
+      ownerId: "x".repeat(129),
+      ownerNonce: new Uint8Array(16),
+    },
+    {
+      leaseId: "lease",
+      ownerId: "owner",
+      ownerNonce: new Uint8Array(17),
+    },
+  ])
+    assert.throws(
+      () =>
+        driver.transaction("write", (tx) =>
+          new StagingRepository(tx, limits).begin({
+            ...options,
+            now: 1,
+            expiresAt: 2,
+          }),
+        ),
+      /1\.\.128 UTF-8 bytes|owner nonce is invalid/,
+    );
+  assert.deepEqual(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT (SELECT count(*) FROM efs_leases) leases,(SELECT count(*) FROM efs_staging_certificates) certificates,charged_metadata_bytes FROM efs_usage",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    ),
+    { leases: 0, certificates: 0, charged_metadata_bytes: 288 },
+  );
   driver.close();
 });
 
@@ -416,7 +592,7 @@ test("two connections serialize staging metadata admission without an orphan row
     initializeOrValidateSchema(second);
     const limits = constrainStorageLimits(
       {
-        maxChargedMetadataBytes: 448,
+        maxChargedMetadataBytes: 480,
         maxManagedPayloadBytes: 1024 * 1024,
         maintenanceReserveBytes: 1024,
       },
@@ -454,7 +630,7 @@ test("two connections serialize staging metadata admission without an orphan row
             { maxRows: 1, maxBytes: 256 },
           )[0],
       ),
-      { charged_metadata_bytes: 448, leases: 1, certificates: 1 },
+      { charged_metadata_bytes: 480, leases: 1, certificates: 1 },
     );
     second.close();
     first.close();
@@ -517,13 +693,20 @@ test("CAS and segmented manifests persist with verified deduplication and exact 
   assert.equal(usage.manifest_root_count, 1);
   assert.equal(usage.manifest_node_count, manifest.nodes.size);
   const firstHash = Buffer.from(manifest.objects.keys().next().value, "hex");
-  driver.transaction("write", (tx) =>
-    tx.run("UPDATE efs_cas_objects SET bytes=zeroblob(size) WHERE hash=?", [firstHash]),
-  );
+  driver.transaction("write", (tx) => {
+    const size = tx.all("SELECT size FROM efs_cas_objects WHERE hash=?", [firstHash], {
+      maxRows: 1,
+      maxBytes: 128,
+    })[0].size;
+    tx.run("UPDATE efs_cas_objects SET bytes=? WHERE hash=?", [
+      new Uint8Array(size),
+      firstHash,
+    ]);
+  });
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
-        new ContentRepository(tx, limits).getObject(firstHash),
+        admittedRepository(tx, limits).verifyObject(firstHash),
       ),
     /digest mismatch/,
   );
@@ -575,9 +758,21 @@ test("the exact supported content-object bound persists and bound plus one rolls
       },
       driver.capabilities,
     );
-    const reopened = driver.transaction("read", (tx) =>
-      new ContentRepository(tx, storage).getObject(exactHash, MAX_CONTENT_OBJECT_BYTES),
-    );
+    const reopened = driver.transaction("read", (tx) => {
+      const output = new Uint8Array(MAX_CONTENT_OBJECT_BYTES);
+      assert.equal(
+        admittedRepository(tx, storage).readObjectInto(
+          exactHash,
+          MAX_CONTENT_OBJECT_BYTES,
+          0,
+          output,
+          0,
+          MAX_CONTENT_OBJECT_BYTES,
+        ),
+        true,
+      );
+      return output;
+    });
     assert.equal(reopened.byteLength, MAX_CONTENT_OBJECT_BYTES);
     assert.deepEqual(sha256(reopened), exactHash);
     assert.deepEqual(
@@ -600,6 +795,52 @@ test("the exact supported content-object bound persists and bound plus one rolls
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("bulk content envelopes reject before hashing or manifest decoding", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 16 * 1024 * 1024,
+      maintenanceReserveBytes: 1024,
+      maxFinalTransactionBytes: 64 * 1024,
+    },
+    driver.capabilities,
+  );
+  class HostileBytes extends Uint8Array {
+    get byteLength() {
+      return 0;
+    }
+  }
+  const objectBytes = new HostileBytes(16 * 1024);
+  const invalidHash = new HostileBytes(32);
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        new ContentRepository(tx, storage).putObjectsBatch(
+          Array.from({ length: 5 }, () => ({
+            hash: invalidHash,
+            bytes: objectBytes,
+          })),
+        ),
+      ),
+    /transaction byte limit/,
+  );
+  const invalidNode = new HostileBytes(10 * 1024);
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        new ContentRepository(tx, storage).putManifestNodesBatch(
+          Array.from({ length: 7 }, () => ({
+            hash: invalidHash,
+            encoded: invalidNode,
+          })),
+        ),
+      ),
+    /transaction byte limit/,
+  );
+  driver.close();
 });
 
 function failingDriver(base, occurrence) {

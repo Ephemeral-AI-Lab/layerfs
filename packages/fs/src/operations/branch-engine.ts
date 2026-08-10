@@ -652,7 +652,11 @@ export class BranchManager implements Branches {
       return info({ ...branch, state: 2, terminal_at_ms: now });
     });
   }
-  prepare(content: Uint8Array | ReadableStream<Uint8Array>, signal?: AbortSignal) {
+  prepare(
+    content: Uint8Array | ReadableStream<Uint8Array>,
+    signal?: AbortSignal,
+    declaredMaxBytes?: number,
+  ) {
     return prepareContent(
       this.#port,
       content,
@@ -662,6 +666,7 @@ export class BranchManager implements Branches {
       signal,
       this.#cache,
       this.#clock,
+      declaredMaxBytes,
     );
   }
   abandonPrepared(certificate: ClosureCertificate): void {
@@ -1000,7 +1005,11 @@ class BranchHandle implements EphemeralBranch {
         : content instanceof Uint8Array
           ? content.slice()
           : content;
-    const prepared = await this.#manager.prepare(input, options.signal);
+    const prepared = await this.#manager.prepare(
+      input,
+      options.signal,
+      options.maxBytes,
+    );
     const now = Date.now();
     const node: DesiredNode = existing
       ? {

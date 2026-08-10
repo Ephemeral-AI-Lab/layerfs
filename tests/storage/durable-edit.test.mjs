@@ -6,8 +6,17 @@ import { test } from "node:test";
 import { EphemeralFS } from "../../packages/fs/dist/index.js";
 import { bytesToHex } from "../../packages/fs/dist/cas/bytes.js";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
+import {
+  DEFAULT_FASTCDC,
+  StreamingFastCdc,
+  fastCdcGearTableV1,
+} from "../../packages/fs/dist/cdc/fastcdc.js";
 import { buildManifestFromEntries } from "../../packages/fs/dist/manifests/builder.js";
-import { decodeManifestNode } from "../../packages/fs/dist/manifests/codec.js";
+import {
+  decodeManifestNode,
+  encodeManifestNode,
+  encodeManifestRoot,
+} from "../../packages/fs/dist/manifests/codec.js";
 import { prepareDurableEditedContent } from "../../packages/fs/dist/operations/durable-edit-prepare.js";
 import { readManifestRange as readManifestRangeUnadmitted } from "../../packages/fs/dist/operations/manifest-io.js";
 import {
@@ -16,15 +25,20 @@ import {
   constrainStorageLimits,
 } from "../../packages/fs/dist/resources/limits.js";
 import { createSqliteOperationsStorage } from "../../packages/fs/dist/sqlite/operations-storage.js";
+import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 
-function readManifestRange(repository, hash, offset, length) {
+function readManifestRange(tx, storage, hash, offset, length) {
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  const cache = new ContentCache(1, admission);
   return readManifestRangeUnadmitted(
-    repository,
+    tx.content(storage, cache),
     hash,
     offset,
     length,
-    new AdmissionController(DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes),
+    admission,
   );
 }
 
@@ -59,6 +73,34 @@ function repeatedEntries(count, ordinaryHash, changedIndex = -1, changedHash) {
         };
     },
   };
+}
+
+function chunkedContent(bytes, parameters) {
+  const entries = [];
+  const objects = new Map();
+  new StreamingFastCdc(parameters).drain(
+    bytes,
+    (chunk) => {
+      const hash = sha256(chunk);
+      entries.push({ hash, length: chunk.length });
+      objects.set(bytesToHex(hash), { hash, bytes: chunk });
+    },
+    true,
+  );
+  return { entries, objects };
+}
+
+function deterministicRange(offset, length) {
+  const bytes = new Uint8Array(length);
+  for (let index = 0; index < length; index += 1) {
+    const position = offset + index;
+    const wordIndex = Math.floor(position / 4);
+    let value = Math.imul(wordIndex ^ 0x7f4a7c15, 0x45d9f3b);
+    value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+    value ^= value >>> 16;
+    bytes[index] = (value >>> ((position & 3) * 8)) & 0xff;
+  }
+  return bytes;
 }
 
 function countedDriver(driver, observed) {
@@ -149,13 +191,15 @@ test("durable path-copy is authenticated and bounded on a 65,537-entry, three-le
     manifestHash: old.rootHash,
     size: old.fileSize,
     parameters,
+    readStorageTransactions: 1,
+    maxReadWindowBytes: 4_000,
     read(offset, length) {
       sourceReadCalls += 1;
       sourceBytesRead += length;
       return port.transaction(
         "read",
         { maxRows: 10_000, maxBytes: 4 * 1024 * 1024 },
-        (tx) => readManifestRange(tx.content(storage), old.rootHash, offset, length),
+        (tx) => readManifestRange(tx, storage, old.rootHash, offset, length),
       );
     },
   });
@@ -191,13 +235,21 @@ test("durable path-copy is authenticated and bounded on a 65,537-entry, three-le
   assert.equal(prepared.mode, "durable-path-copy");
   assert.deepEqual(prepared.hash, expected.rootHash);
   assert.equal(prepared.size, entryCount);
-  assert.equal(prepared.pathCopyMetrics.authenticatedNodesRead, old.depth);
+  assert.ok(prepared.pathCopyMetrics.authenticatedNodesRead >= old.depth);
+  assert.ok(
+    observed.manifestNodeRows <= prepared.pathCopyMetrics.manifestRecordsRead,
+    `${observed.manifestNodeRows} rows exceeded metric ${prepared.pathCopyMetrics.manifestRecordsRead}`,
+  );
   assert.equal(prepared.pathCopyMetrics.emittedNodes, old.depth);
+  assert.ok(prepared.pathCopyMetrics.emittedEntries <= 256);
+  assert.ok(prepared.pathCopyMetrics.emittedObjectBytes <= 256);
   assert.ok(prepared.pathCopyMetrics.reusedSubtrees > 0);
   assert.ok(prepared.pathCopyMetrics.reusedSubtrees <= old.depth * 128);
   assert.ok(sourceReadCalls <= 2, `path-copy made ${sourceReadCalls} source reads`);
   assert.ok(sourceBytesRead <= 256, `path-copy read ${sourceBytesRead} source bytes`);
   assert.equal(prepared.pathCopyMetrics.sourceBytesRead, sourceBytesRead);
+  assert.equal(prepared.pathCopyMetrics.sourceReadCalls, sourceReadCalls);
+  assert.equal(prepared.pathCopyMetrics.sourceReadTransactions, sourceReadCalls);
   assert.ok(
     observed.manifestNodeRows < 64,
     `path-copy materialized ${observed.manifestNodeRows} manifest node rows`,
@@ -210,6 +262,7 @@ test("durable path-copy is authenticated and bounded on a 65,537-entry, three-le
     observed.transactions < 32,
     `path-copy used ${observed.transactions} storage transactions`,
   );
+  assert.equal(prepared.pathCopyMetrics.storageTransactions, observed.transactions);
   port.transaction("read", { maxRows: 100, maxBytes: 64 * 1024 }, (tx) =>
     tx.staging(storage).validateSealed(prepared.certificate, 1002),
   );
@@ -240,11 +293,29 @@ test("durable path-copy is authenticated and bounded on a 65,537-entry, three-le
   const actual = port.transaction(
     "read",
     { maxRows: 10_000, maxBytes: 4 * 1024 * 1024 },
-    (tx) => readManifestRange(tx.content(storage), prepared.hash, editOffset - 16, 33),
+    (tx) => readManifestRange(tx, storage, prepared.hash, editOffset - 16, 33),
   );
   const expectedRange = new Uint8Array(33);
   expectedRange[16] = 1;
   assert.deepEqual(actual, expectedRange);
+
+  const noOp = await prepareDurableEditedContent(
+    port,
+    source,
+    Object.freeze({
+      offset: editOffset,
+      deleteLength: 1,
+      insertLength: 1,
+      readInsert: (_offset, length) => new Uint8Array(length),
+    }),
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    admission,
+    undefined,
+    () => 1003,
+  );
+  assert.equal(noOp.mode, "durable-path-copy");
+  assert.deepEqual(noOp.hash, old.rootHash);
 
   let corruptSourceReads = 0;
   const corruptSource = Object.freeze({
@@ -293,7 +364,7 @@ test("durable path-copy is authenticated and bounded on a 65,537-entry, three-le
   assert.match(fallback.pathCopyReason, /equal-length replacement/);
   assert.deepEqual(
     port.transaction("read", { maxRows: 10_000, maxBytes: 4 * 1024 * 1024 }, (tx) =>
-      readManifestRange(tx.content(storage), fallback.hash, editOffset - 16, 33),
+      readManifestRange(tx, storage, fallback.hash, editOffset - 16, 33),
     ),
     Uint8Array.from({ length: 33 }, (_, index) => (index === 16 ? 7 : 0)),
   );
@@ -312,16 +383,543 @@ test("durable path-copy is authenticated and bounded on a 65,537-entry, three-le
   assert.equal(observed.manifestNodeRows, 0);
   assert.deepEqual(
     port.transaction("read", { maxRows: 1024, maxBytes: 64 * 1024 }, (tx) =>
-      readManifestRange(tx.content(storage), prepared.hash, editOffset - 1, 3),
+      readManifestRange(tx, storage, prepared.hash, editOffset - 1, 3),
     ),
     Uint8Array.of(0, 1, 0),
   );
   await port.close();
 });
 
-test("durable edit reserves its concurrent read windows before source or insertion work", async () => {
+test("nondegenerate multi-height CDC replacement copies one authenticated path", async () => {
+  const raw = await openNodeSqlite({ filename: ":memory:" });
+  const observed = {
+    transactions: 0,
+    manifestNodeRows: 0,
+    manifestEntriesDecoded: 0,
+  };
+  const port = createSqliteOperationsStorage(countedDriver(raw, observed));
+  port.initialize();
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 256 * 1024 * 1024,
+      maintenanceReserveBytes: 1024 * 1024,
+    },
+    raw.capabilities,
+  );
+  const parameters = Object.freeze({ minimum: 2, average: 4, maximum: 8 });
+  const original = Uint8Array.from(
+    { length: 200_000 },
+    (_, index) => (index * 17 + Math.floor(index / 257)) & 0xff,
+  );
+  const chunked = chunkedContent(original, parameters);
+  assert.ok(chunked.entries.length > 16_384);
+  const workspace = new MemoryManifestWorkspace();
+  const built = buildManifestFromEntries(chunked.entries, parameters, workspace, {
+    maxDepth: storage.maxManifestDepth,
+  });
+  assert.ok(built.depth >= 3);
+  for (
+    let start = 0;
+    start < chunked.objects.size;
+    start += storage.maxQueryBatchSize
+  ) {
+    const batch = [...chunked.objects.values()].slice(
+      start,
+      start + storage.maxQueryBatchSize,
+    );
+    port.transaction(
+      "write",
+      { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
+      (tx) => tx.content(storage).putObjectsBatch(batch),
+    );
+  }
+  for (
+    let start = 0;
+    start < workspace.nodes.size;
+    start += storage.maxQueryBatchSize
+  ) {
+    const batch = [...workspace.nodes.values()].slice(
+      start,
+      start + storage.maxQueryBatchSize,
+    );
+    port.transaction(
+      "write",
+      { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
+      (tx) => tx.content(storage).putManifestNodesBatch(batch),
+    );
+  }
+  port.transaction("write", { maxRows: 16, maxBytes: 64 * 1024 }, (tx) =>
+    tx.content(storage).putManifestRoot(built.rootHash, built.root),
+  );
+  const editOffset = Math.floor(original.length / 2);
+  const replacement = original[editOffset] ^ 0xff;
+  const expectedBytes = original.slice();
+  expectedBytes[editOffset] = replacement;
+  const expectedChunks = chunkedContent(expectedBytes, parameters);
+  const expectedWorkspace = new MemoryManifestWorkspace();
+  const expected = buildManifestFromEntries(
+    expectedChunks.entries,
+    parameters,
+    expectedWorkspace,
+    { maxDepth: storage.maxManifestDepth },
+  );
+  observed.transactions = 0;
+  observed.manifestNodeRows = 0;
+  observed.manifestEntriesDecoded = 0;
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  const prepared = await prepareDurableEditedContent(
+    port,
+    Object.freeze({
+      manifestHash: built.rootHash,
+      size: built.fileSize,
+      parameters,
+      read(offset, length) {
+        return original.slice(offset, offset + length);
+      },
+    }),
+    Object.freeze({
+      offset: editOffset,
+      deleteLength: 1,
+      insertLength: 1,
+      readInsert: () => Uint8Array.of(replacement),
+    }),
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    admission,
+    undefined,
+    () => 1500,
+  );
+  assert.equal(prepared.mode, "durable-path-copy");
+  assert.deepEqual(prepared.hash, expected.rootHash);
+  assert.equal(prepared.pathCopyMetrics.emittedNodes, built.depth);
+  assert.ok(prepared.pathCopyMetrics.emittedEntries <= 256);
+  assert.ok(prepared.pathCopyMetrics.authenticatedNodesRead < 1024);
+  assert.ok(observed.manifestNodeRows <= prepared.pathCopyMetrics.manifestRecordsRead);
+  assert.equal(prepared.pathCopyMetrics.storageTransactions, observed.transactions);
+  assert.ok(prepared.pathCopyMetrics.storageTransactions < 64);
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
+test("path-copy caps hostile nondegenerate rechunk output before retaining entry 257", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
   const port = createSqliteOperationsStorage(driver);
+  port.initialize();
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 256 * 1024 * 1024,
+      maintenanceReserveBytes: 1024 * 1024,
+    },
+    driver.capabilities,
+  );
+  const parameters = Object.freeze({
+    minimum: 1,
+    average: 1,
+    maximum: 64 * 1024,
+  });
+  const boundaryByte = fastCdcGearTableV1().findIndex((value) => (value & 1) === 0);
+  assert.ok(boundaryByte >= 0);
+  const object = new Uint8Array(parameters.maximum).fill(boundaryByte);
+  const objectHash = sha256(object);
+  const leafValue = Object.freeze({
+    kind: "leaf",
+    span: parameters.maximum * 256,
+    entryCount: 256,
+    entries: Object.freeze(
+      Array.from({ length: 256 }, () =>
+        Object.freeze({ hash: objectHash, length: parameters.maximum }),
+      ),
+    ),
+  });
+  const leaf = encodeManifestNode(leafValue);
+  const leafHash = sha256(leaf);
+  const root = encodeManifestRoot({
+    parameters,
+    fileSize: leafValue.span,
+    entryCount: leafValue.entryCount,
+    rootNodeHash: leafHash,
+  });
+  const rootHash = sha256(root);
+  port.transaction(
+    "write",
+    { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
+    (tx) => {
+      const content = tx.content(storage);
+      content.putObject(objectHash, object);
+      content.putManifestNode(leafHash, leaf);
+      content.putManifestRoot(rootHash, root);
+    },
+  );
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  const cache = new ContentCache(DEFAULT_RUNTIME_LIMITS.maxCacheBytes, admission);
+  let sourceBytesRead = 0;
+  let sourceReadCalls = 0;
+  const source = Object.freeze({
+    manifestHash: rootHash,
+    size: leafValue.span,
+    parameters,
+    readStorageTransactions: 1,
+    read(offset, length) {
+      sourceReadCalls += 1;
+      sourceBytesRead += length;
+      if (sourceReadCalls > 2)
+        throw new Error("streamed fallback sentinel after bounded path-copy");
+      return port.transaction(
+        "read",
+        {
+          maxRows: storage.maxFinalTransactionRows,
+          maxBytes: storage.maxFinalTransactionBytes,
+        },
+        (tx) =>
+          readManifestRangeUnadmitted(
+            tx.content(storage, cache),
+            rootHash,
+            offset,
+            length,
+            admission,
+            cache,
+          ),
+      );
+    },
+  });
+  const editOffset = Math.floor(leafValue.span / 2);
+  await assert.rejects(
+    prepareDurableEditedContent(
+      port,
+      source,
+      Object.freeze({
+        offset: editOffset,
+        deleteLength: 1,
+        insertLength: 1,
+        readInsert: () => Uint8Array.of(1),
+      }),
+      storage,
+      DEFAULT_RUNTIME_LIMITS,
+      admission,
+      cache,
+      () => 2000,
+    ),
+    /streamed fallback sentinel after bounded path-copy/,
+  );
+  assert.equal(sourceReadCalls, 3);
+  assert.ok(sourceBytesRead <= leafValue.span + 1024 * 1024);
+  assert.ok(admission.peakBytes <= admission.limitBytes);
+  assert.equal(admission.usedBytes, cache.metrics().bytes);
+  cache.clear();
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
+test("a high-entropy 100 MiB tiny edit completes through bounded fallback windows", async (t) => {
+  const raw = await openNodeSqlite({ filename: ":memory:" });
+  const observed = {
+    transactions: 0,
+    manifestNodeRows: 0,
+    manifestEntriesDecoded: 0,
+  };
+  const port = createSqliteOperationsStorage(countedDriver(raw, observed));
+  port.initialize();
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 256 * 1024 * 1024,
+      maintenanceReserveBytes: 1024 * 1024,
+    },
+    raw.capabilities,
+  );
+  const parameters = Object.freeze({
+    minimum: 1024 * 1024,
+    average: 1024 * 1024,
+    maximum: 1024 * 1024,
+  });
+  const objectHash = sha256(Uint8Array.of(0x41));
+  const workspace = new MemoryManifestWorkspace();
+  const built = buildManifestFromEntries(
+    {
+      *[Symbol.iterator]() {
+        for (let index = 0; index < 100; index += 1)
+          yield { hash: objectHash, length: 1024 * 1024 };
+      },
+    },
+    parameters,
+    workspace,
+    { maxDepth: storage.maxManifestDepth },
+  );
+  assert.equal(built.fileSize, 100 * 1024 * 1024);
+  port.transaction(
+    "write",
+    { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
+    (tx) => {
+      const content = tx.content(storage);
+      content.putManifestNodesBatch([...workspace.nodes.values()]);
+      content.putManifestRoot(built.rootHash, built.root);
+    },
+  );
+  observed.transactions = 0;
+  observed.manifestNodeRows = 0;
+  observed.manifestEntriesDecoded = 0;
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  let reads = 0;
+  let requestedBytes = 0;
+  let largestRead = 0;
+  const editOffset = 50 * 1024 * 1024;
+  const prepared = await prepareDurableEditedContent(
+    port,
+    Object.freeze({
+      manifestHash: built.rootHash,
+      size: built.fileSize,
+      parameters,
+      readStorageTransactions: 0,
+      maxReadWindowBytes: 32 * 1024,
+      read(offset, length) {
+        reads += 1;
+        requestedBytes += length;
+        largestRead = Math.max(largestRead, length);
+        return deterministicRange(offset, length);
+      },
+    }),
+    Object.freeze({
+      offset: editOffset,
+      deleteLength: 1,
+      insertLength: 1,
+      readInsert: () => Uint8Array.of(0x42),
+    }),
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    admission,
+    undefined,
+    () => 3000,
+  );
+  assert.equal(prepared.mode, "streamed-fallback");
+  assert.match(prepared.pathCopyReason, /authenticated leaf exceeds/);
+  assert.equal(requestedBytes, built.fileSize - 1);
+  assert.ok(reads <= 3201, `fallback made ${reads} source reads`);
+  assert.ok(largestRead <= 32 * 1024, `fallback requested ${largestRead} bytes`);
+  assert.ok(
+    observed.manifestNodeRows < 4096,
+    `fallback materialized ${observed.manifestNodeRows} manifest node rows`,
+  );
+  assert.ok(
+    observed.transactions < 64,
+    `fallback used ${observed.transactions} transactions`,
+  );
+  const fallbackTransactions = observed.transactions;
+  const expected = deterministicRange(editOffset - 16, 33);
+  expected[16] = 0x42;
+  assert.deepEqual(
+    port.transaction("read", { maxRows: 1024, maxBytes: 1024 * 1024 }, (tx) =>
+      readManifestRange(tx, storage, prepared.hash, editOffset - 16, 33),
+    ),
+    expected,
+  );
+  assert.ok(admission.peakBytes < 32 * 1024 * 1024);
+  assert.equal(admission.usedBytes, 0);
+  t.diagnostic(
+    JSON.stringify({
+      sourceReadCalls: reads,
+      sourceBytesRead: requestedBytes,
+      largestSourceReadBytes: largestRead,
+      storageTransactions: fallbackTransactions,
+      managedPeakBytes: admission.peakBytes,
+    }),
+  );
+  await port.close();
+});
+
+test("durable edits authenticate empty, singleton, and every manifest height before fallback", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const observed = {
+    transactions: 0,
+    manifestNodeRows: 0,
+    manifestEntriesDecoded: 0,
+  };
+  const port = createSqliteOperationsStorage(countedDriver(driver, observed));
+  port.initialize();
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 256 * 1024 * 1024,
+      maintenanceReserveBytes: 1024 * 1024,
+    },
+    driver.capabilities,
+  );
+  const parameters = Object.freeze({ minimum: 1, average: 1, maximum: 1 });
+  const object = Uint8Array.of(0);
+  const objectHash = sha256(object);
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  const shapes = [
+    { count: 0, depth: 1, label: "empty" },
+    { count: 1, depth: 1, label: "singleton" },
+    { count: 257, depth: 2, label: "two-level" },
+    { count: 65_537, depth: 3, label: "three-level" },
+  ];
+  for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex += 1) {
+    const shape = shapes[shapeIndex];
+    const workspace = new MemoryManifestWorkspace();
+    const built = buildManifestFromEntries(
+      repeatedEntries(shape.count, objectHash),
+      parameters,
+      workspace,
+      { maxDepth: storage.maxManifestDepth },
+    );
+    assert.equal(built.depth, shape.depth, shape.label);
+    port.transaction(
+      "write",
+      { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
+      (tx) => {
+        const content = tx.content(storage);
+        if (shape.count) content.putObject(objectHash, object);
+        content.putManifestNodesBatch([...workspace.nodes.values()]);
+        content.putManifestRoot(built.rootHash, built.root);
+      },
+    );
+    const sourceBytes = new Uint8Array(shape.count);
+    const editOffset = Math.floor(shape.count / 2);
+    let sourceReads = 0;
+    observed.transactions = 0;
+    observed.manifestNodeRows = 0;
+    observed.manifestEntriesDecoded = 0;
+    const marker = 0x30 + shapeIndex;
+    const prepared = await prepareDurableEditedContent(
+      port,
+      Object.freeze({
+        manifestHash: built.rootHash,
+        size: built.fileSize,
+        parameters,
+        maxReadWindowBytes: 32 * 1024,
+        read(offset, length) {
+          sourceReads += 1;
+          return sourceBytes.slice(offset, offset + length);
+        },
+      }),
+      Object.freeze({
+        offset: editOffset,
+        deleteLength: 0,
+        insertLength: 1,
+        readInsert: () => Uint8Array.of(marker),
+      }),
+      storage,
+      DEFAULT_RUNTIME_LIMITS,
+      admission,
+      undefined,
+      () => 4000 + shapeIndex,
+    );
+    assert.equal(prepared.mode, "streamed-fallback", shape.label);
+    assert.match(prepared.pathCopyReason, /equal-length replacement/, shape.label);
+    assert.ok(
+      sourceReads <= Math.ceil(shape.count / (32 * 1024)) + 1,
+      `${shape.label} fallback made ${sourceReads} source reads`,
+    );
+    const expected = new Uint8Array(shape.count + 1);
+    expected[editOffset] = marker;
+    assert.deepEqual(
+      port.transaction("read", { maxRows: 1024, maxBytes: 1024 * 1024 }, (tx) =>
+        readManifestRange(tx, storage, prepared.hash, 0, expected.length),
+      ),
+      expected,
+      shape.label,
+    );
+    assert.ok(observed.transactions < 32, shape.label);
+  }
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
+test("a singleton leaf expands through fallback into a canonical multi-leaf tree", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const observed = {
+    transactions: 0,
+    manifestNodeRows: 0,
+    manifestEntriesDecoded: 0,
+  };
+  const port = createSqliteOperationsStorage(countedDriver(driver, observed));
+  port.initialize();
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 256 * 1024 * 1024,
+      maintenanceReserveBytes: 1024 * 1024,
+    },
+    driver.capabilities,
+  );
+  const original = Uint8Array.of(0);
+  const originalHash = sha256(original);
+  const workspace = new MemoryManifestWorkspace();
+  const built = buildManifestFromEntries(
+    [{ hash: originalHash, length: 1 }],
+    DEFAULT_FASTCDC,
+    workspace,
+    { maxDepth: storage.maxManifestDepth },
+  );
+  port.transaction(
+    "write",
+    { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
+    (tx) => {
+      const content = tx.content(storage);
+      content.putObject(originalHash, original);
+      content.putManifestNodesBatch([...workspace.nodes.values()]);
+      content.putManifestRoot(built.rootHash, built.root);
+    },
+  );
+  const insertedBytes = 64 * 1024 * 1024;
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  observed.transactions = 0;
+  const prepared = await prepareDurableEditedContent(
+    port,
+    Object.freeze({
+      manifestHash: built.rootHash,
+      size: 1,
+      parameters: DEFAULT_FASTCDC,
+      read: (offset, length) => original.slice(offset, offset + length),
+    }),
+    Object.freeze({
+      offset: 1,
+      deleteLength: 0,
+      insertLength: insertedBytes,
+      readInsert: deterministicRange,
+    }),
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    admission,
+    undefined,
+    () => 5000,
+  );
+  assert.equal(prepared.mode, "streamed-fallback");
+  assert.match(prepared.pathCopyReason, /equal-length replacement/);
+  const resultPath = port.transaction(
+    "read",
+    { maxRows: 64, maxBytes: 1024 * 1024 },
+    (tx) => tx.manifestTree(storage).pathAtOffset(prepared.hash, insertedBytes / 2),
+  );
+  assert.ok(resultPath.nodes.length >= 2);
+  assert.ok(resultPath.entryCount > 256);
+  assert.deepEqual(
+    port.transaction("read", { maxRows: 1024, maxBytes: 1024 * 1024 }, (tx) =>
+      readManifestRange(tx, storage, prepared.hash, 1 + 10 * 1024 * 1024, 64),
+    ),
+    deterministicRange(10 * 1024 * 1024, 64),
+  );
+  assert.ok(observed.transactions < 64);
+  assert.ok(admission.peakBytes <= admission.limitBytes);
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
+test("durable edit reserves its concurrent read windows before source or insertion work", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const observed = {
+    transactions: 0,
+    manifestNodeRows: 0,
+    manifestEntriesDecoded: 0,
+  };
+  const port = createSqliteOperationsStorage(countedDriver(driver, observed));
   const storage = constrainStorageLimits(
     {
       maxManagedPayloadBytes: 16 * 1024 * 1024,
@@ -358,6 +956,8 @@ test("durable edit reserves its concurrent read windows before source or inserti
   const admission = new AdmissionController(runtime.maxManagedResidentBytes);
   const residentPressure = 127 * 1024;
   const releasePressure = admission.reserve(residentPressure);
+  observed.transactions = 0;
+  observed.manifestNodeRows = 0;
   let sourceReads = 0;
   let insertionReads = 0;
   try {
@@ -390,6 +990,8 @@ test("durable edit reserves its concurrent read windows before source or inserti
     );
     assert.equal(sourceReads, 0);
     assert.equal(insertionReads, 0);
+    assert.equal(observed.transactions, 0);
+    assert.equal(observed.manifestNodeRows, 0);
     assert.equal(admission.usedBytes, residentPressure);
   } finally {
     releasePressure();
@@ -447,6 +1049,7 @@ test("filesystem range mutations and streamed preparation own hostile byte views
           else controller.close();
         },
       }),
+      { maxBytes: 6 },
     );
     assert.deepEqual(
       await filesystem.readFile("/stream"),
@@ -487,4 +1090,41 @@ test("public range edits admit intrinsic exact-bound bytes before ownership copy
   } finally {
     await filesystem.close();
   }
+});
+
+test("cold complete reads span bounded UoWs through 64 MiB while larger materialization is refused", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-materialized-read-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver = await openNodeSqlite({ filename });
+  let filesystem = await EphemeralFS.open({ database: driver });
+  t.after(async () => {
+    try {
+      await filesystem?.close();
+    } catch {}
+    try {
+      driver?.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  });
+  const bytes = Uint8Array.from(
+    { length: 20 * 1024 * 1024 },
+    (_, index) => (index * 131 + (index >>> 7) * 17) & 0xff,
+  );
+  await filesystem.writeFile("/large", bytes);
+  await filesystem.close();
+  driver.close();
+  driver = await openNodeSqlite({ filename, create: false });
+  filesystem = await EphemeralFS.open({ database: driver });
+  assert.deepEqual(await filesystem.readFile("/large"), bytes);
+
+  const rejectedDriver = await openNodeSqlite({ filename: ":memory:" });
+  await assert.rejects(
+    EphemeralFS.open({
+      database: rejectedDriver,
+      filesystem: { maxMaterializedBytes: 64 * 1024 * 1024 + 1 },
+      runtime: { maxPreparedResultBytes: 64 * 1024 * 1024 + 1 },
+    }),
+    /M2 materialization profile is capped at 64 MiB/,
+  );
+  rejectedDriver.close();
 });

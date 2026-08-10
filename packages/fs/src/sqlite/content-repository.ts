@@ -1,6 +1,11 @@
 import { sha256, verifyCasObject } from "../cas/sha256.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
-import { bytesToHex, equalBytes, intrinsicByteLength } from "../cas/bytes.js";
+import {
+  bytesToHex,
+  equalBytes,
+  intrinsicByteLength,
+  intrinsicByteRange,
+} from "../cas/bytes.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import {
   maxPersistedContentObjectBytes,
@@ -13,6 +18,7 @@ import {
 } from "../cache/content-cache.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 import { SQLiteAuthenticatedManifestCursor } from "./manifest-cursor.js";
+import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 interface ObjectRow extends SqliteRow {
   hash?: Uint8Array;
   size: number;
@@ -63,12 +69,21 @@ export class ContentRepository {
       throw new RangeError("content batch exceeds configured row limit");
     const unique = new Map<string, ContentObjectInput>();
     const maxObjectBytes = maxPersistedContentObjectBytes(this.#limits);
+    let preflightBytes = 0;
     for (const item of input) {
-      if (
-        intrinsicByteLength(item.hash) !== 32 ||
-        intrinsicByteLength(item.bytes) > maxObjectBytes
-      )
+      const hashBytes = intrinsicByteLength(item.hash);
+      const objectBytes = intrinsicByteLength(item.bytes);
+      if (hashBytes !== 32 || objectBytes > maxObjectBytes)
         throw new RangeError("object exceeds configured limit");
+      preflightBytes = checkedAdd(
+        preflightBytes,
+        checkedAdd(objectBytes, 256, "content row envelope"),
+        "content batch envelope",
+      );
+      if (preflightBytes > this.#limits.maxFinalTransactionBytes)
+        throw new RangeError("content batch exceeds transaction byte limit");
+    }
+    for (const item of input) {
       verifyCasObject(item.hash, item.bytes);
       const key = bytesToHex(item.hash);
       const previous = unique.get(key);
@@ -127,7 +142,9 @@ export class ContentRepository {
         )
           throw new Error("ECORRUPT: CAS collision or stored payload mismatch");
         verifyCasObject(item.hash, row.bytes);
-        const reservation = this.#cache?.reserve(row.bytes.byteLength + 96);
+        const reservation = this.#cache?.tryReserve(
+          checkedAdd(intrinsicByteLength(row.bytes), 96),
+        );
         this.#admitCache("object", item.hash, row.bytes, reservation);
       }
     }
@@ -153,38 +170,123 @@ export class ContentRepository {
     });
   }
 
-  getObject(hash: Uint8Array, expectedSize?: number): Uint8Array | undefined {
-    const cached = this.#cache?.get("object", hash);
-    if (cached) {
-      if (expectedSize !== undefined && cached.byteLength !== expectedSize)
-        throw new Error("ECORRUPT: cached CAS length mismatch");
-      return cached;
-    }
-    const reservation = this.#cache?.reserve(
-      (expectedSize ?? this.#limits.maxWriteBytes) + 96,
+  readObjectInto(
+    hash: Uint8Array,
+    expectedSize: number,
+    sourceOffset: number,
+    destination: Uint8Array,
+    destinationOffset: number,
+    length: number,
+  ): boolean {
+    if (!this.#cache)
+      throw new Error("content reads require operation-scoped admission");
+    hash = intrinsicByteRange(hash);
+    destination = intrinsicByteRange(destination);
+    if (intrinsicByteLength(hash) !== 32)
+      throw new RangeError("content hash must contain exactly 32 bytes");
+    if (
+      !Number.isSafeInteger(expectedSize) ||
+      expectedSize < 0 ||
+      !Number.isSafeInteger(sourceOffset) ||
+      sourceOffset < 0 ||
+      !Number.isSafeInteger(destinationOffset) ||
+      destinationOffset < 0 ||
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      checkedAdd(sourceOffset, length) > expectedSize ||
+      checkedAdd(destinationOffset, length) > intrinsicByteLength(destination)
+    )
+      throw new RangeError("invalid content object read range");
+    const cached = this.#cache.copyInto(
+      "object",
+      hash,
+      expectedSize,
+      sourceOffset,
+      destination,
+      destinationOffset,
+      length,
     );
+    if (cached) return true;
+    const size = this.#objectSize(hash);
+    if (size === undefined) return false;
+    if (size !== expectedSize)
+      throw new Error("ECORRUPT: stored CAS length disagrees with manifest");
+    return this.#withColdObject(hash, size, (bytes) => {
+      destination.set(
+        intrinsicByteRange(bytes, sourceOffset, sourceOffset + length),
+        destinationOffset,
+      );
+    });
+  }
+
+  verifyObject(hash: Uint8Array, expectedSize?: number, forceStorage = false): boolean {
+    if (!this.#cache)
+      throw new Error("content reads require operation-scoped admission");
+    hash = intrinsicByteRange(hash);
+    if (intrinsicByteLength(hash) !== 32)
+      throw new RangeError("content hash must contain exactly 32 bytes");
+    const size = expectedSize ?? this.#objectSize(hash);
+    if (size === undefined) return false;
+    if (!Number.isSafeInteger(size) || size < 0)
+      throw new Error("ECORRUPT: invalid stored CAS size");
+    if (!forceStorage) {
+      const cached = this.#cache.containsExact("object", hash, size);
+      if (cached) return true;
+    }
+    if (expectedSize !== undefined) {
+      const storedSize = this.#objectSize(hash);
+      if (storedSize === undefined) return false;
+      if (storedSize !== expectedSize)
+        throw new Error("ECORRUPT: stored CAS length mismatch");
+    }
+    return this.#withColdObject(hash, size, () => {});
+  }
+
+  #objectSize(hash: Uint8Array): number | undefined {
+    const row = this.#tx.all<ObjectRow>(
+      "SELECT size FROM efs_cas_objects WHERE hash=?",
+      [hash],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (!row) return undefined;
+    if (!Number.isSafeInteger(row.size) || row.size < 0)
+      throw new Error("ECORRUPT: invalid stored CAS size");
+    return row.size;
+  }
+
+  #withColdObject(
+    hash: Uint8Array,
+    size: number,
+    consume: (bytes: Uint8Array) => void,
+  ): boolean {
+    const cache = this.#cache!;
+    const transientBytes = checkedAdd(
+      checkedMultiply(size, 2, "driver BLOB ownership copies"),
+      128,
+      "content read transient bytes",
+    );
+    const releaseRead = cache.reserveOperation(transientBytes);
+    let reservation: ContentCacheReservation | undefined;
     try {
       const row = this.#tx.all<ObjectRow>(
         "SELECT size,bytes FROM efs_cas_objects WHERE hash=?",
         [hash],
-        { maxRows: 1, maxBytes: (expectedSize ?? this.#limits.maxWriteBytes) + 128 },
+        { maxRows: 1, maxBytes: checkedAdd(size, 128) },
       )[0];
-      if (!row) {
-        reservation?.release();
-        return undefined;
-      }
-      if (
-        !row.bytes ||
-        row.size !== row.bytes.byteLength ||
-        (expectedSize !== undefined && row.size !== expectedSize)
-      )
+      if (!row) return false;
+      if (!row.bytes || row.size !== size || intrinsicByteLength(row.bytes) !== size)
         throw new Error("ECORRUPT: stored CAS length mismatch");
       verifyCasObject(hash, row.bytes);
+      consume(row.bytes);
+      reservation = cache.tryReserve(checkedAdd(size, 96));
       this.#admitCache("object", hash, row.bytes, reservation);
-      return row.bytes;
+      reservation = undefined;
+      return true;
     } catch (error) {
       reservation?.release();
       throw error;
+    } finally {
+      releaseRead();
     }
   }
 
@@ -207,11 +309,22 @@ export class ContentRepository {
         readonly decoded: ReturnType<typeof decodeManifestNode>;
       }
     >();
+    let preflightBytes = 0;
     for (const node of nodes) {
-      if (
-        intrinsicByteLength(node.encoded) > this.#limits.maxManifestNodeBytes ||
-        !equalBytes(sha256(node.encoded), node.hash)
-      )
+      const hashBytes = intrinsicByteLength(node.hash);
+      const encodedBytes = intrinsicByteLength(node.encoded);
+      if (hashBytes !== 32 || encodedBytes > this.#limits.maxManifestNodeBytes)
+        throw new Error("invalid manifest node digest or size");
+      preflightBytes = checkedAdd(
+        preflightBytes,
+        checkedAdd(encodedBytes, 256, "manifest row envelope"),
+        "manifest batch envelope",
+      );
+      if (preflightBytes > this.#limits.maxFinalTransactionBytes)
+        throw new RangeError("manifest batch exceeds transaction byte limit");
+    }
+    for (const node of nodes) {
+      if (!equalBytes(sha256(node.encoded), node.hash))
         throw new Error("invalid manifest node digest or size");
       const key = bytesToHex(node.hash);
       const previous = unique.get(key);

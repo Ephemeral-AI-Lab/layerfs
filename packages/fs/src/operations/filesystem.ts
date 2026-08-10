@@ -17,9 +17,17 @@ import {
   validateName,
   validateSymlinkTarget,
 } from "../namespace/paths.js";
-import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
-import { encodeUtf8 } from "../namespace/utf8.js";
-import { prepareContent, readManifestRange } from "../operations/manifest-io.js";
+import {
+  checkedAdd,
+  checkedInteger,
+  checkedMultiply,
+} from "../resources/safe-integers.js";
+import { encodeUtf8, utf8ByteLength } from "../namespace/utf8.js";
+import {
+  prepareContent,
+  readManifestInto,
+  readManifestRange,
+} from "../operations/manifest-io.js";
 import { copyBytes, intrinsicByteLength, intrinsicByteRange } from "../cas/bytes.js";
 import {
   decodeManifestRoot,
@@ -179,6 +187,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       this.#storageLimits,
       this.#runtimeLimits,
       this.#clock,
+      this.#cache,
     );
   }
 
@@ -188,13 +197,16 @@ export class EphemeralFS implements EphemeralFilesystem {
   ): Promise<EphemeralFS> {
     const filesystem = resolveLimits(DEFAULT_FILESYSTEM_LIMITS, options.filesystem);
     const runtime = resolveLimits(DEFAULT_RUNTIME_LIMITS, options.runtime);
+    if (
+      filesystem.maxMaterializedBytes > DEFAULT_FILESYSTEM_LIMITS.maxMaterializedBytes
+    )
+      throw new RangeError(
+        "the M2 materialization profile is capped at 64 MiB; use ranges or streams for larger files",
+      );
     const branch = resolveLimits(DEFAULT_BRANCH_CONFIGURATION, options.branch);
     const storage = constrainStorageLimits(options.storage, storagePort.capabilities);
     for (const name of ["maxPhysicalDatabaseBytes", "maxJournalBytes"] as const) {
-      if (
-        options.storage?.[name] !== undefined &&
-        storage[name] !== storagePort.capabilities[name]
-      )
+      if (storage[name] !== storagePort.capabilities[name])
         throw new RangeError(
           `${name} must be configured on the SQLite adapter; a filesystem-only lower cap is not enforceable`,
         );
@@ -267,7 +279,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       if (options !== undefined && options.encoding !== "utf8")
         throw fsError("EINVAL", "readFile", path, "unsupported encoding");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "readFile");
-      const bytes = this.#transaction("read", (tx) => {
+      const selected = this.#transaction("read", (tx) => {
         const inode = this.#requireFile(
           tx
             .namespace(this.#filesystemLimits, this.#storageLimits, "readFile")
@@ -281,16 +293,25 @@ export class EphemeralFS implements EphemeralFilesystem {
             canonical.value,
             "file exceeds complete materialization limit",
           );
-        return readManifestRange(
-          tx.content(this.#storageLimits, this.#cache),
-          inode.manifest_hash!,
-          0,
-          inode.size!,
-          this.#admission,
-          this.#cache,
-        );
+        return Object.freeze({
+          size: inode.size!,
+          manifestHash: copyBytes(inode.manifest_hash!),
+        });
       });
-      return options ? new TextDecoder("utf-8", { fatal: false }).decode(bytes) : bytes;
+      const capacity = options
+        ? checkedMultiply(selected.size, 3, "UTF-8 read bytes and decoded string")
+        : selected.size;
+      this.#cache.makeRoom(capacity);
+      const release = this.#admission.reserve(capacity);
+      try {
+        const bytes = new Uint8Array(selected.size);
+        this.#readManifestMaterialized(selected.manifestHash, 0, bytes);
+        return options
+          ? new TextDecoder("utf-8", { fatal: false }).decode(bytes)
+          : bytes;
+      } finally {
+        release();
+      }
     });
   }
 
@@ -303,22 +324,34 @@ export class EphemeralFS implements EphemeralFilesystem {
         this.#filesystemLimits.maxMaterializedBytes,
       );
       const canonical = canonicalizePath(path, this.#filesystemLimits, "readRange");
-      return this.#transaction("read", (tx) => {
+      const selected = this.#transaction("read", (tx) => {
         const inode = this.#requireFile(
           tx
             .namespace(this.#filesystemLimits, this.#storageLimits, "readRange")
             .resolve(canonical, true),
           "readRange",
         );
-        return readManifestRange(
-          tx.content(this.#storageLimits, this.#cache),
-          inode.manifest_hash!,
-          options.offset,
-          options.length,
-          this.#admission,
-          this.#cache,
-        );
+        return Object.freeze({
+          size: inode.size!,
+          manifestHash: copyBytes(inode.manifest_hash!),
+        });
       });
+      const length = Math.max(
+        0,
+        Math.min(
+          options.length,
+          selected.size - Math.min(options.offset, selected.size),
+        ),
+      );
+      this.#cache.makeRoom(length);
+      const release = this.#admission.reserve(length);
+      try {
+        const output = new Uint8Array(length);
+        this.#readManifestMaterialized(selected.manifestHash, options.offset, output);
+        return output;
+      } finally {
+        release();
+      }
     });
   }
 
@@ -341,14 +374,24 @@ export class EphemeralFS implements EphemeralFilesystem {
       if (this.#streams.size >= this.#runtimeLimits.maxConcurrentStreams)
         throw fsError("EAGAIN", "readStream", path, "concurrent stream limit exceeded");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "readStream");
-      const selected = this.#transaction("read", (tx) => {
+      const leaseId = globalThis.crypto.randomUUID();
+      const owner = globalThis.crypto.randomUUID();
+      const selected = this.#transaction("write", (tx) => {
         const inode = this.#requireFile(
           tx
             .namespace(this.#filesystemLimits, this.#storageLimits, "readStream")
             .resolve(canonical, true),
           "readStream",
         );
-        return { manifestHash: inode.manifest_hash!.slice(), size: inode.size! };
+        const manifestHash = copyBytes(inode.manifest_hash!);
+        const expires = this.#now() + this.#storageLimits.readLeaseMs;
+        tx.staging(this.#storageLimits).acquireReadLease(
+          leaseId,
+          owner,
+          manifestHash,
+          expires,
+        );
+        return { manifestHash, size: inode.size! };
       });
       const end = Math.min(
         selected.size,
@@ -356,17 +399,6 @@ export class EphemeralFS implements EphemeralFilesystem {
           ? selected.size
           : checkedAdd(offset, requestedLength),
       );
-      const leaseId = globalThis.crypto.randomUUID();
-      const owner = globalThis.crypto.randomUUID();
-      this.#transaction("write", (tx) => {
-        const expires = this.#now() + this.#storageLimits.readLeaseMs;
-        tx.staging(this.#storageLimits).acquireReadLease(
-          leaseId,
-          owner,
-          selected.manifestHash,
-          expires,
-        );
-      });
       let position = Math.min(offset, selected.size);
       let released = false;
       let queuedRelease: (() => void) | undefined;
@@ -462,13 +494,31 @@ export class EphemeralFS implements EphemeralFilesystem {
     content: FileContent,
     options: WriteFileOptions = {},
   ): Promise<void> {
-    const frozen: Uint8Array | ReadableStream<Uint8Array> =
-      typeof content === "string"
-        ? new TextEncoder().encode(content)
-        : content instanceof Uint8Array
-          ? content
-          : content;
     return this.#operation("writeFile", path, options.signal, async () => {
+      let encodedStringRelease: (() => void) | undefined;
+      let frozen: Uint8Array | ReadableStream<Uint8Array>;
+      if (typeof content === "string") {
+        const encodedLength = utf8ByteLength(content);
+        if (encodedLength > this.#storageLimits.maxWriteBytes)
+          throw fsError(
+            "EFBIG",
+            "writeFile",
+            path,
+            "buffered write exceeds maxWriteBytes",
+          );
+        this.#cache.makeRoom(encodedLength);
+        encodedStringRelease = this.#admission.reserve(encodedLength);
+        try {
+          frozen = new TextEncoder().encode(content);
+          if (intrinsicByteLength(frozen) !== encodedLength)
+            throw new Error("UTF-8 length preflight disagrees with encoder output");
+        } catch (error) {
+          encodedStringRelease();
+          throw error;
+        }
+      } else {
+        frozen = content;
+      }
       if (
         !(frozen instanceof Uint8Array) &&
         !(frozen && typeof frozen.getReader === "function")
@@ -479,6 +529,20 @@ export class EphemeralFS implements EphemeralFilesystem {
           path,
           "content must be string, Uint8Array, or ReadableStream",
         );
+      if (!(frozen instanceof Uint8Array)) {
+        if (options.maxBytes === undefined)
+          throw fsError(
+            "EINVAL",
+            "writeFile",
+            path,
+            "streamed writes require options.maxBytes",
+          );
+        checkedInteger(
+          options.maxBytes,
+          "streamed write maxBytes",
+          this.#storageLimits.maxFileBytes,
+        );
+      }
       if (
         frozen instanceof Uint8Array &&
         intrinsicByteLength(frozen) > this.#storageLimits.maxWriteBytes
@@ -501,16 +565,22 @@ export class EphemeralFS implements EphemeralFilesystem {
         if (exists)
           throw fsError("EEXIST", "writeFile", canonical.value, "destination exists");
       }
-      const prepared = await prepareContent(
-        this.#storagePort,
-        frozen,
-        this.#storageLimits,
-        this.#runtimeLimits,
-        this.#admission,
-        options.signal,
-        this.#cache,
-        this.#clock,
-      );
+      let prepared;
+      try {
+        prepared = await prepareContent(
+          this.#storagePort,
+          frozen,
+          this.#storageLimits,
+          this.#runtimeLimits,
+          this.#admission,
+          options.signal,
+          this.#cache,
+          this.#clock,
+          options.maxBytes,
+        );
+      } finally {
+        encodedStringRelease?.();
+      }
       try {
         this.#transaction("write", (tx) => {
           const ns = tx.namespace(
@@ -594,51 +664,44 @@ export class EphemeralFS implements EphemeralFilesystem {
       return Promise.reject(
         fsError("EFBIG", "writeRange", path, "write exceeds maxWriteBytes"),
       );
-    this.#cache.makeRoom(inputLength);
-    let releaseInput: () => void;
-    try {
-      releaseInput = this.#admission.reserve(inputLength);
-    } catch (error) {
-      return Promise.reject(error);
-    }
-    let frozen: Uint8Array;
-    try {
-      frozen = copyBytes(content);
-    } catch (error) {
-      releaseInput();
-      return Promise.reject(error);
-    }
     return this.#operation("writeRange", path, undefined, async () => {
-      checkedInteger(offset, "offset");
-      const canonical = canonicalizePath(path, this.#filesystemLimits, "writeRange");
-      const selected = this.#selectMutationSource(canonical.value, "writeRange");
-      if (!frozen.byteLength) return;
-      const size = Math.max(
-        selected.source.size,
-        checkedAdd(offset, frozen.byteLength),
-      );
-      if (size > this.#storageLimits.maxFileBytes)
-        throw fsError(
-          "EFBIG",
-          "writeRange",
-          canonical.value,
-          "result exceeds maxFileBytes",
+      this.#cache.makeRoom(inputLength);
+      const releaseInput = this.#admission.reserve(inputLength);
+      try {
+        const frozen = copyBytes(content);
+        checkedInteger(offset, "offset");
+        const canonical = canonicalizePath(path, this.#filesystemLimits, "writeRange");
+        const selected = this.#selectMutationSource(canonical.value, "writeRange");
+        if (!frozen.byteLength) return;
+        const size = Math.max(
+          selected.source.size,
+          checkedAdd(offset, frozen.byteLength),
         );
-      const editOffset = Math.min(offset, selected.source.size);
-      const gap = Math.max(0, offset - selected.source.size);
-      const deleteLength = Math.min(
-        frozen.byteLength,
-        selected.source.size - editOffset,
-      );
-      const edit = this.#bufferedInsertionEdit(editOffset, deleteLength, gap, frozen);
-      await this.#replaceExisting(
-        canonical.value,
-        selected.source,
-        edit,
-        selected.token,
-        "writeRange",
-      );
-    }).finally(releaseInput);
+        if (size > this.#storageLimits.maxFileBytes)
+          throw fsError(
+            "EFBIG",
+            "writeRange",
+            canonical.value,
+            "result exceeds maxFileBytes",
+          );
+        const editOffset = Math.min(offset, selected.source.size);
+        const gap = Math.max(0, offset - selected.source.size);
+        const deleteLength = Math.min(
+          frozen.byteLength,
+          selected.source.size - editOffset,
+        );
+        const edit = this.#bufferedInsertionEdit(editOffset, deleteLength, gap, frozen);
+        await this.#replaceExisting(
+          canonical.value,
+          selected.source,
+          edit,
+          selected.token,
+          "writeRange",
+        );
+      } finally {
+        releaseInput();
+      }
+    });
   }
 
   replaceRange(
@@ -652,49 +715,49 @@ export class EphemeralFS implements EphemeralFilesystem {
       return Promise.reject(
         fsError("EFBIG", "replaceRange", path, "insertion exceeds maxWriteBytes"),
       );
-    this.#cache.makeRoom(inputLength);
-    let releaseInput: () => void;
-    try {
-      releaseInput = this.#admission.reserve(inputLength);
-    } catch (error) {
-      return Promise.reject(error);
-    }
-    let frozen: Uint8Array;
-    try {
-      frozen = copyBytes(insertBytes);
-    } catch (error) {
-      releaseInput();
-      return Promise.reject(error);
-    }
     return this.#operation("replaceRange", path, undefined, async () => {
-      checkedInteger(offset, "offset");
-      checkedInteger(deleteLength, "deleteLength");
-      const canonical = canonicalizePath(path, this.#filesystemLimits, "replaceRange");
-      const selected = this.#selectMutationSource(canonical.value, "replaceRange");
-      if (offset > selected.source.size || deleteLength > selected.source.size - offset)
-        throw fsError(
-          "EINVAL",
+      this.#cache.makeRoom(inputLength);
+      const releaseInput = this.#admission.reserve(inputLength);
+      try {
+        const frozen = copyBytes(insertBytes);
+        checkedInteger(offset, "offset");
+        checkedInteger(deleteLength, "deleteLength");
+        const canonical = canonicalizePath(
+          path,
+          this.#filesystemLimits,
           "replaceRange",
-          canonical.value,
-          "replacement range is outside file",
         );
-      if (!deleteLength && !frozen.byteLength) return;
-      const finalSize = selected.source.size - deleteLength + frozen.byteLength;
-      if (finalSize > this.#storageLimits.maxFileBytes)
-        throw fsError(
-          "EFBIG",
+        const selected = this.#selectMutationSource(canonical.value, "replaceRange");
+        if (
+          offset > selected.source.size ||
+          deleteLength > selected.source.size - offset
+        )
+          throw fsError(
+            "EINVAL",
+            "replaceRange",
+            canonical.value,
+            "replacement range is outside file",
+          );
+        if (!deleteLength && !frozen.byteLength) return;
+        const finalSize = selected.source.size - deleteLength + frozen.byteLength;
+        if (finalSize > this.#storageLimits.maxFileBytes)
+          throw fsError(
+            "EFBIG",
+            "replaceRange",
+            canonical.value,
+            "result exceeds maxFileBytes",
+          );
+        await this.#replaceExisting(
+          canonical.value,
+          selected.source,
+          this.#bufferedInsertionEdit(offset, deleteLength, 0, frozen),
+          selected.token,
           "replaceRange",
-          canonical.value,
-          "result exceeds maxFileBytes",
         );
-      await this.#replaceExisting(
-        canonical.value,
-        selected.source,
-        this.#bufferedInsertionEdit(offset, deleteLength, 0, frozen),
-        selected.token,
-        "replaceRange",
-      );
-    }).finally(releaseInput);
+      } finally {
+        releaseInput();
+      }
+    });
   }
 
   truncate(path: string, size = 0): Promise<void> {
@@ -1147,6 +1210,18 @@ export class EphemeralFS implements EphemeralFilesystem {
       manifestHash: copyBytes(selected.manifestHash),
       size: selected.size,
       parameters: selected.parameters,
+      readStorageTransactions: 1,
+      // A cold one-byte object consumes two result rows (size then BLOB).
+      // Reserve path/root slack and keep each source read inside one UoW.
+      maxReadWindowBytes: Math.max(
+        1,
+        Math.floor(
+          (this.#storageLimits.maxFinalTransactionRows -
+            this.#storageLimits.maxManifestDepth * 4 -
+            16) /
+            2,
+        ),
+      ),
       read: (offset: number, length: number): Uint8Array =>
         this.#transaction("read", (tx) =>
           readManifestRange(
@@ -1442,6 +1517,42 @@ export class EphemeralFS implements EphemeralFilesystem {
     if (!Number.isSafeInteger(value) || value < 0)
       throw new Error("clock must return a nonnegative safe integer");
     return value;
+  }
+  #readManifestMaterialized(
+    manifestHash: Uint8Array,
+    offset: number,
+    destination: Uint8Array,
+  ): void {
+    const rowBoundWindow = Math.max(
+      1,
+      Math.floor(
+        (this.#storageLimits.maxFinalTransactionRows -
+          this.#storageLimits.maxManifestDepth * 4 -
+          16) /
+          2,
+      ),
+    );
+    const windowBytes = Math.max(
+      1,
+      Math.min(this.#runtimeLimits.maxQueryBatchBytes, rowBoundWindow),
+    );
+    let written = 0;
+    while (written < destination.byteLength) {
+      const length = Math.min(windowBytes, destination.byteLength - written);
+      const count = this.#transaction("read", (tx) =>
+        readManifestInto(
+          tx.content(this.#storageLimits, this.#cache),
+          manifestHash,
+          offset + written,
+          destination,
+          written,
+          length,
+        ),
+      );
+      if (count !== length)
+        throw new Error("ECORRUPT: authenticated manifest materialization ended early");
+      written += count;
+    }
   }
   #transaction<T>(
     mode: StorageTransactionMode,

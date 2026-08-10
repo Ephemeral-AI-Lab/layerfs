@@ -15,6 +15,7 @@ import type {
 import type { ContentCache } from "../cache/content-cache.js";
 import type { CowPageBytes } from "../cow/pages.js";
 import type { FilesystemLimits, StorageLimits } from "../resources/limits.js";
+import { UsageRepository } from "./usage-repository.js";
 
 export function createSqliteOperationsStorage(
   driver: FilesystemSQLiteDriver,
@@ -29,23 +30,34 @@ export function createSqliteOperationsStorage(
       callback: (ports: StorageTransactionPorts) => T,
     ): T =>
       runUnitOfWork(driver, mode, budget, (tx) => {
+        let transactionLimits: StorageLimits | undefined;
+        const limitsFor = (limits: StorageLimits): StorageLimits => {
+          transactionLimits ??= limits;
+          return limits;
+        };
         const ports: StorageTransactionPorts = Object.freeze({
           content: (limits: StorageLimits, cache?: ContentCache) =>
-            new ContentRepository(tx, limits, cache),
+            new ContentRepository(tx, limitsFor(limits), cache),
           manifestTree: (limits: StorageLimits, cache?: ContentCache) =>
-            new ManifestTreeRepository(tx, limits, cache),
+            new ManifestTreeRepository(tx, limitsFor(limits), cache),
           namespace: (
             filesystem: FilesystemLimits,
             storage: StorageLimits,
             syscall: string,
-          ) => new NamespaceRepository(tx, filesystem, storage, syscall),
-          branches: (limits: StorageLimits) => new BranchRepository(tx, limits),
-          staging: (limits: StorageLimits) => new StagingRepository(tx, limits),
-          maintenance: (limits: StorageLimits) => new MaintenanceRepository(tx, limits),
+          ) => new NamespaceRepository(tx, filesystem, limitsFor(storage), syscall),
+          branches: (limits: StorageLimits) =>
+            new BranchRepository(tx, limitsFor(limits)),
+          staging: (limits: StorageLimits) =>
+            new StagingRepository(tx, limitsFor(limits)),
+          maintenance: (limits: StorageLimits) =>
+            new MaintenanceRepository(tx, limitsFor(limits)),
           overlay: (limits: StorageLimits, pageBytes: CowPageBytes) =>
-            new OverlayRepository(tx, limits, pageBytes),
+            new OverlayRepository(tx, limitsFor(limits), pageBytes),
         });
-        return callback(ports);
+        const result = callback(ports);
+        if (mode !== "read" && transactionLimits)
+          new UsageRepository(tx, transactionLimits).reconcileDerivedUsage();
+        return result;
       }),
     physicalStorage: () => driver.physicalStorage?.() ?? Object.freeze({}),
     checkpoint: (mode: "passive" | "restart" | "truncate" = "passive") =>

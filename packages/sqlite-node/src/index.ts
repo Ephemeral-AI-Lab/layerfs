@@ -186,65 +186,77 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       enableDoubleQuotedStringLiterals: false,
       allowExtension: false,
     });
-    if (!this.readOnly) {
-      this.#database.exec(
-        `PRAGMA journal_mode=WAL; PRAGMA synchronous=${durability === "acknowledged" ? "FULL" : "NORMAL"}; PRAGMA cache_size=-${Math.max(1, Math.floor(cacheTargetBytes / 1024))}; PRAGMA mmap_size=${mmapLimitBytes}; PRAGMA journal_size_limit=${maxJournalBytes};`,
+    try {
+      this.#database.exec("PRAGMA temp_store=FILE");
+      const tempStore = Number(
+        this.#database.prepare("PRAGMA temp_store").get()?.temp_store,
       );
-    }
-    this.#pageSize = Number(
-      this.#database.prepare("PRAGMA page_size").get()?.page_size ?? 4096,
-    );
-    if (!Number.isSafeInteger(this.#pageSize) || this.#pageSize <= 0)
-      throw new Error("SQLite returned an invalid page size");
-    const minimumJournalBytes = this.#pageSize * 8 + 2 * 9248;
-    if (maxJournalBytes < minimumJournalBytes)
-      throw new RangeError(
-        `maxJournalBytes must hold SQLite overhead and one canonical manifest node (${minimumJournalBytes} bytes)`,
+      if (tempStore !== 1) throw new Error("SQLite failed to enforce temp_store=FILE");
+      if (!this.readOnly) {
+        this.#database.exec(
+          `PRAGMA journal_mode=WAL; PRAGMA synchronous=${durability === "acknowledged" ? "FULL" : "NORMAL"}; PRAGMA cache_size=-${Math.max(1, Math.floor(cacheTargetBytes / 1024))}; PRAGMA mmap_size=${mmapLimitBytes}; PRAGMA journal_size_limit=${maxJournalBytes};`,
+        );
+      }
+      this.#pageSize = Number(
+        this.#database.prepare("PRAGMA page_size").get()?.page_size ?? 4096,
       );
-    this.#maxJournalBytes = maxJournalBytes;
-    let effectiveMaxPhysicalDatabaseBytes = maxPhysicalDatabaseBytes;
-    if (!this.readOnly) {
-      const requestedPageCount = Math.max(
-        1,
-        Math.floor(maxPhysicalDatabaseBytes / this.#pageSize),
-      );
-      this.#database.exec(
-        `PRAGMA max_page_count=${requestedPageCount}; PRAGMA wal_autocheckpoint=${Math.max(
+      if (!Number.isSafeInteger(this.#pageSize) || this.#pageSize <= 0)
+        throw new Error("SQLite returned an invalid page size");
+      const minimumJournalBytes = this.#pageSize * 8 + 2 * 9248;
+      if (maxJournalBytes < minimumJournalBytes)
+        throw new RangeError(
+          `maxJournalBytes must hold SQLite overhead and one canonical manifest node (${minimumJournalBytes} bytes)`,
+        );
+      this.#maxJournalBytes = maxJournalBytes;
+      let effectiveMaxPhysicalDatabaseBytes = maxPhysicalDatabaseBytes;
+      if (!this.readOnly) {
+        const requestedPageCount = Math.max(
           1,
-          Math.floor(maxJournalBytes / (this.#pageSize + 24) / 2),
-        )}`,
+          Math.floor(maxPhysicalDatabaseBytes / this.#pageSize),
+        );
+        this.#database.exec(
+          `PRAGMA max_page_count=${requestedPageCount}; PRAGMA wal_autocheckpoint=${Math.max(
+            1,
+            Math.floor(maxJournalBytes / (this.#pageSize + 24) / 2),
+          )}`,
+        );
+        const effectivePageCount = Number(
+          this.#database.prepare("PRAGMA max_page_count").get()?.max_page_count,
+        );
+        if (!Number.isSafeInteger(effectivePageCount) || effectivePageCount <= 0)
+          throw new Error("SQLite returned an invalid max_page_count");
+        effectiveMaxPhysicalDatabaseBytes = effectivePageCount * this.#pageSize;
+      }
+      this.#journalBackpressureBytes = Math.max(
+        this.#pageSize * 4,
+        Math.floor(maxJournalBytes * 0.75),
       );
-      const effectivePageCount = Number(
-        this.#database.prepare("PRAGMA max_page_count").get()?.max_page_count,
-      );
-      if (!Number.isSafeInteger(effectivePageCount) || effectivePageCount <= 0)
-        throw new Error("SQLite returned an invalid max_page_count");
-      effectiveMaxPhysicalDatabaseBytes = effectivePageCount * this.#pageSize;
+      const rawJournalMode = String(
+        this.#database.prepare("PRAGMA journal_mode").get()?.journal_mode ?? "",
+      ).toLowerCase();
+      this.capabilities = Object.freeze({
+        maxBlobBytes: Math.min(
+          64 * 1024 * 1024,
+          Math.floor((maxJournalBytes - this.#pageSize * 8) / 2),
+        ),
+        maxBindings: 32_766,
+        durability,
+        journalMode: rawJournalMode === "wal" ? "wal" : "rollback",
+        memoryPolicy: "configured",
+        cacheTargetBytes,
+        mmapLimitBytes,
+        maxPhysicalDatabaseBytes: effectiveMaxPhysicalDatabaseBytes,
+        maxJournalBytes,
+        physicalQuotaPolicy: "driver-enforced",
+        journalQuotaPolicy: "checkpoint-backpressure",
+        journalSizeLimitIsHard: false,
+      });
+    } catch (error) {
+      try {
+        this.#database.close();
+      } catch {}
+      throw error;
     }
-    this.#journalBackpressureBytes = Math.max(
-      this.#pageSize * 4,
-      Math.floor(maxJournalBytes * 0.75),
-    );
-    const rawJournalMode = String(
-      this.#database.prepare("PRAGMA journal_mode").get()?.journal_mode ?? "",
-    ).toLowerCase();
-    this.capabilities = Object.freeze({
-      maxBlobBytes: Math.min(
-        64 * 1024 * 1024,
-        Math.floor((maxJournalBytes - this.#pageSize * 8) / 2),
-      ),
-      maxBindings: 32_766,
-      durability,
-      journalMode: rawJournalMode === "wal" ? "wal" : "rollback",
-      memoryPolicy: "configured",
-      cacheTargetBytes,
-      mmapLimitBytes,
-      maxPhysicalDatabaseBytes: effectiveMaxPhysicalDatabaseBytes,
-      maxJournalBytes,
-      physicalQuotaPolicy: "driver-enforced",
-      journalQuotaPolicy: "checkpoint-backpressure",
-      journalSizeLimitIsHard: false,
-    });
   }
   transaction<T>(
     mode: TransactionMode,
@@ -339,9 +351,21 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
         },
       });
       const result = callback(tx);
-      if (result && typeof result === "object" && "then" in result)
+      if (
+        result !== null &&
+        (typeof result === "object" || typeof result === "function") &&
+        "then" in result
+      )
         throw new TypeError("SQLite transaction callbacks must be synchronous");
       active = false;
+      if (
+        mode !== "read" &&
+        this.#filename !== ":memory:" &&
+        (this.#fileBytes(`${this.#filename}-wal`) ?? 0) > this.#maxJournalBytes
+      )
+        throw new Error(
+          "ENOSPC: WAL exceeded the rollback-safe post-statement envelope",
+        );
       this.#database.exec("COMMIT");
       begun = false;
       if (mode !== "read") this.#checkpointAfterCommit();
@@ -366,8 +390,8 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     if (!this.#closed) {
       if (this.#transactionActive)
         throw new Error("cannot close SQLite during a transaction");
-      this.#closed = true;
       this.#database.close();
+      this.#closed = true;
     }
   }
   physicalStorage(): SQLitePhysicalStorage {
@@ -396,6 +420,15 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     if (bindings.length > this.capabilities.maxBindings)
       throw new RangeError("SQLite binding limit exceeded");
     if (mode === "read") assertReadOnlySql(sql);
+    if (
+      mode !== "read" &&
+      /\b(?:zero|random)blob\s*\(|\bprintf\s*\(|\breplace\s*\(/iu.test(sql)
+    )
+      throw new Error(
+        "ENOSPC: SQL-generated payload expressions are outside the WAL admission contract",
+      );
+    if (mode !== "read" && sql.length * 2 > this.#maxJournalBytes)
+      throw new Error("ENOSPC: SQL text exceeds the WAL admission contract");
   }
   #fileBytes(filename: string): number | undefined {
     try {

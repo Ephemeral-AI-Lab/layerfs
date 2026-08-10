@@ -1,6 +1,7 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import type { StorageLimits } from "../resources/limits.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import { intrinsicByteLength } from "../cas/bytes.js";
 
 export interface BranchRow extends SqliteRow {
   id: string;
@@ -234,7 +235,7 @@ export class BranchRepository {
   ): void {
     new UsageRepository(this.#tx, this.#limits).apply(
       {
-        result_bytes: encoded.byteLength,
+        result_bytes: intrinsicByteLength(encoded),
         charged_metadata_bytes: CHARGED_ROW_BYTES,
       },
       "operation result",

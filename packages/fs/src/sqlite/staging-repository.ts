@@ -1,6 +1,6 @@
 import { sha256 } from "../cas/sha256.js";
-import { equalBytes } from "../cas/bytes.js";
-import { encodeUtf8 } from "../namespace/utf8.js";
+import { equalBytes, intrinsicByteLength } from "../cas/bytes.js";
+import { encodeUtf8, utf8ByteLength } from "../namespace/utf8.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
 import { checkedAdd } from "../resources/safe-integers.js";
 import type { StorageLimits } from "../resources/limits.js";
@@ -52,6 +52,7 @@ interface CertificateRow extends SqliteRow {
   state?: number;
   lease_nonce?: Uint8Array;
   rooted?: number;
+  ingest_reservation_bytes: number;
 }
 interface ReconciliationRow extends SqliteRow {
   owner_nonce: Uint8Array;
@@ -82,6 +83,7 @@ interface LeaseChargeRow extends SqliteRow {
   state: number;
   owner_nonce: Uint8Array;
   staged_bytes: number;
+  ingest_reservation_bytes: number;
 }
 interface ExpiredLeaseRow extends LeaseChargeRow {
   id: string;
@@ -118,6 +120,15 @@ const CLEANUP_DELETE_STATEMENTS = Object.freeze([
   "DELETE FROM efs_lease_cow_pages WHERE lease_id=? AND (branch_id,inode_id,page_index,generation) IN (SELECT branch_id,inode_id,page_index,generation FROM efs_lease_cow_pages WHERE lease_id=? ORDER BY branch_id,inode_id,page_index,generation LIMIT ?)",
   "DELETE FROM efs_lease_patches WHERE lease_id=? AND (branch_id,inode_id,sequence) IN (SELECT branch_id,inode_id,sequence FROM efs_lease_patches WHERE lease_id=? ORDER BY branch_id,inode_id,sequence LIMIT ?)",
 ] as const);
+const MAX_STAGING_ID_BYTES = 128;
+
+function stagingId(value: string, label: string): void {
+  const bytes = utf8ByteLength(value);
+  if (!value || bytes > MAX_STAGING_ID_BYTES)
+    throw new RangeError(
+      `${label} must contain 1..${MAX_STAGING_ID_BYTES} UTF-8 bytes`,
+    );
+}
 
 export const EMPTY_STAGING_CHAIN = sha256(encodeUtf8("efs-staging-chain-v1"));
 
@@ -135,9 +146,13 @@ function extendChain(
   encoded.set(member.hash, 1);
   view.setBigUint64(33, BigInt(sequence), true);
   view.setBigUint64(41, BigInt(member.size), true);
-  const chained = new Uint8Array(previous.byteLength + encoded.byteLength);
+  const previousLength = intrinsicByteLength(previous);
+  const encodedLength = intrinsicByteLength(encoded);
+  const chained = new Uint8Array(
+    checkedAdd(previousLength, encodedLength, "staging chain input"),
+  );
   chained.set(previous);
-  chained.set(encoded, previous.byteLength);
+  chained.set(encoded, previousLength);
   return sha256(chained);
 }
 function counters(values: readonly number[]): void {
@@ -163,13 +178,24 @@ export class StagingRepository {
     readonly kind?: number;
     readonly branchId?: string;
     readonly generation?: number;
+    readonly ingestReservationBytes?: number;
   }): void {
-    if (!options.leaseId || !options.ownerId || options.ownerNonce.byteLength < 16)
+    stagingId(options.leaseId, "staging lease id");
+    stagingId(options.ownerId, "staging owner id");
+    if (options.branchId !== undefined)
+      stagingId(options.branchId, "staging branch id");
+    if (intrinsicByteLength(options.ownerNonce) !== 16)
       throw new RangeError("staging lease identity or owner nonce is invalid");
     counters([options.now, options.expiresAt]);
+    counters([options.ingestReservationBytes ?? 0]);
     if (options.expiresAt <= options.now)
       throw new RangeError("staging lease expiry must be in the future");
     this.#changeMetadataRows(2, "staging lease and certificate");
+    if (options.ingestReservationBytes)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { ingest_reservation_bytes: options.ingestReservationBytes },
+        "declared streamed-ingest envelope",
+      );
     this.#tx.run(
       "INSERT INTO efs_leases(id,kind,owner_id,owner_nonce,branch_id,generation,created_at_ms,last_renewal_at_ms,expires_at_ms,state) VALUES(?,?,?,?,?,?,?,?,?,0)",
       [
@@ -185,8 +211,35 @@ export class StagingRepository {
       ],
     );
     this.#tx.run(
-      "INSERT INTO efs_staging_certificates(lease_id,owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified) VALUES(?,?,NULL,?,0,0,0,0,0,0,0,0)",
-      [options.leaseId, options.ownerNonce, EMPTY_STAGING_CHAIN],
+      "INSERT INTO efs_staging_certificates(lease_id,owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified,ingest_reservation_bytes) VALUES(?,?,NULL,?,0,0,0,0,0,0,0,0,?)",
+      [
+        options.leaseId,
+        options.ownerNonce,
+        EMPTY_STAGING_CHAIN,
+        options.ingestReservationBytes ?? 0,
+      ],
+    );
+  }
+
+  consumeIngestReservation(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    bytes: number,
+  ): void {
+    counters([bytes]);
+    if (bytes === 0) return;
+    const row = this.#row(leaseId);
+    if (!equalBytes(row.owner_nonce, ownerNonce) || row.sealed !== 0)
+      throw new Error("ECORRUPT: streamed-ingest reservation owner mismatch");
+    if (bytes > row.ingest_reservation_bytes)
+      throw new Error("ENOSPC: streamed ingest exceeds its declared durable envelope");
+    this.#tx.run(
+      "UPDATE efs_staging_certificates SET ingest_reservation_bytes=ingest_reservation_bytes-? WHERE lease_id=? AND sealed=0",
+      [bytes, leaseId],
+    );
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { ingest_reservation_bytes: -bytes },
+      "streamed-ingest reservation consumption",
     );
   }
 
@@ -244,7 +297,7 @@ export class StagingRepository {
   bumpRoot(kind: number, id: string): void {
     const rootId = encodeUtf8(id);
     new UsageRepository(this.#tx, this.#limits).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES + rootId.byteLength },
+      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
       "root journal",
     );
     this.#tx.run(
@@ -271,7 +324,10 @@ export class StagingRepository {
       [leaseId, ownerNonce],
     );
     if (result.changes) {
-      this.#releaseStagingBytes(charge.staged_bytes);
+      this.#releaseLeaseReservations(
+        charge.staged_bytes,
+        charge.ingest_reservation_bytes,
+      );
       this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
       this.bumpRoot(6, leaseId);
     } else if (charge.state === 2) {
@@ -288,7 +344,10 @@ export class StagingRepository {
     );
     if (result.changes) {
       if (charge.state === 0 || charge.state === 1)
-        this.#releaseStagingBytes(charge.staged_bytes);
+        this.#releaseLeaseReservations(
+          charge.staged_bytes,
+          charge.ingest_reservation_bytes,
+        );
       this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
       this.bumpRoot(6, leaseId);
     } else if (charge.state === 2) {
@@ -302,6 +361,10 @@ export class StagingRepository {
     manifestHash: Uint8Array,
     expiresAt: number,
   ): void {
+    stagingId(leaseId, "read lease id");
+    stagingId(ownerId, "read lease owner id");
+    if (intrinsicByteLength(manifestHash) !== 32)
+      throw new RangeError("read lease manifest hash must contain exactly 32 bytes");
     this.#changeMetadataRows(2, "read lease and root link");
     this.#tx.run(
       "INSERT INTO efs_leases(id,kind,owner_id,expires_at_ms,state) VALUES(?,0,?,?,1)",
@@ -342,11 +405,12 @@ export class StagingRepository {
     )
       throw new RangeError("invalid expired-lease batch limit");
     const rows = this.#tx.all<ExpiredLeaseRow>(
-      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id LEFT JOIN efs_lease_cleanups x ON x.lease_id=l.id WHERE x.lease_id IS NULL AND (l.expires_at_ms<? OR l.state=2) ORDER BY l.id LIMIT ?",
+      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id LEFT JOIN efs_lease_cleanups x ON x.lease_id=l.id WHERE x.lease_id IS NULL AND (l.expires_at_ms<? OR l.state=2) ORDER BY l.id LIMIT ?",
       [now, limit],
       { maxRows: limit, maxBytes: Math.max(1024, limit * 256) },
     );
     let releasedBytes = 0;
+    let releasedIngestBytes = 0;
     let tombstoned = 0;
     for (const row of rows) {
       const result = this.#tx.run(
@@ -357,6 +421,11 @@ export class StagingRepository {
         tombstoned += 1;
         if (row.state === 0 || row.state === 1)
           releasedBytes = checkedAdd(releasedBytes, row.staged_bytes);
+        if (row.state === 0 || row.state === 1)
+          releasedIngestBytes = checkedAdd(
+            releasedIngestBytes,
+            row.ingest_reservation_bytes,
+          );
         this.#scheduleCleanup(
           row.id,
           row.owner_nonce,
@@ -365,7 +434,7 @@ export class StagingRepository {
         );
       }
     }
-    this.#releaseStagingBytes(releasedBytes);
+    this.#releaseLeaseReservations(releasedBytes, releasedIngestBytes);
     if (tombstoned) this.bumpRoot(6, `expired:${now}`);
     return tombstoned;
   }
@@ -475,7 +544,7 @@ export class StagingRepository {
     let stagedDelta = 0;
     let insertedRows = 0;
     for (const member of members) {
-      if (member.hash.byteLength !== 32)
+      if (intrinsicByteLength(member.hash) !== 32)
         throw new RangeError("staging member hash must be 32 bytes");
       counters([member.size]);
       this.#verifyMemberBacking(leaseId, member);
@@ -511,6 +580,8 @@ export class StagingRepository {
       sequence += 1;
     }
     this.#admitStagingBytes(stagedDelta);
+    if (row.ingest_reservation_bytes)
+      this.consumeIngestReservation(leaseId, ownerNonce, stagedDelta);
     this.#changeMetadataRows(insertedRows, "staging membership");
     this.#tx.run(
       "UPDATE efs_staging_certificates SET chain_digest=?,object_count=?,object_bytes=?,node_count=?,node_bytes=?,membership_count=?,next_sequence=? WHERE lease_id=? AND sealed=0",
@@ -560,7 +631,7 @@ export class StagingRepository {
     ownerNonce: Uint8Array,
     manifestHash: Uint8Array,
   ): void {
-    if (manifestHash.byteLength !== 32)
+    if (intrinsicByteLength(manifestHash) !== 32)
       throw new RangeError("manifest root hash must be 32 bytes");
     const certificate = this.#row(leaseId);
     if (!equalBytes(certificate.owner_nonce, ownerNonce) || certificate.sealed !== 0)
@@ -708,6 +779,12 @@ export class StagingRepository {
       row.sealed !== 0
     )
       throw new Error("ECORRUPT: staged closure certificate mismatch");
+    if (row.ingest_reservation_bytes)
+      this.consumeIngestReservation(
+        certificate.leaseId,
+        certificate.ownerNonce,
+        row.ingest_reservation_bytes,
+      );
     const reconciliation = this.#reconciliation(certificate.leaseId);
     if (
       !reconciliation ||
@@ -724,11 +801,11 @@ export class StagingRepository {
       throw new Error(
         "ECORRUPT: staged closure reconciliation is incomplete or mismatched",
       );
-    this.#tx.run(
-      "INSERT INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
+    const rooted = this.#tx.run(
+      "INSERT OR IGNORE INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
       [certificate.leaseId, certificate.manifestHash],
     );
-    this.#changeMetadataRows(1, "sealed staging root link");
+    this.#changeMetadataRows(rooted.changes, "sealed staging root link");
     this.#tx.run(
       "UPDATE efs_staging_certificates SET manifest_hash=?,sealed=1,verified=1 WHERE lease_id=? AND sealed=0",
       [certificate.manifestHash, certificate.leaseId],
@@ -921,7 +998,7 @@ export class StagingRepository {
 
   #leaseCharge(leaseId: string): LeaseChargeRow | undefined {
     return this.#tx.all<LeaseChargeRow>(
-      "SELECT l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id WHERE l.id=?",
+      "SELECT l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id WHERE l.id=?",
       [leaseId],
       { maxRows: 1, maxBytes: 256 },
     )[0];
@@ -961,11 +1038,14 @@ export class StagingRepository {
     );
   }
 
-  #releaseStagingBytes(bytes: number): void {
-    if (bytes === 0) return;
+  #releaseLeaseReservations(stagingBytes: number, ingestBytes: number): void {
+    if (stagingBytes === 0 && ingestBytes === 0) return;
     new UsageRepository(this.#tx, this.#limits).apply(
-      { staging_bytes: -bytes },
-      "staging payload release",
+      {
+        staging_bytes: -stagingBytes,
+        ingest_reservation_bytes: -ingestBytes,
+      },
+      "staging lease reservation release",
     );
   }
 
@@ -979,7 +1059,7 @@ export class StagingRepository {
 
   #row(leaseId: string): CertificateRow {
     const row = this.#tx.all<CertificateRow>(
-      "SELECT owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified FROM efs_staging_certificates WHERE lease_id=?",
+      "SELECT owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified,ingest_reservation_bytes FROM efs_staging_certificates WHERE lease_id=?",
       [leaseId],
       { maxRows: 1, maxBytes: 4096 },
     )[0];
@@ -988,9 +1068,9 @@ export class StagingRepository {
   }
   #validateShape(certificate: ClosureCertificate): void {
     if (
-      certificate.ownerNonce.byteLength < 16 ||
-      certificate.manifestHash.byteLength !== 32 ||
-      certificate.chainDigest.byteLength !== 32
+      intrinsicByteLength(certificate.ownerNonce) !== 16 ||
+      intrinsicByteLength(certificate.manifestHash) !== 32 ||
+      intrinsicByteLength(certificate.chainDigest) !== 32
     )
       throw new RangeError("closure certificate hashes or owner nonce are invalid");
     counters([

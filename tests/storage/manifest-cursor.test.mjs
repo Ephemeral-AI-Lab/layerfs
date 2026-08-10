@@ -12,9 +12,11 @@ import {
 } from "../../packages/fs/dist/operations/manifest-io.js";
 import {
   AdmissionController,
+  MAX_CONTENT_OBJECT_BYTES,
   constrainStorageLimits,
 } from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
+import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 
@@ -29,14 +31,18 @@ function limits(driver, overrides = {}) {
   );
 }
 
-function readManifestRange(repository, hash, offset, length) {
-  return readManifestRangeUnadmitted(
-    repository,
-    hash,
-    offset,
-    length,
-    new AdmissionController(256 * 1024 * 1024),
-  );
+function reader(tx, storage) {
+  const admission = new AdmissionController(256 * 1024 * 1024);
+  const cache = new ContentCache(1, admission);
+  return {
+    admission,
+    repository: new ContentRepository(tx, storage, cache),
+  };
+}
+
+function readManifestRange(tx, storage, hash, offset, length) {
+  const { admission, repository } = reader(tx, storage);
+  return readManifestRangeUnadmitted(repository, hash, offset, length, admission);
 }
 
 function persistBuilt(tx, storage, manifest) {
@@ -87,12 +93,7 @@ test("SQLite manifest cursor returns bounded ranges through authenticated M1 pat
   const offset = 510_123;
   const length = 300_007;
   const actual = driver.transaction("read", (tx) =>
-    readManifestRange(
-      new ContentRepository(tx, storage),
-      manifest.rootHash,
-      offset,
-      length,
-    ),
+    readManifestRange(tx, storage, manifest.rootHash, offset, length),
   );
   assert.deepEqual(actual, bytes.slice(offset, offset + length));
 
@@ -105,16 +106,17 @@ test("SQLite manifest cursor returns bounded ranges through authenticated M1 pat
     }
   }
   const destination = new HostileDestination(length + 8).fill(0xaa);
-  const written = driver.transaction("read", (tx) =>
-    readManifestInto(
-      new ContentRepository(tx, storage),
+  const written = driver.transaction("read", (tx) => {
+    const { repository } = reader(tx, storage);
+    return readManifestInto(
+      repository,
       manifest.rootHash,
       offset,
       destination,
       4,
       length,
-    ),
-  );
+    );
+  });
   assert.equal(written, length);
   assert.deepEqual(
     new Uint8Array(destination.buffer, 4, length),
@@ -167,7 +169,7 @@ test("cursor rejects unsupported parameters and root totals before exposing byte
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
-        readManifestRange(new ContentRepository(tx, storage), unsupported.hash, 0, 1),
+        readManifestRange(tx, storage, unsupported.hash, 0, 1),
       ),
     /effective content-object limit/,
   );
@@ -181,7 +183,7 @@ test("cursor rejects unsupported parameters and root totals before exposing byte
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
-        readManifestRange(new ContentRepository(tx, storage), wrongTotals.hash, 0, 1),
+        readManifestRange(tx, storage, wrongTotals.hash, 0, 1),
       ),
     /root totals mismatch/,
   );
@@ -233,12 +235,7 @@ test("cursor validates child totals, canonical grouping, and configured depth", 
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
-        readManifestRange(
-          new ContentRepository(tx, storage),
-          mismatchedRoot.hash,
-          0,
-          1,
-        ),
+        readManifestRange(tx, storage, mismatchedRoot.hash, 0, 1),
       ),
     /child totals mismatch/,
   );
@@ -267,12 +264,7 @@ test("cursor validates child totals, canonical grouping, and configured depth", 
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
-        readManifestRange(
-          new ContentRepository(tx, storage),
-          noncanonicalRoot.hash,
-          0,
-          1,
-        ),
+        readManifestRange(tx, storage, noncanonicalRoot.hash, 0, 1),
       ),
     /canonical boundary/,
   );
@@ -301,7 +293,7 @@ test("cursor validates child totals, canonical grouping, and configured depth", 
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
-        readManifestRange(new ContentRepository(tx, shallow), deepRoot.hash, 0, 1),
+        readManifestRange(tx, shallow, deepRoot.hash, 0, 1),
       ),
     /depth exceeds/,
   );
@@ -333,18 +325,138 @@ test("CAS corruption is rejected before destination bytes are changed", async ()
   const destination = new Uint8Array(4).fill(0xaa);
   assert.throws(
     () =>
-      driver.transaction("read", (tx) =>
-        readManifestInto(
-          new ContentRepository(tx, storage),
-          manifest.hash,
-          0,
-          destination,
-          0,
-          4,
-        ),
-      ),
+      driver.transaction("read", (tx) => {
+        const { repository } = reader(tx, storage);
+        return readManifestInto(repository, manifest.hash, 0, destination, 0, 4);
+      }),
     /digest mismatch/,
   );
   assert.deepEqual(destination, new Uint8Array(4).fill(0xaa));
+  driver.close();
+});
+
+test("cold and warm one-byte ranges stay inside the admitted max-object envelope", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const storage = limits(driver);
+  const bytes = new Uint8Array(MAX_CONTENT_OBJECT_BYTES).fill(0x5a);
+  const hash = sha256(bytes);
+  const leaf = node({
+    kind: "leaf",
+    span: bytes.length,
+    entryCount: 1,
+    entries: [{ hash, length: bytes.length }],
+  });
+  const manifest = root(
+    {
+      minimum: MAX_CONTENT_OBJECT_BYTES,
+      average: MAX_CONTENT_OBJECT_BYTES,
+      maximum: MAX_CONTENT_OBJECT_BYTES,
+    },
+    bytes.length,
+    1,
+    leaf.hash,
+  );
+  driver.transaction("write", (tx) =>
+    persistManual(tx, storage, { hash, bytes }, [leaf], manifest),
+  );
+  const admission = new AdmissionController(64 * 1024 * 1024);
+  const cache = new ContentCache(32 * 1024 * 1024, admission);
+  const readOne = () =>
+    driver.transaction("read", (tx) =>
+      readManifestRangeUnadmitted(
+        new ContentRepository(tx, storage, cache),
+        manifest.hash,
+        bytes.length - 1,
+        1,
+        admission,
+        cache,
+      ),
+    );
+  assert.deepEqual(readOne(), Uint8Array.of(0x5a));
+  const afterCold = cache.metrics();
+  assert.ok(afterCold.admissions >= 3);
+  assert.ok(
+    admission.peakBytes <=
+      3 * MAX_CONTENT_OBJECT_BYTES + 2 * (storage.maxManifestNodeBytes + 96) + 512,
+  );
+  const coldPeak = admission.peakBytes;
+  assert.deepEqual(readOne(), Uint8Array.of(0x5a));
+  assert.ok(cache.metrics().hits >= afterCold.hits + 3);
+  assert.equal(admission.peakBytes, coldPeak);
+  cache.clear();
+  assert.equal(admission.usedBytes, 0);
+  driver.close();
+});
+
+test("a 100 MiB materialization rejects before a second full-window BLOB allocation", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const storage = limits(driver);
+  const large = new Uint8Array(MAX_CONTENT_OBJECT_BYTES).fill(0x31);
+  const tail = new Uint8Array(4 * 1024 * 1024).fill(0x32);
+  const largeHash = sha256(large);
+  const tailHash = sha256(tail);
+  const fileSize = 100 * 1024 * 1024;
+  const leaf = node({
+    kind: "leaf",
+    span: fileSize,
+    entryCount: 7,
+    entries: [
+      ...Array.from({ length: 6 }, () => ({
+        hash: largeHash,
+        length: large.length,
+      })),
+      { hash: tailHash, length: tail.length },
+    ],
+  });
+  const manifest = root(
+    {
+      minimum: tail.length,
+      average: 8 * 1024 * 1024,
+      maximum: large.length,
+    },
+    fileSize,
+    7,
+    leaf.hash,
+  );
+  driver.transaction("write", (tx) => {
+    const content = new ContentRepository(tx, storage);
+    content.putObject(largeHash, large);
+    content.putObject(tailHash, tail);
+    content.putManifestNode(leaf.hash, leaf.encoded);
+    content.putManifestRoot(manifest.hash, manifest.encoded);
+  });
+  const admission = new AdmissionController(128 * 1024 * 1024);
+  const cache = new ContentCache(64 * 1024 * 1024, admission);
+  let blobMaterializations = 0;
+  assert.throws(
+    () =>
+      driver.transaction("read", (tx) => {
+        const counted = {
+          scope: tx.scope,
+          run: (sql, bindings) => tx.run(sql, bindings),
+          all(sql, bindings, budget) {
+            if (/SELECT size,bytes FROM efs_cas_objects/i.test(sql))
+              blobMaterializations += 1;
+            return tx.all(sql, bindings, budget);
+          },
+        };
+        return readManifestRangeUnadmitted(
+          new ContentRepository(counted, storage, cache),
+          manifest.hash,
+          0,
+          fileSize,
+          admission,
+          cache,
+        );
+      }),
+    /managed resident memory limit/,
+  );
+  assert.equal(blobMaterializations, 0);
+  assert.ok(admission.peakBytes <= fileSize + 2 * (storage.maxManifestNodeBytes + 96));
+  assert.equal(admission.usedBytes, cache.metrics().bytes);
+  cache.clear();
+  assert.equal(admission.usedBytes, 0);
   driver.close();
 });

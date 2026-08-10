@@ -63,6 +63,14 @@ function proveReadTransactionsAreReadOnly(driver) {
 
 test("Node SQLite driver scopes transactions and enforces result/binding types", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
+  assert.equal(
+    driver.transaction(
+      "exclusive",
+      (tx) =>
+        tx.all("PRAGMA temp_store", [], { maxRows: 1, maxBytes: 128 })[0].temp_store,
+    ),
+    1,
+  );
   let retained;
   driver.transaction("write", (tx) => {
     retained = tx;
@@ -190,6 +198,69 @@ test("bounded units of work roll back row and binding-byte overflow", async () =
   driver.close();
 });
 
+test("unit-of-work forwards only remaining intrinsic result and binding budgets", () => {
+  class HostileBytes extends Uint8Array {
+    get byteLength() {
+      return 0;
+    }
+  }
+  let materializedSecond = false;
+  let runCalls = 0;
+  const observedBudgets = [];
+  const fake = {
+    readOnly: false,
+    kind: "fake",
+    capabilities: Object.freeze({}),
+    transaction(_mode, callback) {
+      return callback({
+        scope: Object.freeze({ mode: "read", active: true }),
+        run() {
+          runCalls += 1;
+          return { changes: 0, lastInsertRowid: null };
+        },
+        all(sql, _bindings, budget) {
+          observedBudgets.push(budget);
+          if (sql === "first") return [{ payload: new HostileBytes(16) }];
+          if (budget.maxRows > 1 || budget.maxBytes > 10) {
+            materializedSecond = true;
+            return [{ value: 1 }, { value: 2 }];
+          }
+          throw new RangeError("driver rejected before second query materialization");
+        },
+      });
+    },
+    close() {},
+  };
+  assert.throws(
+    () =>
+      runUnitOfWork(
+        fake,
+        "read",
+        {
+          maxRows: 10,
+          maxBytes: 1024,
+          maxResultRows: 2,
+          maxResultBytes: 68,
+        },
+        (tx) => {
+          tx.all("first", [], { maxRows: 10, maxBytes: 1024 });
+          tx.all("second", [], { maxRows: 10, maxBytes: 1024 });
+        },
+      ),
+    /before second query materialization/,
+  );
+  assert.equal(materializedSecond, false);
+  assert.deepEqual(observedBudgets[1], { maxRows: 1, maxBytes: 6 });
+  assert.throws(
+    () =>
+      runUnitOfWork(fake, "write", { maxRows: 1, maxBytes: 8 }, (tx) =>
+        tx.run("write", [new HostileBytes(9)]),
+      ),
+    /byte limit/,
+  );
+  assert.equal(runCalls, 0);
+});
+
 test("a busy BEGIN leaves the second writer reusable after the first writer commits", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-busy-"));
   const filename = path.join(directory, "filesystem.db");
@@ -261,6 +332,11 @@ test("BLOB bindings and results are plain owned Uint8Arrays for Buffer and subcl
       })[0].value,
   );
   assert.deepEqual([...reread], [7, 8, 9]);
+  const callableThenable = Object.assign(() => {}, { then() {} });
+  assert.throws(
+    () => driver.transaction("read", () => callableThenable),
+    /callbacks must be synchronous/,
+  );
   driver.close();
 });
 
@@ -363,6 +439,17 @@ test("a pinned reader cannot let one transaction cross its admitted WAL envelope
           ),
         /rollback-safe transaction admission envelope/,
       );
+      for (const mode of ["write", "exclusive"])
+        assert.throws(
+          () =>
+            writer.transaction(mode, (write) =>
+              write.run("INSERT INTO wal_tx(value) VALUES(zeroblob(200000))"),
+            ),
+          /SQL-generated payload expressions/,
+        );
+      assert.ok(
+        writer.physicalStorage().walBytes <= writer.capabilities.maxJournalBytes,
+      );
     });
     assert.equal(
       writer.transaction(
@@ -394,6 +481,16 @@ test("filesystem storage caps cannot silently undercut the configured Node drive
     /must be configured on the SQLite adapter/,
   );
   driver.close();
+  const higher = await openNodeSqlite({
+    filename: ":memory:",
+    maxPhysicalDatabaseBytes: 11 * 1024 ** 3,
+    maxJournalBytes: 2 * 1024 ** 3,
+  });
+  await assert.rejects(
+    EphemeralFS.open({ database: higher }),
+    /must be configured on the SQLite adapter/,
+  );
+  higher.close();
 });
 
 test("matching lower physical caps admit below-cap writes and survive reopen", async () => {

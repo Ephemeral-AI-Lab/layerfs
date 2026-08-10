@@ -273,6 +273,18 @@ process bound is unavailable. Computer must then use the platform's isolate limi
 conservative managed limits, and measured resident memory; it must not report the core
 counter as total process memory.
 
+M2 durable path-copy has a distinct conservative envelope. Before reading an affected
+leaf, it admits nine leaf-sized capacities for the cold SQLite BLOB and normalization,
+optional cache ownership, edited source window, CDC input and output, object ownership,
+and replacement-node handoff, plus four maximum node capacities for every possible
+authenticated path level. With the default 128 MiB managed budget, a maximum 16 MiB leaf
+does not fit this envelope. The implementation MUST detect that before source or
+insertion allocation and select the bounded streaming rebuild. The fallback uses a
+meaningful bounded source window (32 KiB by default, at most 1 MiB), does not retain a
+SQLite read transaction between windows, and reports source reads and storage
+transactions separately. This fallback preserves large-file support; it is not a claim
+that public range writes use the path-copy fast path before M3 integration.
+
 Opening MUST reject a configuration that cannot hold the six-capacity maximum-content
 working set and charged diagnostic collector envelope described above, one COW page, and
 the minimum metadata needed to make progress. The accepted manifest-entry limit MUST

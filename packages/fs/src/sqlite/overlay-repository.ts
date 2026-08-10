@@ -2,6 +2,8 @@ import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import { intrinsicByteLength } from "../cas/bytes.js";
+import { checkedAdd } from "../resources/safe-integers.js";
 
 interface BranchRow extends SqliteRow {
   generation: number;
@@ -77,7 +79,8 @@ export class OverlayRepository {
       if (!Number.isSafeInteger(pageOffset) || pageOffset >= fileSize)
         throw new RangeError("COW page lies outside the file");
       const expected = Math.min(this.#pageBytes, fileSize - pageOffset);
-      if (page.bytes.byteLength !== expected)
+      const pageLength = intrinsicByteLength(page.bytes);
+      if (pageLength !== expected)
         throw new RangeError(
           "COW page payload does not match its exact logical length",
         );
@@ -94,7 +97,7 @@ export class OverlayRepository {
         "INSERT INTO efs_cow_page_heads(branch_id,inode_id,page_index,generation) VALUES(?,?,?,?) ON CONFLICT(branch_id,inode_id,page_index) DO UPDATE SET generation=excluded.generation",
         [branchId, inodeId, page.index, generation],
       );
-      addedBytes += page.bytes.byteLength;
+      addedBytes = checkedAdd(addedBytes, pageLength);
       if (prior) {
         const pinned =
           this.#tx.all(
@@ -107,7 +110,7 @@ export class OverlayRepository {
             "DELETE FROM efs_cow_page_versions WHERE branch_id=? AND inode_id=? AND page_index=? AND generation=?",
             [branchId, inodeId, page.index, prior.generation],
           );
-          removedBytes += prior.bytes.byteLength;
+          removedBytes = checkedAdd(removedBytes, intrinsicByteLength(prior.bytes));
           removedCount += 1;
         }
       }
@@ -189,11 +192,10 @@ export class OverlayRepository {
       throw new RangeError("structural patch is outside the current file");
     let insertLength = 0;
     for (const segment of segments) {
-      if (!segment.byteLength || segment.byteLength > 524_288)
+      const segmentLength = intrinsicByteLength(segment);
+      if (!segmentLength || segmentLength > 524_288)
         throw new RangeError("patch segment size is invalid");
-      insertLength += segment.byteLength;
-      if (!Number.isSafeInteger(insertLength))
-        throw new RangeError("patch insertion length overflow");
+      insertLength = checkedAdd(insertLength, segmentLength, "patch insertion length");
     }
     const aggregate = this.#tx.all<CountRow>(
       "SELECT count(*) count,coalesce(sum(insert_length),0) bytes,coalesce(max(sequence),-1) sequence FROM efs_patches WHERE branch_id=? AND inode_id=?",
@@ -256,7 +258,11 @@ export class OverlayRepository {
         if (segment.segment_index !== values.length)
           throw new Error("ECORRUPT: patch segment sequence has a gap");
         values.push(segment.bytes);
-        length += segment.bytes.byteLength;
+        length = checkedAdd(
+          length,
+          intrinsicByteLength(segment.bytes),
+          "persisted patch length",
+        );
         cursor += 1;
       }
       if (length !== patch.insert_length)

@@ -1,4 +1,10 @@
-import { bytesToHex, copyBytes } from "../cas/bytes.js";
+import {
+  bytesToHex,
+  copyBytes,
+  intrinsicByteLength,
+  intrinsicByteRange,
+} from "../cas/bytes.js";
+import { checkedAdd } from "../resources/safe-integers.js";
 import { AdmissionController } from "../resources/limits.js";
 
 export type ContentCacheKind = "object" | "manifest-root" | "manifest-node";
@@ -49,6 +55,75 @@ export class ContentCache {
     this.#entries.set(key, entry);
     this.#hits += 1;
     return copyBytes(entry.bytes);
+  }
+  copyInto(
+    kind: ContentCacheKind,
+    hash: Uint8Array,
+    expectedSize: number,
+    sourceOffset: number,
+    destination: Uint8Array,
+    destinationOffset: number,
+    length: number,
+  ): boolean | undefined {
+    const key = `${kind}:${bytesToHex(hash)}`;
+    const entry = this.#entries.get(key);
+    if (!entry) {
+      this.#misses += 1;
+      return undefined;
+    }
+    if (intrinsicByteLength(entry.bytes) !== expectedSize)
+      throw new Error("ECORRUPT: cached content length mismatch");
+    destination = intrinsicByteRange(destination);
+    if (
+      !Number.isSafeInteger(sourceOffset) ||
+      sourceOffset < 0 ||
+      !Number.isSafeInteger(destinationOffset) ||
+      destinationOffset < 0 ||
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      checkedAdd(sourceOffset, length) > expectedSize ||
+      checkedAdd(destinationOffset, length) > intrinsicByteLength(destination)
+    )
+      throw new RangeError("cached content copy is outside its byte range");
+    this.#entries.delete(key);
+    this.#entries.set(key, entry);
+    this.#hits += 1;
+    destination.set(
+      intrinsicByteRange(entry.bytes, sourceOffset, sourceOffset + length),
+      destinationOffset,
+    );
+    return true;
+  }
+  containsExact(
+    kind: ContentCacheKind,
+    hash: Uint8Array,
+    expectedSize: number,
+  ): boolean | undefined {
+    const key = `${kind}:${bytesToHex(hash)}`;
+    const entry = this.#entries.get(key);
+    if (!entry) {
+      this.#misses += 1;
+      return undefined;
+    }
+    if (intrinsicByteLength(entry.bytes) !== expectedSize)
+      throw new Error("ECORRUPT: cached content length mismatch");
+    this.#entries.delete(key);
+    this.#entries.set(key, entry);
+    this.#hits += 1;
+    return true;
+  }
+  reserveOperation(weight: number): () => void {
+    this.makeRoom(weight);
+    return this.#admission.reserve(weight);
+  }
+  tryReserve(weight: number): ContentCacheReservation | undefined {
+    try {
+      return this.reserve(weight);
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      this.#bypasses += 1;
+      return undefined;
+    }
   }
   reserve(weight: number): ContentCacheReservation | undefined {
     if (!Number.isSafeInteger(weight) || weight <= 0)

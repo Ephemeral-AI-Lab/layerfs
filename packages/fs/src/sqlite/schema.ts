@@ -4,6 +4,14 @@ import type {
   SqliteRow,
 } from "./driver.js";
 import type { CowPageBytes } from "../cow/pages.js";
+import {
+  CHARGED_METADATA_TABLES,
+  CHARGED_ROW_BYTES,
+  DIRECT_CHARGED_METADATA_SQL,
+  DIRECT_INGEST_RESERVATION_SQL,
+  DIRECT_STAGING_BYTES_SQL,
+  USAGE_COUNTER_COLUMNS,
+} from "./usage-repository.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
 export const EFS_SCHEMA_VERSION = 4;
@@ -53,37 +61,51 @@ export const EFS_SCHEMA_V3_CREATE_STATEMENTS = Object.freeze([
 
 const SCHEMA_V4_STATEMENTS = Object.freeze([
   `ALTER TABLE efs_usage ADD COLUMN mutation_sequence INTEGER NOT NULL DEFAULT 0 CHECK(mutation_sequence>=0)`,
+  `ALTER TABLE efs_usage ADD COLUMN ingest_reservation_bytes INTEGER NOT NULL DEFAULT 0 CHECK(ingest_reservation_bytes>=0)`,
+  `ALTER TABLE efs_gc_marks ADD COLUMN edge_cursor INTEGER NOT NULL DEFAULT 0 CHECK(edge_cursor>=0)`,
+  `ALTER TABLE efs_staging_certificates ADD COLUMN ingest_reservation_bytes INTEGER NOT NULL DEFAULT 0 CHECK(ingest_reservation_bytes>=0)`,
   `CREATE TABLE efs_lease_cleanups (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, phase INTEGER NOT NULL CHECK(phase BETWEEN 0 AND 11), cursor_text TEXT, cursor_blob BLOB, released_staging_bytes INTEGER NOT NULL CHECK(released_staging_bytes>=0), tombstoned_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE INDEX efs_lease_cleanups_phase ON efs_lease_cleanups(phase,lease_id)`,
   `CREATE INDEX efs_leases_expiry ON efs_leases(expires_at_ms,id)`,
   `CREATE TABLE efs_staging_workspaces (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, source_manifest_hash BLOB CHECK(source_manifest_hash IS NULL OR length(source_manifest_hash)=32), edit_offset INTEGER NOT NULL CHECK(edit_offset>=0), delete_length INTEGER NOT NULL CHECK(delete_length>=0), insert_length INTEGER NOT NULL CHECK(insert_length>=0), source_entry_cursor INTEGER NOT NULL DEFAULT -1 CHECK(source_entry_cursor>=-1), output_entry_index INTEGER NOT NULL DEFAULT 0 CHECK(output_entry_index>=0), phase INTEGER NOT NULL DEFAULT 0 CHECK(phase BETWEEN 0 AND 10), cdc_buffer BLOB NOT NULL DEFAULT X'', updated_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_staging_reused_subtrees (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, node_hash BLOB NOT NULL REFERENCES efs_manifest_nodes(hash) ON DELETE RESTRICT, source_manifest_hash BLOB NOT NULL REFERENCES efs_manifest_roots(hash) ON DELETE RESTRICT, source_path BLOB NOT NULL CHECK(length(source_path)>0 AND length(source_path)<=64), span INTEGER NOT NULL CHECK(span>=0), entry_count INTEGER NOT NULL CHECK(entry_count>=0), PRIMARY KEY(lease_id,node_hash)) WITHOUT ROWID`,
   `CREATE TRIGGER efs_sealed_certificate_update BEFORE UPDATE ON efs_staging_certificates WHEN OLD.sealed=1 BEGIN SELECT RAISE(ABORT,'sealed staging certificate is immutable'); END`,
-  `CREATE TRIGGER efs_sealed_certificate_delete BEFORE DELETE ON efs_staging_certificates WHEN OLD.sealed=1 AND (SELECT state FROM efs_leases WHERE id=OLD.lease_id) IS NOT 2 BEGIN SELECT RAISE(ABORT,'sealed staging certificate is immutable'); END`,
+  `CREATE TRIGGER efs_sealed_certificate_delete BEFORE DELETE ON efs_staging_certificates WHEN OLD.sealed=1 AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x JOIN efs_leases l ON l.id=x.lease_id AND l.owner_nonce=x.owner_nonce WHERE x.lease_id=OLD.lease_id AND l.state=2) BEGIN SELECT RAISE(ABORT,'sealed staging certificate is immutable'); END`,
   `CREATE TRIGGER efs_sealed_reconciliation_insert BEFORE INSERT ON efs_staging_reconciliations WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation is immutable'); END`,
   `CREATE TRIGGER efs_sealed_reconciliation_update BEFORE UPDATE ON efs_staging_reconciliations WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) OR EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation is immutable'); END`,
-  `CREATE TRIGGER efs_sealed_reconciliation_delete BEFORE DELETE ON efs_staging_reconciliations WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND (SELECT state FROM efs_leases WHERE id=OLD.lease_id) IS NOT 2 BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation is immutable'); END`,
+  `CREATE TRIGGER efs_sealed_reconciliation_delete BEFORE DELETE ON efs_staging_reconciliations WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x JOIN efs_leases l ON l.id=x.lease_id AND l.owner_nonce=x.owner_nonce WHERE x.lease_id=OLD.lease_id AND l.state=2) BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation is immutable'); END`,
   `CREATE TRIGGER efs_sealed_queue_insert BEFORE INSERT ON efs_staging_reconciliation_queue WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation queue is immutable'); END`,
   `CREATE TRIGGER efs_sealed_queue_update BEFORE UPDATE ON efs_staging_reconciliation_queue WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) OR EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation queue is immutable'); END`,
-  `CREATE TRIGGER efs_sealed_queue_delete BEFORE DELETE ON efs_staging_reconciliation_queue WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND (SELECT state FROM efs_leases WHERE id=OLD.lease_id) IS NOT 2 BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation queue is immutable'); END`,
+  `CREATE TRIGGER efs_sealed_queue_delete BEFORE DELETE ON efs_staging_reconciliation_queue WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x JOIN efs_leases l ON l.id=x.lease_id AND l.owner_nonce=x.owner_nonce WHERE x.lease_id=OLD.lease_id AND l.state=2) BEGIN SELECT RAISE(ABORT,'sealed staging reconciliation queue is immutable'); END`,
   `CREATE TRIGGER efs_sealed_object_member_insert BEFORE INSERT ON efs_lease_objects WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
   `CREATE TRIGGER efs_sealed_object_member_update BEFORE UPDATE ON efs_lease_objects WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) OR EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
-  `CREATE TRIGGER efs_sealed_object_member_delete BEFORE DELETE ON efs_lease_objects WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND (SELECT state FROM efs_leases WHERE id=OLD.lease_id) IS NOT 2 BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
+  `CREATE TRIGGER efs_sealed_object_member_delete BEFORE DELETE ON efs_lease_objects WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x JOIN efs_leases l ON l.id=x.lease_id AND l.owner_nonce=x.owner_nonce WHERE x.lease_id=OLD.lease_id AND l.state=2) BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
   `CREATE TRIGGER efs_sealed_manifest_member_insert BEFORE INSERT ON efs_lease_staged_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
   `CREATE TRIGGER efs_sealed_manifest_member_update BEFORE UPDATE ON efs_lease_staged_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) OR EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
-  `CREATE TRIGGER efs_sealed_manifest_member_delete BEFORE DELETE ON efs_lease_staged_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND (SELECT state FROM efs_leases WHERE id=OLD.lease_id) IS NOT 2 BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
+  `CREATE TRIGGER efs_sealed_manifest_member_delete BEFORE DELETE ON efs_lease_staged_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x JOIN efs_leases l ON l.id=x.lease_id AND l.owner_nonce=x.owner_nonce WHERE x.lease_id=OLD.lease_id AND l.state=2) BEGIN SELECT RAISE(ABORT,'sealed staging membership is immutable'); END`,
   `CREATE TRIGGER efs_sealed_root_link_insert BEFORE INSERT ON efs_lease_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging root link is immutable'); END`,
   `CREATE TRIGGER efs_sealed_root_link_update BEFORE UPDATE ON efs_lease_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) OR EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed staging root link is immutable'); END`,
-  `CREATE TRIGGER efs_sealed_root_link_delete BEFORE DELETE ON efs_lease_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND (SELECT state FROM efs_leases WHERE id=OLD.lease_id) IS NOT 2 BEGIN SELECT RAISE(ABORT,'sealed staging root link is immutable'); END`,
+  `CREATE TRIGGER efs_sealed_root_link_delete BEFORE DELETE ON efs_lease_manifests WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x JOIN efs_leases l ON l.id=x.lease_id AND l.owner_nonce=x.owner_nonce WHERE x.lease_id=OLD.lease_id AND l.state=2) BEGIN SELECT RAISE(ABORT,'sealed staging root link is immutable'); END`,
   `CREATE TRIGGER efs_sealed_reused_subtree_insert BEFORE INSERT ON efs_staging_reused_subtrees WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed reused subtree is immutable'); END`,
   `CREATE TRIGGER efs_sealed_reused_subtree_update BEFORE UPDATE ON efs_staging_reused_subtrees WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) OR EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=NEW.lease_id AND c.sealed=1) BEGIN SELECT RAISE(ABORT,'sealed reused subtree is immutable'); END`,
-  `CREATE TRIGGER efs_sealed_reused_subtree_delete BEFORE DELETE ON efs_staging_reused_subtrees WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND (SELECT state FROM efs_leases WHERE id=OLD.lease_id) IS NOT 2 BEGIN SELECT RAISE(ABORT,'sealed reused subtree is immutable'); END`,
+  `CREATE TRIGGER efs_sealed_reused_subtree_delete BEFORE DELETE ON efs_staging_reused_subtrees WHEN EXISTS(SELECT 1 FROM efs_staging_certificates c WHERE c.lease_id=OLD.lease_id AND c.sealed=1) AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x JOIN efs_leases l ON l.id=x.lease_id AND l.owner_nonce=x.owner_nonce WHERE x.lease_id=OLD.lease_id AND l.state=2) BEGIN SELECT RAISE(ABORT,'sealed reused subtree is immutable'); END`,
   `CREATE TRIGGER efs_patch_sequence_insert BEFORE INSERT ON efs_patches WHEN NEW.sequence<>(SELECT coalesce(max(sequence),-1)+1 FROM efs_patches WHERE branch_id=NEW.branch_id AND inode_id=NEW.inode_id) BEGIN SELECT RAISE(ABORT,'structural patch sequence must be contiguous'); END`,
   `CREATE TRIGGER efs_patch_sequence_update BEFORE UPDATE OF branch_id,inode_id,sequence ON efs_patches WHEN OLD.branch_id<>NEW.branch_id OR OLD.inode_id<>NEW.inode_id OR OLD.sequence<>NEW.sequence BEGIN SELECT RAISE(ABORT,'structural patch sequence is immutable'); END`,
   `CREATE TRIGGER efs_patch_sequence_delete BEFORE DELETE ON efs_patches WHEN (SELECT state FROM efs_branches WHERE id=OLD.branch_id)=0 BEGIN SELECT RAISE(ABORT,'active structural patch sequence is immutable'); END`,
-  `UPDATE efs_usage SET charged_metadata_bytes=charged_metadata_bytes+96*((SELECT count(*) FROM efs_leases)+(SELECT count(*) FROM efs_lease_manifests)+(SELECT count(*) FROM efs_lease_objects)+(SELECT count(*) FROM efs_lease_staged_manifests)+(SELECT count(*) FROM efs_staging_entries)+(SELECT count(*) FROM efs_staging_level_records)+(SELECT count(*) FROM efs_lease_cow_pages)+(SELECT count(*) FROM efs_lease_patches)+(SELECT count(*) FROM efs_staging_certificates)+(SELECT count(*) FROM efs_staging_reconciliations)+(SELECT count(*) FROM efs_staging_reconciliation_queue)+(SELECT count(*) FROM efs_staging_workspaces)+(SELECT count(*) FROM efs_staging_reused_subtrees)) WHERE singleton=1`,
+  `UPDATE efs_usage SET charged_metadata_bytes=${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
+    (table) => `(SELECT count(*) FROM ${table})`,
+  ).join("+")}) WHERE singleton=1`,
+  `UPDATE efs_usage SET staging_bytes=(SELECT (SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o JOIN efs_leases l ON l.id=o.lease_id WHERE l.state IN (0,1))+(SELECT coalesce(sum(m.size),0) FROM efs_lease_staged_manifests m JOIN efs_leases l ON l.id=m.lease_id WHERE l.state IN (0,1))) WHERE singleton=1`,
+  `UPDATE efs_usage SET ingest_reservation_bytes=0 WHERE singleton=1`,
   `UPDATE efs_usage SET maintenance_bytes=(SELECT count(*)*96+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*96 FROM efs_gc_runs)+(SELECT count(*)*96 FROM efs_gc_marks) WHERE singleton=1`,
 ] as const);
+
+const REQUIRED_V4_SCHEMA_OBJECTS = Object.freeze(
+  SCHEMA_V4_STATEMENTS.flatMap((sql) => {
+    const matched = /^CREATE (?:TABLE|INDEX|TRIGGER) ([a-z0-9_]+)/u.exec(sql);
+    return matched?.[1] ? [Object.freeze({ name: matched[1], sql })] : [];
+  }),
+);
 
 interface MetaRow extends SqliteRow {
   schema_version: number;
@@ -102,6 +124,10 @@ function oneNumber(tx: FilesystemSQLiteTransaction, sql: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value))
     throw new Error(`invalid scalar result for ${sql}`);
   return value;
+}
+
+function sqlText(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
 }
 
 function inspect(tx: FilesystemSQLiteTransaction): {
@@ -148,6 +174,38 @@ function validateCurrent(
   );
   if (roots.length !== 1)
     throw new Error("ECORRUPT: metadata head references missing root or revision");
+  const schemaMatches = oneNumber(
+    tx,
+    `SELECT count(*) value FROM sqlite_schema WHERE ${REQUIRED_V4_SCHEMA_OBJECTS.map(
+      ({ name, sql }) => `(name=${sqlText(name)} AND sql=${sqlText(sql)})`,
+    ).join(" OR ")}`,
+  );
+  if (schemaMatches !== REQUIRED_V4_SCHEMA_OBJECTS.length)
+    throw new Error("ECORRUPT: required schema-v4 table, index, or trigger is missing");
+  const usage = tx.all<SqliteRow>(
+    `SELECT ${USAGE_COUNTER_COLUMNS.join(",")},mutation_sequence FROM efs_usage WHERE singleton=1`,
+    [],
+    { maxRows: 1, maxBytes: 4096 },
+  )[0];
+  if (!usage) throw new Error("ECORRUPT: missing usage singleton");
+  for (const column of [...USAGE_COUNTER_COLUMNS, "mutation_sequence"] as const)
+    if (!Number.isSafeInteger(usage[column]) || (usage[column] as number) < 0)
+      throw new Error(`ECORRUPT: invalid usage counter ${column}`);
+  const directChargedMetadata = oneNumber(
+    tx,
+    DIRECT_CHARGED_METADATA_SQL.replace(/^SELECT /u, "SELECT ").replace(
+      / value$/u,
+      " value",
+    ),
+  );
+  if (usage.charged_metadata_bytes !== directChargedMetadata)
+    throw new Error("ECORRUPT: charged metadata differs from direct recount");
+  const directStagingBytes = oneNumber(tx, DIRECT_STAGING_BYTES_SQL);
+  if (usage.staging_bytes !== directStagingBytes)
+    throw new Error("ECORRUPT: logical staging bytes differ from direct recount");
+  const directIngestReservation = oneNumber(tx, DIRECT_INGEST_RESERVATION_SQL);
+  if (usage.ingest_reservation_bytes !== directIngestReservation)
+    throw new Error("ECORRUPT: ingest reservation differs from direct recount");
   return meta;
 }
 

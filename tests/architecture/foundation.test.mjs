@@ -68,7 +68,7 @@ test("milestone gates select only their owned suites and sequential predecessors
   const suites = {
     0: "tests/architecture",
     1: "tests/algorithms",
-    2: "tests/storage tests/node-integration",
+    2: "tests/storage tests/node-integration tests/maintenance",
     3: "tests/conformance",
     4: "tests/branches",
     5: "tests/maintenance",
@@ -87,14 +87,16 @@ test("milestone gates select only their owned suites and sequential predecessors
       Number(milestone) === 0
         ? "pnpm validate:m0:pre-evidence && pnpm check:evidence"
         : Number(milestone) === 1
-          ? "pnpm validate:m0 && pnpm test:m1 && pnpm test:workerd"
-          : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
+          ? "pnpm validate:m1:pre-evidence && pnpm check:evidence"
+          : Number(milestone) === 2
+            ? "pnpm validate:m2:pre-evidence && pnpm check:evidence"
+            : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
     assert.equal(scripts[`validate:m${milestone}`], expectedValidation);
     assert.doesNotMatch(
       scripts[`validate:m${milestone}`],
       /test:unit|test:smoke:built|test:fault:built|test:performance:built/,
     );
-    if (Number(milestone) > 0)
+    if (Number(milestone) > 2)
       assert.match(
         scripts[`validate:m${milestone}`],
         new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `),
@@ -104,7 +106,15 @@ test("milestone gates select only their owned suites and sequential predecessors
     scripts["validate:m0:pre-evidence"],
     "pnpm fixtures:check && pnpm check:docs && pnpm check:style && pnpm check:architecture && pnpm build && pnpm check:exports && node --test tests/architecture/foundation.test.mjs",
   );
-  assert.equal(scripts["validate:accepted"], "pnpm validate:m1");
+  assert.equal(
+    scripts["validate:m1:pre-evidence"],
+    "pnpm validate:m0:pre-evidence && pnpm test:m1 && pnpm test:workerd",
+  );
+  assert.equal(
+    scripts["validate:m2:pre-evidence"],
+    "pnpm validate:m1:pre-evidence && pnpm test:m2",
+  );
+  assert.equal(scripts["validate:accepted"], "pnpm validate:m2");
 });
 
 test("documentation links resolve inline and reference-style targets", async () => {

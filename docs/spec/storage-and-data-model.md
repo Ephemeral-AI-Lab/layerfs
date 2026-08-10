@@ -140,6 +140,8 @@ interface FilesystemSQLiteDriver {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard: false;
   };
   transaction<T>(
     mode: TransactionMode,
@@ -185,6 +187,8 @@ An adapter:
    adapter controls them; and
 10. MUST report finite conservative database and journal ceilings together with whether
     the driver or hosting runtime enforces them.
+11. MUST report checkpoint/backpressure journal policy separately and MUST report
+    `journalSizeLimitIsHard: false`; SQLite `journal_size_limit` is not a hard WAL cap.
 
 All dynamic values MUST be passed as bindings. Identifiers and SQL fragments MUST come
 from static core code, not from paths, branch identifiers, actor identifiers, or other
@@ -311,6 +315,15 @@ charge remains until bounded deletion of that row. Cleanup cursor rows belong to
 the same row classes and reconcile the authoritative counter to their direct count
 differential.
 
+An unknown-length streamed ingest MUST declare a maximum byte count before its first
+producer pull. `ingest_reservation_bytes` durably reserves a conservative physical plus
+logical payload envelope for that declaration, including bounded manifest overhead.
+Committed CAS, manifest, and membership bytes consume the reservation; sealing releases
+any remainder. Exceeding the declaration fails before copying that producer chunk. Quota
+rejection therefore cannot arrive late after unreserved batches. A non-quota failure may
+leave verified immutable CAS that became unreachable; those bytes remain truthfully
+charged as physical payload until bounded GC reclaims them.
+
 SQLite `user_version` MUST equal `efs_meta.schema_version`. A mismatch is an integrity
 failure, not permission to guess which value is current.
 
@@ -404,6 +417,16 @@ ordered child records. There MUST NOT be one steady-state database row per manif
 entry. A migration MAY temporarily retain a legacy compact manifest BLOB, but new writes
 MUST use the segmented format and garbage collection MUST understand both formats until
 migration completes.
+
+The M2 SQLite implementation intentionally has no derived manifest-position index.
+Durable path-copy authenticates the root envelope and each canonical node on the one
+root-to-leaf path from the authoritative root and node tables. It may persist only a
+replacement leaf, copied ancestors, and authenticated reused-subtree claims when an
+equal-length edit reconnects without changing canonical grouping. Empty-tree insertion,
+length changes, leaf splitting, and tree-height changes use the bounded streaming
+rebuild. A missing cache therefore changes only performance; it cannot change bytes or
+authentication. If a later milestone adds a derived index, stale, missing, or corrupt
+index state MUST be discarded and must fall back to this authoritative traversal.
 
 ### 6.2 Revisions and namespace
 
@@ -1564,6 +1587,25 @@ their limit.
 `efs_usage`. `maxPhysicalDatabaseBytes` and `maxJournalBytes` MUST be no larger than the
 driver's reported ceilings. These limits are independent of logical and payload
 counters; a workload must satisfy all of them.
+
+The physical database and journal ceilings are independent. They do not imply
+`mainFileBytes + walBytes <= maxPhysicalDatabaseBytes` or any other combined ceiling.
+Logical active staging can also reference already stored payload, so a unique ingest may
+have roughly one physical payload copy plus one logical staging reservation; an
+unrelated rewrite may retain old revisions until GC. Metrics MUST report main, WAL,
+immutable payload, active staging, and reclaimable generations separately rather than
+summing them as if they described one byte population.
+
+For orientation, a pseudorandom 100 MiB initial ingest can therefore report about 100
+MiB of immutable payload plus 100 MiB of active logical staging before attachment. An
+unrelated 100 MiB rewrite can temporarily report about 200 MiB of immutable old and new
+payload plus 100 MiB of active staging while retained revisions still protect the old
+root. SQLite may simultaneously place approximately another payload-sized population in
+the main file and in a preallocated or reader-pinned WAL, subject to their two
+independent driver ceilings. These are separate counters and capacity decisions, not a
+promised combined 200 MiB or 300 MiB hard limit. Bounded lease release and GC reclaim
+unreachable generations; neither sealing nor namespace replacement is an implicit
+vacuum.
 
 `maxMaintenanceBytes` bounds durable temporary mark, migration, checkpoint, and
 verification state. `maxPermanentIdentifiers` bounds lifetime branch and operation

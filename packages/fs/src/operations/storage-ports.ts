@@ -74,7 +74,19 @@ export interface AuthenticatedManifestEntry {
 export interface ContentStore {
   putObject(hash: Uint8Array, bytes: Uint8Array): boolean;
   putObjectsBatch(input: readonly ContentObjectInput[]): ContentBatchResult;
-  getObject(hash: Uint8Array, expectedSize?: number): Uint8Array | undefined;
+  readObjectInto(
+    hash: Uint8Array,
+    expectedSize: number,
+    sourceOffset: number,
+    destination: Uint8Array,
+    destinationOffset: number,
+    length: number,
+  ): boolean;
+  verifyObject(
+    hash: Uint8Array,
+    expectedSize?: number,
+    forceStorage?: boolean,
+  ): boolean;
   putManifestNode(hash: Uint8Array, encoded: Uint8Array): boolean;
   putManifestNodesBatch(
     nodes: readonly { readonly hash: Uint8Array; readonly encoded: Uint8Array }[],
@@ -372,7 +384,13 @@ export interface StagingStore {
     readonly kind?: number;
     readonly branchId?: string;
     readonly generation?: number;
+    readonly ingestReservationBytes?: number;
   }): void;
+  consumeIngestReservation(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    bytes: number,
+  ): void;
   putEntry(
     leaseId: string,
     entryIndex: number,
@@ -449,6 +467,7 @@ export interface GcRunRow {
 export interface GcMarkRow {
   readonly kind: number;
   readonly hash: Uint8Array;
+  readonly edge_cursor: number;
 }
 export interface PayloadRow {
   readonly hash: Uint8Array;
@@ -502,9 +521,15 @@ export interface MaintenanceStore {
   inodes(after: string, limit: number, maxBytes: number): readonly InodeVerifyRow[];
   pendingMarks(runId: string, limit: number, maxBytes: number): readonly GcMarkRow[];
   addMark(runId: string, kind: number, hash: Uint8Array): void;
-  markProcessed(runId: string, kind: number, hash: Uint8Array): void;
+  advanceMark(
+    runId: string,
+    kind: number,
+    hash: Uint8Array,
+    edgeCursor: number,
+    processed: boolean,
+  ): void;
   addExamined(runId: string, roots: number, nodes: number, objects: number): void;
-  reconcileRoots(runId: string): void;
+  seedRootsBatch(runId: string, limit: number, maxBytes: number): boolean;
   sweepCandidates(
     runId: string,
     state: number,

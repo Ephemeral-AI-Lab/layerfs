@@ -16,6 +16,7 @@ import type {
   OperationsStorage,
   StorageTransactionPorts,
 } from "./storage-ports.js";
+import type { ContentCache } from "../cache/content-cache.js";
 
 const COMPLETE = 4;
 const ABANDONED = 5;
@@ -25,16 +26,19 @@ export class MaintenanceManager implements FilesystemMaintenance {
   readonly #storage: StorageLimits;
   readonly #runtime: RuntimeLimits;
   readonly #clock: () => number;
+  readonly #cache: ContentCache;
   constructor(
     port: OperationsStorage,
     storage: StorageLimits,
     runtime: RuntimeLimits,
     clock: () => number,
+    cache: ContentCache,
   ) {
     this.#port = port;
     this.#storage = storage;
     this.#runtime = runtime;
     this.#clock = clock;
+    this.#cache = cache;
   }
 
   async collectGarbage(
@@ -68,7 +72,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       Math.min(
         this.#storage.maxGcBatchSize,
         this.#storage.maxQueryBatchSize,
-        Math.floor((this.#storage.maxFinalTransactionRows - 8) / 2),
+        Math.floor((this.#storage.maxFinalTransactionRows - 8) / 4),
       ),
     );
     const cleanupLimit = Math.max(
@@ -121,13 +125,6 @@ export class MaintenanceManager implements FilesystemMaintenance {
       throw error;
     }
     const row = this.#read((tx) => tx.maintenance(this.#storage).run(runId));
-    if (!row)
-      throw fsError(
-        "ENOENT",
-        "collectGarbage",
-        undefined,
-        "collection run disappeared",
-      );
     return this.#collectionResult(runId, row, batches, start);
   }
 
@@ -194,7 +191,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
     const generation = this.#read((tx) => {
       const maintenance = tx.maintenance(this.#storage);
       const result = maintenance.generation();
-      const repo = tx.content(this.#storage);
+      const repo = tx.content(this.#storage, this.#cache);
       while (checked < maximum && cursor.phase < phases.length) {
         const phase = phases[cursor.phase]!;
         if (
@@ -228,8 +225,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
             this.#runtime.maxQueryBatchBytes,
           );
           for (const row of rows) {
-            const object = repo.getObject(row.hash);
-            if (!object || object.byteLength !== row.size)
+            if (!repo.verifyObject(row.hash, row.size, true))
               throw new Error("ECORRUPT: invalid CAS object");
             cursor.last = bytesToHex(row.hash);
             checked += 1;
@@ -277,20 +273,12 @@ export class MaintenanceManager implements FilesystemMaintenance {
   #markBatch(runId: string): void {
     this.#write((tx) => {
       const maintenance = tx.maintenance(this.#storage);
-      const perMark = 129;
-      const limit = Math.max(
+      const edgeLimit = Math.max(
         1,
-        Math.min(
-          this.#storage.maxGcBatchSize,
-          Math.floor(this.#storage.maxFinalTransactionRows / perMark),
-        ),
+        Math.min(128, Math.floor((this.#storage.maxFinalTransactionRows - 4) / 2)),
       );
-      const rows = maintenance.pendingMarks(
-        runId,
-        limit,
-        this.#runtime.maxQueryBatchBytes,
-      );
-      const repo = tx.content(this.#storage);
+      const rows = maintenance.pendingMarks(runId, 1, this.#runtime.maxQueryBatchBytes);
+      const repo = tx.content(this.#storage, this.#cache);
       let roots = 0;
       let nodes = 0;
       let objects = 0;
@@ -299,40 +287,90 @@ export class MaintenanceManager implements FilesystemMaintenance {
           const encoded = repo.getManifestRoot(row.hash);
           if (!encoded) throw new Error("ECORRUPT: reachable manifest root is missing");
           const root = decodeManifestRoot(encoded, row.hash);
+          if (row.edge_cursor > 0)
+            throw new Error("ECORRUPT: invalid manifest-root GC edge cursor");
           maintenance.addMark(runId, 1, root.rootNodeHash);
-          roots += 1;
+          maintenance.advanceMark(runId, row.kind, row.hash, 1, true);
+          roots = 1;
         } else if (row.kind === 1) {
           const encoded = repo.getManifestNode(row.hash);
           if (!encoded) throw new Error("ECORRUPT: reachable manifest node is missing");
           const node = decodeManifestNode(encoded, row.hash);
-          if (node.kind === "leaf")
-            for (const entry of node.entries) maintenance.addMark(runId, 2, entry.hash);
-          else
-            for (const child of node.children)
-              maintenance.addMark(runId, 1, child.hash);
-          nodes += 1;
+          const edges = node.kind === "leaf" ? node.entries : node.children;
+          if (row.edge_cursor > edges.length)
+            throw new Error("ECORRUPT: invalid manifest-node GC edge cursor");
+          const end = Math.min(edges.length, row.edge_cursor + edgeLimit);
+          for (let index = row.edge_cursor; index < end; index += 1)
+            maintenance.addMark(
+              runId,
+              node.kind === "leaf" ? 2 : 1,
+              edges[index]!.hash,
+            );
+          const complete = end === edges.length;
+          maintenance.advanceMark(runId, row.kind, row.hash, end, complete);
+          if (complete) nodes = 1;
         } else {
-          if (!repo.getObject(row.hash))
+          if (row.edge_cursor > 0)
+            throw new Error("ECORRUPT: invalid object GC edge cursor");
+          if (!repo.verifyObject(row.hash, undefined, true))
             throw new Error("ECORRUPT: reachable object is missing");
-          objects += 1;
+          maintenance.advanceMark(runId, row.kind, row.hash, 0, true);
+          objects = 1;
         }
-        maintenance.markProcessed(runId, row.kind, row.hash);
       }
       maintenance.addExamined(runId, roots, nodes, objects);
-      if (!rows.length) maintenance.reconcileRoots(runId);
+      if (!rows.length)
+        maintenance.seedRootsBatch(
+          runId,
+          Math.max(
+            1,
+            Math.min(
+              this.#storage.maxGcBatchSize,
+              this.#storage.maxQueryBatchSize,
+              Math.floor((this.#storage.maxFinalTransactionRows - 4) / 2),
+            ),
+          ),
+          this.#runtime.maxQueryBatchBytes,
+        );
     });
   }
   #sweepBatch(runId: string, state: number): void {
     this.#write((tx) => {
       const maintenance = tx.maintenance(this.#storage);
       const run = maintenance.run(runId)!;
-      const rows = maintenance.sweepCandidates(
+      const rowLimit = Math.max(
+        1,
+        Math.min(
+          this.#storage.maxGcBatchSize,
+          this.#storage.maxQueryBatchSize,
+          this.#storage.maxFinalTransactionRows - 8,
+        ),
+      );
+      const candidates = maintenance.sweepCandidates(
         runId,
         state,
         run.high_water,
-        this.#storage.maxGcBatchSize,
+        rowLimit,
         this.#runtime.maxQueryBatchBytes,
       );
+      const payloadLimit = Math.max(
+        1,
+        Math.min(
+          this.#runtime.maxQueryBatchBytes,
+          Math.floor(this.#storage.maxFinalTransactionBytes / 4),
+        ),
+      );
+      const rows: (typeof candidates)[number][] = [];
+      let payloadBytes = 0;
+      for (const candidate of candidates) {
+        if (
+          rows.length &&
+          (rows.length >= rowLimit || payloadBytes + candidate.size > payloadLimit)
+        )
+          break;
+        rows.push(candidate);
+        payloadBytes += candidate.size;
+      }
       maintenance.applySweep(runId, state, rows, COMPLETE);
     });
   }
@@ -342,7 +380,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       {
         maxRows: this.#storage.maxFinalTransactionRows,
         maxBytes: this.#storage.maxFinalTransactionBytes,
-        maxElapsedMs: 250,
+        maxElapsedMs: 1_000,
       },
       callback,
     );
@@ -353,7 +391,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       {
         maxRows: this.#storage.maxFinalTransactionRows,
         maxBytes: this.#storage.maxFinalTransactionBytes,
-        maxElapsedMs: 250,
+        maxElapsedMs: 1_000,
       },
       callback,
     );

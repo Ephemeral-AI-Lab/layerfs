@@ -51,6 +51,8 @@ export interface WriteFileOptions {
   readonly mode?: number;
   readonly exclusive?: boolean;
   readonly signal?: AbortSignal;
+  /** Required upper bound for a streamed write; buffered values infer their length. */
+  readonly maxBytes?: number;
 }
 export interface MkdirOptions {
   readonly recursive?: boolean;

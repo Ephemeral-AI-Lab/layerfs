@@ -96,6 +96,8 @@ export interface WriteFileOptions {
   readonly mode?: number;
   readonly exclusive?: boolean;
   readonly signal?: AbortSignal;
+  /** Required upper bound when content is a ReadableStream. */
+  readonly maxBytes?: number;
 }
 
 export interface MkdirOptions {
@@ -376,6 +378,10 @@ replacement characters. No other encoding is included in version 0.1.
 
 Complete materialization MUST fail with `EFBIG` if the file exceeds
 `maxMaterializedBytes`. Callers MUST use `readRange` or `readStream` for a larger file.
+The M2 Node profile fixes this cap at 64 MiB. Files of 100 MiB and larger remain valid
+and MUST be written with a declared bounded stream and read with `readStream` or bounded
+`readRange` calls. Raising the materialization cap above 64 MiB is not supported in M2;
+a larger single `Uint8Array` materializer is deferred.
 
 ### Range reads
 
@@ -971,6 +977,22 @@ export interface SQLiteDriverCapabilities {
   readonly maxPhysicalDatabaseBytes: number;
   readonly maxJournalBytes: number;
   readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+  readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+  /** SQLite journal_size_limit is advisory cleanup policy, never a hard ceiling. */
+  readonly journalSizeLimitIsHard: false;
+}
+
+export interface SQLitePhysicalStorage {
+  readonly mainFileBytes?: number;
+  readonly walBytes?: number;
+}
+
+export interface SQLiteCheckpointResult {
+  readonly mode: "passive" | "restart" | "truncate";
+  readonly busy: number;
+  readonly logFrames: number;
+  readonly checkpointedFrames: number;
+  readonly walBytes?: number;
 }
 
 export interface FilesystemSQLiteDriver {
@@ -981,6 +1003,8 @@ export interface FilesystemSQLiteDriver {
     mode: TransactionMode,
     callback: (tx: FilesystemSQLiteTransaction) => T,
   ): T;
+  physicalStorage?(): SQLitePhysicalStorage;
+  checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
   close(): void | Promise<void>;
 }
 ```
@@ -1079,6 +1103,8 @@ export interface OpenNodeSqliteOptions {
   readonly durability?: "acknowledged" | "relaxed-test";
   readonly cacheTargetBytes?: number;
   readonly mmapLimitBytes?: number;
+  readonly maxPhysicalDatabaseBytes?: number;
+  readonly maxJournalBytes?: number;
 }
 
 export declare function openNodeSqlite(
@@ -1107,10 +1133,23 @@ allocations are measured separately from the core's exact managed-memory counter
 Computer MUST include them in its process-wide memory configuration and resident-memory
 measurements.
 
+The Node adapter MUST set and verify `PRAGMA temp_store=FILE`. Its physical database
+option is enforced with `max_page_count`; a filesystem open MUST reject a lower
+core-only physical or journal value rather than advertising a cap the already-open
+driver does not enforce.
+
 The Node driver MUST enforce its reported physical database and journal ceilings with a
 finite SQLite page-count policy, file-size checks, and bounded WAL checkpoint policy. A
 blocked checkpoint may produce backpressure or `ENOSPC`; it MUST NOT permit unbounded
 WAL growth.
+
+`maxPhysicalDatabaseBytes` and `maxJournalBytes` are independent ceilings, not one
+combined hard byte budget. A workload may therefore occupy close to both at once. The
+driver reports `journalQuotaPolicy: "checkpoint-backpressure"` and
+`journalSizeLimitIsHard: false`: it preflights bound writes, rejects SQL-generated BLOB
+expressions on the bounded write surface, checks the actual WAL before commit, and rolls
+back a transaction that would cross the admitted journal envelope. Pinned readers may
+prevent truncation, so `journal_size_limit` itself MUST NOT be presented as enforcement.
 
 The Node adapter owns a database it opens and MUST close its connection when its
 `close()` resolves. `filename: ":memory:"` MUST be supported for tests.
@@ -1280,6 +1319,12 @@ preferred stream chunks, 100,000 atomic tree entries, and 10,000 directory entri
 materialized listing. Storage defaults and valid ranges are normative in the storage
 specification. Branch defaults are normative in the branches and publication
 specification.
+
+The 64 MiB materialization default is also the M2 maximum. It does not limit file size:
+the default `maxFileBytes` remains much larger, and 100 MiB+ files use a declared
+`ReadableStream` write plus `readStream` or bounded `readRange` reads. A stream write
+without `WriteFileOptions.maxBytes`, or one that produces more than that declaration,
+MUST fail.
 
 Version 0.1 runtime defaults are 128 MiB `maxManagedResidentBytes`, 64 MiB
 `maxCacheBytes`, 64 MiB `maxPendingWriteBytes`, 16 MiB `maxWriteSessionBytes`, 1 MiB

@@ -3,12 +3,14 @@ import { DEFAULT_FASTCDC } from "../cdc/fastcdc.js";
 import {
   DEFAULT_FILESYSTEM_LIMITS,
   DEFAULT_RUNTIME_LIMITS,
+  AdmissionController,
   constrainStorageLimits,
   resolveLimits,
   type FilesystemLimits,
   type RuntimeLimits,
   type StorageLimits,
 } from "../resources/limits.js";
+import { ContentCache } from "../cache/content-cache.js";
 import { canonicalizePath, type CanonicalPath } from "../namespace/paths.js";
 import { readManifestInto, readManifestRange } from "../operations/manifest-io.js";
 import type {
@@ -124,6 +126,8 @@ class Bridge implements NodeVfsFilesystemBridge {
   readonly cowPageBytes: 4096 | 8192 | 16384;
   readonly #port: OperationsStorage;
   readonly #clock: () => number;
+  readonly #admission: AdmissionController;
+  readonly #cache: ContentCache;
   constructor(options: NodeVfsOperationsBridgeOptions) {
     this.#port = options.port;
     this.#clock = options.clock ?? Date.now;
@@ -136,6 +140,10 @@ class Bridge implements NodeVfsFilesystemBridge {
       options.port.capabilities,
     );
     this.runtimeLimits = resolveLimits(DEFAULT_RUNTIME_LIMITS, options.runtime);
+    this.#admission = new AdmissionController(
+      this.runtimeLimits.maxManagedResidentBytes,
+    );
+    this.#cache = new ContentCache(this.runtimeLimits.maxCacheBytes, this.#admission);
     this.cowPageBytes = options.port.initialize({
       ...(options.format?.cowPageBytes === undefined
         ? {}
@@ -228,7 +236,7 @@ class Bridge implements NodeVfsFilesystemBridge {
           "path is not a file",
         );
       return readManifestInto(
-        tx.content(this.storageLimits),
+        tx.content(this.storageLimits, this.#cache),
         inode.manifest_hash,
         position,
         destination,
@@ -277,7 +285,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   ): number {
     return this.#read((tx) =>
       readManifestInto(
-        tx.content(this.storageLimits),
+        tx.content(this.storageLimits, this.#cache),
         prepared.manifestHash,
         position,
         destination,

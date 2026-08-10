@@ -86,9 +86,16 @@ test("verification is cursor-bounded, resumable, and detects reachable corruptio
         maxBytes: 100,
       })[0].hash,
   );
-  database.transaction("write", (tx) =>
-    tx.run("UPDATE efs_cas_objects SET bytes=zeroblob(size) WHERE hash=?", [hash]),
-  );
+  database.transaction("write", (tx) => {
+    const size = tx.all("SELECT size FROM efs_cas_objects WHERE hash=?", [hash], {
+      maxRows: 1,
+      maxBytes: 128,
+    })[0].size;
+    tx.run("UPDATE efs_cas_objects SET bytes=? WHERE hash=?", [
+      new Uint8Array(size),
+      hash,
+    ]);
+  });
   await assert.rejects(async () => {
     let next;
     for (let index = 0; index < 1000; index += 1) {
@@ -126,23 +133,27 @@ test(
       storage: { maxGcBatchSize: 1000 },
     });
     const count = 100_000;
-    database.transaction("write", (tx) => {
-      for (let index = 0; index < count; index += 1) {
-        const bytes = new Uint8Array(4);
-        new DataView(bytes.buffer).setUint32(0, index, true);
+    const insertBatchSize = 1000;
+    for (let start = 0; start < count; start += insertBatchSize) {
+      const end = Math.min(count, start + insertBatchSize);
+      database.transaction("write", (tx) => {
+        for (let index = start; index < end; index += 1) {
+          const bytes = new Uint8Array(4);
+          new DataView(bytes.buffer).setUint32(0, index, true);
+          tx.run(
+            "INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,?)",
+            [sha256(bytes), 4, bytes, index + 1],
+          );
+        }
+        tx.run("UPDATE efs_meta SET next_allocation_sequence=? WHERE singleton=1", [
+          end + 1,
+        ]);
         tx.run(
-          "INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,?)",
-          [sha256(bytes), 4, bytes, index + 1],
+          "UPDATE efs_usage SET object_count=object_count+?,object_bytes=object_bytes+?,charged_metadata_bytes=charged_metadata_bytes+? WHERE singleton=1",
+          [end - start, (end - start) * 4, (end - start) * 96],
         );
-      }
-      tx.run("UPDATE efs_meta SET next_allocation_sequence=? WHERE singleton=1", [
-        count + 1,
-      ]);
-      tx.run(
-        "UPDATE efs_usage SET object_count=?,object_bytes=?,charged_metadata_bytes=charged_metadata_bytes+? WHERE singleton=1",
-        [count, count * 4, count * 96],
-      );
-    });
+      });
+    }
     const result = await filesystem.maintenance.collectGarbage();
     assert.equal(result.state, "complete");
     assert.equal(result.deletedObjectCount, count);
