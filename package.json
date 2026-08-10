@@ -11,19 +11,24 @@
     "clean": "pnpm -r clean",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm build && node --test --test-concurrency=1 tests/**/*.test.mjs",
-    "test:smoke": "pnpm build && node --test --test-concurrency=1 tests/smoke/*.test.mjs",
-    "test:fault": "pnpm build && node --test --test-concurrency=1 tests/fault/*.test.mjs",
-    "test:performance": "pnpm build && node --test --test-concurrency=1 tests/performance/*.test.mjs",
+    "test": "pnpm build && pnpm test:unit",
+    "test:unit": "node scripts/run-test-suite.mjs tests --exclude=smoke,fault,performance",
+    "test:smoke": "pnpm build && pnpm test:smoke:built",
+    "test:smoke:built": "node scripts/run-test-suite.mjs tests/smoke",
+    "test:fault": "pnpm build && pnpm test:fault:built",
+    "test:fault:built": "node scripts/run-test-suite.mjs tests/fault",
+    "test:performance": "pnpm build && pnpm test:performance:built",
+    "test:performance:built": "node scripts/run-test-suite.mjs tests/performance",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:exports": "node scripts/check-exports.mjs",
     "check:docs": "node scripts/check-docs.mjs",
     "fixtures": "node scripts/generate-fixtures.mjs",
-    "validate": "pnpm fixtures && pnpm check:docs && pnpm check:architecture && pnpm check:exports && pnpm test"
+    "fixtures:check": "node scripts/generate-fixtures.mjs --check",
+    "validate:m0": "pnpm fixtures:check && pnpm check:docs && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:unit",
+    "validate": "pnpm fixtures:check && pnpm check:docs && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:unit && pnpm test:smoke:built && pnpm test:fault:built && pnpm test:performance:built"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "typescript": "^5.9.2"
   }
 }
-

@@ -21,9 +21,11 @@ let unchanged = false;
 try {
   unchanged = Buffer.compare(await readFile(binaryPath), bytes) === 0 && await readFile(metadataPath, "utf8") === metadata;
 } catch {}
+if (process.argv.includes("--check") && !unchanged) {
+  throw new Error("generated fixture is missing or differs from seed 0x5eedc0de");
+}
 if (!unchanged) {
   await writeFile(binaryPath, bytes);
   await writeFile(metadataPath, metadata);
 }
 console.log(JSON.stringify({ seed, bytes: bytes.length, sha256: digest, unchanged }));
-
