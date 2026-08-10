@@ -12,6 +12,20 @@ import type {
   TransactionMode,
 } from "@ephemeralai/fs/sqlite-driver";
 
+const TYPED_ARRAY_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype) as object;
+const typedArrayBuffer = Object.getOwnPropertyDescriptor(
+  TYPED_ARRAY_PROTOTYPE,
+  "buffer",
+)!.get!;
+const typedArrayByteOffset = Object.getOwnPropertyDescriptor(
+  TYPED_ARRAY_PROTOTYPE,
+  "byteOffset",
+)!.get!;
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  TYPED_ARRAY_PROTOTYPE,
+  "byteLength",
+)!.get!;
+
 export interface OpenNodeSqliteOptions {
   readonly filename: string;
   readonly readOnly?: boolean;
@@ -24,6 +38,24 @@ export interface OpenNodeSqliteOptions {
   readonly maxJournalBytes?: number;
 }
 
+function intrinsicBytes(value: Uint8Array): Uint8Array {
+  try {
+    const buffer = Reflect.apply(typedArrayBuffer, value, []) as ArrayBufferLike;
+    const byteOffset = Reflect.apply(typedArrayByteOffset, value, []) as number;
+    const byteLength = Reflect.apply(typedArrayByteLength, value, []) as number;
+    return new Uint8Array(buffer, byteOffset, byteLength);
+  } catch {
+    throw new TypeError("SQLite BLOB values must be Uint8Array instances");
+  }
+}
+
+function ownBytes(value: Uint8Array): Uint8Array {
+  const source = intrinsicBytes(value);
+  const owned = new Uint8Array(source.byteLength);
+  owned.set(source);
+  return owned;
+}
+
 function binding(
   value: SqliteValue,
   capabilities: SQLiteDriverCapabilities,
@@ -31,9 +63,10 @@ function binding(
   if (typeof value === "number" && !Number.isSafeInteger(value))
     throw new RangeError("SQLite numbers must be safe integers");
   if (value instanceof Uint8Array) {
-    if (value.byteLength > capabilities.maxBlobBytes)
+    const bytes = intrinsicBytes(value);
+    if (bytes.byteLength > capabilities.maxBlobBytes)
       throw new RangeError("SQLite BLOB exceeds adapter limit");
-    return value.slice();
+    return ownBytes(bytes);
   }
   return value;
 }
@@ -47,7 +80,7 @@ function output(value: SQLOutputValue): SqliteValue {
       throw new RangeError("SQLite returned an unsafe integer");
     return Number(value);
   }
-  if (value instanceof Uint8Array) return value.slice();
+  if (value instanceof Uint8Array) return ownBytes(value);
   return value;
 }
 
@@ -158,75 +191,83 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       throw new Error("EROFS: write transaction requested on read-only adapter");
     this.#transactionActive = true;
     let active = true;
-    if (mode === "read") this.#database.exec("PRAGMA query_only=ON");
-    this.#database.exec(
-      mode === "read"
-        ? "BEGIN DEFERRED"
-        : mode === "write"
-          ? "BEGIN IMMEDIATE"
-          : "BEGIN EXCLUSIVE",
-    );
-    const tx: FilesystemSQLiteTransaction = Object.freeze({
-      scope: Symbol("sqlite-transaction"),
-      run: (sql: string, bindings: SqliteBindings = []): SqliteRunResult => {
-        if (!active) throw new Error("SQLite transaction value is no longer active");
-        this.#validateStatement(sql, bindings, mode);
-        const result = this.#database
-          .prepare(sql)
-          .run(...bindings.map((value) => binding(value, this.capabilities)));
-        const changes = Number(result.changes);
-        const rowid = Number(result.lastInsertRowid);
-        if (!Number.isSafeInteger(changes) || !Number.isSafeInteger(rowid))
-          throw new RangeError("SQLite returned unsafe write counters");
-        return { changes, lastInsertRowid: rowid };
-      },
-      all: <Row extends SqliteRow = SqliteRow>(
-        sql: string,
-        bindings: SqliteBindings,
-        budget: QueryBudget,
-      ): readonly Row[] => {
-        if (!active) throw new Error("SQLite transaction value is no longer active");
-        this.#validateStatement(sql, bindings, mode);
-        if (
-          !Number.isSafeInteger(budget.maxRows) ||
-          budget.maxRows <= 0 ||
-          !Number.isSafeInteger(budget.maxBytes) ||
-          budget.maxBytes <= 0
-        )
-          throw new RangeError("invalid query budget");
-        const result: Row[] = [];
-        let bytes = 0;
-        for (const raw of this.#database
-          .prepare(sql)
-          .iterate(...bindings.map((value) => binding(value, this.capabilities)))) {
-          if (result.length >= budget.maxRows)
-            throw new RangeError("SQLite result row budget exceeded");
-          const normalized = Object.fromEntries(
-            Object.entries(raw).map(([name, value]) => [name, output(value)]),
-          ) as Row;
-          bytes += rowBytes(normalized);
-          if (bytes > budget.maxBytes)
-            throw new RangeError("SQLite result byte budget exceeded");
-          result.push(Object.freeze(normalized));
-        }
-        return Object.freeze(result);
-      },
-    });
+    let begun = false;
+    let queryOnly = false;
     try {
+      if (mode === "read") {
+        this.#database.exec("PRAGMA query_only=ON");
+        queryOnly = true;
+      }
+      this.#database.exec(
+        mode === "read"
+          ? "BEGIN DEFERRED"
+          : mode === "write"
+            ? "BEGIN IMMEDIATE"
+            : "BEGIN EXCLUSIVE",
+      );
+      begun = true;
+      const tx: FilesystemSQLiteTransaction = Object.freeze({
+        scope: Symbol("sqlite-transaction"),
+        run: (sql: string, bindings: SqliteBindings = []): SqliteRunResult => {
+          if (!active) throw new Error("SQLite transaction value is no longer active");
+          this.#validateStatement(sql, bindings, mode);
+          const result = this.#database
+            .prepare(sql)
+            .run(...bindings.map((value) => binding(value, this.capabilities)));
+          const changes = Number(result.changes);
+          const rowid = Number(result.lastInsertRowid);
+          if (!Number.isSafeInteger(changes) || !Number.isSafeInteger(rowid))
+            throw new RangeError("SQLite returned unsafe write counters");
+          return { changes, lastInsertRowid: rowid };
+        },
+        all: <Row extends SqliteRow = SqliteRow>(
+          sql: string,
+          bindings: SqliteBindings,
+          budget: QueryBudget,
+        ): readonly Row[] => {
+          if (!active) throw new Error("SQLite transaction value is no longer active");
+          this.#validateStatement(sql, bindings, mode);
+          if (
+            !Number.isSafeInteger(budget.maxRows) ||
+            budget.maxRows <= 0 ||
+            !Number.isSafeInteger(budget.maxBytes) ||
+            budget.maxBytes <= 0
+          )
+            throw new RangeError("invalid query budget");
+          const result: Row[] = [];
+          let bytes = 0;
+          for (const raw of this.#database
+            .prepare(sql)
+            .iterate(...bindings.map((value) => binding(value, this.capabilities)))) {
+            if (result.length >= budget.maxRows)
+              throw new RangeError("SQLite result row budget exceeded");
+            const normalized = Object.fromEntries(
+              Object.entries(raw).map(([name, value]) => [name, output(value)]),
+            ) as Row;
+            bytes += rowBytes(normalized);
+            if (bytes > budget.maxBytes)
+              throw new RangeError("SQLite result byte budget exceeded");
+            result.push(Object.freeze(normalized));
+          }
+          return Object.freeze(result);
+        },
+      });
       const result = callback(tx);
       if (result && typeof result === "object" && "then" in result)
         throw new TypeError("SQLite transaction callbacks must be synchronous");
       active = false;
       this.#database.exec("COMMIT");
+      begun = false;
       return result;
     } catch (error) {
       active = false;
-      try {
-        this.#database.exec("ROLLBACK");
-      } catch {}
+      if (begun)
+        try {
+          this.#database.exec("ROLLBACK");
+        } catch {}
       throw error;
     } finally {
-      if (mode === "read") {
+      if (queryOnly) {
         try {
           this.#database.exec("PRAGMA query_only=OFF");
         } catch {}

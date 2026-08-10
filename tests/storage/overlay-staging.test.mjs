@@ -19,6 +19,7 @@ import { initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema
 import { StagingRepository } from "../../packages/fs/dist/sqlite/staging-repository.js";
 import { runUnitOfWork } from "../../packages/fs/dist/sqlite/unit-of-work.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
+import { createSqliteOperationsStorage } from "../../packages/fs/dist/sqlite/operations-storage.js";
 
 function limits(driver) {
   return constrainStorageLimits(
@@ -228,6 +229,7 @@ test("byte-weighted cache verifies once, remains bounded, and eviction preserves
 
 test("partial write-admission failure removes its staging lease and releases every reservation", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
+  const port = createSqliteOperationsStorage(driver);
   initializeOrValidateSchema(driver);
   const storage = limits(driver);
   const admission = new AdmissionController(
@@ -235,13 +237,7 @@ test("partial write-admission failure removes its staging lease and releases eve
   );
   const releasePressure = admission.reserve(120 * 1024 * 1024);
   await assert.rejects(
-    prepareContent(
-      driver,
-      Uint8Array.of(1),
-      storage,
-      DEFAULT_RUNTIME_LIMITS,
-      admission,
-    ),
+    prepareContent(port, Uint8Array.of(1), storage, DEFAULT_RUNTIME_LIMITS, admission),
     /managed resident memory limit/,
   );
   releasePressure();
@@ -260,6 +256,7 @@ test("partial write-admission failure removes its staging lease and releases eve
 
 test("a huge upstream stream chunk is admitted at its full size, rejected before processing, and cancelled cleanly", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
+  const port = createSqliteOperationsStorage(driver);
   initializeOrValidateSchema(driver);
   const storage = limits(driver);
   const runtime = {
@@ -283,7 +280,7 @@ test("a huge upstream stream chunk is admitted at its full size, rejected before
   });
   await assert.rejects(
     prepareContent(
-      driver,
+      port,
       stream,
       storage,
       runtime,
@@ -392,6 +389,7 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
   const filename = path.join(directory, "filesystem.db");
   try {
     let driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    let port = createSqliteOperationsStorage(driver);
     initializeOrValidateSchema(driver);
     const storage = constrainStorageLimits(
       {
@@ -423,7 +421,7 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
       DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
     );
     await prepareContent(
-      driver,
+      port,
       Uint8Array.of(5, 6, 7),
       storage,
       DEFAULT_RUNTIME_LIMITS,
@@ -446,9 +444,10 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
     assert.ok(before.staging_bytes > partial.length);
     driver.close();
     driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    port = createSqliteOperationsStorage(driver);
     initializeOrValidateSchema(driver);
     const maintenance = new MaintenanceManager(
-      driver,
+      port,
       storage,
       DEFAULT_RUNTIME_LIMITS,
       () => 100,
@@ -683,7 +682,7 @@ test(
     }
     const built = buildManifestFromEntries(
       entries(),
-      { minimum: 1, average: 2, maximum: 4 },
+      { minimum: 8, average: 8, maximum: 8 },
       workspace,
       { readBatchRecords: 31, maxDepth: storage.maxManifestDepth },
     );

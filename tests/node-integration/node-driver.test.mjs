@@ -188,3 +188,77 @@ test("bounded units of work roll back row and binding-byte overflow", async () =
   );
   driver.close();
 });
+
+test("a busy BEGIN leaves the second writer reusable after the first writer commits", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-busy-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    const first = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
+    const second = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
+    first.transaction("write", (tx) => {
+      tx.run("CREATE TABLE busy_probe(value INTEGER)");
+      assert.throws(() => second.transaction("write", () => {}), /busy|locked/i);
+    });
+    second.transaction("write", (tx) =>
+      tx.run("INSERT INTO busy_probe VALUES(?)", [1]),
+    );
+    assert.equal(
+      second.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT count(*) count FROM busy_probe", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].count,
+      ),
+      1,
+    );
+    second.close();
+    first.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("BLOB bindings and results are plain owned Uint8Arrays for Buffer and subclasses", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  class HostileBytes extends Uint8Array {
+    slice() {
+      throw new Error("subclass slice must not be called");
+    }
+    get byteLength() {
+      throw new Error("subclass byteLength must not be read");
+    }
+  }
+  const backing = new HostileBytes([7, 8, 9]);
+  const buffer = Buffer.from([10, 11, 12]);
+  driver.transaction("write", (tx) => {
+    tx.run("CREATE TABLE owned(id INTEGER PRIMARY KEY,value BLOB NOT NULL)");
+    tx.run("INSERT INTO owned VALUES(?,?)", [1, backing]);
+    tx.run("INSERT INTO owned VALUES(?,?)", [2, buffer]);
+    backing[0] = 99;
+    buffer[0] = 99;
+  });
+  const rows = driver.transaction("read", (tx) =>
+    tx.all("SELECT value FROM owned ORDER BY id", [], {
+      maxRows: 2,
+      maxBytes: 1024,
+    }),
+  );
+  assert.deepEqual([...rows[0].value], [7, 8, 9]);
+  assert.deepEqual([...rows[1].value], [10, 11, 12]);
+  assert.equal(Object.getPrototypeOf(rows[0].value), Uint8Array.prototype);
+  assert.equal(Object.getPrototypeOf(rows[1].value), Uint8Array.prototype);
+  const first = rows[0].value;
+  first[0] = 0;
+  const reread = driver.transaction(
+    "read",
+    (tx) =>
+      tx.all("SELECT value FROM owned WHERE id=1", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].value,
+  );
+  assert.deepEqual([...reread], [7, 8, 9]);
+  driver.close();
+});
