@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
+import { DatabaseSync, type SQLOutputValue, type StatementSync } from "node:sqlite";
 import type {
   FilesystemSQLiteDriver,
   FilesystemSQLiteTransaction,
@@ -27,6 +27,17 @@ const typedArrayByteLength = Object.getOwnPropertyDescriptor(
   TYPED_ARRAY_PROTOTYPE,
   "byteLength",
 )!.get!;
+const MAX_SQL_TEXT_BYTES = 64 * 1024;
+const MAX_CACHED_STATEMENTS = 256;
+
+interface CachedStatement {
+  readonly statement: StatementSync;
+  readonly verdicts: {
+    read?: Error | null;
+    write?: Error | null;
+    exclusive?: Error | null;
+  };
+}
 
 export interface OpenNodeSqliteOptions {
   readonly filename: string;
@@ -59,6 +70,23 @@ function intrinsicByteLength(value: Uint8Array): number {
   }
 }
 
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else bytes += 3;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
 function ownBytes(value: Uint8Array): Uint8Array {
   const source = intrinsicBytes(value);
   const owned = new Uint8Array(source.byteLength);
@@ -72,6 +100,8 @@ function binding(
 ): null | string | number | Uint8Array {
   if (typeof value === "number" && !Number.isSafeInteger(value))
     throw new RangeError("SQLite numbers must be safe integers");
+  if (typeof value === "string" && utf8ByteLength(value) > capabilities.maxBlobBytes)
+    throw new RangeError("SQLite TEXT exceeds adapter limit");
   if (value instanceof Uint8Array) {
     const byteLength = intrinsicByteLength(value);
     if (byteLength > capabilities.maxBlobBytes)
@@ -86,7 +116,10 @@ function binding(
   return value;
 }
 
-function output(value: SQLOutputValue): SqliteValue {
+function output(
+  value: SQLOutputValue,
+  capabilities: SQLiteDriverCapabilities,
+): SqliteValue {
   if (typeof value === "bigint") {
     if (
       value < BigInt(Number.MIN_SAFE_INTEGER) ||
@@ -95,7 +128,13 @@ function output(value: SQLOutputValue): SqliteValue {
       throw new RangeError("SQLite returned an unsafe integer");
     return Number(value);
   }
-  if (value instanceof Uint8Array) return ownBytes(value);
+  if (value instanceof Uint8Array) {
+    if (intrinsicByteLength(value) > capabilities.maxBlobBytes)
+      throw new RangeError("SQLite result BLOB exceeds adapter limit");
+    return ownBytes(value);
+  }
+  if (typeof value === "string" && utf8ByteLength(value) > capabilities.maxBlobBytes)
+    throw new RangeError("SQLite result TEXT exceeds adapter limit");
   return value;
 }
 
@@ -107,7 +146,7 @@ function sqliteOutputRowBytes(row: Record<string, SQLOutputValue>): number {
       (value instanceof Uint8Array
         ? intrinsicByteLength(value)
         : typeof value === "string"
-          ? value.length * 2
+          ? utf8ByteLength(value)
           : 8);
   return bytes;
 }
@@ -119,9 +158,17 @@ function bindingBytes(bindings: SqliteBindings): number {
       value instanceof Uint8Array
         ? intrinsicByteLength(value)
         : typeof value === "string"
-          ? value.length * 2
+          ? utf8ByteLength(value)
           : 8;
   return bytes;
+}
+
+function bindingValueBytes(value: SqliteValue): number {
+  return value instanceof Uint8Array
+    ? intrinsicByteLength(value)
+    : typeof value === "string"
+      ? utf8ByteLength(value)
+      : 8;
 }
 
 function leadingSqlKeyword(sql: string): string {
@@ -140,6 +187,136 @@ function leadingSqlKeyword(sql: string): string {
       continue;
     }
     return /^[A-Za-z]+/u.exec(source)?.[0]?.toUpperCase() ?? "";
+  }
+}
+
+interface SqlHeaderToken {
+  readonly kind: "identifier" | "symbol" | "other";
+  readonly value: string;
+}
+
+function sqlHeaderTokens(sql: string, maxTokens = 16): readonly SqlHeaderToken[] {
+  const tokens: SqlHeaderToken[] = [];
+  let offset = 0;
+  while (offset < sql.length && tokens.length < maxTokens) {
+    const character = sql[offset]!;
+    if (/\s/u.test(character)) {
+      offset += 1;
+      continue;
+    }
+    if (sql.startsWith("--", offset)) {
+      const end = sql.indexOf("\n", offset + 2);
+      offset = end < 0 ? sql.length : end + 1;
+      continue;
+    }
+    if (sql.startsWith("/*", offset)) {
+      const end = sql.indexOf("*/", offset + 2);
+      if (end < 0) throw new TypeError("unterminated SQL comment");
+      offset = end + 2;
+      continue;
+    }
+    if (character === "." || character === ";") {
+      tokens.push({ kind: "symbol", value: character });
+      offset += 1;
+      continue;
+    }
+    if (character === '"' || character === "`" || character === "[") {
+      const close = character === "[" ? "]" : character;
+      let value = "";
+      offset += 1;
+      let closed = false;
+      while (offset < sql.length) {
+        if (sql[offset] === close) {
+          if (sql[offset + 1] === close) {
+            value += close;
+            offset += 2;
+            continue;
+          }
+          offset += 1;
+          closed = true;
+          break;
+        }
+        value += sql[offset]!;
+        offset += 1;
+      }
+      if (!closed) throw new TypeError("unterminated SQL identifier");
+      tokens.push({ kind: "identifier", value: value.toUpperCase() });
+      continue;
+    }
+    const identifier = /^[A-Za-z_][A-Za-z0-9_$]*/u.exec(sql.slice(offset));
+    if (identifier) {
+      tokens.push({ kind: "identifier", value: identifier[0].toUpperCase() });
+      offset += identifier[0].length;
+      continue;
+    }
+    if (character === "'") {
+      offset += 1;
+      while (offset < sql.length) {
+        if (sql[offset] === "'") {
+          if (sql[offset + 1] === "'") {
+            offset += 2;
+            continue;
+          }
+          offset += 1;
+          break;
+        }
+        offset += 1;
+      }
+      tokens.push({ kind: "other", value: "STRING" });
+      continue;
+    }
+    tokens.push({ kind: "other", value: character });
+    offset += 1;
+  }
+  return tokens;
+}
+
+function assertDurableSchemaStatement(sql: string, keyword: string): void {
+  if (keyword !== "CREATE" && keyword !== "DROP" && keyword !== "ALTER") return;
+  const tokens = sqlHeaderTokens(sql);
+  const value = (index: number): string | undefined => tokens[index]?.value;
+  let index = 1;
+  if (keyword === "CREATE") {
+    if (value(index) === "TEMP" || value(index) === "TEMPORARY")
+      throw new Error("temporary and virtual schemas are outside the storage contract");
+    if (value(index) === "UNIQUE") index += 1;
+    if (value(index) === "VIRTUAL")
+      throw new Error("temporary and virtual schemas are outside the storage contract");
+  }
+  const objectKind = value(index);
+  if (
+    objectKind !== "TABLE" &&
+    objectKind !== "INDEX" &&
+    objectKind !== "TRIGGER" &&
+    objectKind !== "VIEW"
+  )
+    throw new Error("SQLite schema statement is outside the storage contract");
+  index += 1;
+  if (value(index) === "IF") {
+    index += 1;
+    if (keyword === "CREATE" && value(index) === "NOT") index += 1;
+    if (value(index) !== "EXISTS")
+      throw new Error("SQLite schema statement is outside the storage contract");
+    index += 1;
+  }
+  const objectName = tokens[index];
+  if (!objectName || objectName.kind !== "identifier")
+    throw new Error("SQLite schema statement is outside the storage contract");
+  if (objectName.value === "TEMP" || value(index + 1) === ".")
+    throw new Error("temporary and qualified schemas are outside the storage contract");
+  if (keyword === "CREATE" && (objectKind === "INDEX" || objectKind === "TRIGGER")) {
+    const on = tokens.findIndex(
+      (token, tokenIndex) => tokenIndex > index && token.value === "ON",
+    );
+    if (
+      on < 0 ||
+      tokens[on + 1]?.kind !== "identifier" ||
+      tokens[on + 1]?.value === "TEMP" ||
+      tokens[on + 2]?.value === "."
+    )
+      throw new Error(
+        "temporary and qualified schemas are outside the storage contract",
+      );
   }
 }
 
@@ -166,6 +343,85 @@ function assertResultSql(sql: string): void {
     throw new Error("EROFS: SQLite result statements must be read-only");
 }
 
+function assertNonResultSql(sql: string): void {
+  const keyword = leadingSqlKeyword(sql);
+  if (
+    keyword === "SELECT" ||
+    keyword === "VALUES" ||
+    keyword === "WITH" ||
+    keyword === "EXPLAIN" ||
+    sqlHeaderTokens(sql, sql.length).some((token) => token.value === "RETURNING")
+  )
+    throw new Error("SQLite result statements require a bounded all() query");
+}
+
+function assertBoundedExpressionSql(sql: string): void {
+  const tokens = sqlHeaderTokens(sql, sql.length);
+  if (tokens.some((token) => token.value === "WITH"))
+    throw new Error("SQLite common-table expressions are outside the bounded contract");
+  const expandingFunctions = new Set([
+    "ZEROBLOB",
+    "RANDOMBLOB",
+    "PRINTF",
+    "FORMAT",
+    "REPLACE",
+    "GROUP_CONCAT",
+    "STRING_AGG",
+    "JSON_GROUP_ARRAY",
+    "JSON_GROUP_OBJECT",
+    "HEX",
+    "QUOTE",
+    "CONCAT",
+    "CONCAT_WS",
+  ]);
+  if (tokens.some((token) => expandingFunctions.has(token.value)))
+    throw new Error("SQLite expanding expressions are outside the bounded contract");
+  const concatenates = tokens.some(
+    (token, index) => token.value === "|" && tokens[index + 1]?.value === "|",
+  );
+  const usageIntegrityConcat =
+    /^UPDATE efs_usage SET integrity_token=CAST\([a-z_]+ AS TEXT\)(?:\|\|':'\|\|CAST\([a-z_]+ AS TEXT\))*(?: WHERE singleton=1)?;?$/iu.test(
+      sql.trim(),
+    );
+  if (concatenates && !usageIntegrityConcat)
+    throw new Error("SQLite concatenation is outside the bounded result contract");
+  const leading = tokens[0]?.value;
+  if (
+    (leading === "INSERT" || leading === "REPLACE") &&
+    tokens.some((token) => token.value === "SELECT")
+  )
+    throw new Error(
+      "SQLite write-from-query statements are outside the bounded contract",
+    );
+  if (
+    leading === "CREATE" &&
+    tokens.some(
+      (token, index) => token.value === "AS" && tokens[index + 1]?.value === "SELECT",
+    )
+  )
+    throw new Error(
+      "SQLite write-from-query statements are outside the bounded contract",
+    );
+  if (leading === "CREATE" && tokens.some((token) => token.value === "TRIGGER")) {
+    const begin = tokens.findIndex((token) => token.value === "BEGIN");
+    for (let index = begin + 1; index > 0 && index < tokens.length; index += 1) {
+      if (tokens[index]?.value !== "INSERT" && tokens[index]?.value !== "REPLACE")
+        continue;
+      const end = tokens.findIndex(
+        (token, tokenIndex) => tokenIndex > index && token.value === ";",
+      );
+      const statementEnd = end < 0 ? tokens.length : end;
+      if (
+        tokens.slice(index + 1, statementEnd).some((token) => token.value === "SELECT")
+      )
+        throw new Error(
+          "SQLite trigger write-from-query statements are outside the bounded contract",
+        );
+      index = statementEnd;
+    }
+  }
+}
+
 export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
   readonly kind = "sqlite" as const;
   readonly readOnly: boolean;
@@ -178,7 +434,11 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
   readonly #pageSize: number;
   readonly #maxJournalBytes: number;
   readonly #journalBackpressureBytes: number;
+  readonly #statementCache = new Map<string, CachedStatement>();
+  #totalChangesStatement!: StatementSync;
   #closed = false;
+  #closeAttempted = false;
+  #closeError: unknown;
   #transactionActive = false;
   constructor(options: OpenNodeSqliteOptions) {
     if (!options.filename) throw new TypeError("filename is required");
@@ -220,9 +480,23 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
         this.#database.prepare("PRAGMA temp_store").get()?.temp_store,
       );
       if (tempStore !== 1) throw new Error("SQLite failed to enforce temp_store=FILE");
+      this.#database.exec(
+        `PRAGMA cache_size=-${Math.max(1, Math.floor(cacheTargetBytes / 1024))}; PRAGMA mmap_size=${mmapLimitBytes};`,
+      );
+      const configuredCacheSize = Number(
+        this.#database.prepare("PRAGMA cache_size").get()?.cache_size,
+      );
+      const mmapRow = this.#database.prepare("PRAGMA mmap_size").get();
+      const configuredMmapSize =
+        mmapRow?.mmap_size === undefined ? 0 : Number(mmapRow.mmap_size);
+      if (
+        configuredCacheSize !== -Math.max(1, Math.floor(cacheTargetBytes / 1024)) ||
+        configuredMmapSize !== mmapLimitBytes
+      )
+        throw new Error("SQLite failed to enforce the configured memory profile");
       if (!this.readOnly) {
         this.#database.exec(
-          `PRAGMA journal_mode=WAL; PRAGMA synchronous=${durability === "acknowledged" ? "FULL" : "NORMAL"}; PRAGMA cache_size=-${Math.max(1, Math.floor(cacheTargetBytes / 1024))}; PRAGMA mmap_size=${mmapLimitBytes}; PRAGMA journal_size_limit=${maxJournalBytes};`,
+          `PRAGMA journal_mode=WAL; PRAGMA synchronous=${durability === "acknowledged" ? "FULL" : "NORMAL"}; PRAGMA journal_size_limit=${maxJournalBytes};`,
         );
       }
       this.#pageSize = Number(
@@ -230,6 +504,9 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       );
       if (!Number.isSafeInteger(this.#pageSize) || this.#pageSize <= 0)
         throw new Error("SQLite returned an invalid page size");
+      this.#totalChangesStatement = this.#database.prepare(
+        "SELECT total_changes() value",
+      );
       const minimumJournalBytes = this.#pageSize * 8 + 2 * 9248;
       if (maxJournalBytes < minimumJournalBytes)
         throw new RangeError(
@@ -254,6 +531,16 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
         if (!Number.isSafeInteger(effectivePageCount) || effectivePageCount <= 0)
           throw new Error("SQLite returned an invalid max_page_count");
         effectiveMaxPhysicalDatabaseBytes = effectivePageCount * this.#pageSize;
+        if (effectiveMaxPhysicalDatabaseBytes > maxPhysicalDatabaseBytes)
+          throw new Error(
+            "ENOSPC: existing SQLite database exceeds the requested physical profile",
+          );
+      } else if (options.filename !== ":memory:") {
+        const currentMainBytes = statSync(options.filename).size;
+        if (currentMainBytes > maxPhysicalDatabaseBytes)
+          throw new Error(
+            "ENOSPC: existing SQLite database exceeds the requested physical profile",
+          );
       }
       this.#journalBackpressureBytes = Math.max(
         this.#pageSize * 4,
@@ -321,29 +608,38 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
         scope: Symbol("sqlite-transaction"),
         run: (sql: string, bindings: SqliteBindings = []): SqliteRunResult => {
           if (!active) throw new Error("SQLite transaction value is no longer active");
-          this.#validateStatement(sql, bindings, mode);
+          const statement = this.#prepareValidated(sql, bindings, mode);
+          assertNonResultSql(sql);
           const bindingEstimate =
             mode === "read" ? 0 : this.#pageSize * 4 + bindingBytes(bindings) * 2;
           if (journalEstimate + bindingEstimate > this.#maxJournalBytes)
             throw new Error(
               "ENOSPC: WAL backpressure exceeds the configured soft transaction estimate",
             );
-          const result = this.#database
-            .prepare(sql)
-            .run(...bindings.map((value) => binding(value, this.capabilities)));
+          const beforeChanges = this.#totalChanges();
+          const result = statement.run(
+            ...bindings.map((value) => binding(value, this.capabilities)),
+          );
+          const totalChanges = this.#totalChanges() - beforeChanges;
           const changes = Number(result.changes);
           const rowid = Number(result.lastInsertRowid);
-          if (!Number.isSafeInteger(changes) || !Number.isSafeInteger(rowid))
+          if (
+            !Number.isSafeInteger(totalChanges) ||
+            totalChanges < 0 ||
+            !Number.isSafeInteger(changes) ||
+            changes < 0 ||
+            !Number.isSafeInteger(rowid)
+          )
             throw new RangeError("SQLite returned unsafe write counters");
           if (mode !== "read") {
-            const changedPageEstimate = changes * this.#pageSize * 4;
+            const changedPageEstimate = totalChanges * this.#pageSize * 4;
             journalEstimate += Math.max(bindingEstimate, changedPageEstimate);
             if (journalEstimate > this.#maxJournalBytes)
               throw new Error(
                 "ENOSPC: WAL backpressure exceeds the configured soft change estimate",
               );
           }
-          return { changes, lastInsertRowid: rowid };
+          return { changes, totalChanges, lastInsertRowid: rowid };
         },
         all: <Row extends SqliteRow = SqliteRow>(
           sql: string,
@@ -351,7 +647,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
           budget: QueryBudget,
         ): readonly Row[] => {
           if (!active) throw new Error("SQLite transaction value is no longer active");
-          this.#validateStatement(sql, bindings, mode);
+          const statement = this.#prepareValidated(sql, bindings, mode);
           assertResultSql(sql);
           if (
             !Number.isSafeInteger(budget.maxRows) ||
@@ -360,6 +656,10 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             budget.maxBytes <= 0
           )
             throw new RangeError("invalid query budget");
+          if (bindings.some((value) => bindingValueBytes(value) > budget.maxBytes))
+            throw new RangeError(
+              "SQLite binding value exceeds the result materialization budget",
+            );
           const result: Row[] = [];
           let bytes = 0;
           let resultQueryOnly = false;
@@ -368,9 +668,9 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
               this.#database.exec("PRAGMA query_only=ON");
               resultQueryOnly = true;
             }
-            const iterator = this.#database
-              .prepare(sql)
-              .iterate(...bindings.map((value) => binding(value, this.capabilities)));
+            const iterator = statement.iterate(
+              ...bindings.map((value) => binding(value, this.capabilities)),
+            );
             for (const raw of iterator) {
               if (result.length >= budget.maxRows)
                 throw new RangeError("SQLite result row budget exceeded");
@@ -379,7 +679,10 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
                 throw new RangeError("SQLite result byte budget exceeded");
               bytes += nextBytes;
               const normalized = Object.fromEntries(
-                Object.entries(raw).map(([name, value]) => [name, output(value)]),
+                Object.entries(raw).map(([name, value]) => [
+                  name,
+                  output(value, this.capabilities),
+                ]),
               ) as Row;
               result.push(Object.freeze(normalized));
             }
@@ -418,11 +721,19 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     }
   }
   close(): void {
-    if (!this.#closed) {
-      if (this.#transactionActive)
-        throw new Error("cannot close SQLite during a transaction");
+    if (this.#closeAttempted) {
+      if (this.#closeError !== undefined) throw this.#closeError;
+      return;
+    }
+    if (this.#transactionActive)
+      throw new Error("cannot close SQLite during a transaction");
+    this.#closeAttempted = true;
+    this.#closed = true;
+    try {
       this.#database.close();
-      this.#closed = true;
+    } catch (error) {
+      this.#closeError = error;
+      throw error;
     }
   }
   physicalStorage(): SQLitePhysicalStorage {
@@ -442,15 +753,47 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     if (this.readOnly) throw new Error("EROFS: cannot checkpoint a read-only adapter");
     return this.#checkpointInternal(mode);
   }
-  #validateStatement(
+  #prepareValidated(
     sql: string,
     bindings: SqliteBindings,
     mode: TransactionMode,
-  ): void {
+  ): StatementSync {
     if (!sql.trim() || sql.includes("\0")) throw new TypeError("invalid SQL statement");
+    if (
+      utf8ByteLength(sql) > Math.min(this.capabilities.maxBlobBytes, MAX_SQL_TEXT_BYTES)
+    )
+      throw new RangeError("SQLite SQL text exceeds the bounded statement limit");
     if (bindings.length > this.capabilities.maxBindings)
       throw new RangeError("SQLite binding limit exceeded");
+    const entry = this.#statementCache.get(sql);
+    if (entry === undefined) {
+      this.#validateStatementShape(sql, mode);
+      const statement = this.#database.prepare(sql);
+      if (this.#statementCache.size >= MAX_CACHED_STATEMENTS)
+        this.#statementCache.delete(this.#statementCache.keys().next().value as string);
+      this.#statementCache.set(sql, {
+        statement,
+        verdicts: { [mode]: null },
+      });
+      return statement;
+    }
+    const verdict = entry.verdicts[mode];
+    if (verdict === undefined) {
+      try {
+        this.#validateStatementShape(sql, mode);
+        entry.verdicts[mode] = null;
+      } catch (error) {
+        entry.verdicts[mode] = error as Error;
+        throw error;
+      }
+    } else if (verdict) {
+      throw verdict;
+    }
+    return entry.statement;
+  }
+  #validateStatementShape(sql: string, mode: TransactionMode): void {
     if (mode === "read") assertReadOnlySql(sql);
+    assertBoundedExpressionSql(sql);
     const keyword = leadingSqlKeyword(sql);
     if (
       mode !== "read" &&
@@ -469,12 +812,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       throw new Error(
         "SQLite statement is outside the callback-scoped transaction contract",
       );
-    if (
-      mode !== "read" &&
-      (/^\s*CREATE\s+(?:TEMP|TEMPORARY|VIRTUAL)\b/iu.test(sql) ||
-        /^\s*(?:DROP|ALTER)\s+(?:TEMP|TEMPORARY|VIRTUAL)\b/iu.test(sql))
-    )
-      throw new Error("temporary and virtual schemas are outside the storage contract");
+    if (mode !== "read") assertDurableSchemaStatement(sql, keyword);
     if (
       mode !== "read" &&
       keyword === "PRAGMA" &&
@@ -485,6 +823,12 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       throw new Error("SQLite PRAGMA is outside the storage transaction contract");
     if (mode !== "read" && sql.length * 2 > this.#maxJournalBytes)
       throw new Error("ENOSPC: SQL text exceeds the configured WAL target");
+  }
+  #totalChanges(): number {
+    const value = Number(this.#totalChangesStatement.get()?.value);
+    if (!Number.isSafeInteger(value) || value < 0)
+      throw new RangeError("SQLite returned an unsafe total-change counter");
+    return value;
   }
   #fileBytes(filename: string): number | undefined {
     try {
@@ -542,10 +886,10 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       throw new Error("ENOSPC: WAL checkpoint backpressure threshold remains pinned");
   }
   #checkpointAfterCommit(): void {
-    if (this.#filename === ":memory:") return;
-    const walBytes = this.#fileBytes(`${this.#filename}-wal`) ?? 0;
-    if (walBytes < Math.floor(this.#journalBackpressureBytes / 2)) return;
     try {
+      if (this.#filename === ":memory:") return;
+      const walBytes = this.#fileBytes(`${this.#filename}-wal`) ?? 0;
+      if (walBytes < Math.floor(this.#journalBackpressureBytes / 2)) return;
       this.#checkpointInternal("passive");
     } catch {}
   }

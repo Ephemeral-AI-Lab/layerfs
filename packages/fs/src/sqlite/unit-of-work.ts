@@ -8,7 +8,8 @@ import type {
   TransactionMode,
 } from "./driver.js";
 import { intrinsicByteLength } from "../cas/bytes.js";
-import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
+import { utf8ByteLength } from "../namespace/utf8.js";
+import { checkedAdd } from "../resources/safe-integers.js";
 
 export interface TransactionLimits {
   readonly maxRows: number;
@@ -27,7 +28,7 @@ function bindingBytes(bindings: SqliteBindings): number {
         value instanceof Uint8Array
           ? intrinsicByteLength(value)
           : typeof value === "string"
-            ? checkedMultiply(value.length, 2, "SQLite string binding")
+            ? utf8ByteLength(value)
             : 8,
         "SQLite bindings",
       ),
@@ -38,8 +39,11 @@ function valueBytes(value: SqliteRow[string]): number {
   return value instanceof Uint8Array
     ? intrinsicByteLength(value)
     : typeof value === "string"
-      ? checkedMultiply(value.length, 2, "SQLite string result")
+      ? utf8ByteLength(value)
       : 8;
+}
+function resultNameBytes(name: string): number {
+  return Math.max(utf8ByteLength(name), name.length * 2);
 }
 function resultBytes(rows: readonly SqliteRow[]): number {
   return rows.reduce(
@@ -52,10 +56,7 @@ function resultBytes(rows: readonly SqliteRow[]): number {
             (rowSum, [name, value]) =>
               checkedAdd(
                 rowSum,
-                checkedAdd(
-                  checkedMultiply(name.length, 2, "SQLite result column name"),
-                  valueBytes(value),
-                ),
+                checkedAdd(resultNameBytes(name), valueBytes(value)),
                 "SQLite result row",
               ),
             0,
@@ -117,7 +118,11 @@ export function runUnitOfWork<T>(
         statement();
         account(bindings);
         const result = tx.run(sql, bindings);
-        changedRows = checkedAdd(changedRows, result.changes, "changed SQLite rows");
+        changedRows = checkedAdd(
+          changedRows,
+          result.totalChanges ?? result.changes,
+          "changed SQLite rows",
+        );
         if (changedRows > limits.maxRows)
           throw new RangeError("final transaction row limit exceeded");
         return result;

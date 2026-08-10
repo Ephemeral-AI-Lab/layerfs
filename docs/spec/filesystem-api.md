@@ -786,9 +786,11 @@ configuration, binary format, or adapter capacity is the tightest bound. The rep
 NOT claim a value larger than the adapter can execute safely.
 
 `collectGarbage` MUST implement the bounded mark-and-sweep behavior and result counters
-defined by the storage specification. `maxBatches` defaults to `1` and MUST be a
-positive safe integer. A paused run MUST return a reusable `runId`; a later call MAY
-resume it. A read-only filesystem MUST reject collection with `EROFS`.
+defined by the storage specification. `maxBatches` defaults to `100_000` and MUST be a
+nonnegative safe integer. Zero performs no writes and only observes an existing run. A
+paused run MUST return a reusable `runId`; a later call MAY resume it. A read-only
+filesystem MUST reject collection with `EROFS`. Public maintenance orchestration remains
+an M5 acceptance concern; M2 owns only its storage-safety prerequisites.
 
 `snapshotStorage` MUST use the bounded accounting algorithm in the storage
 specification. Its default path captures a root generation and row high-water marks in
@@ -1045,10 +1047,15 @@ greatest positional parameter count accepted by one statement. The core MUST bat
 both values and MUST validate capabilities before initialization, allocation, hashing,
 or migration.
 
-The adapter MUST provide SQLite with foreign-key enforcement. It MUST support
-transactions, savepoints, common table expressions, `ON CONFLICT`, and `RETURNING`. The
-adapter documentation MUST state its minimum SQLite version. The core SHOULD avoid
-optional extensions and MUST NOT require a network connection.
+The adapter MUST provide SQLite with foreign-key enforcement and an engine that supports
+transactions, indexes, foreign keys, and `ON CONFLICT`. The M2 callback-scoped statement
+surface is intentionally narrower than the engine: it MUST reject nested transaction
+control (`BEGIN`, `SAVEPOINT`, `COMMIT`, and their peers), common-table expressions,
+`RETURNING`, writable result queries, temporary/attached schemas, and unbounded
+result-producing expressions. Repositories use bounded plain `SELECT`, `INSERT`,
+`UPDATE`, `DELETE`, and migration DDL only. The adapter documentation MUST state its
+minimum SQLite version. The core SHOULD avoid optional extensions and MUST NOT require a
+network connection.
 
 ### Transaction requirements
 

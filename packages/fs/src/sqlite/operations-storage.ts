@@ -35,8 +35,18 @@ export function createSqliteOperationsStorage(
       runUnitOfWork(driver, mode, budget, (tx) => {
         let transactionLimits: StorageLimits | undefined;
         const limitsFor = (limits: StorageLimits): StorageLimits => {
-          transactionLimits ??= limits;
-          return limits;
+          if (!transactionLimits) {
+            transactionLimits = Object.freeze({ ...limits });
+            return transactionLimits;
+          }
+          for (const name of Object.keys(transactionLimits) as Array<
+            keyof StorageLimits
+          >)
+            if (transactionLimits[name] !== limits[name])
+              throw new Error(
+                "EINVAL: one SQLite transaction cannot mix storage limit profiles",
+              );
+          return transactionLimits;
         };
         const ports: StorageTransactionPorts = Object.freeze({
           content: (limits: StorageLimits, cache?: ContentCache) =>

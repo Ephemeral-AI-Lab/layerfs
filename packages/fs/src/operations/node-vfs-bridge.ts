@@ -1,11 +1,16 @@
 import { buildManifest } from "./full-rebuild.js";
 import { DEFAULT_FASTCDC } from "../cdc/fastcdc.js";
 import {
+  DEFAULT_BRANCH_CONFIGURATION,
   DEFAULT_FILESYSTEM_LIMITS,
   DEFAULT_RUNTIME_LIMITS,
   AdmissionController,
+  DURABLE_METADATA_ROW_BYTES,
   constrainStorageLimits,
+  maxPersistedContentObjectBytes,
+  persistedWriterProfile,
   resolveLimits,
+  validateRuntimeLimits,
   type FilesystemLimits,
   type RuntimeLimits,
   type StorageLimits,
@@ -20,7 +25,13 @@ import type {
 } from "../filesystem/types.js";
 import { fsError } from "../filesystem/errors.js";
 import { encodeUtf8 } from "../namespace/utf8.js";
+import { intrinsicByteLength } from "../cas/bytes.js";
+import {
+  ingestReservationBytes,
+  metadataReservationBytes,
+} from "./streaming-prepare.js";
 import type {
+  ClosureCertificate,
   InodeRow,
   NamespaceStore,
   OperationsStorage,
@@ -30,6 +41,7 @@ import type {
 export interface SyncPreparedContent {
   readonly manifestHash: Uint8Array;
   readonly size: number;
+  readonly certificate: ClosureCertificate;
 }
 export interface NodeVfsOperationsBridgeOptions {
   readonly port: OperationsStorage;
@@ -140,6 +152,20 @@ class Bridge implements NodeVfsFilesystemBridge {
       options.port.capabilities,
     );
     this.runtimeLimits = resolveLimits(DEFAULT_RUNTIME_LIMITS, options.runtime);
+    for (const [domain, values] of [
+      ["filesystem", this.filesystemLimits],
+      ["runtime", this.runtimeLimits],
+      ["branch", DEFAULT_BRANCH_CONFIGURATION],
+    ] as const)
+      for (const [name, value] of Object.entries(values))
+        if (!Number.isSafeInteger(value) || value <= 0)
+          throw new RangeError(`${domain}.${name} must be a positive safe integer`);
+    validateRuntimeLimits(
+      this.filesystemLimits,
+      this.storageLimits,
+      this.runtimeLimits,
+      options.format?.cowPageBytes ?? 16_384,
+    );
     this.#admission = new AdmissionController(
       this.runtimeLimits.maxManagedResidentBytes,
     );
@@ -149,7 +175,22 @@ class Bridge implements NodeVfsFilesystemBridge {
         ? {}
         : { cowPageBytes: options.format.cowPageBytes }),
       now: this.#now(),
+      maxManifestEntries: this.storageLimits.maxManifestEntries,
+      maxManifestDepth: this.storageLimits.maxManifestDepth,
+      maxFileBytes: this.storageLimits.maxFileBytes,
+      maxContentObjectBytes: maxPersistedContentObjectBytes(this.storageLimits),
+      writerProfile: persistedWriterProfile(
+        this.filesystemLimits,
+        this.storageLimits,
+        DEFAULT_BRANCH_CONFIGURATION,
+      ),
     }).cowPageBytes;
+    validateRuntimeLimits(
+      this.filesystemLimits,
+      this.storageLimits,
+      this.runtimeLimits,
+      this.cowPageBytes,
+    );
   }
   existsSync(path: string): boolean {
     try {
@@ -263,18 +304,135 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   prepareContentSync(bytes: Uint8Array): SyncPreparedContent {
     const manifest = buildManifest(bytes, DEFAULT_FASTCDC);
-    for (const [hash, object] of manifest.objects)
+    const leaseId = globalThis.crypto.randomUUID();
+    const ownerId = globalThis.crypto.randomUUID();
+    const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    const now = this.#now();
+    let begun = false;
+    try {
+      this.#write((tx) => {
+        const staging = tx.staging(this.storageLimits, this.#cache);
+        staging.begin({
+          leaseId,
+          ownerId,
+          ownerNonce,
+          now,
+          expiresAt: now + this.storageLimits.stagingLeaseMs,
+          ingestReservationBytes: ingestReservationBytes(
+            intrinsicByteLength(bytes),
+            this.storageLimits,
+          ),
+          metadataReservationBytes: metadataReservationBytes(
+            intrinsicByteLength(bytes),
+            this.storageLimits,
+          ),
+        });
+        staging.bumpRoot(5, leaseId);
+      });
+      begun = true;
+      for (const [hash, object] of manifest.objects) {
+        const objectHash = BufferlessHex(hash);
+        const objectBytes = intrinsicByteLength(object);
+        this.#write((tx) => {
+          const staging = tx.staging(this.storageLimits, this.#cache);
+          staging.consumeIngestReservation(leaseId, ownerNonce, objectBytes);
+          staging.consumeMetadataReservation(
+            leaseId,
+            ownerNonce,
+            DURABLE_METADATA_ROW_BYTES,
+          );
+          tx.content(this.storageLimits, this.#cache).putObject(objectHash, object);
+          staging.appendBatch(leaseId, ownerNonce, [
+            { kind: "object", hash: objectHash, size: objectBytes },
+          ]);
+        });
+      }
+      for (const node of manifest.nodes.values()) {
+        const nodeBytes = intrinsicByteLength(node.encoded);
+        this.#write((tx) => {
+          const staging = tx.staging(this.storageLimits, this.#cache);
+          staging.consumeIngestReservation(leaseId, ownerNonce, nodeBytes);
+          staging.consumeMetadataReservation(
+            leaseId,
+            ownerNonce,
+            DURABLE_METADATA_ROW_BYTES,
+          );
+          tx.content(this.storageLimits, this.#cache).putManifestNode(
+            node.hash,
+            node.encoded,
+          );
+          staging.appendBatch(leaseId, ownerNonce, [
+            { kind: "manifest-node", hash: node.hash, size: nodeBytes },
+          ]);
+        });
+      }
+      const rootBytes = intrinsicByteLength(manifest.root);
+      const certificate = this.#write((tx) => {
+        const staging = tx.staging(this.storageLimits, this.#cache);
+        staging.consumeIngestReservation(leaseId, ownerNonce, rootBytes);
+        staging.consumeMetadataReservation(
+          leaseId,
+          ownerNonce,
+          DURABLE_METADATA_ROW_BYTES,
+        );
+        tx.content(this.storageLimits, this.#cache).putManifestRoot(
+          manifest.rootHash,
+          manifest.root,
+        );
+        staging.appendBatch(leaseId, ownerNonce, [
+          {
+            kind: "manifest-root",
+            hash: manifest.rootHash,
+            size: rootBytes,
+          },
+        ]);
+        staging.beginReconciliation(leaseId, ownerNonce, manifest.rootHash);
+        return Object.freeze({
+          ...staging.snapshot(leaseId, ownerNonce),
+          manifestHash: manifest.rootHash,
+        });
+      });
+      let complete = false;
+      while (!complete)
+        complete = this.#write(
+          (tx) =>
+            tx
+              .staging(this.storageLimits, this.#cache)
+              .reconcileBatch(
+                leaseId,
+                ownerNonce,
+                Math.max(
+                  1,
+                  Math.min(
+                    this.storageLimits.maxQueryBatchSize,
+                    Math.floor((this.storageLimits.maxFinalTransactionRows - 8) / 4),
+                    Math.floor(
+                      (this.storageLimits.maxFinalTransactionRows * 4 - 16) /
+                        (this.storageLimits.maxManifestDepth * 2 + 12),
+                    ),
+                  ),
+                ),
+              ).complete,
+        );
       this.#write((tx) =>
-        tx.content(this.storageLimits).putObject(BufferlessHex(hash), object),
+        tx.staging(this.storageLimits, this.#cache).seal(certificate),
       );
-    for (const node of manifest.nodes.values())
-      this.#write((tx) =>
-        tx.content(this.storageLimits).putManifestNode(node.hash, node.encoded),
-      );
-    this.#write((tx) =>
-      tx.content(this.storageLimits).putManifestRoot(manifest.rootHash, manifest.root),
-    );
-    return Object.freeze({ manifestHash: manifest.rootHash, size: bytes.length });
+      return Object.freeze({
+        manifestHash: manifest.rootHash,
+        size: intrinsicByteLength(bytes),
+        certificate,
+      });
+    } catch (error) {
+      if (begun)
+        try {
+          this.#write((tx) =>
+            tx
+              .staging(this.storageLimits, this.#cache)
+              .release(leaseId, ownerNonce, false),
+          );
+        } catch {}
+      throw error;
+    }
   }
   readPreparedIntoSync(
     prepared: SyncPreparedContent,
@@ -311,64 +469,94 @@ class Bridge implements NodeVfsFilesystemBridge {
         canonical.value,
         "root is a directory",
       );
-    this.#write((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "commitVisibleSync",
-      );
-      const existing = ns.resolveOptional(canonical, true);
-      if (options.exclusive && existing)
-        throw fsError(
-          "EEXIST",
+    try {
+      this.#write((tx) => {
+        tx.staging(this.storageLimits, this.#cache).validateSealed(
+          prepared.certificate,
+          this.#now(),
+        );
+        const ns = tx.namespace(
+          this.filesystemLimits,
+          this.storageLimits,
           "commitVisibleSync",
-          canonical.value,
-          "destination exists",
         );
-      if (!existing && options.create === false)
-        throw fsError(
-          "ENOENT",
-          "commitVisibleSync",
-          canonical.value,
-          "file does not exist",
+        const existing = ns.resolveOptional(canonical, true);
+        if (options.exclusive && existing)
+          throw fsError(
+            "EEXIST",
+            "commitVisibleSync",
+            canonical.value,
+            "destination exists",
+          );
+        if (!existing && options.create === false)
+          throw fsError(
+            "ENOENT",
+            "commitVisibleSync",
+            canonical.value,
+            "file does not exist",
+          );
+        if (existing?.inode.type === 1)
+          throw fsError(
+            "EISDIR",
+            "commitVisibleSync",
+            canonical.value,
+            "destination is a directory",
+          );
+        const now = this.#now();
+        const revision = ns.nextRevision(now, existing ? 1 : 3, "node-vfs");
+        if (existing) {
+          ns.setFileContent(
+            existing.inode.id,
+            prepared.size,
+            prepared.manifestHash,
+            now,
+            now,
+            revision,
+          );
+          ns.recordInode(revision, existing.inode.id);
+        } else {
+          const parent = ns.resolveParent(canonical);
+          const id = globalThis.crypto.randomUUID();
+          ns.createInode({
+            id,
+            type: 0,
+            mode: (options.mode ?? 0o666) & 0o7777,
+            now,
+            revision,
+            size: prepared.size,
+            manifestHash: prepared.manifestHash,
+          });
+          ns.putEntry(
+            parent.parent.inode.id,
+            parent.nameSort,
+            parent.name,
+            id,
+            revision,
+          );
+          ns.recordEntry(revision, parent.parent.inode.id, parent.nameSort);
+          ns.recordInode(revision, id);
+          this.#touch(tx, ns, parent.parent.inode, now, revision);
+        }
+        tx.staging(this.storageLimits, this.#cache).release(
+          prepared.certificate.leaseId,
+          prepared.certificate.ownerNonce,
+          true,
         );
-      if (existing?.inode.type === 1)
-        throw fsError(
-          "EISDIR",
-          "commitVisibleSync",
-          canonical.value,
-          "destination is a directory",
+      });
+    } catch (error) {
+      try {
+        this.#write((tx) =>
+          tx
+            .staging(this.storageLimits, this.#cache)
+            .release(
+              prepared.certificate.leaseId,
+              prepared.certificate.ownerNonce,
+              false,
+            ),
         );
-      const now = this.#now();
-      const revision = ns.nextRevision(now, existing ? 1 : 3, "node-vfs");
-      if (existing) {
-        ns.setFileContent(
-          existing.inode.id,
-          prepared.size,
-          prepared.manifestHash,
-          now,
-          now,
-          revision,
-        );
-        ns.recordInode(revision, existing.inode.id);
-      } else {
-        const parent = ns.resolveParent(canonical);
-        const id = globalThis.crypto.randomUUID();
-        ns.createInode({
-          id,
-          type: 0,
-          mode: (options.mode ?? 0o666) & 0o7777,
-          now,
-          revision,
-          size: prepared.size,
-          manifestHash: prepared.manifestHash,
-        });
-        ns.putEntry(parent.parent.inode.id, parent.nameSort, parent.name, id, revision);
-        ns.recordEntry(revision, parent.parent.inode.id, parent.nameSort);
-        ns.recordInode(revision, id);
-        this.#touch(tx, ns, parent.parent.inode, now, revision);
-      }
-    });
+      } catch {}
+      throw error;
+    }
   }
   writeFileSync(
     path: string,

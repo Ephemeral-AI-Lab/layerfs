@@ -1,10 +1,15 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
-import type { FilesystemLimits, StorageLimits } from "../resources/limits.js";
+import {
+  MAINTENANCE_TOTAL_EMERGENCY_BYTES,
+  type FilesystemLimits,
+  type StorageLimits,
+} from "../resources/limits.js";
 import { canonicalizePath, type CanonicalPath } from "../namespace/paths.js";
 import { fsError } from "../filesystem/errors.js";
 import { encodeUtf8 } from "../namespace/utf8.js";
 import { bytesToHex, intrinsicByteLength } from "../cas/bytes.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import { validateDurableIdentifier } from "./identifiers.js";
 
 export interface InodeRow extends SqliteRow {
   id: string;
@@ -189,6 +194,7 @@ export class NamespaceRepository {
     return Object.freeze({ parent, name, nameSort: encodeUtf8(name) });
   }
   nextRevision(now: number, changeCount: number, writer = "filesystem"): number {
+    validateDurableIdentifier(writer, "revision writer identifier");
     const meta = this.meta();
     const revision = meta.main_revision + 1;
     const generation = meta.root_mutation_generation + 1;
@@ -202,6 +208,7 @@ export class NamespaceRepository {
         charged_metadata_bytes: CHARGED_ROW_BYTES + writerBytes,
       },
       "namespace root journal",
+      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
     );
     this.#tx.run(
       "INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(?,?,?,?,?)",
@@ -218,6 +225,7 @@ export class NamespaceRepository {
     return revision;
   }
   recordInode(revision: number, inodeId: string, tombstone = false): void {
+    validateDurableIdentifier(inodeId, "inode identifier");
     const inode = tombstone ? undefined : this.inode(inodeId);
     const encoded = inode
       ? encodeUtf8(
@@ -266,6 +274,7 @@ export class NamespaceRepository {
     nameSort: Uint8Array,
     tombstone = false,
   ): void {
+    validateDurableIdentifier(parentInode, "parent inode identifier");
     const entry = tombstone ? undefined : this.entry(parentInode, nameSort);
     const encoded = entry
       ? encodeUtf8(JSON.stringify({ ...entry, name_sort: bytesToHex(entry.name_sort) }))
@@ -293,6 +302,8 @@ export class NamespaceRepository {
     inodeId: string | null,
     token: number,
   ): void {
+    validateDurableIdentifier(parentInode, "parent inode identifier");
+    if (inodeId !== null) validateDurableIdentifier(inodeId, "inode identifier");
     const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
       "SELECT length(name_sort)+coalesce(length(CAST(name AS BLOB)),0) bytes FROM efs_entries WHERE parent_inode=? AND name_sort=?",
       [parentInode, nameSort],
@@ -356,6 +367,7 @@ export class NamespaceRepository {
     readonly manifestHash?: Uint8Array | null;
     readonly symlinkTarget?: string | null;
   }): void {
+    validateDurableIdentifier(value.id, "inode identifier");
     this.#changeMetadata(
       CHARGED_ROW_BYTES +
         (value.symlinkTarget
@@ -392,6 +404,7 @@ export class NamespaceRepository {
     readonly symlinkTarget: string | null;
     readonly token: number;
   }): void {
+    validateDurableIdentifier(value.id, "inode identifier");
     const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
       "SELECT coalesce(length(CAST(symlink_target AS BLOB)),0) bytes FROM efs_inodes WHERE id=?",
       [value.id],
@@ -503,11 +516,13 @@ export class NamespaceRepository {
     this.#tx.run("DELETE FROM efs_inodes WHERE id=?", [id]);
   }
   bumpRoot(kind: number, id: string): void {
+    validateDurableIdentifier(id, "root journal identifier");
     const generation = this.meta().root_mutation_generation + 1;
     const rootId = encodeUtf8(id);
     new UsageRepository(this.#tx, this.#storage).apply(
       { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
       "namespace root journal",
+      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
     );
     this.#tx.run("UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1", [
       generation,

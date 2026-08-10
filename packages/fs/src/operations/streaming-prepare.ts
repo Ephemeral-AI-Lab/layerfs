@@ -16,6 +16,8 @@ import {
 } from "../manifests/grouping.js";
 import {
   AdmissionController,
+  DURABLE_METADATA_ROW_BYTES,
+  maxPersistedContentObjectBytes,
   type RuntimeLimits,
   type StorageLimits,
 } from "../resources/limits.js";
@@ -40,6 +42,19 @@ interface PreparedNode {
   readonly span: number;
   readonly entryCount: number;
 }
+
+function durableWriteBatchLimit(storage: StorageLimits): number {
+  // A retained item may change physical content, a staging record, membership,
+  // certificate/reservation state, and the usage authority. Keep fixed
+  // transaction bookkeeping outside the per-item envelope.
+  return Math.max(
+    1,
+    Math.min(
+      storage.maxQueryBatchSize,
+      Math.floor((storage.maxFinalTransactionRows - 24) / 6),
+    ),
+  );
+}
 export interface StreamPreparedManifest {
   readonly hash: Uint8Array;
   readonly size: number;
@@ -57,7 +72,7 @@ function randomNonce(): Uint8Array {
   return globalThis.crypto.getRandomValues(new Uint8Array(16));
 }
 
-function ingestReservationBytes(
+export function ingestReservationBytes(
   declaredBytes: number,
   storage: StorageLimits,
   minimumChunkBytes = DEFAULT_FASTCDC.minimum,
@@ -86,6 +101,37 @@ function ingestReservationBytes(
     checkedAdd(declaredBytes, manifestBytes, "declared stream payload envelope"),
     2,
     "declared stream physical and logical envelope",
+  );
+}
+
+export function metadataReservationBytes(
+  declaredBytes: number,
+  storage: StorageLimits,
+  minimumChunkBytes = DEFAULT_FASTCDC.minimum,
+): number {
+  const entries = checkedAdd(
+    Math.ceil(declaredBytes / minimumChunkBytes),
+    1,
+    "declared metadata entry envelope",
+  );
+  const manifestRecords = checkedAdd(
+    checkedMultiply(entries, 2, "declared manifest record envelope"),
+    storage.maxManifestDepth,
+    "declared manifest record envelope",
+  );
+  const rows = checkedAdd(
+    checkedMultiply(entries, 4, "declared content metadata envelope"),
+    checkedAdd(
+      checkedMultiply(manifestRecords, 5, "declared manifest metadata envelope"),
+      8,
+      "declared fixed metadata envelope",
+    ),
+    "declared durable metadata envelope",
+  );
+  return checkedMultiply(
+    rows,
+    DURABLE_METADATA_ROW_BYTES,
+    "declared metadata reservation",
   );
 }
 
@@ -120,6 +166,7 @@ export async function prepareContentStreaming(
       "streamed writes require a declared maximum byte length within maxFileBytes",
     );
   const durableIngestReservation = ingestReservationBytes(declaredBytes, storage);
+  const durableMetadataReservation = metadataReservationBytes(declaredBytes, storage);
   cache ??= new ContentCache(1, admission);
   const leaseId = globalThis.crypto.randomUUID();
   const ownerId = globalThis.crypto.randomUUID();
@@ -130,6 +177,8 @@ export async function prepareContentStreaming(
   const workBudget = {
     maxRows: storage.maxFinalTransactionRows,
     maxBytes: storage.maxFinalTransactionBytes,
+    maxStatements: storage.maxFinalTransactionRows * 4,
+    maxElapsedMs: 5_000,
   };
   const pendingLimit = Math.max(
     DEFAULT_FASTCDC.maximum,
@@ -161,6 +210,7 @@ export async function prepareContentStreaming(
   let entryIndex = 0;
   let pendingBytes = 0;
   const pending: ContentObjectInput[] = [];
+  const durableBatchLimit = durableWriteBatchLimit(storage);
   const flushObjects = (): void => {
     if (!pending.length) return;
     const batch = pending.splice(0);
@@ -177,6 +227,11 @@ export async function prepareContentStreaming(
           (sum, item) => checkedAdd(sum, intrinsicByteLength(item.bytes)),
           0,
         ),
+      );
+      staging.consumeMetadataReservation(
+        leaseId,
+        ownerNonce,
+        unique.length * DURABLE_METADATA_ROW_BYTES,
       );
       tx.content(storage, cache).putObjectsBatch(batch);
       for (const item of batch)
@@ -197,7 +252,6 @@ export async function prepareContentStreaming(
           }),
         ),
       );
-      staging.bumpRoot(5, leaseId);
     });
   };
   const acceptChunk = (chunk: Uint8Array): void => {
@@ -206,7 +260,7 @@ export async function prepareContentStreaming(
     total = checkedAdd(total, chunkLength);
     if (total > storage.maxFileBytes) throw new RangeError("file exceeds maxFileBytes");
     if (
-      pending.length >= storage.maxQueryBatchSize ||
+      pending.length >= durableBatchLimit ||
       checkedAdd(pendingBytes, chunkLength) > pendingLimit
     )
       flushObjects();
@@ -245,6 +299,7 @@ export async function prepareContentStreaming(
         now,
         expiresAt: now + storage.stagingLeaseMs,
         ingestReservationBytes: durableIngestReservation,
+        metadataReservationBytes: durableMetadataReservation,
       });
       staging.bumpRoot(5, leaseId);
     });
@@ -339,6 +394,10 @@ export async function prepareContentEntriesStreaming(
   clock: () => number = Date.now,
 ): Promise<StreamPreparedManifest> {
   validateSupportedManifestParameters(parameters);
+  if (parameters.maximum > maxPersistedContentObjectBytes(storage))
+    throw new RangeError(
+      "manifest FastCDC maximum exceeds the durable object transaction envelope",
+    );
   if (
     !Number.isSafeInteger(expectedSize) ||
     expectedSize < 0 ||
@@ -346,6 +405,11 @@ export async function prepareContentEntriesStreaming(
   )
     throw new RangeError("staged manifest size exceeds configured limit");
   const durableIngestReservation = ingestReservationBytes(
+    expectedSize,
+    storage,
+    parameters.minimum,
+  );
+  const durableMetadataReservation = metadataReservationBytes(
     expectedSize,
     storage,
     parameters.minimum,
@@ -360,8 +424,8 @@ export async function prepareContentEntriesStreaming(
   const workBudget = Object.freeze({
     maxRows: storage.maxFinalTransactionRows,
     maxBytes: storage.maxFinalTransactionBytes,
-    maxStatements: storage.maxFinalTransactionRows,
-    maxElapsedMs: 250,
+    maxStatements: storage.maxFinalTransactionRows * 4,
+    maxElapsedMs: 5_000,
   });
   const pendingLimit = Math.max(
     parameters.maximum,
@@ -400,6 +464,7 @@ export async function prepareContentEntriesStreaming(
     readonly bytes?: Uint8Array;
     readonly release: () => void;
   }> = [];
+  const durableBatchLimit = durableWriteBatchLimit(storage);
   const flush = (): void => {
     if (!pending.length) return;
     const batch = pending.splice(0);
@@ -412,10 +477,7 @@ export async function prepareContentEntriesStreaming(
               item.bytes !== undefined,
           )
           .map((item) => Object.freeze({ hash: item.hash, bytes: item.bytes }));
-        if (objects.length) tx.content(storage, cache).putObjectsBatch(objects);
         const staging = tx.staging(storage, cache);
-        for (const item of batch)
-          staging.putEntry(leaseId, entryIndex++, item.hash, item.length);
         const unique = [
           ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
         ];
@@ -424,6 +486,15 @@ export async function prepareContentEntriesStreaming(
           ownerNonce,
           unique.reduce((sum, item) => checkedAdd(sum, item.length), 0),
         );
+        staging.consumeMetadataReservation(
+          leaseId,
+          ownerNonce,
+          new Set(objects.map((item) => bytesToHex(item.hash))).size *
+            DURABLE_METADATA_ROW_BYTES,
+        );
+        if (objects.length) tx.content(storage, cache).putObjectsBatch(objects);
+        for (const item of batch)
+          staging.putEntry(leaseId, entryIndex++, item.hash, item.length);
         staging.appendBatch(
           leaseId,
           ownerNonce,
@@ -435,7 +506,6 @@ export async function prepareContentEntriesStreaming(
             }),
           ),
         );
-        staging.bumpRoot(5, leaseId);
       });
     } finally {
       for (const item of batch) item.release();
@@ -452,6 +522,7 @@ export async function prepareContentEntriesStreaming(
         now,
         expiresAt: now + storage.stagingLeaseMs,
         ingestReservationBytes: durableIngestReservation,
+        metadataReservationBytes: durableMetadataReservation,
       });
       staging.bumpRoot(5, leaseId);
     });
@@ -479,11 +550,13 @@ export async function prepareContentEntriesStreaming(
       if (total > expectedSize)
         throw new Error("staged entry stream exceeds declared file size");
       if (
-        pending.length >= storage.maxQueryBatchSize ||
+        pending.length >= durableBatchLimit ||
         pendingBytes + bytesLength > pendingLimit
       )
         flush();
-      const release = admission.reserve(checkedAdd(32, bytesLength));
+      const snapshotBytes = checkedAdd(32, bytesLength);
+      cache.makeRoom(snapshotBytes);
+      const release = admission.reserve(snapshotBytes);
       try {
         const hash = copyBytes(borrowedHash);
         const bytes =
@@ -576,6 +649,12 @@ function finalizeStagedManifest(
     const staging = tx.staging(storage, cache);
     if (reservedIngest)
       staging.consumeIngestReservation(leaseId, ownerNonce, intrinsicByteLength(root));
+    if (reservedIngest)
+      staging.consumeMetadataReservation(
+        leaseId,
+        ownerNonce,
+        DURABLE_METADATA_ROW_BYTES,
+      );
     tx.content(storage, cache).putManifestRoot(rootHash, root);
     staging.appendBatch(leaseId, ownerNonce, [
       Object.freeze({
@@ -606,6 +685,10 @@ function finalizeStagedManifest(
               Math.min(
                 storage.maxQueryBatchSize,
                 Math.floor((storage.maxFinalTransactionRows - 8) / 4),
+                Math.floor(
+                  (storage.maxFinalTransactionRows * 4 - 16) /
+                    (storage.maxManifestDepth * 2 + 12),
+                ),
               ),
             ),
           ).complete,
@@ -613,7 +696,6 @@ function finalizeStagedManifest(
   port.transaction("write", workBudget, (tx) => {
     const staging = tx.staging(storage, cache);
     staging.seal(certificate);
-    staging.bumpRoot(5, leaseId);
   });
   return Object.freeze({ hash: rootHash, size: total, certificate });
 }
@@ -637,6 +719,7 @@ function buildManifestLevels(
     let outputIndex = 0;
     let single: PreparedNode | undefined;
     const pendingNodes: PreparedNode[] = [];
+    const durableBatchLimit = durableWriteBatchLimit(storage);
     const flushNodes = (): void => {
       if (!pendingNodes.length) return;
       const nodes = pendingNodes.splice(0);
@@ -650,6 +733,12 @@ function buildManifestLevels(
               (sum, node) => checkedAdd(sum, intrinsicByteLength(node.encoded)),
               0,
             ),
+          );
+        if (reservedIngest)
+          staging.consumeMetadataReservation(
+            leaseId,
+            ownerNonce,
+            nodes.length * DURABLE_METADATA_ROW_BYTES,
           );
         tx.content(storage, cache).putManifestNodesBatch(
           nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
@@ -677,7 +766,6 @@ function buildManifestLevels(
             }),
           ),
         );
-        staging.bumpRoot(5, leaseId);
       });
     };
     const emit = (): void => {
@@ -716,7 +804,7 @@ function buildManifestLevels(
       group = [];
       state = 0n;
       if (
-        pendingNodes.length >= Math.min(storage.maxQueryBatchSize, 64) ||
+        pendingNodes.length >= Math.min(durableBatchLimit, 64) ||
         pendingNodes.reduce(
           (sum, item) => checkedAdd(sum, intrinsicByteLength(item.encoded)),
           0,

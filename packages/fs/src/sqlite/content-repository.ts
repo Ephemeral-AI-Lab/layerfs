@@ -8,6 +8,7 @@ import {
 } from "../cas/bytes.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import {
+  MAINTENANCE_TOTAL_EMERGENCY_BYTES,
   maxPersistedContentObjectBytes,
   type StorageLimits,
 } from "../resources/limits.js";
@@ -16,7 +17,11 @@ import {
   type ContentCacheKind,
   type ContentCacheReservation,
 } from "../cache/content-cache.js";
-import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import {
+  CHARGED_ROW_BYTES,
+  GC_MARK_RESERVATION_BYTES,
+  UsageRepository,
+} from "./usage-repository.js";
 import { SQLiteAuthenticatedManifestCursor } from "./manifest-cursor.js";
 import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 interface ObjectRow extends SqliteRow {
@@ -241,8 +246,12 @@ export class ContentRepository {
       { maxRows: 1, maxBytes: 1024 },
     )[0];
     if (!row) return undefined;
-    if (!Number.isSafeInteger(row.size) || row.size < 0)
-      throw new Error("ECORRUPT: invalid stored CAS size");
+    if (
+      !Number.isSafeInteger(row.size) ||
+      row.size < 0 ||
+      row.size > maxPersistedContentObjectBytes(this.#limits)
+    )
+      throw new Error("ECORRUPT: stored CAS size exceeds durable object envelope");
     return row.size;
   }
 
@@ -417,6 +426,17 @@ export class ContentRepository {
     )
       throw new Error("invalid manifest root digest or size");
     const root = decodeManifestRoot(encoded, hash);
+    if (
+      root.fileSize > this.#limits.maxFileBytes ||
+      root.entryCount > this.#limits.maxManifestEntries
+    )
+      throw new RangeError("manifest root exceeds configured storage limits");
+    if (
+      (root.entryCount === 0 && root.fileSize !== 0) ||
+      (root.entryCount !== 0 &&
+        Math.ceil(root.fileSize / root.entryCount) > root.parameters.maximum)
+    )
+      throw new Error("invalid manifest root size and entry-count envelope");
     if (root.parameters.maximum > maxPersistedContentObjectBytes(this.#limits))
       throw new RangeError(
         "manifest FastCDC maximum exceeds the durable object transaction envelope",
@@ -468,16 +488,40 @@ export class ContentRepository {
   ): T | undefined {
     return this.#withEncoded("manifest-node", "efs_manifest_nodes", hash, consume);
   }
+  validatedManifestDepth(hash: Uint8Array): number | undefined {
+    hash = intrinsicByteRange(hash);
+    if (intrinsicByteLength(hash) !== 32)
+      throw new RangeError("manifest hash must contain exactly 32 bytes");
+    const depth = this.#tx.all<{ tree_depth: number } & SqliteRow>(
+      "SELECT tree_depth FROM efs_manifest_validations WHERE manifest_hash=?",
+      [hash],
+      { maxRows: 1, maxBytes: 128 },
+    )[0]?.tree_depth;
+    if (depth === undefined) return undefined;
+    if (!Number.isSafeInteger(depth) || depth < 1)
+      throw new Error("ECORRUPT: invalid manifest validation certificate");
+    if (depth > this.#limits.maxManifestDepth)
+      throw new Error("ECORRUPT: manifest validation depth exceeds configured limit");
+    return depth;
+  }
+  reserveManifestCursor(bytes: number): () => void {
+    if (!this.#cache)
+      throw new Error("manifest cursors require operation-scoped admission");
+    return this.#cache.reserveOperation(bytes);
+  }
   openManifestCursor(
     manifestHash: Uint8Array,
     offset: number,
   ): SQLiteAuthenticatedManifestCursor {
+    if (intrinsicByteLength(manifestHash) !== 32)
+      throw new RangeError("manifest hash must contain exactly 32 bytes");
     return new SQLiteAuthenticatedManifestCursor(
       this,
       manifestHash,
       offset,
       this.#limits.maxManifestDepth,
       maxPersistedContentObjectBytes(this.#limits),
+      this.#limits.maxManifestNodeBytes,
     );
   }
 
@@ -568,8 +612,10 @@ export class ContentRepository {
         [byteColumn]: bytes,
         [countColumn]: count,
         charged_metadata_bytes: count * CHARGED_ROW_BYTES,
+        maintenance_bytes: count * GC_MARK_RESERVATION_BYTES,
       },
       "durable content",
+      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
     );
   }
 }

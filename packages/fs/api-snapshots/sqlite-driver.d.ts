@@ -74,6 +74,8 @@ export type SqliteRow = Readonly<Record<string, SqliteValue>>;
 /* source: packages/fs/dist/sqlite/driver.d.ts */
 export interface SqliteRunResult {
     readonly changes: number;
+    /** Includes trigger/FK side effects when the adapter can report them. */
+    readonly totalChanges?: number;
     readonly lastInsertRowid?: number;
 }
 

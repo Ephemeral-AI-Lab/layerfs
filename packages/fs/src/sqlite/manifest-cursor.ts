@@ -4,7 +4,7 @@ import {
   decodeManifestRoot,
   validateSupportedManifestParameters,
 } from "../manifests/codec.js";
-import { checkedAdd } from "../resources/safe-integers.js";
+import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 
 export interface SQLiteAuthenticatedManifestEntry {
   readonly hash: Uint8Array;
@@ -29,12 +29,15 @@ export interface SQLiteManifestContentSource {
     hash: Uint8Array,
     consume: (encoded: Uint8Array) => T,
   ): T | undefined;
+  validatedManifestDepth(hash: Uint8Array): number | undefined;
+  reserveManifestCursor(bytes: number): () => void;
 }
 
 export class SQLiteAuthenticatedManifestCursor {
   readonly #source: SQLiteManifestContentSource;
   readonly #cursor: ManifestSequentialCursor;
   readonly fileSize: number;
+  #release: (() => void) | undefined;
   #position: number;
 
   constructor(
@@ -43,13 +46,36 @@ export class SQLiteAuthenticatedManifestCursor {
     offset: number,
     maxDepth: number,
     maxObjectBytes: number,
+    maxManifestNodeBytes = 16_384,
   ) {
+    if (intrinsicByteLength(manifestHash) !== 32)
+      throw new RangeError("manifest hash must contain exactly 32 bytes");
     manifestHash = copyBytes(manifestHash);
     if (!Number.isSafeInteger(offset) || offset < 0)
       throw new RangeError("manifest offset must be a nonnegative safe integer");
-    const initialized = source.withManifestRoot(
-      copyBytes(manifestHash),
-      (rootBytes) => {
+    const validatedDepth = source.validatedManifestDepth(manifestHash);
+    if (validatedDepth === undefined)
+      throw new Error("ECORRUPT: manifest lacks a durable validation certificate");
+    const release = source.reserveManifestCursor(
+      checkedMultiply(
+        maxDepth,
+        checkedAdd(
+          checkedMultiply(maxManifestNodeBytes, 4, "decoded manifest node state"),
+          4_096,
+          "manifest cursor frame state",
+        ),
+        "cursor retained state",
+      ),
+    );
+    let initialized:
+      | {
+          readonly cursor: ManifestSequentialCursor;
+          readonly fileSize: number;
+          readonly effectiveOffset: number;
+        }
+      | undefined;
+    try {
+      initialized = source.withManifestRoot(copyBytes(manifestHash), (rootBytes) => {
         const root = decodeManifestRoot(rootBytes, manifestHash);
         validateSupportedManifestParameters(root.parameters);
         if (root.parameters.maximum > maxObjectBytes)
@@ -67,13 +93,18 @@ export class SQLiteAuthenticatedManifestCursor {
             },
             manifestHash,
             maxDepth,
+            validatedDepth,
           ),
           fileSize: root.fileSize,
           effectiveOffset,
         });
-      },
-    );
-    if (!initialized) throw new Error("ECORRUPT: missing manifest root");
+      });
+      if (!initialized) throw new Error("ECORRUPT: missing manifest root");
+    } catch (error) {
+      release();
+      throw error;
+    }
+    this.#release = release;
     this.#source = source;
     this.#cursor = initialized.cursor;
     this.fileSize = initialized.fileSize;
@@ -84,7 +115,13 @@ export class SQLiteAuthenticatedManifestCursor {
     return this.#position;
   }
 
+  close(): void {
+    this.#release?.();
+    this.#release = undefined;
+  }
+
   peekEntry(): SQLiteAuthenticatedManifestEntry | null {
+    this.#assertOpen();
     const selected = this.#cursor.peek();
     return selected
       ? Object.freeze({
@@ -96,6 +133,7 @@ export class SQLiteAuthenticatedManifestCursor {
   }
 
   nextEntry(): SQLiteAuthenticatedManifestEntry | null {
+    this.#assertOpen();
     const selected = this.#cursor.next();
     if (!selected) return null;
     this.#position = checkedAdd(selected.offset, selected.entry.length);
@@ -107,6 +145,7 @@ export class SQLiteAuthenticatedManifestCursor {
   }
 
   readInto(destination: Uint8Array, destinationOffset: number, length: number): number {
+    this.#assertOpen();
     destination = intrinsicByteRange(destination);
     if (
       !Number.isSafeInteger(destinationOffset) ||
@@ -143,5 +182,9 @@ export class SQLiteAuthenticatedManifestCursor {
       if (this.#position === entryEnd) this.nextEntry();
     }
     return written;
+  }
+
+  #assertOpen(): void {
+    if (!this.#release) throw new Error("manifest cursor is closed");
   }
 }

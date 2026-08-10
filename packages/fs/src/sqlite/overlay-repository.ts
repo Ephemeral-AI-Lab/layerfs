@@ -2,6 +2,7 @@ import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import { validateDurableIdentifier } from "./identifiers.js";
 import { intrinsicByteLength } from "../cas/bytes.js";
 import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 
@@ -23,7 +24,12 @@ interface CountRow extends SqliteRow {
   count: number;
   bytes?: number;
   sequence?: number;
+  segments?: number;
 }
+const PATCH_RESULT_ROW_BYTES = 172;
+const PATCH_SEGMENT_RESULT_OVERHEAD_BYTES = 100;
+const PATCH_SEGMENT_BINDING_OVERHEAD_BYTES = 272;
+const PATCH_WRITE_FIXED_OVERHEAD_BYTES = 16 * 1024;
 interface PatchRow extends SqliteRow {
   sequence: number;
   generation: number;
@@ -67,6 +73,8 @@ export class OverlayRepository {
     pages: readonly CowPage[],
     now: number,
   ): number {
+    validateDurableIdentifier(branchId, "branch identifier");
+    validateDurableIdentifier(inodeId, "inode identifier");
     if (!pages.length) return this.#active(branchId).generation;
     this.#integer(fileSize, "fileSize");
     this.#integer(now, "now");
@@ -182,6 +190,9 @@ export class OverlayRepository {
     firstPage: number,
     lastPage: number,
   ): number {
+    validateDurableIdentifier(leaseId, "lease identifier");
+    validateDurableIdentifier(branchId, "branch identifier");
+    validateDurableIdentifier(inodeId, "inode identifier");
     const rows = this.#tx.all<PageRow>(
       "SELECT page_index,generation,X'' bytes FROM efs_cow_page_heads WHERE branch_id=? AND inode_id=? AND page_index BETWEEN ? AND ? ORDER BY page_index",
       [branchId, inodeId, firstPage, lastPage],
@@ -211,6 +222,8 @@ export class OverlayRepository {
     deleteLength: number,
     segments: readonly Uint8Array[],
   ): number {
+    validateDurableIdentifier(branchId, "branch identifier");
+    validateDurableIdentifier(inodeId, "inode identifier");
     for (const [name, value] of [
       ["currentSize", currentSize],
       ["offset", offset],
@@ -219,6 +232,16 @@ export class OverlayRepository {
       this.#integer(value, name);
     if (offset > currentSize || deleteLength > currentSize - offset)
       throw new RangeError("structural patch is outside the current file");
+    const maxSegments = Math.min(
+      checkedMultiply(
+        this.#limits.maxPatchesPerFile,
+        32,
+        "structural patch segment envelope",
+      ),
+      this.#limits.maxFinalTransactionRows - 4,
+    );
+    if (segments.length > maxSegments)
+      throw new RangeError("structural patch segment limit requires materialization");
     let insertLength = 0;
     for (const segment of segments) {
       const segmentLength = intrinsicByteLength(segment);
@@ -227,13 +250,51 @@ export class OverlayRepository {
       insertLength = checkedAdd(insertLength, segmentLength, "patch insertion length");
     }
     const aggregate = this.#tx.all<CountRow>(
-      "SELECT count(*) count,coalesce(sum(insert_length),0) bytes,coalesce(max(sequence),-1) sequence FROM efs_patches WHERE branch_id=? AND inode_id=?",
-      [branchId, inodeId],
+      "SELECT count(*) count,coalesce(sum(insert_length),0) bytes,coalesce(max(sequence),-1) sequence,(SELECT count(*) FROM efs_patch_segments s WHERE s.branch_id=? AND s.inode_id=?) segments FROM efs_patches WHERE branch_id=? AND inode_id=?",
+      [branchId, inodeId, branchId, inodeId],
       { maxRows: 1, maxBytes: 256 },
     )[0]!;
+    const projectedPatchCount = checkedAdd(aggregate.count, 1);
+    const projectedSegmentCount = checkedAdd(aggregate.segments ?? 0, segments.length);
+    const projectedPayloadBytes = checkedAdd(aggregate.bytes ?? 0, insertLength);
+    const projectedReadBytes = checkedAdd(
+      projectedPayloadBytes,
+      checkedAdd(
+        checkedMultiply(
+          projectedPatchCount,
+          PATCH_RESULT_ROW_BYTES,
+          "structural patch result headers",
+        ),
+        checkedMultiply(
+          projectedSegmentCount,
+          PATCH_SEGMENT_RESULT_OVERHEAD_BYTES,
+          "structural patch result segments",
+        ),
+        "structural patch result overhead",
+      ),
+      "structural patch result envelope",
+    );
+    const projectedWriteBytes = checkedAdd(
+      insertLength,
+      checkedAdd(
+        checkedMultiply(
+          segments.length,
+          PATCH_SEGMENT_BINDING_OVERHEAD_BYTES,
+          "structural patch binding rows",
+        ),
+        PATCH_WRITE_FIXED_OVERHEAD_BYTES,
+        "structural patch write overhead",
+      ),
+      "structural patch write envelope",
+    );
     if (
       aggregate.count >= this.#limits.maxPatchesPerFile ||
-      (aggregate.bytes ?? 0) + insertLength > this.#limits.maxPatchBytesPerFile
+      (aggregate.bytes ?? 0) + insertLength > this.#limits.maxPatchBytesPerFile ||
+      (aggregate.segments ?? 0) + segments.length > maxSegments ||
+      aggregate.count + 1 + (aggregate.segments ?? 0) + segments.length >
+        this.#limits.maxFinalTransactionRows ||
+      projectedReadBytes > this.#limits.maxFinalTransactionBytes ||
+      projectedWriteBytes > this.#limits.maxFinalTransactionBytes
     )
       throw new RangeError("structural patch limit requires materialization");
     const branch = this.#active(branchId);
@@ -262,7 +323,10 @@ export class OverlayRepository {
       [branchId, inodeId],
       {
         maxRows: this.#limits.maxPatchesPerFile,
-        maxBytes: this.#limits.maxQueryBatchSize * 128,
+        maxBytes: Math.min(
+          this.#limits.maxFinalTransactionBytes,
+          this.#limits.maxPatchesPerFile * PATCH_RESULT_ROW_BYTES,
+        ),
       },
     );
     const segments = this.#tx.all<SegmentRow>(
@@ -270,11 +334,11 @@ export class OverlayRepository {
       [branchId, inodeId],
       {
         maxRows: this.#limits.maxPatchesPerFile * 32,
-        maxBytes: this.#limits.maxPatchBytesPerFile + 1024,
+        maxBytes: this.#limits.maxFinalTransactionBytes,
       },
     );
     let cursor = 0;
-    return patches.map((patch, patchIndex) => {
+    const result = patches.map((patch, patchIndex) => {
       if (patch.sequence !== patchIndex)
         throw new Error("ECORRUPT: structural patch sequence has a gap");
       const values: Uint8Array[] = [];
@@ -305,6 +369,9 @@ export class OverlayRepository {
         segments: Object.freeze(values),
       });
     });
+    if (cursor !== segments.length)
+      throw new Error("ECORRUPT: structural patch segment has no patch header");
+    return result;
   }
 
   #active(branchId: string): BranchRow {

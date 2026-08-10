@@ -65,6 +65,7 @@ export interface AuthenticatedManifestCursor {
   peekEntry(): AuthenticatedManifestEntry | null;
   nextEntry(): AuthenticatedManifestEntry | null;
   readInto(destination: Uint8Array, destinationOffset: number, length: number): number;
+  close(): void;
 }
 export interface AuthenticatedManifestEntry {
   readonly hash: Uint8Array;
@@ -391,8 +392,14 @@ export interface StagingStore {
     readonly branchId?: string;
     readonly generation?: number;
     readonly ingestReservationBytes?: number;
+    readonly metadataReservationBytes?: number;
   }): void;
   consumeIngestReservation(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    bytes: number,
+  ): void;
+  consumeMetadataReservation(
     leaseId: string,
     ownerNonce: Uint8Array,
     bytes: number,
@@ -519,6 +526,11 @@ export interface UsageVerificationBatch {
 export interface MaintenanceStore {
   beginRun(runId: string, now: number): void;
   abandonRun(runId: string, completeState: number, abandonedState: number): void;
+  resumeAbandonedRun(
+    runId: string,
+    abandonedState: number,
+    cleanupMarksState: number,
+  ): void;
   run(id: string): GcRunRow | undefined;
   snapshot(): StorageSnapshotRow | undefined;
   physical(): {
@@ -608,6 +620,11 @@ export interface OperationsStorage {
   initialize(options?: {
     readonly cowPageBytes?: CowPageBytes;
     readonly now?: number;
+    readonly maxManifestEntries?: number;
+    readonly maxManifestDepth?: number;
+    readonly maxFileBytes?: number;
+    readonly maxContentObjectBytes?: number;
+    readonly writerProfile?: string;
   }): StorageMetadata;
   transaction<T>(
     mode: StorageTransactionMode,

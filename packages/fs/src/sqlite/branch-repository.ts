@@ -1,7 +1,12 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
-import type { StorageLimits } from "../resources/limits.js";
+import {
+  MAINTENANCE_TOTAL_EMERGENCY_BYTES,
+  type StorageLimits,
+} from "../resources/limits.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
-import { intrinsicByteLength } from "../cas/bytes.js";
+import { equalBytes, intrinsicByteLength, intrinsicByteRange } from "../cas/bytes.js";
+import { validateDurableIdentifier } from "./identifiers.js";
+import { encodeUtf8 } from "../namespace/utf8.js";
 
 export interface BranchRow extends SqliteRow {
   id: string;
@@ -119,6 +124,7 @@ export class BranchRepository {
     );
   }
   create(id: string, baseRevision: number, now: number): BranchRow {
+    validateDurableIdentifier(id, "branch identifier");
     new UsageRepository(this.#tx, this.#limits).apply(
       {
         permanent_identifiers: 1,
@@ -141,6 +147,7 @@ export class BranchRepository {
     )[0];
   }
   operationResult(operationId: string, maxBytes: number): BranchResultRow | undefined {
+    validateDurableIdentifier(operationId, "operation identifier");
     return this.#tx.all<BranchResultRow>(
       "SELECT i.branch_id,i.generation,r.encoded,r.expires_at_ms FROM efs_operation_ids i LEFT JOIN efs_operation_results r ON r.operation_id=i.id WHERE i.id=?",
       [operationId],
@@ -153,6 +160,8 @@ export class BranchRepository {
     generation: number,
     now: number,
   ): void {
+    validateDurableIdentifier(operationId, "operation identifier");
+    validateDurableIdentifier(branchId, "branch identifier");
     new UsageRepository(this.#tx, this.#limits).apply(
       {
         permanent_identifiers: 1,
@@ -172,6 +181,7 @@ export class BranchRepository {
     kind: number,
     encoded: Uint8Array | null,
   ): void {
+    validateDurableIdentifier(branchId, "branch identifier");
     const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
       "SELECT length(path)+coalesce(length(encoded),0) bytes FROM efs_branch_changes WHERE branch_id=? AND path=?",
       [branchId, path],
@@ -193,6 +203,8 @@ export class BranchRepository {
     inodeId: string,
     expectedToken: number | null,
   ): void {
+    validateDurableIdentifier(branchId, "branch identifier");
+    validateDurableIdentifier(inodeId, "inode identifier");
     const exists =
       this.#tx.all(
         "SELECT 1 present FROM efs_branch_inode_expectations WHERE branch_id=? AND inode_id=?",
@@ -206,16 +218,28 @@ export class BranchRepository {
     );
   }
   setManifestRoot(branchId: string, path: Uint8Array, manifestHash?: Uint8Array): void {
-    const prior = this.#tx.all<{ count: number; bytes: number } & SqliteRow>(
-      "SELECT count(*) count,coalesce(sum(length(path)),0) bytes FROM efs_branch_manifest_roots WHERE branch_id=? AND path=?",
+    validateDurableIdentifier(branchId, "branch identifier");
+    path = intrinsicByteRange(path);
+    if (manifestHash) {
+      manifestHash = intrinsicByteRange(manifestHash);
+      if (intrinsicByteLength(manifestHash) !== 32)
+        throw new RangeError("branch manifest hash must contain 32 bytes");
+    }
+    const prior = this.#tx.all<
+      { manifest_hash: Uint8Array; bytes: number } & SqliteRow
+    >(
+      "SELECT manifest_hash,length(path) bytes FROM efs_branch_manifest_roots WHERE branch_id=? AND path=?",
       [branchId, path],
-      { maxRows: 1, maxBytes: 128 },
-    )[0]!;
+      { maxRows: 1, maxBytes: 256 },
+    )[0];
+    if (prior && manifestHash && equalBytes(prior.manifest_hash, manifestHash)) return;
+    if (!prior && !manifestHash) return;
     const nextCharge = manifestHash ? CHARGED_ROW_BYTES + intrinsicByteLength(path) : 0;
     this.#changeMetadata(
-      nextCharge - (prior.count * CHARGED_ROW_BYTES + prior.bytes),
+      nextCharge - (prior ? CHARGED_ROW_BYTES + prior.bytes : 0),
       "branch manifest root metadata",
     );
+    this.#bumpRoot(1, branchId);
     this.#tx.run("DELETE FROM efs_branch_manifest_roots WHERE branch_id=? AND path=?", [
       branchId,
       path,
@@ -271,6 +295,7 @@ export class BranchRepository {
       ),
       "terminal branch metadata cleanup",
     );
+    if (rows.roots) this.#bumpRoot(1, branchId);
     this.#tx.run("DELETE FROM efs_branch_changes WHERE branch_id=?", [branchId]);
     this.#tx.run("DELETE FROM efs_branch_inode_expectations WHERE branch_id=?", [
       branchId,
@@ -282,6 +307,7 @@ export class BranchRepository {
     encoded: Uint8Array,
     expiresAt: number,
   ): void {
+    validateDurableIdentifier(operationId, "operation identifier");
     new UsageRepository(this.#tx, this.#limits).apply(
       {
         result_bytes: intrinsicByteLength(encoded),
@@ -299,6 +325,29 @@ export class BranchRepository {
     new UsageRepository(this.#tx, this.#limits).apply(
       { charged_metadata_bytes: bytes },
       reason,
+    );
+  }
+  #bumpRoot(kind: number, id: string): void {
+    validateDurableIdentifier(id, "root journal identifier");
+    const rootId = encodeUtf8(id);
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
+      "branch root journal",
+      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
+    );
+    this.#tx.run(
+      "UPDATE efs_meta SET root_mutation_generation=root_mutation_generation+1 WHERE singleton=1",
+    );
+    const generation = this.#tx.all<{ value: number } & SqliteRow>(
+      "SELECT root_mutation_generation value FROM efs_meta WHERE singleton=1",
+      [],
+      { maxRows: 1, maxBytes: 128 },
+    )[0]?.value;
+    if (!Number.isSafeInteger(generation))
+      throw new Error("ECORRUPT: invalid root mutation generation");
+    this.#tx.run(
+      "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
+      [generation!, kind, rootId],
     );
   }
 }

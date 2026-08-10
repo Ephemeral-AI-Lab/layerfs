@@ -61,4 +61,5 @@ export interface NodeVfsFilesystemBridge {
 export interface SyncPreparedContent {
     readonly manifestHash: Uint8Array;
     readonly size: number;
+    readonly certificate: ClosureCertificate;
 }

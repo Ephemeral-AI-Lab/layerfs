@@ -172,8 +172,10 @@ revision, and integration modules MUST NOT import the driver or issue SQL direct
 An adapter:
 
 1. MUST use SQLite semantics and support parameterized statements, BLOBs, `NULL`,
-   uniqueness constraints, foreign keys, indexes, transactions, savepoints, common table
-   expressions, `ON CONFLICT`, and `RETURNING`;
+   uniqueness constraints, foreign keys, indexes, transactions, and `ON CONFLICT` in the
+   engine. The M2 callback surface MUST reject nested transaction control, common-table
+   expressions, `RETURNING`, writable result queries, temporary/attached schemas, and
+   unbounded expression forms; core repositories use the bounded plain-statement subset;
 2. MUST preserve all `Uint8Array` bytes, including a view with a nonzero `byteOffset`,
    and MUST return byte values that the caller can retain after the next query;
 3. MUST preserve every persisted core integer as an exact JavaScript safe integer and
@@ -393,9 +395,18 @@ migration is incomplete.
 The M2 v3-to-v4 migration uses one atomic recount only after bounded probes prove that
 all contributing durable tables contain at most 100,000 rows in aggregate. It
 reconstructs every payload, row-count, staging, result, maintenance, identifier, and
-metadata counter before establishing the v4 usage integrity token. A larger v3 database
-is rejected before any v4 DDL or data change; a future shadow migration is required to
-raise this explicit atomic-migration profile without an unbounded exclusive transaction.
+metadata counter before establishing the v4 usage integrity token. Legacy manifest
+certification is separately capped at 100,000 authenticated root/node visits and shares
+the five-second exclusive-transaction deadline. A database beyond either deterministic
+work envelope is rejected before the version switch; a future shadow migration is
+required to raise this explicit atomic-migration profile without an unbounded exclusive
+transaction. The released v1-to-v2 transform additionally preflights the exact COW-page
+and patch BLOB bytes that its `INSERT ... SELECT` statements copy, including
+conservative per-row overhead, against the 16 MiB plus 16 KiB final-transaction
+envelope. Existing CAS payload bytes are not copied by any released migration and
+therefore do not count toward that transform envelope; in particular, a v3 database
+containing an exact-16-MiB CAS object remains migratable when its bounded row and
+manifest-certificate probes pass.
 
 Destructive downgrade is outside version 0.1. Unknown tables or columns MAY be
 preserved, but unknown values in a field whose meaning affects correctness MUST cause an
@@ -1714,9 +1725,12 @@ explicitly created with another valid configuration:
 - 1 GiB `maxBranchOverlayBytes`;
 - 64 MiB each for `maxMaintenanceBytes` and `maintenanceReserveBytes`;
 - 10,000,000 permanent identifiers;
-- 100,000 rows and 16 MiB in one final transaction;
+- 100,000 rows and 16 MiB plus a 16 KiB binding/row envelope (16,793,600 bytes) in one
+  final transaction;
 - 1,000 revision replay steps;
-- 256 `maxPatchesPerFile` and 16 MiB `maxPatchBytesPerFile`;
+- 256 `maxPatchesPerFile` and 16 MiB `maxPatchBytesPerFile`, further constrained so
+  patch headers, segment-row results, and repeated bindings fit the final-transaction
+  byte envelope;
 - 256 `maxQueryBatchSize`;
 - 1,000 `maxGcBatchSize` and `maxRetainedRevisions`;
 - 5-minute read leases and 15-minute staging leases; and

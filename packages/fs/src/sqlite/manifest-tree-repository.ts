@@ -1,4 +1,4 @@
-import { copyBytes, equalBytes } from "../cas/bytes.js";
+import { copyBytes, equalBytes, intrinsicByteLength } from "../cas/bytes.js";
 import type { ContentCache } from "../cache/content-cache.js";
 import {
   decodeManifestNode,
@@ -89,9 +89,14 @@ export class ManifestTreeRepository {
   }
 
   pathAtOffset(manifestHash: Uint8Array, offset: number): SQLiteManifestTreePath {
+    if (intrinsicByteLength(manifestHash) !== 32)
+      throw new RangeError("manifest hash must contain exactly 32 bytes");
     manifestHash = copyBytes(manifestHash);
     if (!Number.isSafeInteger(offset) || offset < 0)
       throw new RangeError("manifest tree offset must be a nonnegative safe integer");
+    const validatedDepth = this.#content.validatedManifestDepth(manifestHash);
+    if (validatedDepth === undefined)
+      throw new Error("ECORRUPT: manifest lacks a durable validation certificate");
     const root = this.#content.withManifestRoot(manifestHash, (rootBytes) =>
       decodeManifestRoot(rootBytes, manifestHash),
     );
@@ -139,6 +144,8 @@ export class ManifestTreeRepository {
           throw new Error("ECORRUPT: manifest root totals mismatch");
       }
       if (decoded.kind === "leaf") {
+        if (depth !== validatedDepth)
+          throw new Error("ECORRUPT: manifest validation depth mismatch");
         let entryOffset = nodeOffset;
         let entryIndex = 0;
         if (root.fileSize !== 0) {
@@ -249,47 +256,76 @@ export class ManifestTreeRepository {
     if (!linked) throw new Error("ECORRUPT: reused subtree lacks its source root link");
     const parents = new Map<
       string,
-      { readonly path: readonly number[]; readonly node: ManifestNode }
+      {
+        readonly path: readonly number[];
+        readonly authenticated: ReturnType<
+          ManifestTreeRepository["authenticateNodePath"]
+        >;
+      }
     >();
     let insertedRows = 0;
     for (const claim of claims) {
       const sourcePath = claim.sourcePath;
       if (
-        !sourcePath.length ||
         sourcePath.length > this.#limits.maxManifestDepth ||
         sourcePath.some(
           (index) => !Number.isSafeInteger(index) || index < 0 || index > 255,
         )
       )
         throw new RangeError("reused subtree path is outside configured bounds");
-      const parentPath = sourcePath.slice(0, -1);
-      const key = parentPath.join("/");
-      let parent = parents.get(key);
-      if (!parent) {
-        parent = Object.freeze({
-          path: Object.freeze([...parentPath]),
-          node: this.authenticateNodePath(sourceManifestHash, parentPath).node,
-        });
-        parents.set(key, parent);
+      let authenticatedDepth: number;
+      let authenticatedTreeDepth: number;
+      let sourceFinalAtLevel: boolean;
+      if (sourcePath.length === 0) {
+        const authenticated = this.authenticateNodePath(sourceManifestHash, []);
+        if (
+          !equalBytes(authenticated.hash, claim.nodeHash) ||
+          authenticated.node.span !== claim.span ||
+          authenticated.node.entryCount !== claim.entryCount
+        )
+          throw new Error("ECORRUPT: reused root node is not source-authenticated");
+        authenticatedDepth = authenticated.depth;
+        authenticatedTreeDepth = authenticated.treeDepth;
+        sourceFinalAtLevel = true;
+      } else {
+        const parentPath = sourcePath.slice(0, -1);
+        const key = parentPath.join("/");
+        let parent = parents.get(key);
+        if (!parent) {
+          parent = Object.freeze({
+            path: Object.freeze([...parentPath]),
+            authenticated: this.authenticateNodePath(sourceManifestHash, parentPath),
+          });
+          parents.set(key, parent);
+        }
+        if (parent.authenticated.node.kind !== "internal")
+          throw new Error("ECORRUPT: reused subtree parent is not internal");
+        const childIndex = sourcePath.at(-1)!;
+        const child = parent.authenticated.node.children[childIndex];
+        if (
+          !child ||
+          !equalBytes(child.hash, claim.nodeHash) ||
+          child.span !== claim.span ||
+          child.entryCount !== claim.entryCount
+        )
+          throw new Error("ECORRUPT: reused subtree claim is not source-authenticated");
+        authenticatedDepth = checkedAdd(parent.authenticated.depth, 1);
+        authenticatedTreeDepth = parent.authenticated.treeDepth;
+        sourceFinalAtLevel =
+          parent.authenticated.finalAtLevel &&
+          childIndex === parent.authenticated.node.children.length - 1;
       }
-      if (parent.node.kind !== "internal")
-        throw new Error("ECORRUPT: reused subtree parent is not internal");
-      const child = parent.node.children[sourcePath.at(-1)!];
-      if (
-        !child ||
-        !equalBytes(child.hash, claim.nodeHash) ||
-        child.span !== claim.span ||
-        child.entryCount !== claim.entryCount
-      )
-        throw new Error("ECORRUPT: reused subtree claim is not source-authenticated");
       const staged = this.#tx.all(
         "SELECT 1 present FROM efs_lease_staged_manifests WHERE lease_id=? AND kind=1 AND manifest_hash=?",
         [leaseId, claim.nodeHash],
         { maxRows: 1, maxBytes: 128 },
       ).length;
       if (!staged) throw new Error("ECORRUPT: reused subtree lacks staged membership");
+      const leafDelta = authenticatedTreeDepth - authenticatedDepth;
+      if (leafDelta < 0)
+        throw new Error("ECORRUPT: reused subtree depth exceeds source certificate");
       insertedRows += this.#tx.run(
-        "INSERT OR IGNORE INTO efs_staging_reused_subtrees(lease_id,node_hash,source_manifest_hash,source_path,span,entry_count) VALUES(?,?,?,?,?,?)",
+        "INSERT OR IGNORE INTO efs_staging_reused_subtrees(lease_id,node_hash,source_manifest_hash,source_path,span,entry_count,validated_nonfinal_leaf_delta,validated_final_leaf_delta) VALUES(?,?,?,?,?,?,?,?)",
         [
           leaseId,
           claim.nodeHash,
@@ -297,6 +333,8 @@ export class ManifestTreeRepository {
           Uint8Array.from(sourcePath),
           claim.span,
           claim.entryCount,
+          sourceFinalAtLevel ? null : leafDelta,
+          sourceFinalAtLevel ? leafDelta : null,
         ],
       ).changes;
     }
@@ -310,8 +348,19 @@ export class ManifestTreeRepository {
   authenticateNodePath(
     manifestHash: Uint8Array,
     sourcePath: readonly number[],
-  ): { readonly hash: Uint8Array; readonly node: ManifestNode } {
+  ): {
+    readonly hash: Uint8Array;
+    readonly node: ManifestNode;
+    readonly depth: number;
+    readonly treeDepth: number;
+    readonly finalAtLevel: boolean;
+  } {
+    if (intrinsicByteLength(manifestHash) !== 32)
+      throw new RangeError("manifest hash must contain exactly 32 bytes");
     manifestHash = copyBytes(manifestHash);
+    const treeDepth = this.#content.validatedManifestDepth(manifestHash);
+    if (treeDepth === undefined)
+      throw new Error("ECORRUPT: source manifest lacks a validation certificate");
     const root = this.#content.withManifestRoot(manifestHash, (rootBytes) =>
       decodeManifestRoot(rootBytes, manifestHash),
     );
@@ -345,7 +394,13 @@ export class ManifestTreeRepository {
       )
         throw new Error("ECORRUPT: reused source root totals mismatch");
       if (depth - 1 === sourcePath.length)
-        return Object.freeze({ hash: copyBytes(hash), node: snapshotNode(node) });
+        return Object.freeze({
+          hash: copyBytes(hash),
+          node: snapshotNode(node),
+          depth,
+          treeDepth,
+          finalAtLevel,
+        });
       if (node.kind !== "internal")
         throw new Error("ECORRUPT: reused subtree path continues below a leaf");
       const index = sourcePath[depth - 1]!;

@@ -51,17 +51,21 @@ export function readManifestRange(
   checkedInteger(offset, "manifest read offset");
   checkedInteger(length, "manifest read length");
   const cursor = repository.openManifestCursor(manifestHash, offset);
-  const outputLength = Math.max(0, Math.min(length, cursor.fileSize - offset));
-  cache?.makeRoom(outputLength);
-  const releaseOutput = admission.reserve(outputLength);
   try {
-    const output = new Uint8Array(outputLength);
-    const written = cursor.readInto(output, 0, output.byteLength);
-    if (written !== output.byteLength)
-      throw new Error("ECORRUPT: authenticated manifest range ended early");
-    return output;
+    const outputLength = Math.max(0, Math.min(length, cursor.fileSize - offset));
+    cache?.makeRoom(outputLength);
+    const releaseOutput = admission.reserve(outputLength);
+    try {
+      const output = new Uint8Array(outputLength);
+      const written = cursor.readInto(output, 0, output.byteLength);
+      if (written !== output.byteLength)
+        throw new Error("ECORRUPT: authenticated manifest range ended early");
+      return output;
+    } finally {
+      releaseOutput();
+    }
   } finally {
-    releaseOutput();
+    cursor.close();
   }
 }
 
@@ -80,5 +84,9 @@ export function readManifestInto(
   if (checkedAdd(destinationOffset, length) > destination.byteLength)
     throw new RangeError("invalid direct manifest read range");
   const cursor = repository.openManifestCursor(manifestHash, position);
-  return cursor.readInto(destination, destinationOffset, length);
+  try {
+    return cursor.readInto(destination, destinationOffset, length);
+  } finally {
+    cursor.close();
+  }
 }

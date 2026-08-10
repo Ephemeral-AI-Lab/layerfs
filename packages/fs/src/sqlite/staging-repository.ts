@@ -1,9 +1,18 @@
 import { sha256 } from "../cas/sha256.js";
-import { equalBytes, intrinsicByteLength } from "../cas/bytes.js";
+import { copyBytes, equalBytes, intrinsicByteLength } from "../cas/bytes.js";
 import { encodeUtf8, utf8ByteLength } from "../namespace/utf8.js";
-import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
+import {
+  decodeManifestNode,
+  decodeManifestRoot,
+  validateSupportedManifestParameters,
+} from "../manifests/codec.js";
+import { validateCanonicalManifestNode } from "../manifests/cursor.js";
 import { checkedAdd } from "../resources/safe-integers.js";
-import type { StorageLimits } from "../resources/limits.js";
+import {
+  MAINTENANCE_GC_EMERGENCY_BYTES,
+  MAINTENANCE_TOTAL_EMERGENCY_BYTES,
+  type StorageLimits,
+} from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 import { ManifestTreeRepository } from "./manifest-tree-repository.js";
@@ -54,7 +63,9 @@ interface CertificateRow extends SqliteRow {
   state?: number;
   lease_nonce?: Uint8Array;
   rooted?: number;
+  validated_depth?: number | null;
   ingest_reservation_bytes: number;
+  metadata_reservation_bytes: number;
 }
 interface ReconciliationRow extends SqliteRow {
   owner_nonce: Uint8Array;
@@ -66,6 +77,7 @@ interface ReconciliationRow extends SqliteRow {
   node_bytes: number;
   membership_count: number;
   complete: number;
+  leaf_depth: number | null;
 }
 interface QueueRow extends SqliteRow {
   kind: number;
@@ -85,6 +97,7 @@ interface LeaseChargeRow extends SqliteRow {
   owner_nonce: Uint8Array;
   staged_bytes: number;
   ingest_reservation_bytes: number;
+  metadata_reservation_bytes: number;
 }
 interface ExpiredLeaseRow extends LeaseChargeRow {
   id: string;
@@ -98,6 +111,17 @@ interface ReusedSubtreeRow extends SqliteRow {
   source_path: Uint8Array;
   span: number;
   entry_count: number;
+  validated_nonfinal_leaf_delta: number | null;
+  validated_final_leaf_delta: number | null;
+}
+interface ValidationQueueRow extends SqliteRow {
+  path: Uint8Array;
+  node_hash: Uint8Array;
+  declared_span: number;
+  declared_entry_count: number;
+  depth: number;
+  final_at_level: number;
+  edge_cursor: number;
 }
 
 export interface ReconciliationProgress {
@@ -114,6 +138,7 @@ const CLEANUP_DELETE_STATEMENTS = Object.freeze([
   "DELETE FROM efs_staging_entries WHERE lease_id=? AND entry_index IN (SELECT entry_index FROM efs_staging_entries WHERE lease_id=? ORDER BY entry_index LIMIT ?)",
   "DELETE FROM efs_staging_level_records WHERE lease_id=? AND (level,record_index) IN (SELECT level,record_index FROM efs_staging_level_records WHERE lease_id=? ORDER BY level,record_index LIMIT ?)",
   "DELETE FROM efs_staging_reconciliation_queue WHERE lease_id=? AND (kind,hash) IN (SELECT kind,hash FROM efs_staging_reconciliation_queue WHERE lease_id=? ORDER BY kind,hash LIMIT ?)",
+  "DELETE FROM efs_staging_manifest_validation_queue WHERE lease_id=? AND path IN (SELECT path FROM efs_staging_manifest_validation_queue WHERE lease_id=? ORDER BY path LIMIT ?)",
   "DELETE FROM efs_staging_reused_subtrees WHERE lease_id=? AND node_hash IN (SELECT node_hash FROM efs_staging_reused_subtrees WHERE lease_id=? ORDER BY node_hash LIMIT ?)",
   "DELETE FROM efs_lease_objects WHERE lease_id=? AND object_hash IN (SELECT object_hash FROM efs_lease_objects WHERE lease_id=? ORDER BY object_hash LIMIT ?)",
   "DELETE FROM efs_lease_staged_manifests WHERE lease_id=? AND (kind,manifest_hash) IN (SELECT kind,manifest_hash FROM efs_lease_staged_manifests WHERE lease_id=? ORDER BY kind,manifest_hash LIMIT ?)",
@@ -188,6 +213,7 @@ export class StagingRepository {
     readonly branchId?: string;
     readonly generation?: number;
     readonly ingestReservationBytes?: number;
+    readonly metadataReservationBytes?: number;
   }): void {
     stagingId(options.leaseId, "staging lease id");
     stagingId(options.ownerId, "staging owner id");
@@ -196,10 +222,19 @@ export class StagingRepository {
     if (intrinsicByteLength(options.ownerNonce) !== 16)
       throw new RangeError("staging lease identity or owner nonce is invalid");
     counters([options.now, options.expiresAt]);
-    counters([options.ingestReservationBytes ?? 0]);
+    counters([
+      options.ingestReservationBytes ?? 0,
+      options.metadataReservationBytes ?? 0,
+    ]);
     if (options.expiresAt <= options.now)
       throw new RangeError("staging lease expiry must be in the future");
-    this.#changeMetadataRows(2, "staging lease and certificate");
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        charged_metadata_bytes:
+          2 * CHARGED_ROW_BYTES + (options.metadataReservationBytes ?? 0),
+      },
+      "staging lease, certificate, and metadata envelope",
+    );
     if (options.ingestReservationBytes)
       new UsageRepository(this.#tx, this.#limits).apply(
         { ingest_reservation_bytes: options.ingestReservationBytes },
@@ -220,13 +255,36 @@ export class StagingRepository {
       ],
     );
     this.#tx.run(
-      "INSERT INTO efs_staging_certificates(lease_id,owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified,ingest_reservation_bytes) VALUES(?,?,NULL,?,0,0,0,0,0,0,0,0,?)",
+      "INSERT INTO efs_staging_certificates(lease_id,owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified,ingest_reservation_bytes,metadata_reservation_bytes) VALUES(?,?,NULL,?,0,0,0,0,0,0,0,0,?,?)",
       [
         options.leaseId,
         options.ownerNonce,
         EMPTY_STAGING_CHAIN,
         options.ingestReservationBytes ?? 0,
+        options.metadataReservationBytes ?? 0,
       ],
+    );
+  }
+
+  consumeMetadataReservation(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    bytes: number,
+  ): void {
+    counters([bytes]);
+    if (bytes === 0) return;
+    const row = this.#row(leaseId);
+    if (!equalBytes(row.owner_nonce, ownerNonce) || row.sealed !== 0)
+      throw new Error("ECORRUPT: metadata reservation owner mismatch");
+    if (bytes > row.metadata_reservation_bytes)
+      throw new Error("ENOSPC: durable metadata exceeds its declared envelope");
+    this.#tx.run(
+      "UPDATE efs_staging_certificates SET metadata_reservation_bytes=metadata_reservation_bytes-? WHERE lease_id=? AND sealed=0",
+      [bytes, leaseId],
+    );
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { charged_metadata_bytes: -bytes },
+      "durable metadata reservation consumption",
     );
   }
 
@@ -258,7 +316,7 @@ export class StagingRepository {
     objectHash: Uint8Array,
     length: number,
   ): void {
-    this.#changeMetadataRows(1, "staging entry");
+    this.#changeMetadataRows(1, "staging entry", leaseId);
     this.#tx.run(
       "INSERT INTO efs_staging_entries(lease_id,entry_index,object_hash,length) VALUES(?,?,?,?)",
       [leaseId, entryIndex, objectHash, length],
@@ -284,7 +342,7 @@ export class StagingRepository {
     span: number,
     entryCount: number,
   ): void {
-    this.#changeMetadataRows(1, "staging level record");
+    this.#changeMetadataRows(1, "staging level record", leaseId);
     this.#tx.run(
       "INSERT INTO efs_staging_level_records(lease_id,level,record_index,node_hash,span,entry_count) VALUES(?,?,?,?,?,?)",
       [leaseId, level, recordIndex, nodeHash, span, entryCount],
@@ -308,6 +366,7 @@ export class StagingRepository {
     new UsageRepository(this.#tx, this.#limits).apply(
       { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
       "root journal",
+      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
     );
     this.#tx.run(
       "UPDATE efs_meta SET root_mutation_generation=root_mutation_generation+1 WHERE singleton=1",
@@ -339,8 +398,10 @@ export class StagingRepository {
       if (result.changes !== 1)
         throw new Error("ECORRUPT: staging lease tombstone changed unexpectedly");
       this.#releaseLeaseReservations(
+        leaseId,
         charge.staged_bytes,
         charge.ingest_reservation_bytes,
+        charge.metadata_reservation_bytes,
       );
       this.bumpRoot(6, leaseId);
     } else if (charge.state === 2) {
@@ -362,8 +423,10 @@ export class StagingRepository {
         throw new Error("ECORRUPT: staging lease tombstone changed unexpectedly");
       if (charge.state === 0 || charge.state === 1)
         this.#releaseLeaseReservations(
+          leaseId,
           charge.staged_bytes,
           charge.ingest_reservation_bytes,
+          charge.metadata_reservation_bytes,
         );
       this.bumpRoot(6, leaseId);
     } else if (charge.state === 2) {
@@ -424,12 +487,13 @@ export class StagingRepository {
     )
       throw new RangeError("invalid expired-lease batch limit");
     const rows = this.#tx.all<ExpiredLeaseRow>(
-      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id LEFT JOIN efs_lease_cleanups x ON x.lease_id=l.id WHERE x.lease_id IS NULL AND (l.expires_at_ms<? OR l.state=2) ORDER BY l.id LIMIT ?",
+      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes,COALESCE(c.metadata_reservation_bytes,0) metadata_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id LEFT JOIN efs_lease_cleanups x ON x.lease_id=l.id WHERE x.lease_id IS NULL AND (l.expires_at_ms<? OR l.state=2) ORDER BY l.id LIMIT ?",
       [now, limit],
       { maxRows: limit, maxBytes: Math.max(1024, limit * 256) },
     );
     let releasedBytes = 0;
     let releasedIngestBytes = 0;
+    let releasedMetadataBytes = 0;
     let tombstoned = 0;
     for (const row of rows) {
       this.#scheduleCleanup(
@@ -443,6 +507,11 @@ export class StagingRepository {
         [row.id, now],
       );
       if (result.changes) {
+        if (row.ingest_reservation_bytes || row.metadata_reservation_bytes)
+          this.#tx.run(
+            "UPDATE efs_staging_certificates SET ingest_reservation_bytes=0,metadata_reservation_bytes=0 WHERE lease_id=? AND sealed=0",
+            [row.id],
+          );
         tombstoned += 1;
         if (row.state === 0 || row.state === 1)
           releasedBytes = checkedAdd(releasedBytes, row.staged_bytes);
@@ -451,11 +520,21 @@ export class StagingRepository {
             releasedIngestBytes,
             row.ingest_reservation_bytes,
           );
+        if (row.state === 0 || row.state === 1)
+          releasedMetadataBytes = checkedAdd(
+            releasedMetadataBytes,
+            row.metadata_reservation_bytes,
+          );
       } else {
         throw new Error("ECORRUPT: expired lease tombstone changed unexpectedly");
       }
     }
-    this.#releaseLeaseReservations(releasedBytes, releasedIngestBytes);
+    this.#releaseLeaseReservations(
+      "",
+      releasedBytes,
+      releasedIngestBytes,
+      releasedMetadataBytes,
+    );
     if (tombstoned) this.bumpRoot(6, `expired:${now}`);
     return tombstoned;
   }
@@ -475,7 +554,7 @@ export class StagingRepository {
     )[0];
     if (!cleanup)
       return Object.freeze({ worked: false, deletedRows: 0, deletedLeases: 0 });
-    if (!Number.isSafeInteger(cleanup.phase) || cleanup.phase < 0 || cleanup.phase > 11)
+    if (!Number.isSafeInteger(cleanup.phase) || cleanup.phase < 0 || cleanup.phase > 12)
       throw new Error("ECORRUPT: invalid lease cleanup phase");
     if (cleanup.phase < CLEANUP_DELETE_STATEMENTS.length) {
       const deletedRows = this.#tx.run(CLEANUP_DELETE_STATEMENTS[cleanup.phase]!, [
@@ -487,7 +566,7 @@ export class StagingRepository {
       if (deletedRows < limit) this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
-    if (cleanup.phase === 9) {
+    if (cleanup.phase === 10) {
       const deletedRows = this.#tx.run(
         "DELETE FROM efs_staging_reconciliations WHERE lease_id=?",
         [cleanup.lease_id],
@@ -496,7 +575,7 @@ export class StagingRepository {
       this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
-    if (cleanup.phase === 10) {
+    if (cleanup.phase === 11) {
       const deletedRows = this.#tx.run(
         "DELETE FROM efs_staging_workspaces WHERE lease_id=?",
         [cleanup.lease_id],
@@ -506,8 +585,8 @@ export class StagingRepository {
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
     const remaining = this.#tx.all<{ count: number } & SqliteRow>(
-      "SELECT (SELECT count(*) FROM efs_staging_entries WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_level_records WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reused_subtrees WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_objects WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_staged_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_cow_pages WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_patches WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_workspaces WHERE lease_id=?) count",
-      Array.from({ length: 11 }, () => cleanup.lease_id),
+      "SELECT (SELECT count(*) FROM efs_staging_entries WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_level_records WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_manifest_validation_queue WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reused_subtrees WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_objects WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_staged_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_cow_pages WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_patches WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_workspaces WHERE lease_id=?) count",
+      Array.from({ length: 12 }, () => cleanup.lease_id),
       { maxRows: 1, maxBytes: 256 },
     )[0]?.count;
     if (remaining !== 0)
@@ -600,10 +679,10 @@ export class StagingRepository {
       chain = extendChain(chain, sequence, member);
       sequence += 1;
     }
-    this.#admitStagingBytes(stagedDelta);
     if (row.ingest_reservation_bytes)
       this.consumeIngestReservation(leaseId, ownerNonce, stagedDelta);
-    this.#changeMetadataRows(insertedRows, "staging membership");
+    this.#admitStagingBytes(stagedDelta);
+    this.#changeMetadataRows(insertedRows, "staging membership", leaseId);
     this.#tx.run(
       "UPDATE efs_staging_certificates SET chain_digest=?,object_count=?,object_bytes=?,node_count=?,node_bytes=?,membership_count=?,next_sequence=? WHERE lease_id=? AND sealed=0",
       [
@@ -619,7 +698,7 @@ export class StagingRepository {
     );
     return Object.freeze({
       leaseId,
-      ownerNonce: ownerNonce.slice(),
+      ownerNonce: copyBytes(ownerNonce),
       manifestHash: new Uint8Array(32),
       chainDigest: chain,
       objectCount,
@@ -636,7 +715,7 @@ export class StagingRepository {
       throw new Error("ECORRUPT: staging owner mismatch");
     return Object.freeze({
       leaseId,
-      ownerNonce: ownerNonce.slice(),
+      ownerNonce: copyBytes(ownerNonce),
       manifestHash: row.manifest_hash?.slice() ?? new Uint8Array(32),
       chainDigest: row.chain_digest,
       objectCount: row.object_count,
@@ -666,7 +745,7 @@ export class StagingRepository {
         throw new Error("ECORRUPT: reconciliation identity mismatch");
       return;
     }
-    this.#changeMetadataRows(1, "staging reconciliation state");
+    this.#changeMetadataRows(1, "staging reconciliation state", leaseId);
     this.#tx.run(
       "INSERT INTO efs_staging_reconciliations(lease_id,owner_nonce,manifest_hash,next_sequence,object_count,object_bytes,node_count,node_bytes,membership_count,complete) VALUES(?,?,?,0,0,0,0,0,0,0)",
       [leaseId, ownerNonce, manifestHash],
@@ -682,17 +761,18 @@ export class StagingRepository {
     if (
       !Number.isSafeInteger(workLimit) ||
       workLimit <= 0 ||
-      workLimit > this.#limits.maxQueryBatchSize
+      workLimit > Math.floor((this.#limits.maxFinalTransactionRows - 12) / 5)
     )
       throw new RangeError("invalid reconciliation work limit");
+    const queryLimit = Math.min(workLimit, this.#limits.maxQueryBatchSize);
     const state = this.#reconciliation(leaseId);
     if (!state || !equalBytes(state.owner_nonce, ownerNonce))
       throw new Error("ECORRUPT: reconciliation owner mismatch");
     if (state.complete === 1) return Object.freeze({ processed: 0, complete: true });
     const queue = this.#tx.all<QueueRow>(
       "SELECT kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor FROM efs_staging_reconciliation_queue WHERE lease_id=? AND processed=0 ORDER BY sequence LIMIT ?",
-      [leaseId, workLimit],
-      { maxRows: workLimit, maxBytes: Math.max(1024, workLimit * 320) },
+      [leaseId, queryLimit],
+      { maxRows: queryLimit, maxBytes: Math.max(1024, queryLimit * 320) },
     );
     let remaining = workLimit;
     let processed = 0;
@@ -716,12 +796,26 @@ export class StagingRepository {
           decodeManifestRoot(encoded, item.hash),
         );
         if (!root) throw new Error("ECORRUPT: reconciled manifest root is missing");
+        if (
+          root.fileSize > this.#limits.maxFileBytes ||
+          root.entryCount > this.#limits.maxManifestEntries
+        )
+          throw new RangeError("manifest root exceeds configured storage limits");
         this.#enqueueVerified(
           leaseId,
           2,
           root.rootNodeHash,
           root.fileSize,
           root.entryCount,
+        );
+        this.#enqueueValidation(
+          leaseId,
+          new Uint8Array(0),
+          root.rootNodeHash,
+          root.fileSize,
+          root.entryCount,
+          1,
+          true,
         );
         this.#tx.run(
           "UPDATE efs_staging_reconciliation_queue SET edge_cursor=1,processed=1 WHERE lease_id=? AND kind=1 AND hash=? AND processed=0",
@@ -742,33 +836,61 @@ export class StagingRepository {
         throw new Error("ECORRUPT: manifest child declaration mismatch");
       const edgeCount =
         node.kind === "leaf" ? node.entries.length : node.children.length;
-      const end = Math.min(edgeCount, item.edge_cursor + remaining);
+      let end = item.edge_cursor;
+      let edgeUnits = remaining * 4;
       if (node.kind === "leaf") {
-        for (let index = item.edge_cursor; index < end; index += 1) {
-          const edge = node.entries[index]!;
-          this.#enqueueVerified(leaseId, 0, edge.hash, edge.length, 1);
-          remaining -= 1;
+        while (end < edgeCount && edgeUnits >= 4) {
+          const edge = node.entries[end]!;
+          const inserted = this.#enqueueVerified(leaseId, 0, edge.hash, edge.length, 1);
+          edgeUnits -= inserted ? 4 : 1;
           processed += 1;
+          end += 1;
         }
       } else {
-        for (let index = item.edge_cursor; index < end; index += 1) {
-          const edge = node.children[index]!;
-          this.#enqueueVerified(leaseId, 2, edge.hash, edge.span, edge.entryCount);
-          remaining -= 1;
+        while (end < edgeCount && edgeUnits >= 4) {
+          const edge = node.children[end]!;
+          const inserted = this.#enqueueVerified(
+            leaseId,
+            2,
+            edge.hash,
+            edge.span,
+            edge.entryCount,
+          );
+          edgeUnits -= inserted ? 4 : 1;
           processed += 1;
+          end += 1;
         }
       }
+      remaining = Math.floor(edgeUnits / 4);
       this.#tx.run(
         "UPDATE efs_staging_reconciliation_queue SET edge_cursor=?,processed=? WHERE lease_id=? AND kind=2 AND hash=? AND processed=0",
         [end, end === edgeCount ? 1 : 0, leaseId, item.hash],
       );
     }
-    const pending =
+    let pending =
       this.#tx.all(
         "SELECT sequence FROM efs_staging_reconciliation_queue WHERE lease_id=? AND processed=0 LIMIT 1",
         [leaseId],
         { maxRows: 1, maxBytes: 128 },
       ).length !== 0;
+    if (!pending) {
+      if (remaining > 0) {
+        const validation = this.#validateManifestBatch(
+          leaseId,
+          state.manifest_hash,
+          remaining,
+        );
+        processed += validation.processed;
+        pending = !validation.complete;
+      } else {
+        pending =
+          this.#tx.all(
+            "SELECT path FROM efs_staging_manifest_validation_queue WHERE lease_id=? AND processed=0 LIMIT 1",
+            [leaseId],
+            { maxRows: 1, maxBytes: 128 },
+          ).length !== 0;
+      }
+    }
     if (!pending) {
       const reconciled = this.#reconciliation(leaseId)!;
       const certificate = this.#row(leaseId);
@@ -783,6 +905,20 @@ export class StagingRepository {
         throw new Error(
           "ECORRUPT: complete manifest closure differs from staged membership",
         );
+      if (reconciled.leaf_depth === null)
+        throw new Error("ECORRUPT: manifest validation did not reach a leaf");
+      const validation = this.#tx.run(
+        "INSERT OR IGNORE INTO efs_manifest_validations(manifest_hash,tree_depth) VALUES(?,?)",
+        [state.manifest_hash, reconciled.leaf_depth],
+      );
+      this.#changeMetadataRows(
+        validation.changes,
+        "manifest validation certificate",
+        leaseId,
+      );
+      const certified = this.#content.validatedManifestDepth(state.manifest_hash);
+      if (certified !== reconciled.leaf_depth)
+        throw new Error("ECORRUPT: manifest validation certificate disagrees");
       this.#tx.run(
         "UPDATE efs_staging_reconciliations SET complete=1 WHERE lease_id=? AND complete=0",
         [leaseId],
@@ -832,7 +968,20 @@ export class StagingRepository {
       "INSERT OR IGNORE INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
       [certificate.leaseId, certificate.manifestHash],
     );
-    this.#changeMetadataRows(rooted.changes, "sealed staging root link");
+    this.#changeMetadataRows(
+      rooted.changes,
+      "sealed staging root link",
+      certificate.leaseId,
+    );
+    const remainingMetadataReservation = this.#row(
+      certificate.leaseId,
+    ).metadata_reservation_bytes;
+    if (remainingMetadataReservation)
+      this.consumeMetadataReservation(
+        certificate.leaseId,
+        certificate.ownerNonce,
+        remainingMetadataReservation,
+      );
     this.#tx.run(
       "UPDATE efs_staging_certificates SET manifest_hash=?,sealed=1,verified=1 WHERE lease_id=? AND sealed=0",
       [certificate.manifestHash, certificate.leaseId],
@@ -846,7 +995,7 @@ export class StagingRepository {
     this.#validateShape(certificate);
     counters([now]);
     const row = this.#tx.all<CertificateRow>(
-      "SELECT c.owner_nonce,c.manifest_hash,c.chain_digest,c.object_count,c.object_bytes,c.node_count,c.node_bytes,c.membership_count,c.next_sequence,c.sealed,c.verified,l.owner_nonce lease_nonce,l.expires_at_ms,l.state,CASE WHEN m.manifest_hash IS NULL THEN 0 ELSE 1 END rooted FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id LEFT JOIN efs_lease_manifests m ON m.lease_id=c.lease_id AND m.manifest_hash=c.manifest_hash WHERE c.lease_id=?",
+      "SELECT c.owner_nonce,c.manifest_hash,c.chain_digest,c.object_count,c.object_bytes,c.node_count,c.node_bytes,c.membership_count,c.next_sequence,c.sealed,c.verified,c.ingest_reservation_bytes,c.metadata_reservation_bytes,l.owner_nonce lease_nonce,l.expires_at_ms,l.state,CASE WHEN m.manifest_hash IS NULL THEN 0 ELSE 1 END rooted,v.tree_depth validated_depth FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id LEFT JOIN efs_lease_manifests m ON m.lease_id=c.lease_id AND m.manifest_hash=c.manifest_hash LEFT JOIN efs_manifest_validations v ON v.manifest_hash=c.manifest_hash WHERE c.lease_id=?",
       [certificate.leaseId],
       { maxRows: 1, maxBytes: 4096 },
     )[0];
@@ -856,6 +1005,11 @@ export class StagingRepository {
       row.verified !== 1 ||
       row.state !== 1 ||
       row.rooted !== 1 ||
+      row.ingest_reservation_bytes !== 0 ||
+      row.metadata_reservation_bytes !== 0 ||
+      !Number.isSafeInteger(row.validated_depth) ||
+      row.validated_depth! < 1 ||
+      row.validated_depth! > this.#limits.maxManifestDepth ||
       row.expires_at_ms! < now ||
       !equalBytes(row.owner_nonce, certificate.ownerNonce) ||
       !equalBytes(row.lease_nonce!, certificate.ownerNonce) ||
@@ -921,7 +1075,7 @@ export class StagingRepository {
     hash: Uint8Array,
     declaredSpan: number | undefined,
     declaredEntryCount: number | undefined,
-  ): void {
+  ): boolean {
     // A manifest is a DAG. Repeated edges to a queue member that was already
     // authenticated need only agree with its immutable declaration; fetching
     // and decoding the same BLOB once per sibling would turn highly deduplicated
@@ -937,7 +1091,7 @@ export class StagingRepository {
         queued.declared_entry_count !== (declaredEntryCount ?? null)
       )
         throw new Error("ECORRUPT: repeated manifest closure edge disagrees");
-      return;
+      return false;
     }
     let size: number;
     let reused = false;
@@ -968,35 +1122,27 @@ export class StagingRepository {
         )
           throw new Error("ECORRUPT: closure manifest root is missing");
       } else {
-        const node = this.#content.withManifestNode(hash, (encoded) =>
-          decodeManifestNode(encoded, hash),
-        );
-        if (!node) throw new Error("ECORRUPT: closure manifest node is missing");
-        if (node.span !== declaredSpan || node.entryCount !== declaredEntryCount)
-          throw new Error("ECORRUPT: manifest child declaration mismatch");
         const claim = this.#tx.all<ReusedSubtreeRow>(
-          "SELECT source_manifest_hash,source_path,span,entry_count FROM efs_staging_reused_subtrees WHERE lease_id=? AND node_hash=?",
+          "SELECT source_manifest_hash,source_path,span,entry_count,validated_nonfinal_leaf_delta,validated_final_leaf_delta FROM efs_staging_reused_subtrees WHERE lease_id=? AND node_hash=?",
           [leaseId, hash],
           { maxRows: 1, maxBytes: 512 },
         )[0];
         if (claim) {
-          if (claim.span !== node.span || claim.entry_count !== node.entryCount)
+          if (claim.span !== declaredSpan || claim.entry_count !== declaredEntryCount)
             throw new Error("ECORRUPT: reused subtree declaration mismatch");
-          const authenticated = new ManifestTreeRepository(
-            this.#tx,
-            this.#limits,
-            this.#cache,
-          ).authenticateNodePath(
-            claim.source_manifest_hash,
-            Array.from(claim.source_path),
-          );
           if (
-            !equalBytes(authenticated.hash, hash) ||
-            authenticated.node.span !== node.span ||
-            authenticated.node.entryCount !== node.entryCount
+            claim.validated_nonfinal_leaf_delta === null &&
+            claim.validated_final_leaf_delta === null
           )
-            throw new Error("ECORRUPT: reused subtree authentication changed");
+            throw new Error("ECORRUPT: reused subtree lacks authenticated depth");
           reused = true;
+        } else {
+          const node = this.#content.withManifestNode(hash, (encoded) =>
+            decodeManifestNode(encoded, hash),
+          );
+          if (!node) throw new Error("ECORRUPT: closure manifest node is missing");
+          if (node.span !== declaredSpan || node.entryCount !== declaredEntryCount)
+            throw new Error("ECORRUPT: manifest child declaration mismatch");
         }
       }
     }
@@ -1017,18 +1163,208 @@ export class StagingRepository {
     );
     if (!inserted.changes)
       throw new Error("ECORRUPT: reconciliation queue changed during insertion");
-    this.#changeMetadataRows(1, "staging reconciliation queue");
+    this.#changeMetadataRows(1, "staging reconciliation queue", leaseId);
     const object = kind === 0 ? 1 : 0;
     const node = kind === 0 ? 0 : 1;
     this.#tx.run(
       "UPDATE efs_staging_reconciliations SET next_sequence=next_sequence+1,object_count=object_count+?,object_bytes=object_bytes+?,node_count=node_count+?,node_bytes=node_bytes+?,membership_count=membership_count+1 WHERE lease_id=? AND complete=0",
       [object, object ? size : 0, node, node ? size : 0, leaseId],
     );
+    return true;
+  }
+
+  #enqueueValidation(
+    leaseId: string,
+    path: Uint8Array,
+    nodeHash: Uint8Array,
+    declaredSpan: number,
+    declaredEntryCount: number,
+    depth: number,
+    finalAtLevel: boolean,
+  ): void {
+    if (
+      intrinsicByteLength(path) !== depth - 1 ||
+      depth > this.#limits.maxManifestDepth
+    )
+      throw new Error("ECORRUPT: manifest validation path exceeds configured depth");
+    const inserted = this.#tx.run(
+      "INSERT INTO efs_staging_manifest_validation_queue(lease_id,path,node_hash,declared_span,declared_entry_count,depth,final_at_level,edge_cursor,processed) VALUES(?,?,?,?,?,?,?,0,0)",
+      [
+        leaseId,
+        path,
+        nodeHash,
+        declaredSpan,
+        declaredEntryCount,
+        depth,
+        finalAtLevel ? 1 : 0,
+      ],
+    );
+    if (inserted.changes !== 1)
+      throw new Error("ECORRUPT: manifest validation path changed unexpectedly");
+    this.#changeMetadataRows(1, "manifest validation queue", leaseId);
+  }
+
+  #validateManifestBatch(
+    leaseId: string,
+    manifestHash: Uint8Array,
+    workLimit: number,
+  ): { readonly processed: number; readonly complete: boolean } {
+    const root = this.#content.withManifestRoot(manifestHash, (encoded) =>
+      decodeManifestRoot(encoded, manifestHash),
+    );
+    if (!root) throw new Error("ECORRUPT: reconciled manifest root is missing");
+    validateSupportedManifestParameters(root.parameters);
+    let processed = 0;
+    while (processed < workLimit) {
+      const item = this.#tx.all<ValidationQueueRow>(
+        "SELECT path,node_hash,declared_span,declared_entry_count,depth,final_at_level,edge_cursor FROM efs_staging_manifest_validation_queue WHERE lease_id=? AND processed=0 ORDER BY path LIMIT 1",
+        [leaseId],
+        { maxRows: 1, maxBytes: 512 },
+      )[0];
+      if (!item) return Object.freeze({ processed, complete: true });
+
+      const claim = this.#tx.all<ReusedSubtreeRow>(
+        "SELECT source_manifest_hash,source_path,span,entry_count,validated_nonfinal_leaf_delta,validated_final_leaf_delta FROM efs_staging_reused_subtrees WHERE lease_id=? AND node_hash=?",
+        [leaseId, item.node_hash],
+        { maxRows: 1, maxBytes: 512 },
+      )[0];
+      if (claim) {
+        if (
+          claim.span !== item.declared_span ||
+          claim.entry_count !== item.declared_entry_count
+        )
+          throw new Error("ECORRUPT: reused validation declaration mismatch");
+        const cachedLeafDelta =
+          item.final_at_level === 1
+            ? (claim.validated_nonfinal_leaf_delta ?? claim.validated_final_leaf_delta)
+            : claim.validated_nonfinal_leaf_delta;
+        if (cachedLeafDelta !== null) {
+          this.#recordLeafDepth(
+            leaseId,
+            checkedAdd(
+              item.depth,
+              cachedLeafDelta,
+              "cached reused manifest validation depth",
+            ),
+          );
+          this.#tx.run(
+            "UPDATE efs_staging_manifest_validation_queue SET processed=1 WHERE lease_id=? AND path=? AND processed=0",
+            [leaseId, item.path],
+          );
+          processed += 1;
+          continue;
+        }
+        const authenticated = new ManifestTreeRepository(
+          this.#tx,
+          this.#limits,
+          this.#cache,
+        ).authenticateNodePath(
+          claim.source_manifest_hash,
+          Array.from(claim.source_path),
+        );
+        if (
+          equalBytes(authenticated.hash, item.node_hash) &&
+          (!authenticated.finalAtLevel || item.final_at_level === 1)
+        ) {
+          const leafDepth = checkedAdd(
+            item.depth,
+            authenticated.treeDepth - authenticated.depth,
+            "reused manifest validation depth",
+          );
+          this.#recordLeafDepth(leaseId, leafDepth);
+          const column =
+            item.final_at_level === 1
+              ? "validated_final_leaf_delta"
+              : "validated_nonfinal_leaf_delta";
+          this.#tx.run(
+            `UPDATE efs_staging_reused_subtrees SET ${column}=? WHERE lease_id=? AND node_hash=? AND ${column} IS NULL`,
+            [authenticated.treeDepth - authenticated.depth, leaseId, item.node_hash],
+          );
+          this.#tx.run(
+            "UPDATE efs_staging_manifest_validation_queue SET processed=1 WHERE lease_id=? AND path=? AND processed=0",
+            [leaseId, item.path],
+          );
+          processed += 1;
+          continue;
+        }
+      }
+
+      const node = this.#content.withManifestNode(item.node_hash, (encoded) =>
+        decodeManifestNode(encoded, item.node_hash),
+      );
+      if (!node) throw new Error("ECORRUPT: validated manifest node is missing");
+      if (
+        node.span !== item.declared_span ||
+        node.entryCount !== item.declared_entry_count
+      )
+        throw new Error("ECORRUPT: manifest validation child totals mismatch");
+      validateCanonicalManifestNode(
+        node,
+        root.parameters,
+        item.final_at_level === 1,
+        item.depth === 1,
+      );
+      if (node.kind === "leaf") {
+        this.#recordLeafDepth(leaseId, item.depth);
+        this.#tx.run(
+          "UPDATE efs_staging_manifest_validation_queue SET processed=1 WHERE lease_id=? AND path=? AND processed=0",
+          [leaseId, item.path],
+        );
+        processed += 1;
+        continue;
+      }
+      if (item.depth >= this.#limits.maxManifestDepth)
+        throw new Error("ECORRUPT: manifest validation exceeds configured depth");
+      const end = Math.min(
+        node.children.length,
+        item.edge_cursor + workLimit - processed,
+      );
+      for (let index = item.edge_cursor; index < end; index += 1) {
+        const child = node.children[index]!;
+        const childPath = new Uint8Array(intrinsicByteLength(item.path) + 1);
+        childPath.set(item.path);
+        childPath[childPath.length - 1] = index;
+        this.#enqueueValidation(
+          leaseId,
+          childPath,
+          child.hash,
+          child.span,
+          child.entryCount,
+          item.depth + 1,
+          item.final_at_level === 1 && index === node.children.length - 1,
+        );
+        processed += 1;
+      }
+      this.#tx.run(
+        "UPDATE efs_staging_manifest_validation_queue SET edge_cursor=?,processed=? WHERE lease_id=? AND path=? AND processed=0",
+        [end, end === node.children.length ? 1 : 0, leaseId, item.path],
+      );
+    }
+    const pending =
+      this.#tx.all(
+        "SELECT path FROM efs_staging_manifest_validation_queue WHERE lease_id=? AND processed=0 LIMIT 1",
+        [leaseId],
+        { maxRows: 1, maxBytes: 128 },
+      ).length !== 0;
+    return Object.freeze({ processed, complete: !pending });
+  }
+
+  #recordLeafDepth(leaseId: string, depth: number): void {
+    if (depth < 1 || depth > this.#limits.maxManifestDepth)
+      throw new Error("ECORRUPT: manifest leaf depth exceeds configured maximum");
+    const changed = this.#tx.run(
+      "UPDATE efs_staging_reconciliations SET leaf_depth=? WHERE lease_id=? AND leaf_depth IS NULL AND complete=0",
+      [depth, leaseId],
+    );
+    if (changed.changes === 0) {
+      const current = this.#reconciliation(leaseId)?.leaf_depth;
+      if (current !== depth) throw new Error("ECORRUPT: unbalanced manifest tree");
+    }
   }
 
   #reconciliation(leaseId: string): ReconciliationRow | undefined {
     return this.#tx.all<ReconciliationRow>(
-      "SELECT owner_nonce,manifest_hash,next_sequence,object_count,object_bytes,node_count,node_bytes,membership_count,complete FROM efs_staging_reconciliations WHERE lease_id=?",
+      "SELECT owner_nonce,manifest_hash,next_sequence,object_count,object_bytes,node_count,node_bytes,membership_count,complete,leaf_depth FROM efs_staging_reconciliations WHERE lease_id=?",
       [leaseId],
       { maxRows: 1, maxBytes: 512 },
     )[0];
@@ -1036,7 +1372,7 @@ export class StagingRepository {
 
   #leaseCharge(leaseId: string): LeaseChargeRow | undefined {
     return this.#tx.all<LeaseChargeRow>(
-      "SELECT l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id WHERE l.id=?",
+      "SELECT l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes,COALESCE(c.metadata_reservation_bytes,0) metadata_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id WHERE l.id=?",
       [leaseId],
       { maxRows: 1, maxBytes: 256 },
     )[0];
@@ -1056,6 +1392,7 @@ export class StagingRepository {
       new UsageRepository(this.#tx, this.#limits).apply(
         { maintenance_bytes: CHARGED_ROW_BYTES },
         "lease cleanup state",
+        { preserveMaintenanceBytes: MAINTENANCE_GC_EMERGENCY_BYTES },
       );
   }
 
@@ -1076,28 +1413,64 @@ export class StagingRepository {
     );
   }
 
-  #releaseLeaseReservations(stagingBytes: number, ingestBytes: number): void {
-    if (stagingBytes === 0 && ingestBytes === 0) return;
+  #releaseLeaseReservations(
+    leaseId: string,
+    stagingBytes: number,
+    ingestBytes: number,
+    metadataBytes = 0,
+  ): void {
+    if (stagingBytes === 0 && ingestBytes === 0 && metadataBytes === 0) return;
+    if (leaseId && (ingestBytes !== 0 || metadataBytes !== 0)) {
+      this.#tx.run(
+        "UPDATE efs_staging_certificates SET ingest_reservation_bytes=0,metadata_reservation_bytes=0 WHERE lease_id=?",
+        [leaseId],
+      );
+    }
     new UsageRepository(this.#tx, this.#limits).apply(
       {
         staging_bytes: -stagingBytes,
         ingest_reservation_bytes: -ingestBytes,
+        charged_metadata_bytes: -metadataBytes,
       },
       "staging lease reservation release",
     );
   }
 
-  #changeMetadataRows(rows: number, reason: string): void {
+  #changeMetadataRows(rows: number, reason: string, leaseId?: string): void {
     if (rows === 0) return;
+    let bytes = rows * CHARGED_ROW_BYTES;
+    let transferred = false;
+    if (rows > 0 && leaseId) {
+      const available = this.#tx.all<{ bytes: number } & SqliteRow>(
+        "SELECT metadata_reservation_bytes bytes FROM efs_staging_certificates WHERE lease_id=? AND sealed=0",
+        [leaseId],
+        { maxRows: 1, maxBytes: 128 },
+      )[0]?.bytes;
+      if (available !== undefined) {
+        const credit = Math.min(bytes, available);
+        if (credit) {
+          this.#tx.run(
+            "UPDATE efs_staging_certificates SET metadata_reservation_bytes=metadata_reservation_bytes-? WHERE lease_id=? AND sealed=0",
+            [credit, leaseId],
+          );
+          bytes -= credit;
+          transferred = true;
+        }
+      }
+    }
+    if (bytes === 0) {
+      if (transferred) new UsageRepository(this.#tx, this.#limits).touch(reason);
+      return;
+    }
     new UsageRepository(this.#tx, this.#limits).apply(
-      { charged_metadata_bytes: rows * CHARGED_ROW_BYTES },
+      { charged_metadata_bytes: bytes },
       reason,
     );
   }
 
   #row(leaseId: string): CertificateRow {
     const row = this.#tx.all<CertificateRow>(
-      "SELECT owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified,ingest_reservation_bytes FROM efs_staging_certificates WHERE lease_id=?",
+      "SELECT owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified,ingest_reservation_bytes,metadata_reservation_bytes FROM efs_staging_certificates WHERE lease_id=?",
       [leaseId],
       { maxRows: 1, maxBytes: 4096 },
     )[0];

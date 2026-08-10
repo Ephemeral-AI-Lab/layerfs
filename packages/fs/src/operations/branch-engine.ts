@@ -13,7 +13,7 @@ import {
   type CanonicalPath,
 } from "../namespace/paths.js";
 import { bytesToHex, hexToBytes } from "../cas/bytes.js";
-import { encodeUtf8 } from "../namespace/utf8.js";
+import { encodeUtf8, utf8ByteLength } from "../namespace/utf8.js";
 import { prepareContent, readManifestRange } from "../operations/manifest-io.js";
 import { fsError } from "../filesystem/errors.js";
 import { ContentCache } from "../cache/content-cache.js";
@@ -722,7 +722,7 @@ export class BranchManager implements Branches {
       kind === "branch"
         ? this.#limits.maxBranchIdBytes
         : this.#limits.maxOperationIdBytes;
-    if (!id || id.includes("\0") || encodeUtf8(id).byteLength > maximum)
+    if (!id || id.includes("\0") || utf8ByteLength(id) > maximum)
       throw new BranchError(
         kind === "branch" ? "InvalidBranchId" : "InvalidOperationId",
         `invalid ${kind} identifier`,

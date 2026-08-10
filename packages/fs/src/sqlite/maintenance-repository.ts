@@ -1,11 +1,16 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
-import type { StorageLimits } from "../resources/limits.js";
+import {
+  MAX_MAINTENANCE_MARK_ROW_BYTES,
+  type StorageLimits,
+} from "../resources/limits.js";
 import {
   CHARGED_ROW_BYTES,
+  GC_MARK_RESERVATION_BYTES,
   USAGE_COUNTER_COLUMNS,
   USAGE_RECOUNT_PHASE_COUNT,
   UsageRepository,
 } from "./usage-repository.js";
+import { utf8ByteLength } from "../namespace/utf8.js";
 
 const MAX_GC_RUN_ID_BYTES = 256;
 const GC_RUN_BASE_BYTES = 512;
@@ -14,16 +19,13 @@ const GC_MARK_BASE_BYTES = 192;
 function runIdBytes(runId: string): number {
   if (typeof runId !== "string" || runId.length === 0 || runId.includes("\0"))
     throw new RangeError("invalid garbage-collection run id");
-  const bytes = new TextEncoder().encode(runId).byteLength;
+  const bytes = utf8ByteLength(runId);
   if (bytes > MAX_GC_RUN_ID_BYTES)
     throw new RangeError("garbage-collection run id exceeds byte limit");
   return bytes;
 }
 function runCharge(runId: string): number {
   return GC_RUN_BASE_BYTES + runIdBytes(runId) * 2;
-}
-function markCharge(runId: string): number {
-  return GC_MARK_BASE_BYTES + runIdBytes(runId) * 2;
 }
 
 export interface GcRunRow extends SqliteRow {
@@ -49,6 +51,7 @@ export interface PayloadRow extends SqliteRow {
   hash: Uint8Array;
   size: number;
   allocation_sequence: number;
+  metadata_rows?: number;
 }
 export interface SnapshotRow extends SqliteRow {
   object_count: number;
@@ -87,6 +90,12 @@ export class MaintenanceRepository {
   beginRun(runId: string, now: number): void {
     runIdBytes(runId);
     if (this.run(runId)) return;
+    const active = this.#tx.all<{ id: string } & SqliteRow>(
+      "SELECT id FROM efs_gc_runs WHERE state<>7 LIMIT 1",
+      [],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (active) throw new Error("EBUSY: another garbage-collection run is nonterminal");
     const meta = this.#tx.all<
       { next_allocation_sequence: number; root_mutation_generation: number } & SqliteRow
     >(
@@ -98,6 +107,7 @@ export class MaintenanceRepository {
     new UsageRepository(this.#tx, this.#limits).apply(
       { maintenance_bytes: runCharge(runId) },
       "garbage-collection run",
+      { preserveMaintenanceBytes: MAX_MAINTENANCE_MARK_ROW_BYTES },
     );
     this.#tx.run(
       "INSERT INTO efs_gc_runs(id,state,high_water,root_generation,cursor_kind,cursor_value,created_at_ms) VALUES(?,0,?,?,0,NULL,?)",
@@ -110,6 +120,18 @@ export class MaintenanceRepository {
       runId,
       completeState,
     ]);
+  }
+  resumeAbandonedRun(
+    runId: string,
+    abandonedState: number,
+    cleanupMarksState: number,
+  ): void {
+    const changed = this.#tx.run(
+      "UPDATE efs_gc_runs SET state=? WHERE id=? AND state=?",
+      [cleanupMarksState, runId, abandonedState],
+    );
+    if (changed.changes !== 1)
+      throw new Error("ECORRUPT: abandoned garbage-collection run changed");
   }
   run(id: string): GcRunRow | undefined {
     runIdBytes(id);
@@ -207,11 +229,7 @@ export class MaintenanceRepository {
       "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) VALUES(?,?,?,0)",
       [runId, kind, hash],
     );
-    if (result.changes)
-      new UsageRepository(this.#tx, this.#limits).apply(
-        { maintenance_bytes: markCharge(runId) },
-        "garbage-collection mark",
-      );
+    void result;
   }
   advanceMark(
     runId: string,
@@ -256,8 +274,8 @@ export class MaintenanceRepository {
       "SELECT DISTINCT manifest_hash hash FROM efs_inodes WHERE manifest_hash IS NOT NULL AND manifest_hash>? ORDER BY manifest_hash LIMIT ?",
       "SELECT DISTINCT manifest_hash hash FROM efs_revision_manifest_roots WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
       "SELECT DISTINCT manifest_hash hash FROM efs_branch_manifest_roots WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
-      "SELECT DISTINCT lm.manifest_hash hash FROM efs_lease_manifests lm JOIN efs_leases l ON l.id=lm.lease_id WHERE l.state IN (0,1) AND lm.manifest_hash>? ORDER BY lm.manifest_hash LIMIT ?",
-      "SELECT DISTINCT c.manifest_hash hash FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id WHERE c.sealed=1 AND l.state=1 AND c.manifest_hash>? ORDER BY c.manifest_hash LIMIT ?",
+      "SELECT DISTINCT manifest_hash hash FROM efs_lease_manifests WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
+      "SELECT DISTINCT manifest_hash hash FROM efs_lease_staged_manifests WHERE kind=0 AND manifest_hash>? ORDER BY manifest_hash LIMIT ?",
     ] as const;
     const rows = this.#tx.all<{ hash: Uint8Array } & SqliteRow>(
       queries[run.cursor_kind]!,
@@ -294,14 +312,18 @@ export class MaintenanceRepository {
           : "efs_cas_objects";
     const kind = state - 1;
     const size = state === 3 ? "size" : "length(encoded)";
+    const metadataRows =
+      state === 1
+        ? "1+CASE WHEN EXISTS(SELECT 1 FROM efs_manifest_validations v WHERE v.manifest_hash=efs_manifest_roots.hash) THEN 1 ELSE 0 END"
+        : "1";
     const unreferenced =
       state === 1
-        ? "NOT EXISTS(SELECT 1 FROM efs_inodes i WHERE i.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_revision_manifest_roots r WHERE r.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_branch_manifest_roots b WHERE b.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_manifests l WHERE l.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.source_manifest_hash=efs_manifest_roots.hash)"
+        ? "NOT EXISTS(SELECT 1 FROM efs_inodes i WHERE i.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_revision_manifest_roots r WHERE r.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_branch_manifest_roots b WHERE b.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_manifests l WHERE l.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_staged_manifests m WHERE m.kind=0 AND m.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.source_manifest_hash=efs_manifest_roots.hash)"
         : state === 2
-          ? "NOT EXISTS(SELECT 1 FROM efs_staging_level_records l WHERE l.node_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.node_hash=efs_manifest_nodes.hash)"
+          ? "NOT EXISTS(SELECT 1 FROM efs_lease_staged_manifests m WHERE m.kind=1 AND m.manifest_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_level_records l WHERE l.node_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.node_hash=efs_manifest_nodes.hash)"
           : "NOT EXISTS(SELECT 1 FROM efs_lease_objects l WHERE l.object_hash=efs_cas_objects.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_entries s WHERE s.object_hash=efs_cas_objects.hash)";
     return this.#tx.all<PayloadRow>(
-      `SELECT hash,${size} size,allocation_sequence FROM ${table} WHERE allocation_sequence<=? AND NOT EXISTS(SELECT 1 FROM efs_gc_marks m WHERE m.run_id=? AND m.kind=? AND m.hash=${table}.hash) AND ${unreferenced} ORDER BY allocation_sequence LIMIT ?`,
+      `SELECT hash,${size} size,allocation_sequence,${metadataRows} metadata_rows FROM ${table} WHERE allocation_sequence<=? AND NOT EXISTS(SELECT 1 FROM efs_gc_marks m WHERE m.run_id=? AND m.kind=? AND m.hash=${table}.hash) AND ${unreferenced} ORDER BY allocation_sequence LIMIT ?`,
       [highWater, runId, kind, limit],
       { maxRows: limit, maxBytes },
     );
@@ -336,9 +358,19 @@ export class MaintenanceRepository {
           ? "efs_manifest_nodes"
           : "efs_cas_objects";
     let bytes = 0;
+    let metadataRows = 0;
     for (const row of rows) {
+      if (state === 1 && (row.metadata_rows ?? 1) === 2) {
+        const validation = this.#tx.run(
+          "DELETE FROM efs_manifest_validations WHERE manifest_hash=?",
+          [row.hash],
+        );
+        if (validation.changes !== 1)
+          throw new Error("ECORRUPT: manifest validation certificate changed");
+      }
       this.#tx.run(`DELETE FROM ${table} WHERE hash=?`, [row.hash]);
       bytes += row.size;
+      metadataRows += row.metadata_rows ?? 1;
     }
     if (rows.length) {
       const countColumn =
@@ -365,7 +397,8 @@ export class MaintenanceRepository {
         {
           [countColumn]: -rows.length,
           [byteColumn]: -bytes,
-          charged_metadata_bytes: -rows.length * CHARGED_ROW_BYTES,
+          charged_metadata_bytes: -metadataRows * CHARGED_ROW_BYTES,
+          maintenance_bytes: -rows.length * GC_MARK_RESERVATION_BYTES,
         },
         "garbage-collection sweep",
       );
@@ -390,19 +423,21 @@ export class MaintenanceRepository {
         row.kind,
         row.hash,
       ]);
-    if (rows.length)
-      new UsageRepository(this.#tx, this.#limits).apply(
-        { maintenance_bytes: -rows.length * markCharge(runId) },
-        "garbage-collection mark cleanup",
-      );
-    else this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [nextState, runId]);
+    if (!rows.length)
+      this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [nextState, runId]);
     return rows.length > 0;
   }
   cleanupRootJournal(runId: string, limit: number, nextState: number): boolean {
-    const before = Math.max(0, this.generation() - 10_000);
+    const safeGeneration = this.#tx.all<{ root_generation: number } & SqliteRow>(
+      "SELECT root_generation FROM efs_gc_runs WHERE id=?",
+      [runId],
+      { maxRows: 1, maxBytes: 128 },
+    )[0]?.root_generation;
+    if (!Number.isSafeInteger(safeGeneration) || safeGeneration! < 0)
+      throw new Error("ECORRUPT: invalid garbage-collection root generation");
     const rows = this.#tx.all<{ generation: number; bytes: number } & SqliteRow>(
-      "SELECT generation,length(root_id) bytes FROM efs_root_journal WHERE generation<? ORDER BY generation LIMIT ?",
-      [before, limit],
+      "SELECT generation,length(root_id) bytes FROM efs_root_journal WHERE generation<=? ORDER BY generation LIMIT ?",
+      [safeGeneration!, limit],
       { maxRows: limit, maxBytes: Math.max(256, limit * 64) },
     );
     let charged = 0;
@@ -445,13 +480,7 @@ export class MaintenanceRepository {
         mark.kind,
         mark.hash,
       ]);
-    if (marks.length) {
-      new UsageRepository(this.#tx, this.#limits).apply(
-        { maintenance_bytes: -marks.length * markCharge(prior.id) },
-        "terminal garbage-collection mark cleanup",
-      );
-      return true;
-    }
+    if (marks.length) return true;
     const deleted = this.#tx.run("DELETE FROM efs_gc_runs WHERE id=?", [prior.id]);
     if (deleted.changes !== 1)
       throw new Error("ECORRUPT: terminal garbage-collection run changed");

@@ -13,10 +13,11 @@ import {
 } from "../manifests/codec.js";
 import { validateCanonicalManifestNode } from "../manifests/cursor.js";
 import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
-import type {
-  AdmissionController,
-  RuntimeLimits,
-  StorageLimits,
+import {
+  DURABLE_METADATA_ROW_BYTES,
+  type AdmissionController,
+  type RuntimeLimits,
+  type StorageLimits,
 } from "../resources/limits.js";
 import { ContentCache } from "../cache/content-cache.js";
 import type {
@@ -88,6 +89,7 @@ interface PreparedNode {
 
 interface ReusedClaim {
   readonly sourcePath: readonly number[];
+  readonly sourceFinalAtLevel: boolean;
   readonly nodeHash: Uint8Array;
   readonly span: number;
   readonly entryCount: number;
@@ -426,15 +428,25 @@ function buildCandidate(
       const frame = path.nodes[level]!;
       if (frame.node.kind !== "internal" || frame.selectedChildIndex === undefined)
         throw new Error("ECORRUPT: authenticated path lost an internal child");
-      const children = frame.node.children.map((child, index) => {
+      const sourceParent = frame.node;
+      const children = sourceParent.children.map((child, index) => {
         if (index === frame.selectedChildIndex) return replacement;
+        const sourceFinalAtLevel =
+          frame.finalAtLevel && index === sourceParent.children.length - 1;
         const claim = Object.freeze({
           sourcePath: Object.freeze([...frame.path, index]),
+          sourceFinalAtLevel,
           nodeHash: copyBytes(child.hash),
           span: child.span,
           entryCount: child.entryCount,
         });
-        reused.set(bytesToHex(child.hash), claim);
+        const key = bytesToHex(child.hash);
+        const prior = reused.get(key);
+        // A non-final source proof is strictly stronger: it is valid in both
+        // non-final and final destination contexts. Never let a later final
+        // occurrence overwrite that bounded authentication path.
+        if (!prior || (prior.sourceFinalAtLevel && !sourceFinalAtLevel))
+          reused.set(key, claim);
         return Object.freeze({
           hash: copyBytes(child.hash),
           span: child.span,
@@ -479,10 +491,24 @@ function buildCandidate(
       entryCount,
       rootNodeHash: replacement.hash,
     });
-    const newNodeHashes = new Set(prepared.map((node) => bytesToHex(node.hash)));
-    const reusedValues = [...reused.values()].filter(
-      (claim) => !newNodeHashes.has(bytesToHex(claim.nodeHash)),
-    );
+    const rootHash = sha256(root);
+    const unchangedRoot = bytesToHex(rootHash) === bytesToHex(source.manifestHash);
+    const persistedEntries = unchangedRoot ? [] : entries;
+    const persistedNodes = unchangedRoot ? [] : prepared;
+    const newNodeHashes = new Set(persistedNodes.map((node) => bytesToHex(node.hash)));
+    const reusedValues = unchangedRoot
+      ? [
+          Object.freeze({
+            sourcePath: Object.freeze([] as number[]),
+            sourceFinalAtLevel: true,
+            nodeHash: copyBytes(replacement.hash),
+            span: replacement.span,
+            entryCount: replacement.entryCount,
+          }),
+        ]
+      : [...reused.values()].filter(
+          (claim) => !newNodeHashes.has(bytesToHex(claim.nodeHash)),
+        );
     const parentPaths = new Map<string, readonly number[]>();
     for (const claim of reusedValues) {
       const parent = Object.freeze(claim.sourcePath.slice(0, -1));
@@ -498,29 +524,39 @@ function buildCandidate(
     );
     const authenticatedNodesRead = checkedAdd(
       path.nodesRead,
-      checkedAdd(registeredNodesRead, reconciledNodesRead),
+      checkedAdd(
+        registeredNodesRead,
+        checkedMultiply(
+          reconciledNodesRead,
+          2,
+          "reused closure and validation authentication",
+        ),
+      ),
     );
     const authenticationRootReads = checkedAdd(
       1,
-      checkedAdd(parentPaths.size, reusedValues.length),
+      checkedAdd(
+        parentPaths.size,
+        checkedMultiply(reusedValues.length, 2, "reused authentication roots"),
+      ),
     );
     const manifestRecordsRead = checkedAdd(
       checkedAdd(authenticatedNodesRead, authenticationRootReads),
       checkedAdd(
-        2,
+        18,
         checkedAdd(
-          checkedMultiply(prepared.length, 2),
-          checkedMultiply(reusedValues.length, 2),
+          checkedMultiply(prepared.length, 4),
+          checkedMultiply(reusedValues.length, 4),
         ),
       ),
     );
     const candidate = Object.freeze({
       path,
-      entries: Object.freeze(entries),
-      nodes: Object.freeze(prepared),
+      entries: Object.freeze(persistedEntries),
+      nodes: Object.freeze(persistedNodes),
       reused: Object.freeze(reusedValues),
       root,
-      rootHash: sha256(root),
+      rootHash,
       entryCount,
       sourceBytesRead,
       sourceReadCalls,
@@ -566,12 +602,96 @@ function batchesByBytes<T>(
 }
 
 function reconciliationWorkLimit(storage: StorageLimits): number {
+  return Math.max(1, Math.floor((storage.maxFinalTransactionRows - 12) / 5));
+}
+
+function reusedClaimBatches(
+  claims: readonly ReusedClaim[],
+  storage: StorageLimits,
+): readonly (readonly ReusedClaim[])[] {
+  const batches: ReusedClaim[][] = [];
+  let batch: ReusedClaim[] = [];
+  let resultRows = 2;
+  let statements = 3;
+  let parents = new Set<string>();
+  const flush = (): void => {
+    if (batch.length) batches.push(batch);
+    batch = [];
+    resultRows = 2;
+    statements = 3;
+    parents = new Set<string>();
+  };
+  for (const claim of claims) {
+    const parentKey = claim.sourcePath.slice(0, -1).join("/");
+    const pathAuthenticationCost = checkedAdd(
+      3,
+      checkedMultiply(claim.sourcePath.length, 2, "reused path query envelope"),
+      "reused path query envelope",
+    );
+    let authenticationCost = parents.has(parentKey) ? 0 : pathAuthenticationCost;
+    const nextResultRows = checkedAdd(
+      resultRows,
+      checkedAdd(authenticationCost, 1),
+      "reused claim result rows",
+    );
+    const nextStatements = checkedAdd(
+      statements,
+      checkedAdd(authenticationCost, 2),
+      "reused claim statements",
+    );
+    if (
+      batch.length &&
+      (batch.length >=
+        Math.min(
+          storage.maxQueryBatchSize,
+          Math.floor((storage.maxFinalTransactionRows - 8) / 3),
+        ) ||
+        nextResultRows > storage.maxFinalTransactionRows ||
+        nextStatements > storage.maxFinalTransactionRows * 4)
+    )
+      flush();
+    authenticationCost = parents.has(parentKey) ? 0 : pathAuthenticationCost;
+    resultRows = checkedAdd(
+      resultRows,
+      checkedAdd(authenticationCost, 1),
+      "reused claim result rows",
+    );
+    statements = checkedAdd(
+      statements,
+      checkedAdd(authenticationCost, 2),
+      "reused claim statements",
+    );
+    if (
+      resultRows > storage.maxFinalTransactionRows ||
+      statements > storage.maxFinalTransactionRows * 4
+    )
+      throw new DurablePathCopyFallbackError(
+        "one reused subtree authentication exceeds the transaction query envelope",
+      );
+    parents.add(parentKey);
+    batch.push(claim);
+  }
+  flush();
+  return Object.freeze(batches.map((values) => Object.freeze(values)));
+}
+
+function durableWriteBatchLimit(storage: StorageLimits): number {
   return Math.max(
     1,
     Math.min(
       storage.maxQueryBatchSize,
-      Math.floor((storage.maxFinalTransactionRows - 8) / 4),
+      Math.floor((storage.maxFinalTransactionRows - 24) / 6),
     ),
+  );
+}
+
+function candidateValidationRows(candidate: PathCopyCandidate): number {
+  return candidate.nodes.reduce(
+    (rows, prepared) =>
+      prepared.node.kind === "internal"
+        ? checkedAdd(rows, prepared.node.children.length, "path-copy validation rows")
+        : rows,
+    1,
   );
 }
 
@@ -579,33 +699,53 @@ function projectedPersistenceTransactions(
   candidate: PathCopyCandidate,
   storage: StorageLimits,
 ): number {
+  const uniqueEntries = [
+    ...new Map(
+      candidate.entries.map((entry) => [bytesToHex(entry.hash), entry]),
+    ).values(),
+  ];
   const objectBatches = batchesByBytes(
-    candidate.entries,
-    storage.maxQueryBatchSize,
+    uniqueEntries,
+    durableWriteBatchLimit(storage),
     storage.maxFinalTransactionBytes,
     (entry) => intrinsicByteLength(entry.bytes),
   ).length;
-  const reusedBatches = Math.ceil(candidate.reused.length / storage.maxQueryBatchSize);
-  const reconciliationWork = checkedAdd(
-    1,
+  const nodeBatches = batchesByBytes(
+    candidate.nodes,
+    durableWriteBatchLimit(storage),
+    storage.maxFinalTransactionBytes,
+    (node) => intrinsicByteLength(node.encoded),
+  ).length;
+  const reusedBatches = reusedClaimBatches(candidate.reused, storage).length;
+  const seenEdges = new Set<string>();
+  let reconciliationUnits = 4;
+  for (const prepared of candidate.nodes) {
+    const edges =
+      prepared.node.kind === "leaf"
+        ? prepared.node.entries.map((entry) => ({ kind: 0, hash: entry.hash }))
+        : prepared.node.children.map((child) => ({ kind: 2, hash: child.hash }));
+    for (const edge of edges) {
+      const key = `${edge.kind}:${bytesToHex(edge.hash)}`;
+      reconciliationUnits = checkedAdd(reconciliationUnits, seenEdges.has(key) ? 1 : 4);
+      seenEdges.add(key);
+    }
+  }
+  const reconciliationWork = Math.ceil(reconciliationUnits / 4);
+  const validationWork = checkedAdd(
+    candidate.reused.length,
     candidate.nodes.reduce((sum, prepared) => {
-      const edges =
-        prepared.node.kind === "leaf"
-          ? prepared.node.entries.length
-          : prepared.node.children.length;
-      return checkedAdd(sum, edges);
+      const work = prepared.node.kind === "leaf" ? 1 : prepared.node.children.length;
+      return checkedAdd(sum, work);
     }, 0),
   );
   const reconciliationTransactions = checkedAdd(
-    Math.ceil(reconciliationWork / reconciliationWorkLimit(storage)),
+    Math.ceil(
+      checkedAdd(reconciliationWork, validationWork) / reconciliationWorkLimit(storage),
+    ),
     1,
   );
   return (
-    5 +
-    objectBatches +
-    reusedBatches +
-    (candidate.reused.length ? 1 : 0) +
-    reconciliationTransactions
+    5 + objectBatches + nodeBatches + reusedBatches * 2 + reconciliationTransactions
   );
 }
 
@@ -627,9 +767,54 @@ function persistCandidate(
   const budget: StorageWorkBudget = Object.freeze({
     maxRows: storage.maxFinalTransactionRows,
     maxBytes: storage.maxFinalTransactionBytes,
-    maxStatements: storage.maxFinalTransactionRows,
-    maxElapsedMs: 250,
+    maxStatements: storage.maxFinalTransactionRows * 4,
+    maxElapsedMs: 5_000,
   });
+  const uniqueObjects = [
+    ...new Map(
+      candidate.entries.map((entry) => [bytesToHex(entry.hash), entry]),
+    ).values(),
+  ];
+  const newObjectBytes = uniqueObjects.reduce(
+    (sum, entry) => checkedAdd(sum, intrinsicByteLength(entry.bytes)),
+    0,
+  );
+  const newNodeBytes = candidate.nodes.reduce(
+    (sum, node) => checkedAdd(sum, intrinsicByteLength(node.encoded)),
+    0,
+  );
+  const newPayloadBytes = checkedAdd(
+    checkedAdd(newObjectBytes, newNodeBytes),
+    intrinsicByteLength(candidate.root),
+  );
+  const durablePayloadReservation = checkedAdd(
+    checkedMultiply(newPayloadBytes, 2, "path-copy physical and staging payload"),
+    checkedMultiply(
+      candidate.reused.length,
+      storage.maxManifestNodeBytes,
+      "path-copy reused staging envelope",
+    ),
+  );
+  const metadataRows = checkedAdd(
+    checkedAdd(
+      checkedMultiply(uniqueObjects.length, 3, "path-copy object metadata"),
+      checkedMultiply(candidate.nodes.length, 3, "path-copy node metadata"),
+    ),
+    checkedAdd(
+      checkedAdd(
+        checkedMultiply(candidate.reused.length, 3, "path-copy reused metadata"),
+        candidateValidationRows(candidate),
+        "path-copy validation metadata",
+      ),
+      16,
+      "path-copy fixed metadata",
+    ),
+  );
+  const durableMetadataReservation = checkedMultiply(
+    metadataRows,
+    DURABLE_METADATA_ROW_BYTES,
+    "path-copy metadata reservation",
+  );
   let storageTransactions = 0;
   let begun = false;
   const transact = <T>(
@@ -652,7 +837,14 @@ function persistCandidate(
         ownerNonce,
         now,
         expiresAt: checkedAdd(now, storage.stagingLeaseMs),
+        ingestReservationBytes: durablePayloadReservation,
+        metadataReservationBytes: durableMetadataReservation,
       });
+      staging.consumeMetadataReservation(
+        leaseId,
+        ownerNonce,
+        DURABLE_METADATA_ROW_BYTES,
+      );
       tx.manifestTree(storage, cache).protectSourceManifest(
         leaseId,
         ownerNonce,
@@ -662,22 +854,28 @@ function persistCandidate(
     });
     begun = true;
 
-    const uniqueObjects = [
-      ...new Map(
-        candidate.entries.map((entry) => [bytesToHex(entry.hash), entry]),
-      ).values(),
-    ];
     for (const batch of batchesByBytes(
       uniqueObjects,
-      storage.maxQueryBatchSize,
+      durableWriteBatchLimit(storage),
       storage.maxFinalTransactionBytes,
       (entry) => intrinsicByteLength(entry.bytes),
     ))
       transact<void>("write", (tx) => {
+        const staging = tx.staging(storage, cache);
+        const batchBytes = batch.reduce(
+          (sum, entry) => checkedAdd(sum, intrinsicByteLength(entry.bytes)),
+          0,
+        );
+        staging.consumeIngestReservation(leaseId, ownerNonce, batchBytes);
+        staging.consumeMetadataReservation(
+          leaseId,
+          ownerNonce,
+          batch.length * DURABLE_METADATA_ROW_BYTES,
+        );
         tx.content(storage, cache).putObjectsBatch(
           batch.map((entry) => ({ hash: entry.hash, bytes: entry.bytes })),
         );
-        tx.staging(storage, cache).appendBatch(
+        staging.appendBatch(
           leaseId,
           ownerNonce,
           batch.map((entry) => ({
@@ -688,25 +886,42 @@ function persistCandidate(
         );
       });
 
-    transact<void>("write", (tx) => {
-      const content = tx.content(storage, cache);
-      content.putManifestNodesBatch(
-        candidate.nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
-      );
-      tx.staging(storage, cache).appendBatch(
-        leaseId,
-        ownerNonce,
-        candidate.nodes.map((node) => ({
-          kind: "manifest-node" as const,
-          hash: node.hash,
-          size: intrinsicByteLength(node.encoded),
-        })),
-      );
-    });
+    for (const batch of batchesByBytes(
+      candidate.nodes,
+      durableWriteBatchLimit(storage),
+      storage.maxFinalTransactionBytes,
+      (node) => intrinsicByteLength(node.encoded),
+    ))
+      transact<void>("write", (tx) => {
+        const staging = tx.staging(storage, cache);
+        const batchBytes = batch.reduce(
+          (sum, node) => checkedAdd(sum, intrinsicByteLength(node.encoded)),
+          0,
+        );
+        staging.consumeIngestReservation(leaseId, ownerNonce, batchBytes);
+        staging.consumeMetadataReservation(
+          leaseId,
+          ownerNonce,
+          batch.length * DURABLE_METADATA_ROW_BYTES,
+        );
+        const content = tx.content(storage, cache);
+        content.putManifestNodesBatch(
+          batch.map((node) => ({ hash: node.hash, encoded: node.encoded })),
+        );
+        staging.appendBatch(
+          leaseId,
+          ownerNonce,
+          batch.map((node) => ({
+            kind: "manifest-node" as const,
+            hash: node.hash,
+            size: intrinsicByteLength(node.encoded),
+          })),
+        );
+      });
 
     const reused = candidate.reused;
-    for (let start = 0; start < reused.length; start += storage.maxQueryBatchSize) {
-      const batch = reused.slice(start, start + storage.maxQueryBatchSize);
+    const reusedBatches = reusedClaimBatches(reused, storage);
+    for (const batch of reusedBatches) {
       transact<void>("write", (tx) => {
         const content = tx.content(storage, cache);
         const members = batch.map((claim) => {
@@ -722,19 +937,35 @@ function persistCandidate(
         tx.staging(storage, cache).appendBatch(leaseId, ownerNonce, members);
       });
     }
-    if (reused.length)
+    for (const batch of reusedBatches) {
       transact<void>("write", (tx) => {
+        tx.staging(storage, cache).consumeMetadataReservation(
+          leaseId,
+          ownerNonce,
+          batch.length * DURABLE_METADATA_ROW_BYTES,
+        );
         tx.manifestTree(storage, cache).registerReusedSubtrees(
           leaseId,
           ownerNonce,
           source.manifestHash,
-          reused,
+          batch,
         );
       });
+    }
 
     const certificate = transact<ClosureCertificate>("write", (tx) => {
-      tx.content(storage, cache).putManifestRoot(candidate.rootHash, candidate.root);
       const staging = tx.staging(storage, cache);
+      staging.consumeIngestReservation(
+        leaseId,
+        ownerNonce,
+        intrinsicByteLength(candidate.root),
+      );
+      staging.consumeMetadataReservation(
+        leaseId,
+        ownerNonce,
+        DURABLE_METADATA_ROW_BYTES,
+      );
+      tx.content(storage, cache).putManifestRoot(candidate.rootHash, candidate.root);
       staging.appendBatch(leaseId, ownerNonce, [
         {
           kind: "manifest-root",
@@ -758,7 +989,6 @@ function persistCandidate(
     transact<void>("write", (tx) => {
       const staging = tx.staging(storage, cache);
       staging.seal(certificate);
-      staging.bumpRoot(5, leaseId);
     });
     return Object.freeze({
       hash: copyBytes(candidate.rootHash),
@@ -786,216 +1016,249 @@ export async function prepareDurableEditedContent(
   admission: AdmissionController,
   cache?: ContentCache,
   clock: () => number = Date.now,
+  retainedBytesAlreadyAdmitted = false,
 ): Promise<DurableEditPreparedManifest> {
   cache ??= new ContentCache(1, admission);
   const newSize = validateInputs(source, edit);
   if (newSize > storage.maxFileBytes)
     throw new RangeError("edited file exceeds maxFileBytes");
-  let reason: string | undefined;
-  let pathAuthenticationTransactions = 0;
+  let releaseRetained: (() => void) | undefined;
+  if ((edit.retainedBytes ?? 0) > 0 && !retainedBytesAlreadyAdmitted) {
+    cache.makeRoom(edit.retainedBytes!);
+    releaseRetained = admission.reserve(edit.retainedBytes!);
+  }
   try {
-    const pathCapacity = checkedMultiply(
-      storage.maxManifestDepth + 1,
-      checkedMultiply(
-        storage.maxManifestNodeBytes,
-        4,
-        "authenticated path node ownership",
-      ),
-      "authenticated manifest path ownership",
-    );
-    let releasePath: () => void;
+    let reason: string | undefined;
+    let pathAuthenticationTransactions = 0;
     try {
-      cache?.makeRoom(pathCapacity);
-      releasePath = admission.reserve(pathCapacity);
-    } catch (error) {
-      if (error instanceof RangeError)
-        throw new DurablePathCopyFallbackError(
-          "authenticated path working set cannot be admitted",
+      const pathCapacity = checkedMultiply(
+        storage.maxManifestDepth + 1,
+        checkedMultiply(
+          storage.maxManifestNodeBytes,
+          4,
+          "authenticated path node ownership",
+        ),
+        "authenticated manifest path ownership",
+      );
+      let releasePath: () => void;
+      try {
+        cache?.makeRoom(pathCapacity);
+        releasePath = admission.reserve(pathCapacity);
+      } catch (error) {
+        if (error instanceof RangeError)
+          throw new DurablePathCopyFallbackError(
+            "authenticated path working set cannot be admitted",
+          );
+        throw error;
+      }
+      try {
+        pathAuthenticationTransactions = checkedAdd(
+          pathAuthenticationTransactions,
+          1,
+          "durable edit path transactions",
         );
-      throw error;
+        const path = port.transaction(
+          "read",
+          {
+            maxRows: checkedAdd(
+              8,
+              checkedMultiply(
+                storage.maxManifestDepth,
+                2,
+                "authenticated path result rows",
+              ),
+              "authenticated path result rows",
+            ),
+            maxBytes: Math.max(
+              runtime.maxQueryBatchBytes,
+              checkedAdd(
+                1_024,
+                checkedMultiply(
+                  storage.maxManifestDepth,
+                  checkedAdd(
+                    storage.maxManifestNodeBytes,
+                    512,
+                    "authenticated path row bytes",
+                  ),
+                  "authenticated path result bytes",
+                ),
+                "authenticated path result bytes",
+              ),
+            ),
+            maxStatements: storage.maxManifestDepth * 4 + 8,
+            maxElapsedMs: 5_000,
+          },
+          (tx) =>
+            tx
+              .manifestTree(storage, cache)
+              .pathAtOffset(source.manifestHash, edit.offset),
+        );
+        if (
+          path.fileSize !== source.size ||
+          path.parameters.minimum !== source.parameters.minimum ||
+          path.parameters.average !== source.parameters.average ||
+          path.parameters.maximum !== source.parameters.maximum
+        )
+          throw new Error("ECORRUPT: durable edit source disagrees with manifest root");
+        const candidate = buildCandidate(
+          path,
+          source,
+          edit,
+          newSize,
+          storage,
+          runtime,
+          admission,
+          cache,
+        );
+        try {
+          const projectedTransactions = checkedAdd(
+            1,
+            checkedAdd(
+              candidate.sourceReadTransactions,
+              projectedPersistenceTransactions(candidate, storage),
+            ),
+            "durable path-copy aggregate transactions",
+          );
+          if (projectedTransactions > MAX_PATH_COPY_TRANSACTIONS)
+            throw new DurablePathCopyFallbackError(
+              `durable path-copy exceeds its aggregate storage transaction cap (${projectedTransactions} projected for ${candidate.reused.length} reused subtrees)`,
+            );
+          const persistenceLimit =
+            MAX_PATH_COPY_TRANSACTIONS - 1 - candidate.sourceReadTransactions;
+          const prepared = persistCandidate(
+            port,
+            source,
+            candidate,
+            storage,
+            cache,
+            clock,
+            persistenceLimit,
+          );
+          return Object.freeze({
+            hash: prepared.hash,
+            size: newSize,
+            certificate: prepared.certificate,
+            mode: "durable-path-copy",
+            pathCopyMetrics: Object.freeze({
+              authenticatedNodesRead: candidate.authenticatedNodesRead,
+              manifestRecordsRead: candidate.manifestRecordsRead,
+              emittedNodes: candidate.nodes.length,
+              emittedEntries: candidate.entries.length,
+              emittedObjectBytes: candidate.entries.reduce(
+                (sum, entry) => checkedAdd(sum, intrinsicByteLength(entry.bytes)),
+                0,
+              ),
+              reusedSubtrees: candidate.reused.length,
+              storageTransactions:
+                prepared.storageTransactions + 1 + candidate.sourceReadTransactions,
+              sourceReadCalls: candidate.sourceReadCalls,
+              sourceReadTransactions: candidate.sourceReadTransactions,
+              sourceBytesRead: candidate.sourceBytesRead,
+            }),
+          });
+        } finally {
+          candidate.release();
+        }
+      } finally {
+        releasePath();
+      }
+    } catch (error) {
+      if (!(error instanceof DurablePathCopyFallbackError)) throw error;
+      reason = error.message;
     }
-    try {
-      pathAuthenticationTransactions = checkedAdd(
-        pathAuthenticationTransactions,
-        1,
-        "durable edit path transactions",
-      );
-      const path = port.transaction(
-        "read",
-        {
-          maxRows: storage.maxQueryBatchSize,
-          maxBytes: runtime.maxQueryBatchBytes,
-          maxStatements: storage.maxManifestDepth * 4 + 8,
-          maxElapsedMs: 250,
-        },
-        (tx) =>
-          tx
-            .manifestTree(storage, cache)
-            .pathAtOffset(source.manifestHash, edit.offset),
-      );
-      if (
-        path.fileSize !== source.size ||
-        path.parameters.minimum !== source.parameters.minimum ||
-        path.parameters.average !== source.parameters.average ||
-        path.parameters.maximum !== source.parameters.maximum
-      )
-        throw new Error("ECORRUPT: durable edit source disagrees with manifest root");
-      const candidate = buildCandidate(
-        path,
-        source,
+    const readWindowBytes = Math.max(
+      1,
+      Math.min(
+        1024 * 1024,
+        source.maxReadWindowBytes ?? 32 * 1024,
+        runtime.maxWriteSessionBytes,
+        runtime.maxQueryBatchBytes,
+        Math.floor(storage.maxFinalTransactionBytes / 2),
+      ),
+    );
+    let sourceReadCalls = 0;
+    let sourceBytesRead = 0;
+    let persistenceTransactions = 0;
+    const measuredSource: DurableEditSource = Object.freeze({
+      ...source,
+      read(offset: number, length: number): Uint8Array {
+        sourceReadCalls = checkedAdd(
+          sourceReadCalls,
+          1,
+          "streamed fallback source reads",
+        );
+        sourceBytesRead = checkedAdd(
+          sourceBytesRead,
+          length,
+          "streamed fallback source bytes",
+        );
+        return source.read(offset, length);
+      },
+    });
+    const measuredPort: OperationsStorage = Object.freeze({
+      ...port,
+      transaction<T>(
+        mode: StorageTransactionMode,
+        budget: StorageWorkBudget,
+        callback: (ports: StorageTransactionPorts) => T,
+      ): T {
+        persistenceTransactions = checkedAdd(
+          persistenceTransactions,
+          1,
+          "streamed fallback persistence transactions",
+        );
+        return port.transaction(mode, budget, callback);
+      },
+    });
+    const prepared = await prepareContentStreaming(
+      measuredPort,
+      editedContentStream(
+        measuredSource,
         edit,
         newSize,
-        storage,
-        runtime,
+        readWindowBytes,
         admission,
         cache,
-      );
-      try {
-        const projectedTransactions = checkedAdd(
-          1,
-          checkedAdd(
-            candidate.sourceReadTransactions,
-            projectedPersistenceTransactions(candidate, storage),
-          ),
-          "durable path-copy aggregate transactions",
-        );
-        if (projectedTransactions > MAX_PATH_COPY_TRANSACTIONS)
-          throw new DurablePathCopyFallbackError(
-            "durable path-copy exceeds its aggregate storage transaction cap",
-          );
-        const persistenceLimit =
-          MAX_PATH_COPY_TRANSACTIONS - 1 - candidate.sourceReadTransactions;
-        const prepared = persistCandidate(
-          port,
-          source,
-          candidate,
-          storage,
-          cache,
-          clock,
-          persistenceLimit,
-        );
-        return Object.freeze({
-          hash: prepared.hash,
-          size: newSize,
-          certificate: prepared.certificate,
-          mode: "durable-path-copy",
-          pathCopyMetrics: Object.freeze({
-            authenticatedNodesRead: candidate.authenticatedNodesRead,
-            manifestRecordsRead: candidate.manifestRecordsRead,
-            emittedNodes: candidate.nodes.length,
-            emittedEntries: candidate.entries.length,
-            emittedObjectBytes: candidate.entries.reduce(
-              (sum, entry) => checkedAdd(sum, intrinsicByteLength(entry.bytes)),
-              0,
-            ),
-            reusedSubtrees: candidate.reused.length,
-            storageTransactions:
-              prepared.storageTransactions + 1 + candidate.sourceReadTransactions,
-            sourceReadCalls: candidate.sourceReadCalls,
-            sourceReadTransactions: candidate.sourceReadTransactions,
-            sourceBytesRead: candidate.sourceBytesRead,
-          }),
-        });
-      } finally {
-        candidate.release();
-      }
-    } finally {
-      releasePath();
-    }
-  } catch (error) {
-    if (!(error instanceof DurablePathCopyFallbackError)) throw error;
-    reason = error.message;
-  }
-  const readWindowBytes = Math.max(
-    1,
-    Math.min(
-      1024 * 1024,
-      source.maxReadWindowBytes ?? 32 * 1024,
-      runtime.maxWriteSessionBytes,
-      runtime.maxQueryBatchBytes,
-      Math.floor(storage.maxFinalTransactionBytes / 2),
-    ),
-  );
-  let sourceReadCalls = 0;
-  let sourceBytesRead = 0;
-  let persistenceTransactions = 0;
-  const measuredSource: DurableEditSource = Object.freeze({
-    ...source,
-    read(offset: number, length: number): Uint8Array {
-      sourceReadCalls = checkedAdd(
-        sourceReadCalls,
-        1,
-        "streamed fallback source reads",
-      );
-      sourceBytesRead = checkedAdd(
-        sourceBytesRead,
-        length,
-        "streamed fallback source bytes",
-      );
-      return source.read(offset, length);
-    },
-  });
-  const measuredPort: OperationsStorage = Object.freeze({
-    ...port,
-    transaction<T>(
-      mode: StorageTransactionMode,
-      budget: StorageWorkBudget,
-      callback: (ports: StorageTransactionPorts) => T,
-    ): T {
-      persistenceTransactions = checkedAdd(
-        persistenceTransactions,
-        1,
-        "streamed fallback persistence transactions",
-      );
-      return port.transaction(mode, budget, callback);
-    },
-  });
-  const prepared = await prepareContentStreaming(
-    measuredPort,
-    editedContentStream(
-      measuredSource,
-      edit,
-      newSize,
-      readWindowBytes,
-      admission,
-      cache,
-    ),
-    storage,
-    runtime,
-    admission,
-    undefined,
-    cache,
-    clock,
-    newSize,
-  );
-  return Object.freeze({
-    ...prepared,
-    mode: "streamed-fallback",
-    pathCopyReason: reason,
-    fallbackMetrics: Object.freeze({
-      sourceReadCalls,
-      sourceReadTransactions: checkedMultiply(
-        sourceReadCalls,
-        source.readStorageTransactions ?? 0,
-        "streamed fallback source transactions",
       ),
-      sourceBytesRead,
-      pathAuthenticationTransactions,
-      persistenceTransactions,
-      storageTransactions: checkedAdd(
-        checkedAdd(
-          pathAuthenticationTransactions,
-          persistenceTransactions,
-          "streamed fallback storage transactions",
-        ),
-        checkedMultiply(
+      storage,
+      runtime,
+      admission,
+      undefined,
+      cache,
+      clock,
+      newSize,
+    );
+    return Object.freeze({
+      ...prepared,
+      mode: "streamed-fallback",
+      pathCopyReason: reason,
+      fallbackMetrics: Object.freeze({
+        sourceReadCalls,
+        sourceReadTransactions: checkedMultiply(
           sourceReadCalls,
           source.readStorageTransactions ?? 0,
           "streamed fallback source transactions",
         ),
-        "streamed fallback storage transactions",
-      ),
-      readWindowBytes,
-    }),
-  });
+        sourceBytesRead,
+        pathAuthenticationTransactions,
+        persistenceTransactions,
+        storageTransactions: checkedAdd(
+          checkedAdd(
+            pathAuthenticationTransactions,
+            persistenceTransactions,
+            "streamed fallback storage transactions",
+          ),
+          checkedMultiply(
+            sourceReadCalls,
+            source.readStorageTransactions ?? 0,
+            "streamed fallback source transactions",
+          ),
+          "streamed fallback storage transactions",
+        ),
+        readWindowBytes,
+      }),
+    });
+  } finally {
+    releaseRetained?.();
+  }
 }

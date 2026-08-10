@@ -7,6 +7,8 @@ export type SqliteBindings = readonly SqliteValue[];
 export type SqliteRow = Readonly<Record<string, SqliteValue>>;
 export interface SqliteRunResult {
     readonly changes: number;
+    /** Includes trigger/FK side effects when the adapter can report them. */
+    readonly totalChanges?: number;
     readonly lastInsertRowid?: number;
 }
 export interface QueryBudget {

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
 import {
+  decodeManifestNode,
+  decodeManifestRoot,
   encodeManifestNode,
   encodeManifestRoot,
 } from "../../packages/fs/dist/manifests/codec.js";
@@ -18,13 +20,19 @@ import {
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
+import { SQLiteAuthenticatedManifestCursor } from "../../packages/fs/dist/sqlite/manifest-cursor.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
+import { bytesToHex } from "../../packages/fs/dist/cas/bytes.js";
+import {
+  CHARGED_ROW_BYTES,
+  UsageRepository,
+} from "../../packages/fs/dist/sqlite/usage-repository.js";
 
 function limits(driver, overrides = {}) {
   return constrainStorageLimits(
     {
       maxManagedPayloadBytes: 256 * 1024 * 1024,
-      maintenanceReserveBytes: 1024,
+      maintenanceReserveBytes: 4096,
       ...overrides,
     },
     driver.capabilities,
@@ -73,6 +81,7 @@ function persistBuilt(tx, storage, manifest) {
   for (const node of manifest.nodes.values())
     content.putManifestNode(node.hash, node.encoded);
   content.putManifestRoot(manifest.rootHash, manifest.root);
+  certify(tx, storage, manifest.rootHash, manifest.root, [...manifest.nodes.values()]);
 }
 
 function persistManual(tx, storage, object, nodes, root) {
@@ -80,6 +89,29 @@ function persistManual(tx, storage, object, nodes, root) {
   content.putObject(object.hash, object.bytes);
   for (const node of nodes) content.putManifestNode(node.hash, node.encoded);
   content.putManifestRoot(root.hash, root.encoded);
+  certify(tx, storage, root.hash, root.encoded, nodes);
+}
+
+function certify(tx, storage, rootHash, rootEncoded, nodes) {
+  const byHash = new Map(nodes.map((item) => [bytesToHex(item.hash), item.encoded]));
+  let hash = decodeManifestRoot(rootEncoded, rootHash).rootNodeHash;
+  let depth = 0;
+  while (true) {
+    depth += 1;
+    const encoded = byHash.get(bytesToHex(hash));
+    if (!encoded) throw new Error("test manifest path is missing");
+    const decoded = decodeManifestNode(encoded, hash);
+    if (decoded.kind === "leaf") break;
+    hash = decoded.children[0].hash;
+  }
+  tx.run("INSERT INTO efs_manifest_validations(manifest_hash,tree_depth) VALUES(?,?)", [
+    rootHash,
+    depth,
+  ]);
+  new UsageRepository(tx, storage).apply(
+    { charged_metadata_bytes: CHARGED_ROW_BYTES },
+    "test validation certificate",
+  );
 }
 
 function node(value) {
@@ -96,6 +128,41 @@ function root(parameters, fileSize, entryCount, rootNodeHash) {
   });
   return { hash: sha256(encoded), encoded };
 }
+
+test("manifest cursor intrinsically rejects oversized digest subclasses before source work", () => {
+  class HostileDigest extends Uint8Array {
+    get byteLength() {
+      return 32;
+    }
+  }
+  let sourceCalls = 0;
+  const source = {
+    readObjectInto() {
+      sourceCalls += 1;
+      return false;
+    },
+    withManifestRoot() {
+      sourceCalls += 1;
+      return undefined;
+    },
+    withManifestNode() {
+      sourceCalls += 1;
+      return undefined;
+    },
+  };
+  assert.throws(
+    () =>
+      new SQLiteAuthenticatedManifestCursor(
+        source,
+        new HostileDigest(1024 * 1024),
+        0,
+        8,
+        MAX_CONTENT_OBJECT_BYTES,
+      ),
+    /exactly 32 bytes/,
+  );
+  assert.equal(sourceCalls, 0);
+});
 
 test("SQLite manifest cursor returns bounded ranges through authenticated M1 paths", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
@@ -143,6 +210,30 @@ test("SQLite manifest cursor returns bounded ranges through authenticated M1 pat
     new Uint8Array(destination.buffer, 4, length),
     bytes.slice(offset, offset + length),
   );
+  driver.transaction("read", (tx) => {
+    const admission = new AdmissionController(2 * 1024 * 1024);
+    const cache = new ContentCache(1, admission);
+    const repository = new ContentRepository(tx, storage, cache);
+    const cursor = repository.openManifestCursor(manifest.rootHash, 0);
+    assert.ok(admission.usedBytes > 0);
+    cursor.close();
+    assert.equal(admission.usedBytes, 0);
+    assert.throws(() => cursor.peekEntry(), /cursor is closed/);
+    assert.throws(() => cursor.nextEntry(), /cursor is closed/);
+    assert.throws(
+      () =>
+        readManifestRangeUnadmitted(
+          repository,
+          manifest.rootHash,
+          0,
+          bytes.length,
+          admission,
+          cache,
+        ),
+      /managed resident memory limit/,
+    );
+    assert.equal(admission.usedBytes, 0);
+  });
   driver.close();
 });
 
@@ -186,6 +277,7 @@ test("cursor rejects unsupported parameters and root totals before exposing byte
         999,
       ],
     );
+    certify(tx, storage, unsupported.hash, unsupported.encoded, [leaf]);
   });
   assert.throws(
     () =>
@@ -194,13 +286,14 @@ test("cursor rejects unsupported parameters and root totals before exposing byte
       ),
     /effective content-object limit/,
   );
-  const wrongTotals = root({ minimum: 1, average: 1, maximum: 1 }, 2, 1, leaf.hash);
-  driver.transaction("write", (tx) =>
+  const wrongTotals = root({ minimum: 1, average: 1, maximum: 1 }, 1, 2, leaf.hash);
+  driver.transaction("write", (tx) => {
     new ContentRepository(tx, storage).putManifestRoot(
       wrongTotals.hash,
       wrongTotals.encoded,
-    ),
-  );
+    );
+    certify(tx, storage, wrongTotals.hash, wrongTotals.encoded, [leaf]);
+  });
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>
@@ -281,6 +374,10 @@ test("cursor validates child totals, canonical grouping, and configured depth", 
     const content = new ContentRepository(tx, storage);
     content.putManifestNode(noncanonicalInternal.hash, noncanonicalInternal.encoded);
     content.putManifestRoot(noncanonicalRoot.hash, noncanonicalRoot.encoded);
+    certify(tx, storage, noncanonicalRoot.hash, noncanonicalRoot.encoded, [
+      shortLeaf,
+      noncanonicalInternal,
+    ]);
   });
   assert.throws(
     () =>
@@ -309,6 +406,11 @@ test("cursor validates child totals, canonical grouping, and configured depth", 
     const content = new ContentRepository(tx, storage);
     content.putManifestNode(validInternal.hash, validInternal.encoded);
     content.putManifestRoot(deepRoot.hash, deepRoot.encoded);
+    certify(tx, storage, deepRoot.hash, deepRoot.encoded, [
+      fullLeaf,
+      finalLeaf,
+      validInternal,
+    ]);
   });
   const shallow = limits(driver, { maxManifestDepth: 1 });
   assert.throws(
@@ -400,14 +502,22 @@ test("cold and warm one-byte ranges stay inside the admitted max-object envelope
   assert.ok(afterCold.admissions >= 3);
   assert.ok(
     admission.peakBytes <=
-      3 * MAX_CONTENT_OBJECT_BYTES + 2 * (storage.maxManifestNodeBytes + 96) + 512,
+      3 * MAX_CONTENT_OBJECT_BYTES +
+        2 * (storage.maxManifestNodeBytes + 96) +
+        storage.maxManifestDepth * (4 * storage.maxManifestNodeBytes + 4096) +
+        512,
   );
   const coldPeak = admission.peakBytes;
   const warm = measureAdmission(admission, readOne);
   assert.deepEqual(warm.value, Uint8Array.of(0x5a));
   assert.ok(cache.metrics().hits >= afterCold.hits + 3);
   assert.equal(admission.peakBytes, coldPeak);
-  assert.ok(warm.temporaryBytes <= MAX_CONTENT_OBJECT_BYTES + 2 * 1024 * 1024);
+  assert.ok(
+    warm.temporaryBytes <=
+      MAX_CONTENT_OBJECT_BYTES +
+        storage.maxManifestDepth * (4 * storage.maxManifestNodeBytes + 4096) +
+        2 * 1024 * 1024,
+  );
   t.diagnostic(
     JSON.stringify({
       objectBytes: MAX_CONTENT_OBJECT_BYTES,
@@ -462,6 +572,7 @@ test("a 100 MiB materialization rejects before a second full-window BLOB allocat
     content.putObject(tailHash, tail);
     content.putManifestNode(leaf.hash, leaf.encoded);
     content.putManifestRoot(manifest.hash, manifest.encoded);
+    certify(tx, storage, manifest.hash, manifest.encoded, [leaf]);
   });
   const admission = new AdmissionController(128 * 1024 * 1024);
   const cache = new ContentCache(64 * 1024 * 1024, admission);
@@ -490,7 +601,12 @@ test("a 100 MiB materialization rejects before a second full-window BLOB allocat
     /managed resident memory limit/,
   );
   assert.equal(blobMaterializations, 0);
-  assert.ok(admission.peakBytes <= fileSize + 2 * (storage.maxManifestNodeBytes + 96));
+  assert.ok(
+    admission.peakBytes <=
+      fileSize +
+        2 * (storage.maxManifestNodeBytes + 96) +
+        storage.maxManifestDepth * (4 * storage.maxManifestNodeBytes + 4096),
+  );
   assert.equal(admission.usedBytes, cache.metrics().bytes);
   cache.clear();
   assert.equal(admission.usedBytes, 0);

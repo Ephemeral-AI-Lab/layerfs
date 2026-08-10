@@ -4,6 +4,8 @@ import {
   DEFAULT_RUNTIME_LIMITS,
   AdmissionController,
   constrainStorageLimits,
+  maxPersistedContentObjectBytes,
+  persistedWriterProfile,
   resolveLimits,
   validateRuntimeLimits,
   type BranchConfiguration,
@@ -201,10 +203,24 @@ export class EphemeralFS implements EphemeralFilesystem {
       filesystem.maxMaterializedBytes > DEFAULT_FILESYSTEM_LIMITS.maxMaterializedBytes
     )
       throw new RangeError(
-        "the M2 materialization profile is capped at 64 MiB; use ranges or streams for larger files",
+        "the Node storage-prerequisite materialization profile is capped at 64 MiB; use ranges or streams for larger files",
       );
     const branch = resolveLimits(DEFAULT_BRANCH_CONFIGURATION, options.branch);
     const storage = constrainStorageLimits(options.storage, storagePort.capabilities);
+    for (const [domain, values] of [
+      ["filesystem", filesystem],
+      ["runtime", runtime],
+      ["branch", branch],
+    ] as const)
+      for (const [name, value] of Object.entries(values))
+        if (!Number.isSafeInteger(value) || value <= 0)
+          throw new RangeError(`${domain}.${name} must be a positive safe integer`);
+    validateRuntimeLimits(
+      filesystem,
+      storage,
+      runtime,
+      options.format?.cowPageBytes ?? 16_384,
+    );
     for (const name of ["maxPhysicalDatabaseBytes", "maxJournalBytes"] as const) {
       if (storage[name] !== storagePort.capabilities[name])
         throw new RangeError(
@@ -216,6 +232,11 @@ export class EphemeralFS implements EphemeralFilesystem {
         ? {}
         : { cowPageBytes: options.format.cowPageBytes }),
       now: (options.clock ?? Date.now)(),
+      maxManifestEntries: storage.maxManifestEntries,
+      maxManifestDepth: storage.maxManifestDepth,
+      maxFileBytes: storage.maxFileBytes,
+      maxContentObjectBytes: maxPersistedContentObjectBytes(storage),
+      writerProfile: persistedWriterProfile(filesystem, storage, branch),
     });
     validateRuntimeLimits(filesystem, storage, runtime, metadata.cowPageBytes);
     const format = Object.freeze({
@@ -244,6 +265,15 @@ export class EphemeralFS implements EphemeralFilesystem {
             name === "maxPhysicalDatabaseBytes" || name === "maxJournalBytes"
               ? ("adapter" as const)
               : ("configuration" as const),
+        }),
+      ),
+      ...Object.entries(branch).map(([name, value]) =>
+        Object.freeze({
+          domain: "branch" as const,
+          name,
+          value,
+          scope: "persisted" as const,
+          constrainedBy: "configuration" as const,
         }),
       ),
       ...Object.entries(runtime).map(([name, value]) =>
@@ -495,7 +525,19 @@ export class EphemeralFS implements EphemeralFilesystem {
     options: WriteFileOptions = {},
   ): Promise<void> {
     return this.#operation("writeFile", path, options.signal, async () => {
-      let encodedStringRelease: (() => void) | undefined;
+      const canonical = canonicalizePath(path, this.#filesystemLimits, "writeFile");
+      if (canonical.value === "/")
+        throw fsError("EISDIR", "writeFile", canonical.value, "root is a directory");
+      if (options.exclusive) {
+        const exists = this.#transaction("read", (tx) =>
+          tx
+            .namespace(this.#filesystemLimits, this.#storageLimits, "writeFile")
+            .resolveOptional(canonical, false),
+        );
+        if (exists)
+          throw fsError("EEXIST", "writeFile", canonical.value, "destination exists");
+      }
+      let encodedString: Uint8Array | undefined;
       let frozen: Uint8Array | ReadableStream<Uint8Array>;
       if (typeof content === "string") {
         const encodedLength = utf8ByteLength(content);
@@ -506,16 +548,10 @@ export class EphemeralFS implements EphemeralFilesystem {
             path,
             "buffered write exceeds maxWriteBytes",
           );
-        this.#cache.makeRoom(encodedLength);
-        encodedStringRelease = this.#admission.reserve(encodedLength);
-        try {
-          frozen = new TextEncoder().encode(content);
-          if (intrinsicByteLength(frozen) !== encodedLength)
-            throw new Error("UTF-8 length preflight disagrees with encoder output");
-        } catch (error) {
-          encodedStringRelease();
-          throw error;
-        }
+        encodedString = new TextEncoder().encode(content);
+        if (intrinsicByteLength(encodedString) !== encodedLength)
+          throw new Error("UTF-8 length preflight disagrees with encoder output");
+        frozen = encodedString;
       } else {
         frozen = content;
       }
@@ -553,34 +589,17 @@ export class EphemeralFS implements EphemeralFilesystem {
           path,
           "buffered write exceeds maxWriteBytes",
         );
-      const canonical = canonicalizePath(path, this.#filesystemLimits, "writeFile");
-      if (canonical.value === "/")
-        throw fsError("EISDIR", "writeFile", canonical.value, "root is a directory");
-      if (options.exclusive) {
-        const exists = this.#transaction("read", (tx) =>
-          tx
-            .namespace(this.#filesystemLimits, this.#storageLimits, "writeFile")
-            .resolveOptional(canonical, false),
-        );
-        if (exists)
-          throw fsError("EEXIST", "writeFile", canonical.value, "destination exists");
-      }
-      let prepared;
-      try {
-        prepared = await prepareContent(
-          this.#storagePort,
-          frozen,
-          this.#storageLimits,
-          this.#runtimeLimits,
-          this.#admission,
-          options.signal,
-          this.#cache,
-          this.#clock,
-          options.maxBytes,
-        );
-      } finally {
-        encodedStringRelease?.();
-      }
+      const prepared = await prepareContent(
+        this.#storagePort,
+        frozen,
+        this.#storageLimits,
+        this.#runtimeLimits,
+        this.#admission,
+        options.signal,
+        this.#cache,
+        this.#clock,
+        options.maxBytes,
+      );
       try {
         this.#transaction("write", (tx) => {
           const ns = tx.namespace(
@@ -665,12 +684,12 @@ export class EphemeralFS implements EphemeralFilesystem {
         fsError("EFBIG", "writeRange", path, "write exceeds maxWriteBytes"),
       );
     return this.#operation("writeRange", path, undefined, async () => {
+      checkedInteger(offset, "offset");
+      const canonical = canonicalizePath(path, this.#filesystemLimits, "writeRange");
       this.#cache.makeRoom(inputLength);
       const releaseInput = this.#admission.reserve(inputLength);
       try {
         const frozen = copyBytes(content);
-        checkedInteger(offset, "offset");
-        const canonical = canonicalizePath(path, this.#filesystemLimits, "writeRange");
         const selected = this.#selectMutationSource(canonical.value, "writeRange");
         if (!frozen.byteLength) return;
         const size = Math.max(
@@ -716,17 +735,13 @@ export class EphemeralFS implements EphemeralFilesystem {
         fsError("EFBIG", "replaceRange", path, "insertion exceeds maxWriteBytes"),
       );
     return this.#operation("replaceRange", path, undefined, async () => {
+      checkedInteger(offset, "offset");
+      checkedInteger(deleteLength, "deleteLength");
+      const canonical = canonicalizePath(path, this.#filesystemLimits, "replaceRange");
       this.#cache.makeRoom(inputLength);
       const releaseInput = this.#admission.reserve(inputLength);
       try {
         const frozen = copyBytes(insertBytes);
-        checkedInteger(offset, "offset");
-        checkedInteger(deleteLength, "deleteLength");
-        const canonical = canonicalizePath(
-          path,
-          this.#filesystemLimits,
-          "replaceRange",
-        );
         const selected = this.#selectMutationSource(canonical.value, "replaceRange");
         if (
           offset > selected.source.size ||
@@ -1283,6 +1298,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       this.#admission,
       this.#cache,
       this.#clock,
+      true,
     );
     try {
       this.#transaction("write", (tx) => {

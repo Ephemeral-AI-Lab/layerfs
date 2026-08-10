@@ -84,6 +84,7 @@ export class ManifestSequentialCursor {
   readonly #reader: ManifestNodeSource;
   readonly #maxDepth: number;
   readonly #parameters: ManifestParameters;
+  readonly #expectedLeafDepth: number | undefined;
   readonly #stack: CursorFrame[] = [];
   #leaf: ManifestLeaf | undefined;
   #leafDepth: number | undefined;
@@ -97,15 +98,24 @@ export class ManifestSequentialCursor {
     reader: ManifestNodeSource,
     expectedRootHash?: Uint8Array,
     maxDepth = 8,
+    expectedLeafDepth?: number,
   ) {
     const root = decodeManifestRoot(rootBytes, expectedRootHash);
     validateSupportedManifestParameters(root.parameters);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > root.fileSize)
       throw new RangeError("manifest offset is outside the file");
     validateDepthLimit(maxDepth);
+    if (
+      expectedLeafDepth !== undefined &&
+      (!Number.isSafeInteger(expectedLeafDepth) ||
+        expectedLeafDepth < 1 ||
+        expectedLeafDepth > maxDepth)
+    )
+      throw new RangeError("expected manifest leaf depth is invalid");
     this.#reader = reader;
     this.#maxDepth = maxDepth;
     this.#parameters = root.parameters;
+    this.#expectedLeafDepth = expectedLeafDepth;
     const rootNode = this.#load(root.rootNodeHash, 1, undefined, true, true);
     if (rootNode.span !== root.fileSize || rootNode.entryCount !== root.entryCount)
       throw new Error("manifest root totals mismatch");
@@ -205,6 +215,11 @@ export class ManifestSequentialCursor {
       finalAtLevel = childFinal;
       start = childOffset;
     }
+    if (
+      this.#expectedLeafDepth !== undefined &&
+      currentDepth !== this.#expectedLeafDepth
+    )
+      throw new Error("unbalanced manifest tree");
     if (this.#leafDepth === undefined) this.#leafDepth = currentDepth;
     else if (this.#leafDepth !== currentDepth)
       throw new Error("unbalanced manifest tree");

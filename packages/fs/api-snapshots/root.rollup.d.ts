@@ -409,8 +409,10 @@ export interface StorageAdapterLimits {
 }
 /** Hard version-0.1 content-object/streaming CDC allocation ceiling. */
 export declare const MAX_CONTENT_OBJECT_BYTES: number;
+export declare const DEFAULT_FASTCDC_MINIMUM_BYTES = 32768;
+export declare const DEFAULT_FASTCDC_MAXIMUM_BYTES = 524288;
 /** Conservative per-object binding/row/index envelope in a durable transaction. */
-export declare const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES = 256;
+export declare const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES: number;
 export declare function maxPersistedContentObjectBytes(storage: Pick<StorageLimits, "maxFinalTransactionBytes">): number;
 /** Additional caller input one collecting FastCDC push may return with a prebuffer. */
 export declare const MAX_CONTENT_COLLECTOR_PUSH_BYTES: number;
@@ -424,11 +426,19 @@ export declare const CONTENT_COLLECTOR_REFERENCE_BYTES = 16;
  */
 export declare const MAX_CONTENT_WORKING_SET_COPIES = 6;
 export declare const MIN_CANONICAL_MANIFEST_NODE_BYTES = 9248;
+export declare const DURABLE_METADATA_ROW_BYTES = 512;
+export declare const MAX_MAINTENANCE_RUN_ROW_BYTES = 1024;
+export declare const MAX_MAINTENANCE_MARK_ROW_BYTES = 704;
+export declare const MAINTENANCE_CLEANUP_ROW_BYTES = 512;
+export declare const MAINTENANCE_GC_EMERGENCY_BYTES: number;
+export declare const MAINTENANCE_TOTAL_EMERGENCY_BYTES: number;
+export declare const MIN_MAINTENANCE_BYTES: number;
 export declare const DEFAULT_FILESYSTEM_LIMITS: FilesystemLimits;
 export declare const DEFAULT_STORAGE_LIMITS: StorageLimits;
 export declare const DEFAULT_RUNTIME_LIMITS: RuntimeLimits;
 export declare const DEFAULT_BRANCH_CONFIGURATION: BranchConfiguration;
 export declare function resolveLimits<T extends object>(defaults: T, configured?: Partial<T>): Readonly<T>;
+export declare function persistedWriterProfile(filesystem: Readonly<FilesystemLimits>, storage: Readonly<StorageLimits>, branch: Readonly<BranchConfiguration>): string;
 export declare function constrainStorageLimits(configured: Partial<StorageLimits> | undefined, adapter: StorageAdapterLimits): Readonly<StorageLimits>;
 export declare function validateRuntimeLimits(filesystem: FilesystemLimits, storage: StorageLimits, runtime: RuntimeLimits, cowPageBytes: number): void;
 export declare function requiredRuntimeProgressBytes(filesystem: FilesystemLimits, storage: StorageLimits, cowPageBytes: number): number;
@@ -447,6 +457,8 @@ export type SqliteBindings = readonly SqliteValue[];
 export type SqliteRow = Readonly<Record<string, SqliteValue>>;
 export interface SqliteRunResult {
     readonly changes: number;
+    /** Includes trigger/FK side effects when the adapter can report them. */
+    readonly totalChanges?: number;
     readonly lastInsertRowid?: number;
 }
 export interface QueryBudget {

@@ -1,4 +1,8 @@
-import type { RuntimeLimits, StorageLimits } from "../resources/limits.js";
+import {
+  maxPersistedContentObjectBytes,
+  type RuntimeLimits,
+  type StorageLimits,
+} from "../resources/limits.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
 import { bytesToHex, hexToBytes } from "../cas/bytes.js";
 import { sha256 } from "../cas/sha256.js";
@@ -18,6 +22,7 @@ import type {
   StorageTransactionPorts,
 } from "./storage-ports.js";
 import type { ContentCache } from "../cache/content-cache.js";
+import { utf8ByteLength } from "../namespace/utf8.js";
 
 const CLEAN_MARKS = 4;
 const CLEAN_ROOT_JOURNAL = 5;
@@ -25,6 +30,8 @@ const CLEAN_TERMINAL_RUNS = 6;
 const COMPLETE = 7;
 const ABANDONED = 8;
 const MAX_GC_RUN_ID_BYTES = 256;
+const MAX_VERIFICATION_CURSOR_BYTES = 64 * 1024;
+const MAX_VERIFICATION_CURSOR_PAYLOAD_BYTES = 48 * 1024;
 const USAGE_COUNTER_COUNT = 16;
 
 interface UsageVerificationCursor {
@@ -91,7 +98,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       typeof runId !== "string" ||
       runId.length === 0 ||
       runId.includes("\0") ||
-      new TextEncoder().encode(runId).byteLength > MAX_GC_RUN_ID_BYTES
+      utf8ByteLength(runId) > MAX_GC_RUN_ID_BYTES
     )
       throw fsError(
         "EINVAL",
@@ -154,7 +161,16 @@ export class MaintenanceManager implements FilesystemMaintenance {
           continue;
         }
         const state = run.state;
-        if (state === COMPLETE || state === ABANDONED) break;
+        if (state === COMPLETE) break;
+        if (state === ABANDONED) {
+          this.#write((tx) =>
+            tx
+              .maintenance(this.#storage)
+              .resumeAbandonedRun(runId, ABANDONED, CLEAN_MARKS),
+          );
+          batches += 1;
+          continue;
+        }
         if (state === 0) this.#markBatch(runId);
         else this.#sweepBatch(runId, state);
         batches += 1;
@@ -371,9 +387,19 @@ export class MaintenanceManager implements FilesystemMaintenance {
             };
           else break;
         } else if (phase === "objects") {
+          const rowLimit = Math.min(
+            maximum - checked,
+            Math.max(
+              1,
+              Math.floor(
+                (this.#storage.maxFinalTransactionBytes - 512) /
+                  (maxPersistedContentObjectBytes(this.#storage) + 512),
+              ),
+            ),
+          );
           const rows = maintenance.objects(
             cursor.last ? hexToBytes(cursor.last, 32) : Uint8Array.of(0),
-            maximum - checked,
+            rowLimit,
             this.#runtime.maxQueryBatchBytes,
           );
           for (const row of rows) {
@@ -382,7 +408,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
             cursor.last = bytesToHex(row.hash);
             checked += 1;
           }
-          if (rows.length < maximum - (checked - rows.length))
+          if (rows.length < rowLimit)
             cursor = {
               phase: cursor.phase + 1,
               last: "",
@@ -535,7 +561,9 @@ export class MaintenanceManager implements FilesystemMaintenance {
         Math.min(
           this.#storage.maxGcBatchSize,
           this.#storage.maxQueryBatchSize,
-          this.#storage.maxFinalTransactionRows - 8,
+          state === 1
+            ? Math.floor((this.#storage.maxFinalTransactionRows - 8) / 2)
+            : this.#storage.maxFinalTransactionRows - 8,
         ),
       );
       const candidates = maintenance.sweepCandidates(
@@ -622,13 +650,25 @@ export class MaintenanceManager implements FilesystemMaintenance {
   }
   #encodeCursor(cursor: VerificationCursorState): string {
     const payload = JSON.stringify(cursor);
+    if (utf8ByteLength(payload) > MAX_VERIFICATION_CURSOR_PAYLOAD_BYTES)
+      throw fsError("EFBIG", "verify", undefined, "verification cursor exceeds limit");
     return `${encodeBase64Text(payload)}.${bytesToHex(this.#cursorDigest(payload))}`;
   }
   #decodeCursor(value: string): VerificationCursorState {
     try {
+      if (typeof value !== "string" || value.length > MAX_VERIFICATION_CURSOR_BYTES)
+        throw new Error();
       const separator = value.lastIndexOf(".");
-      if (separator <= 0) throw new Error();
-      const payload = decodeBase64Text(value.slice(0, separator));
+      if (
+        separator <= 0 ||
+        separator > MAX_VERIFICATION_CURSOR_PAYLOAD_BYTES * 2 ||
+        value.length - separator - 1 !== 64
+      )
+        throw new Error();
+      const encodedPayload = value.slice(0, separator);
+      const payload = decodeBase64Text(encodedPayload);
+      if (utf8ByteLength(payload) > MAX_VERIFICATION_CURSOR_PAYLOAD_BYTES)
+        throw new Error();
       if (bytesToHex(this.#cursorDigest(payload)) !== value.slice(separator + 1))
         throw new Error();
       const result = JSON.parse(payload);

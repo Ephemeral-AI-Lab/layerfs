@@ -1,5 +1,7 @@
 import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
 import {
+  DEFAULT_FASTCDC_MINIMUM_BYTES,
+  DEFAULT_FASTCDC_MAXIMUM_BYTES,
   MAX_CONTENT_COLLECTOR_PUSH_BYTES,
   MAX_CONTENT_COLLECTOR_REFERENCES,
   MAX_CONTENT_OBJECT_BYTES,
@@ -24,9 +26,9 @@ export interface StreamingFastCdcMetrics {
   readonly peakPushOutputCount: number;
 }
 export const DEFAULT_FASTCDC: FastCdcConfiguration = Object.freeze({
-  minimum: 32_768,
+  minimum: DEFAULT_FASTCDC_MINIMUM_BYTES,
   average: 131_072,
-  maximum: 524_288,
+  maximum: DEFAULT_FASTCDC_MAXIMUM_BYTES,
 });
 
 export const MAX_STREAMING_FASTCDC_BYTES = MAX_CONTENT_OBJECT_BYTES;

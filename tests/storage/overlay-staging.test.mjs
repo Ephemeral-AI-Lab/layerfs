@@ -11,6 +11,7 @@ import {
 } from "../../packages/fs/dist/manifests/codec.js";
 import {
   AdmissionController,
+  DEFAULT_FASTCDC_MAXIMUM_BYTES,
   DEFAULT_RUNTIME_LIMITS,
   constrainStorageLimits,
 } from "../../packages/fs/dist/resources/limits.js";
@@ -33,12 +34,13 @@ import { runUnitOfWork } from "../../packages/fs/dist/sqlite/unit-of-work.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { createSqliteOperationsStorage } from "../../packages/fs/dist/sqlite/operations-storage.js";
 
-function limits(driver) {
+function limits(driver, overrides = {}) {
   return constrainStorageLimits(
     {
       maxManagedPayloadBytes: 256 * 1024 * 1024,
       maintenanceReserveBytes: 1024 * 1024,
       maxBranchOverlayBytes: 32 * 1024 * 1024,
+      ...overrides,
     },
     driver.capabilities,
   );
@@ -264,6 +266,287 @@ test("structural patches are segmented, ordered, bounded, and exact", async () =
   );
   driver.transaction("read", (tx) => verifyKeysetUsage(tx, storage));
   driver.close();
+});
+
+test("structural patch segment envelopes persist exactly and reject plus one before writes", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-patch-segments-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver;
+  try {
+    driver = await openNodeSqlite({ filename });
+    const metadata = initializeOrValidateSchema(driver);
+    createBranch(driver);
+    const storage = limits(driver, { maxPatchesPerFile: 2 });
+    const exact = Array.from({ length: 64 }, () => Uint8Array.of(1));
+    driver.transaction("write", (tx) =>
+      new OverlayRepository(tx, storage, metadata.cowPageBytes).appendPatch(
+        "branch",
+        "inode",
+        0,
+        0,
+        0,
+        exact,
+      ),
+    );
+    assert.throws(
+      () =>
+        driver.transaction("write", (tx) =>
+          new OverlayRepository(tx, storage, metadata.cowPageBytes).appendPatch(
+            "branch",
+            "other-inode",
+            0,
+            0,
+            0,
+            [...exact, Uint8Array.of(2)],
+          ),
+        ),
+      /segment limit/,
+    );
+    assert.equal(
+      driver.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT count(*) count FROM efs_patches WHERE inode_id='other-inode'",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].count,
+      ),
+      0,
+    );
+    driver.close();
+    driver = await openNodeSqlite({ filename, create: false });
+    initializeOrValidateSchema(driver);
+    const reopened = driver.transaction("read", (tx) =>
+      new OverlayRepository(tx, storage, metadata.cowPageBytes).patches(
+        "branch",
+        "inode",
+      ),
+    );
+    assert.equal(reopened.length, 1);
+    assert.equal(reopened[0].segments.length, 64);
+    assert.equal(reopened[0].insertLength, 64);
+    driver.close();
+    driver = undefined;
+  } finally {
+    try {
+      driver?.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("tight row profiles persist only patch sets their bounded reader can materialize", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-patch-row-envelope-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver;
+  let port;
+  try {
+    driver = await openNodeSqlite({ filename });
+    const storage = limits(driver, {
+      maxFinalTransactionRows: 64,
+      maxPatchesPerFile: 40,
+    });
+    port = createSqliteOperationsStorage(driver);
+    const metadata = port.initialize();
+    port.transaction(
+      "write",
+      { maxRows: 64, maxBytes: storage.maxFinalTransactionBytes },
+      (tx) => tx.branches(storage).create("tight", 0, 0),
+    );
+    for (let index = 0; index < 32; index += 1)
+      port.transaction(
+        "write",
+        { maxRows: 64, maxBytes: storage.maxFinalTransactionBytes },
+        (tx) =>
+          tx
+            .overlay(storage, metadata.cowPageBytes)
+            .appendPatch("tight", "inode", index, index, 0, [Uint8Array.of(index)]),
+      );
+    assert.equal(
+      port.transaction(
+        "read",
+        { maxRows: 64, maxBytes: storage.maxFinalTransactionBytes },
+        (tx) =>
+          tx.overlay(storage, metadata.cowPageBytes).patches("tight", "inode").length,
+      ),
+      32,
+    );
+    assert.throws(
+      () =>
+        port.transaction(
+          "write",
+          { maxRows: 64, maxBytes: storage.maxFinalTransactionBytes },
+          (tx) =>
+            tx
+              .overlay(storage, metadata.cowPageBytes)
+              .appendPatch("tight", "inode", 32, 32, 0, [Uint8Array.of(33)]),
+        ),
+      /requires materialization/,
+    );
+    await port.close();
+    port = undefined;
+    driver = await openNodeSqlite({ filename, create: false });
+    port = createSqliteOperationsStorage(driver);
+    port.initialize();
+    assert.equal(
+      port.transaction(
+        "read",
+        { maxRows: 64, maxBytes: storage.maxFinalTransactionBytes },
+        (tx) =>
+          tx.overlay(storage, metadata.cowPageBytes).patches("tight", "inode").length,
+      ),
+      32,
+    );
+  } finally {
+    try {
+      await port?.close();
+    } catch {}
+    try {
+      driver?.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("patch payload plus row and binding overhead is exact across reopen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-patch-byte-envelope-"));
+  const filename = path.join(directory, "filesystem.db");
+  const finalBytes = DEFAULT_FASTCDC_MAXIMUM_BYTES + 16 * 1024;
+  const segmentCount = 32;
+  const payloadBytes = finalBytes - 16 * 1024 - segmentCount * 272;
+  const segmented = (total) => {
+    const base = Math.floor(total / segmentCount);
+    let remaining = total;
+    return Array.from({ length: segmentCount }, () => {
+      const size = Math.min(base + (remaining % segmentCount ? 1 : 0), remaining);
+      remaining -= size;
+      return new Uint8Array(size).fill(23);
+    });
+  };
+  let driver;
+  let port;
+  try {
+    driver = await openNodeSqlite({ filename });
+    const storage = limits(driver, {
+      maxFinalTransactionBytes: finalBytes,
+      maxPatchBytesPerFile: payloadBytes + 1,
+      maxPatchesPerFile: 1,
+    });
+    port = createSqliteOperationsStorage(driver);
+    const metadata = port.initialize();
+    port.transaction(
+      "write",
+      { maxRows: storage.maxFinalTransactionRows, maxBytes: finalBytes },
+      (tx) => tx.branches(storage).create("bytes", 0, 0),
+    );
+    const exact = segmented(payloadBytes);
+    port.transaction(
+      "write",
+      { maxRows: storage.maxFinalTransactionRows, maxBytes: finalBytes },
+      (tx) =>
+        tx
+          .overlay(storage, metadata.cowPageBytes)
+          .appendPatch("bytes", "inode", 0, 0, 0, exact),
+    );
+    const plusOne = segmented(payloadBytes + 1);
+    assert.throws(
+      () =>
+        port.transaction(
+          "write",
+          { maxRows: storage.maxFinalTransactionRows, maxBytes: finalBytes },
+          (tx) =>
+            tx
+              .overlay(storage, metadata.cowPageBytes)
+              .appendPatch("bytes", "other", 0, 0, 0, plusOne),
+        ),
+      /requires materialization/,
+    );
+    assert.equal(
+      port.transaction(
+        "read",
+        { maxRows: storage.maxFinalTransactionRows, maxBytes: finalBytes },
+        (tx) =>
+          tx.overlay(storage, metadata.cowPageBytes).patches("bytes", "inode")[0]
+            .insertLength,
+      ),
+      payloadBytes,
+    );
+    await port.close();
+    port = undefined;
+    driver = await openNodeSqlite({ filename, create: false });
+    port = createSqliteOperationsStorage(driver);
+    port.initialize();
+    assert.equal(
+      port.transaction(
+        "read",
+        { maxRows: storage.maxFinalTransactionRows, maxBytes: finalBytes },
+        (tx) =>
+          tx.overlay(storage, metadata.cowPageBytes).patches("bytes", "inode")[0]
+            .segments.length,
+      ),
+      segmentCount,
+    );
+  } finally {
+    try {
+      await port?.close();
+    } catch {}
+    try {
+      driver?.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("bounded usage recount derives patch bytes from physical segments after reopen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-patch-recount-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver;
+  try {
+    driver = await openNodeSqlite({ filename });
+    const metadata = initializeOrValidateSchema(driver);
+    createBranch(driver);
+    let storage = limits(driver);
+    driver.transaction("write", (tx) =>
+      new OverlayRepository(tx, storage, metadata.cowPageBytes).appendPatch(
+        "branch",
+        "inode",
+        8,
+        4,
+        0,
+        [Uint8Array.of(1, 2, 3)],
+      ),
+    );
+    driver.close();
+    driver = undefined;
+
+    driver = await openNodeSqlite({ filename, create: false });
+    initializeOrValidateSchema(driver);
+    driver.transaction("write", (tx) =>
+      tx.run(
+        "UPDATE efs_patch_segments SET bytes=? WHERE branch_id='branch' AND inode_id='inode' AND sequence=0 AND segment_index=0",
+        [Uint8Array.of(1, 2, 3, 4)],
+      ),
+    );
+    driver.close();
+    driver = undefined;
+
+    driver = await openNodeSqlite({ filename, create: false });
+    initializeOrValidateSchema(driver);
+    storage = limits(driver);
+    assert.throws(
+      () =>
+        driver.transaction("read", (tx) =>
+          new UsageRepository(tx, storage).verifyDerivedUsage(),
+        ),
+      /patch_bytes differs from bounded direct recount/,
+    );
+  } finally {
+    try {
+      driver?.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("byte-weighted cache verifies once, remains bounded, and eviction preserves integrity checks", async () => {
@@ -503,7 +786,7 @@ test("declared streamed-ingest quota is reserved before the first producer pull"
   const storage = constrainStorageLimits(
     {
       maxManagedPayloadBytes: 2 * 1024 * 1024,
-      maintenanceReserveBytes: 1024,
+      maintenanceReserveBytes: 4096,
     },
     driver.capabilities,
   );
@@ -558,7 +841,7 @@ test("declared entry-stream quota is reserved before iterable work or durable ba
   const storage = constrainStorageLimits(
     {
       maxManagedPayloadBytes: 128 * 1024,
-      maintenanceReserveBytes: 1024,
+      maintenanceReserveBytes: 4096,
       maxQueryBatchSize: 1,
     },
     driver.capabilities,
@@ -818,7 +1101,7 @@ test("staging payload quota is exact across rollback, release, and reopen", asyn
     const storage = constrainStorageLimits(
       {
         maxManagedPayloadBytes: 16 * 1024 * 1024,
-        maintenanceReserveBytes: 1024,
+        maintenanceReserveBytes: 4096,
         maxStagingPayloadBytes: 8,
       },
       driver.capabilities,
@@ -907,7 +1190,7 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
     let storage = constrainStorageLimits(
       {
         maxManagedPayloadBytes: 16 * 1024 * 1024,
-        maintenanceReserveBytes: 1024,
+        maintenanceReserveBytes: 4096,
         maxChargedMetadataBytes: metadataLimit,
       },
       driver.capabilities,
@@ -946,7 +1229,7 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
     storage = constrainStorageLimits(
       {
         maxManagedPayloadBytes: 16 * 1024 * 1024,
-        maintenanceReserveBytes: 1024,
+        maintenanceReserveBytes: 4096,
         maxChargedMetadataBytes: metadataLimit,
       },
       driver.capabilities,
@@ -1015,14 +1298,16 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
 test("maintenance expiry atomically releases partial and sealed staging charges after reopen", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-stage-expiry-"));
   const filename = path.join(directory, "filesystem.db");
+  let driver;
+  let port;
   try {
-    let driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
-    let port = createSqliteOperationsStorage(driver);
+    driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    port = createSqliteOperationsStorage(driver);
     initializeOrValidateSchema(driver);
     const storage = constrainStorageLimits(
       {
         maxManagedPayloadBytes: 32 * 1024 * 1024,
-        maintenanceReserveBytes: 1024,
+        maintenanceReserveBytes: 4096,
         maxStagingPayloadBytes: 1024 * 1024,
         stagingLeaseMs: 10,
       },
@@ -1070,7 +1355,9 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
     );
     assert.equal(before.leases, 2);
     assert.ok(before.staging_bytes > partial.length);
-    driver.close();
+    await port.close();
+    port = undefined;
+    driver = undefined;
     driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
     port = createSqliteOperationsStorage(driver);
     initializeOrValidateSchema(driver);
@@ -1123,8 +1410,16 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
       manifest_members: 0,
       queued: 0,
     });
-    driver.close();
+    await port.close();
+    port = undefined;
+    driver = undefined;
   } finally {
+    try {
+      await port?.close();
+    } catch {}
+    try {
+      driver?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -1136,7 +1431,7 @@ test("every expired-lease tombstone statement fault rolls back lease state and u
     const storage = constrainStorageLimits(
       {
         maxManagedPayloadBytes: 16 * 1024 * 1024,
-        maintenanceReserveBytes: 1024,
+        maintenanceReserveBytes: 4096,
         maxStagingPayloadBytes: 1024,
       },
       base.capabilities,
@@ -1227,7 +1522,7 @@ test("every keyset cleanup statement fault rolls back its child deletion and cur
     const storage = constrainStorageLimits(
       {
         maxManagedPayloadBytes: 16 * 1024 * 1024,
-        maintenanceReserveBytes: 1024,
+        maintenanceReserveBytes: 4096,
         maxStagingPayloadBytes: 1024,
         maxGcBatchSize: 2,
         maxQueryBatchSize: 2,
@@ -1313,7 +1608,7 @@ test("tombstoned leases clean up through resumable keyset-sized child batches", 
   const storage = constrainStorageLimits(
     {
       maxManagedPayloadBytes: 16 * 1024 * 1024,
-      maintenanceReserveBytes: 1024,
+      maintenanceReserveBytes: 4096,
       maxStagingPayloadBytes: 1024,
       maxGcBatchSize: 2,
       maxQueryBatchSize: 2,
@@ -1342,6 +1637,13 @@ test("tombstoned leases clean up through resumable keyset-sized child batches", 
       ]);
     });
   }
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        tx.run("DELETE FROM efs_leases WHERE id='bounded-cleanup'"),
+      ),
+    /lease deletion requires completed bounded cleanup/,
+  );
   driver.transaction("write", (tx) =>
     assert.equal(
       new StagingRepository(tx, storage).release("bounded-cleanup", nonce, false),
@@ -1384,7 +1686,7 @@ test("lease maintenance observes aborts between bounded committed batches", asyn
   const storage = constrainStorageLimits(
     {
       maxManagedPayloadBytes: 16 * 1024 * 1024,
-      maintenanceReserveBytes: 1024,
+      maintenanceReserveBytes: 4096,
       maxStagingPayloadBytes: 1024,
       maxGcBatchSize: 1,
       maxQueryBatchSize: 2,
@@ -1476,7 +1778,7 @@ test("sealed recovery rows reject raw mutation until tombstoned cleanup", async 
     "UPDATE efs_lease_staged_manifests SET size=size WHERE lease_id=?",
     "DELETE FROM efs_lease_staged_manifests WHERE lease_id=?",
     "DELETE FROM efs_lease_manifests WHERE lease_id=?",
-    "INSERT OR IGNORE INTO efs_lease_manifests(lease_id,manifest_hash) SELECT lease_id,manifest_hash FROM efs_lease_manifests WHERE lease_id=?",
+    "INSERT OR IGNORE INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
   ];
   for (const sql of mutations)
     assert.throws(

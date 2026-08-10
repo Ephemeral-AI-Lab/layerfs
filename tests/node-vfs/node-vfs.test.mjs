@@ -76,9 +76,9 @@ test("shared backpressure bounds 64 sessions and rejects excess bytes", async ()
   const handle = await openNodeVfs({
     database,
     runtime: {
-      maxManagedResidentBytes: 1024 * 1024,
-      maxPendingWriteBytes: 32 * 1024,
-      maxWriteSessionBytes: 1024,
+      maxManagedResidentBytes: 128 * 1024 * 1024,
+      maxPendingWriteBytes: 16 * 1024 * 1024,
+      maxWriteSessionBytes: 256 * 1024,
       maxOpenNodeVfsSessions: 64,
     },
   });
@@ -88,11 +88,11 @@ test("shared backpressure bounds 64 sessions and rejects excess bytes", async ()
       writable: true,
       create: true,
     });
-    session.writeSync(new Uint8Array(512), 0);
+    session.writeSync(new Uint8Array(256 * 1024), 0);
     sessions.push(session);
   }
   assert.throws(
-    () => sessions[0].writeSync(Uint8Array.of(1), 512),
+    () => sessions[0].writeSync(Uint8Array.of(1), 256 * 1024),
     (error) => error.code === "EAGAIN",
   );
   const peak = handle.provider.metrics.snapshot().peakManagedResidentBytes;

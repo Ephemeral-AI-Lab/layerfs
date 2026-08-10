@@ -69,8 +69,10 @@ export interface StorageAdapterLimits {
 
 /** Hard version-0.1 content-object/streaming CDC allocation ceiling. */
 export const MAX_CONTENT_OBJECT_BYTES = 16 * 1024 * 1024;
+export const DEFAULT_FASTCDC_MINIMUM_BYTES = 32_768;
+export const DEFAULT_FASTCDC_MAXIMUM_BYTES = 524_288;
 /** Conservative per-object binding/row/index envelope in a durable transaction. */
-export const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES = 256;
+export const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES = 16 * 1024;
 
 export function maxPersistedContentObjectBytes(
   storage: Pick<StorageLimits, "maxFinalTransactionBytes">,
@@ -95,6 +97,16 @@ export const CONTENT_COLLECTOR_REFERENCE_BYTES = 16;
  */
 export const MAX_CONTENT_WORKING_SET_COPIES = 6;
 export const MIN_CANONICAL_MANIFEST_NODE_BYTES = 9248;
+export const DURABLE_METADATA_ROW_BYTES = 512;
+export const MAX_MAINTENANCE_RUN_ROW_BYTES = 1024;
+export const MAX_MAINTENANCE_MARK_ROW_BYTES = 704;
+export const MAINTENANCE_CLEANUP_ROW_BYTES = 512;
+export const MAINTENANCE_GC_EMERGENCY_BYTES =
+  MAX_MAINTENANCE_RUN_ROW_BYTES + MAX_MAINTENANCE_MARK_ROW_BYTES;
+export const MAINTENANCE_TOTAL_EMERGENCY_BYTES =
+  MAINTENANCE_GC_EMERGENCY_BYTES + MAINTENANCE_CLEANUP_ROW_BYTES;
+export const MIN_MAINTENANCE_BYTES =
+  MAINTENANCE_TOTAL_EMERGENCY_BYTES + Math.max(640, MAX_MAINTENANCE_MARK_ROW_BYTES);
 
 function validateCowPageBytes(cowPageBytes: number): 4096 | 8192 | 16384 {
   if (cowPageBytes !== 4096 && cowPageBytes !== 8192 && cowPageBytes !== 16384)
@@ -171,13 +183,47 @@ export function resolveLimits<T extends object>(
   return Object.freeze({ ...defaults, ...configured });
 }
 
+export function persistedWriterProfile(
+  filesystem: Readonly<FilesystemLimits>,
+  storage: Readonly<StorageLimits>,
+  branch: Readonly<BranchConfiguration>,
+): string {
+  const domain = (value: Readonly<Record<string, number>>) =>
+    Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
+  return JSON.stringify({
+    branch: domain(branch as unknown as Readonly<Record<string, number>>),
+    filesystem: domain(filesystem as unknown as Readonly<Record<string, number>>),
+    storage: domain(storage as unknown as Readonly<Record<string, number>>),
+  });
+}
+
 export function constrainStorageLimits(
   configured: Partial<StorageLimits> | undefined,
   adapter: StorageAdapterLimits,
 ): Readonly<StorageLimits> {
   const limits = resolveLimits(DEFAULT_STORAGE_LIMITS, configured);
+  if (
+    !Number.isSafeInteger(limits.maxManifestDepth) ||
+    limits.maxManifestDepth < 1 ||
+    limits.maxManifestDepth > 64
+  )
+    throw new RangeError("maxManifestDepth must be between 1 and 64");
+  let entriesByDepth = 256;
+  for (let depth = 1; depth < limits.maxManifestDepth; depth += 1)
+    entriesByDepth = Math.min(0xffff_ffff, entriesByDepth * 128);
+  const effectiveManifestEntries = Math.min(
+    limits.maxManifestEntries,
+    entriesByDepth,
+    0xffff_ffff,
+  );
+  const fileBytesByEntries = Math.min(
+    Number.MAX_SAFE_INTEGER,
+    effectiveManifestEntries * (DEFAULT_FASTCDC_MINIMUM_BYTES + 1),
+  );
   const result = {
     ...limits,
+    maxManifestEntries: effectiveManifestEntries,
+    maxFileBytes: Math.min(limits.maxFileBytes, fileBytesByEntries),
     maxWriteBytes: Math.min(limits.maxWriteBytes, adapter.maxBlobBytes),
     maxFinalTransactionBytes: Math.min(
       limits.maxFinalTransactionBytes,
@@ -200,9 +246,36 @@ export function constrainStorageLimits(
     throw new RangeError("adapter cannot admit canonical manifest nodes");
   if (adapter.maxBindings < 8)
     throw new RangeError("adapter must support at least eight bindings");
-  if (result.maxFinalTransactionRows < 64)
+  const minimumTransactionRows = Math.max(64, result.maxManifestDepth * 4 + 16);
+  if (result.maxFinalTransactionRows > Math.floor(Number.MAX_SAFE_INTEGER / 4))
     throw new RangeError(
-      "maxFinalTransactionRows must be at least 64 for bounded storage progress",
+      "maxFinalTransactionRows exceeds the safe derived statement envelope",
+    );
+  if (result.maxPatchesPerFile > Math.floor(Number.MAX_SAFE_INTEGER / 32))
+    throw new RangeError(
+      "maxPatchesPerFile exceeds the safe structural segment envelope",
+    );
+  if (result.maxFinalTransactionRows < minimumTransactionRows)
+    throw new RangeError(
+      `maxFinalTransactionRows must be at least ${minimumTransactionRows} for the configured manifest depth`,
+    );
+  if (
+    result.maxFinalTransactionBytes <
+    result.maxManifestNodeBytes + CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES
+  )
+    throw new RangeError(
+      "maxFinalTransactionBytes cannot persist one canonical manifest node",
+    );
+  if (maxPersistedContentObjectBytes(result) < DEFAULT_FASTCDC_MAXIMUM_BYTES)
+    throw new RangeError(
+      "storage transaction/blob limits cannot persist the default FastCDC maximum",
+    );
+  if (
+    result.maxMaintenanceBytes < MIN_MAINTENANCE_BYTES ||
+    result.maintenanceReserveBytes < MIN_MAINTENANCE_BYTES
+  )
+    throw new RangeError(
+      `maintenance limits must reserve at least ${MIN_MAINTENANCE_BYTES} bytes for bounded progress`,
     );
   if (result.maintenanceReserveBytes >= result.maxManagedPayloadBytes)
     throw new RangeError(
@@ -228,6 +301,17 @@ export function validateRuntimeLimits(
     throw new RangeError("maxMaterializedBytes exceeds maxPreparedResultBytes");
   if (runtime.maxWriteSessionBytes > runtime.maxPendingWriteBytes)
     throw new RangeError("maxWriteSessionBytes exceeds aggregate pending-write limit");
+  if (runtime.maxPendingWriteBytes < maxPersistedContentObjectBytes(storage))
+    throw new RangeError(
+      "maxPendingWriteBytes cannot hold one supported durable content object",
+    );
+  if (
+    runtime.maxQueryBatchBytes <
+    storage.maxManifestNodeBytes + DURABLE_METADATA_ROW_BYTES
+  )
+    throw new RangeError(
+      "maxQueryBatchBytes cannot hold one canonical manifest query row",
+    );
   const progress = requiredRuntimeProgressBytes(filesystem, storage, cowPageBytes);
   if (runtime.maxManagedResidentBytes < progress)
     throw new RangeError(

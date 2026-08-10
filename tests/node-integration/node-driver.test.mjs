@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { runUnitOfWork } from "../../packages/fs/dist/sqlite/unit-of-work.js";
@@ -104,6 +105,11 @@ test("Node SQLite driver scopes transactions and enforces result/binding types",
       ),
     /byte budget/,
   );
+  for (const mode of ["read", "write"])
+    assert.throws(
+      () => driver.transaction(mode, (tx) => tx.run("SELECT 1")),
+      /require a bounded all\(\) query/,
+    );
   driver.close();
   driver.close();
 });
@@ -114,6 +120,32 @@ test("Node read transactions reject DML, DDL, write PRAGMAs, and RETURNING throu
     proveReadTransactionsAreReadOnly(driver);
   } finally {
     driver.close();
+  }
+});
+
+test("close invokes the native handle once and rethrows the first close failure", async () => {
+  const original = DatabaseSync.prototype.close;
+  const failure = new Error("injected native close failure");
+  let calls = 0;
+  DatabaseSync.prototype.close = function () {
+    calls += 1;
+    Reflect.apply(original, this, []);
+    throw failure;
+  };
+  try {
+    const driver = await openNodeSqlite({ filename: ":memory:" });
+    assert.throws(
+      () => driver.close(),
+      (error) => error === failure,
+    );
+    assert.throws(
+      () => driver.close(),
+      (error) => error === failure,
+    );
+    assert.equal(calls, 1);
+    assert.throws(() => driver.physicalStorage(), /driver is closed/);
+  } finally {
+    DatabaseSync.prototype.close = original;
   }
 });
 
@@ -141,7 +173,7 @@ test("callback scope rejects transaction escapes and result queries cannot mutat
           { maxRows: 1, maxBytes: 128 },
         ),
       ),
-    /read-only|readonly/,
+    /read-only|readonly|bounded contract/,
   );
   assert.equal(
     driver.transaction(
@@ -157,16 +189,68 @@ test("callback scope rejects transaction escapes and result queries cannot mutat
   driver.close();
 });
 
+test("temporary and qualified schema escapes reject before file-backed mutation", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-schema-contract-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    const driver = await openNodeSqlite({ filename });
+    for (const sql of [
+      "CREATE TABLE temp.escape_contract(value INTEGER)",
+      "CREATE/**/TEMP TABLE escape_comment(value INTEGER)",
+      'CREATE TABLE "temp"."escape_quoted"(value INTEGER)',
+      "CREATE VIRTUAL/**/TABLE escape_virtual USING fts5(value)",
+      "DROP/**/TABLE temp.escape_contract",
+      "ALTER/**/TABLE temp.escape_contract RENAME TO escaped",
+      "CREATE TRIGGER escape_target AFTER INSERT ON temp . escape_contract BEGIN SELECT 1; END",
+    ])
+      assert.throws(
+        () => driver.transaction("write", (tx) => tx.run(sql)),
+        /outside the storage contract/,
+      );
+    assert.equal(
+      driver.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT count(*) count FROM sqlite_temp_schema", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].count,
+      ),
+      0,
+    );
+    driver.close();
+
+    const reopened = await openNodeSqlite({ filename, create: false });
+    assert.equal(
+      reopened.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT count(*) count FROM sqlite_schema", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].count,
+      ),
+      0,
+    );
+    reopened.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("file-backed driver reopens read-only and supports a second snapshot connection", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-"));
   const filename = path.join(directory, "filesystem.db");
+  let first;
+  let second;
+  let readOnly;
   try {
-    const first = await openNodeSqlite({ filename });
+    first = await openNodeSqlite({ filename });
     first.transaction("write", (tx) => {
       tx.run("CREATE TABLE durable(id INTEGER PRIMARY KEY,value TEXT)");
       tx.run("INSERT INTO durable(value) VALUES(?)", ["committed"]);
     });
-    const second = await openNodeSqlite({ filename });
+    second = await openNodeSqlite({ filename });
     assert.equal(
       second.transaction(
         "read",
@@ -177,8 +261,33 @@ test("file-backed driver reopens read-only and supports a second snapshot connec
       "committed",
     );
     second.close();
+    second = undefined;
     first.close();
-    const readOnly = await openNodeSqlite({ filename, readOnly: true, create: false });
+    first = undefined;
+    await assert.rejects(
+      openNodeSqlite({
+        filename,
+        create: false,
+        maxPhysicalDatabaseBytes: 1,
+      }),
+      /existing SQLite database exceeds the requested physical profile/,
+    );
+    await assert.rejects(
+      openNodeSqlite({
+        filename,
+        readOnly: true,
+        create: false,
+        maxPhysicalDatabaseBytes: 1,
+      }),
+      /existing SQLite database exceeds the requested physical profile/,
+    );
+    readOnly = await openNodeSqlite({
+      filename,
+      readOnly: true,
+      create: false,
+      cacheTargetBytes: 8192,
+      mmapLimitBytes: 0,
+    });
     assert.equal(
       readOnly.transaction(
         "read",
@@ -189,8 +298,25 @@ test("file-backed driver reopens read-only and supports a second snapshot connec
       "committed",
     );
     assert.throws(() => readOnly.transaction("write", () => {}), /EROFS/);
+    assert.deepEqual(
+      {
+        cacheTargetBytes: readOnly.capabilities.cacheTargetBytes,
+        mmapLimitBytes: readOnly.capabilities.mmapLimitBytes,
+      },
+      { cacheTargetBytes: 8192, mmapLimitBytes: 0 },
+    );
     readOnly.close();
+    readOnly = undefined;
   } finally {
+    try {
+      readOnly?.close();
+    } catch {}
+    try {
+      second?.close();
+    } catch {}
+    try {
+      first?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -240,6 +366,50 @@ test("bounded units of work roll back row and binding-byte overflow", async () =
   driver.close();
 });
 
+test("unit-of-work row limits include trigger and foreign-key side effects", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  driver.transaction("exclusive", (tx) => {
+    tx.run("CREATE TABLE trigger_source(value INTEGER PRIMARY KEY)");
+    tx.run("CREATE TABLE trigger_sink(value INTEGER PRIMARY KEY)");
+    tx.run(
+      "CREATE TRIGGER bounded_trigger AFTER INSERT ON trigger_source BEGIN INSERT INTO trigger_sink(value) VALUES(NEW.value); END",
+    );
+    tx.run("CREATE TABLE fk_parent(id INTEGER PRIMARY KEY)");
+    tx.run(
+      "CREATE TABLE fk_child(id INTEGER PRIMARY KEY,parent_id INTEGER NOT NULL REFERENCES fk_parent(id) ON DELETE CASCADE)",
+    );
+    tx.run("INSERT INTO fk_parent(id) VALUES(1)");
+    tx.run("INSERT INTO fk_child(id,parent_id) VALUES(1,1)");
+  });
+  assert.throws(
+    () =>
+      runUnitOfWork(driver, "write", { maxRows: 1, maxBytes: 1024 }, (tx) =>
+        tx.run("INSERT INTO trigger_source(value) VALUES(1)"),
+      ),
+    /row limit/,
+  );
+  assert.throws(
+    () =>
+      runUnitOfWork(driver, "write", { maxRows: 1, maxBytes: 1024 }, (tx) =>
+        tx.run("DELETE FROM fk_parent WHERE id=1"),
+      ),
+    /row limit/,
+  );
+  assert.deepEqual(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT (SELECT count(*) FROM trigger_source) sources,(SELECT count(*) FROM trigger_sink) sinks,(SELECT count(*) FROM fk_parent) parents,(SELECT count(*) FROM fk_child) children",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    ),
+    { sources: 0, sinks: 0, parents: 1, children: 1 },
+  );
+  driver.close();
+});
+
 test("unit-of-work forwards only remaining intrinsic result and binding budgets", () => {
   class HostileBytes extends Uint8Array {
     get byteLength() {
@@ -263,7 +433,7 @@ test("unit-of-work forwards only remaining intrinsic result and binding budgets"
         all(sql, _bindings, budget) {
           observedBudgets.push(budget);
           if (sql === "first") return [{ payload: new HostileBytes(16) }];
-          if (budget.maxRows > 1 || budget.maxBytes > 10) {
+          if (budget.maxRows > 1 || budget.maxBytes > 6) {
             materializedSecond = true;
             return [{ value: 1 }, { value: 2 }];
           }
@@ -293,10 +463,54 @@ test("unit-of-work forwards only remaining intrinsic result and binding budgets"
   );
   assert.equal(materializedSecond, false);
   assert.deepEqual(observedBudgets[1], { maxRows: 1, maxBytes: 6 });
+  const longAlias = "a".repeat(2048);
+  const aliasBudgets = [];
+  const aliasFake = {
+    ...fake,
+    transaction(_mode, callback) {
+      let first = true;
+      return callback({
+        scope: Symbol("alias-budget"),
+        run() {
+          return { changes: 0 };
+        },
+        all(_sql, _bindings, budget) {
+          aliasBudgets.push(budget);
+          if (first) {
+            first = false;
+            return [{ [longAlias]: 1 }];
+          }
+          throw new RangeError("second alias query rejected before materialization");
+        },
+      });
+    },
+  };
+  assert.throws(
+    () =>
+      runUnitOfWork(
+        aliasFake,
+        "read",
+        { maxRows: 4, maxBytes: 8192, maxResultBytes: 32 + 4096 + 8 + 17 },
+        (tx) => {
+          tx.all("first-alias", [], { maxRows: 4, maxBytes: 8192 });
+          tx.all("second-alias", [], { maxRows: 4, maxBytes: 8192 });
+        },
+      ),
+    /before materialization/,
+  );
+  assert.deepEqual(aliasBudgets[1], { maxRows: 3, maxBytes: 17 });
   assert.throws(
     () =>
       runUnitOfWork(fake, "write", { maxRows: 1, maxBytes: 8 }, (tx) =>
         tx.run("write", [new HostileBytes(9)]),
+      ),
+    /byte limit/,
+  );
+  assert.equal(runCalls, 0);
+  assert.throws(
+    () =>
+      runUnitOfWork(fake, "write", { maxRows: 1, maxBytes: 2 }, (tx) =>
+        tx.run("write", ["\ud800"]),
       ),
     /byte limit/,
   );
@@ -512,37 +726,65 @@ test("a pinned reader exposes one soft-target overshoot then backpressures the n
 test("SQL-generated payloads use the same truthful soft-WAL backpressure policy", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-wal-expression-"));
   const filename = path.join(directory, "filesystem.db");
+  let writer;
+  let reader;
   try {
     const setup = await openNodeSqlite({ filename, durability: "relaxed-test" });
     setup.transaction("write", (tx) =>
       tx.run("CREATE TABLE expression_wal(value TEXT NOT NULL)"),
     );
     setup.close();
-    const writer = await openNodeSqlite({
+    writer = await openNodeSqlite({
       filename,
       busyTimeoutMs: 0,
       durability: "relaxed-test",
       maxJournalBytes: 64 * 1024,
     });
     writer.checkpoint("truncate");
-    const reader = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
+    writer.transaction("write", (write) => {
+      write.run("CREATE TABLE expression_source(id INTEGER PRIMARY KEY,value TEXT)");
+      write.run("INSERT INTO expression_source(id,value) VALUES(1,'bounded')");
+    });
+    writer.checkpoint("truncate");
+    reader = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
     reader.transaction("read", (tx) => {
       tx.all("SELECT count(*) count FROM expression_wal", [], {
         maxRows: 1,
         maxBytes: 128,
       });
-      writer.transaction("write", (write) =>
-        write.run(
-          "WITH RECURSIVE c(x,n) AS (VALUES('x',0) UNION ALL SELECT x||x,n+1 FROM c WHERE n<18) INSERT INTO expression_wal(value) SELECT x FROM c ORDER BY n DESC LIMIT 1",
-        ),
-      );
-      assert.ok(writer.physicalStorage().walBytes > 64 * 1024);
       assert.throws(
         () =>
           writer.transaction("write", (write) =>
-            write.run("INSERT INTO expression_wal(value) VALUES('blocked')"),
+            write.run(
+              "WITH RECURSIVE c(x,n) AS (VALUES('x',0) UNION ALL SELECT x||x,n+1 FROM c WHERE n<18) INSERT INTO expression_wal(value) SELECT x FROM c ORDER BY n DESC LIMIT 1",
+            ),
           ),
-        /WAL checkpoint backpressure threshold remains pinned/,
+        /bounded contract/,
+      );
+      assert.throws(
+        () =>
+          writer.transaction("write", (write) =>
+            write.run("SELECT 1,1,1,1,1,1,1,1,zeroblob(100000000)"),
+          ),
+        /expanding expressions/,
+      );
+      assert.throws(
+        () =>
+          writer.transaction("write", (write) =>
+            write.run(
+              "INSERT INTO expression_wal(value) SELECT value FROM expression_source",
+            ),
+          ),
+        /write-from-query statements/,
+      );
+      assert.throws(
+        () =>
+          writer.transaction("write", (write) =>
+            write.run(
+              "CREATE TRIGGER expression_escape AFTER INSERT ON expression_wal BEGIN INSERT INTO expression_wal(value) VALUES(zeroblob(100000000)); END",
+            ),
+          ),
+        /expanding expressions/,
       );
     });
     assert.equal(
@@ -554,12 +796,19 @@ test("SQL-generated payloads use the same truthful soft-WAL backpressure policy"
             maxBytes: 128,
           })[0].count,
       ),
-      1,
+      0,
     );
-    writer.checkpoint("truncate");
     reader.close();
+    reader = undefined;
     writer.close();
+    writer = undefined;
   } finally {
+    try {
+      reader?.close();
+    } catch {}
+    try {
+      writer?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -593,13 +842,15 @@ test("matching lower physical caps admit below-cap writes and survive reopen", a
   const filename = path.join(directory, "filesystem.db");
   const physicalCap = 2 * 1024 * 1024;
   const journalCap = 8 * 1024 * 1024;
+  let driver;
+  let filesystem;
   try {
-    let driver = await openNodeSqlite({
+    driver = await openNodeSqlite({
       filename,
       maxPhysicalDatabaseBytes: physicalCap,
       maxJournalBytes: journalCap,
     });
-    let filesystem = await EphemeralFS.open({
+    filesystem = await EphemeralFS.open({
       database: driver,
       storage: {
         maxPhysicalDatabaseBytes: driver.capabilities.maxPhysicalDatabaseBytes,
@@ -610,7 +861,9 @@ test("matching lower physical caps admit below-cap writes and survive reopen", a
     await filesystem.writeFile("/below-cap", expected);
     assert.deepEqual(await filesystem.readFile("/below-cap"), expected);
     await filesystem.close();
+    filesystem = undefined;
     driver.close();
+    driver = undefined;
 
     driver = await openNodeSqlite({
       filename,
@@ -631,8 +884,16 @@ test("matching lower physical caps admit below-cap writes and survive reopen", a
         driver.capabilities.maxPhysicalDatabaseBytes,
     );
     await filesystem.close();
+    filesystem = undefined;
     driver.close();
+    driver = undefined;
   } finally {
+    try {
+      await filesystem?.close();
+    } catch {}
+    try {
+      driver?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });

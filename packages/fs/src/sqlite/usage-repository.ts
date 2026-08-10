@@ -1,15 +1,18 @@
 import { checkedAdd } from "../resources/safe-integers.js";
 import { bytesToHex, hexToBytes } from "../cas/bytes.js";
-import type { StorageLimits } from "../resources/limits.js";
+import { DURABLE_METADATA_ROW_BYTES, type StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow, SqliteValue } from "./driver.js";
 
 /** Conservative fixed metadata envelope; variable payload classes are charged separately. */
-export const CHARGED_ROW_BYTES = 512;
+export const CHARGED_ROW_BYTES = DURABLE_METADATA_ROW_BYTES;
+/** Logical per-content-row reservation that is exchanged for one live GC mark. */
+export const GC_MARK_RESERVATION_BYTES = 704;
 
 export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_cas_objects",
   "efs_manifest_roots",
   "efs_manifest_nodes",
+  "efs_manifest_validations",
   "efs_revisions",
   "efs_inodes",
   "efs_entries",
@@ -36,6 +39,7 @@ export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_staging_certificates",
   "efs_staging_reconciliations",
   "efs_staging_reconciliation_queue",
+  "efs_staging_manifest_validation_queue",
   "efs_staging_workspaces",
   "efs_staging_reused_subtrees",
   "efs_operation_ids",
@@ -51,6 +55,7 @@ const DIRECT_VARIABLE_METADATA_TERMS = Object.freeze([
   "(SELECT coalesce(sum(length(path)+coalesce(length(encoded),0)),0) FROM efs_branch_changes)",
   "(SELECT coalesce(sum(length(path)),0) FROM efs_branch_manifest_roots)",
   "(SELECT coalesce(sum(coalesce(length(cdc_buffer),0)),0) FROM efs_staging_workspaces)",
+  "(SELECT coalesce(sum(metadata_reservation_bytes),0) FROM efs_staging_certificates)",
 ] as const);
 export const DIRECT_CHARGED_METADATA_EXPRESSION = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
   (table) => `(SELECT count(*) FROM ${table})`,
@@ -79,11 +84,11 @@ const DIRECT_USAGE_SQL = `SELECT
   (SELECT count(*) FROM efs_cow_page_versions) page_count,
   (SELECT coalesce(sum(length(bytes)),0) FROM efs_cow_page_versions) page_bytes,
   (SELECT count(*) FROM efs_patches) patch_count,
-  (SELECT coalesce(sum(insert_length),0) FROM efs_patches) patch_bytes,
+  (SELECT coalesce(sum(length(bytes)),0) FROM efs_patch_segments) patch_bytes,
   (${DIRECT_STAGING_BYTES_SQL.replace(/^SELECT /u, "").replace(/ value$/u, "")}) staging_bytes,
   (${DIRECT_INGEST_RESERVATION_SQL.replace(/ value FROM/u, " FROM")}) ingest_reservation_bytes,
   (SELECT coalesce(sum(length(encoded)),0) FROM efs_operation_results) result_bytes,
-  ((SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs)+(SELECT count(*)*192+coalesce(sum(2*length(CAST(run_id AS BLOB))),0) FROM efs_gc_marks)+(SELECT count(*)*${CHARGED_ROW_BYTES} FROM efs_lease_cleanups)) maintenance_bytes,
+  ((SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_cas_objects)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_roots)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_nodes)+(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs)+(SELECT count(*)*${CHARGED_ROW_BYTES} FROM efs_lease_cleanups)) maintenance_bytes,
   ((SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_operation_ids)) permanent_identifiers,
   (${DIRECT_CHARGED_METADATA_EXPRESSION}) charged_metadata_bytes`;
 
@@ -161,7 +166,11 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
   {
     table: "efs_cas_objects",
     keys: [key("hash", "blob")],
-    contributions: metadataContributions({ object_count: "1", object_bytes: "t.size" }),
+    contributions: metadataContributions({
+      object_count: "1",
+      object_bytes: "t.size",
+      maintenance_bytes: String(GC_MARK_RESERVATION_BYTES),
+    }),
   },
   {
     table: "efs_manifest_roots",
@@ -169,6 +178,7 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
     contributions: metadataContributions({
       manifest_root_count: "1",
       manifest_root_bytes: "length(t.encoded)",
+      maintenance_bytes: String(GC_MARK_RESERVATION_BYTES),
     }),
   },
   {
@@ -177,7 +187,13 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
     contributions: metadataContributions({
       manifest_node_count: "1",
       manifest_node_bytes: "length(t.encoded)",
+      maintenance_bytes: String(GC_MARK_RESERVATION_BYTES),
     }),
+  },
+  {
+    table: "efs_manifest_validations",
+    keys: [key("manifest_hash", "blob")],
+    contributions: metadataContributions(),
   },
   {
     table: "efs_revisions",
@@ -289,7 +305,6 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
     ],
     contributions: metadataContributions({
       patch_count: "1",
-      patch_bytes: "t.insert_length",
     }),
   },
   {
@@ -300,7 +315,7 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
       key("sequence", "number"),
       key("segment_index", "number"),
     ],
-    contributions: metadataContributions(),
+    contributions: metadataContributions({ patch_bytes: "length(t.bytes)" }),
   },
   {
     table: "efs_leases",
@@ -364,9 +379,10 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
   {
     table: "efs_staging_certificates",
     keys: [key("lease_id", "string")],
-    contributions: metadataContributions({
-      ingest_reservation_bytes: activeIngestReservation,
-    }),
+    contributions: metadataContributions(
+      { ingest_reservation_bytes: activeIngestReservation },
+      "t.metadata_reservation_bytes",
+    ),
   },
   {
     table: "efs_staging_reconciliations",
@@ -376,6 +392,11 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
   {
     table: "efs_staging_reconciliation_queue",
     keys: [key("lease_id", "string"), key("kind", "number"), key("hash", "blob")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_staging_manifest_validation_queue",
+    keys: [key("lease_id", "string"), key("path", "blob")],
     contributions: metadataContributions(),
   },
   {
@@ -411,7 +432,7 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
   {
     table: "efs_gc_marks",
     keys: [key("run_id", "string"), key("kind", "number"), key("hash", "blob")],
-    contributions: { maintenance_bytes: "192+2*length(CAST(t.run_id AS BLOB))" },
+    contributions: {},
   },
   {
     table: "efs_lease_cleanups",
@@ -528,7 +549,11 @@ export class UsageRepository {
     return row;
   }
 
-  apply(delta: UsageDelta, reason = "durable storage"): UsageSnapshot {
+  apply(
+    delta: UsageDelta,
+    reason = "durable storage",
+    options: { readonly preserveMaintenanceBytes?: number } = {},
+  ): UsageSnapshot {
     const current = this.snapshot();
     const next = {} as Record<UsageCounter, number>;
     for (const column of USAGE_COUNTER_COLUMNS)
@@ -557,9 +582,17 @@ export class UsageRepository {
       this.#limits.maxManagedPayloadBytes - this.#limits.maintenanceReserveBytes
     )
       throw new Error(`ENOSPC: ${reason} exceeds aggregate managed payload quota`);
+    const managedWithMaintenance = checkedAdd(
+      normalBytes,
+      next.maintenance_bytes,
+      "managed payload",
+    );
     if (
-      checkedAdd(normalBytes, next.maintenance_bytes, "managed payload") >
-      this.#limits.maxManagedPayloadBytes
+      checkedAdd(
+        managedWithMaintenance,
+        options.preserveMaintenanceBytes ?? 0,
+        "managed maintenance progress",
+      ) > this.#limits.maxManagedPayloadBytes
     )
       throw new Error(
         `ENOSPC: ${reason} exceeds managed payload including maintenance reserve`,
@@ -568,7 +601,9 @@ export class UsageRepository {
       throw new Error(`ENOSPC: ${reason} exceeds branch overlay quota`);
     if (next.staging_bytes > this.#limits.maxStagingPayloadBytes)
       throw new Error(`ENOSPC: ${reason} exceeds staging payload quota`);
-    if (next.maintenance_bytes > this.#limits.maxMaintenanceBytes)
+    const maintenanceLimit =
+      this.#limits.maxMaintenanceBytes - (options.preserveMaintenanceBytes ?? 0);
+    if (maintenanceLimit < 0 || next.maintenance_bytes > maintenanceLimit)
       throw new Error(`ENOSPC: ${reason} exceeds maintenance quota`);
     if (next.permanent_identifiers > this.#limits.maxPermanentIdentifiers)
       throw new Error(`ENOSPC: ${reason} exceeds permanent identifier quota`);
@@ -609,6 +644,25 @@ export class UsageRepository {
     }) as UsageSnapshot;
   }
 
+  touch(reason = "durable usage contributor transfer"): void {
+    const current = this.snapshot();
+    const mutationSequence = checkedAdd(
+      current.mutation_sequence,
+      1,
+      "usage mutation sequence",
+    );
+    const integrityToken = usageIntegrityToken({
+      ...current,
+      mutation_sequence: mutationSequence,
+    });
+    const changed = this.#tx.run(
+      "UPDATE efs_usage SET mutation_sequence=mutation_sequence+1,integrity_token=? WHERE singleton=1 AND mutation_sequence=?",
+      [integrityToken, current.mutation_sequence],
+    );
+    if (changed.changes !== 1)
+      throw new Error(`ECORRUPT: ${reason} lost the usage authority`);
+  }
+
   recountBatch(
     phaseIndex: number,
     afterKey: string | null,
@@ -645,7 +699,7 @@ export class UsageRepository {
           ? `WHERE ${keyColumns[0]}>?`
           : `WHERE (${keyColumns.join(",")})>(${keyColumns.map(() => "?").join(",")})`;
     const rows = this.#tx.all(
-      `SELECT ${keyProjection},${contributionProjection} FROM ${phase.table} t ${where} ORDER BY ${keyColumns.join(",")} LIMIT ?`,
+      `SELECT ${keyProjection}${contributionProjection ? `,${contributionProjection}` : ""} FROM ${phase.table} t ${where} ORDER BY ${keyColumns.join(",")} LIMIT ?`,
       [...bindings, limit],
       { maxRows: limit, maxBytes },
     );
