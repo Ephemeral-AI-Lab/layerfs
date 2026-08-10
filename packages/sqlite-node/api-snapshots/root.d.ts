@@ -7,6 +7,7 @@ export declare class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     #private;
     readonly kind: "sqlite";
     readonly readOnly: boolean;
+    readonly hashBytes: SqliteHashFunction;
     readonly capabilities: SQLiteDriverCapabilities & {
         readonly journalQuotaPolicy: "checkpoint-backpressure";
         readonly journalSizeLimitIsHard: false;

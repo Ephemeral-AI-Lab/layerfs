@@ -1,0 +1,32 @@
+{
+  "schema": "efs-benchmark-result-v1",
+  "benchmark": "C3-storage-evolution",
+  "commit": "b93a90fefaa1d0c49f0553562694ac9bb79387cc",
+  "engine": "ephemeral-ai-fs",
+  "driver": "sqlite-node",
+  "fixture": {
+    "name": "deterministic-seed-5eed5eed",
+    "sha256": null
+  },
+  "configuration": {
+    "seed": 1592614637,
+    "sizeBytes": 4194304
+  },
+  "trials": 1,
+  "latencyMs": {},
+  "counters": {
+    "nativePayloadBytes": 14188544,
+    "finalDbBytes": 33676888,
+    "ratioBasisPoints": 23735,
+    "dbBytesAtPhase0": 4944008,
+    "dbBytesAtPhase1": 15025648,
+    "dbBytesAtPhase2": 28040728,
+    "dbBytesAtPhase3": 30755808,
+    "dbBytesAtPhase4": 31917648,
+    "dbBytesAtPhase5": 31917648,
+    "dbBytesAtPhase6": 31917648,
+    "dbBytesAtPhase7": 33623328,
+    "dbBytesAtPhase8": 33676888
+  },
+  "pass": true
+}

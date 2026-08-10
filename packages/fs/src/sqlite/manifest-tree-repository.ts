@@ -1,4 +1,5 @@
 import { copyBytes, equalBytes, intrinsicByteLength } from "../cas/bytes.js";
+import { sha256, type HashFunction } from "../cas/sha256.js";
 import type { ContentCache } from "../cache/content-cache.js";
 import {
   decodeManifestNode,
@@ -82,10 +83,11 @@ export class ManifestTreeRepository {
     tx: FilesystemSQLiteTransaction,
     limits: StorageLimits,
     cache?: ContentCache,
+    hashBytes: HashFunction = sha256,
   ) {
     this.#tx = tx;
     this.#limits = limits;
-    this.#content = new ContentRepository(tx, limits, cache);
+    this.#content = new ContentRepository(tx, limits, cache, hashBytes);
   }
 
   pathAtOffset(manifestHash: Uint8Array, offset: number): SQLiteManifestTreePath {

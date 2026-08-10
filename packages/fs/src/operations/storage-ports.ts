@@ -8,6 +8,7 @@ import type { CanonicalPath } from "../namespace/paths.js";
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { ContentCache } from "../cache/content-cache.js";
 import type { ManifestNode, ManifestParameters } from "../manifests/codec.js";
+import type { HashFunction } from "../cas/sha256.js";
 
 export type StorageTransactionMode = "read" | "write" | "exclusive";
 export interface StorageWorkBudget {
@@ -410,6 +411,14 @@ export interface StagingStore {
     objectHash: Uint8Array,
     length: number,
   ): void;
+  putEntriesBatch(
+    leaseId: string,
+    entries: readonly {
+      readonly entryIndex: number;
+      readonly objectHash: Uint8Array;
+      readonly length: number;
+    }[],
+  ): void;
   entriesAfter(
     leaseId: string,
     cursor: number,
@@ -423,6 +432,16 @@ export interface StagingStore {
     nodeHash: Uint8Array,
     span: number,
     entryCount: number,
+  ): void;
+  putLevelRecordsBatch(
+    leaseId: string,
+    level: number,
+    records: readonly {
+      readonly recordIndex: number;
+      readonly nodeHash: Uint8Array;
+      readonly span: number;
+      readonly entryCount: number;
+    }[],
   ): void;
   levelRecordsAfter(
     leaseId: string,
@@ -617,6 +636,13 @@ export interface StorageTransactionPorts {
 export interface OperationsStorage {
   readonly readOnly: boolean;
   readonly capabilities: StorageAdapterCapabilities;
+  /**
+   * Synchronous SHA-256 hashing capability injected by the host adapter.
+   * Hosts that can provide a synchronous native hasher (node:crypto on Node)
+   * do so; every other host falls back to the byte-identical pure-JS
+   * implementation in `cas/sha256.ts`, so digests never depend on the host.
+   */
+  readonly hashBytes: HashFunction;
   initialize(options?: {
     readonly cowPageBytes?: CowPageBytes;
     readonly now?: number;

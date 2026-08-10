@@ -118,9 +118,10 @@ export class IncrementalSha256 {
 export type CasObjectId = string & { readonly __casObjectId: unique symbol };
 export type ManifestId = string & { readonly __manifestId: unique symbol };
 
-export function sha256(bytes: Uint8Array): Uint8Array {
-  return new IncrementalSha256().update(bytes).digest();
-}
+export type HashFunction = (bytes: Uint8Array) => Uint8Array;
+
+export const sha256: HashFunction = (bytes) =>
+  new IncrementalSha256().update(bytes).digest();
 
 export function sha256Hex(bytes: Uint8Array): CasObjectId {
   return bytesToHex(sha256(bytes)) as CasObjectId;

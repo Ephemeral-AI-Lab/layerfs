@@ -35,6 +35,31 @@ export declare class ContentCache {
     metrics(): ContentCacheMetrics;
 }
 
+/* ===== packages/fs/dist/cas/sha256.d.ts ===== */
+export declare class IncrementalSha256 {
+    #private;
+    update(input: Uint8Array): this;
+    digest(): Uint8Array;
+}
+export type CasObjectId = string & {
+    readonly __casObjectId: unique symbol;
+};
+export type ManifestId = string & {
+    readonly __manifestId: unique symbol;
+};
+export type HashFunction = (bytes: Uint8Array) => Uint8Array;
+export declare const sha256: HashFunction;
+export declare function sha256Hex(bytes: Uint8Array): CasObjectId;
+export declare function casObjectId(value: string): CasObjectId;
+export declare function manifestId(value: string): ManifestId;
+export declare function manifestIdFromHash(hash: Uint8Array): ManifestId;
+export interface CasObject {
+    readonly id: CasObjectId;
+    readonly bytes: Uint8Array;
+}
+export declare function createCasObject(bytes: Uint8Array): CasObject;
+export declare function verifyCasObject(expectedDigest: Uint8Array | string, bytes: Uint8Array): void;
+
 /* ===== packages/fs/dist/cow/pages.d.ts ===== */
 export type CowPageBytes = 4096 | 8192 | 16384;
 /** 64 MiB at 4 KiB plus both partial endpoints. */
@@ -424,6 +449,7 @@ import type { CanonicalPath } from "../namespace/paths.js";
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { ContentCache } from "../cache/content-cache.js";
 import type { ManifestNode, ManifestParameters } from "../manifests/codec.js";
+import type { HashFunction } from "../cas/sha256.js";
 export type StorageTransactionMode = "read" | "write" | "exclusive";
 export interface StorageWorkBudget {
     readonly maxRows: number;
@@ -725,8 +751,19 @@ export interface StagingStore {
     consumeIngestReservation(leaseId: string, ownerNonce: Uint8Array, bytes: number): void;
     consumeMetadataReservation(leaseId: string, ownerNonce: Uint8Array, bytes: number): void;
     putEntry(leaseId: string, entryIndex: number, objectHash: Uint8Array, length: number): void;
+    putEntriesBatch(leaseId: string, entries: readonly {
+        readonly entryIndex: number;
+        readonly objectHash: Uint8Array;
+        readonly length: number;
+    }[]): void;
     entriesAfter(leaseId: string, cursor: number, limit: number, maxBytes: number): readonly StagingEntryRow[];
     putLevelRecord(leaseId: string, level: number, recordIndex: number, nodeHash: Uint8Array, span: number, entryCount: number): void;
+    putLevelRecordsBatch(leaseId: string, level: number, records: readonly {
+        readonly recordIndex: number;
+        readonly nodeHash: Uint8Array;
+        readonly span: number;
+        readonly entryCount: number;
+    }[]): void;
     levelRecordsAfter(leaseId: string, level: number, cursor: number, limit: number, maxBytes: number): readonly StagingLevelRow[];
     bumpRoot(kind: number, id: string): void;
     release(leaseId: string, ownerNonce: Uint8Array, requireSealed: boolean): boolean;
@@ -847,6 +884,13 @@ export interface StorageTransactionPorts {
 export interface OperationsStorage {
     readonly readOnly: boolean;
     readonly capabilities: StorageAdapterCapabilities;
+    /**
+     * Synchronous SHA-256 hashing capability injected by the host adapter.
+     * Hosts that can provide a synchronous native hasher (node:crypto on Node)
+     * do so; every other host falls back to the byte-identical pure-JS
+     * implementation in `cas/sha256.ts`, so digests never depend on the host.
+     */
+    readonly hashBytes: HashFunction;
     initialize(options?: {
         readonly cowPageBytes?: CowPageBytes;
         readonly now?: number;
@@ -1026,10 +1070,18 @@ export interface SQLiteCheckpointResult {
     readonly checkpointedFrames: number;
     readonly walBytes?: number;
 }
+export type SqliteHashFunction = (bytes: Uint8Array) => Uint8Array;
 export interface FilesystemSQLiteDriver {
     readonly kind: "sqlite";
     readonly readOnly: boolean;
     readonly capabilities: SQLiteDriverCapabilities;
+    /**
+     * Optional synchronous SHA-256 hasher. When the host adapter provides one
+     * (node:crypto on Node), the operations storage uses it for content
+     * hashing and verification; hosts without a synchronous native hasher
+     * fall back to the byte-identical pure-JS implementation.
+     */
+    readonly hashBytes?: SqliteHashFunction;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     physicalStorage?(): SQLitePhysicalStorage;
     checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;

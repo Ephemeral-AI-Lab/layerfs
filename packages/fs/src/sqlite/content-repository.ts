@@ -1,4 +1,4 @@
-import { sha256, verifyCasObject } from "../cas/sha256.js";
+import { sha256, type HashFunction } from "../cas/sha256.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
 import {
   bytesToHex,
@@ -55,14 +55,17 @@ export class ContentRepository {
   readonly #tx: FilesystemSQLiteTransaction;
   readonly #limits: StorageLimits;
   readonly #cache: ContentCache | undefined;
+  readonly #hashBytes: HashFunction;
   constructor(
     tx: FilesystemSQLiteTransaction,
     limits: StorageLimits,
     cache?: ContentCache,
+    hashBytes: HashFunction = sha256,
   ) {
     this.#tx = tx;
     this.#limits = limits;
     this.#cache = cache;
+    this.#hashBytes = hashBytes;
   }
 
   putObject(hash: Uint8Array, bytes: Uint8Array): boolean {
@@ -91,7 +94,7 @@ export class ContentRepository {
         throw new RangeError("content batch exceeds transaction byte limit");
     }
     for (const item of input) {
-      verifyCasObject(item.hash, item.bytes);
+      this.#verifyDigest(item.hash, item.bytes);
       const key = bytesToHex(item.hash);
       const previous = unique.get(key);
       if (previous && !equalBytes(previous.bytes, item.bytes))
@@ -239,6 +242,23 @@ export class ContentRepository {
     return this.#withColdObject(hash, size, () => {});
   }
 
+  #verifyDigest(expectedDigest: Uint8Array | string, bytes: Uint8Array): void {
+    if (typeof expectedDigest === "string") {
+      if (!/^[0-9a-f]{64}$/u.test(expectedDigest))
+        throw new TypeError("CAS object digest must be exactly 64 lowercase hex chars");
+      if (bytesToHex(this.#hashBytes(intrinsicByteRange(bytes))) !== expectedDigest)
+        throw new Error("CAS object digest mismatch");
+      return;
+    }
+    if (
+      !(expectedDigest instanceof Uint8Array) ||
+      intrinsicByteLength(expectedDigest) !== 32
+    )
+      throw new TypeError("CAS object digest must contain exactly 32 bytes");
+    if (!equalBytes(this.#hashBytes(intrinsicByteRange(bytes)), expectedDigest))
+      throw new Error("CAS object digest mismatch");
+  }
+
   #objectSize(hash: Uint8Array): number | undefined {
     const row = this.#tx.all<ObjectRow>(
       "SELECT size FROM efs_cas_objects WHERE hash=?",
@@ -277,7 +297,7 @@ export class ContentRepository {
       if (!row) return false;
       if (!row.bytes || row.size !== size || intrinsicByteLength(row.bytes) !== size)
         throw new Error("ECORRUPT: stored CAS length mismatch");
-      verifyCasObject(hash, row.bytes);
+      this.#verifyDigest(hash, row.bytes);
       reservation = cache.tryReserve(checkedAdd(size, 96));
       this.#admitCache("object", hash, row.bytes, reservation);
       reservation = undefined;
@@ -325,7 +345,7 @@ export class ContentRepository {
         throw new RangeError("manifest batch exceeds transaction byte limit");
     }
     for (const node of nodes) {
-      if (!equalBytes(sha256(node.encoded), node.hash))
+      if (!equalBytes(this.#hashBytes(intrinsicByteRange(node.encoded)), node.hash))
         throw new Error("invalid manifest node digest or size");
       const key = bytesToHex(node.hash);
       const previous = unique.get(key);
@@ -422,7 +442,7 @@ export class ContentRepository {
   putManifestRoot(hash: Uint8Array, encoded: Uint8Array): boolean {
     if (
       intrinsicByteLength(encoded) > this.#limits.maxManifestNodeBytes ||
-      !equalBytes(sha256(encoded), hash)
+      !equalBytes(this.#hashBytes(intrinsicByteRange(encoded)), hash)
     )
       throw new Error("invalid manifest root digest or size");
     const root = decodeManifestRoot(encoded, hash);
@@ -566,7 +586,7 @@ export class ContentRepository {
       )[0]?.encoded;
       if (!encoded || intrinsicByteLength(encoded) !== size)
         throw new Error("ECORRUPT: stored manifest length changed during read");
-      if (!equalBytes(sha256(encoded), hash))
+      if (!equalBytes(this.#hashBytes(intrinsicByteRange(encoded)), hash))
         throw new Error("ECORRUPT: stored manifest digest mismatch");
       reservation = this.#cache.tryReserve(checkedAdd(size, 96));
       this.#admitCache(kind, hash, encoded, reservation);

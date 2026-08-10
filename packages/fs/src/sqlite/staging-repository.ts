@@ -1,5 +1,10 @@
-import { sha256 } from "../cas/sha256.js";
-import { copyBytes, equalBytes, intrinsicByteLength } from "../cas/bytes.js";
+import { sha256, type HashFunction } from "../cas/sha256.js";
+import {
+  bytesToHex,
+  copyBytes,
+  equalBytes,
+  intrinsicByteLength,
+} from "../cas/bytes.js";
 import { encodeUtf8, utf8ByteLength } from "../namespace/utf8.js";
 import {
   decodeManifestNode,
@@ -196,11 +201,12 @@ export class StagingRepository {
     tx: FilesystemSQLiteTransaction,
     limits: StorageLimits,
     cache?: ContentCache,
+    hashBytes: HashFunction = sha256,
   ) {
     this.#tx = tx;
     this.#limits = limits;
     this.#cache = cache;
-    this.#content = new ContentRepository(tx, limits, cache);
+    this.#content = new ContentRepository(tx, limits, cache, hashBytes);
   }
 
   begin(options: {
@@ -316,10 +322,30 @@ export class StagingRepository {
     objectHash: Uint8Array,
     length: number,
   ): void {
-    this.#changeMetadataRows(1, "staging entry", leaseId);
+    this.putEntriesBatch(leaseId, [Object.freeze({ entryIndex, objectHash, length })]);
+  }
+  putEntriesBatch(
+    leaseId: string,
+    entries: readonly {
+      readonly entryIndex: number;
+      readonly objectHash: Uint8Array;
+      readonly length: number;
+    }[],
+  ): void {
+    if (entries.length === 0) return;
+    if (entries.length > this.#limits.maxQueryBatchSize)
+      throw new RangeError("staging entry batch exceeds configured row limit");
+    this.#changeMetadataRows(entries.length, "staging entry", leaseId);
     this.#tx.run(
-      "INSERT INTO efs_staging_entries(lease_id,entry_index,object_hash,length) VALUES(?,?,?,?)",
-      [leaseId, entryIndex, objectHash, length],
+      `INSERT INTO efs_staging_entries(lease_id,entry_index,object_hash,length) VALUES ${entries
+        .map(() => "(?,?,?,?)")
+        .join(",")}`,
+      entries.flatMap((entry) => [
+        leaseId,
+        entry.entryIndex,
+        entry.objectHash,
+        entry.length,
+      ]),
     );
   }
   entriesAfter(
@@ -342,10 +368,36 @@ export class StagingRepository {
     span: number,
     entryCount: number,
   ): void {
-    this.#changeMetadataRows(1, "staging level record", leaseId);
+    this.putLevelRecordsBatch(leaseId, level, [
+      Object.freeze({ recordIndex, nodeHash, span, entryCount }),
+    ]);
+  }
+  putLevelRecordsBatch(
+    leaseId: string,
+    level: number,
+    records: readonly {
+      readonly recordIndex: number;
+      readonly nodeHash: Uint8Array;
+      readonly span: number;
+      readonly entryCount: number;
+    }[],
+  ): void {
+    if (records.length === 0) return;
+    if (records.length > this.#limits.maxQueryBatchSize)
+      throw new RangeError("staging level-record batch exceeds configured row limit");
+    this.#changeMetadataRows(records.length, "staging level record", leaseId);
     this.#tx.run(
-      "INSERT INTO efs_staging_level_records(lease_id,level,record_index,node_hash,span,entry_count) VALUES(?,?,?,?,?,?)",
-      [leaseId, level, recordIndex, nodeHash, span, entryCount],
+      `INSERT INTO efs_staging_level_records(lease_id,level,record_index,node_hash,span,entry_count) VALUES ${records
+        .map(() => "(?,?,?,?,?,?)")
+        .join(",")}`,
+      records.flatMap((record) => [
+        leaseId,
+        level,
+        record.recordIndex,
+        record.nodeHash,
+        record.span,
+        record.entryCount,
+      ]),
     );
   }
   levelRecordsAfter(
@@ -839,12 +891,102 @@ export class StagingRepository {
       let end = item.edge_cursor;
       let edgeUnits = remaining * 4;
       if (node.kind === "leaf") {
+        // Batch the leaf's object edges: one queued lookup with hash IN (...),
+        // one backing lookup with hash IN (...), and one multi-row queue insert,
+        // instead of four statements per edge.
+        const edges = node.entries;
+        const remainingEdges = edges.slice(end);
+        const queuedByHash = new Map<string, QueueRow>();
+        if (remainingEdges.length) {
+          const placeholders = remainingEdges.map(() => "?").join(",");
+          const rows = this.#tx.all<QueueRow>(
+            `SELECT kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor FROM efs_staging_reconciliation_queue WHERE lease_id=? AND kind=? AND hash IN (${placeholders})`,
+            [leaseId, 0, ...remainingEdges.map((edge) => edge.hash)],
+            {
+              maxRows: remainingEdges.length + 1,
+              maxBytes: Math.max(1024, remainingEdges.length * 320 + 512),
+            },
+          );
+          for (const row of rows) queuedByHash.set(bytesToHex(row.hash!), row);
+        }
+        const seen = new Set<string>();
+        const newEdges: Array<{ readonly hash: Uint8Array; readonly length: number }> =
+          [];
         while (end < edgeCount && edgeUnits >= 4) {
-          const edge = node.entries[end]!;
-          const inserted = this.#enqueueVerified(leaseId, 0, edge.hash, edge.length, 1);
-          edgeUnits -= inserted ? 4 : 1;
+          const edge = edges[end]!;
+          const key = bytesToHex(edge.hash);
+          const queued = queuedByHash.get(key);
+          if (queued) {
+            if (
+              queued.declared_span !== edge.length ||
+              queued.declared_entry_count !== 1
+            )
+              throw new Error("ECORRUPT: repeated manifest closure edge disagrees");
+            edgeUnits -= 1;
+          } else if (seen.has(key)) {
+            edgeUnits -= 1;
+          } else {
+            seen.add(key);
+            newEdges.push(edge);
+            edgeUnits -= 4;
+          }
           processed += 1;
           end += 1;
+        }
+        if (newEdges.length) {
+          const placeholders = newEdges.map(() => "?").join(",");
+          const backing = this.#tx.all<BackingRow & { hash: Uint8Array }>(
+            `SELECT o.hash hash,o.size stored_size,m.size membership_size FROM efs_cas_objects o JOIN efs_lease_objects m ON m.lease_id=? AND m.object_hash=o.hash WHERE o.hash IN (${placeholders})`,
+            [leaseId, ...newEdges.map((edge) => edge.hash)],
+            {
+              maxRows: newEdges.length + 1,
+              maxBytes: Math.max(1024, newEdges.length * 192 + 256),
+            },
+          );
+          const sizes = new Map(backing.map((row) => [bytesToHex(row.hash), row]));
+          for (const edge of newEdges) {
+            const row = sizes.get(bytesToHex(edge.hash));
+            if (
+              !row ||
+              row.stored_size !== row.membership_size ||
+              row.stored_size !== edge.length
+            )
+              throw new Error(
+                "ECORRUPT: object closure member is absent or has a mismatched size",
+              );
+          }
+          const currentState = this.#reconciliation(leaseId)!;
+          const inserted = this.#tx.run(
+            `INSERT OR IGNORE INTO efs_staging_reconciliation_queue(lease_id,kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor,processed) VALUES ${newEdges
+              .map(() => "(?,?,?,?,?,?,?,0,0)")
+              .join(",")}`,
+            newEdges.flatMap((edge, index) => [
+              leaseId,
+              0,
+              edge.hash,
+              currentState.next_sequence + index,
+              edge.length,
+              edge.length,
+              1,
+            ]),
+          );
+          if (inserted.changes !== newEdges.length)
+            throw new Error(
+              "ECORRUPT: reconciliation queue changed during batched insertion",
+            );
+          const insertedBytes = newEdges.reduce(
+            (sum, edge) => checkedAdd(sum, edge.length),
+            0,
+          );
+          this.#changeMetadataRows(
+            newEdges.length,
+            "staging reconciliation queue",
+            leaseId,
+          );
+          this.#tx.run(
+            "UPDATE efs_staging_reconciliations SET next_sequence=next_sequence+?,object_count=object_count+?,object_bytes=object_bytes+?,node_count=node_count+0,node_bytes=node_bytes+0,membership_count=membership_count+? WHERE lease_id=? AND complete=0",
+            [newEdges.length, newEdges.length, insertedBytes, newEdges.length, leaseId],
+          );
         }
       } else {
         while (end < edgeCount && edgeUnits >= 4) {

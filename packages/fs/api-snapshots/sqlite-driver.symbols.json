@@ -76,6 +76,18 @@
       ]
     },
     {
+      "name": "SqliteHashFunction",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
       "name": "SQLitePhysicalStorage",
       "kinds": [
         "type"

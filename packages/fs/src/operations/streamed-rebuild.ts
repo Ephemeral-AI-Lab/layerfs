@@ -1,4 +1,4 @@
-import { sha256 } from "../cas/sha256.js";
+import { sha256, type HashFunction } from "../cas/sha256.js";
 import { copyBytes, intrinsicByteLength, intrinsicByteRange } from "../cas/bytes.js";
 import {
   StreamingFastCdc,
@@ -199,6 +199,7 @@ export function rebuildEditedContentStreaming(
     chunkerBoundaryBytesScanned: 0,
     editedInputBytesPrepared: 0,
   }),
+  hashBytes: HashFunction = sha256,
 ): StreamedRebuildResult {
   const controls = snapshotStreamedRebuildControls(parameters, options, attemptedLocal);
   const owned = ownLocalContentInputs(validateLocalContentInputs(source, edit));
@@ -208,6 +209,7 @@ export function rebuildEditedContentStreaming(
     workspace,
     objects,
     reason,
+    hashBytes,
   );
 }
 
@@ -217,6 +219,7 @@ function rebuildEditedContentStreamingOwned(
   workspace: ManifestBuildWorkspace,
   objects: StreamedObjectSink,
   reason: string,
+  hashBytes: HashFunction = sha256,
 ): StreamedRebuildResult {
   const { source, edit } = owned;
   const { parameters, options, attemptedLocal } = controls;
@@ -247,7 +250,7 @@ function rebuildEditedContentStreamingOwned(
       ),
     );
     const prepareEntry = (chunk: Uint8Array): ManifestEntry => {
-      const hash = sha256(chunk);
+      const hash = hashBytes(chunk);
       const retainedHash = copyBytes(hash);
       bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
       objectCount = checkedAdd(objectCount, 1);
@@ -355,6 +358,7 @@ export function rebuildManifestLocallyOrStream(
   objects: StreamedObjectSink,
   localLimits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
   options: StreamedRebuildOptions = {},
+  hashBytes: HashFunction = sha256,
 ): LocalRebuildResult | StreamedRebuildResult {
   parameters = snapshotMatchingLocalParameters(old, parameters);
   localLimits = snapshotLocalRebuildLimits(localLimits);
@@ -396,6 +400,7 @@ export function rebuildManifestLocallyOrStream(
       workspace,
       objects,
       error.message,
+      hashBytes,
     );
   }
 }

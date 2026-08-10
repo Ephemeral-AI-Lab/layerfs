@@ -496,10 +496,18 @@ export interface SQLiteCheckpointResult {
     readonly checkpointedFrames: number;
     readonly walBytes?: number;
 }
+export type SqliteHashFunction = (bytes: Uint8Array) => Uint8Array;
 export interface FilesystemSQLiteDriver {
     readonly kind: "sqlite";
     readonly readOnly: boolean;
     readonly capabilities: SQLiteDriverCapabilities;
+    /**
+     * Optional synchronous SHA-256 hasher. When the host adapter provides one
+     * (node:crypto on Node), the operations storage uses it for content
+     * hashing and verification; hosts without a synchronous native hasher
+     * fall back to the byte-identical pure-JS implementation.
+     */
+    readonly hashBytes?: SqliteHashFunction;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     physicalStorage?(): SQLitePhysicalStorage;
     checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;

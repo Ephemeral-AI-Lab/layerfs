@@ -1,4 +1,3 @@
-import { sha256 } from "../cas/sha256.js";
 import { DEFAULT_FASTCDC, StreamingFastCdc } from "../cdc/fastcdc.js";
 import {
   encodeManifestNode,
@@ -234,13 +233,16 @@ export async function prepareContentStreaming(
         unique.length * DURABLE_METADATA_ROW_BYTES,
       );
       tx.content(storage, cache).putObjectsBatch(batch);
-      for (const item of batch)
-        staging.putEntry(
-          leaseId,
-          entryIndex++,
-          item.hash,
-          intrinsicByteLength(item.bytes),
-        );
+      staging.putEntriesBatch(
+        leaseId,
+        batch.map((item) =>
+          Object.freeze({
+            entryIndex: entryIndex++,
+            objectHash: item.hash,
+            length: intrinsicByteLength(item.bytes),
+          }),
+        ),
+      );
       staging.appendBatch(
         leaseId,
         ownerNonce,
@@ -255,8 +257,9 @@ export async function prepareContentStreaming(
     });
   };
   const acceptChunk = (chunk: Uint8Array): void => {
+    // StreamingFastCdc#emitChunk already returns a fresh, detached slice of
+    // its internal buffer, so no defensive copy is needed here.
     const chunkLength = intrinsicByteLength(chunk);
-    chunk = copyBytes(chunk);
     total = checkedAdd(total, chunkLength);
     if (total > storage.maxFileBytes) throw new RangeError("file exceeds maxFileBytes");
     if (
@@ -264,7 +267,7 @@ export async function prepareContentStreaming(
       checkedAdd(pendingBytes, chunkLength) > pendingLimit
     )
       flushObjects();
-    pending.push(Object.freeze({ hash: sha256(chunk), bytes: chunk }));
+    pending.push(Object.freeze({ hash: port.hashBytes(chunk), bytes: chunk }));
     pendingBytes = checkedAdd(pendingBytes, chunkLength);
   };
   const feed = (bytes: Uint8Array): void => {
@@ -493,8 +496,16 @@ export async function prepareContentEntriesStreaming(
             DURABLE_METADATA_ROW_BYTES,
         );
         if (objects.length) tx.content(storage, cache).putObjectsBatch(objects);
-        for (const item of batch)
-          staging.putEntry(leaseId, entryIndex++, item.hash, item.length);
+        staging.putEntriesBatch(
+          leaseId,
+          batch.map((item) =>
+            Object.freeze({
+              entryIndex: entryIndex++,
+              objectHash: item.hash,
+              length: item.length,
+            }),
+          ),
+        );
         staging.appendBatch(
           leaseId,
           ownerNonce,
@@ -644,7 +655,7 @@ function finalizeStagedManifest(
     entryCount: entryIndex,
     rootNodeHash: rootNode.hash,
   });
-  const rootHash = sha256(root);
+  const rootHash = port.hashBytes(root);
   const certificate = port.transaction("write", workBudget, (tx) => {
     const staging = tx.staging(storage, cache);
     if (reservedIngest)
@@ -743,15 +754,18 @@ function buildManifestLevels(
         tx.content(storage, cache).putManifestNodesBatch(
           nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
         );
-        for (const node of nodes)
-          staging.putLevelRecord(
-            leaseId,
-            level,
-            outputIndex++,
-            node.hash,
-            node.span,
-            node.entryCount,
-          );
+        staging.putLevelRecordsBatch(
+          leaseId,
+          level,
+          nodes.map((node) =>
+            Object.freeze({
+              recordIndex: outputIndex++,
+              nodeHash: node.hash,
+              span: node.span,
+              entryCount: node.entryCount,
+            }),
+          ),
+        );
         const unique = [
           ...new Map(nodes.map((node) => [bytesToHex(node.hash), node])).values(),
         ];
@@ -794,7 +808,7 @@ function buildManifestLevels(
             } satisfies ManifestInternal);
       const encoded = encodeManifestNode(node);
       const prepared = Object.freeze({
-        hash: sha256(encoded),
+        hash: port.hashBytes(encoded),
         encoded,
         span: node.span,
         entryCount: node.entryCount,

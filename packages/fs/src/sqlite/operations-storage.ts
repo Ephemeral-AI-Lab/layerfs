@@ -8,6 +8,7 @@ import { StagingRepository } from "./staging-repository.js";
 import { MaintenanceRepository } from "./maintenance-repository.js";
 import { OverlayRepository } from "./overlay-repository.js";
 import { ManifestTreeRepository } from "./manifest-tree-repository.js";
+import { sha256 } from "../cas/sha256.js";
 import type {
   OperationsStorage,
   StorageTransactionPorts,
@@ -19,6 +20,7 @@ import type { FilesystemLimits, StorageLimits } from "../resources/limits.js";
 export function createSqliteOperationsStorage(
   driver: FilesystemSQLiteDriver,
 ): OperationsStorage {
+  const hashBytes = driver.hashBytes ?? sha256;
   return Object.freeze({
     readOnly: driver.readOnly,
     capabilities: Object.freeze({
@@ -26,6 +28,7 @@ export function createSqliteOperationsStorage(
       journalQuotaPolicy: driver.capabilities.journalQuotaPolicy ?? "runtime-enforced",
       journalSizeLimitIsHard: false,
     }),
+    hashBytes,
     initialize: (options = {}) => initializeOrValidateSchema(driver, options),
     transaction: <T>(
       mode: "read" | "write" | "exclusive",
@@ -50,9 +53,9 @@ export function createSqliteOperationsStorage(
         };
         const ports: StorageTransactionPorts = Object.freeze({
           content: (limits: StorageLimits, cache?: ContentCache) =>
-            new ContentRepository(tx, limitsFor(limits), cache),
+            new ContentRepository(tx, limitsFor(limits), cache, hashBytes),
           manifestTree: (limits: StorageLimits, cache?: ContentCache) =>
-            new ManifestTreeRepository(tx, limitsFor(limits), cache),
+            new ManifestTreeRepository(tx, limitsFor(limits), cache, hashBytes),
           namespace: (
             filesystem: FilesystemLimits,
             storage: StorageLimits,
@@ -61,7 +64,7 @@ export function createSqliteOperationsStorage(
           branches: (limits: StorageLimits) =>
             new BranchRepository(tx, limitsFor(limits)),
           staging: (limits: StorageLimits, cache?: ContentCache) =>
-            new StagingRepository(tx, limitsFor(limits), cache),
+            new StagingRepository(tx, limitsFor(limits), cache, hashBytes),
           maintenance: (limits: StorageLimits) =>
             new MaintenanceRepository(tx, limitsFor(limits)),
           overlay: (limits: StorageLimits, pageBytes: CowPageBytes) =>

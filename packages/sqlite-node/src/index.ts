@@ -1,4 +1,5 @@
 import { existsSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { DatabaseSync, type SQLOutputValue, type StatementSync } from "node:sqlite";
 import type {
   FilesystemSQLiteDriver,
@@ -8,6 +9,7 @@ import type {
   SQLiteCheckpointResult,
   SQLitePhysicalStorage,
   SqliteBindings,
+  SqliteHashFunction,
   SqliteRow,
   SqliteRunResult,
   SqliteValue,
@@ -425,6 +427,7 @@ function assertBoundedExpressionSql(sql: string): void {
 export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
   readonly kind = "sqlite" as const;
   readonly readOnly: boolean;
+  readonly hashBytes: SqliteHashFunction;
   readonly capabilities: SQLiteDriverCapabilities & {
     readonly journalQuotaPolicy: "checkpoint-backpressure";
     readonly journalSizeLimitIsHard: false;
@@ -451,6 +454,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       throw new Error("SQLite database does not exist and create is false");
     this.readOnly = options.readOnly ?? false;
     this.#filename = options.filename;
+    this.hashBytes = (bytes) => createHash("sha256").update(bytes).digest();
     const cacheTargetBytes = options.cacheTargetBytes ?? 16 * 1024 * 1024;
     const mmapLimitBytes = options.mmapLimitBytes ?? 0;
     const maxPhysicalDatabaseBytes = options.maxPhysicalDatabaseBytes ?? 10 * 1024 ** 3;

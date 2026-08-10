@@ -496,10 +496,18 @@ export interface SQLiteCheckpointResult {
     readonly checkpointedFrames: number;
     readonly walBytes?: number;
 }
+export type SqliteHashFunction = (bytes: Uint8Array) => Uint8Array;
 export interface FilesystemSQLiteDriver {
     readonly kind: "sqlite";
     readonly readOnly: boolean;
     readonly capabilities: SQLiteDriverCapabilities;
+    /**
+     * Optional synchronous SHA-256 hasher. When the host adapter provides one
+     * (node:crypto on Node), the operations storage uses it for content
+     * hashing and verification; hosts without a synchronous native hasher
+     * fall back to the byte-identical pure-JS implementation.
+     */
+    readonly hashBytes?: SqliteHashFunction;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     physicalStorage?(): SQLitePhysicalStorage;
     checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
@@ -618,7 +626,7 @@ export type NodeVfsObserver = (event: NodeVfsObservation) => void;
 export declare function openNodeVfs(options: OpenNodeVfsOptions): Promise<NodeVfsHandle>;
 
 /* ===== packages/sqlite-node/dist/index.d.ts ===== */
-import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SQLiteDriverCapabilities, SQLiteCheckpointResult, SQLitePhysicalStorage, TransactionMode } from "@ephemeralai/fs/sqlite-driver";
+import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SQLiteDriverCapabilities, SQLiteCheckpointResult, SQLitePhysicalStorage, SqliteHashFunction, TransactionMode } from "@ephemeralai/fs/sqlite-driver";
 export interface OpenNodeSqliteOptions {
     readonly filename: string;
     readonly readOnly?: boolean;
@@ -634,6 +642,7 @@ export declare class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     #private;
     readonly kind: "sqlite";
     readonly readOnly: boolean;
+    readonly hashBytes: SqliteHashFunction;
     readonly capabilities: SQLiteDriverCapabilities & {
         readonly journalQuotaPolicy: "checkpoint-backpressure";
         readonly journalSizeLimitIsHard: false;

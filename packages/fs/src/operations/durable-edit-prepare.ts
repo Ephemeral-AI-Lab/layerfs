@@ -1,5 +1,5 @@
 import { bytesToHex, copyBytes, intrinsicByteLength } from "../cas/bytes.js";
-import { sha256 } from "../cas/sha256.js";
+import type { HashFunction } from "../cas/sha256.js";
 import { StreamingFastCdc } from "../cdc/fastcdc.js";
 import {
   encodeManifestNode,
@@ -266,9 +266,9 @@ function editedContentStream(
   );
 }
 
-function makeNode(node: ManifestNode): PreparedNode {
+function makeNode(node: ManifestNode, hashBytes: HashFunction): PreparedNode {
   const encoded = encodeManifestNode(node);
-  return Object.freeze({ hash: sha256(encoded), encoded, node });
+  return Object.freeze({ hash: hashBytes(encoded), encoded, node });
 }
 
 function buildCandidate(
@@ -279,7 +279,8 @@ function buildCandidate(
   storage: StorageLimits,
   runtime: RuntimeLimits,
   admission: AdmissionController,
-  cache?: ContentCache,
+  cache: ContentCache | undefined,
+  hashBytes: HashFunction,
 ): PathCopyCandidate {
   if (edit.deleteLength !== edit.insertLength)
     throw new DurablePathCopyFallbackError(
@@ -379,8 +380,9 @@ function buildCandidate(
           throw new DurablePathCopyFallbackError(
             "edited leaf exceeds the bounded path-copy byte output",
           );
-        const bytes = copyBytes(borrowed);
-        entries.push(Object.freeze({ hash: sha256(bytes), bytes }));
+        // StreamingFastCdc#emitChunk returns a fresh, detached slice, so the
+        // borrowed chunk is already library-owned.
+        entries.push(Object.freeze({ hash: hashBytes(borrowed), bytes: borrowed }));
         emittedObjectBytes = projectedBytes;
       },
       leafFrame.finalAtLevel,
@@ -417,7 +419,7 @@ function buildCandidate(
         `edited leaf requires regrouping beyond one authenticated path: ${String(error)}`,
       );
     }
-    const prepared: PreparedNode[] = [makeNode(leaf)];
+    const prepared: PreparedNode[] = [makeNode(leaf, hashBytes)];
     const reused = new Map<string, ReusedClaim>();
     let replacement: ManifestChild = Object.freeze({
       hash: copyBytes(prepared[0]!.hash),
@@ -474,7 +476,7 @@ function buildCandidate(
           `copied ancestor requires bounded sibling regrouping: ${String(error)}`,
         );
       }
-      const next = makeNode(internal);
+      const next = makeNode(internal, hashBytes);
       prepared.push(next);
       replacement = Object.freeze({
         hash: copyBytes(next.hash),
@@ -491,7 +493,7 @@ function buildCandidate(
       entryCount,
       rootNodeHash: replacement.hash,
     });
-    const rootHash = sha256(root);
+    const rootHash = hashBytes(root);
     const unchangedRoot = bytesToHex(rootHash) === bytesToHex(source.manifestHash);
     const persistedEntries = unchangedRoot ? [] : entries;
     const persistedNodes = unchangedRoot ? [] : prepared;
@@ -1109,6 +1111,7 @@ export async function prepareDurableEditedContent(
           runtime,
           admission,
           cache,
+          port.hashBytes,
         );
         try {
           const projectedTransactions = checkedAdd(

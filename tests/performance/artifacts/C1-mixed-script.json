@@ -1,0 +1,45 @@
+{
+  "schema": "efs-benchmark-result-v1",
+  "benchmark": "C1-mixed-script",
+  "commit": "b93a90fefaa1d0c49f0553562694ac9bb79387cc",
+  "engine": "ephemeral-ai-fs",
+  "driver": "sqlite-node",
+  "fixture": {
+    "name": "deterministic-seed-5eed5eed",
+    "sha256": null
+  },
+  "configuration": {
+    "seed": 1592614637,
+    "sizeBytes": 4194304
+  },
+  "trials": 1,
+  "latencyMs": {
+    "p50": 2548.467,
+    "p95": 2548.467,
+    "p99": 2548.467
+  },
+  "counters": {
+    "wallMs": 2548.467,
+    "phaseCount": 9,
+    "dbBytesAtPhase0": 4944008,
+    "dbBytesAtPhase1": 15042128,
+    "dbBytesAtPhase2": 28172568,
+    "dbBytesAtPhase3": 30854688,
+    "dbBytesAtPhase4": 32028888,
+    "dbBytesAtPhase5": 32028888,
+    "dbBytesAtPhase6": 32028888,
+    "dbBytesAtPhase7": 33660408,
+    "dbBytesAtPhase8": 33713968,
+    "dbGrowthBytes": 33380240,
+    "transactions": 773,
+    "statements": 13317,
+    "peakManagedResidentBytes": 51237241,
+    "peakHarnessHeapBytes": 51954024,
+    "cacheHits": 121101,
+    "cacheMisses": 10594,
+    "overheadBasisPoints": null,
+    "nativePayloadBytes": 14188544,
+    "nativeRatioBasisPoints": 23526
+  },
+  "pass": true
+}
