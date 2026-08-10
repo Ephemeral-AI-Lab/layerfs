@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
+autobins = false
+autotests = false
 
 [features]
 default = []
@@ -26,27 +28,35 @@ blake3.workspace = true
 # targets report the metric as unavailable rather than inventing a substitute.
 libc = { version = "=0.2.189", default-features = false }
 
-[[bin]]
-name = "c3-qualification"
-path = "src/bin/c3_qualification.rs"
-required-features = ["c3-polymorphism"]
+[[test]]
+name = "l0_architecture"
+path = "tests/l0_architecture.rs"
 
 [[test]]
-name = "l1_cas"
-path = "tests/l1_cas.rs"
-required-features = ["c3-polymorphism"]
+name = "l0_codec_vectors"
+path = "tests/l0_codec_vectors.rs"
 
 [[test]]
-name = "l1_pack"
-path = "tests/l1_pack.rs"
-required-features = ["c3-polymorphism"]
+name = "l0_identity_vectors"
+path = "tests/l0_identity_vectors.rs"
 
 [[test]]
-name = "c3_fscas"
-path = "tests/c3_fscas.rs"
-required-features = ["c3-polymorphism"]
+name = "l1_cdc"
+path = "tests/l1_cdc.rs"
 
 [[test]]
-name = "c3_operation"
-path = "tests/c3_operation.rs"
+name = "l1_identity"
+path = "tests/l1_identity.rs"
+
+[[test]]
+name = "l1_object"
+path = "tests/l1_object.rs"
+
+[[test]]
+name = "l1_profiles"
+path = "tests/l1_profiles.rs"
+
+[[test]]
+name = "c3_seqcdc_compare"
+path = "tests/c3_seqcdc_compare.rs"
 required-features = ["c3-polymorphism"]

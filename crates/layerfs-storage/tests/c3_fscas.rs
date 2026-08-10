@@ -123,11 +123,135 @@ struct BreakCatalogAtPublication {
     injected: bool,
 }
 
+struct InstallMalformedLocatorAtPublication {
+    locator: PathBuf,
+    injected: bool,
+}
+
+struct InstallLocatorAndFailPreparationCleanup {
+    locator: PathBuf,
+    occupant_injected: bool,
+    cleanup_injected: bool,
+}
+
+struct InstallMalformedCatalogAtPublication {
+    root: PathBuf,
+    injected: bool,
+}
+
+struct ObserveIncumbentComparisonLock {
+    cas: FsCasV1,
+    observed: bool,
+    available: bool,
+}
+
+struct ObserveFreshCarrierValidationLock {
+    cas: FsCasV1,
+    observed: bool,
+    available: bool,
+}
+
+impl FsCasControlV1 for ObserveFreshCarrierValidationLock {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::AfterCarrierInstall {
+            self.observed = true;
+            self.available = self.cas.visibility_lock_available_for_test_v1();
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for ObserveIncumbentComparisonLock {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeIncumbentComparisonWindow {
+            self.observed = true;
+            self.available = self.cas.visibility_lock_available_for_test_v1();
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
 impl FsCasControlV1 for BreakCatalogAtPublication {
     fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
         if boundary == FsCasBoundaryV1::BeforeCatalogPublication && !self.injected {
             fs::remove_dir(&self.catalog).unwrap();
             fs::write(&self.catalog, b"injected-not-a-directory").unwrap();
+            self.injected = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for InstallMalformedLocatorAtPublication {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeObjectLocatorPublication && !self.injected {
+            fs::write(&self.locator, [0_u8; 160]).unwrap();
+            self.injected = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for InstallLocatorAndFailPreparationCleanup {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeObjectLocatorPublication && !self.occupant_injected {
+            fs::write(&self.locator, [0_u8; 160]).unwrap();
+            self.occupant_injected = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+        if target == FsCasCleanupTargetV1::PreparationSpool && !self.cleanup_injected {
+            self.cleanup_injected = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl FsCasControlV1 for InstallMalformedCatalogAtPublication {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeCatalogPublication && !self.injected {
+            let carrier = only_entry(&self.root.join("carriers"));
+            let destination = self.root.join("catalog").join(carrier.file_name().unwrap());
+            fs::write(destination, [0_u8; 64]).unwrap();
             self.injected = true;
         }
     }
@@ -494,7 +618,10 @@ fn pack_is_transferred_once_then_reopened_through_committed_catalog() {
     assert!(counters.fscas_bytes_read > 0);
     assert!(counters.fscas_read_calls > 0);
     assert_eq!(counters.fscas_catalog_operations, 1);
-    assert!(counters.pack_allocated_blocks >= admission.sealed().pack_len());
+    assert_eq!(
+        counters.installed_carrier_logical_bytes,
+        admission.sealed().pack_len()
+    );
     assert!(counters.has_zero_forbidden_work());
     assert_eq!(ledger.admitted_slots(), 0);
 
@@ -513,8 +640,9 @@ fn pack_is_transferred_once_then_reopened_through_committed_catalog() {
         }
         assert_eq!(actual, *expected);
     }
-    assert!(occupied.read_calls() > 0);
-    assert!(occupied.bytes_read() >= objects.iter().map(|bytes| bytes.len() as u64).sum());
+    let (bytes_read, read_calls) = occupied.direct_storage_read_observation().unwrap();
+    assert!(read_calls > 0);
+    assert!(bytes_read >= objects.iter().map(|bytes| bytes.len() as u64).sum());
 }
 
 #[test]
@@ -591,7 +719,7 @@ fn carrier_cleanup_failure_invalidates_owner_and_root() {
             &mut scratch,
             &mut control,
         ),
-        Err(FsCasErrorV1::Invalidated)
+        Err(FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::Carrier,))
     );
     assert!(control.injected);
     assert_eq!(counters.unreachable_installed_residue_bytes, pack_len);
@@ -691,7 +819,9 @@ fn locator_cleanup_failure_is_counted_and_cannot_poison_a_later_admission() {
             &mut scratch,
             &mut control,
         ),
-        Err(FsCasErrorV1::Invalidated)
+        Err(FsCasErrorV1::CleanupFailed(
+            FsCasCleanupTargetV1::ObjectLocator,
+        ))
     );
     assert!(control.injected);
     assert_eq!(counters.unreachable_installed_residue_bytes, 160);
@@ -1082,7 +1212,7 @@ fn forced_equal_typed_id_with_unequal_incumbent_bytes_fails_closed() {
             &mut loser_counters,
             &mut scratch,
         ),
-        Err(FsCasErrorV1::Integrity)
+        Err(FsCasErrorV1::MalformedOccupant)
     );
     assert_eq!(
         fs::read_dir(fixture.path.join("preparation"))
@@ -1226,7 +1356,7 @@ fn malformed_object_locator_fails_closed_without_publishing_the_loser() {
             &mut loser_counters,
             &mut scratch,
         ),
-        Err(FsCasErrorV1::Invalidated)
+        Err(FsCasErrorV1::MalformedOccupant)
     );
     assert_eq!(
         fs::read_dir(fixture.path.join("preparation"))
@@ -1254,6 +1384,178 @@ fn malformed_object_locator_fails_closed_without_publishing_the_loser() {
     ));
     assert_eq!(ledger.admitted_slots(), 0);
     assert!(loser_counters.has_zero_forbidden_work());
+}
+
+#[test]
+fn atomic_locator_no_replace_authenticates_a_racing_malformed_occupant() {
+    let fixture = TestRoot::new("atomic-locator-race");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let objects = [object(5, b"atomic-no-replace")];
+    let id = typed_id(&objects[0]);
+    let locator = locator_path(&fixture.path, id);
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut counters = OperationCountersV1::default();
+    let mut scratch = [0_u8; 65_536];
+    let mut pack = build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+    let mut spool = Spool::default();
+    let mut control = InstallMalformedLocatorAtPublication {
+        locator: locator.clone(),
+        injected: false,
+    };
+
+    assert_eq!(
+        cas.admit_pack_controlled(
+            &mut pack,
+            &mut spool,
+            &ledger,
+            &mut counters,
+            &mut scratch,
+            &mut control,
+        ),
+        Err(FsCasErrorV1::MalformedOccupant)
+    );
+    assert!(control.injected);
+    assert_eq!(fs::read(&locator).unwrap(), [0_u8; 160]);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+        1
+    );
+    assert!(fixture.path.join("invalidated").is_dir());
+    assert!(matches!(
+        FsCasV1::open_existing(&fixture.path),
+        Err(FsCasErrorV1::Invalidated)
+    ));
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert!(counters.has_zero_forbidden_work());
+}
+
+#[test]
+fn atomic_locator_incumbent_cleanup_failure_preserves_typed_lifecycle_error() {
+    let fixture = TestRoot::new("atomic-locator-cleanup-failure");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let stale = FsCasV1::open_existing(&fixture.path).unwrap();
+    let objects = [object(5, b"atomic-cleanup")];
+    let locator = locator_path(&fixture.path, typed_id(&objects[0]));
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut counters = OperationCountersV1::default();
+    let mut scratch = [0_u8; 65_536];
+    let mut pack = build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+    let mut spool = Spool::default();
+    let mut control = InstallLocatorAndFailPreparationCleanup {
+        locator,
+        occupant_injected: false,
+        cleanup_injected: false,
+    };
+
+    assert_eq!(
+        cas.admit_pack_controlled(
+            &mut pack,
+            &mut spool,
+            &ledger,
+            &mut counters,
+            &mut scratch,
+            &mut control,
+        ),
+        Err(FsCasErrorV1::CleanupFailed(
+            FsCasCleanupTargetV1::PreparationSpool,
+        ))
+    );
+    assert!(control.occupant_injected);
+    assert!(control.cleanup_injected);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        0
+    );
+    assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+    assert!(matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)));
+    assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+    assert!(matches!(
+        FsCasV1::open_existing(&fixture.path),
+        Err(FsCasErrorV1::Invalidated)
+    ));
+    assert_eq!(ledger.admitted_slots(), 0);
+}
+
+#[test]
+fn atomic_catalog_no_replace_authenticates_a_racing_malformed_occupant() {
+    let fixture = TestRoot::new("atomic-catalog-race");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let objects = [object(5, b"atomic-catalog")];
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut counters = OperationCountersV1::default();
+    let mut scratch = [0_u8; 65_536];
+    let mut pack = build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+    let mut spool = Spool::default();
+    let mut control = InstallMalformedCatalogAtPublication {
+        root: fixture.path.clone(),
+        injected: false,
+    };
+
+    assert_eq!(
+        cas.admit_pack_controlled(
+            &mut pack,
+            &mut spool,
+            &ledger,
+            &mut counters,
+            &mut scratch,
+            &mut control,
+        ),
+        Err(FsCasErrorV1::MalformedOccupant)
+    );
+    assert!(control.injected);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read(only_entry(&fixture.path.join("catalog"))).unwrap(),
+        [0_u8; 64]
+    );
+    assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert!(counters.has_zero_forbidden_work());
 }
 
 #[test]
@@ -1440,7 +1742,7 @@ fn every_fresh_admission_boundary_cleans_or_counts_exact_residue() {
             assert_eq!(counters.unreachable_installed_residue_bytes, 0);
         }
         assert_eq!(counters.closure_fences, 0);
-        assert!(counters.open_files_high_water <= 2);
+        assert!(counters.layerfs_open_file_handles_high_water <= 2);
         assert!(counters.has_zero_forbidden_work());
     }
 }
@@ -1569,7 +1871,7 @@ fn every_incumbent_boundary_cleans_loser_without_changing_winner() {
         );
         assert_eq!(counters.unreachable_installed_residue_bytes, 0);
         assert_eq!(counters.closure_fences, 0);
-        assert!(counters.open_files_high_water <= 2);
+        assert!(counters.layerfs_open_file_handles_high_water <= 2);
         assert!(counters.has_zero_forbidden_work());
     }
 }
@@ -1979,7 +2281,7 @@ fn closure_capability_rejects_cross_fscas_cross_operation_and_replay() {
             &mut pack_scratch,
             &mut cleanup_failure,
         ),
-        Err(FsCasErrorV1::Invalidated)
+        Err(FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::Carrier,))
     );
     assert_eq!(
         capability_b.version_record(),
@@ -2113,7 +2415,7 @@ fn closure_fence_io_failure_returns_no_closure_or_publication() {
     );
     assert!(counters.bytes_read > 0);
     assert_eq!(counters.closure_fences, 0);
-    assert_eq!(counters.publication_dispatches, 0);
+    assert_eq!(counters.publication_authority_dispatches, 0);
     assert!(fixture.path.join("closures").is_file());
     admission
         .record_later_unreachable_residue(&mut counters)
@@ -2124,6 +2426,38 @@ fn closure_fence_io_failure_returns_no_closure_or_publication() {
     );
     assert_eq!(ledger.admitted_slots(), 0);
     assert!(counters.has_zero_forbidden_work());
+}
+
+#[test]
+fn fresh_carrier_validation_does_not_hold_the_visibility_lock() {
+    let fixture = TestRoot::new("fresh-carrier-validation-lock");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let objects = [object(5, &[0x4d; 32_768])];
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut scratch = [0_u8; 65_536];
+    let mut counters = OperationCountersV1::default();
+    let mut private = build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+    let mut spool = Spool::default();
+    let mut control = ObserveFreshCarrierValidationLock {
+        cas: cas.clone(),
+        observed: false,
+        available: false,
+    };
+
+    let admission = cas
+        .admit_pack_controlled(
+            &mut private,
+            &mut spool,
+            &ledger,
+            &mut counters,
+            &mut scratch,
+            &mut control,
+        )
+        .unwrap();
+
+    assert!(control.observed);
+    assert!(control.available);
+    assert_eq!(admission.outcome(), FsPackAdmissionOutcomeV1::Installed);
 }
 
 #[test]
@@ -2156,15 +2490,23 @@ fn same_pack_race_is_no_replace_and_compares_every_incumbent_byte() {
     let mut second_counters = OperationCountersV1::default();
     let mut second =
         build_private_pack(&cas, &objects, &ledger, &mut second_counters, &mut scratch);
+    let mut control = ObserveIncumbentComparisonLock {
+        cas: cas.clone(),
+        observed: false,
+        available: false,
+    };
     let reused = cas
-        .admit_pack(
+        .admit_pack_controlled(
             &mut second,
             &mut spool,
             &ledger,
             &mut second_counters,
             &mut scratch,
+            &mut control,
         )
         .unwrap();
+    assert!(control.observed);
+    assert!(control.available);
     assert_eq!(reused.outcome(), FsPackAdmissionOutcomeV1::ExistingComplete);
     assert_eq!(
         second_counters.incumbent_comparison_bytes,
@@ -2241,10 +2583,7 @@ fn malformed_incumbent_fails_closed_without_overwrite_or_fallback() {
         &mut candidate_counters,
         &mut scratch,
     );
-    assert!(matches!(
-        result,
-        Err(FsCasErrorV1::Core(CoreError::PackInvalid)) | Err(FsCasErrorV1::Integrity)
-    ));
+    assert_eq!(result, Err(FsCasErrorV1::MalformedOccupant));
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;

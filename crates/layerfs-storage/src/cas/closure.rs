@@ -1,8 +1,10 @@
 //! Immutable closure snapshots and completed admission observations.
 
-use super::ImmutablePortErrorV1;
+#[cfg(feature = "c3-polymorphism")]
+use super::{FileClosureObjectSpoolV1, FsCasErrorV1, FsCasOccupiedV1};
+use super::{ImmutablePortErrorV1, OccupiedImmutableReadPortV1};
 use crate::object::TypedPhysicalObjectIdV1;
-use crate::CoreResult;
+use crate::{CoreError, CoreResult};
 
 /// Immutable random-readable view of a canonical, typed closure spool.
 ///
@@ -33,6 +35,102 @@ pub trait CompleteImmutableClosureReadPortV1 {
         offset: u64,
         destination: &mut [u8],
     ) -> Result<(), ImmutablePortErrorV1>;
+}
+
+/// CAS-owned closure-fence adapter. Operation-metadata reads remain separate
+/// from the occupied FsCas payload observation exposed by this port.
+#[cfg(feature = "c3-polymorphism")]
+pub(crate) struct FsCasClosureSpoolV1<'objects> {
+    objects: &'objects mut FileClosureObjectSpoolV1,
+    occupied: FsCasOccupiedV1,
+}
+
+#[cfg(feature = "c3-polymorphism")]
+impl<'objects> FsCasClosureSpoolV1<'objects> {
+    pub(crate) fn new(
+        objects: &'objects mut FileClosureObjectSpoolV1,
+        occupied: FsCasOccupiedV1,
+    ) -> Self {
+        Self { objects, occupied }
+    }
+
+    pub(crate) fn first_error_typed_v1(&self) -> Option<FsCasErrorV1> {
+        self.occupied.first_error_typed_v1()
+    }
+}
+
+#[cfg(feature = "c3-polymorphism")]
+impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
+    fn object_count(&mut self) -> Result<u64, ImmutablePortErrorV1> {
+        Ok(u64::from(self.objects.count))
+    }
+
+    fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+        self.objects
+            .resident_memory_bound_bytes()?
+            .checked_add(self.occupied.resident_memory_bound_bytes()?)
+            .and_then(|bytes| {
+                bytes.checked_add(
+                    u64::try_from(core::mem::size_of::<Self>())
+                        .map_err(|_| CoreError::IntegerOverflow)
+                        .ok()?,
+                )
+            })
+            .ok_or(CoreError::IntegerOverflow)
+    }
+
+    fn direct_storage_read_observation(&self) -> Result<(u64, u64), ImmutablePortErrorV1> {
+        self.occupied.direct_storage_read_observation()
+    }
+
+    fn object_id_at(
+        &mut self,
+        ordinal: u64,
+    ) -> Result<TypedPhysicalObjectIdV1, ImmutablePortErrorV1> {
+        let ordinal = u32::try_from(ordinal).map_err(|_| ImmutablePortErrorV1::Failure)?;
+        self.objects
+            .read(ordinal)
+            .map(|record| record.id)
+            .map_err(|_| ImmutablePortErrorV1::Failure)
+    }
+
+    fn object_len_at(&mut self, ordinal: u64) -> Result<u64, ImmutablePortErrorV1> {
+        let ordinal = u32::try_from(ordinal).map_err(|_| ImmutablePortErrorV1::Failure)?;
+        let record = self
+            .objects
+            .read(ordinal)
+            .map_err(|_| ImmutablePortErrorV1::Failure)?;
+        let occupied = self
+            .occupied
+            .occupied_len(record.id)?
+            .ok_or(ImmutablePortErrorV1::Failure)?;
+        if occupied != record.complete_len {
+            return Err(ImmutablePortErrorV1::Failure);
+        }
+        Ok(occupied)
+    }
+
+    fn read_object_exact_at(
+        &mut self,
+        ordinal: u64,
+        offset: u64,
+        destination: &mut [u8],
+    ) -> Result<(), ImmutablePortErrorV1> {
+        let ordinal = u32::try_from(ordinal).map_err(|_| ImmutablePortErrorV1::Failure)?;
+        let record = self
+            .objects
+            .read(ordinal)
+            .map_err(|_| ImmutablePortErrorV1::Failure)?;
+        let occupied = self
+            .occupied
+            .occupied_len(record.id)?
+            .ok_or(ImmutablePortErrorV1::Failure)?;
+        if occupied != record.complete_len {
+            return Err(ImmutablePortErrorV1::Failure);
+        }
+        self.occupied
+            .read_occupied_exact_at(record.id, offset, destination)
+    }
 }
 
 pub fn compare_closure_object_ids_v1(

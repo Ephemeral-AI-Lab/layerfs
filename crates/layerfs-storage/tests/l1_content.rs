@@ -1,4 +1,4 @@
-mod support;
+use crate::test_support as support;
 
 use layerfs_storage::cdc::{ContinueCdcControlV1, MAXIMUM_CHUNK_BYTES};
 use layerfs_storage::content::{
@@ -629,5 +629,5 @@ fn large_source_uses_fixed_io_windows_and_the_qualified_memory_ledger() {
         + maximum_refs * core::mem::size_of::<PreparedChunkRefV1>() as u64;
     assert_eq!(ledger.planned_high_water_bytes(), expected_planned);
     assert_eq!(ledger.admitted_slots(), 0);
-    assert_eq!(counters.fallback_attempts, 0);
+    assert_eq!(counters.automatic_fallbacks, 0);
 }

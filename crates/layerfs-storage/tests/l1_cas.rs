@@ -666,8 +666,10 @@ fn complete_empty_closure_is_visible_only_after_all_objects_validate() {
     assert_eq!(sink.visible, Some(version_id));
     assert_eq!(sink.aborts, 0);
     assert_eq!(ledger.admitted_slots(), 0);
-    assert_eq!(counters.physical_objects_created, 2);
-    assert_eq!(counters.publication_dispatches, 0);
+    assert_eq!(counters.physical_objects_created, 0);
+    assert_eq!(counters.closure_objects_missing, 2);
+    assert_eq!(counters.closure_objects_occupied_validated, 0);
+    assert_eq!(counters.publication_authority_dispatches, 0);
 }
 
 #[test]
@@ -960,7 +962,9 @@ fn occupied_complete_equality_deduplicates_without_overwrite() {
     assert_eq!(admitted.reused_count(), 1);
     assert_eq!(sink.staged, vec![version_id]);
     assert_eq!(sink.reused, vec![root_id]);
-    assert_eq!(counters.physical_objects_reused, 1);
+    assert_eq!(counters.physical_objects_reused, 0);
+    assert_eq!(counters.closure_objects_missing, 1);
+    assert_eq!(counters.closure_objects_occupied_validated, 1);
 }
 
 #[test]

@@ -140,7 +140,7 @@ impl PreparedTreeSinkV1 for VecTreeSink {
     }
 }
 
-struct MutationSource<'a> {
+pub(crate) struct MutationSource<'a> {
     base: &'a [CanonicalTreeEntryV1<'a>],
     result: &'a [CanonicalTreeEntryV1<'a>],
     resident_bytes: u64,
@@ -149,7 +149,10 @@ struct MutationSource<'a> {
 }
 
 impl<'a> MutationSource<'a> {
-    fn new(base: &'a [CanonicalTreeEntryV1<'a>], result: &'a [CanonicalTreeEntryV1<'a>]) -> Self {
+    pub(crate) fn new(
+        base: &'a [CanonicalTreeEntryV1<'a>],
+        result: &'a [CanonicalTreeEntryV1<'a>],
+    ) -> Self {
         Self {
             base,
             result,
@@ -196,15 +199,15 @@ impl CanonicalTreeMutationSourceV1 for MutationSource<'_> {
     }
 }
 
-struct BuiltTree {
-    directory: CanonicalDirectoryTreeV1,
+pub(crate) struct BuiltTree {
+    pub(crate) directory: CanonicalDirectoryTreeV1,
     leaves: Vec<TreePageSummaryV1>,
     level_one: Vec<TreePageSummaryV1>,
     sink: VecTreeSink,
     counters: OperationCountersV1,
 }
 
-struct ReplacementEvidenceFixture<'a> {
+pub(crate) struct ReplacementEvidenceFixture<'a> {
     affected_leaf_index: u32,
     affected_entries: &'a [CanonicalTreeEntryV1<'a>],
     affected_leaf: TreePageSummaryV1,
@@ -219,7 +222,7 @@ struct ReplacementEvidenceFixture<'a> {
 }
 
 #[derive(Clone)]
-struct MutationEvidenceFixture<'a> {
+pub(crate) struct MutationEvidenceFixture<'a> {
     affected_leaf_index: Option<u32>,
     affected_leaf: Option<TreePageSummaryV1>,
     leaf_group: Vec<TreePageBoundaryV1<'a>>,
@@ -233,7 +236,7 @@ struct MutationEvidenceFixture<'a> {
 }
 
 impl MutationEvidenceFixture<'_> {
-    fn evidence<'a>(
+    pub(crate) fn evidence<'a>(
         &'a self,
         base: CanonicalDirectoryTreeV1,
     ) -> AuthenticatedTreeMutationEvidenceV1<'a> {
@@ -256,7 +259,7 @@ impl MutationEvidenceFixture<'_> {
 }
 
 impl<'a> ReplacementEvidenceFixture<'a> {
-    fn evidence<'b>(
+    pub(crate) fn evidence<'b>(
         &'b self,
         base: CanonicalDirectoryTreeV1,
     ) -> AuthenticatedTreeReplacementEvidenceV1<'b>
@@ -364,7 +367,7 @@ fn page_boundary<'a>(
     )
 }
 
-fn replacement_fixture<'a>(
+pub(crate) fn replacement_fixture<'a>(
     mode: DirectoryBuildModeV1,
     entries: &'a [CanonicalTreeEntryV1<'a>],
     built: &BuiltTree,
@@ -423,7 +426,7 @@ fn replacement_fixture<'a>(
     }
 }
 
-fn mutation_fixture<'a>(
+pub(crate) fn mutation_fixture<'a>(
     mode: DirectoryBuildModeV1,
     entries: &'a [CanonicalTreeEntryV1<'a>],
     built: &BuiltTree,
@@ -491,7 +494,7 @@ fn mutation_fixture<'a>(
     }
 }
 
-fn build(
+pub(crate) fn build(
     mode: DirectoryBuildModeV1,
     entries: &[CanonicalTreeEntryV1<'_>],
 ) -> CoreResult<BuiltTree> {

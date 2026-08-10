@@ -14,7 +14,7 @@ pub use crate::cdc::{
     MAX_UPDATE_RESYNCHRONIZATION_BYTES,
 };
 use crate::content::{
-    file_object_lengths_v1, object_header, write_chunk_object, write_file_object_and_logical,
+    file_object_lengths_v1, write_chunk_object, write_file_object_and_logical,
     ChunkReferenceSpoolV1, ContentSourceErrorV1, ContentSourceV1, ObjectDispositionV1,
     PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1, PreparedSinkErrorV1,
 };
@@ -27,9 +27,12 @@ use crate::identity::{
     derive_logical_chunk_spans_v1, FramedHasherV1, LogicalChunkIdV1, LogicalFileHasherV1,
     PhysicalChunkIdV1, PhysicalFileIdV1, IDENTITY_HASHER_BYTES_V1, TAG_PHYSICAL_FILE,
 };
+#[cfg(feature = "c3-polymorphism")]
+use crate::limits::OperationReservationV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
 };
+use crate::object::encode_physical_object_header_v1;
 use crate::profile::ChunkerSpecV1;
 use crate::{CoreError, CoreResult};
 
@@ -242,13 +245,71 @@ where
         output,
         buffers,
         control,
-        ledger,
+        UpdateMemoryAdmissionV1::Independent(ledger),
         counters,
     );
     if result.is_err() {
         let _ = counters.add(CounterFieldV1::UpdateFailures, 1);
     }
     result
+}
+
+/// Complete-C3 adapter which borrows the already granted root operation.
+/// It cannot mint another ledger slot and therefore preserves the single
+/// operation capability across verified rejoin and immutable staging.
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn update_file_c3_borrowed_v1<S, O, R, E, B, C>(
+    path: &[u8],
+    mode: u16,
+    base: AuthenticatedBaseFileV1,
+    range: UpdateRangeV1,
+    inserted_len: u64,
+    inserted: &mut S,
+    base_bytes: &mut B,
+    evidence: &mut E,
+    objects: &mut O,
+    output: &mut R,
+    buffers: UpdateBuffersV1<'_>,
+    control: &mut C,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<PreparedFileV1>
+where
+    S: ContentSourceV1 + ?Sized,
+    O: PreparedObjectSinkV1 + ?Sized,
+    R: ChunkReferenceSpoolV1 + ?Sized,
+    E: BaseChunkEvidenceSourceV1 + ?Sized,
+    B: AuthenticatedBaseByteReaderV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
+{
+    let result = update_file_inner(
+        path,
+        mode,
+        base,
+        range,
+        inserted_len,
+        inserted,
+        base_bytes,
+        evidence,
+        objects,
+        output,
+        buffers,
+        control,
+        UpdateMemoryAdmissionV1::Borrowed(reservation),
+        counters,
+    );
+    if result.is_err() {
+        let _ = counters.add(CounterFieldV1::UpdateFailures, 1);
+    }
+    result
+}
+
+#[derive(Clone, Copy)]
+enum UpdateMemoryAdmissionV1<'a> {
+    Independent(&'a ResourceLedgerV1),
+    #[cfg(feature = "c3-polymorphism")]
+    Borrowed(&'a OperationReservationV1<'a>),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -265,7 +326,7 @@ fn update_file_inner<S, O, R, E, B, C>(
     output: &mut R,
     buffers: UpdateBuffersV1<'_>,
     control: &mut C,
-    ledger: &ResourceLedgerV1,
+    admission: UpdateMemoryAdmissionV1<'_>,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<PreparedFileV1>
 where
@@ -326,9 +387,19 @@ where
         )?
         .charge(MemoryComponentV1::MetadataWindow, operation_metadata_bytes)
         .map_err(|_| CoreError::RangeResyncFailed)?;
-    let _reservation = ledger.reserve_operation_with_plan(memory)?;
-    counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
-    authenticate_base(base, evidence, counters)?;
+    let _independent_reservation = match admission {
+        UpdateMemoryAdmissionV1::Independent(ledger) => {
+            let reservation = ledger.reserve_operation_with_plan(memory)?;
+            counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+            Some(reservation)
+        }
+        #[cfg(feature = "c3-polymorphism")]
+        UpdateMemoryAdmissionV1::Borrowed(reservation) => {
+            reservation.require(memory)?;
+            None
+        }
+    };
+    authenticate_base_file_evidence_v1(base, evidence, counters)?;
 
     let predecessor = if base_len == 0 {
         None
@@ -515,7 +586,7 @@ where
     result
 }
 
-fn authenticate_base<E: BaseChunkEvidenceSourceV1 + ?Sized>(
+pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + ?Sized>(
     base: AuthenticatedBaseFileV1,
     evidence: &mut E,
     counters: &mut OperationCountersV1,
@@ -529,7 +600,10 @@ fn authenticate_base<E: BaseChunkEvidenceSourceV1 + ?Sized>(
         .map_err(|_| CoreError::RangeResyncFailed)?;
     let mut physical_hasher = FramedHasherV1::new(TAG_PHYSICAL_FILE, complete_len);
     physical_hasher
-        .write(&object_header(PhysicalObjectKindV1::File, payload_len))
+        .write(&encode_physical_object_header_v1(
+            PhysicalObjectKindV1::File,
+            payload_len,
+        ))
         .map_err(|_| CoreError::RangeResyncFailed)?;
     physical_hasher
         .write(&base.mode.to_be_bytes())
@@ -584,6 +658,76 @@ fn authenticate_base<E: BaseChunkEvidenceSourceV1 + ?Sized>(
         return Err(CoreError::RangeResyncFailed);
     }
     Ok(())
+}
+
+/// Re-encode a file object with new metadata while replaying only the already
+/// authenticated bounded chunk-reference stream. This borrows the outer root
+/// reservation; it cannot mint an independent operation or read base payload.
+#[cfg(feature = "c3-polymorphism")]
+pub(crate) fn reencode_file_metadata_c3_borrowed_v1<O, R, E>(
+    new_mode: u16,
+    base: AuthenticatedBaseFileV1,
+    evidence: &mut E,
+    objects: &mut O,
+    output: &mut R,
+    _reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<PreparedFileV1>
+where
+    O: PreparedObjectSinkV1 + ?Sized,
+    R: ChunkReferenceSpoolV1 + ?Sized,
+    E: BaseChunkEvidenceSourceV1 + ?Sized,
+{
+    validate_file_mode(new_mode)?;
+    objects.begin_closure().map_err(map_sink)?;
+    if let Err(error) = output.begin(u64::from(base.chunk_count)).map_err(map_sink) {
+        objects.abort_closure();
+        return Err(error);
+    }
+
+    let result = (|| {
+        evidence.rewind().map_err(map_evidence)?;
+        let mut expected_start = 0_u64;
+        for _ in 0..base.chunk_count {
+            let chunk = evidence
+                .next()
+                .map_err(map_evidence)?
+                .ok_or(CoreError::RangeResyncFailed)?;
+            counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
+            validate_chunk_reference_len(u64::from(chunk.len))?;
+            if chunk.start != expected_start {
+                return Err(CoreError::RangeResyncFailed);
+            }
+            expected_start = chunk.end()?;
+            output.push(chunk.prepared()).map_err(map_sink)?;
+        }
+        if evidence.next().map_err(map_evidence)?.is_some()
+            || expected_start != base.identity.logical_len()
+        {
+            return Err(CoreError::RangeResyncFailed);
+        }
+
+        let (logical_file, physical_file) = write_file_object_and_logical(
+            objects,
+            output,
+            new_mode,
+            base.identity.logical_len(),
+            u64::from(base.chunk_count),
+            counters,
+        )?;
+        if logical_file != base.identity {
+            return Err(CoreError::IdMismatch);
+        }
+        let prepared = PreparedFileV1::new(logical_file, physical_file, base.chunk_count);
+        objects.finish_closure(prepared).map_err(map_sink)?;
+        Ok(prepared)
+    })();
+
+    if result.is_err() {
+        output.abort();
+        objects.abort_closure();
+    }
+    result
 }
 
 fn copy_untouched_prefix<E, R>(

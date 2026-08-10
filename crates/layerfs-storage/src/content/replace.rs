@@ -5,6 +5,8 @@ use super::{
     PreparedObjectSinkV1,
 };
 use crate::cdc::CdcControlV1;
+#[cfg(feature = "c3-polymorphism")]
+use crate::limits::OperationReservationV1;
 use crate::limits::{OperationCountersV1, ResourceLedgerV1};
 use crate::CoreResult;
 
@@ -39,6 +41,45 @@ where
         buffers,
         control,
         ledger,
+        counters,
+    )
+}
+
+/// Complete-C3 Replace constructor borrowing the already-granted root
+/// operation. Keeping this semantic entry distinct prevents Update from
+/// redispatching to Replace while sharing the one canonical file encoder.
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn replace_file_c3_borrowed_v1<S, O, R, C>(
+    path: &[u8],
+    mode: u16,
+    declared_len: u64,
+    source: &mut S,
+    objects: &mut O,
+    references: &mut R,
+    buffers: ContentBuffersV1<'_>,
+    control: &mut C,
+    reservation: &OperationReservationV1<'_>,
+    algorithm: crate::cdc::C3CdcAlgorithmV1,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<PreparedFileV1>
+where
+    S: ContentSourceV1 + ?Sized,
+    O: PreparedObjectSinkV1 + ?Sized,
+    R: ChunkReferenceSpoolV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
+{
+    super::create_file_c3_borrowed_v1(
+        path,
+        mode,
+        declared_len,
+        source,
+        objects,
+        references,
+        buffers,
+        control,
+        reservation,
+        algorithm,
         counters,
     )
 }

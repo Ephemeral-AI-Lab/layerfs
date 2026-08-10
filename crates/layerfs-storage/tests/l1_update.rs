@@ -1,4 +1,4 @@
-mod support;
+use crate::test_support as support;
 
 use layerfs_storage::cdc::{ContinueCdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES};
 use layerfs_storage::content::update::{
@@ -508,9 +508,9 @@ fn insertion_deletion_replacement_and_edge_ranges_match_full_canonical_results()
         assert!(
             result.counters.update_resynchronization_bytes <= MAX_UPDATE_RESYNCHRONIZATION_BYTES
         );
-        assert_eq!(result.counters.fallback_attempts, 0);
-        assert_eq!(result.counters.retries_or_redispatches, 0);
-        assert_eq!(result.counters.publication_dispatches, 0);
+        assert_eq!(result.counters.automatic_fallbacks, 0);
+        assert_eq!(result.counters.redispatches, 0);
+        assert_eq!(result.counters.publication_authority_dispatches, 0);
         let maximum_refs = (expected_data.len() as u64).div_ceil(8_192);
         assert_eq!(
             result.planned_memory_high_water,
@@ -545,7 +545,7 @@ fn middle_update_reuses_authenticated_prefix_and_suffix_identities() {
     assert!(result.counters.bytes_structurally_reused > 0);
     assert!(result.counters.anchor_attempts > 0);
     assert!(result.sink.object_ids.len() < prepared.chunk_count() as usize + 1);
-    assert_eq!(result.counters.fallback_attempts, 0);
+    assert_eq!(result.counters.automatic_fallbacks, 0);
 }
 
 #[test]
@@ -583,7 +583,7 @@ fn rejoin_requires_a_complete_exact_base_byte_comparison() {
     assert_eq!(failed_proof.sink.completed, None);
     assert_eq!(failed_proof.sink.aborts, 1);
     assert!(failed_proof.output.aborted);
-    assert_eq!(failed_proof.counters.fallback_attempts, 0);
+    assert_eq!(failed_proof.counters.automatic_fallbacks, 0);
 }
 
 #[test]
@@ -664,7 +664,7 @@ fn missing_or_mismatched_evidence_and_no_anchor_fail_closed() {
     assert!(result.counters.update_resynchronization_bytes > 0);
     assert!(result.counters.update_resynchronization_bytes <= MAX_UPDATE_RESYNCHRONIZATION_BYTES);
     assert!(result.base_bytes_read < base_data.len() as u64);
-    assert_eq!(result.counters.fallback_attempts, 0);
+    assert_eq!(result.counters.automatic_fallbacks, 0);
     assert_eq!(result.sink.completed, None);
     assert_eq!(result.sink.aborts, 1);
     assert!(result.output.aborted);
@@ -700,7 +700,7 @@ fn invalid_range_and_resource_refusal_precede_all_reads() {
     assert_eq!(result.prepared, Err(CoreError::ResourceRefused));
     assert_eq!(result.base_bytes_read, 0);
     assert_eq!(result.inserted_reads, 0);
-    assert_eq!(result.counters.fallback_attempts, 0);
+    assert_eq!(result.counters.automatic_fallbacks, 0);
 
     let base = expected_file(&base_data, 0o644);
     let authenticated = AuthenticatedBaseFileV1::new(

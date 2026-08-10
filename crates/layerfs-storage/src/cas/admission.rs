@@ -19,7 +19,7 @@ use crate::cdc::{
 use crate::cdc::{C3CdcAlgorithmV1, C3CdcStreamV1};
 use crate::format::{
     DirectoryModeContext, ExtentTagV1, PhysicalTreeChildKindV1, TreeSubtypeV1, ValidatedComponent,
-    ValidatedSymlinkTarget,
+    ValidatedSymlinkTarget, MAX_PATH_DEPTH, MAX_TREE_PAGE_DEPTH,
 };
 use crate::identity::{
     derive_file_node_v1, derive_logical_chunk_spans_v1, derive_symlink_node_v1, derive_version_v1,
@@ -32,6 +32,7 @@ use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
     OperationReservationV1, ResourceLedgerV1,
 };
+use crate::object::require_canonical_traversal_depth_v1;
 use crate::object::{
     decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1,
     PhysicalObjectReadPortV1, TreeRecordV1, TypedPhysicalObjectIdV1, VersionRecordV1,
@@ -40,9 +41,8 @@ use crate::object::{
 use crate::profile::{ChunkerSpecV1, DigestSpecV1};
 use crate::{CoreError, CoreResult};
 
-const MAX_CLOSURE_TRAVERSAL_DEPTH: usize = 1_028;
 const MAX_COMPONENT_BYTES: usize = 255;
-const CHARGED_TRAVERSAL_FRAME_BYTES: u64 = 512;
+const ADMISSION_DIRECTORY_STACK_CAPACITY_V1: usize = MAX_PATH_DEPTH + 1;
 
 #[derive(Clone, Copy)]
 enum ClosureCdcV1 {
@@ -232,13 +232,23 @@ where
         )?
         .charge(
             MemoryComponentV1::PageSummaries,
-            u64::try_from(MAX_CLOSURE_TRAVERSAL_DEPTH)
-                .map_err(|_| CoreError::IntegerOverflow)?
-                .checked_mul(CHARGED_TRAVERSAL_FRAME_BYTES)
-                .ok_or(CoreError::IntegerOverflow)?,
+            admission_traversal_resident_bytes_v1()?,
         )?
         .charge(MemoryComponentV1::MetadataWindow, source_resident)?
         .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)
+}
+
+pub(crate) fn admission_traversal_resident_bytes_v1() -> CoreResult<u64> {
+    let frame_bytes = u64::try_from(core::mem::size_of::<AdmissionDirectoryFrameV1>())
+        .map_err(|_| CoreError::IntegerOverflow)?;
+    let capacity = u64::try_from(ADMISSION_DIRECTORY_STACK_CAPACITY_V1)
+        .map_err(|_| CoreError::IntegerOverflow)?;
+    frame_bytes
+        .checked_mul(capacity)
+        .and_then(|bytes| {
+            bytes.checked_add(core::mem::size_of::<Vec<AdmissionDirectoryFrameV1>>() as u64)
+        })
+        .ok_or(CoreError::IntegerOverflow)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -384,7 +394,7 @@ where
                 reused_count = reused_count
                     .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?;
-                counters.add(CounterFieldV1::PhysicalObjectsReused, 1)?;
+                counters.add(CounterFieldV1::ClosureObjectsOccupiedValidated, 1)?;
             }
             None => {
                 stage_private_object_bounded(
@@ -399,7 +409,7 @@ where
                 created_count = created_count
                     .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?;
-                counters.add(CounterFieldV1::PhysicalObjectsCreated, 1)?;
+                counters.add(CounterFieldV1::ClosureObjectsMissing, 1)?;
             }
         }
     }
@@ -1086,9 +1096,421 @@ where
     Ok(len)
 }
 
+#[derive(Clone, Copy)]
+struct PageFactsV1 {
+    depth: u8,
+    entry_count: u32,
+    first_name: [u8; MAX_COMPONENT_BYTES],
+    first_name_len: usize,
+    last_name: [u8; MAX_COMPONENT_BYTES],
+    last_name_len: usize,
+}
+
+impl PageFactsV1 {
+    const fn empty(depth: u8) -> Self {
+        Self {
+            depth,
+            entry_count: 0,
+            first_name: [0; MAX_COMPONENT_BYTES],
+            first_name_len: 0,
+            last_name: [0; MAX_COMPONENT_BYTES],
+            last_name_len: 0,
+        }
+    }
+
+    fn add_entry(&mut self, name: &[u8]) -> CoreResult<()> {
+        if self.entry_count == 0 {
+            self.first_name[..name.len()].copy_from_slice(name);
+            self.first_name_len = name.len();
+        }
+        self.last_name[..name.len()].copy_from_slice(name);
+        self.last_name_len = name.len();
+        self.entry_count = self
+            .entry_count
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    fn add_child(&mut self, child: Self) -> CoreResult<()> {
+        if self.entry_count == 0 {
+            self.first_name[..child.first_name_len]
+                .copy_from_slice(&child.first_name[..child.first_name_len]);
+            self.first_name_len = child.first_name_len;
+        }
+        self.last_name[..child.last_name_len]
+            .copy_from_slice(&child.last_name[..child.last_name_len]);
+        self.last_name_len = child.last_name_len;
+        self.entry_count = self
+            .entry_count
+            .checked_add(child.entry_count)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct OwnedComponentV1 {
+    bytes: [u8; MAX_COMPONENT_BYTES],
+    len: usize,
+}
+
+impl OwnedComponentV1 {
+    fn read<C>(
+        cursor: &mut ObjectCursorV1,
+        closure: &mut C,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<Self>
+    where
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    {
+        let mut bytes = [0; MAX_COMPONENT_BYTES];
+        let len = read_component(cursor, closure, counters, &mut bytes)?;
+        Ok(Self { bytes, len })
+    }
+
+    fn validated(&self) -> CoreResult<ValidatedComponent<'_>> {
+        ValidatedComponent::new(&self.bytes[..self.len])
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PhysicalTreeEntryOwnedV1 {
+    name: OwnedComponentV1,
+    kind: PhysicalTreeChildKindV1,
+    raw_id: [u8; 32],
+}
+
+#[derive(Clone, Copy)]
+struct IndexExpectationV1 {
+    count: u32,
+    first: OwnedComponentV1,
+    last: OwnedComponentV1,
+}
+
+#[derive(Clone, Copy)]
+// This fixed inline state is part of the explicitly charged traversal stack.
+// Indirection would add a heap allocation outside that resident-byte proof.
+#[allow(clippy::large_enum_variant)]
+enum PageFrameStateV1 {
+    Leaf {
+        remaining: u16,
+    },
+    Index {
+        remaining: u16,
+        pending: Option<IndexExpectationV1>,
+    },
+}
+
+#[derive(Clone, Copy)]
+struct PageFrameV1 {
+    ordinal: u64,
+    first_visit: bool,
+    cursor: ObjectCursorV1,
+    facts: PageFactsV1,
+    state: PageFrameStateV1,
+}
+
+const PAGE_TRAVERSAL_CAPACITY_V1: usize = MAX_TREE_PAGE_DEPTH as usize + 1;
+
+#[derive(Clone, Copy)]
+struct PageTraversalV1 {
+    frames: [Option<PageFrameV1>; PAGE_TRAVERSAL_CAPACITY_V1],
+    len: usize,
+    finished: Option<PageFactsV1>,
+}
+
+impl PageTraversalV1 {
+    fn new<C>(
+        closure: &mut C,
+        object_count: u64,
+        id: PhysicalTreeIdV1,
+        expected_depth: u8,
+        counters: &mut OperationCountersV1,
+        states: &mut [u8],
+    ) -> CoreResult<Self>
+    where
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    {
+        let mut result = Self {
+            frames: [None; PAGE_TRAVERSAL_CAPACITY_V1],
+            len: 0,
+            finished: None,
+        };
+        result.push_page(closure, object_count, id, expected_depth, counters, states)?;
+        Ok(result)
+    }
+
+    fn push_page<C>(
+        &mut self,
+        closure: &mut C,
+        object_count: u64,
+        id: PhysicalTreeIdV1,
+        expected_depth: u8,
+        counters: &mut OperationCountersV1,
+        states: &mut [u8],
+    ) -> CoreResult<()>
+    where
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    {
+        if self.len >= self.frames.len() {
+            return Err(CoreError::CountCap);
+        }
+        let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::Tree(id))?;
+        let first_visit = traversal_enter(states, ordinal)?;
+        let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
+        let subtype = TreeSubtypeV1::try_from(cursor.read_u8(closure, counters)?)?;
+        let depth = cursor.read_u8(closure, counters)?;
+        let count = cursor.read_u16_be(closure, counters)?;
+        if depth != expected_depth || count == 0 {
+            return Err(CoreError::IdMismatch);
+        }
+        let state = match subtype {
+            TreeSubtypeV1::Leaf if expected_depth == 0 => {
+                PageFrameStateV1::Leaf { remaining: count }
+            }
+            TreeSubtypeV1::Index if expected_depth != 0 => PageFrameStateV1::Index {
+                remaining: count,
+                pending: None,
+            },
+            _ => return Err(CoreError::TypedEdge),
+        };
+        self.frames[self.len] = Some(PageFrameV1 {
+            ordinal,
+            first_visit,
+            cursor,
+            facts: PageFactsV1::empty(depth),
+            state,
+        });
+        self.len += 1;
+        Ok(())
+    }
+
+    fn next_entry<C>(
+        &mut self,
+        closure: &mut C,
+        object_count: u64,
+        counters: &mut OperationCountersV1,
+        states: &mut [u8],
+        visited: &mut u64,
+    ) -> CoreResult<Option<PhysicalTreeEntryOwnedV1>>
+    where
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    {
+        loop {
+            let index = self.len.checked_sub(1).ok_or(CoreError::Truncated)?;
+            let state = self.frames[index].ok_or(CoreError::Truncated)?.state;
+            match state {
+                PageFrameStateV1::Leaf { remaining } if remaining != 0 => {
+                    let frame = self.frames[index].as_mut().ok_or(CoreError::Truncated)?;
+                    let name = OwnedComponentV1::read(&mut frame.cursor, closure, counters)?;
+                    let kind = PhysicalTreeChildKindV1::try_from(
+                        frame.cursor.read_u8(closure, counters)?,
+                    )?;
+                    let raw_id = frame.cursor.read_array::<32, _>(closure, counters)?;
+                    frame.facts.add_entry(&name.bytes[..name.len])?;
+                    frame.state = PageFrameStateV1::Leaf {
+                        remaining: remaining - 1,
+                    };
+                    return Ok(Some(PhysicalTreeEntryOwnedV1 { name, kind, raw_id }));
+                }
+                PageFrameStateV1::Index {
+                    remaining,
+                    pending: None,
+                } if remaining != 0 => {
+                    let (expectation, child, child_depth) = {
+                        let frame = self.frames[index].as_mut().ok_or(CoreError::Truncated)?;
+                        let count = frame.cursor.read_u32_be(closure, counters)?;
+                        let first = OwnedComponentV1::read(&mut frame.cursor, closure, counters)?;
+                        let last = OwnedComponentV1::read(&mut frame.cursor, closure, counters)?;
+                        let child = PhysicalTreeIdV1::from_digest(
+                            frame.cursor.read_array::<32, _>(closure, counters)?,
+                        );
+                        let child_depth = frame
+                            .facts
+                            .depth
+                            .checked_sub(1)
+                            .ok_or(CoreError::IdMismatch)?;
+                        frame.state = PageFrameStateV1::Index {
+                            remaining: remaining - 1,
+                            pending: Some(IndexExpectationV1 { count, first, last }),
+                        };
+                        (
+                            IndexExpectationV1 { count, first, last },
+                            child,
+                            child_depth,
+                        )
+                    };
+                    let _ = expectation;
+                    self.push_page(closure, object_count, child, child_depth, counters, states)?;
+                }
+                PageFrameStateV1::Index {
+                    pending: Some(_), ..
+                } => return Err(CoreError::Truncated),
+                PageFrameStateV1::Leaf { remaining: 0 }
+                | PageFrameStateV1::Index {
+                    remaining: 0,
+                    pending: None,
+                } => {
+                    let frame = self.frames[index].take().ok_or(CoreError::Truncated)?;
+                    self.len -= 1;
+                    frame.cursor.finish()?;
+                    if frame.first_visit {
+                        traversal_finish(states, frame.ordinal, visited)?;
+                    }
+                    if self.len == 0 {
+                        self.finished = Some(frame.facts);
+                        return Ok(None);
+                    }
+                    let parent = self.frames[self.len - 1]
+                        .as_mut()
+                        .ok_or(CoreError::Truncated)?;
+                    let PageFrameStateV1::Index {
+                        remaining,
+                        pending: Some(expectation),
+                    } = parent.state
+                    else {
+                        return Err(CoreError::Truncated);
+                    };
+                    if frame.facts.depth.checked_add(1) != Some(parent.facts.depth)
+                        || frame.facts.entry_count != expectation.count
+                        || frame.facts.first_name[..frame.facts.first_name_len]
+                            != expectation.first.bytes[..expectation.first.len]
+                        || frame.facts.last_name[..frame.facts.last_name_len]
+                            != expectation.last.bytes[..expectation.last.len]
+                    {
+                        return Err(CoreError::IdMismatch);
+                    }
+                    parent.facts.add_child(frame.facts)?;
+                    parent.state = PageFrameStateV1::Index {
+                        remaining,
+                        pending: None,
+                    };
+                }
+                PageFrameStateV1::Leaf { .. } | PageFrameStateV1::Index { .. } => {
+                    return Err(CoreError::Truncated);
+                }
+            }
+        }
+    }
+
+    fn finish(self) -> CoreResult<PageFactsV1> {
+        if self.len == 0 {
+            self.finished.ok_or(CoreError::Truncated)
+        } else {
+            Err(CoreError::Truncated)
+        }
+    }
+}
+
+struct AdmissionDirectoryFrameV1 {
+    ordinal: u64,
+    first_visit: bool,
+    context: DirectoryModeContext,
+    entry_count: u32,
+    page_depth: u8,
+    hasher: LogicalDirectoryHasherV1,
+    pages: Option<PageTraversalV1>,
+    page_facts: Option<PageFactsV1>,
+    pending_name: Option<OwnedComponentV1>,
+}
+
+impl AdmissionDirectoryFrameV1 {
+    fn new<C>(
+        closure: &mut C,
+        object_count: u64,
+        id: PhysicalTreeIdV1,
+        context: DirectoryModeContext,
+        counters: &mut OperationCountersV1,
+        states: &mut [u8],
+    ) -> CoreResult<Self>
+    where
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    {
+        let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::Tree(id))?;
+        let first_visit = traversal_enter(states, ordinal)?;
+        let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
+        if TreeSubtypeV1::try_from(cursor.read_u8(closure, counters)?)? != TreeSubtypeV1::Directory
+        {
+            return Err(CoreError::TypedEdge);
+        }
+        let mode = cursor.read_u16_be(closure, counters)?;
+        let entry_count = cursor.read_u32_be(closure, counters)?;
+        let page_depth = cursor.read_u8(closure, counters)?;
+        if u64::from(page_depth) > MAX_TREE_PAGE_DEPTH {
+            return Err(CoreError::CountCap);
+        }
+        let presence = cursor.read_u8(closure, counters)?;
+        let root_page = match presence {
+            0 if entry_count == 0 => None,
+            1 if entry_count != 0 => Some(PhysicalTreeIdV1::from_digest(
+                cursor.read_array::<32, _>(closure, counters)?,
+            )),
+            _ => return Err(CoreError::TypedEdge),
+        };
+        cursor.finish()?;
+        let pages = match root_page {
+            Some(root_page) => Some(PageTraversalV1::new(
+                closure,
+                object_count,
+                root_page,
+                page_depth,
+                counters,
+                states,
+            )?),
+            None => None,
+        };
+        Ok(Self {
+            ordinal,
+            first_visit,
+            context,
+            entry_count,
+            page_depth,
+            hasher: LogicalDirectoryHasherV1::new(mode, context, u64::from(entry_count))?,
+            pages,
+            page_facts: None,
+            pending_name: None,
+        })
+    }
+
+    fn push_child(&mut self, name: &OwnedComponentV1, child: LogicalChildIdV1) -> CoreResult<()> {
+        self.hasher
+            .push(LogicalDirectoryEntryV1::new(name.validated()?, child))
+    }
+
+    fn is_complete(&self) -> bool {
+        self.pages.is_none()
+    }
+
+    fn validate_completed_pages(&self) -> CoreResult<()> {
+        match (self.entry_count, self.page_facts) {
+            (0, None) => Ok(()),
+            (count, Some(facts))
+                if facts.entry_count == count && facts.depth == self.page_depth =>
+            {
+                Ok(())
+            }
+            _ => Err(CoreError::IdMismatch),
+        }
+    }
+}
+
 enum ReconstructedDirectoryV1 {
     ImplicitRoot(ImplicitRootDirectoryV1),
     Explicit(ExplicitDirectoryNodeV1),
+}
+
+fn directory_depth_charge_v1(directory_frames: usize) -> CoreResult<usize> {
+    let stride = (MAX_TREE_PAGE_DEPTH as usize)
+        .checked_add(2)
+        .ok_or(CoreError::IntegerOverflow)?;
+    let depth = directory_frames
+        .checked_sub(1)
+        .and_then(|value| value.checked_mul(stride))
+        .and_then(|value| value.checked_add(1))
+        .ok_or(CoreError::IntegerOverflow)?;
+    require_depth(depth)?;
+    Ok(depth)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1101,351 +1523,138 @@ fn reconstruct_root_directory<C>(
     cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
     states: &mut [u8],
     visited: &mut u64,
-    depth: usize,
+    _depth: usize,
     validation_cdc: ClosureCdcV1,
 ) -> CoreResult<ImplicitRootDirectoryV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
 {
-    match reconstruct_directory(
+    let mut frames = Vec::new();
+    frames
+        .try_reserve_exact(ADMISSION_DIRECTORY_STACK_CAPACITY_V1)
+        .map_err(|_| CoreError::ResourceRefused)?;
+    if frames.capacity() > ADMISSION_DIRECTORY_STACK_CAPACITY_V1 {
+        return Err(CoreError::ResourceRefused);
+    }
+    frames.push(AdmissionDirectoryFrameV1::new(
         closure,
         object_count,
         id,
         DirectoryModeContext::ImplicitRoot,
         counters,
-        source_window,
-        cdc_ring,
         states,
-        visited,
-        depth,
-        validation_cdc,
-    )? {
-        ReconstructedDirectoryV1::ImplicitRoot(root) => Ok(root),
-        ReconstructedDirectoryV1::Explicit(_) => Err(CoreError::RootSentinel),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn reconstruct_explicit_directory<C>(
-    closure: &mut C,
-    object_count: u64,
-    id: PhysicalTreeIdV1,
-    counters: &mut OperationCountersV1,
-    source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    states: &mut [u8],
-    visited: &mut u64,
-    depth: usize,
-    validation_cdc: ClosureCdcV1,
-) -> CoreResult<ExplicitDirectoryNodeV1>
-where
-    C: CompleteImmutableClosureReadPortV1 + ?Sized,
-{
-    match reconstruct_directory(
-        closure,
-        object_count,
-        id,
-        DirectoryModeContext::Explicit,
-        counters,
-        source_window,
-        cdc_ring,
-        states,
-        visited,
-        depth,
-        validation_cdc,
-    )? {
-        ReconstructedDirectoryV1::Explicit(directory) => Ok(directory),
-        ReconstructedDirectoryV1::ImplicitRoot(_) => Err(CoreError::ChildMode),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn reconstruct_directory<C>(
-    closure: &mut C,
-    object_count: u64,
-    id: PhysicalTreeIdV1,
-    context: DirectoryModeContext,
-    counters: &mut OperationCountersV1,
-    source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    states: &mut [u8],
-    visited: &mut u64,
-    depth: usize,
-    validation_cdc: ClosureCdcV1,
-) -> CoreResult<ReconstructedDirectoryV1>
-where
-    C: CompleteImmutableClosureReadPortV1 + ?Sized,
-{
-    require_depth(depth)?;
-    let typed = TypedPhysicalObjectIdV1::Tree(id);
-    let ordinal = require_edge(closure, object_count, typed)?;
-    let first_visit = traversal_enter(states, ordinal)?;
-    let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-    if TreeSubtypeV1::try_from(cursor.read_u8(closure, counters)?)? != TreeSubtypeV1::Directory {
-        return Err(CoreError::TypedEdge);
-    }
-    let mode = cursor.read_u16_be(closure, counters)?;
-    let entry_count = cursor.read_u32_be(closure, counters)?;
-    let page_depth = cursor.read_u8(closure, counters)?;
-    let presence = cursor.read_u8(closure, counters)?;
-    let root_page = match presence {
-        0 if entry_count == 0 => None,
-        1 if entry_count != 0 => Some(PhysicalTreeIdV1::from_digest(
-            cursor.read_array::<32, _>(closure, counters)?,
-        )),
-        _ => return Err(CoreError::TypedEdge),
-    };
-    cursor.finish()?;
-    let mut hasher = LogicalDirectoryHasherV1::new(mode, context, u64::from(entry_count))?;
-    if let Some(root_page) = root_page {
-        let facts = stream_page_entries(
-            closure,
-            object_count,
-            root_page,
-            page_depth,
-            &mut hasher,
-            counters,
-            source_window,
-            cdc_ring,
-            states,
-            visited,
-            depth + 1,
-            validation_cdc,
-        )?;
-        if facts.entry_count != entry_count || facts.depth != page_depth {
-            return Err(CoreError::IdMismatch);
+    )?);
+    loop {
+        let depth = directory_depth_charge_v1(frames.len())?;
+        if frames.last().ok_or(CoreError::Truncated)?.is_complete() {
+            let frame = frames.pop().ok_or(CoreError::Truncated)?;
+            frame.validate_completed_pages()?;
+            if frame.first_visit {
+                traversal_finish(states, frame.ordinal, visited)?;
+            }
+            let logical = match frame.context {
+                DirectoryModeContext::ImplicitRoot => frame
+                    .hasher
+                    .finish_implicit_root()
+                    .map(ReconstructedDirectoryV1::ImplicitRoot)?,
+                DirectoryModeContext::Explicit => frame
+                    .hasher
+                    .finish_explicit()
+                    .map(ReconstructedDirectoryV1::Explicit)?,
+            };
+            if let Some(parent) = frames.last_mut() {
+                let ReconstructedDirectoryV1::Explicit(directory) = logical else {
+                    return Err(CoreError::RootSentinel);
+                };
+                let name = parent.pending_name.take().ok_or(CoreError::Truncated)?;
+                parent.push_child(&name, LogicalChildIdV1::Directory(directory))?;
+                continue;
+            }
+            return match logical {
+                ReconstructedDirectoryV1::ImplicitRoot(root) => Ok(root),
+                ReconstructedDirectoryV1::Explicit(_) => Err(CoreError::RootSentinel),
+            };
         }
-    }
-    if first_visit {
-        traversal_finish(states, ordinal, visited)?;
-    }
-    match context {
-        DirectoryModeContext::ImplicitRoot => hasher
-            .finish_implicit_root()
-            .map(ReconstructedDirectoryV1::ImplicitRoot),
-        DirectoryModeContext::Explicit => hasher
-            .finish_explicit()
-            .map(ReconstructedDirectoryV1::Explicit),
-    }
-}
 
-#[derive(Clone, Copy)]
-struct PageFactsV1 {
-    depth: u8,
-    entry_count: u32,
-    first_name: [u8; MAX_COMPONENT_BYTES],
-    first_name_len: usize,
-    last_name: [u8; MAX_COMPONENT_BYTES],
-    last_name_len: usize,
-}
-
-#[allow(clippy::too_many_arguments)]
-fn stream_page_entries<C>(
-    closure: &mut C,
-    object_count: u64,
-    id: PhysicalTreeIdV1,
-    expected_depth: u8,
-    hasher: &mut LogicalDirectoryHasherV1,
-    counters: &mut OperationCountersV1,
-    source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    states: &mut [u8],
-    visited: &mut u64,
-    traversal_depth: usize,
-    validation_cdc: ClosureCdcV1,
-) -> CoreResult<PageFactsV1>
-where
-    C: CompleteImmutableClosureReadPortV1 + ?Sized,
-{
-    require_depth(traversal_depth)?;
-    let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::Tree(id))?;
-    let first_visit = traversal_enter(states, ordinal)?;
-    let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-    let subtype = TreeSubtypeV1::try_from(cursor.read_u8(closure, counters)?)?;
-    let result = match subtype {
-        TreeSubtypeV1::Leaf => {
-            let depth = cursor.read_u8(closure, counters)?;
-            let count = cursor.read_u16_be(closure, counters)?;
-            if expected_depth != 0 || depth != 0 || count == 0 {
-                return Err(CoreError::IdMismatch);
-            }
-            let mut first_name = [0_u8; MAX_COMPONENT_BYTES];
-            let mut first_name_len = 0_usize;
-            let mut last_name = [0_u8; MAX_COMPONENT_BYTES];
-            let mut last_name_len = 0_usize;
-            for index in 0..count {
-                let mut name = [0_u8; MAX_COMPONENT_BYTES];
-                let name_len = read_component(&mut cursor, closure, counters, &mut name)?;
-                let kind = PhysicalTreeChildKindV1::try_from(cursor.read_u8(closure, counters)?)?;
-                let raw_id = cursor.read_array::<32, _>(closure, counters)?;
-                let child = reconstruct_child(
-                    closure,
-                    object_count,
-                    kind,
-                    raw_id,
-                    counters,
-                    source_window,
-                    cdc_ring,
-                    states,
-                    visited,
-                    traversal_depth + 1,
-                    validation_cdc,
-                )?;
-                let component = ValidatedComponent::new(&name[..name_len])?;
-                hasher.push(LogicalDirectoryEntryV1::new(component, child))?;
-                if index == 0 {
-                    first_name[..name_len].copy_from_slice(&name[..name_len]);
-                    first_name_len = name_len;
-                }
-                last_name[..name_len].copy_from_slice(&name[..name_len]);
-                last_name_len = name_len;
-            }
-            PageFactsV1 {
-                depth,
-                entry_count: u32::from(count),
-                first_name,
-                first_name_len,
-                last_name,
-                last_name_len,
-            }
-        }
-        TreeSubtypeV1::Index => {
-            let depth = cursor.read_u8(closure, counters)?;
-            let count = cursor.read_u16_be(closure, counters)?;
-            if expected_depth == 0 || depth != expected_depth || count == 0 {
-                return Err(CoreError::IdMismatch);
-            }
-            let mut total = 0_u32;
-            let mut first_name = [0_u8; MAX_COMPONENT_BYTES];
-            let mut first_name_len = 0_usize;
-            let mut last_name = [0_u8; MAX_COMPONENT_BYTES];
-            let mut last_name_len = 0_usize;
-            for index in 0..count {
-                let declared_count = cursor.read_u32_be(closure, counters)?;
-                let mut declared_first = [0_u8; MAX_COMPONENT_BYTES];
-                let declared_first_len =
-                    read_component(&mut cursor, closure, counters, &mut declared_first)?;
-                let mut declared_last = [0_u8; MAX_COMPONENT_BYTES];
-                let declared_last_len =
-                    read_component(&mut cursor, closure, counters, &mut declared_last)?;
-                let child =
-                    PhysicalTreeIdV1::from_digest(cursor.read_array::<32, _>(closure, counters)?);
-                let facts = stream_page_entries(
-                    closure,
-                    object_count,
-                    child,
-                    expected_depth - 1,
-                    hasher,
-                    counters,
-                    source_window,
-                    cdc_ring,
-                    states,
-                    visited,
-                    traversal_depth + 1,
-                    validation_cdc,
-                )?;
-                if facts.depth.checked_add(1) != Some(expected_depth)
-                    || facts.entry_count != declared_count
-                    || facts.first_name[..facts.first_name_len]
-                        != declared_first[..declared_first_len]
-                    || facts.last_name[..facts.last_name_len] != declared_last[..declared_last_len]
+        let entry = {
+            let frame = frames.last_mut().ok_or(CoreError::Truncated)?;
+            frame
+                .pages
+                .as_mut()
+                .ok_or(CoreError::Truncated)?
+                .next_entry(closure, object_count, counters, states, visited)?
+        };
+        let Some(entry) = entry else {
+            let frame = frames.last_mut().ok_or(CoreError::Truncated)?;
+            let pages = frame.pages.take().ok_or(CoreError::Truncated)?;
+            frame.page_facts = Some(pages.finish()?);
+            continue;
+        };
+        match entry.kind {
+            PhysicalTreeChildKindV1::Tree => {
+                if frames
+                    .last()
+                    .ok_or(CoreError::Truncated)?
+                    .pending_name
+                    .is_some()
                 {
-                    return Err(CoreError::IdMismatch);
+                    return Err(CoreError::Truncated);
                 }
-                total = total
-                    .checked_add(facts.entry_count)
+                frames.last_mut().ok_or(CoreError::Truncated)?.pending_name = Some(entry.name);
+                let next_count = frames
+                    .len()
+                    .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?;
-                if index == 0 {
-                    first_name[..facts.first_name_len]
-                        .copy_from_slice(&facts.first_name[..facts.first_name_len]);
-                    first_name_len = facts.first_name_len;
-                }
-                last_name[..facts.last_name_len]
-                    .copy_from_slice(&facts.last_name[..facts.last_name_len]);
-                last_name_len = facts.last_name_len;
+                directory_depth_charge_v1(next_count)?;
+                frames.push(AdmissionDirectoryFrameV1::new(
+                    closure,
+                    object_count,
+                    PhysicalTreeIdV1::from_digest(entry.raw_id),
+                    DirectoryModeContext::Explicit,
+                    counters,
+                    states,
+                )?);
             }
-            PageFactsV1 {
-                depth,
-                entry_count: total,
-                first_name,
-                first_name_len,
-                last_name,
-                last_name_len,
+            PhysicalTreeChildKindV1::File => {
+                let logical = reconstruct_file(
+                    closure,
+                    object_count,
+                    PhysicalFileIdV1::from_digest(entry.raw_id),
+                    counters,
+                    source_window,
+                    cdc_ring,
+                    states,
+                    visited,
+                    depth,
+                    validation_cdc,
+                )?;
+                frames
+                    .last_mut()
+                    .ok_or(CoreError::Truncated)?
+                    .push_child(&entry.name, LogicalChildIdV1::File(logical))?;
+            }
+            PhysicalTreeChildKindV1::Symlink => {
+                let logical = reconstruct_symlink(
+                    closure,
+                    object_count,
+                    PhysicalSymlinkIdV1::from_digest(entry.raw_id),
+                    counters,
+                    source_window,
+                    states,
+                    visited,
+                    depth,
+                )?;
+                frames
+                    .last_mut()
+                    .ok_or(CoreError::Truncated)?
+                    .push_child(&entry.name, LogicalChildIdV1::Symlink(logical))?;
             }
         }
-        TreeSubtypeV1::Directory => return Err(CoreError::TypedEdge),
-    };
-    cursor.finish()?;
-    if first_visit {
-        traversal_finish(states, ordinal, visited)?;
-    }
-    Ok(result)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn reconstruct_child<C>(
-    closure: &mut C,
-    object_count: u64,
-    kind: PhysicalTreeChildKindV1,
-    raw_id: [u8; 32],
-    counters: &mut OperationCountersV1,
-    source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
-    states: &mut [u8],
-    visited: &mut u64,
-    depth: usize,
-    validation_cdc: ClosureCdcV1,
-) -> CoreResult<LogicalChildIdV1>
-where
-    C: CompleteImmutableClosureReadPortV1 + ?Sized,
-{
-    match kind {
-        PhysicalTreeChildKindV1::Tree => reconstruct_explicit_directory(
-            closure,
-            object_count,
-            PhysicalTreeIdV1::from_digest(raw_id),
-            counters,
-            source_window,
-            cdc_ring,
-            states,
-            visited,
-            depth,
-            validation_cdc,
-        )
-        .map(LogicalChildIdV1::Directory),
-        PhysicalTreeChildKindV1::File => reconstruct_file(
-            closure,
-            object_count,
-            PhysicalFileIdV1::from_digest(raw_id),
-            counters,
-            source_window,
-            cdc_ring,
-            states,
-            visited,
-            depth,
-            validation_cdc,
-        )
-        .map(LogicalChildIdV1::File),
-        PhysicalTreeChildKindV1::Symlink => reconstruct_symlink(
-            closure,
-            object_count,
-            PhysicalSymlinkIdV1::from_digest(raw_id),
-            counters,
-            source_window,
-            states,
-            visited,
-            depth,
-        )
-        .map(LogicalChildIdV1::Symlink),
     }
 }
 
 fn require_depth(depth: usize) -> CoreResult<()> {
-    if depth >= MAX_CLOSURE_TRAVERSAL_DEPTH {
-        Err(CoreError::CountCap)
-    } else {
-        Ok(())
-    }
+    require_canonical_traversal_depth_v1(depth)
 }
 
 #[allow(clippy::too_many_arguments)]

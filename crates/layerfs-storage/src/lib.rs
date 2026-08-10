@@ -9,21 +9,65 @@
 
 mod error;
 
-#[cfg(feature = "c3-polymorphism")]
-pub mod cas;
-#[cfg(not(feature = "c3-polymorphism"))]
+#[allow(dead_code)]
 pub(crate) mod cas;
 pub mod cdc;
-pub mod content;
-pub mod cow;
+#[allow(dead_code)]
+pub(crate) mod content;
+#[allow(dead_code)]
+pub(crate) mod cow;
 pub mod format;
 pub mod identity;
-pub mod limits;
-pub mod object;
 #[cfg(feature = "c3-polymorphism")]
-pub mod pack;
-#[cfg(not(feature = "c3-polymorphism"))]
+#[allow(dead_code)]
+pub(crate) mod lifecycle;
+#[allow(dead_code)]
+pub(crate) mod limits;
+pub mod object;
+#[allow(dead_code)]
 pub(crate) mod pack;
 pub mod profile;
+#[cfg(feature = "c3-polymorphism")]
+#[allow(dead_code)]
+pub(crate) mod read;
 
 pub use error::{CoreError, CoreResult, OutcomeCode};
+
+// These accepted storage tests exercise private production boundaries from
+// inside this crate. Keeping them internal prevents test plumbing from turning
+// concrete FsCas, pack, COW, resource, or C3 machinery into a dependent-crate
+// SDK.
+#[cfg(test)]
+extern crate self as layerfs_storage;
+
+#[cfg(test)]
+#[path = "../tests/support/mod.rs"]
+mod test_support;
+
+#[cfg(all(test, feature = "c3-polymorphism"))]
+#[path = "../tests/c3_fscas.rs"]
+mod c3_fscas_tests;
+#[cfg(all(test, feature = "c3-polymorphism"))]
+#[path = "../tests/c3_mutation.rs"]
+mod c3_mutation_tests;
+#[cfg(all(test, feature = "c3-polymorphism"))]
+#[path = "../tests/c3_operation.rs"]
+mod c3_operation_tests;
+#[cfg(all(test, feature = "c3-polymorphism"))]
+#[path = "../tests/l1_cas.rs"]
+mod l1_cas_tests;
+#[cfg(test)]
+#[path = "../tests/l1_content.rs"]
+mod l1_content_tests;
+#[cfg(all(test, feature = "c3-polymorphism"))]
+#[path = "../tests/l1_pack.rs"]
+mod l1_pack_tests;
+#[cfg(test)]
+#[path = "../tests/l1_resources.rs"]
+mod l1_resources_tests;
+#[cfg(test)]
+#[path = "../tests/l1_tree.rs"]
+mod l1_tree_tests;
+#[cfg(test)]
+#[path = "../tests/l1_update.rs"]
+mod l1_update_tests;

@@ -27,6 +27,19 @@ use crate::object::{
 use crate::profile::ProfileSpecV1;
 use crate::{CoreError, CoreResult};
 
+#[cfg(feature = "c3-polymorphism")]
+use crate::cas::FsPackAdmissionOutcomeV1;
+
+#[cfg(feature = "c3-polymorphism")]
+mod complete_writer;
+#[cfg(feature = "c3-polymorphism")]
+mod operation_index;
+
+#[cfg(feature = "c3-polymorphism")]
+pub(crate) use complete_writer::DirectPackSinkV1;
+#[cfg(feature = "c3-polymorphism")]
+pub(crate) use operation_index::FilePackIndexSpoolV1;
+
 pub const PACK_HEADER_BYTES: u64 = 64;
 pub const PACK_INDEX_ENTRY_BYTES: u64 = 80;
 pub const PACK_TRAILER_BYTES: u64 = 80;
@@ -38,9 +51,57 @@ const PACK_MAGIC: &[u8; 8] = b"ELSPACK1";
 const PACK_TRAILER_MAGIC: &[u8; 8] = b"ELSPEND1";
 const OBJECT_HEADER_BYTES: u64 = 52;
 
+/// Pack-owned result of a complete bounded carrier sequence. Lifecycle sees
+/// only this immutable summary, never a concrete writer or carrier handle.
+#[cfg(feature = "c3-polymorphism")]
+#[derive(Clone, Copy)]
+pub(crate) struct CompletedPackSetV1 {
+    pub(crate) last_sealed: SealedPackV1,
+    pub(crate) last_outcome: FsPackAdmissionOutcomeV1,
+    pub(crate) carrier_count: u32,
+    pub(crate) carriers_installed: u32,
+    pub(crate) carriers_reused: u32,
+    pub(crate) installed_residue_bytes: u64,
+    pub(crate) index_spool_bytes: Option<u64>,
+}
+
+#[cfg(feature = "c3-polymorphism")]
+impl CompletedPackSetV1 {
+    pub(crate) const fn last_sealed(self) -> SealedPackV1 {
+        self.last_sealed
+    }
+
+    pub(crate) const fn last_outcome(self) -> FsPackAdmissionOutcomeV1 {
+        self.last_outcome
+    }
+
+    pub(crate) const fn carrier_count(self) -> u32 {
+        self.carrier_count
+    }
+
+    pub(crate) const fn carriers_installed(self) -> u32 {
+        self.carriers_installed
+    }
+
+    pub(crate) const fn carriers_reused(self) -> u32 {
+        self.carriers_reused
+    }
+
+    pub(crate) const fn installed_residue_bytes(self) -> u64 {
+        self.installed_residue_bytes
+    }
+
+    pub(crate) const fn index_spool_bytes(self) -> Option<u64> {
+        self.index_spool_bytes
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PackPortErrorV1 {
     Failure,
+    Cancelled,
+    Deadline,
+    WorkExhausted,
 }
 
 /// Random-readable transaction-private pack bytes.
@@ -159,6 +220,46 @@ pub trait PackIndexSpoolV1 {
     fn push(&mut self, entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1>;
     fn sort_by_key(&mut self) -> Result<(), PackPortErrorV1>;
     fn sort_by_offset(&mut self) -> Result<(), PackPortErrorV1>;
+    fn sort_by_key_controlled(
+        &mut self,
+        control: &mut dyn crate::limits::OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> Result<(), PackPortErrorV1> {
+        if control.cancellation_requested_v1() {
+            return Err(PackPortErrorV1::Cancelled);
+        }
+        if control.deadline_exceeded_v1() {
+            return Err(PackPortErrorV1::Deadline);
+        }
+        let result = self.sort_by_key();
+        if result.is_ok() {
+            counters.file_sort_control_polls = counters
+                .file_sort_control_polls
+                .checked_add(1)
+                .ok_or(PackPortErrorV1::Failure)?;
+        }
+        result
+    }
+    fn sort_by_offset_controlled(
+        &mut self,
+        control: &mut dyn crate::limits::OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> Result<(), PackPortErrorV1> {
+        if control.cancellation_requested_v1() {
+            return Err(PackPortErrorV1::Cancelled);
+        }
+        if control.deadline_exceeded_v1() {
+            return Err(PackPortErrorV1::Deadline);
+        }
+        let result = self.sort_by_offset();
+        if result.is_ok() {
+            counters.file_sort_control_polls = counters
+                .file_sort_control_polls
+                .checked_add(1)
+                .ok_or(PackPortErrorV1::Failure)?;
+        }
+        result
+    }
     fn rewind(&mut self) -> Result<(), PackPortErrorV1>;
     fn next(&mut self) -> Result<Option<PackIndexEntryV1>, PackPortErrorV1>;
     fn abort(&mut self);
@@ -409,7 +510,10 @@ where
         return Err(CoreError::PackInvalid);
     }
 
-    metadata.sort_by_key().map_err(map_spool_port)?;
+    let mut sort_control = NeverStopWorkControlV1;
+    metadata
+        .sort_by_key_controlled(&mut sort_control, counters)
+        .map_err(map_spool_port)?;
     metadata.rewind().map_err(map_spool_port)?;
     let mut previous: Option<PackIndexEntryV1> = None;
     let mut emitted = 0_u32;
@@ -443,7 +547,15 @@ where
         return Err(CoreError::PackInvalid);
     }
 
-    let validated = validate_pack_inner_v1(pack, metadata, scratch, counters, record_count)?;
+    let mut control = NeverStopWorkControlV1;
+    let validated = validate_pack_inner_v1(
+        pack,
+        metadata,
+        scratch,
+        counters,
+        record_count,
+        &mut control,
+    )?;
     if validated.id.as_bytes() != &pack_digest
         || validated.record_count != record_count
         || validated.index_offset != index_offset
@@ -487,7 +599,15 @@ where
         .charge(MemoryComponentV1::MetadataWindow, metadata_bytes)?;
     let _reservation = ledger.reserve_operation_with_plan(memory)?;
     counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
-    validate_pack_inner_v1(pack, metadata, scratch, counters, maximum_entries)
+    let mut control = NeverStopWorkControlV1;
+    validate_pack_inner_v1(
+        pack,
+        metadata,
+        scratch,
+        counters,
+        maximum_entries,
+        &mut control,
+    )
 }
 
 #[cfg(feature = "c3-polymorphism")]
@@ -498,6 +618,7 @@ pub(crate) fn validate_pack_borrowed_v1<P, M>(
     maximum_entries: u32,
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
 ) -> CoreResult<SealedPackV1>
 where
     P: PackReadPortV1 + ?Sized,
@@ -520,7 +641,7 @@ where
         )?
         .charge(MemoryComponentV1::MetadataWindow, metadata_bytes)?;
     reservation.require(memory)?;
-    validate_pack_inner_v1(pack, metadata, scratch, counters, maximum_entries)
+    validate_pack_inner_v1(pack, metadata, scratch, counters, maximum_entries, control)
 }
 
 fn validate_pack_inner_v1<P, M>(
@@ -529,6 +650,7 @@ fn validate_pack_inner_v1<P, M>(
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     counters: &mut OperationCountersV1,
     maximum_entries: u32,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
 ) -> CoreResult<SealedPackV1>
 where
     P: PackReadPortV1 + ?Sized,
@@ -603,6 +725,7 @@ where
         record_count,
         index_offset,
         profile,
+        control,
     );
     if validation.is_err() {
         metadata.abort();
@@ -625,6 +748,7 @@ fn validate_index_and_records<P, M>(
     record_count: u32,
     index_offset: u64,
     profile: ProfileId,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
 ) -> CoreResult<()>
 where
     P: PackReadPortV1 + ?Sized,
@@ -647,7 +771,9 @@ where
         metadata.push(entry).map_err(map_spool_port)?;
         previous = Some(entry);
     }
-    metadata.sort_by_offset().map_err(map_spool_port)?;
+    metadata
+        .sort_by_offset_controlled(control, counters)
+        .map_err(map_spool_port)?;
     metadata.rewind().map_err(map_spool_port)?;
     let mut expected_offset = PACK_HEADER_BYTES;
     let mut consumed = 0_u32;
@@ -665,6 +791,18 @@ where
         return Err(CoreError::PackInvalid);
     }
     Ok(())
+}
+
+struct NeverStopWorkControlV1;
+
+impl crate::limits::OperationWorkControlV1 for NeverStopWorkControlV1 {
+    fn cancellation_requested_v1(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded_v1(&mut self) -> bool {
+        false
+    }
 }
 
 fn validate_record<P: PackReadPortV1 + ?Sized>(
@@ -989,8 +1127,12 @@ const fn map_read_port(_: PackPortErrorV1) -> CoreError {
     CoreError::SourceFailure
 }
 
-const fn map_spool_port(_: PackPortErrorV1) -> CoreError {
-    CoreError::ResourceRefused
+const fn map_spool_port(error: PackPortErrorV1) -> CoreError {
+    match error {
+        PackPortErrorV1::Failure | PackPortErrorV1::WorkExhausted => CoreError::ResourceRefused,
+        PackPortErrorV1::Cancelled => CoreError::Cancelled,
+        PackPortErrorV1::Deadline => CoreError::Deadline,
+    }
 }
 
 const fn map_object_validation(error: CoreError) -> CoreError {

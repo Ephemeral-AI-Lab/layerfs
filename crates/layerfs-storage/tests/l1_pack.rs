@@ -11,7 +11,7 @@ use layerfs_storage::pack::{
 use layerfs_storage::profile::ProfileSpecV1;
 use layerfs_storage::{CoreError, CoreResult};
 
-mod support;
+use crate::test_support as support;
 
 fn object(kind: u8, payload: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(52 + payload.len());

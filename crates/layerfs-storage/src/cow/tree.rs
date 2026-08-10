@@ -21,10 +21,14 @@ use crate::limits::OperationReservationV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
 };
-use crate::object::{decode_physical_object_v1, DiscardStrongEdgesV1, TypedPhysicalObjectIdV1};
-use crate::profile::ProfileSpecV1;
+use crate::object::{
+    decode_physical_object_v1, encode_physical_object_header_v1, DiscardStrongEdgesV1,
+    TypedPhysicalObjectIdV1,
+};
 use crate::{CoreError, CoreResult};
 use blake3::hazmat::{merge_subtrees_non_root, merge_subtrees_root, HasherExt, Mode};
+
+use super::view::{CanonicalTreeMutationSourceV1, TreeMutationSourceErrorV1};
 
 pub const TREE_LEAF_FANOUT: usize = 192;
 pub const TREE_INDEX_FANOUT: usize = 96;
@@ -179,11 +183,6 @@ pub enum TreeSinkErrorV1 {
     Failure,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TreeMutationSourceErrorV1 {
-    Failure,
-}
-
 /// Transaction-private immutable Tree sink. No object becomes visible through
 /// this interface; closure admission owns the later visibility boundary.
 pub trait PreparedTreeSinkV1 {
@@ -199,27 +198,6 @@ pub trait PreparedTreeSinkV1 {
     ) -> Result<TreeObjectDispositionV1, TreeSinkErrorV1>;
     fn finish_private_tree_set(&mut self, root: PhysicalTreeIdV1) -> Result<(), TreeSinkErrorV1>;
     fn abort_private_tree_set(&mut self);
-}
-
-/// Immutable, bounded-read entry carrier used by general add/remove COW.
-/// All calls must observe one snapshot. Backing storage is not resident
-/// operation memory, but every decoder window/cache is declared before the
-/// first entry read. Returned entries may borrow only until the next call.
-pub trait CanonicalTreeMutationSourceV1 {
-    fn resident_memory_bound_bytes(&self) -> CoreResult<u64>;
-
-    /// Pure declarations: no allocation, caching, or I/O is permitted.
-    fn declared_base_entry_count(&self) -> CoreResult<u32>;
-    fn declared_result_entry_count(&self) -> CoreResult<u32>;
-
-    fn read_base_entry(
-        &mut self,
-        ordinal: u32,
-    ) -> Result<CanonicalTreeEntryV1<'_>, TreeMutationSourceErrorV1>;
-    fn read_result_entry(
-        &mut self,
-        ordinal: u32,
-    ) -> Result<CanonicalTreeEntryV1<'_>, TreeMutationSourceErrorV1>;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -490,6 +468,24 @@ impl<'a> AuthenticatedTreeReplacementEvidenceV1<'a> {
             logical,
         }
     }
+
+    /// Return the exact old entry covered by this bounded replacement proof.
+    /// Complete mutation orchestration uses it to bind a separately
+    /// authenticated base file to the accepted tree before preparing output.
+    pub(crate) fn expected_entry_v1(
+        self,
+        replacement_index: usize,
+    ) -> CoreResult<CanonicalTreeEntryV1<'a>> {
+        let leaf_first = usize::try_from(self.affected_leaf.first_entry)
+            .map_err(|_| CoreError::IntegerOverflow)?;
+        let relative = replacement_index
+            .checked_sub(leaf_first)
+            .ok_or(CoreError::Path)?;
+        self.affected_entries
+            .get(relative)
+            .copied()
+            .ok_or(CoreError::Path)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -734,13 +730,71 @@ fn build_directory_inner<S: PreparedTreeSinkV1 + ?Sized>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
+pub(super) fn replace_directory_entry_cow_impl_v1<S: PreparedTreeSinkV1 + ?Sized>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
     replacement_index: usize,
     replacement: CanonicalTreeEntryV1<'_>,
     sink: &mut S,
     ledger: &ResourceLedgerV1,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+) -> CoreResult<CowTreeReplacementV1> {
+    replace_directory_entry_cow_with_admission_v1(
+        base,
+        evidence,
+        replacement_index,
+        replacement,
+        sink,
+        TreeMemoryAdmissionV1::Independent(ledger),
+        counters,
+        object_scratch,
+        logical_scratch,
+    )
+}
+
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn replace_directory_entry_cow_borrowed_impl_v1<S: PreparedTreeSinkV1 + ?Sized>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
+    replacement_index: usize,
+    replacement: CanonicalTreeEntryV1<'_>,
+    sink: &mut S,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+) -> CoreResult<CowTreeReplacementV1> {
+    replace_directory_entry_cow_with_admission_v1(
+        base,
+        evidence,
+        replacement_index,
+        replacement,
+        sink,
+        TreeMemoryAdmissionV1::Borrowed(reservation),
+        counters,
+        object_scratch,
+        logical_scratch,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum TreeMemoryAdmissionV1<'a> {
+    Independent(&'a ResourceLedgerV1),
+    #[cfg(feature = "c3-polymorphism")]
+    Borrowed(&'a OperationReservationV1<'a>),
+}
+
+#[allow(clippy::too_many_arguments)]
+fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
+    replacement_index: usize,
+    replacement: CanonicalTreeEntryV1<'_>,
+    sink: &mut S,
+    admission: TreeMemoryAdmissionV1<'_>,
     counters: &mut OperationCountersV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
@@ -777,7 +831,7 @@ pub fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
     if old.name.as_bytes() != replacement.name.as_bytes() {
         return Err(CoreError::Path);
     }
-    let evidence_bytes = replacement_evidence_resident_bytes(evidence)?;
+    let evidence_bytes = replacement_evidence_resident_bytes_v1(evidence)?;
     let memory = OperationMemoryPlanV1::empty()
         .charge(
             MemoryComponentV1::ObjectScratch,
@@ -793,8 +847,52 @@ pub fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
             MemoryComponentV1::MetadataWindow,
             sink.resident_memory_bound_bytes()?,
         )?;
-    let _reservation = ledger.reserve_operation_with_plan(memory)?;
-    counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+    match admission {
+        TreeMemoryAdmissionV1::Independent(ledger) => {
+            let _reservation = ledger.reserve_operation_with_plan(memory)?;
+            counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+            replace_directory_entry_after_admission_v1(
+                base,
+                plan,
+                evidence,
+                replacement_index,
+                replacement,
+                sink,
+                counters,
+                object_scratch,
+                logical_scratch,
+            )
+        }
+        #[cfg(feature = "c3-polymorphism")]
+        TreeMemoryAdmissionV1::Borrowed(reservation) => {
+            reservation.require(memory)?;
+            replace_directory_entry_after_admission_v1(
+                base,
+                plan,
+                evidence,
+                replacement_index,
+                replacement,
+                sink,
+                counters,
+                object_scratch,
+                logical_scratch,
+            )
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn replace_directory_entry_after_admission_v1<S: PreparedTreeSinkV1 + ?Sized>(
+    base: CanonicalDirectoryTreeV1,
+    plan: TreePlanV1,
+    evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
+    replacement_index: usize,
+    replacement: CanonicalTreeEntryV1<'_>,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+) -> CoreResult<CowTreeReplacementV1> {
     let logical = validate_replacement_evidence(
         base,
         plan,
@@ -953,7 +1051,7 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn add_directory_entry_cow_v1<T, S>(
+pub(super) fn add_directory_entry_cow_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
     insertion_index: usize,
@@ -977,7 +1075,41 @@ where
         TreeMutationKindV1::Add(added),
         source,
         sink,
-        ledger,
+        TreeMemoryAdmissionV1::Independent(ledger),
+        counters,
+        object_scratch,
+        logical_scratch,
+        page_scratch,
+    )
+}
+
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn add_directory_entry_cow_borrowed_impl_v1<T, S>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
+    insertion_index: usize,
+    added: CanonicalTreeEntryV1<'_>,
+    source: &mut T,
+    sink: &mut S,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+) -> CoreResult<CowTreeMutationV1>
+where
+    T: CanonicalTreeMutationSourceV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    mutate_directory_entries_cow_v1(
+        base,
+        evidence,
+        insertion_index,
+        TreeMutationKindV1::Add(added),
+        source,
+        sink,
+        TreeMemoryAdmissionV1::Borrowed(reservation),
         counters,
         object_scratch,
         logical_scratch,
@@ -986,7 +1118,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn remove_directory_entry_cow_v1<T, S>(
+pub(super) fn remove_directory_entry_cow_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
     removal_index: usize,
@@ -1010,7 +1142,132 @@ where
         TreeMutationKindV1::Remove(expected_removed),
         source,
         sink,
-        ledger,
+        TreeMemoryAdmissionV1::Independent(ledger),
+        counters,
+        object_scratch,
+        logical_scratch,
+        page_scratch,
+    )
+}
+
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn remove_directory_entry_cow_borrowed_impl_v1<T, S>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
+    removal_index: usize,
+    expected_removed: CanonicalTreeEntryV1<'_>,
+    source: &mut T,
+    sink: &mut S,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+) -> CoreResult<CowTreeMutationV1>
+where
+    T: CanonicalTreeMutationSourceV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    mutate_directory_entries_cow_v1(
+        base,
+        evidence,
+        removal_index,
+        TreeMutationKindV1::Remove(expected_removed),
+        source,
+        sink,
+        TreeMemoryAdmissionV1::Borrowed(reservation),
+        counters,
+        object_scratch,
+        logical_scratch,
+        page_scratch,
+    )
+}
+
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn move_directory_entry_cow_borrowed_impl_v1<T, S>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
+    removal_index: usize,
+    insertion_index: usize,
+    expected_removed: CanonicalTreeEntryV1<'_>,
+    moved: CanonicalTreeEntryV1<'_>,
+    source: &mut T,
+    sink: &mut S,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+) -> CoreResult<CowTreeMutationV1>
+where
+    T: CanonicalTreeMutationSourceV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    mutate_directory_entries_cow_v1(
+        base,
+        evidence,
+        removal_index.min(insertion_index),
+        TreeMutationKindV1::Move {
+            removal_index,
+            insertion_index,
+            expected_removed,
+            moved,
+        },
+        source,
+        sink,
+        TreeMemoryAdmissionV1::Borrowed(reservation),
+        counters,
+        object_scratch,
+        logical_scratch,
+        page_scratch,
+    )
+}
+
+/// Replace two distinct entries in one authenticated directory snapshot.
+/// This is the root-spine primitive used by a cross-directory Move after the
+/// source detach and destination attach candidates have both been prepared.
+/// The caller supplies the one final result view; no intermediate root is
+/// emitted or made visible.
+#[cfg(feature = "c3-polymorphism")]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn replace_two_directory_entries_cow_borrowed_impl_v1<T, S>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
+    first_index: usize,
+    first_expected: CanonicalTreeEntryV1<'_>,
+    first_replacement: CanonicalTreeEntryV1<'_>,
+    second_index: usize,
+    second_expected: CanonicalTreeEntryV1<'_>,
+    second_replacement: CanonicalTreeEntryV1<'_>,
+    source: &mut T,
+    sink: &mut S,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+) -> CoreResult<CowTreeMutationV1>
+where
+    T: CanonicalTreeMutationSourceV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    mutate_directory_entries_cow_v1(
+        base,
+        evidence,
+        first_index.min(second_index),
+        TreeMutationKindV1::ReplacePair {
+            first_index,
+            first_expected,
+            first_replacement,
+            second_index,
+            second_expected,
+            second_replacement,
+        },
+        source,
+        sink,
+        TreeMemoryAdmissionV1::Borrowed(reservation),
         counters,
         object_scratch,
         logical_scratch,
@@ -1022,6 +1279,20 @@ where
 enum TreeMutationKindV1<'a> {
     Add(CanonicalTreeEntryV1<'a>),
     Remove(CanonicalTreeEntryV1<'a>),
+    Move {
+        removal_index: usize,
+        insertion_index: usize,
+        expected_removed: CanonicalTreeEntryV1<'a>,
+        moved: CanonicalTreeEntryV1<'a>,
+    },
+    ReplacePair {
+        first_index: usize,
+        first_expected: CanonicalTreeEntryV1<'a>,
+        first_replacement: CanonicalTreeEntryV1<'a>,
+        second_index: usize,
+        second_expected: CanonicalTreeEntryV1<'a>,
+        second_replacement: CanonicalTreeEntryV1<'a>,
+    },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1032,7 +1303,7 @@ fn mutate_directory_entries_cow_v1<T, S>(
     mutation: TreeMutationKindV1<'_>,
     source: &mut T,
     sink: &mut S,
-    ledger: &ResourceLedgerV1,
+    admission: TreeMemoryAdmissionV1<'_>,
     counters: &mut OperationCountersV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
@@ -1065,6 +1336,39 @@ where
                 return Err(CoreError::Path);
             }
         }
+        TreeMutationKindV1::Move {
+            removal_index,
+            insertion_index,
+            ..
+        } => {
+            if base_count == 0
+                || result_count != base_count
+                || removal_index >= base_count
+                || insertion_index >= result_count
+                || mutation_index != removal_index.min(insertion_index)
+            {
+                return Err(CoreError::Path);
+            }
+        }
+        TreeMutationKindV1::ReplacePair {
+            first_index,
+            second_index,
+            first_expected,
+            first_replacement,
+            second_expected,
+            second_replacement,
+        } => {
+            if result_count != base_count
+                || first_index == second_index
+                || first_index >= base_count
+                || second_index >= base_count
+                || mutation_index != first_index.min(second_index)
+                || first_expected.name != first_replacement.name
+                || second_expected.name != second_replacement.name
+            {
+                return Err(CoreError::Path);
+            }
+        }
     }
     let base_plan = TreePlanV1::for_count(base_count)?;
     let result_plan = TreePlanV1::for_count(result_count)?;
@@ -1074,7 +1378,7 @@ where
     if page_scratch.len() < required_page_summaries {
         return Err(CoreError::ResourceRefused);
     }
-    let evidence_bytes = mutation_evidence_resident_bytes(evidence)?;
+    let evidence_bytes = mutation_evidence_resident_bytes_v1(evidence)?;
     let page_bytes = core::mem::size_of_val(page_scratch);
     let port_bytes = source
         .resident_memory_bound_bytes()?
@@ -1097,11 +1401,76 @@ where
             MemoryComponentV1::EvidenceWindow,
             u64::try_from(evidence_bytes).map_err(|_| CoreError::IntegerOverflow)?,
         )?
-        .charge(MemoryComponentV1::HashState, mutation_hash_state_bytes()?)?
+        .charge(
+            MemoryComponentV1::HashState,
+            mutation_hash_state_bytes_v1()?,
+        )?
         .charge(MemoryComponentV1::MetadataWindow, port_bytes)?;
-    let _reservation = ledger.reserve_operation_with_plan(memory)?;
-    counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+    match admission {
+        TreeMemoryAdmissionV1::Independent(ledger) => {
+            let _reservation = ledger.reserve_operation_with_plan(memory)?;
+            counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
+            mutate_directory_entries_after_admission_v1(
+                base,
+                evidence,
+                mutation_index,
+                mutation,
+                source,
+                sink,
+                counters,
+                object_scratch,
+                logical_scratch,
+                page_scratch,
+                base_count,
+                result_count,
+                base_plan,
+                result_plan,
+            )
+        }
+        #[cfg(feature = "c3-polymorphism")]
+        TreeMemoryAdmissionV1::Borrowed(reservation) => {
+            reservation.require(memory)?;
+            mutate_directory_entries_after_admission_v1(
+                base,
+                evidence,
+                mutation_index,
+                mutation,
+                source,
+                sink,
+                counters,
+                object_scratch,
+                logical_scratch,
+                page_scratch,
+                base_count,
+                result_count,
+                base_plan,
+                result_plan,
+            )
+        }
+    }
+}
 
+#[allow(clippy::too_many_arguments)]
+fn mutate_directory_entries_after_admission_v1<T, S>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
+    mutation_index: usize,
+    mutation: TreeMutationKindV1<'_>,
+    source: &mut T,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+    base_count: usize,
+    result_count: usize,
+    base_plan: TreePlanV1,
+    result_plan: TreePlanV1,
+) -> CoreResult<CowTreeMutationV1>
+where
+    T: CanonicalTreeMutationSourceV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
     validate_mutation_relation(source, mutation_index, mutation, base_count, result_count)?;
     let logical = authenticate_and_derive_mutation_logical(
         base,
@@ -1411,6 +1780,57 @@ fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Sized>(
                     .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?
             }),
+            TreeMutationKindV1::Move {
+                insertion_index,
+                moved,
+                ..
+            } if result_ordinal == insertion_index => {
+                if !result.matches(moved) {
+                    return Err(CoreError::Path);
+                }
+                None
+            }
+            TreeMutationKindV1::Move {
+                removal_index,
+                insertion_index,
+                ..
+            } => {
+                let intermediate = if result_ordinal < insertion_index {
+                    result_ordinal
+                } else {
+                    result_ordinal
+                        .checked_sub(1)
+                        .ok_or(CoreError::IntegerOverflow)?
+                };
+                Some(if intermediate < removal_index {
+                    intermediate
+                } else {
+                    intermediate
+                        .checked_add(1)
+                        .ok_or(CoreError::IntegerOverflow)?
+                })
+            }
+            TreeMutationKindV1::ReplacePair {
+                first_index,
+                first_replacement,
+                ..
+            } if result_ordinal == first_index => {
+                if !result.matches(first_replacement) {
+                    return Err(CoreError::Path);
+                }
+                None
+            }
+            TreeMutationKindV1::ReplacePair {
+                second_index,
+                second_replacement,
+                ..
+            } if result_ordinal == second_index => {
+                if !result.matches(second_replacement) {
+                    return Err(CoreError::Path);
+                }
+                None
+            }
+            TreeMutationKindV1::ReplacePair { .. } => Some(result_ordinal),
         };
         if let Some(base_ordinal) = expected {
             if read_base_snapshot(source, base_ordinal)? != result {
@@ -1419,10 +1839,35 @@ fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Sized>(
         }
         previous_result = Some(result);
     }
-    if let TreeMutationKindV1::Remove(expected) = mutation {
-        if !read_base_snapshot(source, mutation_index)?.matches(expected) {
-            return Err(CoreError::Path);
+    match mutation {
+        TreeMutationKindV1::Remove(expected) => {
+            if !read_base_snapshot(source, mutation_index)?.matches(expected) {
+                return Err(CoreError::Path);
+            }
         }
+        TreeMutationKindV1::Move {
+            removal_index,
+            expected_removed,
+            ..
+        } => {
+            if !read_base_snapshot(source, removal_index)?.matches(expected_removed) {
+                return Err(CoreError::Path);
+            }
+        }
+        TreeMutationKindV1::ReplacePair {
+            first_index,
+            first_expected,
+            second_index,
+            second_expected,
+            ..
+        } => {
+            if !read_base_snapshot(source, first_index)?.matches(first_expected)
+                || !read_base_snapshot(source, second_index)?.matches(second_expected)
+            {
+                return Err(CoreError::Path);
+            }
+        }
+        TreeMutationKindV1::Add(_) => {}
     }
     Ok(())
 }
@@ -1434,7 +1879,7 @@ fn mutation_entry_encoded_len(entry: CanonicalTreeEntryV1<'_>) -> CoreResult<u64
         .ok_or(CoreError::IntegerOverflow)
 }
 
-fn mutation_evidence_resident_bytes(
+pub(crate) fn mutation_evidence_resident_bytes_v1(
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
 ) -> CoreResult<usize> {
     if evidence.leaf_group.len() > TREE_INDEX_FANOUT
@@ -1464,7 +1909,7 @@ fn mutation_evidence_resident_bytes(
     Ok(bytes)
 }
 
-fn mutation_hash_state_bytes() -> CoreResult<u64> {
+pub(crate) fn mutation_hash_state_bytes_v1() -> CoreResult<u64> {
     u64::try_from(
         core::mem::size_of::<SparsePreimageHasherV1>()
             + 2 * core::mem::size_of::<TreeEntrySnapshotV1>(),
@@ -1537,6 +1982,7 @@ fn authenticate_and_derive_mutation_logical<T: CanonicalTreeMutationSourceV1 + ?
         TreeMutationKindV1::Add(entry) | TreeMutationKindV1::Remove(entry) => {
             mutation_entry_encoded_len(entry)?
         }
+        TreeMutationKindV1::Move { .. } | TreeMutationKindV1::ReplacePair { .. } => 0,
     };
     let result_preimage_len = match mutation {
         TreeMutationKindV1::Add(_) => proof
@@ -1547,6 +1993,20 @@ fn authenticate_and_derive_mutation_logical<T: CanonicalTreeMutationSourceV1 + ?
             .old_preimage_len
             .checked_sub(changed_len)
             .ok_or(CoreError::IdMismatch)?,
+        TreeMutationKindV1::Move {
+            expected_removed,
+            moved,
+            ..
+        } => {
+            let without_old = proof
+                .old_preimage_len
+                .checked_sub(mutation_entry_encoded_len(expected_removed)?)
+                .ok_or(CoreError::IdMismatch)?;
+            without_old
+                .checked_add(mutation_entry_encoded_len(moved)?)
+                .ok_or(CoreError::IntegerOverflow)?
+        }
+        TreeMutationKindV1::ReplacePair { .. } => proof.old_preimage_len,
     };
 
     let old_digest = hash_streamed_directory_side(
@@ -2099,7 +2559,7 @@ fn validate_entries(entries: &[CanonicalTreeEntryV1<'_>]) -> CoreResult<()> {
     Ok(())
 }
 
-fn replacement_evidence_resident_bytes(
+pub(crate) fn replacement_evidence_resident_bytes_v1(
     evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
 ) -> CoreResult<usize> {
     if evidence.logical.prefix.len() + evidence.logical.suffix.len()
@@ -3029,16 +3489,11 @@ impl<'a> ObjectWriterV1<'a> {
             .position
             .checked_sub(52)
             .ok_or(CoreError::IntegerOverflow)?;
-        self.bytes[..8].copy_from_slice(b"ELSOBJ01");
-        self.bytes[8..10].copy_from_slice(&1_u16.to_be_bytes());
-        self.bytes[10] = 0x02;
-        self.bytes[11] = 0;
-        self.bytes[12..44].copy_from_slice(ProfileSpecV1::frozen().id().as_bytes());
-        self.bytes[44..52].copy_from_slice(
-            &u64::try_from(payload_len)
-                .map_err(|_| CoreError::IntegerOverflow)?
-                .to_be_bytes(),
-        );
+        let payload_len = u64::try_from(payload_len).map_err(|_| CoreError::IntegerOverflow)?;
+        self.bytes[..52].copy_from_slice(&encode_physical_object_header_v1(
+            PhysicalObjectKindV1::Tree,
+            payload_len,
+        ));
         Ok(())
     }
 

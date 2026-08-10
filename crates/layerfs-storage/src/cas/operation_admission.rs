@@ -1,0 +1,709 @@
+//! CAS admission session for a granted complete-content operation.
+//!
+//! Lifecycle supplies the already-granted root and preparation ports. This
+//! module assembles CAS-owned admission and closure-fence behavior around the
+//! pack-owned carrier writer; it cannot reserve slots or publish product state.
+
+use std::cell::RefCell;
+
+use crate::cas::{
+    AdmissionBuffersV1, ClosureObjectRecordV1, FileClosureObjectSpoolV1, FileGlobalSeenSpoolV1,
+    FsCasClosureSpoolV1, FsCasControlV1, FsCasErrorV1, FsCasOccupiedV1, FsCasV1,
+    FsClosureAdmissionErrorV1, FsStorageOperationTokenV1, GlobalSeenErrorV1, GlobalSeenRecordV1,
+    OccupiedImmutableReadPortV1, CLOSURE_MARKER_BYTES,
+};
+use crate::cdc::{C3CdcAlgorithmV1, CdcControlV1};
+use crate::content::{ChunkReferenceSpoolV1, PreparedObjectSinkV1};
+use crate::cow::PreparedTreeSinkV1;
+use crate::identity::{PhysicalTreeIdV1, PhysicalVersionRecordIdV1, COMPARISON_WINDOW_BYTES};
+use crate::lifecycle::{
+    BuiltDirectoryRecordV1, BuiltFileRecordV1, C3OperationErrorV1, C3OperationPreparationV1,
+    C3StorageSessionPortV1, FileBuiltDirectorySpoolV1, FileBuiltFileSpoolV1,
+    FileChunkReferenceSpoolV1, SharedC3ControlV1, VersionSummaryInputV1,
+};
+use crate::limits::{OperationCountersV1, OperationReservationV1, ResourceLedgerV1};
+use crate::object::{
+    decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1,
+    PhysicalObjectReadPortV1, StrongEdgeV1, StrongEdgeVisitorV1, TreeRecordV1,
+    TypedPhysicalObjectIdV1,
+};
+use crate::pack::{CompletedPackSetV1, DirectPackSinkV1, FilePackIndexSpoolV1, PackReadPortV1};
+use crate::{CoreError, CoreResult};
+
+/// Authenticate an accepted version/root pair through the real closure marker
+/// and occupied-object path while the caller retains the sole root operation
+/// capability. This performs no preparation and preserves the first typed
+/// FsCas failure instead of flattening it through a content adapter.
+pub(crate) fn authenticate_base_root_storage_v1<C>(
+    cas: &FsCasV1,
+    version_record: PhysicalVersionRecordIdV1,
+    expected_root: PhysicalTreeIdV1,
+    counters: &mut OperationCountersV1,
+    comparison: &mut [u8; COMPARISON_WINDOW_BYTES],
+    control: &mut C,
+) -> Result<u64, C3OperationErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let closure = cas.validate_closure_for_read_controlled_v1(version_record, control)?;
+    if closure.version_record() != version_record {
+        return Err(CoreError::IdMismatch.into());
+    }
+    counters.add(
+        crate::limits::CounterFieldV1::BytesRead,
+        CLOSURE_MARKER_BYTES as u64,
+    )?;
+    counters.record_fscas_read(CLOSURE_MARKER_BYTES as u64, 1)?;
+
+    let mut occupied = cas.occupied_private_controlled_v1(control)?;
+    let typed = TypedPhysicalObjectIdV1::VersionRecord(version_record);
+    let len = match occupied.occupied_len_typed_controlled_v1(typed, control) {
+        Ok(Some(len)) => len,
+        Ok(None) => {
+            occupied.retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+            return Err(FsCasErrorV1::MissingOccupant.into());
+        }
+        Err(error) => {
+            occupied.retain_first_error_typed_v1(error);
+            return Err(error.into());
+        }
+    };
+    let before = occupied.direct_storage_read_observation_typed_v1()?;
+    let decoded = {
+        let mut reader = BaseRootOccupiedReaderV1 {
+            occupied: &mut occupied,
+            counters,
+            control,
+            id: typed,
+            len,
+        };
+        let mut visitor = DiscardStrongEdgesV1;
+        let result = decode_physical_object_from_port_v1(&mut reader, &mut visitor, comparison);
+        match result {
+            Ok(decoded) => decoded,
+            Err(error) => {
+                if let Some(storage) = reader.occupied.first_error_typed_v1() {
+                    return Err(storage.into());
+                }
+                return Err(error.into());
+            }
+        }
+    };
+    let after = occupied.direct_storage_read_observation_typed_v1()?;
+    counters.record_fscas_read(
+        after
+            .0
+            .checked_sub(before.0)
+            .ok_or(CoreError::IntegerOverflow)?,
+        after
+            .1
+            .checked_sub(before.1)
+            .ok_or(CoreError::IntegerOverflow)?,
+    )?;
+    if decoded.physical_id() != typed || decoded.header().kind() != typed.kind() {
+        return Err(CoreError::IdMismatch.into());
+    }
+    let PhysicalObjectPayloadV1::VersionRecord(version) = decoded.payload() else {
+        return Err(CoreError::TypeDomain.into());
+    };
+    if version.root_tree_id != expected_root
+        || u64::from(version.total_object_count) != closure.object_count()
+    {
+        return Err(CoreError::IdMismatch.into());
+    }
+    Ok(closure.object_count())
+}
+
+struct BaseRootOccupiedReaderV1<'occupied, 'counters, 'control, C: ?Sized> {
+    occupied: &'occupied mut FsCasOccupiedV1,
+    counters: &'counters mut OperationCountersV1,
+    control: &'control mut C,
+    id: TypedPhysicalObjectIdV1,
+    len: u64,
+}
+
+impl<C: FsCasControlV1 + ?Sized> PhysicalObjectReadPortV1
+    for BaseRootOccupiedReaderV1<'_, '_, '_, C>
+{
+    fn len(&mut self) -> CoreResult<u64> {
+        Ok(self.len)
+    }
+
+    fn read_exact_at(&mut self, offset: u64, destination: &mut [u8]) -> CoreResult<()> {
+        let end = offset
+            .checked_add(destination.len() as u64)
+            .ok_or(CoreError::IntegerOverflow)?;
+        if end > self.len {
+            return Err(CoreError::Truncated);
+        }
+        self.occupied
+            .read_occupied_exact_at_typed_controlled_v1(self.id, offset, destination, self.control)
+            .map_err(|error| {
+                self.occupied.retain_first_error_typed_v1(error);
+                CoreError::SourceFailure
+            })?;
+        self.counters.add(
+            crate::limits::CounterFieldV1::BytesRead,
+            destination.len() as u64,
+        )
+    }
+}
+
+/// CAS-owned construction of the concrete storage session. The lifecycle
+/// owner passes an already-granted root and already-created preparation; this
+/// function cannot mint admission or create outer operation state.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn begin_storage_session_v1<'operation, 'ledger, 'control, C>(
+    cas: &'operation FsCasV1,
+    storage_token: FsStorageOperationTokenV1,
+    preparation: &'operation mut C3OperationPreparationV1,
+    require_tree_storage: bool,
+    left: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
+    right: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
+    maximum_records: u32,
+    private_pack_resident_bound: u64,
+    ledger: &'operation ResourceLedgerV1,
+    reservation: &'operation OperationReservationV1<'ledger>,
+    control: &'operation RefCell<&'control mut C>,
+) -> Result<C3StorageSessionV1<'operation, 'ledger, 'control, C>, FsCasErrorV1>
+where
+    C: CdcControlV1 + FsCasControlV1 + ?Sized,
+{
+    let (references, metadata, closure_objects, global_seen, built_files, built_directories) =
+        preparation.parts_mut();
+    if require_tree_storage != (built_files.is_some() && built_directories.is_some()) {
+        return Err(FsCasErrorV1::Core(CoreError::Schema));
+    }
+    let occupied_resident = cas.occupied_resident_memory_bound_v1()?;
+    let occupied = cas.occupied_private_v1()?;
+    if occupied.resident_memory_bound_bytes()? > occupied_resident {
+        return Err(FsCasErrorV1::Core(CoreError::ResourceRefused));
+    }
+    let mut private_pack = cas.begin_private_pack_borrowed_v1(storage_token)?;
+    if private_pack.resident_memory_bound_bytes()? > private_pack_resident_bound {
+        let mut shared_control = SharedC3ControlV1::new(control);
+        private_pack.cleanup_controlled_v1(&mut shared_control)?;
+        return Err(FsCasErrorV1::Core(CoreError::ResourceRefused));
+    }
+    let sink = DirectPackSinkV1::new(
+        cas,
+        storage_token,
+        private_pack,
+        metadata,
+        closure_objects,
+        global_seen,
+        occupied,
+        left,
+        right,
+        maximum_records,
+        private_pack_resident_bound,
+        ledger,
+        reservation,
+        control,
+    );
+    Ok(C3StorageSessionV1 {
+        references,
+        built_files,
+        built_directories,
+        sink,
+    })
+}
+
+/// CAS-owned complete-closure validation and consumed-handoff fence. The
+/// lifecycle owner retains the sole outer operation capability throughout.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn complete_closure_fence_storage_v1<C>(
+    cas: &FsCasV1,
+    storage_token: FsStorageOperationTokenV1,
+    preparation: &mut C3OperationPreparationV1,
+    root: TypedPhysicalObjectIdV1,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    buffers: AdmissionBuffersV1<'_>,
+    algorithm: C3CdcAlgorithmV1,
+    control: &mut C,
+) -> Result<u64, FsClosureAdmissionErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let closure_objects = preparation.closure_objects_for_fence_mut();
+    let occupied = cas
+        .occupied_private_v1()
+        .map_err(FsClosureAdmissionErrorV1::FsCas)?;
+    let mut closure = FsCasClosureSpoolV1::new(closure_objects, occupied);
+    let mut closure_operation = cas
+        .begin_closure_operation()
+        .map_err(FsClosureAdmissionErrorV1::FsCas)?;
+    let closure_result = cas.admit_complete_closure_borrowed_v1(
+        &mut closure_operation,
+        &mut closure,
+        storage_token,
+        root,
+        reservation,
+        counters,
+        buffers,
+        algorithm,
+        control,
+    );
+    let (admitted, mut capability) = match closure_result {
+        Ok(value) => value,
+        Err(error) => {
+            return Err(closure
+                .first_error_typed_v1()
+                .map(FsClosureAdmissionErrorV1::FsCas)
+                .unwrap_or(error));
+        }
+    };
+    cas.consume_validated_closure_for_handoff(&mut closure_operation, &mut capability)
+        .map_err(FsClosureAdmissionErrorV1::FsCas)?;
+    Ok(admitted.object_count())
+}
+
+pub(crate) struct C3StorageSessionV1<'operation, 'ledger, 'control, C: ?Sized> {
+    references: &'operation mut FileChunkReferenceSpoolV1,
+    built_files: Option<&'operation mut FileBuiltFileSpoolV1>,
+    built_directories: Option<&'operation mut FileBuiltDirectorySpoolV1>,
+    sink: DirectPackSinkV1<'operation, 'ledger, 'control, FilePackIndexSpoolV1, C>,
+}
+
+impl<C> C3StorageSessionPortV1 for C3StorageSessionV1<'_, '_, '_, C>
+where
+    C: CdcControlV1 + FsCasControlV1 + ?Sized,
+{
+    fn content_parts_v1(
+        &mut self,
+    ) -> (
+        &mut (dyn ChunkReferenceSpoolV1 + '_),
+        &mut (dyn PreparedObjectSinkV1 + '_),
+    ) {
+        (self.references, &mut self.sink)
+    }
+
+    fn tree_sink_v1(&mut self) -> &mut (dyn PreparedTreeSinkV1 + '_) {
+        &mut self.sink
+    }
+
+    fn reference_storage_bytes_v1(&self) -> CoreResult<Option<u64>> {
+        self.references.storage_bytes_observation()
+    }
+
+    fn push_built_file_v1(&mut self, record: BuiltFileRecordV1) -> CoreResult<()> {
+        self.built_files
+            .as_deref_mut()
+            .ok_or(CoreError::Schema)?
+            .push(record)
+    }
+
+    fn read_built_file_v1(&mut self, ordinal: u32) -> CoreResult<BuiltFileRecordV1> {
+        self.built_files
+            .as_deref_mut()
+            .ok_or(CoreError::Schema)?
+            .read(ordinal)
+    }
+
+    fn push_built_directory_v1(&mut self, record: BuiltDirectoryRecordV1) -> CoreResult<()> {
+        self.built_directories
+            .as_deref_mut()
+            .ok_or(CoreError::Schema)?
+            .push(record)
+    }
+
+    fn built_version_summary_v1(
+        &mut self,
+        canonical_len: u64,
+        counters: &mut OperationCountersV1,
+        control: &mut dyn FsCasControlV1,
+    ) -> CoreResult<VersionSummaryInputV1> {
+        let file_stats = self
+            .built_files
+            .as_deref_mut()
+            .ok_or(CoreError::Schema)?
+            .sort_unique_stats(control, counters)?;
+        let entry_count = self
+            .built_directories
+            .as_deref_mut()
+            .ok_or(CoreError::Schema)?
+            .sort_unique_entry_count(control, counters)?;
+        Ok(VersionSummaryInputV1::new(
+            canonical_len,
+            file_stats.logical_file_bytes,
+            entry_count,
+            file_stats.extent_count,
+            file_stats.chunk_ref_count,
+        ))
+    }
+
+    fn rebuild_candidate_closure_v1(
+        &mut self,
+        root_tree: PhysicalTreeIdV1,
+        counters: &mut OperationCountersV1,
+        control: &mut dyn FsCasControlV1,
+    ) -> Result<VersionSummaryInputV1, C3OperationErrorV1> {
+        self.sink.flush_changed_objects_for_candidate_v1()?;
+        let (closure, seen, occupied, comparison) = self.sink.candidate_graph_parts_v1();
+        rebuild_candidate_graph_v1(
+            closure, seen, occupied, comparison, root_tree, counters, control,
+        )
+    }
+
+    fn write_version_v1(
+        &mut self,
+        version_id: crate::identity::VersionIdV1,
+        root_tree: PhysicalTreeIdV1,
+        summary: VersionSummaryInputV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<PhysicalVersionRecordIdV1> {
+        self.sink
+            .write_version_v1(version_id, root_tree, summary, counters)
+    }
+
+    fn complete_v1(
+        &mut self,
+        expected_version: PhysicalVersionRecordIdV1,
+    ) -> CoreResult<CompletedPackSetV1> {
+        self.sink.complete_v1(expected_version)
+    }
+
+    fn record_incomplete_residue_v1(&mut self) -> CoreResult<()> {
+        self.sink.record_incomplete_residue()
+    }
+
+    fn cleanup_private_pack_controlled_v1(&mut self) -> Result<(), FsCasErrorV1> {
+        self.sink.cleanup_private_pack_controlled_v1()
+    }
+
+    fn take_first_fscas_error_v1(&mut self) -> Option<FsCasErrorV1> {
+        self.sink.take_first_fscas_error()
+    }
+
+    fn record_global_seen_observation_v1(&mut self) -> CoreResult<()> {
+        self.sink.record_global_seen_observation()
+    }
+
+    fn take_storage_counters_v1(&mut self) -> OperationCountersV1 {
+        self.sink.take_storage_counters()
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct CandidateGraphSummaryV1 {
+    canonical_len: u64,
+    logical_file_bytes: u64,
+    entry_count: u64,
+    extent_count: u64,
+    chunk_ref_count: u64,
+}
+
+impl CandidateGraphSummaryV1 {
+    fn observe(&mut self, payload: PhysicalObjectPayloadV1) -> CoreResult<()> {
+        match payload {
+            PhysicalObjectPayloadV1::VersionRecord(_) => return Err(CoreError::TypedEdge),
+            PhysicalObjectPayloadV1::Tree(TreeRecordV1::Directory(directory)) => {
+                self.entry_count = self
+                    .entry_count
+                    .checked_add(u64::from(directory.entry_count))
+                    .ok_or(CoreError::IntegerOverflow)?;
+                crate::format::validate_entry_count(self.entry_count)?;
+            }
+            PhysicalObjectPayloadV1::Tree(_) => {}
+            PhysicalObjectPayloadV1::File(file) => {
+                self.canonical_len = self
+                    .canonical_len
+                    .checked_add(file.logical_len)
+                    .ok_or(CoreError::IntegerOverflow)?;
+                self.logical_file_bytes = self
+                    .logical_file_bytes
+                    .checked_add(file.logical_len)
+                    .ok_or(CoreError::IntegerOverflow)?;
+                self.extent_count = self
+                    .extent_count
+                    .checked_add(u64::from(file.extent_count))
+                    .ok_or(CoreError::IntegerOverflow)?;
+                self.chunk_ref_count = self
+                    .chunk_ref_count
+                    .checked_add(file.chunk_ref_count)
+                    .ok_or(CoreError::IntegerOverflow)?;
+                crate::format::validate_logical_length(self.canonical_len)?;
+                crate::format::validate_logical_length(self.logical_file_bytes)?;
+                crate::format::validate_extents_per_version(self.extent_count)?;
+                crate::format::validate_chunk_refs_per_version(self.chunk_ref_count)?;
+            }
+            PhysicalObjectPayloadV1::Symlink(_) | PhysicalObjectPayloadV1::Chunk(_) => {}
+        }
+        Ok(())
+    }
+
+    fn finish(self) -> CoreResult<VersionSummaryInputV1> {
+        Ok(VersionSummaryInputV1::new(
+            self.canonical_len,
+            self.logical_file_bytes,
+            u32::try_from(self.entry_count).map_err(|_| CoreError::IntegerOverflow)?,
+            u32::try_from(self.extent_count).map_err(|_| CoreError::IntegerOverflow)?,
+            u32::try_from(self.chunk_ref_count).map_err(|_| CoreError::IntegerOverflow)?,
+        ))
+    }
+}
+
+struct CandidateOccupiedReaderV1<'occupied, 'cell, 'control, 'counters> {
+    occupied: &'occupied mut FsCasOccupiedV1,
+    control: &'cell RefCell<&'control mut dyn FsCasControlV1>,
+    counters: &'counters mut OperationCountersV1,
+    id: TypedPhysicalObjectIdV1,
+    len: u64,
+}
+
+impl PhysicalObjectReadPortV1 for CandidateOccupiedReaderV1<'_, '_, '_, '_> {
+    fn len(&mut self) -> CoreResult<u64> {
+        Ok(self.len)
+    }
+
+    fn read_exact_at(&mut self, offset: u64, destination: &mut [u8]) -> CoreResult<()> {
+        let mut shared_control = CandidateSharedControlV1 {
+            inner: self.control,
+        };
+        self.occupied
+            .read_occupied_exact_at_typed_controlled_v1(
+                self.id,
+                offset,
+                destination,
+                &mut shared_control,
+            )
+            .map_err(|error| {
+                self.occupied.retain_first_error_typed_v1(error);
+                CoreError::SourceFailure
+            })?;
+        self.counters.add(
+            crate::limits::CounterFieldV1::BytesRead,
+            destination.len() as u64,
+        )
+    }
+}
+
+struct CandidateEdgeVisitorV1<'closure, 'seen, 'cell, 'control> {
+    closure: &'closure mut FileClosureObjectSpoolV1,
+    seen: &'seen mut FileGlobalSeenSpoolV1,
+    control: &'cell RefCell<&'control mut dyn FsCasControlV1>,
+    first_error: Option<C3OperationErrorV1>,
+}
+
+impl CandidateEdgeVisitorV1<'_, '_, '_, '_> {
+    fn enqueue(&mut self, id: TypedPhysicalObjectIdV1) -> CoreResult<()> {
+        let mut shared_control = CandidateSharedControlV1 {
+            inner: self.control,
+        };
+        let lookup = self.seen.lookup(id, &mut shared_control).map_err(|error| {
+            let terminal = map_global_seen_operation_error_v1(error);
+            self.first_error.get_or_insert(terminal);
+            map_operation_to_core_v1(terminal)
+        })?;
+        if lookup.record.is_some() {
+            return Ok(());
+        }
+        self.seen
+            .insert_controlled_v1(
+                lookup.vacant_slot,
+                id,
+                GlobalSeenRecordV1 {
+                    complete_len: crate::object::OBJECT_HEADER_BYTES,
+                    private_payload_offset: 0,
+                    carrier_ordinal: u32::MAX,
+                },
+                &mut shared_control,
+            )
+            .map_err(|error| {
+                let terminal = map_global_seen_operation_error_v1(error);
+                self.first_error.get_or_insert(terminal);
+                map_operation_to_core_v1(terminal)
+            })?;
+        let next_count = u64::from(self.closure.count)
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        crate::format::validate_total_object_count(next_count)?;
+        self.closure.push(ClosureObjectRecordV1::pending(id))
+    }
+}
+
+struct CandidateSharedControlV1<'cell, 'control> {
+    inner: &'cell RefCell<&'control mut dyn FsCasControlV1>,
+}
+
+impl FsCasControlV1 for CandidateSharedControlV1<'_, '_> {
+    fn boundary_reached(&mut self, boundary: crate::cas::FsCasBoundaryV1) {
+        (**self.inner.borrow_mut()).boundary_reached(boundary);
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        (**self.inner.borrow_mut()).cancellation_requested()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        (**self.inner.borrow_mut()).deadline_exceeded()
+    }
+
+    fn inject_cleanup_failure(&mut self, target: crate::cas::FsCasCleanupTargetV1) -> bool {
+        (**self.inner.borrow_mut()).inject_cleanup_failure(target)
+    }
+
+    fn inject_filesystem_failure(
+        &mut self,
+        boundary: crate::cas::FsCasFilesystemBoundaryV1,
+    ) -> Option<crate::cas::FsCasErrorV1> {
+        (**self.inner.borrow_mut()).inject_filesystem_failure(boundary)
+    }
+}
+
+impl StrongEdgeVisitorV1 for CandidateEdgeVisitorV1<'_, '_, '_, '_> {
+    fn begin_object(&mut self) {}
+
+    fn visit_edge(&mut self, edge: StrongEdgeV1) -> CoreResult<()> {
+        self.enqueue(edge.typed_id())
+    }
+
+    fn commit_object(&mut self) {}
+
+    fn abort_object(&mut self) {}
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rebuild_candidate_graph_v1(
+    closure: &mut FileClosureObjectSpoolV1,
+    seen: &mut FileGlobalSeenSpoolV1,
+    occupied: &mut FsCasOccupiedV1,
+    comparison: &mut [u8; COMPARISON_WINDOW_BYTES],
+    root_tree: PhysicalTreeIdV1,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn FsCasControlV1,
+) -> Result<VersionSummaryInputV1, C3OperationErrorV1> {
+    closure.clear_for_candidate_graph_v1().map_err(|error| {
+        closure
+            .take_first_error()
+            .map(C3OperationErrorV1::FsCas)
+            .unwrap_or(C3OperationErrorV1::Core(error))
+    })?;
+    seen.reset_for_candidate_graph_controlled_v1(control)
+        .map_err(map_global_seen_operation_error_v1)?;
+
+    let control_cell = RefCell::new(control);
+
+    {
+        let mut visitor = CandidateEdgeVisitorV1 {
+            closure,
+            seen,
+            control: &control_cell,
+            first_error: None,
+        };
+        visitor
+            .enqueue(TypedPhysicalObjectIdV1::Tree(root_tree))
+            .map_err(|error| {
+                visitor
+                    .first_error
+                    .unwrap_or(C3OperationErrorV1::Core(error))
+            })?;
+    }
+
+    let before = occupied.direct_storage_read_observation_typed_v1()?;
+    let mut summary = CandidateGraphSummaryV1::default();
+    let mut ordinal = 0_u32;
+    while ordinal < closure.count {
+        if (**control_cell.borrow_mut()).cancellation_requested() {
+            return Err(CoreError::Cancelled.into());
+        }
+        if (**control_cell.borrow_mut()).deadline_exceeded() {
+            return Err(CoreError::Deadline.into());
+        }
+        let pending = closure.read(ordinal).map_err(|error| {
+            closure
+                .take_first_error()
+                .map(C3OperationErrorV1::FsCas)
+                .unwrap_or(C3OperationErrorV1::Core(error))
+        })?;
+        if !pending.is_pending() {
+            return Err(CoreError::IdMismatch.into());
+        }
+        let len = match occupied.occupied_len_typed_controlled_v1(
+            pending.id,
+            &mut CandidateSharedControlV1 {
+                inner: &control_cell,
+            },
+        ) {
+            Ok(Some(len)) => len,
+            Ok(None) => {
+                occupied.retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+                return Err(FsCasErrorV1::MissingOccupant.into());
+            }
+            Err(error) => {
+                occupied.retain_first_error_typed_v1(error);
+                return Err(error.into());
+            }
+        };
+        let decoded = {
+            let mut reader = CandidateOccupiedReaderV1 {
+                occupied,
+                control: &control_cell,
+                counters,
+                id: pending.id,
+                len,
+            };
+            let mut visitor = CandidateEdgeVisitorV1 {
+                closure,
+                seen,
+                control: &control_cell,
+                first_error: None,
+            };
+            let result = decode_physical_object_from_port_v1(&mut reader, &mut visitor, comparison);
+            match result {
+                Ok(decoded) => decoded,
+                Err(error) => {
+                    if let Some(terminal) = visitor.first_error {
+                        return Err(terminal);
+                    }
+                    if let Some(error) = reader.occupied.first_error_typed_v1() {
+                        return Err(error.into());
+                    }
+                    return Err(error.into());
+                }
+            }
+        };
+        if decoded.physical_id() != pending.id || decoded.header().kind() != pending.id.kind() {
+            return Err(CoreError::IdMismatch.into());
+        }
+        closure.complete_pending(ordinal, len).map_err(|error| {
+            closure
+                .take_first_error()
+                .map(C3OperationErrorV1::FsCas)
+                .unwrap_or(C3OperationErrorV1::Core(error))
+        })?;
+        summary.observe(decoded.payload())?;
+        ordinal = ordinal.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
+    }
+    let after = occupied.direct_storage_read_observation_typed_v1()?;
+    counters.record_fscas_read(
+        after
+            .0
+            .checked_sub(before.0)
+            .ok_or(CoreError::IntegerOverflow)?,
+        after
+            .1
+            .checked_sub(before.1)
+            .ok_or(CoreError::IntegerOverflow)?,
+    )?;
+    summary.finish().map_err(C3OperationErrorV1::Core)
+}
+
+fn map_global_seen_operation_error_v1(error: GlobalSeenErrorV1) -> C3OperationErrorV1 {
+    match error {
+        GlobalSeenErrorV1::Core(error) => C3OperationErrorV1::Core(error),
+        GlobalSeenErrorV1::FsCas(error) => C3OperationErrorV1::FsCas(error),
+    }
+}
+
+fn map_operation_to_core_v1(error: C3OperationErrorV1) -> CoreError {
+    match error {
+        C3OperationErrorV1::Core(error) => error,
+        C3OperationErrorV1::FsCas(FsCasErrorV1::Core(error)) => error,
+        C3OperationErrorV1::FsCas(
+            FsCasErrorV1::Unsupported | FsCasErrorV1::Busy | FsCasErrorV1::ResourceExhausted(_),
+        ) => CoreError::ResourceRefused,
+        C3OperationErrorV1::FsCas(_) => CoreError::SourceFailure,
+    }
+}
