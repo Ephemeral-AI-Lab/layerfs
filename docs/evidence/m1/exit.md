@@ -1,46 +1,49 @@
 ### Milestone 1 repaired exit
 
-- Candidate commit: `88415105459431971974dc8fa421441a63f73e16`
+- Candidate commit: `ff8cd5a74e3b57392ff232788e6f9244cc447aaf`
 - Validation date: 2026-08-10
 - Sequential predecessor: repaired M0 candidate
-  `786b418d002a0bf086386bd84d053a20054ec3fd`
-- Checklist complete: yes; M0 and M1 only
-- Primary environment: Windows 11 64-bit `10.0.26200`, Node `24.11.1`, pnpm `10.32.1`
-- Primary command: `pnpm validate:m1`
-- Primary result: pass in 54.007 seconds; 4 M0 tests, 13 M1 Node tests, and 9 workerd
-  checks passed with zero failures
+  `937b72e84349d3371ca5d75399f5a30e0307d06c`
+- Checklist complete: yes; this record accepts M0 and M1 only
+- Primary environment: Microsoft Windows NT `10.0.26200.0`, x64, Node `24.11.1`, pnpm
+  `10.32.1`
+- Primary commands: `pnpm test:m1` and `pnpm test:workerd`
+- Primary result: pass in 11.163 seconds total; 35 Node tests and 11 named workerd
+  checks passed, 0 failed
 - Correctness artifact: [`correctness.json`](./correctness.json)
 - Benchmark artifact: not applicable to the pure-algorithm milestone
-- Hosted-CI deviation: no GitHub Actions run exists for this unpushed branch. The exact
-  candidate was instead validated locally across Windows and Linux with Node 22 and
-  Node 24.
-- Approval boundary: stop after M1. M2 is paused and may not resume until an independent
-  audit and explicit user approval.
+- Hosted-CI deviation: no GitHub Actions run exists for this unpushed branch
+- Validation scope: one actually executed Windows x64 / Node 24.11.1 cell; no Linux or
+  Node 22 result is claimed
+- Approval boundary: stop after M1. M2 remains paused and unaccepted.
 
-The exact candidate passed `pnpm validate:m1` on Windows Node 24.11.1 in 54.007 seconds
-and Windows Node 22.23.2 in 53.006 seconds. Clean Debian bookworm containers also passed
-the same sequential gate on Node 22 and Node 24. Every run included the complete
-repaired M0 gate, 13 Node algorithm tests, and the workerd golden-vector gate.
+The candidate is an explicit allow-empty validation marker directly above the M0
+evidence commit. The accepted M0 source/API predecessor remains
+`937b72e84349d3371ca5d75399f5a30e0307d06c`, matching the M0 evidence candidate and the
+sequential predecessor required by the evidence checker.
 
-Manifest encoding and construction now validate the embedded FastCDC parameters before
-writing bytes, enforce maximum chunk length and non-final minimum chunk length, reject
-empty internal nodes, and retain a single-entry lookahead rather than the complete
-input. Full-tree validation proves exact child totals, canonical leaf/internal grouping
-boundaries, balanced leaf depth, the empty-root special case, and absence of a unary
-root wrapper. Lookup and sequential cursor construction validate every affected node's
-grouping, chunk constraints, declared totals, and depth before returning an entry.
+The Node suite passed all 35 algorithm tests in 6.837 seconds of command wall time. It
+covers SHA-256/CAS ownership, FastCDC goldens and streaming bounds, runtime admission,
+COW and structural patches, segmented-manifest codecs/builders/cursors, recomputed-
+digest corruption, the 100,001-entry bounded builder, authenticated fixed-capacity
+diagnostic local rebuild, streamed fallback, adversarial metrics, and caller-controlled
+`Uint8Array`/Node `Buffer` ownership boundaries.
 
-Fixed vectors now cover the 68-byte root envelope, leaf encoding and digest, internal
-encoding and digest, grouping states and boundaries, and a complete manifest root in
-both Node and workerd. Regression tests reproduce all four audit defects and add
-unbalanced-tree, empty-internal, maximum-capacity, maximum-depth, safe-integer overflow,
-truncation, extension, reserved-header, impossible-count, and zero-length-record cases
-without depending only on digest flips.
+The workerd command, including its clean package build, passed all 11 required named
+checks in 4.323 seconds and emitted machine-readable JSON. It reproduced the shared
+SHA-256, FastCDC, manifest, cursor/corruption, COW, patch, diagnostic-local, streamed,
+subclass-source, and runtime-progress assertions. The no-edit subclass-source regression
+preserved root identity, file size, source bytes read, and bytes hashed in both
+runtimes.
 
-The 100,001-entry durable builder case remains bounded to a 17-record keyset page and a
-group-sized retained window. Local rebuild, streamed fallback, COW, patch, SHA-256,
-FastCDC partitioning, and deterministic full-rebuild comparisons remain green.
+The durable 100,001-entry builder used 17-record keyset reads, produced 396 nodes at
+depth 3, and observed a peak of 259 retained record references with a 9,336-byte
+serialized-record capacity proxy. It processed 100,396 grouping records / 3,618,996
+grouping-record bytes. These are observed metrics, not loose assertion ceilings or
+JavaScript heap measurements.
 
-`validate:accepted` advances to `pnpm validate:m1` only in the evidence commit after the
-candidate passed the full four-cell local matrix. M2 source remains provisional and is
-not validated or accepted by this record.
+The M1-owned tree digest is
+`4dcfa8d941c7fd40e7a697e9431bd4ac0673e987579bd548306b91412536bce1`. After this directly
+parented evidence commit exists, the complete `pnpm validate:m1` command revalidates M0,
+checks both evidence histories/digests, and reruns Node and workerd. No hosted or
+unexecuted platform/runtime result is inferred.
