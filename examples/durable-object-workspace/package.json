@@ -1,0 +1,11 @@
+{
+  "name": "@ephemeralai/fs-example-durable-object",
+  "version": "0.1.0-rc.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ephemeralai/fs": "workspace:^",
+    "@ephemeralai/fs-sqlite-cloudflare": "workspace:^"
+  }
+}
+
