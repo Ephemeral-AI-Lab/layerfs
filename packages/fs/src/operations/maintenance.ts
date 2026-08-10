@@ -58,8 +58,20 @@ export class MaintenanceManager implements FilesystemMaintenance {
         undefined,
         "maxBatches must be a nonnegative safe integer",
       );
+    if (maxBatches === 0) {
+      const existing = this.#read((tx) => tx.maintenance(this.#storage).run(runId));
+      return this.#collectionResult(runId, existing, 0, start);
+    }
     const now = this.#now();
     const expiryLimit = Math.max(
+      1,
+      Math.min(
+        this.#storage.maxGcBatchSize,
+        this.#storage.maxQueryBatchSize,
+        Math.floor((this.#storage.maxFinalTransactionRows - 8) / 2),
+      ),
+    );
+    const cleanupLimit = Math.max(
       1,
       Math.min(
         this.#storage.maxGcBatchSize,
@@ -67,29 +79,32 @@ export class MaintenanceManager implements FilesystemMaintenance {
         this.#storage.maxFinalTransactionRows - 8,
       ),
     );
-    while (
-      this.#write((tx) => tx.staging(this.#storage).expireBatch(now, expiryLimit)) ===
-      expiryLimit
-    ) {
-      // The bounded batch is drained by the loop predicate.
-    }
-    this.#write((tx) => {
-      tx.maintenance(this.#storage).beginRun(runId, now);
-    });
     let batches = 0;
     try {
       while (batches < maxBatches) {
         if (options.signal?.aborted) throw abortError();
-        const state = this.#read(
-          (tx) => tx.maintenance(this.#storage).run(runId)?.state,
+        const expired = this.#write((tx) =>
+          tx.staging(this.#storage).expireBatch(now, expiryLimit),
         );
-        if (state === undefined)
-          throw fsError(
-            "ENOENT",
-            "collectGarbage",
-            undefined,
-            "collection run does not exist",
-          );
+        if (expired) {
+          batches += 1;
+          continue;
+        }
+        if (options.signal?.aborted) throw abortError();
+        const cleanup = this.#write((tx) =>
+          tx.staging(this.#storage).cleanupBatch(cleanupLimit),
+        );
+        if (cleanup.worked) {
+          batches += 1;
+          continue;
+        }
+        const run = this.#read((tx) => tx.maintenance(this.#storage).run(runId));
+        if (!run) {
+          this.#write((tx) => tx.maintenance(this.#storage).beginRun(runId, now));
+          batches += 1;
+          continue;
+        }
+        const state = run.state;
         if (state === COMPLETE || state === ABANDONED) break;
         if (state === 0) this.#markBatch(runId);
         else this.#sweepBatch(runId, state);
@@ -113,28 +128,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
         undefined,
         "collection run disappeared",
       );
-    return Object.freeze({
-      runId,
-      state:
-        row.state === COMPLETE
-          ? "complete"
-          : row.state === ABANDONED
-            ? "abandoned"
-            : "paused",
-      examinedManifestRootCount: row.examined_roots,
-      deletedManifestRootCount: row.deleted_roots,
-      examinedManifestNodeCount: row.examined_nodes,
-      deletedManifestNodeCount: row.deleted_nodes,
-      examinedManifestCount: row.examined_roots + row.examined_nodes,
-      deletedManifestCount: row.deleted_roots + row.deleted_nodes,
-      examinedObjectCount: row.examined_objects,
-      deletedObjectCount: row.deleted_objects,
-      reclaimedObjectPayloadBytes: row.reclaimed_object_bytes,
-      reclaimedManifestPayloadBytes: row.reclaimed_manifest_bytes,
-      reclaimedBranchOverlayPayloadBytes: 0,
-      committedBatches: batches,
-      elapsedMs: performance.now() - start,
-    });
+    return this.#collectionResult(runId, row, batches, start);
   }
 
   async snapshotStorage(): Promise<StorageSnapshot> {
@@ -342,6 +336,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       {
         maxRows: this.#storage.maxFinalTransactionRows,
         maxBytes: this.#storage.maxFinalTransactionBytes,
+        maxElapsedMs: 250,
       },
       callback,
     );
@@ -352,12 +347,42 @@ export class MaintenanceManager implements FilesystemMaintenance {
       {
         maxRows: this.#storage.maxFinalTransactionRows,
         maxBytes: this.#storage.maxFinalTransactionBytes,
+        maxElapsedMs: 250,
       },
       callback,
     );
   }
   #now(): number {
     return this.#clock();
+  }
+  #collectionResult(
+    runId: string,
+    row: GcRunRow | undefined,
+    batches: number,
+    start: number,
+  ): GarbageCollectionResult {
+    return Object.freeze({
+      runId,
+      state:
+        row?.state === COMPLETE
+          ? "complete"
+          : row?.state === ABANDONED
+            ? "abandoned"
+            : "paused",
+      examinedManifestRootCount: row?.examined_roots ?? 0,
+      deletedManifestRootCount: row?.deleted_roots ?? 0,
+      examinedManifestNodeCount: row?.examined_nodes ?? 0,
+      deletedManifestNodeCount: row?.deleted_nodes ?? 0,
+      examinedManifestCount: (row?.examined_roots ?? 0) + (row?.examined_nodes ?? 0),
+      deletedManifestCount: (row?.deleted_roots ?? 0) + (row?.deleted_nodes ?? 0),
+      examinedObjectCount: row?.examined_objects ?? 0,
+      deletedObjectCount: row?.deleted_objects ?? 0,
+      reclaimedObjectPayloadBytes: row?.reclaimed_object_bytes ?? 0,
+      reclaimedManifestPayloadBytes: row?.reclaimed_manifest_bytes ?? 0,
+      reclaimedBranchOverlayPayloadBytes: 0,
+      committedBatches: batches,
+      elapsedMs: performance.now() - start,
+    });
   }
   #encodeCursor(cursor: { phase: number; last: string }): string {
     return btoa(JSON.stringify(cursor));

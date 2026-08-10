@@ -85,11 +85,31 @@ interface LeaseChargeRow extends SqliteRow {
 interface ExpiredLeaseRow extends LeaseChargeRow {
   id: string;
 }
+interface CleanupRow extends SqliteRow {
+  lease_id: string;
+  phase: number;
+}
 
 export interface ReconciliationProgress {
   readonly processed: number;
   readonly complete: boolean;
 }
+export interface LeaseCleanupProgress {
+  readonly worked: boolean;
+  readonly deletedRows: number;
+  readonly deletedLeases: number;
+}
+
+const CLEANUP_DELETE_STATEMENTS = Object.freeze([
+  "DELETE FROM efs_staging_entries WHERE lease_id=? AND entry_index IN (SELECT entry_index FROM efs_staging_entries WHERE lease_id=? ORDER BY entry_index LIMIT ?)",
+  "DELETE FROM efs_staging_level_records WHERE lease_id=? AND (level,record_index) IN (SELECT level,record_index FROM efs_staging_level_records WHERE lease_id=? ORDER BY level,record_index LIMIT ?)",
+  "DELETE FROM efs_staging_reconciliation_queue WHERE lease_id=? AND (kind,hash) IN (SELECT kind,hash FROM efs_staging_reconciliation_queue WHERE lease_id=? ORDER BY kind,hash LIMIT ?)",
+  "DELETE FROM efs_lease_objects WHERE lease_id=? AND object_hash IN (SELECT object_hash FROM efs_lease_objects WHERE lease_id=? ORDER BY object_hash LIMIT ?)",
+  "DELETE FROM efs_lease_staged_manifests WHERE lease_id=? AND (kind,manifest_hash) IN (SELECT kind,manifest_hash FROM efs_lease_staged_manifests WHERE lease_id=? ORDER BY kind,manifest_hash LIMIT ?)",
+  "DELETE FROM efs_lease_manifests WHERE lease_id=? AND manifest_hash IN (SELECT manifest_hash FROM efs_lease_manifests WHERE lease_id=? ORDER BY manifest_hash LIMIT ?)",
+  "DELETE FROM efs_lease_cow_pages WHERE lease_id=? AND (branch_id,inode_id,page_index,generation) IN (SELECT branch_id,inode_id,page_index,generation FROM efs_lease_cow_pages WHERE lease_id=? ORDER BY branch_id,inode_id,page_index,generation LIMIT ?)",
+  "DELETE FROM efs_lease_patches WHERE lease_id=? AND (branch_id,inode_id,sequence) IN (SELECT branch_id,inode_id,sequence FROM efs_lease_patches WHERE lease_id=? ORDER BY branch_id,inode_id,sequence LIMIT ?)",
+] as const);
 
 export const EMPTY_STAGING_CHAIN = sha256(encodeUtf8("efs-staging-chain-v1"));
 
@@ -241,21 +261,27 @@ export class StagingRepository {
     );
     if (result.changes) {
       this.#releaseStagingBytes(charge.staged_bytes);
+      this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
       this.bumpRoot(6, leaseId);
+    } else if (charge.state === 2) {
+      this.#scheduleCleanup(leaseId, ownerNonce, 0, 0);
     }
     return result.changes === 1;
   }
   delete(leaseId: string, ownerNonce: Uint8Array): boolean {
     const charge = this.#leaseCharge(leaseId);
     if (!charge || !equalBytes(charge.owner_nonce, ownerNonce)) return false;
-    const result = this.#tx.run("DELETE FROM efs_leases WHERE id=? AND owner_nonce=?", [
-      leaseId,
-      ownerNonce,
-    ]);
+    const result = this.#tx.run(
+      "UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND state IN (0,1)",
+      [leaseId, ownerNonce],
+    );
     if (result.changes) {
       if (charge.state === 0 || charge.state === 1)
         this.#releaseStagingBytes(charge.staged_bytes);
+      this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
       this.bumpRoot(6, leaseId);
+    } else if (charge.state === 2) {
+      this.#scheduleCleanup(leaseId, ownerNonce, 0, 0);
     }
     return result.changes === 1;
   }
@@ -276,11 +302,22 @@ export class StagingRepository {
     this.bumpRoot(2, leaseId);
   }
   releaseReadLease(leaseId: string, ownerId: string): boolean {
-    const result = this.#tx.run("DELETE FROM efs_leases WHERE id=? AND owner_id=?", [
-      leaseId,
-      ownerId,
-    ]);
-    if (result.changes) this.bumpRoot(3, leaseId);
+    const lease = this.#tx.all<{ owner_nonce: Uint8Array; state: number } & SqliteRow>(
+      "SELECT owner_nonce,state FROM efs_leases WHERE id=? AND owner_id=?",
+      [leaseId, ownerId],
+      { maxRows: 1, maxBytes: 256 },
+    )[0];
+    if (!lease) return false;
+    const result = this.#tx.run(
+      "UPDATE efs_leases SET state=2 WHERE id=? AND owner_id=? AND state IN (0,1)",
+      [leaseId, ownerId],
+    );
+    if (result.changes) {
+      this.#scheduleCleanup(leaseId, lease.owner_nonce, 0, 0);
+      this.bumpRoot(3, leaseId);
+    } else if (lease.state === 2) {
+      this.#scheduleCleanup(leaseId, lease.owner_nonce, 0, 0);
+    }
     return result.changes === 1;
   }
 
@@ -293,26 +330,98 @@ export class StagingRepository {
     )
       throw new RangeError("invalid expired-lease batch limit");
     const rows = this.#tx.all<ExpiredLeaseRow>(
-      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id WHERE l.expires_at_ms<? OR l.state=2 ORDER BY l.id LIMIT ?",
+      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.object_bytes+c.node_bytes,0) staged_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id LEFT JOIN efs_lease_cleanups x ON x.lease_id=l.id WHERE x.lease_id IS NULL AND (l.expires_at_ms<? OR l.state=2) ORDER BY l.id LIMIT ?",
       [now, limit],
       { maxRows: limit, maxBytes: Math.max(1024, limit * 256) },
     );
     let releasedBytes = 0;
-    let deleted = 0;
+    let tombstoned = 0;
     for (const row of rows) {
       const result = this.#tx.run(
-        "DELETE FROM efs_leases WHERE id=? AND (expires_at_ms<? OR state=2)",
+        "UPDATE efs_leases SET state=2 WHERE id=? AND (expires_at_ms<? OR state=2)",
         [row.id, now],
       );
       if (result.changes) {
-        deleted += 1;
+        tombstoned += 1;
         if (row.state === 0 || row.state === 1)
           releasedBytes = checkedAdd(releasedBytes, row.staged_bytes);
+        this.#scheduleCleanup(
+          row.id,
+          row.owner_nonce,
+          row.state === 0 || row.state === 1 ? row.staged_bytes : 0,
+          now,
+        );
       }
     }
     this.#releaseStagingBytes(releasedBytes);
-    if (deleted) this.bumpRoot(6, `expired:${now}`);
-    return deleted;
+    if (tombstoned) this.bumpRoot(6, `expired:${now}`);
+    return tombstoned;
+  }
+
+  cleanupBatch(limit: number): LeaseCleanupProgress {
+    counters([limit]);
+    if (
+      limit <= 0 ||
+      limit > this.#limits.maxGcBatchSize ||
+      limit > this.#limits.maxQueryBatchSize
+    )
+      throw new RangeError("invalid lease-cleanup batch limit");
+    const cleanup = this.#tx.all<CleanupRow>(
+      "SELECT lease_id,phase FROM efs_lease_cleanups ORDER BY lease_id LIMIT 1",
+      [],
+      { maxRows: 1, maxBytes: 256 },
+    )[0];
+    if (!cleanup)
+      return Object.freeze({ worked: false, deletedRows: 0, deletedLeases: 0 });
+    if (!Number.isSafeInteger(cleanup.phase) || cleanup.phase < 0 || cleanup.phase > 10)
+      throw new Error("ECORRUPT: invalid lease cleanup phase");
+    if (cleanup.phase < CLEANUP_DELETE_STATEMENTS.length) {
+      const deletedRows = this.#tx.run(CLEANUP_DELETE_STATEMENTS[cleanup.phase]!, [
+        cleanup.lease_id,
+        cleanup.lease_id,
+        limit,
+      ]).changes;
+      if (deletedRows < limit) this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
+      return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
+    }
+    if (cleanup.phase === 8) {
+      const deletedRows = this.#tx.run(
+        "DELETE FROM efs_staging_reconciliations WHERE lease_id=?",
+        [cleanup.lease_id],
+      ).changes;
+      this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
+      return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
+    }
+    if (cleanup.phase === 9) {
+      const deletedRows = this.#tx.run(
+        "DELETE FROM efs_staging_workspaces WHERE lease_id=?",
+        [cleanup.lease_id],
+      ).changes;
+      this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
+      return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
+    }
+    const remaining = this.#tx.all<{ count: number } & SqliteRow>(
+      "SELECT (SELECT count(*) FROM efs_staging_entries WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_level_records WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_objects WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_staged_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_cow_pages WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_patches WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_workspaces WHERE lease_id=?) count",
+      Array.from({ length: 10 }, () => cleanup.lease_id),
+      { maxRows: 1, maxBytes: 256 },
+    )[0]?.count;
+    if (remaining !== 0)
+      throw new Error("ECORRUPT: lease cleanup reached parent with live children");
+    const deletedRows = this.#tx.run(
+      "DELETE FROM efs_staging_certificates WHERE lease_id=?",
+      [cleanup.lease_id],
+    ).changes;
+    const deletedLeases = this.#tx.run(
+      "DELETE FROM efs_leases WHERE id=? AND state=2",
+      [cleanup.lease_id],
+    ).changes;
+    if (deletedLeases !== 1)
+      throw new Error("ECORRUPT: tombstoned lease disappeared during cleanup");
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { maintenance_bytes: -CHARGED_ROW_BYTES },
+      "lease cleanup completion",
+    );
+    return Object.freeze({ worked: true, deletedRows, deletedLeases });
   }
 
   appendBatch(
@@ -763,6 +872,32 @@ export class StagingRepository {
       [leaseId],
       { maxRows: 1, maxBytes: 256 },
     )[0];
+  }
+
+  #scheduleCleanup(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    releasedStagingBytes: number,
+    tombstonedAt: number,
+  ): void {
+    const inserted = this.#tx.run(
+      "INSERT OR IGNORE INTO efs_lease_cleanups(lease_id,owner_nonce,phase,cursor_text,cursor_blob,released_staging_bytes,tombstoned_at_ms) VALUES(?,?,0,NULL,NULL,?,?)",
+      [leaseId, ownerNonce, releasedStagingBytes, tombstonedAt],
+    );
+    if (inserted.changes)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: CHARGED_ROW_BYTES },
+        "lease cleanup state",
+      );
+  }
+
+  #advanceCleanup(leaseId: string, phase: number): void {
+    const result = this.#tx.run(
+      "UPDATE efs_lease_cleanups SET phase=phase+1,cursor_text=NULL,cursor_blob=NULL WHERE lease_id=? AND phase=?",
+      [leaseId, phase],
+    );
+    if (result.changes !== 1)
+      throw new Error("ECORRUPT: lease cleanup phase changed unexpectedly");
   }
 
   #admitStagingBytes(bytes: number): void {

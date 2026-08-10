@@ -12,6 +12,10 @@ export type StorageTransactionMode = "read" | "write" | "exclusive";
 export interface StorageWorkBudget {
   readonly maxRows: number;
   readonly maxBytes: number;
+  readonly maxStatements?: number;
+  readonly maxElapsedMs?: number;
+  readonly maxResultRows?: number;
+  readonly maxResultBytes?: number;
 }
 export interface StorageAdapterCapabilities {
   readonly maxBlobBytes: number;
@@ -284,6 +288,11 @@ export interface ReconciliationProgress {
   readonly processed: number;
   readonly complete: boolean;
 }
+export interface LeaseCleanupProgress {
+  readonly worked: boolean;
+  readonly deletedRows: number;
+  readonly deletedLeases: number;
+}
 export interface StagingStore {
   begin(options: {
     readonly leaseId: string;
@@ -333,6 +342,7 @@ export interface StagingStore {
   ): void;
   releaseReadLease(leaseId: string, ownerId: string): boolean;
   expireBatch(now: number, limit: number): number;
+  cleanupBatch(limit: number): LeaseCleanupProgress;
   appendBatch(
     leaseId: string,
     ownerNonce: Uint8Array,

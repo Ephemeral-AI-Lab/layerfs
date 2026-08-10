@@ -245,12 +245,16 @@ test("partial write-admission failure removes its staging lease and releases eve
   const active = driver.transaction(
     "read",
     (tx) =>
-      tx.all("SELECT count(*) count FROM efs_leases", [], {
-        maxRows: 1,
-        maxBytes: 128,
-      })[0].count,
+      tx.all(
+        "SELECT (SELECT count(*) FROM efs_leases WHERE state IN (0,1)) active,(SELECT count(*) FROM efs_leases WHERE state=2) tombstoned,(SELECT count(*) FROM efs_lease_cleanups) cleanups",
+        [],
+        {
+          maxRows: 1,
+          maxBytes: 128,
+        },
+      )[0],
   );
-  assert.equal(active, 0);
+  assert.deepEqual(active, { active: 0, tombstoned: 1, cleanups: 1 });
   driver.close();
 });
 
@@ -298,12 +302,17 @@ test("a huge upstream stream chunk is admitted at its full size, rejected before
     "read",
     (tx) =>
       tx.all(
-        "SELECT (SELECT count(*) FROM efs_leases) leases,staging_bytes FROM efs_usage",
+        "SELECT (SELECT count(*) FROM efs_leases WHERE state IN (0,1)) active,(SELECT count(*) FROM efs_leases WHERE state=2) tombstoned,(SELECT count(*) FROM efs_lease_cleanups) cleanups,staging_bytes FROM efs_usage",
         [],
-        { maxRows: 1, maxBytes: 128 },
+        { maxRows: 1, maxBytes: 256 },
       )[0],
   );
-  assert.deepEqual(state, { leases: 0, staging_bytes: 0 });
+  assert.deepEqual(state, {
+    active: 0,
+    tombstoned: 1,
+    cleanups: 1,
+    staging_bytes: 0,
+  });
   driver.close();
 });
 
@@ -452,7 +461,31 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
       DEFAULT_RUNTIME_LIMITS,
       () => 100,
     );
-    await maintenance.collectGarbage({ runId: "expiry-accounting", maxBatches: 0 });
+    const zero = await maintenance.collectGarbage({
+      runId: "expiry-accounting",
+      maxBatches: 0,
+    });
+    assert.equal(zero.committedBatches, 0);
+    const untouched = driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT staging_bytes,(SELECT count(*) FROM efs_leases) leases,(SELECT count(*) FROM efs_lease_cleanups) cleanups,(SELECT count(*) FROM efs_gc_runs) runs FROM efs_usage",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    );
+    assert.deepEqual(untouched, {
+      staging_bytes: before.staging_bytes,
+      leases: before.leases,
+      cleanups: 0,
+      runs: 0,
+    });
+    const collected = await maintenance.collectGarbage({
+      runId: "expiry-accounting",
+      maxBatches: 100,
+    });
+    assert.equal(collected.state, "complete");
     const after = driver.transaction(
       "read",
       (tx) =>
@@ -476,7 +509,7 @@ test("maintenance expiry atomically releases partial and sealed staging charges 
   }
 });
 
-test("every expired-lease accounting statement fault rolls back lease cascades and usage", async () => {
+test("every expired-lease tombstone statement fault rolls back lease state and usage", async () => {
   async function fixture(failAt, counter) {
     const base = await openNodeSqlite({ filename: ":memory:" });
     initializeOrValidateSchema(base);
@@ -565,6 +598,222 @@ test("every expired-lease accounting statement fault rolls back lease cascades a
     assert.deepEqual(state, { staging_bytes: 3, leases: 1, members: 1 });
     base.close();
   }
+});
+
+test("every keyset cleanup statement fault rolls back its child deletion and cursor", async () => {
+  async function fixture(failAt, counter) {
+    const base = await openNodeSqlite({ filename: ":memory:" });
+    initializeOrValidateSchema(base);
+    const storage = constrainStorageLimits(
+      {
+        maxManagedPayloadBytes: 16 * 1024 * 1024,
+        maintenanceReserveBytes: 1024,
+        maxStagingPayloadBytes: 1024,
+        maxGcBatchSize: 2,
+        maxQueryBatchSize: 2,
+      },
+      base.capabilities,
+    );
+    const nonce = new Uint8Array(16).fill(5);
+    const bytes = Uint8Array.of(7);
+    const hash = sha256(bytes);
+    base.transaction("write", (tx) => {
+      const staging = new StagingRepository(tx, storage);
+      staging.begin({
+        leaseId: "cleanup-fault",
+        ownerId: "owner",
+        ownerNonce: nonce,
+        now: 1,
+        expiresAt: 100,
+      });
+      new ContentRepository(tx, storage).putObject(hash, bytes);
+      staging.putEntry("cleanup-fault", 0, hash, 1);
+      staging.appendBatch("cleanup-fault", nonce, [{ kind: "object", hash, size: 1 }]);
+      staging.release("cleanup-fault", nonce, false);
+    });
+    const wrapped = {
+      kind: base.kind,
+      readOnly: base.readOnly,
+      capabilities: base.capabilities,
+      close: () => base.close(),
+      transaction(mode, callback) {
+        return base.transaction(mode, (tx) =>
+          callback({
+            scope: tx.scope,
+            run(...args) {
+              counter.value += 1;
+              if (counter.value === failAt) throw new Error(`cleanup fault ${failAt}`);
+              return tx.run(...args);
+            },
+            all(...args) {
+              counter.value += 1;
+              if (counter.value === failAt) throw new Error(`cleanup fault ${failAt}`);
+              return tx.all(...args);
+            },
+          }),
+        );
+      },
+    };
+    return { base, wrapped, storage };
+  }
+  const probeCount = { value: 0 };
+  const probe = await fixture(Number.POSITIVE_INFINITY, probeCount);
+  runUnitOfWork(probe.wrapped, "write", { maxRows: 100, maxBytes: 1024 * 1024 }, (tx) =>
+    new StagingRepository(tx, probe.storage).cleanupBatch(2),
+  );
+  probe.base.close();
+  assert.ok(probeCount.value >= 3);
+  for (let failAt = 1; failAt <= probeCount.value; failAt += 1) {
+    const count = { value: 0 };
+    const { base, wrapped, storage } = await fixture(failAt, count);
+    assert.throws(
+      () =>
+        runUnitOfWork(wrapped, "write", { maxRows: 100, maxBytes: 1024 * 1024 }, (tx) =>
+          new StagingRepository(tx, storage).cleanupBatch(2),
+        ),
+      new RegExp(`cleanup fault ${failAt}`),
+    );
+    const state = base.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT (SELECT count(*) FROM efs_leases WHERE id='cleanup-fault') leases,(SELECT count(*) FROM efs_staging_entries WHERE lease_id='cleanup-fault') entries,(SELECT count(*) FROM efs_lease_objects WHERE lease_id='cleanup-fault') members,(SELECT phase FROM efs_lease_cleanups WHERE lease_id='cleanup-fault') phase",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    );
+    assert.deepEqual(state, { leases: 1, entries: 1, members: 1, phase: 0 });
+    base.close();
+  }
+});
+
+test("tombstoned leases clean up through resumable keyset-sized child batches", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 16 * 1024 * 1024,
+      maintenanceReserveBytes: 1024,
+      maxStagingPayloadBytes: 1024,
+      maxGcBatchSize: 2,
+      maxQueryBatchSize: 2,
+    },
+    driver.capabilities,
+  );
+  const nonce = new Uint8Array(16).fill(6);
+  driver.transaction("write", (tx) =>
+    new StagingRepository(tx, storage).begin({
+      leaseId: "bounded-cleanup",
+      ownerId: "owner",
+      ownerNonce: nonce,
+      now: 1,
+      expiresAt: 100,
+    }),
+  );
+  for (let index = 0; index < 5; index += 1) {
+    const bytes = Uint8Array.of(index + 1);
+    const hash = sha256(bytes);
+    driver.transaction("write", (tx) => {
+      new ContentRepository(tx, storage).putObject(hash, bytes);
+      const staging = new StagingRepository(tx, storage);
+      staging.putEntry("bounded-cleanup", index, hash, 1);
+      staging.appendBatch("bounded-cleanup", nonce, [
+        { kind: "object", hash, size: 1 },
+      ]);
+    });
+  }
+  driver.transaction("write", (tx) =>
+    assert.equal(
+      new StagingRepository(tx, storage).release("bounded-cleanup", nonce, false),
+      true,
+    ),
+  );
+  let batches = 0;
+  while (true) {
+    const before = driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT (SELECT count(*) FROM efs_leases WHERE id='bounded-cleanup') leases,(SELECT count(*) FROM efs_staging_entries WHERE lease_id='bounded-cleanup') entries,(SELECT count(*) FROM efs_lease_objects WHERE lease_id='bounded-cleanup') members,staging_bytes FROM efs_usage",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    );
+    if (!before.leases) {
+      assert.equal(before.entries, 0);
+      assert.equal(before.members, 0);
+      assert.equal(before.staging_bytes, 0);
+      break;
+    }
+    const progress = driver.transaction("write", (tx) =>
+      new StagingRepository(tx, storage).cleanupBatch(2),
+    );
+    assert.equal(progress.worked, true);
+    assert.ok(progress.deletedRows <= 2);
+    batches += 1;
+    assert.ok(batches < 32, "cleanup did not make bounded progress");
+  }
+  assert.ok(batches > 2, "fixture should require resumable cleanup");
+  driver.close();
+});
+
+test("lease maintenance observes aborts between bounded committed batches", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const port = createSqliteOperationsStorage(driver);
+  initializeOrValidateSchema(driver);
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 16 * 1024 * 1024,
+      maintenanceReserveBytes: 1024,
+      maxStagingPayloadBytes: 1024,
+      maxGcBatchSize: 1,
+      maxQueryBatchSize: 2,
+    },
+    driver.capabilities,
+  );
+  driver.transaction("write", (tx) => {
+    const staging = new StagingRepository(tx, storage);
+    for (let index = 0; index < 3; index += 1)
+      staging.begin({
+        leaseId: `abort-${index}`,
+        ownerId: "owner",
+        ownerNonce: new Uint8Array(16).fill(index + 1),
+        now: 1,
+        expiresAt: 2,
+      });
+  });
+  const maintenance = new MaintenanceManager(
+    port,
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    () => 10,
+  );
+  let checks = 0;
+  const signal = {
+    get aborted() {
+      checks += 1;
+      return checks >= 3;
+    },
+  };
+  await assert.rejects(
+    maintenance.collectGarbage({
+      runId: "bounded-abort",
+      maxBatches: 100,
+      signal,
+    }),
+    /aborted/i,
+  );
+  const state = driver.transaction(
+    "read",
+    (tx) =>
+      tx.all(
+        "SELECT (SELECT count(*) FROM efs_leases WHERE state IN (0,1)) active,(SELECT count(*) FROM efs_leases WHERE state=2) tombstoned,(SELECT count(*) FROM efs_lease_cleanups) cleanups,(SELECT count(*) FROM efs_gc_runs) runs",
+        [],
+        { maxRows: 1, maxBytes: 256 },
+      )[0],
+  );
+  assert.deepEqual(state, { active: 2, tombstoned: 1, cleanups: 1, runs: 0 });
+  driver.close();
 });
 
 test(
