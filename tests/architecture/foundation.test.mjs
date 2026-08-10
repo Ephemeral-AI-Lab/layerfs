@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createRecordingFactory } from "../../packages/testkit/dist/index.js";
 
@@ -9,6 +10,38 @@ test("M0 architecture and exports are locked", () => {
   execFileSync(process.execPath, ["scripts/check-architecture.mjs"], { cwd: root });
   execFileSync(process.execPath, ["scripts/check-exports.mjs"], { cwd: root });
   assert.ok(true);
+});
+
+test("CI invokes only the explicit highest accepted milestone gate", () => {
+  const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+  assert.match(manifest.scripts["validate:accepted"], /^pnpm validate:m\d+$/);
+  const workflow = readFileSync(path.join(root, ".github", "workflows", "ci.yml"), "utf8");
+  assert.match(workflow, /- run: pnpm validate:accepted\s*$/m);
+  assert.doesNotMatch(workflow, /- run: pnpm validate\s*$/m);
+});
+
+test("milestone gates select only their owned suites and sequential predecessors", () => {
+  const scripts = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).scripts;
+  const suites = {
+    0: "tests/architecture",
+    1: "tests/algorithms",
+    2: "tests/storage tests/node-integration",
+    3: "tests/conformance",
+    4: "tests/branches",
+    5: "tests/maintenance",
+    6: "tests/durable-object-integration",
+    7: "tests/node-vfs",
+    8: "tests/replication",
+    9: "tests/fault tests/smoke tests/performance",
+    10: "tests/computer-integration",
+  };
+  for (const [milestone, owned] of Object.entries(suites)) {
+    assert.equal(scripts[`test:m${milestone}`], `node scripts/run-test-suite.mjs ${owned}`);
+    assert.match(scripts[`validate:m${milestone}`], new RegExp(`(?:^|&& pnpm )test:m${milestone}(?:$| )`));
+    assert.doesNotMatch(scripts[`validate:m${milestone}`], /test:unit|test:smoke:built|test:fault:built|test:performance:built/);
+    if (Number(milestone) > 0) assert.match(scripts[`validate:m${milestone}`], new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `));
+  }
+  assert.equal(scripts["validate:accepted"], "pnpm validate:m0");
 });
 
 test("recording testkit fixtures preserve labels, seeds, restart hooks, and disposal", async () => {

@@ -1,5 +1,3 @@
-import type { SQLiteDriverCapabilities } from "../sqlite/driver.js";
-
 export interface FilesystemLimits {
   readonly maxPathBytes: number; readonly maxNameBytes: number; readonly maxSymlinkTargetBytes: number; readonly maxSymlinkTraversals: number;
   readonly maxMaterializedBytes: number; readonly preferredStreamChunkBytes: number; readonly maxAtomicTreeEntries: number; readonly maxReaddirEntries: number;
@@ -23,6 +21,14 @@ export interface BranchConfiguration {
   readonly terminalBranchRetentionMs: number; readonly publicationResultRetentionMs: number;
 }
 
+/** Structural adapter limits consumed by resource policy without depending on SQLite. */
+export interface StorageAdapterLimits {
+  readonly maxBlobBytes: number;
+  readonly maxBindings: number;
+  readonly maxPhysicalDatabaseBytes: number;
+  readonly maxJournalBytes: number;
+}
+
 export const DEFAULT_FILESYSTEM_LIMITS: FilesystemLimits = Object.freeze({ maxPathBytes: 4096, maxNameBytes: 255, maxSymlinkTargetBytes: 4096, maxSymlinkTraversals: 40, maxMaterializedBytes: 64 * 1024 * 1024, preferredStreamChunkBytes: 256 * 1024, maxAtomicTreeEntries: 10_000, maxReaddirEntries: 10_000 });
 export const DEFAULT_STORAGE_LIMITS: StorageLimits = Object.freeze({ maxManifestEntries: 0xffff_ffff, maxManifestNodeBytes: 16 * 1024, maxManifestDepth: 8, maxFileBytes: 16 * 1024 ** 3, maxWriteBytes: 64 * 1024 ** 2, maxManagedPayloadBytes: 8 * 1024 ** 3, maxChargedMetadataBytes: 1024 ** 3, maxPhysicalDatabaseBytes: 10 * 1024 ** 3, maxJournalBytes: 1024 ** 3, maxStagingPayloadBytes: 512 * 1024 ** 2, maxBranchOverlayBytes: 1024 ** 3, maxMaintenanceBytes: 64 * 1024 ** 2, maintenanceReserveBytes: 64 * 1024 ** 2, maxPermanentIdentifiers: 10_000_000, maxFinalTransactionRows: 100_000, maxFinalTransactionBytes: 16 * 1024 ** 2, maxRevisionReplaySteps: 1_000, maxPatchesPerFile: 256, maxPatchBytesPerFile: 16 * 1024 ** 2, maxQueryBatchSize: 256, maxGcBatchSize: 1_000, maxRetainedRevisions: 1_000, readLeaseMs: 300_000, stagingLeaseMs: 900_000 });
 export const DEFAULT_RUNTIME_LIMITS: RuntimeLimits = Object.freeze({ maxManagedResidentBytes: 128 * 1024 ** 2, maxCacheBytes: 64 * 1024 ** 2, maxPendingWriteBytes: 64 * 1024 ** 2, maxWriteSessionBytes: 16 * 1024 ** 2, maxPrefetchBytes: 1024 ** 2, maxQueryBatchBytes: 2 * 1024 ** 2, maxPreparedResultBytes: 64 * 1024 ** 2, maxConcurrentStreams: 64, maxConcurrentOperations: 256, maxOpenBranchHandles: 1_024, maxOpenNodeVfsSessions: 256 });
@@ -30,9 +36,9 @@ export const DEFAULT_BRANCH_CONFIGURATION: BranchConfiguration = Object.freeze({
 
 export function resolveLimits<T extends object>(defaults: T, configured?: Partial<T>): Readonly<T> { return Object.freeze({ ...defaults, ...configured }); }
 
-export function constrainStorageLimits(configured: Partial<StorageLimits> | undefined, adapter: SQLiteDriverCapabilities): Readonly<StorageLimits> {
+export function constrainStorageLimits(configured: Partial<StorageLimits> | undefined, adapter: StorageAdapterLimits): Readonly<StorageLimits> {
   const limits = resolveLimits(DEFAULT_STORAGE_LIMITS, configured);
-  const result = { ...limits, maxPhysicalDatabaseBytes: Math.min(limits.maxPhysicalDatabaseBytes, adapter.maxPhysicalDatabaseBytes), maxJournalBytes: Math.min(limits.maxJournalBytes, adapter.maxJournalBytes) };
+  const result = { ...limits, maxPhysicalDatabaseBytes: Math.min(limits.maxPhysicalDatabaseBytes, adapter.maxPhysicalDatabaseBytes), maxJournalBytes: Math.min(limits.maxJournalBytes, adapter.maxJournalBytes), maxQueryBatchSize: Math.min(limits.maxQueryBatchSize, adapter.maxBindings) };
   for (const [name, value] of Object.entries(result)) if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`);
   if (result.maxManifestNodeBytes < 9248 || result.maxManifestNodeBytes > adapter.maxBlobBytes) throw new RangeError("adapter cannot admit canonical manifest nodes");
   if (adapter.maxBindings < 8) throw new RangeError("adapter must support at least eight bindings");

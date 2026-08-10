@@ -2,7 +2,7 @@ import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SqliteRow } f
 import type { CowPageBytes } from "../cow/pages.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
-export const EFS_SCHEMA_VERSION = 2;
+export const EFS_SCHEMA_VERSION = 3;
 
 const CREATE_STATEMENTS = [
   `CREATE TABLE efs_meta (singleton INTEGER PRIMARY KEY CHECK(singleton=1), schema_version INTEGER NOT NULL, filesystem_id TEXT NOT NULL UNIQUE, main_revision INTEGER NOT NULL, root_inode TEXT NOT NULL, root_mutation_generation INTEGER NOT NULL, next_allocation_sequence INTEGER NOT NULL, cow_page_bytes INTEGER NOT NULL CHECK(cow_page_bytes IN (4096,8192,16384)), created_at_ms INTEGER NOT NULL)`,
@@ -35,6 +35,8 @@ const CREATE_STATEMENTS = [
   `CREATE TABLE efs_lease_cow_pages (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(lease_id,branch_id,inode_id,page_index,generation), FOREIGN KEY(branch_id,inode_id,page_index,generation) REFERENCES efs_cow_page_versions(branch_id,inode_id,page_index,generation) ON DELETE RESTRICT) WITHOUT ROWID`,
   `CREATE TABLE efs_lease_patches (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY(lease_id,branch_id,inode_id,sequence), FOREIGN KEY(branch_id,inode_id,sequence) REFERENCES efs_patches(branch_id,inode_id,sequence) ON DELETE RESTRICT) WITHOUT ROWID`,
   `CREATE TABLE efs_staging_certificates (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, manifest_hash BLOB, chain_digest BLOB NOT NULL CHECK(length(chain_digest)=32), object_count INTEGER NOT NULL CHECK(object_count>=0), object_bytes INTEGER NOT NULL CHECK(object_bytes>=0), node_count INTEGER NOT NULL CHECK(node_count>=0), node_bytes INTEGER NOT NULL CHECK(node_bytes>=0), membership_count INTEGER NOT NULL CHECK(membership_count>=0), next_sequence INTEGER NOT NULL CHECK(next_sequence>=0), sealed INTEGER NOT NULL CHECK(sealed IN (0,1)), verified INTEGER NOT NULL CHECK(verified IN (0,1))) WITHOUT ROWID`,
+  `CREATE TABLE efs_staging_reconciliations (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, manifest_hash BLOB NOT NULL CHECK(length(manifest_hash)=32), next_sequence INTEGER NOT NULL CHECK(next_sequence>=0), object_count INTEGER NOT NULL CHECK(object_count>=0), object_bytes INTEGER NOT NULL CHECK(object_bytes>=0), node_count INTEGER NOT NULL CHECK(node_count>=0), node_bytes INTEGER NOT NULL CHECK(node_bytes>=0), membership_count INTEGER NOT NULL CHECK(membership_count>=0), complete INTEGER NOT NULL CHECK(complete IN (0,1))) WITHOUT ROWID`,
+  `CREATE TABLE efs_staging_reconciliation_queue (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind IN (0,1,2)), hash BLOB NOT NULL CHECK(length(hash)=32), sequence INTEGER NOT NULL CHECK(sequence>=0), declared_size INTEGER NOT NULL CHECK(declared_size>=0), declared_span INTEGER, declared_entry_count INTEGER, edge_cursor INTEGER NOT NULL DEFAULT 0 CHECK(edge_cursor>=0), processed INTEGER NOT NULL DEFAULT 0 CHECK(processed IN (0,1)), PRIMARY KEY(lease_id,kind,hash), UNIQUE(lease_id,sequence)) WITHOUT ROWID`,
   `CREATE TABLE efs_operation_ids (id TEXT PRIMARY KEY, branch_id TEXT NOT NULL, generation INTEGER NOT NULL, created_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_operation_results (operation_id TEXT PRIMARY KEY REFERENCES efs_operation_ids(id), outcome INTEGER NOT NULL, encoded BLOB NOT NULL, expires_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_root_journal (generation INTEGER PRIMARY KEY, kind INTEGER NOT NULL, root_id BLOB NOT NULL)`,
@@ -110,6 +112,17 @@ function migrateV1ToV2(tx: FilesystemSQLiteTransaction): void {
   tx.run("PRAGMA user_version=2");
 }
 
+function migrateV2ToV3(tx: FilesystemSQLiteTransaction): void {
+  const state = inspect(tx);
+  if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 2) throw new Error("ESCHEMA: schema v2 migration precondition failed");
+  const meta = tx.all<MetaRow>("SELECT schema_version,filesystem_id,main_revision,root_inode,cow_page_bytes FROM efs_meta WHERE singleton=1", [], { maxRows: 1, maxBytes: 4096 })[0];
+  if (!meta || meta.schema_version !== 2) throw new Error("ECORRUPT: invalid schema v2 metadata");
+  tx.run(`CREATE TABLE efs_staging_reconciliations (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, manifest_hash BLOB NOT NULL CHECK(length(manifest_hash)=32), next_sequence INTEGER NOT NULL CHECK(next_sequence>=0), object_count INTEGER NOT NULL CHECK(object_count>=0), object_bytes INTEGER NOT NULL CHECK(object_bytes>=0), node_count INTEGER NOT NULL CHECK(node_count>=0), node_bytes INTEGER NOT NULL CHECK(node_bytes>=0), membership_count INTEGER NOT NULL CHECK(membership_count>=0), complete INTEGER NOT NULL CHECK(complete IN (0,1))) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_staging_reconciliation_queue (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind IN (0,1,2)), hash BLOB NOT NULL CHECK(length(hash)=32), sequence INTEGER NOT NULL CHECK(sequence>=0), declared_size INTEGER NOT NULL CHECK(declared_size>=0), declared_span INTEGER, declared_entry_count INTEGER, edge_cursor INTEGER NOT NULL DEFAULT 0 CHECK(edge_cursor>=0), processed INTEGER NOT NULL DEFAULT 0 CHECK(processed IN (0,1)), PRIMARY KEY(lease_id,kind,hash), UNIQUE(lease_id,sequence)) WITHOUT ROWID`);
+  tx.run("UPDATE efs_meta SET schema_version=3 WHERE singleton=1");
+  tx.run("PRAGMA user_version=3");
+}
+
 export interface StorageMetadata { readonly filesystemId: string; readonly mainRevision: number; readonly rootInode: string; readonly cowPageBytes: CowPageBytes }
 
 export function initializeOrValidateSchema(driver: FilesystemSQLiteDriver, options: { readonly cowPageBytes?: CowPageBytes; readonly now?: number } = {}): StorageMetadata {
@@ -118,7 +131,12 @@ export function initializeOrValidateSchema(driver: FilesystemSQLiteDriver, optio
   if (state.applicationId === EFS_APPLICATION_ID) {
     if (state.userVersion === 1) {
       if (driver.readOnly) throw new Error("ESCHEMA: schema v1 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV1ToV2(tx));
+      driver.transaction("exclusive", (tx) => { migrateV1ToV2(tx); migrateV2ToV3(tx); });
+    }
+    const afterV1 = driver.transaction("read", (tx) => inspect(tx));
+    if (afterV1.userVersion === 2) {
+      if (driver.readOnly) throw new Error("ESCHEMA: schema v2 requires a writable migration");
+      driver.transaction("exclusive", (tx) => migrateV2ToV3(tx));
     }
     const meta = driver.transaction("read", (tx) => validateCurrent(tx, requestedPageBytes));
     return Object.freeze({ filesystemId: meta.filesystem_id, mainRevision: meta.main_revision, rootInode: meta.root_inode, cowPageBytes: meta.cow_page_bytes as CowPageBytes });

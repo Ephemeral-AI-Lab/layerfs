@@ -1,0 +1,115 @@
+{
+  "package": "@ephemeralai/fs-testkit",
+  "subpath": ".",
+  "entry": "packages/testkit/dist/index.d.ts",
+  "symbols": [
+    {
+      "name": "BenchmarkResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ConformanceAdapterFactory",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ConformanceCapability",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ConformanceDatabase",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ConformanceFaultController",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ConformanceFixtureOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "CorrectnessResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "createRecordingFactory",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "RecordingEvent",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    }
+  ]
+}

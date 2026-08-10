@@ -26,6 +26,21 @@ function rowBytes(row: SqliteRow): number {
   return bytes;
 }
 
+function leadingSqlKeyword(sql: string): string {
+  let source = sql;
+  while (true) {
+    source = source.trimStart();
+    if (source.startsWith("--")) { const end = source.indexOf("\n"); source = end < 0 ? "" : source.slice(end + 1); continue; }
+    if (source.startsWith("/*")) { const end = source.indexOf("*/", 2); if (end < 0) throw new TypeError("unterminated SQL comment"); source = source.slice(end + 2); continue; }
+    return /^[A-Za-z]+/u.exec(source)?.[0]?.toUpperCase() ?? "";
+  }
+}
+
+function assertReadOnlySql(sql: string): void {
+  const keyword = leadingSqlKeyword(sql);
+  if (keyword !== "SELECT" && keyword !== "VALUES" && keyword !== "WITH" && keyword !== "EXPLAIN") throw new Error("EROFS: read transaction accepts only read-only SQL");
+}
+
 export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
   readonly kind = "sqlite" as const; readonly readOnly: boolean; readonly capabilities: SQLiteDriverCapabilities;
   readonly #database: DatabaseSync; #closed = false; #transactionActive = false;
@@ -47,18 +62,19 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     if (this.#closed) throw new Error("SQLite driver is closed"); if (this.#transactionActive) throw new Error("nested SQLite transactions are forbidden");
     if (this.readOnly && mode !== "read") throw new Error("EROFS: write transaction requested on read-only adapter");
     this.#transactionActive = true; let active = true;
+    if (mode === "read") this.#database.exec("PRAGMA query_only=ON");
     this.#database.exec(mode === "read" ? "BEGIN DEFERRED" : mode === "write" ? "BEGIN IMMEDIATE" : "BEGIN EXCLUSIVE");
     const tx: FilesystemSQLiteTransaction = Object.freeze({
       scope: Symbol("sqlite-transaction"),
       run: (sql: string, bindings: SqliteBindings = []): SqliteRunResult => {
-        if (!active) throw new Error("SQLite transaction value is no longer active"); this.#validateStatement(sql, bindings);
+        if (!active) throw new Error("SQLite transaction value is no longer active"); this.#validateStatement(sql, bindings, mode);
         const result = this.#database.prepare(sql).run(...bindings.map((value) => binding(value, this.capabilities)));
         const changes = Number(result.changes); const rowid = Number(result.lastInsertRowid);
         if (!Number.isSafeInteger(changes) || !Number.isSafeInteger(rowid)) throw new RangeError("SQLite returned unsafe write counters");
         return { changes, lastInsertRowid: rowid };
       },
       all: <Row extends SqliteRow = SqliteRow>(sql: string, bindings: SqliteBindings, budget: QueryBudget): readonly Row[] => {
-        if (!active) throw new Error("SQLite transaction value is no longer active"); this.#validateStatement(sql, bindings);
+        if (!active) throw new Error("SQLite transaction value is no longer active"); this.#validateStatement(sql, bindings, mode);
         if (!Number.isSafeInteger(budget.maxRows) || budget.maxRows <= 0 || !Number.isSafeInteger(budget.maxBytes) || budget.maxBytes <= 0) throw new RangeError("invalid query budget");
         const result: Row[] = []; let bytes = 0;
         for (const raw of this.#database.prepare(sql).iterate(...bindings.map((value) => binding(value, this.capabilities)))) {
@@ -75,14 +91,14 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       active = false; this.#database.exec("COMMIT"); return result;
     } catch (error) {
       active = false; try { this.#database.exec("ROLLBACK"); } catch {} throw error;
-    } finally { this.#transactionActive = false; }
+    } finally { if (mode === "read") { try { this.#database.exec("PRAGMA query_only=OFF"); } catch {} } this.#transactionActive = false; }
   }
   close(): void { if (!this.#closed) { if (this.#transactionActive) throw new Error("cannot close SQLite during a transaction"); this.#closed = true; this.#database.close(); } }
-  #validateStatement(sql: string, bindings: SqliteBindings): void {
+  #validateStatement(sql: string, bindings: SqliteBindings, mode: TransactionMode): void {
     if (!sql.trim() || sql.includes("\0")) throw new TypeError("invalid SQL statement");
     if (bindings.length > this.capabilities.maxBindings) throw new RangeError("SQLite binding limit exceeded");
+    if (mode === "read") assertReadOnlySql(sql);
   }
 }
 
 export async function openNodeSqlite(options: OpenNodeSqliteOptions): Promise<NodeSQLiteDriver> { return new NodeSQLiteDriver(options); }
-

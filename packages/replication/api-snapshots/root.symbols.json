@@ -1,0 +1,19 @@
+{
+  "package": "@ephemeralai/fs-replication",
+  "subpath": ".",
+  "entry": "packages/replication/dist/index.d.ts",
+  "symbols": [
+    {
+      "name": "REPLICATION_PROTOCOL_VERSION",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/index.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    }
+  ]
+}

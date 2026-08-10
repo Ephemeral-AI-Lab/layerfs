@@ -7,7 +7,7 @@ import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
 import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import { constrainStorageLimits } from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
-import { EFS_APPLICATION_ID, initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
+import { EFS_APPLICATION_ID, EFS_SCHEMA_VERSION, initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { createV1Schema } from "../fixtures/schema-v1.mjs";
 
@@ -19,7 +19,7 @@ test("schema initialization is deterministic, persisted, and read-only reopen-sa
       applicationId: tx.all("SELECT application_id value FROM pragma_application_id", [], { maxRows: 1, maxBytes: 1024 })[0].value,
       userVersion: tx.all("SELECT user_version value FROM pragma_user_version", [], { maxRows: 1, maxBytes: 1024 })[0].value,
     }));
-    assert.deepEqual(identity, { applicationId: EFS_APPLICATION_ID, userVersion: 2 }); driver.close();
+    assert.deepEqual(identity, { applicationId: EFS_APPLICATION_ID, userVersion: EFS_SCHEMA_VERSION }); driver.close();
     const readOnly = await openNodeSqlite({ filename, readOnly: true }); const reopened = initializeOrValidateSchema(readOnly, { cowPageBytes: 4096 });
     assert.deepEqual(reopened, created); assert.throws(() => initializeOrValidateSchema(readOnly, { cowPageBytes: 8192 }), /ESCHEMA/); readOnly.close();
   } finally { await rm(directory, { recursive: true, force: true }); }
@@ -33,12 +33,12 @@ function migrationDriver(base, failAt, count) {
   }); } };
 }
 
-test("schema v1 migrates data to v2 and every migration-statement fault rolls back", async () => {
+test("schema v1 migrates data to the current schema and every migration-statement fault rolls back", async () => {
   const probe = await openNodeSqlite({ filename: ":memory:" }); createV1Schema(probe);
   probe.transaction("write", (tx) => { tx.run("INSERT INTO efs_branch_ids VALUES('b',1)"); tx.run("INSERT INTO efs_branches VALUES('b',0,0,7,1,NULL)"); tx.run("INSERT INTO efs_cow_pages VALUES('b','inode',2,7,?)", [new Uint8Array(4096).fill(3)]); tx.run("INSERT INTO efs_patches VALUES('b','inode',0,9,2,?)", [Uint8Array.of(4, 5, 6)]); });
   const count = { value: 0 }; initializeOrValidateSchema(migrationDriver(probe, Number.POSITIVE_INFINITY, count), { cowPageBytes: 4096 });
   const migrated = probe.transaction("read", (tx) => ({ version: tx.all("SELECT user_version value FROM pragma_user_version", [], { maxRows: 1, maxBytes: 128 })[0].value, page: tx.all("SELECT page_index,generation,length(bytes) size FROM efs_cow_page_versions", [], { maxRows: 1, maxBytes: 128 })[0], patch: tx.all("SELECT offset,delete_length,insert_length FROM efs_patches", [], { maxRows: 1, maxBytes: 128 })[0], segment: tx.all("SELECT segment_index,bytes FROM efs_patch_segments", [], { maxRows: 1, maxBytes: 128 })[0] }));
-  assert.equal(migrated.version, 2); assert.deepEqual(migrated.page, { page_index: 2, generation: 7, size: 4096 }); assert.deepEqual(migrated.patch, { offset: 9, delete_length: 2, insert_length: 3 }); assert.equal(migrated.segment.segment_index, 0); assert.deepEqual(migrated.segment.bytes, Uint8Array.of(4, 5, 6)); probe.close();
+  assert.equal(migrated.version, EFS_SCHEMA_VERSION); assert.deepEqual(migrated.page, { page_index: 2, generation: 7, size: 4096 }); assert.deepEqual(migrated.patch, { offset: 9, delete_length: 2, insert_length: 3 }); assert.equal(migrated.segment.segment_index, 0); assert.deepEqual(migrated.segment.bytes, Uint8Array.of(4, 5, 6)); probe.close();
   assert.ok(count.value > 20);
   for (let failAt = 1; failAt <= count.value; failAt += 1) {
     const base = await openNodeSqlite({ filename: ":memory:" }); createV1Schema(base); const faultCount = { value: 0 };

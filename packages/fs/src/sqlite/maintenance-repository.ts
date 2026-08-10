@@ -12,7 +12,6 @@ export class MaintenanceRepository {
   constructor(tx: FilesystemSQLiteTransaction) { this.#tx = tx; }
   beginRun(runId: string, now: number): void {
     if (this.run(runId)) return;
-    this.#tx.run("DELETE FROM efs_leases WHERE expires_at_ms<?", [now]);
     const meta = this.#tx.all<{ next_allocation_sequence: number; root_mutation_generation: number } & SqliteRow>("SELECT next_allocation_sequence,root_mutation_generation FROM efs_meta WHERE singleton=1", [], { maxRows: 1, maxBytes: 1024 })[0];
     if (!meta) throw new Error("ECORRUPT: missing metadata");
     this.#tx.run("INSERT INTO efs_gc_runs(id,state,high_water,root_generation,cursor_kind,cursor_value,created_at_ms) VALUES(?,0,?,?,0,NULL,?)", [runId, meta.next_allocation_sequence - 1, meta.root_mutation_generation, now]);
@@ -48,8 +47,8 @@ export class MaintenanceRepository {
     "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_inodes WHERE manifest_hash IS NOT NULL",
     "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_revision_manifest_roots",
     "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_branch_manifest_roots",
-    "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,lm.manifest_hash,0 FROM efs_lease_manifests lm JOIN efs_leases l ON l.id=lm.lease_id",
-    "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_staging_certificates WHERE sealed=1",
+    "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,lm.manifest_hash,0 FROM efs_lease_manifests lm JOIN efs_leases l ON l.id=lm.lease_id WHERE l.state IN (0,1)",
+    "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,c.manifest_hash,0 FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id WHERE c.sealed=1 AND l.state=1",
   ]) changes += this.#tx.run(sql, [runId]).changes; return changes; }
   #scalar(sql: string): number { const value = this.#tx.all<{ value: number } & SqliteRow>(sql, [], { maxRows: 1, maxBytes: 1024 })[0]?.value; if (typeof value !== "number") throw new Error("ECORRUPT: invalid scalar"); return value; }
 }

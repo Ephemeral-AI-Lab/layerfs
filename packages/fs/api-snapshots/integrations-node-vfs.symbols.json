@@ -1,0 +1,55 @@
+{
+  "package": "@ephemeralai/fs",
+  "subpath": "./integrations/node-vfs",
+  "entry": "packages/fs/dist/integrations/node-vfs.d.ts",
+  "symbols": [
+    {
+      "name": "createNodeVfsBridge",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/integrations/node-vfs.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "CreateNodeVfsBridgeOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/integrations/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsFilesystemBridge",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/operations/node-vfs-bridge.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SyncPreparedContent",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/operations/node-vfs-bridge.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    }
+  ]
+}

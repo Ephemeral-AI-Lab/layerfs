@@ -1,0 +1,163 @@
+{
+  "package": "@ephemeralai/fs-node-vfs",
+  "subpath": ".",
+  "entry": "packages/node-vfs/dist/index.d.ts",
+  "symbols": [
+    {
+      "name": "CowPageBytes",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "FlushOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeFileSession",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsCapabilities",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsHandle",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsMetrics",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsMetricsSnapshot",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsObservation",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsObserver",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsProvider",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "OpenFileOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "openNodeVfs",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "OpenNodeVfsOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    }
+  ]
+}

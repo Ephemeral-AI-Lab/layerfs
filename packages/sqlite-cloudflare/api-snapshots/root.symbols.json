@@ -1,0 +1,80 @@
+{
+  "package": "@ephemeralai/fs-sqlite-cloudflare",
+  "subpath": ".",
+  "entry": "packages/sqlite-cloudflare/dist/index.d.ts",
+  "symbols": [
+    {
+      "name": "CloudflareSQLiteDriver",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "DurableObjectSqlCursor",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "DurableObjectSQLiteStorage",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "DurableObjectSqlStorage",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "openCloudflareSqlite",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "OpenCloudflareSqliteOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    }
+  ]
+}

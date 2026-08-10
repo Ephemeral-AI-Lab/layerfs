@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
-import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
+import { buildManifestFromEntries } from "../../packages/fs/dist/manifests/builder.js";
 import { AdmissionController, DEFAULT_RUNTIME_LIMITS, constrainStorageLimits } from "../../packages/fs/dist/resources/limits.js";
 import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { prepareContent } from "../../packages/fs/dist/operations/manifest-io.js";
+import { MaintenanceManager } from "../../packages/fs/dist/operations/maintenance.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { OverlayRepository } from "../../packages/fs/dist/sqlite/overlay-repository.js";
 import { initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
@@ -58,18 +62,82 @@ test("partial write-admission failure removes its staging lease and releases eve
   assert.equal(active, 0); driver.close();
 });
 
-test("a 100001-object staging closure seals and final-validates with constant-row work", { timeout: 120_000 }, async () => {
+test("a huge upstream stream chunk is admitted at its full size, rejected before processing, and cancelled cleanly", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" }); initializeOrValidateSchema(driver); const storage = limits(driver);
+  const runtime = { ...DEFAULT_RUNTIME_LIMITS, maxManagedResidentBytes: 4 * 1024 * 1024, maxPendingWriteBytes: 1024 * 1024, maxWriteSessionBytes: 256 * 1024, maxQueryBatchBytes: 128 * 1024 };
+  const admission = new AdmissionController(runtime.maxManagedResidentBytes); let cancelled = false; let cancellationReason;
+  const stream = new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array(3 * 1024 * 1024)); }, cancel(reason) { cancelled = true; cancellationReason = reason; } });
+  await assert.rejects(prepareContent(driver, stream, storage, runtime, admission, undefined, undefined, () => 7), /managed resident memory limit/);
+  assert.equal(cancelled, true); assert.ok(cancellationReason instanceof RangeError); assert.equal(admission.usedBytes, 0);
+  const state = driver.transaction("read", (tx) => tx.all("SELECT (SELECT count(*) FROM efs_leases) leases,staging_bytes FROM efs_usage", [], { maxRows: 1, maxBytes: 128 })[0]);
+  assert.deepEqual(state, { leases: 0, staging_bytes: 0 }); driver.close();
+});
+
+test("staging payload quota is exact across rollback, release, and reopen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-stage-quota-")); const filename = path.join(directory, "filesystem.db");
+  try {
+    let driver = await openNodeSqlite({ filename }); initializeOrValidateSchema(driver); const storage = constrainStorageLimits({ maxManagedPayloadBytes: 16 * 1024 * 1024, maintenanceReserveBytes: 1024, maxStagingPayloadBytes: 8 }, driver.capabilities); const nonce = new Uint8Array(16).fill(1); const first = new Uint8Array(8).fill(2); const firstHash = sha256(first);
+    driver.transaction("write", (tx) => { const staging = new StagingRepository(tx, storage); staging.begin({ leaseId: "quota", ownerId: "owner", ownerNonce: nonce, now: 1, expiresAt: 100 }); new ContentRepository(tx, storage).putObject(firstHash, first); staging.appendBatch("quota", nonce, [{ kind: "object", hash: firstHash, size: first.length }]); });
+    const second = new Uint8Array(1).fill(3); const secondHash = sha256(second);
+    assert.throws(() => driver.transaction("write", (tx) => { new ContentRepository(tx, storage).putObject(secondHash, second); new StagingRepository(tx, storage).appendBatch("quota", nonce, [{ kind: "object", hash: secondHash, size: second.length }]); }), /staging payload quota/);
+    let state = driver.transaction("read", (tx) => tx.all("SELECT object_count,staging_bytes,(SELECT count(*) FROM efs_lease_objects WHERE lease_id='quota') members FROM efs_usage", [], { maxRows: 1, maxBytes: 128 })[0]); assert.deepEqual(state, { object_count: 1, staging_bytes: 8, members: 1 });
+    driver.transaction("write", (tx) => assert.equal(new StagingRepository(tx, storage).release("quota", nonce, false), true)); driver.close();
+    driver = await openNodeSqlite({ filename }); initializeOrValidateSchema(driver); state = driver.transaction("read", (tx) => tx.all("SELECT staging_bytes FROM efs_usage", [], { maxRows: 1, maxBytes: 128 })[0]); assert.equal(state.staging_bytes, 0); driver.close();
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("maintenance expiry atomically releases partial and sealed staging charges after reopen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-stage-expiry-")); const filename = path.join(directory, "filesystem.db");
+  try {
+    let driver = await openNodeSqlite({ filename, durability: "relaxed-test" }); initializeOrValidateSchema(driver); const storage = constrainStorageLimits({ maxManagedPayloadBytes: 32 * 1024 * 1024, maintenanceReserveBytes: 1024, maxStagingPayloadBytes: 1024 * 1024, stagingLeaseMs: 10 }, driver.capabilities); const partialNonce = new Uint8Array(16).fill(4); const partial = Uint8Array.of(1, 2, 3, 4); const partialHash = sha256(partial);
+    driver.transaction("write", (tx) => { const staging = new StagingRepository(tx, storage); staging.begin({ leaseId: "partial", ownerId: "owner", ownerNonce: partialNonce, now: 1, expiresAt: 11 }); new ContentRepository(tx, storage).putObject(partialHash, partial); staging.appendBatch("partial", partialNonce, [{ kind: "object", hash: partialHash, size: partial.length }]); });
+    const admission = new AdmissionController(DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes); await prepareContent(driver, Uint8Array.of(5, 6, 7), storage, DEFAULT_RUNTIME_LIMITS, admission, undefined, undefined, () => 1); assert.equal(admission.usedBytes, 0);
+    const before = driver.transaction("read", (tx) => tx.all("SELECT staging_bytes,(SELECT count(*) FROM efs_leases) leases FROM efs_usage", [], { maxRows: 1, maxBytes: 128 })[0]); assert.equal(before.leases, 2); assert.ok(before.staging_bytes > partial.length); driver.close();
+    driver = await openNodeSqlite({ filename, durability: "relaxed-test" }); initializeOrValidateSchema(driver); const maintenance = new MaintenanceManager(driver, storage, DEFAULT_RUNTIME_LIMITS, () => 100); await maintenance.collectGarbage({ runId: "expiry-accounting", maxBatches: 0 });
+    const after = driver.transaction("read", (tx) => tx.all("SELECT staging_bytes,(SELECT count(*) FROM efs_leases) leases,(SELECT count(*) FROM efs_staging_certificates) certificates,(SELECT count(*) FROM efs_lease_objects) object_members,(SELECT count(*) FROM efs_lease_staged_manifests) manifest_members,(SELECT count(*) FROM efs_staging_reconciliation_queue) queued FROM efs_usage", [], { maxRows: 1, maxBytes: 256 })[0]);
+    assert.deepEqual(after, { staging_bytes: 0, leases: 0, certificates: 0, object_members: 0, manifest_members: 0, queued: 0 }); driver.close();
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("every expired-lease accounting statement fault rolls back lease cascades and usage", async () => {
+  async function fixture(failAt, counter) {
+    const base = await openNodeSqlite({ filename: ":memory:" }); initializeOrValidateSchema(base); const storage = constrainStorageLimits({ maxManagedPayloadBytes: 16 * 1024 * 1024, maintenanceReserveBytes: 1024, maxStagingPayloadBytes: 1024 }, base.capabilities); const nonce = new Uint8Array(16).fill(8); const bytes = Uint8Array.of(9, 9, 9); const hash = sha256(bytes);
+    base.transaction("write", (tx) => { const staging = new StagingRepository(tx, storage); staging.begin({ leaseId: "expired", ownerId: "owner", ownerNonce: nonce, now: 1, expiresAt: 2 }); new ContentRepository(tx, storage).putObject(hash, bytes); staging.appendBatch("expired", nonce, [{ kind: "object", hash, size: bytes.length }]); });
+    const wrapped = { kind: base.kind, readOnly: base.readOnly, capabilities: base.capabilities, close: () => base.close(), transaction(mode, callback) { return base.transaction(mode, (tx) => callback({ scope: tx.scope, run(...args) { counter.value += 1; if (counter.value === failAt) throw new Error(`expiry fault ${failAt}`); return tx.run(...args); }, all(...args) { counter.value += 1; if (counter.value === failAt) throw new Error(`expiry fault ${failAt}`); return tx.all(...args); } })); } };
+    return { base, wrapped, storage };
+  }
+  const probeCount = { value: 0 }; const probe = await fixture(Number.POSITIVE_INFINITY, probeCount); runUnitOfWork(probe.wrapped, "write", { maxRows: 1000, maxBytes: 1024 * 1024 }, (tx) => new StagingRepository(tx, probe.storage).expireBatch(3, 10)); probe.base.close(); assert.ok(probeCount.value >= 6);
+  for (let failAt = 1; failAt <= probeCount.value; failAt += 1) {
+    const count = { value: 0 }; const { base, wrapped, storage } = await fixture(failAt, count);
+    assert.throws(() => runUnitOfWork(wrapped, "write", { maxRows: 1000, maxBytes: 1024 * 1024 }, (tx) => new StagingRepository(tx, storage).expireBatch(3, 10)), new RegExp(`expiry fault ${failAt}`));
+    const state = base.transaction("read", (tx) => tx.all("SELECT staging_bytes,(SELECT count(*) FROM efs_leases) leases,(SELECT count(*) FROM efs_lease_objects) members FROM efs_usage", [], { maxRows: 1, maxBytes: 128 })[0]); assert.deepEqual(state, { staging_bytes: 3, leases: 1, members: 1 }); base.close();
+  }
+});
+
+test("a genuine 100001-entry manifest closure reconciles durably and final-validates with constant-row work", { timeout: 120_000 }, async (t) => {
   const driver = await openNodeSqlite({ filename: ":memory:", durability: "relaxed-test" }); initializeOrValidateSchema(driver); const storage = limits(driver); const leaseId = "large-stage"; const nonce = Uint8Array.from({ length: 16 }, (_, index) => index + 1); const budget = { maxRows: storage.maxFinalTransactionRows, maxBytes: storage.maxFinalTransactionBytes };
-  runUnitOfWork(driver, "write", budget, (tx) => new StagingRepository(tx).begin({ leaseId, ownerId: "test", ownerNonce: nonce, now: 1, expiresAt: 1_000_000 }));
+  runUnitOfWork(driver, "write", budget, (tx) => new StagingRepository(tx, storage).begin({ leaseId, ownerId: "test", ownerNonce: nonce, now: 1, expiresAt: 1_000_000 }));
   const total = 100_001; const batchSize = 128;
   for (let start = 0; start < total; start += batchSize) {
     const batch = []; for (let index = start; index < Math.min(total, start + batchSize); index += 1) { const bytes = new Uint8Array(8); new DataView(bytes.buffer).setBigUint64(0, BigInt(index), true); batch.push({ hash: sha256(bytes), bytes }); }
-    runUnitOfWork(driver, "write", budget, (tx) => { new ContentRepository(tx, storage).putObjectsBatch(batch); new StagingRepository(tx).appendBatch(leaseId, nonce, batch.map((item) => ({ kind: "object", hash: item.hash, size: item.bytes.length }))); });
+    runUnitOfWork(driver, "write", budget, (tx) => { const staging = new StagingRepository(tx, storage); new ContentRepository(tx, storage).putObjectsBatch(batch); for (let index = 0; index < batch.length; index += 1) staging.putEntry(leaseId, start + index, batch[index].hash, batch[index].bytes.length); staging.appendBatch(leaseId, nonce, batch.map((item) => ({ kind: "object", hash: item.hash, size: item.bytes.length }))); });
   }
-  const empty = buildManifest(new Uint8Array(), { minimum: 32768, average: 131072, maximum: 524288 });
-  const certificate = runUnitOfWork(driver, "write", budget, (tx) => { const content = new ContentRepository(tx, storage); for (const node of empty.nodes.values()) content.putManifestNode(node.hash, node.encoded); content.putManifestRoot(empty.rootHash, empty.root); const staging = new StagingRepository(tx); staging.appendBatch(leaseId, nonce, [...empty.nodes.values()].map((node) => ({ kind: "manifest-node", hash: node.hash, size: node.encoded.length }))); staging.appendBatch(leaseId, nonce, [{ kind: "manifest-root", hash: empty.rootHash, size: empty.root.length }]); const snapshot = staging.snapshot(leaseId, nonce); const value = { ...snapshot, manifestHash: empty.rootHash }; staging.seal(value); return value; });
-  let statements = 0;
-  const counted = { ...driver, transaction(mode, callback) { return driver.transaction(mode, (tx) => callback({ scope: tx.scope, run(...args) { statements += 1; return tx.run(...args); }, all(...args) { statements += 1; return tx.all(...args); } })); } };
-  runUnitOfWork(counted, "read", budget, (tx) => new StagingRepository(tx).validateSealed(certificate, 2));
-  assert.equal(certificate.objectCount, total); assert.equal(certificate.membershipCount, total + empty.nodes.size + 1); assert.equal(statements, 1); driver.close();
+  const workspace = {
+    writeNode(record) { runUnitOfWork(driver, "write", budget, (tx) => { const staging = new StagingRepository(tx, storage); new ContentRepository(tx, storage).putManifestNode(record.value.hash, record.value.encoded); staging.putLevelRecord(leaseId, record.level, record.index, record.value.hash, record.child.span, record.child.entryCount); staging.appendBatch(leaseId, nonce, [{ kind: "manifest-node", hash: record.value.hash, size: record.value.encoded.length }]); }); },
+    readLevel(level, afterIndex, limit) { return runUnitOfWork(driver, "read", budget, (tx) => new StagingRepository(tx, storage).levelRecordsAfter(leaseId, level, afterIndex, limit, 1024 * 1024).map((row) => ({ index: row.record_index, child: { hash: row.node_hash, span: row.span, entryCount: row.entry_count } }))); },
+  };
+  function* entries() { let cursor = -1; while (true) { const rows = runUnitOfWork(driver, "read", budget, (tx) => new StagingRepository(tx, storage).entriesAfter(leaseId, cursor, batchSize, 64 * 1024)); if (!rows.length) return; for (const row of rows) { cursor = row.entry_index; yield { hash: row.object_hash, length: row.length }; } } }
+  const built = buildManifestFromEntries(entries(), { minimum: 1, average: 2, maximum: 4 }, workspace, { readBatchRecords: 31, maxDepth: storage.maxManifestDepth });
+  let reconciliationStatements = 0;
+  const counted = { kind: driver.kind, readOnly: driver.readOnly, capabilities: driver.capabilities, close: () => {}, transaction(mode, callback) { return driver.transaction(mode, (tx) => callback({ scope: tx.scope, run(...args) { reconciliationStatements += 1; return tx.run(...args); }, all(...args) { reconciliationStatements += 1; return tx.all(...args); } })); } };
+  const certificate = runUnitOfWork(counted, "write", budget, (tx) => { const content = new ContentRepository(tx, storage); content.putManifestRoot(built.rootHash, built.root); const staging = new StagingRepository(tx, storage); staging.appendBatch(leaseId, nonce, [{ kind: "manifest-root", hash: built.rootHash, size: built.root.length }]); staging.beginReconciliation(leaseId, nonce, built.rootHash); return { ...staging.snapshot(leaseId, nonce), manifestHash: built.rootHash }; });
+  let complete = false; while (!complete) complete = runUnitOfWork(counted, "write", budget, (tx) => new StagingRepository(tx, storage).reconcileBatch(leaseId, nonce, storage.maxQueryBatchSize).complete);
+  runUnitOfWork(counted, "write", budget, (tx) => new StagingRepository(tx, storage).seal(certificate));
+  const reconciliation = driver.transaction("read", (tx) => tx.all("SELECT object_count,node_count,membership_count,complete FROM efs_staging_reconciliations WHERE lease_id=?", [leaseId], { maxRows: 1, maxBytes: 256 })[0]);
+  let finalStatements = 0; const finalCounted = { ...counted, transaction(mode, callback) { return driver.transaction(mode, (tx) => callback({ scope: tx.scope, run(...args) { finalStatements += 1; return tx.run(...args); }, all(...args) { finalStatements += 1; return tx.all(...args); } })); } };
+  runUnitOfWork(finalCounted, "read", budget, (tx) => new StagingRepository(tx, storage).validateSealed(certificate, 2));
+  assert.equal(built.entryCount, total); assert.equal(certificate.objectCount, total); assert.deepEqual(reconciliation, { object_count: total, node_count: certificate.nodeCount, membership_count: certificate.membershipCount, complete: 1 }); assert.equal(finalStatements, 1);
+  assert.ok(reconciliationStatements < certificate.membershipCount * 8, `unexpected reconciliation SQL amplification: ${reconciliationStatements}`);
+  t.diagnostic(JSON.stringify({ manifestEntries: total, uniqueClosureMembers: certificate.membershipCount, reconciliationStatements, statementsPerClosureMember: reconciliationStatements / certificate.membershipCount, finalValidationStatements: finalStatements }));
+  driver.close();
 });

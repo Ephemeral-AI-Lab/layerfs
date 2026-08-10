@@ -6,6 +6,27 @@ import { test } from "node:test";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { runUnitOfWork } from "../../packages/fs/dist/sqlite/unit-of-work.js";
 
+function proveReadTransactionsAreReadOnly(driver) {
+  driver.transaction("write", (tx) => tx.run("CREATE TABLE readonly_probe(value INTEGER)"));
+  const budget = { maxRows: 10, maxBytes: 4096 };
+  const attempts = [
+    ["DML through run", (tx) => tx.run("INSERT INTO readonly_probe VALUES(1)")],
+    ["DML through all", (tx) => tx.all("INSERT INTO readonly_probe VALUES(2)", [], budget)],
+    ["DDL through run", (tx) => tx.run("CREATE TABLE forbidden_run(value INTEGER)")],
+    ["DDL through all", (tx) => tx.all("CREATE TABLE forbidden_all(value INTEGER)", [], budget)],
+    ["write PRAGMA through run", (tx) => tx.run("PRAGMA user_version=123")],
+    ["write PRAGMA through all", (tx) => tx.all("PRAGMA user_version=124", [], budget)],
+    ["row-returning write through run", (tx) => tx.run("INSERT INTO readonly_probe VALUES(3) RETURNING value")],
+    ["row-returning write through all", (tx) => tx.all("INSERT INTO readonly_probe VALUES(4) RETURNING value", [], budget)],
+  ];
+  for (const [label, attempt] of attempts) assert.throws(() => driver.transaction("read", attempt), /EROFS|read-only|readonly|query_only/i, label);
+  driver.transaction("read", (tx) => {
+    assert.equal(tx.all("SELECT count(*) count FROM readonly_probe", [], budget)[0].count, 0);
+    assert.equal(tx.all("SELECT count(*) count FROM sqlite_master WHERE name IN ('forbidden_run','forbidden_all')", [], budget)[0].count, 0);
+    assert.equal(tx.all("SELECT user_version value FROM pragma_user_version", [], budget)[0].value, 0);
+  });
+}
+
 test("Node SQLite driver scopes transactions and enforces result/binding types", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
   let retained;
@@ -21,6 +42,10 @@ test("Node SQLite driver scopes transactions and enforces result/binding types",
   assert.throws(() => driver.transaction("write", (tx) => tx.run("INSERT INTO sample VALUES(?,?)", [1.5, new Uint8Array()])), /safe integers/);
   assert.throws(() => driver.transaction("read", (tx) => tx.all("SELECT * FROM sample", [], { maxRows: 1, maxBytes: 1 })), /byte budget/);
   driver.close(); driver.close();
+});
+
+test("Node read transactions reject DML, DDL, write PRAGMAs, and RETURNING through run and all", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" }); try { proveReadTransactionsAreReadOnly(driver); } finally { driver.close(); }
 });
 
 test("file-backed driver reopens read-only and supports a second snapshot connection", async () => {

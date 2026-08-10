@@ -1,0 +1,115 @@
+{
+  "package": "@ephemeralai/fs",
+  "subpath": "./sqlite-driver",
+  "entry": "packages/fs/dist/sqlite/driver.d.ts",
+  "symbols": [
+    {
+      "name": "FilesystemSQLiteDriver",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "FilesystemSQLiteTransaction",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "QueryBudget",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SqliteBindings",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SQLiteDriverCapabilities",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SqliteRow",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SqliteRunResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SqliteValue",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransactionMode",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "package": "@ephemeralai/fs",
+  "subpath": "./integrations/replication",
+  "entry": "packages/fs/dist/integrations/replication.d.ts",
+  "symbols": [
+    {
+      "name": "ReplicationFilesystemBridge",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/integrations/replication.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationPlan",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/integrations/replication.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    }
+  ]
+}

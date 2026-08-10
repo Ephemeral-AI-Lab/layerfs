@@ -1,0 +1,44 @@
+{
+  "package": "@ephemeralai/fs-sqlite-node",
+  "subpath": ".",
+  "entry": "packages/sqlite-node/dist/index.d.ts",
+  "symbols": [
+    {
+      "name": "NodeSQLiteDriver",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-node/dist/index.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "openNodeSqlite",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-node/dist/index.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "OpenNodeSqliteOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-node/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    }
+  ]
+}

@@ -1,12 +1,9 @@
 import { decodeManifestNode, decodeManifestRoot, type ManifestEntry } from "../manifests/codec.js";
 import { checkedAdd } from "../resources/safe-integers.js";
-import { ContentRepository } from "../sqlite/content-repository.js";
-import { runUnitOfWork } from "../sqlite/unit-of-work.js";
-import type { FilesystemSQLiteDriver } from "../sqlite/driver.js";
 import type { RuntimeLimits, StorageLimits } from "../resources/limits.js";
 import { AdmissionController } from "../resources/limits.js";
 import { prepareContentStreaming } from "./streaming-prepare.js";
-import type { ClosureCertificate } from "../sqlite/staging-repository.js";
+import type { ClosureCertificate, ContentStore, OperationsStorage } from "./storage-ports.js";
 import type { ContentCache } from "../cache/content-cache.js";
 
 function concatParts(parts: readonly Uint8Array[]): Uint8Array {
@@ -19,11 +16,11 @@ function concatParts(parts: readonly Uint8Array[]): Uint8Array {
 
 export interface PreparedManifest { readonly hash: Uint8Array; readonly size: number; readonly certificate: ClosureCertificate }
 
-export async function prepareContent(driver: FilesystemSQLiteDriver, input: Uint8Array | ReadableStream<Uint8Array>, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, signal?: AbortSignal, cache?: ContentCache): Promise<PreparedManifest> {
-  return prepareContentStreaming(driver, input, storage, runtime, admission, signal, cache);
+export async function prepareContent(port: OperationsStorage, input: Uint8Array | ReadableStream<Uint8Array>, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, signal?: AbortSignal, cache?: ContentCache, clock?: () => number): Promise<PreparedManifest> {
+  return prepareContentStreaming(port, input, storage, runtime, admission, signal, cache, clock);
 }
 
-export function readManifestRange(repository: ContentRepository, manifestHash: Uint8Array, offset: number, length: number): Uint8Array {
+export function readManifestRange(repository: ContentStore, manifestHash: Uint8Array, offset: number, length: number): Uint8Array {
   const rootBytes = repository.getManifestRoot(manifestHash); if (!rootBytes) throw new Error("ECORRUPT: missing manifest root");
   const root = decodeManifestRoot(rootBytes, manifestHash); if (length === 0 || offset >= root.fileSize) return new Uint8Array();
   const end = Math.min(root.fileSize, offset + length); const parts: Uint8Array[] = [];
@@ -45,7 +42,7 @@ export function readManifestRange(repository: ContentRepository, manifestHash: U
   visit(root.rootNodeHash, 0, 1); return concatParts(parts);
 }
 
-export function readManifestInto(repository: ContentRepository, manifestHash: Uint8Array, position: number, destination: Uint8Array, destinationOffset: number, length: number): number {
+export function readManifestInto(repository: ContentStore, manifestHash: Uint8Array, position: number, destination: Uint8Array, destinationOffset: number, length: number): number {
   if (!Number.isSafeInteger(position) || position < 0 || !Number.isSafeInteger(destinationOffset) || destinationOffset < 0 || !Number.isSafeInteger(length) || length < 0 || destinationOffset + length > destination.byteLength) throw new RangeError("invalid direct manifest read range");
   const rootBytes = repository.getManifestRoot(manifestHash); if (!rootBytes) throw new Error("ECORRUPT: missing manifest root"); const root = decodeManifestRoot(rootBytes, manifestHash); if (!length || position >= root.fileSize) return 0;
   const end = Math.min(root.fileSize, position + length); let written = 0;

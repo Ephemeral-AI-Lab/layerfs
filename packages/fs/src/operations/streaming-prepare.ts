@@ -4,10 +4,7 @@ import { encodeManifestNode, encodeManifestRoot, type ManifestChild, type Manife
 import { advanceManifestGroupingState, isManifestGroupBoundary } from "../manifests/grouping.js";
 import { AdmissionController, type RuntimeLimits, type StorageLimits } from "../resources/limits.js";
 import type { ContentCache } from "../cache/content-cache.js";
-import { ContentRepository, type ContentObjectInput } from "../sqlite/content-repository.js";
-import { StagingRepository, type ClosureCertificate, type StagingEntryRow as EntryRow, type StagingLevelRow as LevelRow } from "../sqlite/staging-repository.js";
-import { runUnitOfWork } from "../sqlite/unit-of-work.js";
-import type { FilesystemSQLiteDriver } from "../sqlite/driver.js";
+import type { ClosureCertificate, ContentObjectInput, OperationsStorage, StagingEntryRow as EntryRow, StagingLevelRow as LevelRow } from "./storage-ports.js";
 import { bytesToHex } from "../cas/bytes.js";
 import { checkedAdd } from "../resources/safe-integers.js";
 interface PreparedNode { readonly hash: Uint8Array; readonly encoded: Uint8Array; readonly span: number; readonly entryCount: number }
@@ -15,8 +12,9 @@ export interface StreamPreparedManifest { readonly hash: Uint8Array; readonly si
 
 function randomNonce(): Uint8Array { return globalThis.crypto.getRandomValues(new Uint8Array(16)); }
 
-export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, input: Uint8Array | ReadableStream<Uint8Array>, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, signal?: AbortSignal, cache?: ContentCache): Promise<StreamPreparedManifest> {
-  const leaseId = globalThis.crypto.randomUUID(); const ownerId = globalThis.crypto.randomUUID(); const ownerNonce = randomNonce(); const now = Date.now();
+export async function prepareContentStreaming(port: OperationsStorage, input: Uint8Array | ReadableStream<Uint8Array>, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, signal?: AbortSignal, cache?: ContentCache, clock: () => number = Date.now): Promise<StreamPreparedManifest> {
+  const leaseId = globalThis.crypto.randomUUID(); const ownerId = globalThis.crypto.randomUUID(); const ownerNonce = randomNonce(); const now = clock();
+  if (!Number.isSafeInteger(now) || now < 0) throw new Error("clock must return a nonnegative safe integer");
   const workBudget = { maxRows: storage.maxFinalTransactionRows, maxBytes: storage.maxFinalTransactionBytes };
   const pendingLimit = Math.max(DEFAULT_FASTCDC.maximum, Math.min(runtime.maxPendingWriteBytes, Math.floor(storage.maxFinalTransactionBytes / 2)));
   const inputBudget = input instanceof Uint8Array ? input.byteLength : 0;
@@ -28,9 +26,9 @@ export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, in
   const pending: ContentObjectInput[] = [];
   const flushObjects = (): void => {
     if (!pending.length) return; const batch = pending.splice(0); pendingBytes = 0;
-    runUnitOfWork(driver, "write", workBudget, (tx) => {
-      const repository = new ContentRepository(tx, storage); repository.putObjectsBatch(batch);
-      const staging = new StagingRepository(tx);
+    port.transaction("write", workBudget, (tx) => {
+      const repository = tx.content(storage); repository.putObjectsBatch(batch);
+      const staging = tx.staging(storage);
       for (const item of batch) staging.putEntry(leaseId, entryIndex++, item.hash, item.bytes.byteLength);
       const unique = [...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values()];
       staging.appendBatch(leaseId, ownerNonce, unique.map((item) => Object.freeze({ kind: "object" as const, hash: item.hash, size: item.bytes.byteLength })));
@@ -47,7 +45,7 @@ export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, in
   const feed = (bytes: Uint8Array): void => { for (let offset = 0; offset < bytes.byteLength; offset += runtime.maxWriteSessionBytes) acceptChunks(chunker.push(bytes.subarray(offset, offset + runtime.maxWriteSessionBytes))); };
   try {
     cache?.makeRoom(reservationBytes);
-    runUnitOfWork(driver, "write", workBudget, (tx) => { const staging = new StagingRepository(tx); staging.begin({ leaseId, ownerId, ownerNonce, now, expiresAt: now + storage.stagingLeaseMs }); staging.bumpRoot(5, leaseId); }); leaseBegun = true;
+    port.transaction("write", workBudget, (tx) => { const staging = tx.staging(storage); staging.begin({ leaseId, ownerId, ownerNonce, now, expiresAt: now + storage.stagingLeaseMs }); staging.bumpRoot(5, leaseId); }); leaseBegun = true;
     releases.push(admission.reserve(DEFAULT_FASTCDC.maximum));
     releases.push(admission.reserve(pendingLimit));
     releases.push(admission.reserve(builderBudget));
@@ -55,35 +53,46 @@ export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, in
     chunker = new StreamingFastCdc(DEFAULT_FASTCDC);
     if (input instanceof Uint8Array) feed(input);
     else {
-      const reader = input.getReader();
-      try { while (true) { if (signal?.aborted) throw new DOMException("The operation was aborted", "AbortError"); const { done, value } = await reader.read(); if (done) break; if (!(value instanceof Uint8Array)) throw new TypeError("write stream chunks must be Uint8Array values"); feed(value); } }
-      finally { reader.releaseLock(); }
+      const reader = input.getReader(); let completed = false; let streamError: unknown;
+      try {
+        while (true) {
+          if (signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
+          const { done, value } = await reader.read(); if (done) { completed = true; break; }
+          if (!(value instanceof Uint8Array)) throw new TypeError("write stream chunks must be Uint8Array values");
+          const releaseInput = admission.reserve(value.byteLength);
+          try { feed(value); } finally { releaseInput(); }
+        }
+      } catch (error) { streamError = error; throw error; }
+      finally { if (!completed) try { await reader.cancel(streamError); } catch {} reader.releaseLock(); }
     }
     acceptChunks(chunker.finish()); flushObjects();
-    const rootNode = buildManifestLevels(driver, storage, runtime, leaseId, ownerNonce, workBudget);
+    const rootNode = buildManifestLevels(port, storage, runtime, leaseId, ownerNonce, workBudget);
     const root = encodeManifestRoot({ parameters: DEFAULT_FASTCDC, fileSize: total, entryCount: entryIndex, rootNodeHash: rootNode.hash }); const rootHash = sha256(root);
-    const certificate = runUnitOfWork(driver, "write", workBudget, (tx) => {
-      const repository = new ContentRepository(tx, storage); repository.putManifestRoot(rootHash, root);
-      const staging = new StagingRepository(tx); staging.appendBatch(leaseId, ownerNonce, [Object.freeze({ kind: "manifest-root", hash: rootHash, size: root.byteLength })]);
-      const snapshot = staging.snapshot(leaseId, ownerNonce); const sealed = Object.freeze({ ...snapshot, manifestHash: rootHash }); staging.seal(sealed); staging.bumpRoot(5, leaseId); return sealed;
+    const certificate = port.transaction("write", workBudget, (tx) => {
+      const repository = tx.content(storage); repository.putManifestRoot(rootHash, root);
+      const staging = tx.staging(storage); staging.appendBatch(leaseId, ownerNonce, [Object.freeze({ kind: "manifest-root", hash: rootHash, size: root.byteLength })]);
+      staging.beginReconciliation(leaseId, ownerNonce, rootHash); return Object.freeze({ ...staging.snapshot(leaseId, ownerNonce), manifestHash: rootHash });
     });
+    let complete = false;
+    while (!complete) complete = port.transaction("write", workBudget, (tx) => tx.staging(storage).reconcileBatch(leaseId, ownerNonce, Math.max(1, Math.min(storage.maxQueryBatchSize, storage.maxFinalTransactionRows - 8))).complete);
+    port.transaction("write", workBudget, (tx) => { const staging = tx.staging(storage); staging.seal(certificate); staging.bumpRoot(5, leaseId); });
     return Object.freeze({ hash: rootHash, size: total, certificate });
   } catch (error) {
-    if (leaseBegun) try { runUnitOfWork(driver, "write", workBudget, (tx) => { new StagingRepository(tx).delete(leaseId, ownerNonce); }); } catch {}
+    if (leaseBegun) try { port.transaction("write", workBudget, (tx) => { tx.staging(storage).delete(leaseId, ownerNonce); }); } catch {}
     throw error;
   } finally { for (let index = releases.length - 1; index >= 0; index -= 1) releases[index]!(); }
 }
 
-function buildManifestLevels(driver: FilesystemSQLiteDriver, storage: StorageLimits, runtime: RuntimeLimits, leaseId: string, ownerNonce: Uint8Array, budget: { readonly maxRows: number; readonly maxBytes: number }): PreparedNode {
+function buildManifestLevels(port: OperationsStorage, storage: StorageLimits, runtime: RuntimeLimits, leaseId: string, ownerNonce: Uint8Array, budget: { readonly maxRows: number; readonly maxBytes: number }): PreparedNode {
   let level = 0; let sourceKind: "entries" | "level" = "entries";
   while (true) {
     let cursor = -1; let state = 0n; let group: Array<ManifestEntry | ManifestChild> = []; let outputIndex = 0; let single: PreparedNode | undefined;
     const pendingNodes: PreparedNode[] = [];
     const flushNodes = (): void => {
       if (!pendingNodes.length) return; const nodes = pendingNodes.splice(0);
-      runUnitOfWork(driver, "write", budget, (tx) => {
-        const repository = new ContentRepository(tx, storage); repository.putManifestNodesBatch(nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })));
-        const staging = new StagingRepository(tx);
+      port.transaction("write", budget, (tx) => {
+        const repository = tx.content(storage); repository.putManifestNodesBatch(nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })));
+        const staging = tx.staging(storage);
         for (const node of nodes) staging.putLevelRecord(leaseId, level, outputIndex++, node.hash, node.span, node.entryCount);
         const unique = [...new Map(nodes.map((node) => [bytesToHex(node.hash), node])).values()];
         staging.appendBatch(leaseId, ownerNonce, unique.map((node) => Object.freeze({ kind: "manifest-node" as const, hash: node.hash, size: node.encoded.byteLength })));
@@ -99,7 +108,7 @@ function buildManifestLevels(driver: FilesystemSQLiteDriver, storage: StorageLim
     };
     const minimum = level === 0 ? 64 : 32; const target = level === 0 ? 128 : 64; const maximum = level === 0 ? 256 : 128;
     while (true) {
-      const rows = runUnitOfWork(driver, "read", budget, (tx) => { const staging = new StagingRepository(tx); return sourceKind === "entries"
+      const rows = port.transaction("read", budget, (tx) => { const staging = tx.staging(storage); return sourceKind === "entries"
         ? staging.entriesAfter(leaseId, cursor, storage.maxQueryBatchSize, runtime.maxQueryBatchBytes)
         : staging.levelRecordsAfter(leaseId, level - 1, cursor, storage.maxQueryBatchSize, runtime.maxQueryBatchBytes); });
       if (!rows.length) break;
