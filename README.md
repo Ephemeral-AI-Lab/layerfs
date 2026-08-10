@@ -15,3 +15,6 @@ specification. The release gates are the
 packages have not been created yet. Delivery order, milestone checklists, and
 acceptance criteria are in the
 [`implementation plan`](./docs/implementation/implementation-plan.md).
+The ready-to-paste
+[`implementation prompt`](./docs/implementation/implementation-prompt.md)
+starts a coding-agent task with the required architecture and release gates.

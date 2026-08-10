@@ -7,6 +7,10 @@
 | Delivery style | Milestone exits with objective acceptance evidence |
 | Database foundation | SQLite remains authoritative |
 
+Use the ready-to-paste
+[`implementation prompt`](./implementation-prompt.md) to start an execution
+task that follows this plan.
+
 ## 1. Execution rules
 
 Milestones are ordered by dependency. Work inside one milestone may proceed in
