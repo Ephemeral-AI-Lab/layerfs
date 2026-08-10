@@ -311,6 +311,10 @@ method, regression policy, and DOFS comparison gates are defined by
 
 ## Implementation sequence
 
+The normative implementation milestones, checklists, dependency order, and
+acceptance criteria are maintained in
+[`docs/implementation/implementation-plan.md`](./docs/implementation/implementation-plan.md).
+
 1. Create the monorepo packages, shared types, fixtures, and adapter test
    harness.
 2. Implement the transactional database contract, schema, objects, FastCDC,

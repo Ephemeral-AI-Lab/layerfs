@@ -12,4 +12,6 @@ The project is in its specification phase. Start with the
 specification. The release gates are the
 [`correctness test plan`](./docs/testing/correctness-tests.md) and
 [`benchmark plan`](./docs/benchmarks/release-benchmarks.md). Implementation
-packages have not been created yet.
+packages have not been created yet. Delivery order, milestone checklists, and
+acceptance criteria are in the
+[`implementation plan`](./docs/implementation/implementation-plan.md).

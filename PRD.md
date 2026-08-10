@@ -438,6 +438,10 @@ workload. This repository does not package or depend on DOFS.
 
 ## Delivery plan
 
+The executable delivery sequence, checklists, and milestone exit criteria are
+defined in
+[`docs/implementation/implementation-plan.md`](./docs/implementation/implementation-plan.md).
+
 ### Milestone 0: Repository foundation
 
 - Approve this product requirements document.

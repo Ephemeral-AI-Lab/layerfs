@@ -22,6 +22,8 @@ evidence, tradeoffs, and rejected alternatives behind those contracts.
 
 The executable release plans are:
 
+- [`../implementation/implementation-plan.md`](../implementation/implementation-plan.md)
+  for milestone order, implementation checklists, and acceptance criteria;
 - [`../testing/correctness-tests.md`](../testing/correctness-tests.md) for the
   required correctness, fault, integrity, and integration matrix; and
 - [`../benchmarks/release-benchmarks.md`](../benchmarks/release-benchmarks.md)
