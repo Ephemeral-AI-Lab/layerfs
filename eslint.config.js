@@ -36,4 +36,16 @@ export default [
       "@typescript-eslint/no-duplicate-enum-values": "error",
     },
   },
+  {
+    files: [
+      "tests/fixtures/architecture-bypasses/operations/bound-eval.ts",
+      "tests/fixtures/architecture-bypasses/operations/direct-eval.ts",
+      "tests/fixtures/architecture-bypasses/operations/function-constructor.ts",
+      "tests/fixtures/architecture-bypasses/operations/global-eval.ts",
+    ],
+    rules: {
+      "no-eval": "off",
+      "no-new-func": "off",
+    },
+  },
 ];

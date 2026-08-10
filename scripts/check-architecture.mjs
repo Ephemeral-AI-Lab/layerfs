@@ -138,6 +138,17 @@ function portableHostAccessReason(node, checker) {
   return "portable core uses the Node process global";
 }
 
+function portableConstructorAccessReason(node) {
+  if (
+    (ts.isPropertyAccessExpression(node) && node.name.text === "constructor") ||
+    (ts.isElementAccessExpression(node) &&
+      ts.isStringLiteralLike(node.argumentExpression) &&
+      node.argumentExpression.text === "constructor")
+  )
+    return "portable core uses forbidden reflective constructor access";
+  return undefined;
+}
+
 function reflectionContext(filename, source) {
   const options = {
     noLib: true,
@@ -703,7 +714,8 @@ for (const info of packages) {
       const reason =
         globalIdentifierAccessReason(node, reflection.checker) ??
         (info.name === "@ephemeralai/fs"
-          ? portableHostAccessReason(node, reflection.checker)
+          ? (portableHostAccessReason(node, reflection.checker) ??
+            portableConstructorAccessReason(node))
           : undefined);
       if (reason)
         violations.push(
@@ -773,6 +785,7 @@ const globalReflectionFixtures = [
   "operations/destructured-global-eval.ts",
   "fs/adapter-computed-global.ts",
   "fs/process-create-require.ts",
+  "fs/crypto-constructor.ts",
 ];
 for (const fixture of globalReflectionFixtures) {
   const filename = path.join(fixtureRoot, ...fixture.split("/"));
@@ -782,7 +795,8 @@ for (const fixture of globalReflectionFixtures) {
   const inspect = (node) => {
     if (
       globalIdentifierAccessReason(node, reflection.checker) ||
-      portableHostAccessReason(node, reflection.checker)
+      portableHostAccessReason(node, reflection.checker) ||
+      portableConstructorAccessReason(node)
     )
       rejected = true;
     ts.forEachChild(node, inspect);

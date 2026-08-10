@@ -6,8 +6,27 @@ import { createRecordingFactory } from "../../packages/testkit/dist/index.js";
 import { load as parseYaml } from "js-yaml";
 import { documentationLinkErrors } from "../../scripts/documentation-links.mjs";
 import { workflowPolicyErrors } from "../../scripts/workflow-policy.mjs";
+import eslintConfig from "../../eslint.config.js";
 
 const root = path.resolve(import.meta.dirname, "../..");
+test("lint exceptions are limited to deliberate code-generation fixtures", () => {
+  const exception = eslintConfig.find((configuration) =>
+    configuration.files?.includes(
+      "tests/fixtures/architecture-bypasses/operations/direct-eval.ts",
+    ),
+  );
+  assert.deepEqual(exception?.files, [
+    "tests/fixtures/architecture-bypasses/operations/bound-eval.ts",
+    "tests/fixtures/architecture-bypasses/operations/direct-eval.ts",
+    "tests/fixtures/architecture-bypasses/operations/function-constructor.ts",
+    "tests/fixtures/architecture-bypasses/operations/global-eval.ts",
+  ]);
+  assert.deepEqual(exception?.rules, {
+    "no-eval": "off",
+    "no-new-func": "off",
+  });
+});
+
 test("CI invokes only the explicit highest accepted milestone gate", () => {
   const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   assert.match(manifest.scripts["validate:accepted"], /^pnpm validate:m\d+$/);
