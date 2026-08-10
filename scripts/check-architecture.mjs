@@ -93,12 +93,22 @@ function unwrapTsExpression(expression) {
   return current;
 }
 
-function globalIdentifierAccessReason(node) {
+function isLocallyBound(node, checker) {
+  const symbol = checker.getSymbolAtLocation(node);
+  return Boolean(
+    symbol?.declarations?.some(
+      (declaration) => declaration.getSourceFile() === node.getSourceFile(),
+    ),
+  );
+}
+
+function globalIdentifierAccessReason(node, checker) {
   if (
     !ts.isIdentifier(node) ||
     !["globalThis", "global", "self", "window"].includes(node.text)
   )
     return undefined;
+  if (isLocallyBound(node, checker)) return undefined;
   if (
     node.text === "globalThis" &&
     ts.isPropertyAccessExpression(node.parent) &&
@@ -107,6 +117,27 @@ function globalIdentifierAccessReason(node) {
   )
     return undefined;
   return `uses forbidden global-object identifier ${node.text} outside the globalThis.crypto allowlist`;
+}
+
+function reflectionContext(filename, source) {
+  const options = {
+    noLib: true,
+    noResolve: true,
+    target: ts.ScriptTarget.Latest,
+  };
+  const normalized = path.resolve(filename);
+  const host = ts.createCompilerHost(options);
+  host.fileExists = (candidate) => path.resolve(candidate) === normalized;
+  host.readFile = (candidate) =>
+    path.resolve(candidate) === normalized ? source : undefined;
+  host.getSourceFile = (candidate, languageVersion) =>
+    path.resolve(candidate) === normalized
+      ? ts.createSourceFile(normalized, source, languageVersion, true, ts.ScriptKind.TS)
+      : undefined;
+  const program = ts.createProgram([normalized], options, host);
+  const sourceFile = program.getSourceFile(normalized);
+  if (!sourceFile) throw new Error(`cannot parse reflection policy input ${filename}`);
+  return { sourceFile, checker: program.getTypeChecker() };
 }
 
 function dependencyDeclarationReason(manifest, dependency, typeOnly) {
@@ -646,19 +677,18 @@ for (const info of packages) {
     }
   }
   for (const sourceInfo of info.sources) {
-    const parsed = parse(
-      sourceInfo.logical,
-      await readFile(sourceInfo.logical, "utf8"),
-    );
+    const source = await readFile(sourceInfo.logical, "utf8");
+    const parsed = parse(sourceInfo.logical, source);
+    const reflection = reflectionContext(sourceInfo.logical, source);
     const inspectGlobalAccess = (node) => {
-      const reason = globalIdentifierAccessReason(node);
+      const reason = globalIdentifierAccessReason(node, reflection.checker);
       if (reason)
         violations.push(
-          `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} ${reason}`,
+          `${relative(sourceInfo.logical)}:${reflection.sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1} ${reason}`,
         );
       ts.forEachChild(node, inspectGlobalAccess);
     };
-    inspectGlobalAccess(parsed);
+    inspectGlobalAccess(reflection.sourceFile);
     for (const reference of moduleReferences(parsed)) {
       if (reference.kind.startsWith("runtime-")) {
         violations.push(
@@ -722,17 +752,39 @@ const globalReflectionFixtures = [
 ];
 for (const fixture of globalReflectionFixtures) {
   const filename = path.join(fixtureRoot, ...fixture.split("/"));
-  const parsed = parse(filename, await readFile(filename, "utf8"));
+  const source = await readFile(filename, "utf8");
+  const reflection = reflectionContext(filename, source);
   let rejected = false;
   const inspect = (node) => {
-    if (globalIdentifierAccessReason(node)) rejected = true;
+    if (globalIdentifierAccessReason(node, reflection.checker)) rejected = true;
     ts.forEachChild(node, inspect);
   };
-  inspect(parsed);
+  inspect(reflection.sourceFile);
   if (!rejected)
     violations.push(
       `global-object reflection negative fixture was not rejected: ${fixture}`,
     );
+}
+
+const localGlobalFixture = path.join(
+  root,
+  "tests",
+  "fixtures",
+  "architecture-allowed",
+  "lexical-globals.ts",
+);
+{
+  const source = await readFile(localGlobalFixture, "utf8");
+  const reflection = reflectionContext(localGlobalFixture, source);
+  const reasons = [];
+  const inspect = (node) => {
+    const reason = globalIdentifierAccessReason(node, reflection.checker);
+    if (reason) reasons.push(reason);
+    ts.forEachChild(node, inspect);
+  };
+  inspect(reflection.sourceFile);
+  if (reasons.length)
+    violations.push("lexically bound global-name positive fixture was rejected");
 }
 
 const dependencyFixtureDirectory = path.join(
