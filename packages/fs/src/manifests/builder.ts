@@ -9,8 +9,14 @@ import {
   type ManifestLeaf,
   type ManifestNode,
   type ManifestParameters,
+  validateManifestParameters,
 } from "./codec.js";
-import { advanceManifestGroupingState, isManifestGroupBoundary } from "./grouping.js";
+import {
+  advanceManifestGroupingState,
+  INTERNAL_MANIFEST_GROUPING,
+  isManifestGroupBoundary,
+  LEAF_MANIFEST_GROUPING,
+} from "./grouping.js";
 
 export interface EncodedManifestNode {
   readonly hash: Uint8Array;
@@ -79,6 +85,7 @@ export function buildManifestFromEntries(
   workspace: ManifestBuildWorkspace,
   options: ManifestBuildOptions = {},
 ): BuiltManifestRoot {
+  validateManifestParameters(parameters);
   const readBatchRecords = checkedInteger(
     options.readBatchRecords ?? 64,
     "readBatchRecords",
@@ -108,19 +115,38 @@ export function buildManifestFromEntries(
     leafGroup = [];
     leafState = 0n;
   };
-  for (const entry of entries) {
+  const appendEntry = (entry: ManifestEntry, final: boolean): void => {
     if (entry.hash.byteLength !== 32)
       throw new RangeError("manifest entry hash must contain 32 bytes");
     checkedInteger(entry.length, "manifest entry length", 0xffff_ffff);
     if (entry.length === 0)
       throw new RangeError("zero-length manifest entries are forbidden");
+    if (entry.length > parameters.maximum)
+      throw new RangeError("manifest entry exceeds the FastCDC maximum");
+    if (!final && entry.length < parameters.minimum)
+      throw new RangeError("non-final manifest entry is below the FastCDC minimum");
     fileSize = checkedAdd(fileSize, entry.length);
     entryCount = checkedAdd(entryCount, 1);
     leafGroup.push(Object.freeze({ hash: entry.hash.slice(), length: entry.length }));
     peakRetainedRecords = Math.max(peakRetainedRecords, leafGroup.length);
     leafState = advanceManifestGroupingState(leafState, entry);
-    if (isManifestGroupBoundary(leafGroup.length, leafState, 64, 128, 256)) emitLeaf();
+    if (
+      isManifestGroupBoundary(
+        leafGroup.length,
+        leafState,
+        LEAF_MANIFEST_GROUPING.minimum,
+        LEAF_MANIFEST_GROUPING.target,
+        LEAF_MANIFEST_GROUPING.maximum,
+      )
+    )
+      emitLeaf();
+  };
+  let pendingEntry: ManifestEntry | undefined;
+  for (const entry of entries) {
+    if (pendingEntry) appendEntry(pendingEntry, false);
+    pendingEntry = entry;
   }
+  if (pendingEntry) appendEntry(pendingEntry, true);
   if (leafGroup.length || leafCount === 0) emitLeaf();
 
   let inputLevel = 0;
@@ -161,7 +187,16 @@ export function buildManifestFromEntries(
         group.push(row.child);
         state = advanceManifestGroupingState(state, row.child);
         peakRetainedRecords = Math.max(peakRetainedRecords, group.length + rows.length);
-        if (isManifestGroupBoundary(group.length, state, 32, 64, 128)) emitInternal();
+        if (
+          isManifestGroupBoundary(
+            group.length,
+            state,
+            INTERNAL_MANIFEST_GROUPING.minimum,
+            INTERNAL_MANIFEST_GROUPING.target,
+            INTERNAL_MANIFEST_GROUPING.maximum,
+          )
+        )
+          emitInternal();
       }
       if (rows.length < readBatchRecords) break;
     }

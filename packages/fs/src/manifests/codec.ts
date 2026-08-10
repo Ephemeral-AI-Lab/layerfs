@@ -1,5 +1,5 @@
 import { equalBytes } from "../cas/bytes.js";
-import { checkedAdd } from "../resources/safe-integers.js";
+import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
 import { readU64, writeU64 } from "./binary.js";
 import { sha256 } from "../cas/sha256.js";
 
@@ -41,6 +41,23 @@ export interface ManifestInternal {
 }
 export type ManifestNode = ManifestLeaf | ManifestInternal;
 
+export function validateManifestParameters(parameters: ManifestParameters): void {
+  checkedInteger(parameters.minimum, "manifest minimum chunk size", 0xffff_ffff);
+  checkedInteger(parameters.average, "manifest average chunk size", 0xffff_ffff);
+  checkedInteger(parameters.maximum, "manifest maximum chunk size", 0xffff_ffff);
+  if (
+    parameters.minimum === 0 ||
+    parameters.minimum > parameters.average ||
+    parameters.average > parameters.maximum
+  ) {
+    throw new RangeError(
+      "manifest FastCDC parameters require 0 < minimum <= average <= maximum",
+    );
+  }
+  if ((parameters.average & (parameters.average - 1)) !== 0)
+    throw new RangeError("manifest FastCDC average must be a power of two");
+}
+
 function magic(bytes: Uint8Array, expected: string): void {
   if (bytes.byteLength < 4 || String.fromCharCode(...bytes.subarray(0, 4)) !== expected)
     throw new Error(`invalid ${expected} magic`);
@@ -49,6 +66,7 @@ function magic(bytes: Uint8Array, expected: string): void {
 export function encodeManifestRoot(root: ManifestRoot): Uint8Array {
   if (root.rootNodeHash.byteLength !== 32)
     throw new RangeError("root node hash must contain 32 bytes");
+  validateManifestParameters(root.parameters);
   const bytes = new Uint8Array(ROOT_ENVELOPE_BYTES);
   bytes.set([0x45, 0x41, 0x46, 0x52]);
   const view = new DataView(bytes.buffer);
@@ -79,13 +97,7 @@ export function decodeManifestRoot(
   const minimum = view.getUint32(8, true);
   const average = view.getUint32(12, true);
   const maximum = view.getUint32(16, true);
-  if (
-    minimum === 0 ||
-    minimum > average ||
-    average > maximum ||
-    (average & (average - 1)) !== 0
-  )
-    throw new Error("invalid manifest chunking parameters");
+  validateManifestParameters({ minimum, average, maximum });
   return Object.freeze({
     parameters: Object.freeze({ minimum, average, maximum }),
     fileSize: readU64(view, 20, "file size"),
@@ -98,6 +110,8 @@ export function encodeManifestNode(node: ManifestNode): Uint8Array {
   const count = node.kind === "leaf" ? node.entries.length : node.children.length;
   const capacity = node.kind === "leaf" ? 256 : 128;
   if (count > capacity) throw new RangeError("manifest node capacity exceeded");
+  if (node.kind === "internal" && count === 0)
+    throw new RangeError("empty internal manifest nodes are forbidden");
   const recordBytes = node.kind === "leaf" ? LEAF_RECORD_BYTES : INTERNAL_RECORD_BYTES;
   const bytes = new Uint8Array(NODE_HEADER_BYTES + count * recordBytes);
   bytes.set([0x45, 0x41, 0x46, 0x4e]);
@@ -170,6 +184,7 @@ export function decodeManifestNode(
   const capacity = leaf ? 256 : 128;
   if (count > capacity || bytes.byteLength !== NODE_HEADER_BYTES + count * recordBytes)
     throw new Error("noncanonical manifest node size");
+  if (!leaf && count === 0) throw new Error("empty internal manifest node");
   if (leaf) {
     const entries: ManifestEntry[] = [];
     let computedSpan = 0;

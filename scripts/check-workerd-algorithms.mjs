@@ -40,7 +40,7 @@ try {
       `workerd algorithm gate failed (${response.status}): ${body}\n${diagnostic}`,
     );
   const result = JSON.parse(body);
-  if (result.runtime !== "workerd" || result.passed !== 5)
+  if (result.runtime !== "workerd" || result.passed !== 9)
     throw new Error(`unexpected workerd result: ${body}`);
   console.log(JSON.stringify(result));
 } finally {

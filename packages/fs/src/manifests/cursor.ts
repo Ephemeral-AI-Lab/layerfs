@@ -1,3 +1,4 @@
+import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
 import {
   decodeManifestNode,
   decodeManifestRoot,
@@ -5,7 +6,15 @@ import {
   type ManifestEntry,
   type ManifestInternal,
   type ManifestLeaf,
+  type ManifestParameters,
 } from "./codec.js";
+import {
+  INTERNAL_MANIFEST_GROUPING,
+  LEAF_MANIFEST_GROUPING,
+  validateCanonicalManifestGroup,
+} from "./grouping.js";
+
+export const MAX_MANIFEST_DEPTH = 64;
 
 export interface ManifestNodeReader {
   get(hash: Uint8Array): Uint8Array | undefined;
@@ -22,15 +31,56 @@ export interface ManifestCursorEntry {
 
 interface CursorFrame {
   readonly node: ManifestInternal;
+  readonly finalAtLevel: boolean;
   childIndex: number;
   childOffset: number;
+}
+
+function validateDepthLimit(maxDepth: number): void {
+  checkedInteger(maxDepth, "maxDepth", MAX_MANIFEST_DEPTH);
+  if (maxDepth === 0) throw new RangeError("maxDepth must be positive");
+}
+
+function validateNodeCanonicality(
+  node: ManifestLeaf | ManifestInternal,
+  parameters: ManifestParameters,
+  finalAtLevel: boolean,
+  rootNode: boolean,
+): void {
+  if (node.kind === "leaf") {
+    if (node.entries.length === 0) {
+      if (!rootNode || node.span !== 0 || node.entryCount !== 0)
+        throw new Error("empty manifest leaf is only canonical as the empty root");
+      return;
+    }
+    for (let index = 0; index < node.entries.length; index += 1) {
+      const entry = node.entries[index]!;
+      if (entry.length > parameters.maximum)
+        throw new Error("manifest entry exceeds root FastCDC maximum");
+      const finalEntry = finalAtLevel && index === node.entries.length - 1;
+      if (!finalEntry && entry.length < parameters.minimum)
+        throw new Error("non-final manifest entry is below root FastCDC minimum");
+    }
+    validateCanonicalManifestGroup(node.entries, LEAF_MANIFEST_GROUPING, finalAtLevel);
+    return;
+  }
+  if (node.children.length === 0) throw new Error("empty internal manifest node");
+  if (rootNode && node.children.length === 1)
+    throw new Error("unary internal root wrapper is noncanonical");
+  validateCanonicalManifestGroup(
+    node.children,
+    INTERNAL_MANIFEST_GROUPING,
+    finalAtLevel,
+  );
 }
 
 export class ManifestSequentialCursor {
   readonly #reader: ManifestNodeReader;
   readonly #maxDepth: number;
+  readonly #parameters: ManifestParameters;
   readonly #stack: CursorFrame[] = [];
   #leaf: ManifestLeaf | undefined;
+  #leafDepth: number | undefined;
   #entryIndex = 0;
   #entryOffset = 0;
   #nodesRead = 0;
@@ -45,18 +95,20 @@ export class ManifestSequentialCursor {
     const root = decodeManifestRoot(rootBytes, expectedRootHash);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > root.fileSize)
       throw new RangeError("manifest offset is outside the file");
-    if (!Number.isSafeInteger(maxDepth) || maxDepth <= 0)
-      throw new RangeError("maxDepth must be a positive safe integer");
+    validateDepthLimit(maxDepth);
     this.#reader = reader;
     this.#maxDepth = maxDepth;
+    this.#parameters = root.parameters;
+    const rootNode = this.#load(root.rootNodeHash, 1, undefined, true, true);
+    if (rootNode.span !== root.fileSize || rootNode.entryCount !== root.entryCount)
+      throw new Error("manifest root totals mismatch");
+    if ((root.fileSize === 0) !== (root.entryCount === 0))
+      throw new Error("manifest empty root totals mismatch");
     if (offset === root.fileSize) {
       this.#entryOffset = root.fileSize;
       return;
     }
-    const rootNode = this.#load(root.rootNodeHash, 1);
-    if (rootNode.span !== root.fileSize || rootNode.entryCount !== root.entryCount)
-      throw new Error("manifest root totals mismatch");
-    this.#descend(rootNode, 0, offset, 1);
+    this.#descend(rootNode, 0, offset, 1, true);
   }
 
   peek(): ManifestCursorEntry | null {
@@ -67,7 +119,7 @@ export class ManifestSequentialCursor {
   next(): ManifestCursorEntry | null {
     const current = this.peek();
     if (!current) return null;
-    this.#entryOffset += current.entry.length;
+    this.#entryOffset = checkedAdd(this.#entryOffset, current.entry.length);
     this.#entryIndex += 1;
     if (this.#entryIndex >= this.#leaf!.entries.length) this.#advanceLeaf();
     return current;
@@ -84,6 +136,8 @@ export class ManifestSequentialCursor {
     hash: Uint8Array,
     depth: number,
     expected?: ManifestChild,
+    finalAtLevel = false,
+    rootNode = false,
   ): ManifestLeaf | ManifestInternal {
     if (depth > this.#maxDepth)
       throw new Error("manifest depth exceeds configured maximum");
@@ -96,6 +150,7 @@ export class ManifestSequentialCursor {
       (node.span !== expected.span || node.entryCount !== expected.entryCount)
     )
       throw new Error("manifest child totals mismatch");
+    validateNodeCanonicality(node, this.#parameters, finalAtLevel, rootNode);
     return node;
   }
 
@@ -104,6 +159,7 @@ export class ManifestSequentialCursor {
     nodeOffset: number,
     relative: number,
     depth: number,
+    finalAtLevel: boolean,
   ): void {
     let node = initial;
     let start = nodeOffset;
@@ -119,16 +175,21 @@ export class ManifestSequentialCursor {
           break;
         }
         remaining -= child.span;
-        childOffset += child.span;
+        childOffset = checkedAdd(childOffset, child.span);
       }
       if (selected < 0)
         throw new Error("manifest internal span does not contain requested offset");
-      this.#stack.push({ node, childIndex: selected, childOffset });
+      this.#stack.push({ node, childIndex: selected, childOffset, finalAtLevel });
       const child = node.children[selected]!;
+      const childFinal = finalAtLevel && selected === node.children.length - 1;
       currentDepth += 1;
-      node = this.#load(child.hash, currentDepth, child);
+      node = this.#load(child.hash, currentDepth, child, childFinal);
+      finalAtLevel = childFinal;
       start = childOffset;
     }
+    if (this.#leafDepth === undefined) this.#leafDepth = currentDepth;
+    else if (this.#leafDepth !== currentDepth)
+      throw new Error("unbalanced manifest tree");
     let entryOffset = start;
     for (let index = 0; index < node.entries.length; index += 1) {
       const entry = node.entries[index]!;
@@ -139,7 +200,7 @@ export class ManifestSequentialCursor {
         return;
       }
       remaining -= entry.length;
-      entryOffset += entry.length;
+      entryOffset = checkedAdd(entryOffset, entry.length);
     }
     throw new Error("manifest leaf span does not contain requested offset");
   }
@@ -156,10 +217,13 @@ export class ManifestSequentialCursor {
         continue;
       }
       frame.childIndex = nextIndex;
-      frame.childOffset += completed.span;
+      frame.childOffset = checkedAdd(frame.childOffset, completed.span);
       const child = frame.node.children[nextIndex]!;
-      const node = this.#load(child.hash, this.#stack.length + 1, child);
-      this.#descend(node, frame.childOffset, 0, this.#stack.length + 1);
+      const finalAtLevel =
+        frame.finalAtLevel && nextIndex === frame.node.children.length - 1;
+      const depth = this.#stack.length + 1;
+      const node = this.#load(child.hash, depth, child, finalAtLevel);
+      this.#descend(node, frame.childOffset, 0, depth, finalAtLevel);
       return;
     }
   }
@@ -194,24 +258,44 @@ export function validateManifestTree(
   maxDepth = 8,
 ): void {
   const root = decodeManifestRoot(rootBytes, expectedRootHash);
-  const visit = (hash: Uint8Array, depth: number): { span: number; count: number } => {
+  validateDepthLimit(maxDepth);
+  let leafDepth: number | undefined;
+  const visit = (
+    hash: Uint8Array,
+    depth: number,
+    finalAtLevel: boolean,
+    rootNode: boolean,
+  ): { span: number; count: number } => {
     if (depth > maxDepth) throw new Error("manifest depth exceeds configured maximum");
     const bytes = reader.get(hash);
     if (!bytes) throw new Error("missing manifest node");
     const node = decodeManifestNode(bytes, hash);
-    if (node.kind === "leaf") return { span: node.span, count: node.entryCount };
+    validateNodeCanonicality(node, root.parameters, finalAtLevel, rootNode);
+    if (node.kind === "leaf") {
+      if (leafDepth === undefined) leafDepth = depth;
+      else if (leafDepth !== depth) throw new Error("unbalanced manifest tree");
+      return { span: node.span, count: node.entryCount };
+    }
     let span = 0;
     let count = 0;
-    for (const child of node.children) {
-      const actual = visit(child.hash, depth + 1);
+    for (let index = 0; index < node.children.length; index += 1) {
+      const child = node.children[index]!;
+      const actual = visit(
+        child.hash,
+        depth + 1,
+        finalAtLevel && index === node.children.length - 1,
+        false,
+      );
       if (actual.span !== child.span || actual.count !== child.entryCount)
         throw new Error("manifest child totals mismatch");
-      span += actual.span;
-      count += actual.count;
+      span = checkedAdd(span, actual.span);
+      count = checkedAdd(count, actual.count);
     }
     return { span, count };
   };
-  const totals = visit(root.rootNodeHash, 1);
+  const totals = visit(root.rootNodeHash, 1, true, true);
   if (totals.span !== root.fileSize || totals.count !== root.entryCount)
     throw new Error("manifest root totals mismatch");
+  if ((root.fileSize === 0) !== (root.entryCount === 0))
+    throw new Error("manifest empty root totals mismatch");
 }
