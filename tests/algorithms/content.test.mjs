@@ -86,12 +86,12 @@ test("fastcdc-v1 gear and two-megabyte boundary vector are exact", () => {
   );
 });
 
-test("streaming FastCDC is invariant to every tested input partition", () => {
+test("streaming FastCDC is partition-invariant with bounded push retention", () => {
   const bytes = fixture(3 * 1024 * 1024 + 17);
   const expected = fastCdcChunks(bytes).map(({ offset, length }) =>
     bytes.slice(offset, offset + length),
   );
-  for (const partition of [1, 7, 4096, 65_537, 524_288, 900_001]) {
+  for (const partition of [1, 7, 4096, 65_537, 524_288]) {
     const stream = new StreamingFastCdc();
     const actual = [];
     for (let offset = 0; offset < bytes.length; offset += partition)
@@ -103,5 +103,31 @@ test("streaming FastCDC is invariant to every tested input partition", () => {
     );
     assert.equal(stream.bufferedBytes, 0);
     assert.equal(stream.capacityBytes, DEFAULT_FASTCDC.maximum);
+    assert.equal(stream.maxPushBytes, DEFAULT_FASTCDC.maximum);
   }
+
+  const rejected = new StreamingFastCdc();
+  assert.throws(
+    () => rejected.push(new Uint8Array(DEFAULT_FASTCDC.maximum + 1)),
+    /exceeds maxPushBytes/,
+  );
+  assert.equal(rejected.bufferedBytes, 0);
+
+  const adversarial = fixture(16 * 1024 * 1024 + 17, 0xa5a5a5a5);
+  const expectedLengths = fastCdcChunks(adversarial).map((chunk) => chunk.length);
+  const drainedLengths = [];
+  let drainedBytes = 0;
+  const draining = new StreamingFastCdc();
+  draining.drain(
+    adversarial,
+    (chunk) => {
+      assert.ok(chunk.byteLength <= DEFAULT_FASTCDC.maximum);
+      drainedLengths.push(chunk.byteLength);
+      drainedBytes += chunk.byteLength;
+    },
+    true,
+  );
+  assert.deepEqual(drainedLengths, expectedLengths);
+  assert.equal(drainedBytes, adversarial.byteLength);
+  assert.equal(draining.bufferedBytes, 0);
 });

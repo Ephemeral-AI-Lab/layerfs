@@ -7,6 +7,7 @@ export const ROOT_ENVELOPE_BYTES = 68;
 export const NODE_HEADER_BYTES = 32;
 export const LEAF_RECORD_BYTES = 36;
 export const INTERNAL_RECORD_BYTES = 48;
+export const MAX_MANIFEST_ENTRY_COUNT = 0xffff_ffff;
 export interface ManifestParameters {
   readonly minimum: number;
   readonly average: number;
@@ -67,6 +68,11 @@ export function encodeManifestRoot(root: ManifestRoot): Uint8Array {
   if (root.rootNodeHash.byteLength !== 32)
     throw new RangeError("root node hash must contain 32 bytes");
   validateManifestParameters(root.parameters);
+  checkedInteger(
+    root.entryCount,
+    "manifest root entry count",
+    MAX_MANIFEST_ENTRY_COUNT,
+  );
   const bytes = new Uint8Array(ROOT_ENVELOPE_BYTES);
   bytes.set([0x45, 0x41, 0x46, 0x52]);
   const view = new DataView(bytes.buffer);
@@ -98,10 +104,15 @@ export function decodeManifestRoot(
   const average = view.getUint32(12, true);
   const maximum = view.getUint32(16, true);
   validateManifestParameters({ minimum, average, maximum });
+  const entryCount = checkedInteger(
+    readU64(view, 28, "entry count"),
+    "manifest root entry count",
+    MAX_MANIFEST_ENTRY_COUNT,
+  );
   return Object.freeze({
     parameters: Object.freeze({ minimum, average, maximum }),
     fileSize: readU64(view, 20, "file size"),
-    entryCount: readU64(view, 28, "entry count"),
+    entryCount,
     rootNodeHash: bytes.slice(36, 68),
   });
 }
@@ -112,6 +123,11 @@ export function encodeManifestNode(node: ManifestNode): Uint8Array {
   if (count > capacity) throw new RangeError("manifest node capacity exceeded");
   if (node.kind === "internal" && count === 0)
     throw new RangeError("empty internal manifest nodes are forbidden");
+  checkedInteger(
+    node.entryCount,
+    "manifest node entry count",
+    MAX_MANIFEST_ENTRY_COUNT,
+  );
   const recordBytes = node.kind === "leaf" ? LEAF_RECORD_BYTES : INTERNAL_RECORD_BYTES;
   const bytes = new Uint8Array(NODE_HEADER_BYTES + count * recordBytes);
   bytes.set([0x45, 0x41, 0x46, 0x4e]);
@@ -145,6 +161,11 @@ export function encodeManifestNode(node: ManifestNode): Uint8Array {
     let computedCount = 0;
     for (let index = 0; index < node.children.length; index += 1) {
       const child = node.children[index]!;
+      checkedInteger(
+        child.entryCount,
+        "manifest child entry count",
+        MAX_MANIFEST_ENTRY_COUNT,
+      );
       if (child.hash.byteLength !== 32 || child.span === 0 || child.entryCount === 0)
         throw new RangeError("invalid manifest internal child");
       const offset = NODE_HEADER_BYTES + index * INTERNAL_RECORD_BYTES;
@@ -152,7 +173,11 @@ export function encodeManifestNode(node: ManifestNode): Uint8Array {
       writeU64(view, offset + 32, child.span);
       writeU64(view, offset + 40, child.entryCount);
       computedSpan = checkedAdd(computedSpan, child.span);
-      computedCount = checkedAdd(computedCount, child.entryCount);
+      computedCount = checkedInteger(
+        checkedAdd(computedCount, child.entryCount, "manifest node entry count"),
+        "manifest node entry count",
+        MAX_MANIFEST_ENTRY_COUNT,
+      );
     }
     if (computedSpan !== node.span || computedCount !== node.entryCount)
       throw new Error("manifest internal totals mismatch");
@@ -178,7 +203,11 @@ export function decodeManifestNode(
     throw new Error("unsupported or malformed manifest node header");
   const count = view.getUint32(8, true);
   const span = readU64(view, 16, "node span");
-  const entryCount = readU64(view, 24, "node entry count");
+  const entryCount = checkedInteger(
+    readU64(view, 24, "node entry count"),
+    "manifest node entry count",
+    MAX_MANIFEST_ENTRY_COUNT,
+  );
   const leaf = bytes[6] === 0;
   const recordBytes = leaf ? LEAF_RECORD_BYTES : INTERNAL_RECORD_BYTES;
   const capacity = leaf ? 256 : 128;
@@ -210,7 +239,11 @@ export function decodeManifestNode(
   for (let index = 0; index < count; index += 1) {
     const offset = NODE_HEADER_BYTES + index * recordBytes;
     const childSpan = readU64(view, offset + 32, "child span");
-    const childCount = readU64(view, offset + 40, "child entry count");
+    const childCount = checkedInteger(
+      readU64(view, offset + 40, "child entry count"),
+      "manifest child entry count",
+      MAX_MANIFEST_ENTRY_COUNT,
+    );
     if (childSpan === 0 || childCount === 0)
       throw new Error("empty internal manifest child");
     children.push(
@@ -221,7 +254,11 @@ export function decodeManifestNode(
       }),
     );
     computedSpan = checkedAdd(computedSpan, childSpan);
-    computedCount = checkedAdd(computedCount, childCount);
+    computedCount = checkedInteger(
+      checkedAdd(computedCount, childCount, "manifest node entry count"),
+      "manifest node entry count",
+      MAX_MANIFEST_ENTRY_COUNT,
+    );
   }
   if (computedSpan !== span || computedCount !== entryCount)
     throw new Error("manifest internal totals mismatch");

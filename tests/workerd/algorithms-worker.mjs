@@ -1,5 +1,10 @@
 import { sha256, sha256Hex } from "./cas/sha256.js";
-import { FASTCDC_GEAR_V1, fastCdcChunks } from "./cdc/fastcdc.js";
+import {
+  DEFAULT_FASTCDC,
+  FASTCDC_GEAR_V1,
+  StreamingFastCdc,
+  fastCdcChunks,
+} from "./cdc/fastcdc.js";
 import { buildManifest } from "./operations/full-rebuild.js";
 import { rebuildManifestLocally } from "./operations/local-rebuild.js";
 import { bytesToHex } from "./cas/bytes.js";
@@ -46,6 +51,18 @@ export default {
         .join(",") ===
         "118265,231191,325530,155909,187710,141143,175869,138460,346490,147103,109121,20361",
       "workerd FastCDC golden mismatch",
+    );
+    const drainedLengths = [];
+    const draining = new StreamingFastCdc();
+    draining.drain(bytes, (chunk) => drainedLengths.push(chunk.byteLength), true);
+    assert(
+      drainedLengths.join(",") ===
+        fastCdcChunks(bytes)
+          .map((chunk) => chunk.length)
+          .join(",") &&
+        draining.bufferedBytes === 0 &&
+        draining.maxPushBytes === DEFAULT_FASTCDC.maximum,
+      "workerd draining FastCDC mismatch",
     );
     const entryA = { hash: new Uint8Array(32).fill(0x11), length: 1 };
     const entryB = { hash: new Uint8Array(32).fill(0x22), length: 2 };
@@ -142,7 +159,7 @@ export default {
     );
     return Response.json({
       runtime: "workerd",
-      passed: 9,
+      passed: 10,
       sourceBytesRead: local.metrics.sourceBytesRead,
       bytesHashed: local.metrics.bytesHashed,
     });

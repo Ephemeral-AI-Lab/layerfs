@@ -9,6 +9,7 @@ export interface FastCdcChunk {
   readonly offset: number;
   readonly length: number;
 }
+export type FastCdcChunkConsumer = (chunk: Uint8Array) => void;
 export const DEFAULT_FASTCDC: FastCdcConfiguration = Object.freeze({
   minimum: 32_768,
   average: 131_072,
@@ -94,16 +95,36 @@ export function fastCdcChunks(
 export class StreamingFastCdc {
   readonly #configuration: FastCdcConfiguration;
   readonly #buffer: Uint8Array;
+  readonly #maxPushBytes: number;
   #buffered = 0;
 
-  constructor(configuration: FastCdcConfiguration = DEFAULT_FASTCDC) {
+  constructor(
+    configuration: FastCdcConfiguration = DEFAULT_FASTCDC,
+    maxPushBytes = configuration.maximum,
+  ) {
     validateFastCdcConfiguration(configuration);
+    checkedInteger(maxPushBytes, "maxPushBytes");
+    if (maxPushBytes === 0) throw new RangeError("maxPushBytes must be positive");
     this.#configuration = Object.freeze({ ...configuration });
     this.#buffer = new Uint8Array(configuration.maximum);
+    this.#maxPushBytes = maxPushBytes;
   }
 
   push(input: Uint8Array, final = false): Uint8Array[] {
+    if (input.byteLength > this.#maxPushBytes)
+      throw new RangeError(
+        `streaming FastCDC push exceeds maxPushBytes (${this.#maxPushBytes})`,
+      );
     const chunks: Uint8Array[] = [];
+    this.drain(input, (chunk) => chunks.push(chunk), final);
+    return chunks;
+  }
+
+  /**
+   * Consume emitted chunks immediately. Unlike push(), this path does not
+   * retain all output produced by an arbitrarily large input segment.
+   */
+  drain(input: Uint8Array, consume: FastCdcChunkConsumer, final = false): void {
     let offset = 0;
     while (offset < input.byteLength) {
       const copied = Math.min(
@@ -113,10 +134,9 @@ export class StreamingFastCdc {
       this.#buffer.set(input.subarray(offset, offset + copied), this.#buffered);
       this.#buffered += copied;
       offset += copied;
-      if (this.#buffered === this.#buffer.byteLength) chunks.push(this.#emitChunk());
+      if (this.#buffered === this.#buffer.byteLength) consume(this.#emitChunk());
     }
-    if (final) while (this.#buffered > 0) chunks.push(this.#emitChunk());
-    return chunks;
+    if (final) while (this.#buffered > 0) consume(this.#emitChunk());
   }
 
   finish(): Uint8Array[] {
@@ -127,6 +147,9 @@ export class StreamingFastCdc {
   }
   get capacityBytes(): number {
     return this.#buffer.byteLength;
+  }
+  get maxPushBytes(): number {
+    return this.#maxPushBytes;
   }
 
   #emitChunk(): Uint8Array {

@@ -118,19 +118,16 @@ export async function prepareContentStreaming(
       staging.bumpRoot(5, leaseId);
     });
   };
-  const acceptChunks = (chunks: readonly Uint8Array[]): void => {
-    for (const chunk of chunks) {
-      total = checkedAdd(total, chunk.byteLength);
-      if (total > storage.maxFileBytes)
-        throw new RangeError("file exceeds maxFileBytes");
-      if (
-        pending.length >= storage.maxQueryBatchSize ||
-        pendingBytes + chunk.byteLength > pendingLimit
-      )
-        flushObjects();
-      pending.push(Object.freeze({ hash: sha256(chunk), bytes: chunk }));
-      pendingBytes += chunk.byteLength;
-    }
+  const acceptChunk = (chunk: Uint8Array): void => {
+    total = checkedAdd(total, chunk.byteLength);
+    if (total > storage.maxFileBytes) throw new RangeError("file exceeds maxFileBytes");
+    if (
+      pending.length >= storage.maxQueryBatchSize ||
+      pendingBytes + chunk.byteLength > pendingLimit
+    )
+      flushObjects();
+    pending.push(Object.freeze({ hash: sha256(chunk), bytes: chunk }));
+    pendingBytes += chunk.byteLength;
   };
   const feed = (bytes: Uint8Array): void => {
     for (
@@ -138,8 +135,9 @@ export async function prepareContentStreaming(
       offset < bytes.byteLength;
       offset += runtime.maxWriteSessionBytes
     )
-      acceptChunks(
-        chunker.push(bytes.subarray(offset, offset + runtime.maxWriteSessionBytes)),
+      chunker.drain(
+        bytes.subarray(offset, offset + runtime.maxWriteSessionBytes),
+        acceptChunk,
       );
   };
   try {
@@ -195,7 +193,7 @@ export async function prepareContentStreaming(
         reader.releaseLock();
       }
     }
-    acceptChunks(chunker.finish());
+    chunker.drain(new Uint8Array(), acceptChunk, true);
     flushObjects();
     const rootNode = buildManifestLevels(
       port,

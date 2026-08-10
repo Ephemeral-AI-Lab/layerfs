@@ -77,37 +77,91 @@ function moduleReferences(sourceFile) {
     });
   };
   const requireAliases = new Map([["require", "require"]]);
-  const collectRequireAliases = (node) => {
+  const unwrapExpression = (expression) => {
+    let current = expression;
+    while (
+      ts.isParenthesizedExpression(current) ||
+      ts.isAsExpression(current) ||
+      ts.isTypeAssertionExpression(current) ||
+      ts.isNonNullExpression(current) ||
+      ts.isSatisfiesExpression(current)
+    ) {
+      current = current.expression;
+    }
+    return current;
+  };
+  const requireKind = (expression) => {
+    const current = unwrapExpression(expression);
+    if (ts.isIdentifier(current)) return requireAliases.get(current.text);
+    if (
+      ts.isPropertyAccessExpression(current) ||
+      ts.isElementAccessExpression(current)
+    ) {
+      const owner = requireKind(current.expression);
+      const member = ts.isPropertyAccessExpression(current)
+        ? current.name.text
+        : ts.isStringLiteralLike(current.argumentExpression)
+          ? current.argumentExpression.text
+          : undefined;
+      if (owner === "require" && member === "resolve") return "require-resolve";
+      return undefined;
+    }
+    if (
+      ts.isCallExpression(current) &&
+      (ts.isPropertyAccessExpression(current.expression) ||
+        ts.isElementAccessExpression(current.expression))
+    ) {
+      const member = ts.isPropertyAccessExpression(current.expression)
+        ? current.expression.name.text
+        : ts.isStringLiteralLike(current.expression.argumentExpression)
+          ? current.expression.argumentExpression.text
+          : undefined;
+      if (member === "bind") return requireKind(current.expression.expression);
+    }
+    return undefined;
+  };
+  const aliasAssignments = [];
+  const collectRequireAliasAssignments = (node) => {
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.initializer
     ) {
-      if (
-        ts.isIdentifier(node.initializer) &&
-        requireAliases.get(node.initializer.text) === "require"
-      ) {
-        requireAliases.set(node.name.text, "require");
-      } else if (
-        ts.isPropertyAccessExpression(node.initializer) &&
-        ts.isIdentifier(node.initializer.expression) &&
-        requireAliases.get(node.initializer.expression.text) === "require" &&
-        node.initializer.name.text === "resolve"
-      ) {
-        requireAliases.set(node.name.text, "require-resolve");
+      aliasAssignments.push([node.name.text, node.initializer]);
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left)
+    ) {
+      aliasAssignments.push([node.left.text, node.right]);
+    }
+    ts.forEachChild(node, collectRequireAliasAssignments);
+  };
+  collectRequireAliasAssignments(sourceFile);
+  let changed;
+  do {
+    changed = false;
+    for (const [name, initializer] of aliasAssignments) {
+      const kind = requireKind(initializer);
+      if (kind && requireAliases.get(name) !== kind) {
+        requireAliases.set(name, kind);
+        changed = true;
       }
     }
-    ts.forEachChild(node, collectRequireAliases);
+  } while (changed);
+  const addTripleSlashReferences = (items, kind) => {
+    for (const reference of items) {
+      references.push({
+        kind,
+        specifier: reference.fileName,
+        typeOnly: true,
+        line: sourceFile.getLineAndCharacterOfPosition(reference.pos).line + 1,
+      });
+    }
   };
-  collectRequireAliases(sourceFile);
-  for (const reference of sourceFile.referencedFiles) {
-    references.push({
-      kind: "triple-slash-path",
-      specifier: reference.fileName,
-      typeOnly: true,
-      line: sourceFile.getLineAndCharacterOfPosition(reference.pos).line + 1,
-    });
-  }
+  addTripleSlashReferences(sourceFile.referencedFiles, "triple-slash-path");
+  addTripleSlashReferences(sourceFile.typeReferenceDirectives, "triple-slash-types");
+  addTripleSlashReferences(sourceFile.libReferenceDirectives, "triple-slash-lib");
   const visit = (node) => {
     if (ts.isImportDeclaration(node)) {
       push(
@@ -144,20 +198,8 @@ function moduleReferences(sourceFile) {
       node.expression.kind === ts.SyntaxKind.ImportKeyword
     ) {
       push("dynamic-import", node, node.arguments[0]);
-    } else if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      requireAliases.has(node.expression.text)
-    ) {
-      push(requireAliases.get(node.expression.text), node, node.arguments[0]);
-    } else if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === "require" &&
-      node.expression.name.text === "resolve"
-    ) {
-      push("require-resolve", node, node.arguments[0]);
+    } else if (ts.isCallExpression(node) && requireKind(node.expression)) {
+      push(requireKind(node.expression), node, node.arguments[0]);
     }
     ts.forEachChild(node, visit);
   };
@@ -532,7 +574,14 @@ const fixtureCases = [
   { file: "operations/import-equals.cts", kind: "import-equals", policy: "core" },
   { file: "operations/require.cts", kind: "require", policy: "core" },
   { file: "operations/aliased-require.cts", kind: "require", policy: "core" },
+  { file: "operations/bound-require.cts", kind: "require", policy: "core" },
   { file: "operations/triple-slash.ts", kind: "triple-slash-path", policy: "core" },
+  {
+    file: "manifests/triple-slash-types.ts",
+    kind: "triple-slash-types",
+    policy: "host",
+  },
+  { file: "manifests/triple-slash-lib.ts", kind: "triple-slash-lib", policy: "host" },
   { file: "manifests/host-import.ts", kind: "static-import", policy: "host" },
   { file: "sqlite/runtime-port.ts", kind: "static-import", policy: "runtime-port" },
   { file: "fs/cross-package-relative.ts", kind: "static-import", policy: "package" },

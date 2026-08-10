@@ -3,6 +3,7 @@ import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
 import {
   encodeManifestNode,
   encodeManifestRoot,
+  MAX_MANIFEST_ENTRY_COUNT,
   type ManifestChild,
   type ManifestEntry,
   type ManifestInternal,
@@ -126,7 +127,11 @@ export function buildManifestFromEntries(
     if (!final && entry.length < parameters.minimum)
       throw new RangeError("non-final manifest entry is below the FastCDC minimum");
     fileSize = checkedAdd(fileSize, entry.length);
-    entryCount = checkedAdd(entryCount, 1);
+    entryCount = checkedInteger(
+      checkedAdd(entryCount, 1, "manifest entry count"),
+      "manifest entry count",
+      MAX_MANIFEST_ENTRY_COUNT,
+    );
     leafGroup.push(Object.freeze({ hash: entry.hash.slice(), length: entry.length }));
     peakRetainedRecords = Math.max(peakRetainedRecords, leafGroup.length);
     leafState = advanceManifestGroupingState(leafState, entry);
@@ -164,7 +169,15 @@ export function buildManifestFromEntries(
       const node = Object.freeze({
         kind: "internal",
         span: group.reduce((sum, child) => checkedAdd(sum, child.span), 0),
-        entryCount: group.reduce((sum, child) => checkedAdd(sum, child.entryCount), 0),
+        entryCount: group.reduce(
+          (sum, child) =>
+            checkedInteger(
+              checkedAdd(sum, child.entryCount, "manifest entry count"),
+              "manifest entry count",
+              MAX_MANIFEST_ENTRY_COUNT,
+            ),
+          0,
+        ),
         children: Object.freeze(group),
       } satisfies ManifestInternal);
       onlyChild = writeNode(workspace, inputLevel + 1, outputCount++, node);

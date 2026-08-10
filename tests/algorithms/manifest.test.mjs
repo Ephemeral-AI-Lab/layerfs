@@ -13,6 +13,7 @@ import {
   decodeManifestRoot,
   encodeManifestNode,
   encodeManifestRoot,
+  MAX_MANIFEST_ENTRY_COUNT,
 } from "../../packages/fs/dist/manifests/codec.js";
 import {
   lookupManifest,
@@ -401,6 +402,83 @@ test("builder, validation, and lookup reject noncanonical manifest structures", 
 
 test("manifest codecs reject overflow and malformed encodings without digest checks", () => {
   const hash = new Uint8Array(32).fill(0x44);
+  const maximumRoot = encodeManifestRoot({
+    parameters: { minimum: 1, average: 2, maximum: 4 },
+    fileSize: MAX_MANIFEST_ENTRY_COUNT,
+    entryCount: MAX_MANIFEST_ENTRY_COUNT,
+    rootNodeHash: hash,
+  });
+  assert.equal(decodeManifestRoot(maximumRoot).entryCount, MAX_MANIFEST_ENTRY_COUNT);
+  assert.throws(
+    () =>
+      encodeManifestRoot({
+        parameters: { minimum: 1, average: 2, maximum: 4 },
+        fileSize: MAX_MANIFEST_ENTRY_COUNT + 1,
+        entryCount: MAX_MANIFEST_ENTRY_COUNT + 1,
+        rootNodeHash: hash,
+      }),
+    /manifest root entry count/,
+  );
+  const maximumInternal = encodeManifestNode({
+    kind: "internal",
+    span: 1,
+    entryCount: MAX_MANIFEST_ENTRY_COUNT,
+    children: [{ hash, span: 1, entryCount: MAX_MANIFEST_ENTRY_COUNT }],
+  });
+  assert.equal(
+    decodeManifestNode(maximumInternal).entryCount,
+    MAX_MANIFEST_ENTRY_COUNT,
+  );
+  assert.throws(
+    () =>
+      encodeManifestNode({
+        kind: "internal",
+        span: 1,
+        entryCount: MAX_MANIFEST_ENTRY_COUNT + 1,
+        children: [{ hash, span: 1, entryCount: MAX_MANIFEST_ENTRY_COUNT }],
+      }),
+    /manifest node entry count/,
+  );
+  assert.throws(
+    () =>
+      encodeManifestNode({
+        kind: "internal",
+        span: 1,
+        entryCount: MAX_MANIFEST_ENTRY_COUNT,
+        children: [{ hash, span: 1, entryCount: MAX_MANIFEST_ENTRY_COUNT + 1 }],
+      }),
+    /manifest child entry count/,
+  );
+  const oversizedRootCount = maximumRoot.slice();
+  new DataView(oversizedRootCount.buffer).setBigUint64(
+    28,
+    BigInt(MAX_MANIFEST_ENTRY_COUNT) + 1n,
+    true,
+  );
+  assert.throws(
+    () => decodeManifestRoot(oversizedRootCount),
+    /manifest root entry count/,
+  );
+  const oversizedNodeCount = maximumInternal.slice();
+  new DataView(oversizedNodeCount.buffer).setBigUint64(
+    24,
+    BigInt(MAX_MANIFEST_ENTRY_COUNT) + 1n,
+    true,
+  );
+  assert.throws(
+    () => decodeManifestNode(oversizedNodeCount),
+    /manifest node entry count/,
+  );
+  const oversizedChildCount = maximumInternal.slice();
+  new DataView(oversizedChildCount.buffer).setBigUint64(
+    72,
+    BigInt(MAX_MANIFEST_ENTRY_COUNT) + 1n,
+    true,
+  );
+  assert.throws(
+    () => decodeManifestNode(oversizedChildCount),
+    /manifest child entry count/,
+  );
   const leaf = encodeManifestNode({
     kind: "leaf",
     span: 1,

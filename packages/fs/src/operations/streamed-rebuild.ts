@@ -89,12 +89,16 @@ export function rebuildEditedContentStreaming(
   function* entries(): Generator<ManifestEntry> {
     const chunker = new StreamingFastCdc(parameters);
     const accept = function* (input: Uint8Array): Generator<ManifestEntry> {
-      for (const chunk of chunker.push(input)) {
-        const hash = sha256(chunk);
-        bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
-        objectCount = checkedAdd(objectCount, 1);
-        objects.putObject(hash, chunk);
-        yield Object.freeze({ hash, length: chunk.byteLength });
+      for (let offset = 0; offset < input.byteLength; offset += chunker.maxPushBytes) {
+        for (const chunk of chunker.push(
+          input.subarray(offset, offset + chunker.maxPushBytes),
+        )) {
+          const hash = sha256(chunk);
+          bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
+          objectCount = checkedAdd(objectCount, 1);
+          objects.putObject(hash, chunk);
+          yield Object.freeze({ hash, length: chunk.byteLength });
+        }
       }
     };
     for (let offset = 0; offset < edit.offset;) {
