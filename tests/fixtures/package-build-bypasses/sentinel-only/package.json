@@ -1,0 +1,8 @@
+{
+  "name": "sentinel-only-build-bypass",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('dist/__m0_stale_output_sentinel__.js',{force:true})\""
+  }
+}

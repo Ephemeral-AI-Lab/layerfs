@@ -1,0 +1,14 @@
+name: spoofed-validation
+on:
+  push:
+  pull_request:
+jobs:
+  validate:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # - run: pnpm validate:accepted
+      - run: echo "pnpm validate:accepted"

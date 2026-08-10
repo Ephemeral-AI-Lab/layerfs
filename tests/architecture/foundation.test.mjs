@@ -4,6 +4,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createRecordingFactory } from "../../packages/testkit/dist/index.js";
+import { load as parseYaml } from "js-yaml";
+import { documentationLinkErrors } from "../../scripts/documentation-links.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 test("M0 architecture and exports are locked", () => {
@@ -19,8 +21,32 @@ test("CI invokes only the explicit highest accepted milestone gate", () => {
     path.join(root, ".github", "workflows", "ci.yml"),
     "utf8",
   );
-  assert.match(workflow, /- run: pnpm validate:accepted\s*$/m);
-  assert.doesNotMatch(workflow, /- run: pnpm validate\s*$/m);
+  const parsed = parseYaml(workflow);
+  assert.deepEqual(Object.keys(parsed.on).sort(), ["pull_request", "push"]);
+  assert.deepEqual(parsed.jobs.validate.strategy.matrix.os, [
+    "ubuntu-latest",
+    "windows-latest",
+  ]);
+  assert.deepEqual(parsed.jobs.validate.strategy.matrix.node, [22, 24]);
+  const runSteps = parsed.jobs.validate.steps
+    .filter((step) => Object.hasOwn(step, "run"))
+    .map((step) => step.run);
+  assert.equal(
+    runSteps.filter((command) => command === "pnpm validate:accepted").length,
+    1,
+  );
+  assert.ok(runSteps.includes("pnpm install --frozen-lockfile"));
+  assert.ok(!runSteps.includes("pnpm validate"));
+
+  const spoof = parseYaml(
+    readFileSync(
+      path.join(root, "tests/fixtures/ci-bypasses/comment-spoof.yml"),
+      "utf8",
+    ),
+  );
+  assert.ok(
+    !spoof.jobs.validate.steps.some((step) => step.run === "pnpm validate:accepted"),
+  );
 });
 
 test("milestone gates select only their owned suites and sequential predecessors", () => {
@@ -45,10 +71,13 @@ test("milestone gates select only their owned suites and sequential predecessors
       scripts[`test:m${milestone}`],
       `node scripts/run-test-suite.mjs ${owned}`,
     );
-    assert.match(
-      scripts[`validate:m${milestone}`],
-      new RegExp(`(?:^|&& pnpm )test:m${milestone}(?:$| )`),
-    );
+    const expectedValidation =
+      Number(milestone) === 0
+        ? "pnpm fixtures:check && pnpm check:docs && pnpm check:evidence && pnpm check:style && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:m0"
+        : Number(milestone) === 1
+          ? "pnpm validate:m0 && pnpm test:m1 && pnpm test:workerd"
+          : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
+    assert.equal(scripts[`validate:m${milestone}`], expectedValidation);
     assert.doesNotMatch(
       scripts[`validate:m${milestone}`],
       /test:unit|test:smoke:built|test:fault:built|test:performance:built/,
@@ -60,6 +89,44 @@ test("milestone gates select only their owned suites and sequential predecessors
       );
   }
   assert.equal(scripts["validate:accepted"], "pnpm validate:m1");
+});
+
+test("documentation links resolve inline and reference-style targets", async () => {
+  const filename = path.join(root, "docs", "fixture.md");
+  const read = async (target) => {
+    if (target !== path.join(root, "README.md")) throw new Error("missing");
+    return "# Ephemeral AI FS\n";
+  };
+  assert.deepEqual(
+    await documentationLinkErrors(
+      "[inline](../README.md) [full][root] [collapsed][]\n\n[root]: ../README.md\n[collapsed]: ../README.md\n",
+      filename,
+      { root, read },
+    ),
+    [],
+  );
+  assert.deepEqual(
+    await documentationLinkErrors("[broken][absent]", filename, { root, read }),
+    ["undefined reference [absent]"],
+  );
+  assert.deepEqual(
+    await documentationLinkErrors("[broken]: missing.md", filename, { root, read }),
+    ["missing target missing.md"],
+  );
+  assert.deepEqual(
+    await documentationLinkErrors("[anchor](../README.md#not-present)", filename, {
+      root,
+      read,
+    }),
+    ["missing anchor #not-present in ../README.md"],
+  );
+  assert.deepEqual(
+    await documentationLinkErrors("[escape](../../outside.md)", filename, {
+      root: path.join(root, "docs"),
+      read,
+    }),
+    ["target escapes repository: ../../outside.md"],
+  );
 });
 
 test("recording testkit fixtures preserve labels, seeds, restart hooks, and disposal", async () => {

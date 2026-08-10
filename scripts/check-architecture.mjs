@@ -64,6 +64,32 @@ function packageName(specifier) {
   return specifier.split("/").slice(0, 2).join("/");
 }
 
+function sqlStatementText(node) {
+  if (ts.isTemplateExpression(node)) return node.head.text.trimStart();
+  if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    return node.text.trimStart();
+  return undefined;
+}
+
+function beginsSqlStatement(value) {
+  return Boolean(
+    value &&
+    /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA|REPLACE|WITH|VACUUM|ATTACH|DETACH|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)(?:\s|;|\()/iu.test(
+      value,
+    ),
+  );
+}
+
+function dependencyDeclarationReason(manifest, dependency, typeOnly) {
+  const dependencies = manifest.dependencies ?? {};
+  const peers = manifest.peerDependencies ?? {};
+  if (Object.hasOwn(dependencies, dependency)) return undefined;
+  if (typeOnly && Object.hasOwn(peers, dependency)) return undefined;
+  return typeOnly
+    ? `type-only workspace import requires dependencies or peerDependencies: ${dependency}`
+    : `runtime workspace import requires dependencies: ${dependency}`;
+}
+
 /** Return every executable or type-level module edge represented by TypeScript syntax. */
 function moduleReferences(sourceFile) {
   const references = [];
@@ -77,6 +103,10 @@ function moduleReferences(sourceFile) {
     });
   };
   const requireAliases = new Map([["require", "require"]]);
+  const codeGenerationAliases = new Map([
+    ["eval", "runtime-eval"],
+    ["Function", "runtime-function-constructor"],
+  ]);
   const unwrapExpression = (expression) => {
     let current = expression;
     while (
@@ -120,6 +150,46 @@ function moduleReferences(sourceFile) {
     }
     return undefined;
   };
+  const codeGenerationKind = (expression) => {
+    const current = unwrapExpression(expression);
+    if (ts.isIdentifier(current)) return codeGenerationAliases.get(current.text);
+    if (
+      ts.isBinaryExpression(current) &&
+      current.operatorToken.kind === ts.SyntaxKind.CommaToken
+    )
+      return codeGenerationKind(current.right);
+    if (
+      ts.isPropertyAccessExpression(current) ||
+      ts.isElementAccessExpression(current)
+    ) {
+      const member = ts.isPropertyAccessExpression(current)
+        ? current.name.text
+        : ts.isStringLiteralLike(current.argumentExpression)
+          ? current.argumentExpression.text
+          : undefined;
+      if (
+        ts.isIdentifier(current.expression) &&
+        ["globalThis", "global", "self", "window"].includes(current.expression.text)
+      ) {
+        if (member === "eval") return "runtime-eval";
+        if (member === "Function") return "runtime-function-constructor";
+      }
+      return undefined;
+    }
+    if (
+      ts.isCallExpression(current) &&
+      (ts.isPropertyAccessExpression(current.expression) ||
+        ts.isElementAccessExpression(current.expression))
+    ) {
+      const member = ts.isPropertyAccessExpression(current.expression)
+        ? current.expression.name.text
+        : ts.isStringLiteralLike(current.expression.argumentExpression)
+          ? current.expression.argumentExpression.text
+          : undefined;
+      if (member === "bind") return codeGenerationKind(current.expression.expression);
+    }
+    return undefined;
+  };
   const aliasAssignments = [];
   const collectRequireAliasAssignments = (node) => {
     if (
@@ -147,6 +217,11 @@ function moduleReferences(sourceFile) {
         requireAliases.set(name, kind);
         changed = true;
       }
+      const generatedKind = codeGenerationKind(initializer);
+      if (generatedKind && codeGenerationAliases.get(name) !== generatedKind) {
+        codeGenerationAliases.set(name, generatedKind);
+        changed = true;
+      }
     }
   } while (changed);
   const addTripleSlashReferences = (items, kind) => {
@@ -164,16 +239,28 @@ function moduleReferences(sourceFile) {
   addTripleSlashReferences(sourceFile.libReferenceDirectives, "triple-slash-lib");
   const visit = (node) => {
     if (ts.isImportDeclaration(node)) {
-      push(
-        "static-import",
-        node,
-        node.moduleSpecifier,
-        Boolean(node.importClause?.isTypeOnly),
+      const bindings = node.importClause?.namedBindings;
+      const typeOnly = Boolean(
+        node.importClause?.isTypeOnly ||
+        (node.importClause &&
+          !node.importClause.name &&
+          bindings &&
+          ts.isNamedImports(bindings) &&
+          bindings.elements.length > 0 &&
+          bindings.elements.every((element) => element.isTypeOnly)),
       );
+      push("static-import", node, node.moduleSpecifier, typeOnly);
       return;
     }
     if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
-      push("static-export", node, node.moduleSpecifier, Boolean(node.isTypeOnly));
+      const typeOnly = Boolean(
+        node.isTypeOnly ||
+        (node.exportClause &&
+          ts.isNamedExports(node.exportClause) &&
+          node.exportClause.elements.length > 0 &&
+          node.exportClause.elements.every((element) => element.isTypeOnly)),
+      );
+      push("static-export", node, node.moduleSpecifier, typeOnly);
       return;
     }
     if (
@@ -198,6 +285,11 @@ function moduleReferences(sourceFile) {
       node.expression.kind === ts.SyntaxKind.ImportKeyword
     ) {
       push("dynamic-import", node, node.arguments[0]);
+    } else if (
+      (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
+      codeGenerationKind(node.expression)
+    ) {
+      push(codeGenerationKind(node.expression), node, undefined);
     } else if (ts.isCallExpression(node) && requireKind(node.expression)) {
       push(requireKind(node.expression), node, node.arguments[0]);
     }
@@ -430,6 +522,12 @@ for (const sourceInfo of coreFiles) {
   const fromArea = coreArea(sourceInfo.logical);
   const composed = new Set();
   for (const reference of moduleReferences(parsed)) {
+    if (reference.kind.startsWith("runtime-")) {
+      violations.push(
+        `${relative(sourceInfo.logical)}:${reference.line} uses forbidden runtime code generation (${reference.kind})`,
+      );
+      continue;
+    }
     if (!reference.specifier) {
       violations.push(
         `${relative(sourceInfo.logical)}:${reference.line} has non-literal ${reference.kind}; the import graph cannot prove its target`,
@@ -482,16 +580,9 @@ for (const sourceInfo of coreFiles) {
 
   const sqlOwner = fromArea === "sqlite";
   const inspectSql = (node) => {
-    if (
-      !sqlOwner &&
-      (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node))
-    ) {
-      const value = node.text.trimStart();
-      if (
-        /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA|REPLACE|WITH|VACUUM|ATTACH|DETACH|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)(?:\s|;|\()/iu.test(
-          value,
-        )
-      ) {
+    if (!sqlOwner) {
+      const value = sqlStatementText(node);
+      if (beginsSqlStatement(value)) {
         violations.push(
           `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} contains SQL outside sqlite ownership`,
         );
@@ -500,6 +591,30 @@ for (const sourceInfo of coreFiles) {
     ts.forEachChild(node, inspectSql);
   };
   inspectSql(parsed);
+
+  const inspectGlobalReflection = (node) => {
+    if (
+      ts.isElementAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "globalThis"
+    )
+      violations.push(
+        `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} uses forbidden computed globalThis access`,
+      );
+    else if (
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "globalThis" &&
+      node.name.text !== "crypto" &&
+      node.name.text !== "eval" &&
+      node.name.text !== "Function"
+    )
+      violations.push(
+        `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} uses non-allowlisted globalThis.${node.name.text}`,
+      );
+    ts.forEachChild(node, inspectGlobalReflection);
+  };
+  inspectGlobalReflection(parsed);
 }
 findCycles(graph, "source", (filename) => relative(filename));
 
@@ -509,25 +624,34 @@ for (const info of packages) {
   const edges = new Set();
   packageGraph.set(info.name, edges);
   if (!expected) violations.push(`unexpected package ${info.name}`);
-  const declared = {
-    ...(info.manifest.dependencies ?? {}),
-    ...(info.manifest.devDependencies ?? {}),
-    ...(info.manifest.peerDependencies ?? {}),
-  };
-  const recordDependency = (dependency, label) => {
+  const recordDependency = (dependency, label, typeOnly) => {
     if (dependency === info.name) return;
     edges.add(dependency);
     if (!expected?.has(dependency))
       violations.push(`${label} imports forbidden workspace package ${dependency}`);
-    if (!Object.hasOwn(declared, dependency))
-      violations.push(`${label} imports undeclared workspace package ${dependency}`);
+    const declarationReason = dependencyDeclarationReason(
+      info.manifest,
+      dependency,
+      typeOnly,
+    );
+    if (declarationReason) violations.push(`${label} ${declarationReason}`);
   };
-  for (const dependency of Object.keys(declared).filter((name) =>
-    name.startsWith("@ephemeralai/"),
-  )) {
-    edges.add(dependency);
-    if (!expected?.has(dependency))
-      violations.push(`${info.name} must not declare dependency ${dependency}`);
+  for (const field of ["dependencies", "peerDependencies", "devDependencies"]) {
+    for (const dependency of Object.keys(info.manifest[field] ?? {}).filter((name) =>
+      name.startsWith("@ephemeralai/"),
+    )) {
+      if (field !== "devDependencies") edges.add(dependency);
+      if (!expected?.has(dependency))
+        violations.push(`${info.name} must not declare ${field} ${dependency}`);
+      if (
+        field === "devDependencies" &&
+        !Object.hasOwn(info.manifest.dependencies ?? {}, dependency) &&
+        !Object.hasOwn(info.manifest.peerDependencies ?? {}, dependency)
+      )
+        violations.push(
+          `${info.name} must not rely on dev-only workspace dependency ${dependency}`,
+        );
+    }
   }
   for (const sourceInfo of info.sources) {
     const parsed = parse(
@@ -535,6 +659,12 @@ for (const info of packages) {
       await readFile(sourceInfo.logical, "utf8"),
     );
     for (const reference of moduleReferences(parsed)) {
+      if (reference.kind.startsWith("runtime-")) {
+        violations.push(
+          `${relative(sourceInfo.logical)}:${reference.line} uses forbidden runtime code generation (${reference.kind})`,
+        );
+        continue;
+      }
       if (!reference.specifier) {
         violations.push(
           `${relative(sourceInfo.logical)}:${reference.line} has non-literal ${reference.kind}; the package graph cannot prove its target`,
@@ -546,6 +676,7 @@ for (const info of packages) {
         recordDependency(
           bareDependency,
           `${relative(sourceInfo.logical)}:${reference.line}`,
+          reference.typeOnly,
         );
         continue;
       }
@@ -561,11 +692,76 @@ for (const info of packages) {
         recordDependency(
           target.package.name,
           `${relative(sourceInfo.logical)}:${reference.line} relative realpath escape`,
+          reference.typeOnly,
         );
     }
   }
 }
 findCycles(packageGraph, "package");
+
+const sqlTemplateFixture = path.join(fixtureRoot, "operations", "sql-template.ts");
+const sqlTemplateParsed = parse(
+  sqlTemplateFixture,
+  await readFile(sqlTemplateFixture, "utf8"),
+);
+let sqlTemplateRejected = false;
+const inspectSqlTemplateFixture = (node) => {
+  if (beginsSqlStatement(sqlStatementText(node))) sqlTemplateRejected = true;
+  ts.forEachChild(node, inspectSqlTemplateFixture);
+};
+inspectSqlTemplateFixture(sqlTemplateParsed);
+if (!sqlTemplateRejected)
+  violations.push("SQL template-expression negative fixture was not rejected");
+
+const computedGlobalFixture = path.join(
+  fixtureRoot,
+  "operations",
+  "computed-global-eval.ts",
+);
+const computedGlobalParsed = parse(
+  computedGlobalFixture,
+  await readFile(computedGlobalFixture, "utf8"),
+);
+let computedGlobalRejected = false;
+const inspectComputedGlobalFixture = (node) => {
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "globalThis"
+  )
+    computedGlobalRejected = true;
+  ts.forEachChild(node, inspectComputedGlobalFixture);
+};
+inspectComputedGlobalFixture(computedGlobalParsed);
+if (!computedGlobalRejected)
+  violations.push("computed globalThis reflection negative fixture was not rejected");
+
+const dependencyFixtureDirectory = path.join(
+  root,
+  "tests",
+  "fixtures",
+  "package-dependency-bypasses",
+  "dev-only",
+);
+const dependencyFixtureManifest = JSON.parse(
+  await readFile(path.join(dependencyFixtureDirectory, "package.json"), "utf8"),
+);
+const dependencyFixtureSource = parse(
+  path.join(dependencyFixtureDirectory, "index.ts"),
+  await readFile(path.join(dependencyFixtureDirectory, "index.ts"), "utf8"),
+);
+const dependencyFixtureReference = moduleReferences(dependencyFixtureSource).find(
+  (reference) => packageName(reference.specifier ?? "") === "@ephemeralai/fs",
+);
+if (
+  !dependencyFixtureReference ||
+  !dependencyDeclarationReason(
+    dependencyFixtureManifest,
+    "@ephemeralai/fs",
+    dependencyFixtureReference.typeOnly,
+  )
+)
+  violations.push("dev-only workspace dependency negative fixture was not rejected");
 
 // These deliberately forbidden files prove each syntax/realpath bypass is
 // observed by the same parser, resolver, and policy used for production code.
@@ -575,6 +771,14 @@ const fixtureCases = [
   { file: "operations/require.cts", kind: "require", policy: "core" },
   { file: "operations/aliased-require.cts", kind: "require", policy: "core" },
   { file: "operations/bound-require.cts", kind: "require", policy: "core" },
+  { file: "operations/direct-eval.ts", kind: "runtime-eval", policy: "codegen" },
+  { file: "operations/global-eval.ts", kind: "runtime-eval", policy: "codegen" },
+  { file: "operations/bound-eval.ts", kind: "runtime-eval", policy: "codegen" },
+  {
+    file: "operations/function-constructor.ts",
+    kind: "runtime-function-constructor",
+    policy: "codegen",
+  },
   { file: "operations/triple-slash.ts", kind: "triple-slash-path", policy: "core" },
   {
     file: "manifests/triple-slash-types.ts",
@@ -609,6 +813,8 @@ for (const fixture of fixtureCases) {
     );
   } else if (fixture.policy === "host") {
     rejected = Boolean(reference?.specifier && !reference.specifier.startsWith("."));
+  } else if (fixture.policy === "codegen") {
+    rejected = Boolean(reference?.kind.startsWith("runtime-"));
   } else if (target && fixture.policy === "runtime-port") {
     rejected = coreArea(target.logical) === "operations" && !reference?.typeOnly;
   } else if (target && fixture.policy === "package") {
@@ -616,7 +822,7 @@ for (const fixture of fixtureCases) {
       target.package.name !== "@ephemeralai/fs" &&
       !allowedPackages.get("@ephemeralai/fs")?.has(target.package.name);
   }
-  const needsTarget = fixture.policy !== "host";
+  const needsTarget = fixture.policy !== "host" && fixture.policy !== "codegen";
   if (!reference || (needsTarget && !target) || !rejected)
     violations.push(
       `negative architecture fixture was not detected and rejected: ${fixture.file}`,
@@ -628,6 +834,6 @@ if (violations.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `architecture: ${coreFiles.length} core files; full TypeScript module graph, realpath package graph, exact ports/directions, cycles, composition, SQL ownership, and ${fixtureCases.length} bypass fixtures valid`,
+    `architecture: ${coreFiles.length} core files; statically expressible module edges, realpath package graph, exact ports/directions, cycles, composition, SQL ownership, reviewed reflection/code-generation ban, and ${fixtureCases.length + 2} bypass fixtures valid`,
   );
 }

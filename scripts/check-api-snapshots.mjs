@@ -5,6 +5,19 @@ import ts from "typescript";
 const root = path.resolve(import.meta.dirname, "..");
 const packagesRoot = path.join(root, "packages");
 const update = process.argv.includes("--update");
+const compilerOptions = {
+  target: ts.ScriptTarget.ES2022,
+  module: ts.ModuleKind.NodeNext,
+  moduleResolution: ts.ModuleResolutionKind.NodeNext,
+  lib: [
+    "lib.es2022.d.ts",
+    "lib.dom.d.ts",
+    "lib.dom.iterable.d.ts",
+    "lib.esnext.disposable.d.ts",
+  ],
+  skipLibCheck: true,
+  noEmit: true,
+};
 
 async function filesBelow(directory) {
   const output = [];
@@ -39,6 +52,56 @@ function symbolKinds(symbol) {
   return result;
 }
 
+function declarationModuleSpecifiers(sourceFile) {
+  const result = new Set();
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    )
+      result.add(node.moduleSpecifier.text);
+    else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteralLike(node.moduleReference.expression)
+    )
+      result.add(node.moduleReference.expression.text);
+    else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      const literal = node.argument.literal;
+      if (ts.isStringLiteralLike(literal)) result.add(literal.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return [...result];
+}
+
+function reachableDeclarationFiles(entry, program) {
+  const result = new Set();
+  const pending = [path.resolve(entry)];
+  while (pending.length) {
+    const filename = pending.pop();
+    const sourceFile = program.getSourceFile(filename);
+    if (!sourceFile || result.has(path.resolve(sourceFile.fileName))) continue;
+    const resolvedFilename = path.resolve(sourceFile.fileName);
+    result.add(resolvedFilename);
+    for (const specifier of declarationModuleSpecifiers(sourceFile)) {
+      const resolved = ts.resolveModuleName(
+        specifier,
+        resolvedFilename,
+        compilerOptions,
+        ts.sys,
+      ).resolvedModule?.resolvedFileName;
+      if (resolved && within(resolved, packagesRoot) && resolved.endsWith(".d.ts"))
+        pending.push(path.resolve(resolved));
+    }
+  }
+  return [...result].sort((left, right) =>
+    relativeRoot(left).localeCompare(relativeRoot(right)),
+  );
+}
+
 const publishablePackages = [];
 for (const entry of (await readdir(packagesRoot, { withFileTypes: true })).sort(
   (left, right) => left.name.localeCompare(right.name),
@@ -59,19 +122,7 @@ for (const entry of (await readdir(packagesRoot, { withFileTypes: true })).sort(
 const declarationFiles = publishablePackages.flatMap((item) => item.declarations);
 const program = ts.createProgram({
   rootNames: declarationFiles,
-  options: {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    lib: [
-      "lib.es2022.d.ts",
-      "lib.dom.d.ts",
-      "lib.dom.iterable.d.ts",
-      "lib.esnext.disposable.d.ts",
-    ],
-    skipLibCheck: true,
-    noEmit: true,
-  },
+  options: compilerOptions,
 });
 const checker = program.getTypeChecker();
 const printer = ts.createPrinter({
@@ -162,9 +213,28 @@ for (const packageInfo of publishablePackages) {
     const stem = snapshotStem(publicEntry.subpath);
     const expectedSymbols = `${JSON.stringify({ package: packageInfo.manifest.name, subpath: publicEntry.subpath, entry: relativeRoot(publicEntry.entry), symbols: report }, null, 2)}\n`;
     const expectedDeclarations = `${declarations.join("\n").trimEnd()}\n`;
+    const rollupFiles = reachableDeclarationFiles(publicEntry.entry, program);
+    const expectedRollup = `${[
+      "/* Generated reachable public declaration rollup. Update only with: pnpm api:update */",
+      `/* package: ${packageInfo.manifest.name}; subpath: ${publicEntry.subpath}; entry: ${relativeRoot(publicEntry.entry)} */`,
+      ...(await Promise.all(
+        rollupFiles.map(async (filename) =>
+          [
+            "",
+            `/* ===== ${relativeRoot(filename)} ===== */`,
+            normalized(await readFile(filename, "utf8"))
+              .replace(/^\/\/# sourceMappingURL=.*$/gmu, "")
+              .trimEnd(),
+          ].join("\n"),
+        ),
+      )),
+    ]
+      .join("\n")
+      .trimEnd()}\n`;
     for (const [suffix, expected] of [
       ["symbols.json", expectedSymbols],
       ["d.ts", expectedDeclarations],
+      ["rollup.d.ts", expectedRollup],
     ]) {
       const snapshotName = `${stem}.${suffix}`;
       expectedSnapshotNames.add(snapshotName);
@@ -191,7 +261,10 @@ for (const packageInfo of publishablePackages) {
     }
   }
   const actualSnapshotNames = (await readdir(snapshotDirectory)).filter(
-    (name) => name.endsWith(".symbols.json") || name.endsWith(".d.ts"),
+    (name) =>
+      name.endsWith(".symbols.json") ||
+      name.endsWith(".d.ts") ||
+      name.endsWith(".rollup.d.ts"),
   );
   for (const actual of actualSnapshotNames) {
     if (expectedSnapshotNames.has(actual)) continue;
@@ -203,6 +276,39 @@ for (const packageInfo of publishablePackages) {
       );
   }
 }
+
+const reachableFixtureDirectory = path.join(
+  root,
+  "tests",
+  "fixtures",
+  "api-snapshot-bypasses",
+  "private-reachable",
+);
+const reachableFixtureFiles = ["before.d.ts", "after.d.ts"].map((name) =>
+  path.join(reachableFixtureDirectory, name),
+);
+const reachableFixtureProgram = ts.createProgram({
+  rootNames: reachableFixtureFiles,
+  options: compilerOptions,
+});
+const reachableFixtureRollups = await Promise.all(
+  reachableFixtureFiles.map(async (entry) =>
+    (
+      await Promise.all(
+        reachableDeclarationFiles(entry, reachableFixtureProgram).map((filename) =>
+          readFile(filename, "utf8"),
+        ),
+      )
+    ).join("\n"),
+  ),
+);
+if (
+  !reachableFixtureRollups.every((value) =>
+    value.includes("interface HiddenPublicOption"),
+  ) ||
+  reachableFixtureRollups[0] === reachableFixtureRollups[1]
+)
+  throw new Error("reachable private public-type mutation fixture was not detected");
 
 console.log(
   `api snapshots: ${publishablePackages.length} publishable packages, ${checkedSubpaths} public subpaths, and ${checkedSymbols} exported symbols match committed symbol/.d.ts reports`,

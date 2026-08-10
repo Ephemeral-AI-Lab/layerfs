@@ -1,0 +1,8 @@
+{
+  "name": "@ephemeralai/dev-only-bypass",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@ephemeralai/fs": "workspace:^"
+  }
+}

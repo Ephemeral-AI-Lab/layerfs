@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { documentationLinkErrors } from "./documentation-links.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 async function walk(directory) {
@@ -16,15 +17,8 @@ async function walk(directory) {
 const missing = [];
 for (const filename of await walk(root)) {
   const source = await readFile(filename, "utf8");
-  for (const match of source.matchAll(/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g)) {
-    const target = match[1];
-    if (!target || /^(?:https?:|mailto:)/.test(target)) continue;
-    try {
-      await readFile(path.resolve(path.dirname(filename), decodeURIComponent(target)));
-    } catch {
-      missing.push(`${path.relative(root, filename)} -> ${target}`);
-    }
-  }
+  for (const error of await documentationLinkErrors(source, filename, { root }))
+    missing.push(`${path.relative(root, filename)} -> ${error}`);
 }
 if (missing.length)
   throw new Error(`broken documentation links:\n${missing.join("\n")}`);
