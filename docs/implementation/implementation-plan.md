@@ -104,39 +104,39 @@ algorithms before adding persistence.
 
 ### M1 checklist
 
-- [x] Implement checked integer and byte-view utilities.
-- [x] Implement branded CAS object and manifest identifiers.
-- [x] Implement incremental SHA-256 hashing and object verification.
-- [x] Implement the exact `fastcdc-v1` Gear table and boundary algorithm.
-- [x] Implement resumable streaming FastCDC state.
-- [x] Implement COW page-size, page-key, dirty-range, and page-overlay math.
-- [x] Implement ordered insertion, deletion, replacement, and truncation patches.
-- [x] Implement the manifest root-envelope codec.
-- [x] Implement leaf and internal manifest-node codecs.
-- [x] Implement deterministic content-defined manifest grouping.
-- [x] Implement bounded root-to-leaf lookup and sequential manifest cursors.
-- [x] Implement canonical manifest building from a CAS-entry stream.
-- [x] Implement local FastCDC and manifest-tree reconnection.
-- [x] Add golden vectors for CAS, FastCDC, root envelopes, leaves, internal nodes,
+- [ ] Implement checked integer and byte-view utilities.
+- [ ] Implement branded CAS object and manifest identifiers.
+- [ ] Implement incremental SHA-256 hashing and object verification.
+- [ ] Implement the exact `fastcdc-v1` Gear table and boundary algorithm.
+- [ ] Implement resumable streaming FastCDC state.
+- [ ] Implement COW page-size, page-key, dirty-range, and page-overlay math.
+- [ ] Implement ordered insertion, deletion, replacement, and truncation patches.
+- [ ] Implement the manifest root-envelope codec.
+- [ ] Implement leaf and internal manifest-node codecs.
+- [ ] Implement deterministic content-defined manifest grouping.
+- [ ] Implement bounded root-to-leaf lookup and sequential manifest cursors.
+- [ ] Implement canonical manifest building from a CAS-entry stream.
+- [ ] Implement local FastCDC and manifest-tree reconnection.
+- [ ] Add golden vectors for CAS, FastCDC, root envelopes, leaves, internal nodes,
       grouping, and complete manifest roots.
-- [x] Add property tests for byte coverage, determinism, overflow, malformed encodings,
+- [ ] Add property tests for byte coverage, determinism, overflow, malformed encodings,
       and full-rebuild equivalence.
 
 ### M1 acceptance criteria
 
-- [x] All golden vectors match on supported Node and workerd runtimes.
-- [x] FastCDC results are independent of input buffer partitioning.
-- [x] Identical bytes and parameters produce identical manifest roots.
-- [x] Start, middle, end, and EOF lookup scan no more than one leaf after traversing the
+- [ ] All golden vectors match on supported Node and workerd runtimes.
+- [ ] FastCDC results are independent of input buffer partitioning.
+- [ ] Identical bytes and parameters produce identical manifest roots.
+- [ ] Start, middle, end, and EOF lookup scan no more than one leaf after traversing the
       bounded tree path.
-- [x] Corrupt root, node, span, count, or child data is rejected before affected bytes
+- [ ] Corrupt root, node, span, count, or child data is rejected before affected bytes
       are returned.
-- [x] Local insertion, deletion, truncation, and overwrite produce exactly the
+- [ ] Local insertion, deletion, truncation, and overwrite produce exactly the
       full-rebuild manifest root.
-- [x] Unchanged CAS objects and manifest subtrees are reused after deterministic
+- [ ] Unchanged CAS objects and manifest subtrees are reused after deterministic
       reconnection.
-- [x] COW and patch cases pass at 4, 8, and 16 KiB page sizes.
-- [x] Pure algorithms import no SQLite, branch, host, RPC, or FUSE module.
+- [ ] COW and patch cases pass at 4, 8, and 16 KiB page sizes.
+- [ ] Pure algorithms import no SQLite, branch, host, RPC, or FUSE module.
 
 ## 5. Milestone 2: Transactional SQLite storage and Node driver
 

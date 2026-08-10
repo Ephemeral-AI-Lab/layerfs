@@ -1,24 +1,31 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "f1c4ebd111eee269a2a4f2d0a786f41d4cae63b2",
-  "adapter": "workspace-foundation",
+  "commit": "786b418d002a0bf086386bd84d053a20054ec3fd",
+  "adapter": "workspace-foundation-matrix",
   "schemaVersion": 3,
   "formatVersion": "efs-merkle-manifest-v1",
   "seed": 1592639710,
   "fixtureDigest": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086",
   "faultPoint": null,
-  "passed": 4,
+  "passed": 16,
   "failed": 0,
-  "elapsedMs": 37070,
+  "elapsedMs": 40572,
   "metrics": {
+    "operatingSystems": 2,
+    "nodeVersions": 2,
+    "matrixRuns": 4,
+    "markdownFiles": 18,
     "coreSourceFiles": 45,
-    "negativeArchitectureFixtures": 4,
-    "lintedFiles": 118,
+    "negativeArchitectureFixtures": 8,
+    "lintedFiles": 122,
     "publishablePackages": 6,
     "publicEntrypoints": 9,
     "exportedSymbols": 96,
     "cleanDistFiles": 200,
     "packedTarballs": 6,
     "packedFiles": 206
-  }
+  },
+  "deviations": [
+    "No hosted GitHub Actions run exists because the branch has not been pushed; the full Windows/Linux Node 22/24 matrix was run locally instead."
+  ]
 }
