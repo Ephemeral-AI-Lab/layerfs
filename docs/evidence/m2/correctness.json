@@ -1,0 +1,23 @@
+{
+  "schema": "efs-correctness-result-v1",
+  "commit": "ba64ed9",
+  "adapter": "node-sqlite-and-workerd-algorithms",
+  "schemaVersion": 2,
+  "formatVersion": "efs-merkle-manifest-v1",
+  "seed": 2447445413,
+  "fixtureDigest": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086",
+  "faultPoint": "every-v1-to-v2-migration-statement-and-content-write-statement",
+  "passed": 49,
+  "failed": 0,
+  "elapsedMs": 17726,
+  "metrics": {
+    "stagedObjectCount": 100001,
+    "finalCertificateValidationStatements": 1,
+    "cowReplacementIterationsPerPageSize": 1000,
+    "cowPageSizesBytes": [4096, 8192, 16384],
+    "managedResidentLimitBytes": 134217728,
+    "cacheLimitBytes": 67108864,
+    "finalTransactionLimitBytes": 16777216,
+    "fastCdcBufferCapacityBytes": 524288
+  }
+}
