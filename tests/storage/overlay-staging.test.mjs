@@ -180,6 +180,43 @@ test("structural patches are segmented, ordered, bounded, and exact", async () =
       ),
     /outside/,
   );
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        tx.run(
+          "INSERT INTO efs_patches(branch_id,inode_id,sequence,generation,offset,delete_length,insert_length) VALUES('branch','inode',3,3,0,0,0)",
+        ),
+      ),
+    /contiguous/,
+  );
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        tx.run(
+          "UPDATE efs_patches SET sequence=4 WHERE branch_id='branch' AND inode_id='inode' AND sequence=0",
+        ),
+      ),
+    /immutable/,
+  );
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        tx.run(
+          "DELETE FROM efs_patches WHERE branch_id='branch' AND inode_id='inode' AND sequence=0",
+        ),
+      ),
+    /immutable/,
+  );
+  assert.equal(
+    driver.transaction("read", (tx) =>
+      tx.all(
+        "SELECT count(*) count FROM efs_patches WHERE branch_id='branch' AND inode_id='inode'",
+        [],
+        { maxRows: 1, maxBytes: 128 },
+      )[0].count,
+    ),
+    2,
+  );
   driver.close();
 });
 

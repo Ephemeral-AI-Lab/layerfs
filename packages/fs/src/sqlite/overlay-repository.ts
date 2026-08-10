@@ -238,7 +238,9 @@ export class OverlayRepository {
       },
     );
     let cursor = 0;
-    return patches.map((patch) => {
+    return patches.map((patch, patchIndex) => {
+      if (patch.sequence !== patchIndex)
+        throw new Error("ECORRUPT: structural patch sequence has a gap");
       const values: Uint8Array[] = [];
       let length = 0;
       while (

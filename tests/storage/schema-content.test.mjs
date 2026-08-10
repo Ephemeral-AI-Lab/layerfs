@@ -5,8 +5,12 @@ import path from "node:path";
 import { test } from "node:test";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
 import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
-import { constrainStorageLimits } from "../../packages/fs/dist/resources/limits.js";
+import {
+  DEFAULT_FILESYSTEM_LIMITS,
+  constrainStorageLimits,
+} from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
+import { NamespaceRepository } from "../../packages/fs/dist/sqlite/namespace-repository.js";
 import { UsageRepository } from "../../packages/fs/dist/sqlite/usage-repository.js";
 import {
   EFS_APPLICATION_ID,
@@ -274,6 +278,83 @@ test("one usage authority enforces aggregate and category quotas transactionally
   assert.equal(usage.maintenance_bytes, 100);
   assert.equal(usage.permanent_identifiers, 1);
   assert.equal(usage.mutation_sequence, 6);
+  driver.close();
+});
+
+test("namespace root journals reserve maintenance quota before changing the head", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const tight = constrainStorageLimits(
+    { maxMaintenanceBytes: 96 },
+    driver.capabilities,
+  );
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        new NamespaceRepository(tx, DEFAULT_FILESYSTEM_LIMITS, tight, "test").nextRevision(
+          2,
+          1,
+        ),
+      ),
+    /maintenance quota/,
+  );
+  assert.deepEqual(
+    driver.transaction("read", (tx) => ({
+      meta: tx.all(
+        "SELECT main_revision,root_mutation_generation FROM efs_meta",
+        [],
+        { maxRows: 1, maxBytes: 128 },
+      )[0],
+      revisions: tx.all("SELECT count(*) count FROM efs_revisions", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].count,
+      journals: tx.all("SELECT count(*) count FROM efs_root_journal", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].count,
+      maintenance: tx.all("SELECT maintenance_bytes FROM efs_usage", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].maintenance_bytes,
+    })),
+    {
+      meta: { main_revision: 0, root_mutation_generation: 0 },
+      revisions: 1,
+      journals: 0,
+      maintenance: 0,
+    },
+  );
+  const admitted = constrainStorageLimits(
+    { maxMaintenanceBytes: 97 },
+    driver.capabilities,
+  );
+  assert.equal(
+    driver.transaction("write", (tx) =>
+      new NamespaceRepository(
+        tx,
+        DEFAULT_FILESYSTEM_LIMITS,
+        admitted,
+        "test",
+      ).nextRevision(2, 1),
+    ),
+    1,
+  );
+  assert.deepEqual(
+    driver.transaction("read", (tx) =>
+      tx.all(
+        "SELECT u.maintenance_bytes,m.main_revision,m.root_mutation_generation,(SELECT count(*) FROM efs_root_journal) journals FROM efs_usage u JOIN efs_meta m ON m.singleton=u.singleton",
+        [],
+        { maxRows: 1, maxBytes: 256 },
+      )[0],
+    ),
+    {
+      maintenance_bytes: 97,
+      main_revision: 1,
+      root_mutation_generation: 1,
+      journals: 1,
+    },
+  );
   driver.close();
 });
 

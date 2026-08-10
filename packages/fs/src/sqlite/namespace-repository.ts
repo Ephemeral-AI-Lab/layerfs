@@ -1,9 +1,10 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
-import type { FilesystemLimits } from "../resources/limits.js";
+import type { FilesystemLimits, StorageLimits } from "../resources/limits.js";
 import { canonicalizePath, type CanonicalPath } from "../namespace/paths.js";
 import { fsError } from "../filesystem/errors.js";
 import { encodeUtf8 } from "../namespace/utf8.js";
 import { bytesToHex } from "../cas/bytes.js";
+import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 
 export interface InodeRow extends SqliteRow {
   id: string;
@@ -49,14 +50,17 @@ export interface ResolvedPath {
 export class NamespaceRepository {
   readonly #tx: FilesystemSQLiteTransaction;
   readonly #limits: FilesystemLimits;
+  readonly #storage: StorageLimits;
   readonly #syscall: string;
   constructor(
     tx: FilesystemSQLiteTransaction,
     limits: FilesystemLimits,
+    storage: StorageLimits,
     syscall: string,
   ) {
     this.#tx = tx;
     this.#limits = limits;
+    this.#storage = storage;
     this.#syscall = syscall;
   }
   meta(): MetaRow {
@@ -190,6 +194,11 @@ export class NamespaceRepository {
     const generation = meta.root_mutation_generation + 1;
     if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(generation))
       throw new Error("ENOSPC: revision or generation space exhausted");
+    const rootId = encodeUtf8(String(revision));
+    new UsageRepository(this.#tx, this.#storage).apply(
+      { maintenance_bytes: CHARGED_ROW_BYTES + rootId.byteLength },
+      "namespace root journal",
+    );
     this.#tx.run(
       "INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(?,?,?,?,?)",
       [revision, meta.main_revision, now, writer, changeCount],
@@ -200,7 +209,7 @@ export class NamespaceRepository {
     );
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,0,?)",
-      [generation, encodeUtf8(String(revision))],
+      [generation, rootId],
     );
     return revision;
   }
@@ -411,12 +420,17 @@ export class NamespaceRepository {
   }
   bumpRoot(kind: number, id: string): void {
     const generation = this.meta().root_mutation_generation + 1;
+    const rootId = encodeUtf8(id);
+    new UsageRepository(this.#tx, this.#storage).apply(
+      { maintenance_bytes: CHARGED_ROW_BYTES + rootId.byteLength },
+      "namespace root journal",
+    );
     this.#tx.run("UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1", [
       generation,
     ]);
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
-      [generation, kind, encodeUtf8(id)],
+      [generation, kind, rootId],
     );
   }
 }

@@ -6,7 +6,12 @@ import {
   validateSupportedManifestParameters,
 } from "../manifests/codec.js";
 import { checkedAdd } from "../resources/safe-integers.js";
-import type { AuthenticatedManifestEntry } from "../operations/storage-ports.js";
+
+export interface SQLiteAuthenticatedManifestEntry {
+  readonly hash: Uint8Array;
+  readonly length: number;
+  readonly offset: number;
+}
 
 export interface SQLiteManifestContentSource {
   getObject(hash: Uint8Array, expectedSize?: number): Uint8Array | undefined;
@@ -50,7 +55,7 @@ export class SQLiteAuthenticatedManifestCursor {
     return this.#position;
   }
 
-  peekEntry(): AuthenticatedManifestEntry | null {
+  peekEntry(): SQLiteAuthenticatedManifestEntry | null {
     const selected = this.#cursor.peek();
     return selected
       ? Object.freeze({
@@ -61,7 +66,7 @@ export class SQLiteAuthenticatedManifestCursor {
       : null;
   }
 
-  nextEntry(): AuthenticatedManifestEntry | null {
+  nextEntry(): SQLiteAuthenticatedManifestEntry | null {
     const selected = this.#cursor.next();
     if (!selected) return null;
     this.#position = checkedAdd(selected.offset, selected.entry.length);

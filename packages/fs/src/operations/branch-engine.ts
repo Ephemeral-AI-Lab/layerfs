@@ -550,7 +550,7 @@ export class BranchManager implements Branches {
       }
       const view = new BranchView(tx, branch, this.#filesystem, this.#storage);
       const changes = view.allChanges();
-      const ns = tx.namespace(this.#filesystem, "publish");
+      const ns = tx.namespace(this.#filesystem, this.#storage, "publish");
       const head = ns.meta().main_revision;
       const conflicts = [];
       for (const change of changes) {

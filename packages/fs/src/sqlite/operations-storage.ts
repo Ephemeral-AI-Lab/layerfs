@@ -31,8 +31,11 @@ export function createSqliteOperationsStorage(
         const ports: StorageTransactionPorts = Object.freeze({
           content: (limits: StorageLimits, cache?: ContentCache) =>
             new ContentRepository(tx, limits, cache),
-          namespace: (limits: FilesystemLimits, syscall: string) =>
-            new NamespaceRepository(tx, limits, syscall),
+          namespace: (
+            filesystem: FilesystemLimits,
+            storage: StorageLimits,
+            syscall: string,
+          ) => new NamespaceRepository(tx, filesystem, storage, syscall),
           branches: (limits: StorageLimits) => new BranchRepository(tx, limits),
           staging: (limits: StorageLimits) => new StagingRepository(tx, limits),
           maintenance: (limits: StorageLimits) => new MaintenanceRepository(tx, limits),

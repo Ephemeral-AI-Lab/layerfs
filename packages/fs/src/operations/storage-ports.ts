@@ -492,7 +492,11 @@ export interface OverlayStore {
 
 export interface StorageTransactionPorts {
   content(limits: StorageLimits, cache?: ContentCache): ContentStore;
-  namespace(limits: FilesystemLimits, syscall: string): NamespaceStore;
+  namespace(
+    filesystem: FilesystemLimits,
+    storage: StorageLimits,
+    syscall: string,
+  ): NamespaceStore;
   branches(limits: StorageLimits): BranchStore;
   staging(limits: StorageLimits): StagingStore;
   maintenance(limits: StorageLimits): MaintenanceStore;
