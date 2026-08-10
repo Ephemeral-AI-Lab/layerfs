@@ -231,10 +231,7 @@ export class ContentRepository {
         maxRows: values.length,
         maxBytes: Math.max(
           1024,
-          values.reduce(
-            (sum, node) => sum + intrinsicByteLength(node.encoded) + 96,
-            0,
-          ),
+          values.reduce((sum, node) => sum + intrinsicByteLength(node.encoded) + 96, 0),
         ),
       },
     );
@@ -288,9 +285,7 @@ export class ContentRepository {
     )
       throw new Error("invalid manifest root digest or size");
     const root = decodeManifestRoot(encoded, hash);
-    if (
-      root.parameters.maximum > maxPersistedContentObjectBytes(this.#limits)
-    )
+    if (root.parameters.maximum > maxPersistedContentObjectBytes(this.#limits))
       throw new RangeError(
         "manifest FastCDC maximum exceeds the durable object transaction envelope",
       );

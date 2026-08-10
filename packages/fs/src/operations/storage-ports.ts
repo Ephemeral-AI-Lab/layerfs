@@ -7,10 +7,7 @@ import type {
 import type { CanonicalPath } from "../namespace/paths.js";
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { ContentCache } from "../cache/content-cache.js";
-import type {
-  ManifestNode,
-  ManifestParameters,
-} from "../manifests/codec.js";
+import type { ManifestNode, ManifestParameters } from "../manifests/codec.js";
 
 export type StorageTransactionMode = "read" | "write" | "exclusive";
 export interface StorageWorkBudget {
@@ -111,10 +108,7 @@ export interface AuthenticatedManifestTreePath {
   readonly entryOffset: number;
 }
 export interface ManifestTreeStore {
-  pathAtOffset(
-    manifestHash: Uint8Array,
-    offset: number,
-  ): AuthenticatedManifestTreePath;
+  pathAtOffset(manifestHash: Uint8Array, offset: number): AuthenticatedManifestTreePath;
   protectSourceManifest(
     leaseId: string,
     ownerNonce: Uint8Array,

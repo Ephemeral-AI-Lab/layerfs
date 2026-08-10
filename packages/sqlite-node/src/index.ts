@@ -283,9 +283,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
           if (!active) throw new Error("SQLite transaction value is no longer active");
           this.#validateStatement(sql, bindings, mode);
           const bindingEstimate =
-            mode === "read"
-              ? 0
-              : this.#pageSize * 4 + bindingBytes(bindings) * 2;
+            mode === "read" ? 0 : this.#pageSize * 4 + bindingBytes(bindings) * 2;
           if (journalEstimate + bindingEstimate > this.#maxJournalBytes)
             throw new Error(
               "ENOSPC: WAL backpressure exceeds rollback-safe transaction admission envelope",

@@ -388,8 +388,7 @@ test("filesystem storage caps cannot silently undercut the configured Node drive
     EphemeralFS.open({
       database: driver,
       storage: {
-        maxPhysicalDatabaseBytes:
-          driver.capabilities.maxPhysicalDatabaseBytes - 4096,
+        maxPhysicalDatabaseBytes: driver.capabilities.maxPhysicalDatabaseBytes - 4096,
       },
     }),
     /must be configured on the SQLite adapter/,

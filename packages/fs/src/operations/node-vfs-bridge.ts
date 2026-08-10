@@ -165,11 +165,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   readdirSync(path: string): DirectoryEntry[] {
     const canonical = canonicalizePath(path, this.filesystemLimits, "readdirSync");
     return this.#read((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "readdirSync",
-      );
+      const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "readdirSync");
       const selected = ns.resolve(canonical, true);
       if (selected.inode.type !== 1)
         throw fsError(
@@ -380,11 +376,7 @@ class Bridge implements NodeVfsFilesystemBridge {
       throw fsError("EEXIST", "mkdirSync", canonical.value, "root exists");
     }
     this.#write((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "mkdirSync",
-      );
+      const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "mkdirSync");
       if (ns.resolveOptional(canonical, false)) {
         if (options.recursive) return;
         throw fsError("EEXIST", "mkdirSync", canonical.value, "destination exists");
@@ -418,11 +410,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   chmodSync(path: string, mode: number): void {
     this.#write((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "chmodSync",
-      );
+      const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "chmodSync");
       const value = ns.resolve(path, true);
       const now = this.#now();
       const revision = ns.nextRevision(now, 1, "node-vfs");
@@ -462,11 +450,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   symlinkSync(target: string, path: string): void {
     this.#write((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "symlinkSync",
-      );
+      const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "symlinkSync");
       const destination = canonicalizePath(path, this.filesystemLimits, "symlinkSync");
       if (ns.resolveOptional(destination, false))
         throw fsError("EEXIST", "symlinkSync", destination.value, "destination exists");
@@ -493,11 +477,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     const destination = canonicalizePath(newPath, this.filesystemLimits, "renameSync");
     if (sourcePath.value === destination.value) return;
     this.#write((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "renameSync",
-      );
+      const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "renameSync");
       const source = ns.resolve(sourcePath, false);
       const target = ns.resolveOptional(destination, false);
       if (target)
@@ -520,11 +500,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   unlinkSync(path: string): void {
     this.#write((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "unlinkSync",
-      );
+      const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "unlinkSync");
       const value = ns.resolve(path, false);
       if (value.inode.type === 1)
         throw fsError("EISDIR", "unlinkSync", path, "path is a directory");
@@ -533,11 +509,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   rmdirSync(path: string): void {
     this.#write((tx) => {
-      const ns = tx.namespace(
-        this.filesystemLimits,
-        this.storageLimits,
-        "rmdirSync",
-      );
+      const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "rmdirSync");
       const value = ns.resolve(path, false);
       if (value.inode.type !== 1)
         throw fsError("ENOTDIR", "rmdirSync", path, "path is not a directory");

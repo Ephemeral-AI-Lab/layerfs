@@ -190,10 +190,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     const runtime = resolveLimits(DEFAULT_RUNTIME_LIMITS, options.runtime);
     const branch = resolveLimits(DEFAULT_BRANCH_CONFIGURATION, options.branch);
     const storage = constrainStorageLimits(options.storage, storagePort.capabilities);
-    for (const name of [
-      "maxPhysicalDatabaseBytes",
-      "maxJournalBytes",
-    ] as const) {
+    for (const name of ["maxPhysicalDatabaseBytes", "maxJournalBytes"] as const) {
       if (
         options.storage?.[name] !== undefined &&
         storage[name] !== storagePort.capabilities[name]
@@ -653,12 +650,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     const inputLength = intrinsicByteLength(insertBytes);
     if (inputLength > this.#storageLimits.maxWriteBytes)
       return Promise.reject(
-        fsError(
-          "EFBIG",
-          "replaceRange",
-          path,
-          "insertion exceeds maxWriteBytes",
-        ),
+        fsError("EFBIG", "replaceRange", path, "insertion exceeds maxWriteBytes"),
       );
     this.#cache.makeRoom(inputLength);
     let releaseInput: () => void;
@@ -744,11 +736,7 @@ export class EphemeralFS implements EphemeralFilesystem {
         throw fsError("EEXIST", "mkdir", canonical.value, "root already exists");
       }
       this.#transaction("write", (tx) => {
-        const ns = tx.namespace(
-          this.#filesystemLimits,
-          this.#storageLimits,
-          "mkdir",
-        );
+        const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, "mkdir");
         const existing = ns.resolveOptional(canonical, false);
         if (existing) {
           if (options.recursive && existing.inode.type === 1) return;
@@ -854,11 +842,7 @@ export class EphemeralFS implements EphemeralFilesystem {
           : validateName(options.startAfter, this.#filesystemLimits, "readdir");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "readdir");
       return this.#transaction("read", (tx) => {
-        const ns = tx.namespace(
-          this.#filesystemLimits,
-          this.#storageLimits,
-          "readdir",
-        );
+        const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, "readdir");
         const selected = ns.resolve(canonical, true);
         if (selected.inode.type !== 1)
           throw fsError(
@@ -901,11 +885,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       const canonical = canonicalizePath(path, this.#filesystemLimits, "chmod");
       const normalized = validatedMode(mode, 0, "chmod", canonical.value);
       this.#transaction("write", (tx) => {
-        const ns = tx.namespace(
-          this.#filesystemLimits,
-          this.#storageLimits,
-          "chmod",
-        );
+        const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, "chmod");
         const selected = ns.resolve(canonical, true);
         if (selected.inode.mode === normalized) return;
         const now = Math.max(this.#now(), selected.inode.ctime_ms);
@@ -969,11 +949,7 @@ export class EphemeralFS implements EphemeralFilesystem {
           "root cannot be a symlink destination",
         );
       this.#transaction("write", (tx) => {
-        const ns = tx.namespace(
-          this.#filesystemLimits,
-          this.#storageLimits,
-          "symlink",
-        );
+        const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, "symlink");
         if (ns.resolveOptional(canonical, false))
           throw fsError("EEXIST", "symlink", canonical.value, "destination exists");
         const parent = ns.resolveParent(canonical);
@@ -1039,11 +1015,7 @@ export class EphemeralFS implements EphemeralFilesystem {
           "directory cannot be moved into itself",
         );
       this.#transaction("write", (tx) => {
-        const ns = tx.namespace(
-          this.#filesystemLimits,
-          this.#storageLimits,
-          "rename",
-        );
+        const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, "rename");
         const source = ns.resolve(sourcePath, false);
         const destination = ns.resolveOptional(destinationPath, false);
         const parent = ns.resolveParent(destinationPath);
@@ -1239,42 +1211,38 @@ export class EphemeralFS implements EphemeralFilesystem {
     );
     try {
       this.#transaction("write", (tx) => {
-          const ns = tx.namespace(
-            this.#filesystemLimits,
-            this.#storageLimits,
+        const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, syscall);
+        const selected = ns.resolve(path, true);
+        const inode = this.#requireFile(selected, syscall);
+        if (inode.token !== expectedToken)
+          throw fsError(
+            "EAGAIN",
             syscall,
+            path,
+            "file changed while content was prepared",
           );
-          const selected = ns.resolve(path, true);
-          const inode = this.#requireFile(selected, syscall);
-          if (inode.token !== expectedToken)
-            throw fsError(
-              "EAGAIN",
-              syscall,
-              path,
-              "file changed while content was prepared",
-            );
-          const now = Math.max(this.#now(), inode.mtime_ms, inode.ctime_ms);
-          this.#validatePrepared(tx, prepared.certificate, now);
-          const revision = ns.nextRevision(now, 1);
-          if (
-            ns.setFileContent(
-              inode.id,
-              prepared.size,
-              prepared.hash,
-              now,
-              now,
-              revision,
-              expectedToken,
-            ) !== 1
-          )
-            throw fsError(
-              "EAGAIN",
-              syscall,
-              path,
-              "file changed while content was prepared",
-            );
-          ns.recordInode(revision, inode.id);
-          this.#releasePrepared(tx, prepared.certificate);
+        const now = Math.max(this.#now(), inode.mtime_ms, inode.ctime_ms);
+        this.#validatePrepared(tx, prepared.certificate, now);
+        const revision = ns.nextRevision(now, 1);
+        if (
+          ns.setFileContent(
+            inode.id,
+            prepared.size,
+            prepared.hash,
+            now,
+            now,
+            revision,
+            expectedToken,
+          ) !== 1
+        )
+          throw fsError(
+            "EAGAIN",
+            syscall,
+            path,
+            "file changed while content was prepared",
+          );
+        ns.recordInode(revision, inode.id);
+        this.#releasePrepared(tx, prepared.certificate);
       });
     } catch (error) {
       this.#abandonPrepared(prepared.certificate);
@@ -1373,11 +1341,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       if (canonical.value === "/")
         throw fsError("EPERM", syscall, canonical.value, "root cannot be removed");
       this.#transaction("write", (tx) => {
-        const ns = tx.namespace(
-          this.#filesystemLimits,
-          this.#storageLimits,
-          syscall,
-        );
+        const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, syscall);
         const selected = ns.resolveOptional(canonical, false);
         if (!selected) {
           if (force) return;
