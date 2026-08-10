@@ -14,6 +14,40 @@ reference numbers: 1,000 edits on 16 MiB = 274 ms edit + 124 ms publish (10.1x v
 96% less SQL); 10 B prepend 16.5x; 1.08x write amplification over 32 checkpoints;
 explicit conflicts instead of lost updates.
 
+## Improvement matrix (diff vs current)
+
+Consolidated targets; "diff" is the expected factor against the measured current state
+at HEAD `93a6a1f`. Per-phase detail and acceptance gates follow in each section.
+
+| Phase   | Item                                 | Today (measured)             | Expected target                  | Diff vs current                   |
+| ------- | ------------------------------------ | ---------------------------- | -------------------------------- | --------------------------------- |
+| M2 done | R3+R5+copy reduction                 | write 17.9 / read 43.8 MiB/s | write 44.2 / read 118.1 MiB/s    | 2.5x / 2.7x (measured)            |
+| M3.1    | Warm sequential read (A4)            | 118.6 MiB/s                  | >=250 MiB/s (400-600 achievable) | >=2.1x (3.4-5.1x achievable)      |
+| M3.1    | Cold sequential read (A3)            | 118.1 MiB/s                  | >=250 MiB/s                      | >=2.1x                            |
+| M3.1    | Small random reads (A6)              | 1.17 ms/op                   | <=1.0 ms/op                      | >=1.17x faster                    |
+| M3.1    | Warm vs cold (A4/A3)                 | 1.00x (indistinguishable)    | >=1.2x warm                      | +20%+ (new capability)            |
+| M3.1    | Read transactions per 100 MiB        | 402                          | <=55                             | >=7.3x fewer                      |
+| M3.1    | Read statements per 100 MiB          | 1,787                        | <=250                            | >=7.1x fewer                      |
+| M3.2    | A5: 3 one-byte edits on 100 MiB      | 9.4 s (O(file))              | <1 s total (expect 0.1-0.3 s)    | >=9.4x (31-94x expected)          |
+| M3.2    | A6: 1,000 scattered edits            | 2 in 8 s, pass=false         | 1,000 in <=20 s, pass=true       | ~220x per edit (~4.4 s -> ~20 ms) |
+| M3.2    | Per-edit storage growth              | ~3.9 MiB                     | ~1 chunk + nodes (~0.2 MiB)      | ~20x less                         |
+| M3.3    | Workerd write hashing                | 66 MiB/s (pure-JS)           | >=300 MiB/s                      | >=4.5x                            |
+| M3.3    | 100 MiB workerd write                | baseline                     | >=1.5x faster                    | >=1.5x                            |
+| M5      | Branch-exclusive storage (100 edits) | ~64 MiB                      | <=2 MiB (>=96% less)             | >=32x less                        |
+| M5      | 1,000-edit branch loop               | O(file) per edit             | <=15 s                           | ~10x class (per prototype)        |
+
+Explicitly NOT targets (audit re-based):
+
+| Claimed earlier                  | Reality                         | Diff vs current                                                         |
+| -------------------------------- | ------------------------------- | ----------------------------------------------------------------------- |
+| Sub-10 ms edits                  | 15-40 ms Node, 40-80 ms workerd | persistence floor: ~9 write txs x ~4 ms (`synchronous=FULL`)            |
+| GB/s-class warm reads            | ~400-600 MiB/s Node             | driver copies each byte 2-3x; GB/s is the M9 mmap/zero-copy profile     |
+| WebCrypto "native-class" ~2 GB/s | ~300-600 MiB/s                  | per-158 KiB-chunk call overhead + DO crypto pool contention             |
+| M3c write win "7.5x"             | ~1.4-1.6x                       | every workerd byte is hashed twice; in-tx `#verifyDigest` stays pure-JS |
+
+Aggregate expectation after M3: reads +2-5x over today, small edits +10-100x over today,
+workerd writes +1.5-4.5x, and M5 branch storage ~32x less.
+
 ## Sequencing rationale
 
 R7 read-path batching lands first: it is smaller and lower-risk than R1, and it
@@ -43,14 +77,14 @@ peak-at-stream- close metric in the mini-bench (housekeeping).
 Expected targets (validated; GB/s-class is NOT achievable in M3 because the Node driver
 copies each byte 2-3x - that is the M9 mmap/zero-copy profile):
 
-| Metric                        | Today (measured)       | M3.1 target                                            |
-| ----------------------------- | ---------------------- | ------------------------------------------------------ |
-| Warm sequential read (A4)     | 118.6 MiB/s            | >=250 MiB/s (400-600 achievable)                       |
-| Cold sequential read (A3)     | 118.1 MiB/s            | >=250 MiB/s (Node; ~66 MiB/s workerd cap without M3.3) |
-| Warm vs cold (A4/A3)          | 1.00x (not measurable) | >=1.2x warm                                            |
-| Read transactions per 100 MiB | 402                    | <=55                                                   |
-| Read statements per 100 MiB   | 1,787                  | <=250                                                  |
-| Small random reads (A6)       | 1.17 ms/op             | <=1.0 ms/op                                            |
+| Metric                        | Today (measured)       | M3.1 target                                            | Diff vs current |
+| ----------------------------- | ---------------------- | ------------------------------------------------------ | --------------- |
+| Warm sequential read (A4)     | 118.6 MiB/s            | >=250 MiB/s (400-600 achievable)                       | >=2.1x          |
+| Cold sequential read (A3)     | 118.1 MiB/s            | >=250 MiB/s (Node; ~66 MiB/s workerd cap without M3.3) | >=2.1x          |
+| Warm vs cold (A4/A3)          | 1.00x (not measurable) | >=1.2x warm                                            | +20%+           |
+| Read transactions per 100 MiB | 402                    | <=55                                                   | >=7.3x fewer    |
+| Read statements per 100 MiB   | 1,787                  | <=250                                                  | >=7.1x fewer    |
+| Small random reads (A6)       | 1.17 ms/op             | <=1.0 ms/op                                            | >=1.17x faster  |
 
 Acceptance: A3/A4 MiB/s and statement/transaction gates above on the mini-bench; workerd
 parity suite unchanged; no node-only imports. Risk: budget math - a ~2 MiB window with
@@ -82,12 +116,12 @@ tests.
 Expected targets (validated; "sub-10 ms" is NOT achievable - persistence alone is ~9
 write transactions x ~4 ms under `synchronous=FULL`):
 
-| Metric                          | Today (measured)              | M3.2 target                                                    |
-| ------------------------------- | ----------------------------- | -------------------------------------------------------------- |
-| A5: 3 one-byte edits on 100 MiB | 9.4 s (mixed path)            | <1 s total (expect 0.1-0.3 s); never O(file) for in-leaf edits |
-| A6: 1,000 scattered edits       | 2 in 8 s (capped, pass=false) | 1,000 in <=20 s, pass=true                                     |
-| Per-edit storage growth         | ~3.9 MiB (fallback)           | ~1 chunk + manifest nodes                                      |
-| Insert/prepend class            | O(file) fallback              | O(changed window); 10-16x class per prototype                  |
+| Metric                          | Today (measured)              | M3.2 target                                                    | Diff vs current          |
+| ------------------------------- | ----------------------------- | -------------------------------------------------------------- | ------------------------ |
+| A5: 3 one-byte edits on 100 MiB | 9.4 s (mixed path)            | <1 s total (expect 0.1-0.3 s); never O(file) for in-leaf edits | >=9.4x (31-94x expected) |
+| A6: 1,000 scattered edits       | 2 in 8 s (capped, pass=false) | 1,000 in <=20 s, pass=true                                     | ~220x per edit           |
+| Per-edit storage growth         | ~3.9 MiB (fallback)           | ~1 chunk + manifest nodes (~0.2 MiB)                           | ~20x less                |
+| Insert/prepend class            | O(file) fallback              | O(changed window); 10-16x class per prototype                  | ~10-16x                  |
 
 Acceptance: size-changing/append/truncate/prepend/EOF cases byte-identical to the
 streamed rebuild; every new persistence statement fault-injects cleanly; workerd parity
@@ -109,11 +143,11 @@ full hashing win on workerd.
 
 Expected targets (validated):
 
-| Metric                          | Today (workerd) | M3.3 target                                                          |
-| ------------------------------- | --------------- | -------------------------------------------------------------------- |
-| Write-path hashing (outside tx) | 66 MiB/s        | >=300 MiB/s (not ~2 GB/s; WebCrypto call overhead per 158 KiB chunk) |
-| 100 MiB streamed write          | baseline        | >=1.5x faster                                                        |
-| In-tx verify                    | 66 MiB/s        | unchanged unless the double-verify decision is made                  |
+| Metric                          | Today (workerd) | M3.3 target                                                          | Diff vs current |
+| ------------------------------- | --------------- | -------------------------------------------------------------------- | --------------- |
+| Write-path hashing (outside tx) | 66 MiB/s        | >=300 MiB/s (not ~2 GB/s; WebCrypto call overhead per 158 KiB chunk) | >=4.5x          |
+| 100 MiB streamed write          | baseline        | >=1.5x faster                                                        | >=1.5x          |
+| In-tx verify                    | 66 MiB/s        | unchanged unless the double-verify decision is made                  | ~1x             |
 
 Acceptance: M1 golden vectors and the 11 workerd parity checks byte-identical and
 passing; no node-only imports. Risk: async pipeline changes memory/ordering invariants
@@ -137,12 +171,12 @@ staging leases/certificates; overlay pinning so GC never prunes mid-edit.
 
 Expected targets (validated against the prototype):
 
-| Metric                                       | Today (measured)                  | M5 target                 |
-| -------------------------------------------- | --------------------------------- | ------------------------- |
-| Branch-exclusive storage, 100 one-byte edits | ~64 MiB (B4-class full manifests) | >=96% less (<=2 MiB)      |
-| 1,000-edit branch loop                       | O(file) per edit                  | <=15 s                    |
-| Same-file two-writer publish                 | explicit conflict                 | unchanged (already exact) |
-| Publish for page/patch-only branch           | -                                 | never O(file)             |
+| Metric                                       | Today (measured)                  | M5 target                 | Diff vs current |
+| -------------------------------------------- | --------------------------------- | ------------------------- | --------------- |
+| Branch-exclusive storage, 100 one-byte edits | ~64 MiB (B4-class full manifests) | >=96% less (<=2 MiB)      | >=32x less      |
+| 1,000-edit branch loop                       | O(file) per edit                  | <=15 s                    | ~10x class      |
+| Same-file two-writer publish                 | explicit conflict                 | unchanged (already exact) | ~1x             |
+| Publish for page/patch-only branch           | -                                 | never O(file)             | -               |
 
 Acceptance: branch `readFile` equals main byte-for-byte after publish; existing
 branch/conflict/replay suite passes unchanged. Risk: publication depends on M3.2's
