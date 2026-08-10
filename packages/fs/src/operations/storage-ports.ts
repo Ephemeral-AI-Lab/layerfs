@@ -58,6 +58,11 @@ export interface ContentBatchResult {
   readonly deduplicated: number;
   readonly insertedBytes: number;
 }
+export interface AuthenticatedManifestCursor {
+  readonly fileSize: number;
+  readonly position: number;
+  readInto(destination: Uint8Array, destinationOffset: number, length: number): number;
+}
 export interface ContentStore {
   putObject(hash: Uint8Array, bytes: Uint8Array): boolean;
   putObjectsBatch(input: readonly ContentObjectInput[]): ContentBatchResult;
@@ -69,6 +74,10 @@ export interface ContentStore {
   putManifestRoot(hash: Uint8Array, encoded: Uint8Array): boolean;
   getManifestRoot(hash: Uint8Array): Uint8Array | undefined;
   getManifestNode(hash: Uint8Array): Uint8Array | undefined;
+  openManifestCursor(
+    manifestHash: Uint8Array,
+    offset: number,
+  ): AuthenticatedManifestCursor;
 }
 
 export interface InodeRow {

@@ -9,6 +9,7 @@ import {
   type ContentCacheReservation,
 } from "../cache/content-cache.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import { SQLiteAuthenticatedManifestCursor } from "./manifest-cursor.js";
 interface ObjectRow extends SqliteRow {
   hash?: Uint8Array;
   size: number;
@@ -307,6 +308,17 @@ export class ContentRepository {
   }
   getManifestNode(hash: Uint8Array): Uint8Array | undefined {
     return this.#getEncoded("manifest-node", "efs_manifest_nodes", hash);
+  }
+  openManifestCursor(
+    manifestHash: Uint8Array,
+    offset: number,
+  ): SQLiteAuthenticatedManifestCursor {
+    return new SQLiteAuthenticatedManifestCursor(
+      this,
+      manifestHash,
+      offset,
+      this.#limits.maxManifestDepth,
+    );
   }
 
   #getEncoded(

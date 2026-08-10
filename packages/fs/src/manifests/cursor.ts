@@ -3,6 +3,7 @@ import { copyBytes } from "../cas/bytes.js";
 import {
   decodeManifestNode,
   decodeManifestRoot,
+  validateSupportedManifestParameters,
   type ManifestChild,
   type ManifestEntry,
   type ManifestInternal,
@@ -94,6 +95,7 @@ export class ManifestSequentialCursor {
     maxDepth = 8,
   ) {
     const root = decodeManifestRoot(rootBytes, expectedRootHash);
+    validateSupportedManifestParameters(root.parameters);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > root.fileSize)
       throw new RangeError("manifest offset is outside the file");
     validateDepthLimit(maxDepth);
