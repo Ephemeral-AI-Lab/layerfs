@@ -1,0 +1,19 @@
+{
+  "schema": "efs-correctness-result-v1",
+  "commit": "0eaf3ab",
+  "adapter": "node-and-workerd-pure-algorithms",
+  "schemaVersion": 1,
+  "formatVersion": "efs-merkle-manifest-v1",
+  "seed": 2447445413,
+  "fixtureDigest": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086",
+  "faultPoint": null,
+  "passed": 42,
+  "failed": 0,
+  "elapsedMs": 12100,
+  "metrics": {
+    "fastCdcBufferCapacityBytes": 524288,
+    "workerdLocalSourceBytesRead": 524287,
+    "workerdLocalBytesHashed": 155909,
+    "seededLocalEditCases": 24
+  }
+}
