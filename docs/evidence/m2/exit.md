@@ -19,23 +19,23 @@
 - Smoke duration and operation counts: 68,306 ms for the M2 suite; the sealed
   100,001-entry closure reconciled 100,401 grouping records, reached 7 unique closure
   members, and final-validated with one statement
-- Resource high-water: 128 MiB managed-resident default, 64 MiB byte-weighted cache,
-  16 MiB final-transaction ceiling, and a fixed 524,288-byte FastCDC buffer;
-  observed streamed-managed peak 12,373,056 bytes and fallback-managed peak
-  11,182,080 bytes on the 100 MiB fixtures
+- Resource high-water: 128 MiB managed-resident default, 64 MiB byte-weighted cache, 16
+  MiB final-transaction ceiling, and a fixed 524,288-byte FastCDC buffer; observed
+  streamed-managed peak 12,373,056 bytes and fallback-managed peak 11,182,080 bytes on
+  the 100 MiB fixtures
 - Known deviations:
-  - No hosted GitHub Actions run exists because the branch has not been pushed; only
-    the actually executed Windows x64 / Node 24.11.1 cell is claimed.
+  - No hosted GitHub Actions run exists because the branch has not been pushed; only the
+    actually executed Windows x64 / Node 24.11.1 cell is claimed.
   - Reopen-after-fault is demonstrated per statement for migrations; content, expiry,
     and cleanup fault tests verify complete rollback on the same connection without a
     reopen leg. The testkit fault-controller capability is declared but not yet
     implemented; both are evidence gaps, not observed defects.
-  - The Node driver prepared-statement cache (256-entry bound) is a performance
-    change measured at roughly 14-20 percent faster suite wall time; it does not
-    change the bounded-statement contract.
-- Independent audit: approved after the retracted `ba64ed9` attempt; the audit
-  verified all 25 M2 checklist items and all ten acceptance criteria, closed the
-  prior P0 blockers, and confirmed `efs_usage` exactness, quota-race serialization,
+  - The Node driver prepared-statement cache (256-entry bound) is a performance change
+    measured at roughly 14-20 percent faster suite wall time; it does not change the
+    bounded-statement contract.
+- Independent audit: approved after the retracted `ba64ed9` attempt; the audit verified
+  all 25 M2 checklist items and all ten acceptance criteria, closed the prior P0
+  blockers, and confirmed `efs_usage` exactness, quota-race serialization,
   sealed-closure constant-row validation, WAL backpressure observability, and
   deterministic restart-safe migrations
 - Approved to begin next milestone: yes
