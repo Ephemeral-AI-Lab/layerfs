@@ -48,11 +48,12 @@ core must not import host runtime, container, FUSE, or remote procedure call
 types.
 
 Ephemeral AI FS is therefore not a plugin to Cloudflare Computer. It is an
-independent filesystem library. In Ephemeral AI Computer it replaces the
-current `@cloudflare/dofs` filesystem facade, namespace and content engine,
-schema, and virtual filesystem provider. Computer retains its workspace, sync,
-mount, FUSE, and process-execution boundaries as host-owned compatibility
-bridges.
+independent filesystem library. In Ephemeral AI Computer it is the default
+production filesystem facade, namespace and content engine, schema, and
+virtual filesystem provider. Computer retains its workspace, sync, mount,
+FUSE, and process-execution boundaries as host-owned compatibility bridges.
+Computer may also retain DOFS behind an explicit comparison selector, but that
+adapter and its database remain outside Ephemeral AI FS.
 
 Durable Object SQLite is below that replacement boundary. The
 `@ephemeralai/fs-sqlite-cloudflare` package adapts it to the portable database
@@ -68,7 +69,7 @@ workspace.fs: EphemeralFilesystem     asynchronous filesystem API
         +---------------+-----------------------+
                         |
                 Ephemeral AI FS
-        replaces @cloudflare/dofs in Computer
+         default engine in Computer
                         |
        namespace + branches + publication
                         |
@@ -93,6 +94,11 @@ In Computer, `workspace.fs` MUST use the `EphemeralFilesystem` contract rather
 than retain `WorkspaceFilesystem` as a second semantic API. Computer MAY add
 transport-safe facades and convenience helpers, but they MUST delegate to this
 contract and MUST NOT redefine filesystem behavior or storage.
+
+A Computer-owned DOFS comparison adapter MAY implement the common contract.
+It MUST report unsupported branch capabilities rather than emulate them, use a
+separate database, and never become an automatic fallback. Ephemeral AI FS
+packages MUST NOT import or configure that adapter.
 
 ## Repository and package layout
 
@@ -214,8 +220,9 @@ restart mechanisms, but may not weaken portable outcomes.
 4. Implement durable branches, conflict tokens, publication, replay, and
    retention.
 5. Implement verification, accounting, and bounded garbage collection.
-6. Replace Computer's `@cloudflare/dofs` runtime path with Ephemeral AI FS and
-   its Computer-owned compatibility bridges.
+6. Make Ephemeral AI FS Computer's default runtime path and wire its
+   Computer-owned compatibility bridges. Keep any optional DOFS comparison
+   adapter outside Ephemeral AI FS.
 
 ## Open implementation choices
 

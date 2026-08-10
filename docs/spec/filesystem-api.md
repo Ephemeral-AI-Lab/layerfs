@@ -31,6 +31,12 @@ NOT define different filesystem semantics. In Ephemeral AI Computer,
 `WorkspaceFilesystem` contract. Transport wrappers remain host code and MUST
 mirror the portable methods, results, and errors one-for-one.
 
+Computer MAY retain a host-owned DOFS comparison adapter. When selected, that
+adapter MUST implement the common methods, results, and errors in this contract
+and MUST report branch-only capabilities as unsupported. It MUST use storage
+isolated from Ephemeral AI FS and MUST NOT become an automatic fallback. The
+Ephemeral AI FS core and adapters MUST NOT import or configure DOFS.
+
 Version 0.1 includes path-based operations. Persistent file descriptors,
 memory mapping, advisory locking, ownership, access-control enforcement,
 extended attributes, device nodes, sockets, FIFOs, sparse-file reporting,
