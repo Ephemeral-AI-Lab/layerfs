@@ -2,9 +2,10 @@
 
 - Candidate commit: `d01651b4ba3a5b9f2e5d02ab48d3d1b519396922`
 - Date: 2026-08-11
-- Sequential predecessor: accepted M2 candidate
-  `2e06a446aa5781102d9c028c62519582ee3b1519` (M2 improvements build on the accepted M2
-  baseline; M1 predecessor remains `ff8cd5a74e3b57392ff232788e6f9244cc447aaf`)
+- Sequential predecessor: accepted M1 candidate
+  `ff8cd5a74e3b57392ff232788e6f9244cc447aaf`; this record supersedes the accepted M2
+  baseline candidate `2e06a446aa5781102d9c028c62519582ee3b1519` with the M2 improvements
+  candidate
 - Checklist complete: yes; this record accepts M0, M1, and M2 only
 - Primary environment: Microsoft Windows NT `10.0.26200.0`, x64, Node `24.11.1`, pnpm
   `10.32.1`
