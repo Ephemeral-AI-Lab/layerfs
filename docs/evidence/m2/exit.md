@@ -17,7 +17,7 @@
 - Benchmark artifact: the `tests/performance/mini-bench.mjs` matrix (cells A1-A7, B1-B5,
   C1-C3) with raw artifacts under `tests/performance/artifacts/`, `artifacts-r3/`, and
   `artifacts-baseline/`; see
-  [`docs/benchmarks/m2-minibench.md`](../benchmarks/m2-minibench.md)
+  [`docs/benchmarks/m2-minibench.md`](../../benchmarks/m2-minibench.md)
 - Smoke duration and operation counts: 70,919 ms for the M2 suite; the sealed
   100,001-entry closure reconciled with 4,655 statements (0.0465 per manifest entry,
   down from 0.0507), reached 7 unique closure members, and final-validated with one
