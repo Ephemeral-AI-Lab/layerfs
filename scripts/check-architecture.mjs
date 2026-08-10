@@ -80,6 +80,35 @@ function beginsSqlStatement(value) {
   );
 }
 
+function unwrapTsExpression(expression) {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  )
+    current = current.expression;
+  return current;
+}
+
+function globalIdentifierAccessReason(node) {
+  if (
+    !ts.isIdentifier(node) ||
+    !["globalThis", "global", "self", "window"].includes(node.text)
+  )
+    return undefined;
+  if (
+    node.text === "globalThis" &&
+    ts.isPropertyAccessExpression(node.parent) &&
+    node.parent.expression === node &&
+    node.parent.name.text === "crypto"
+  )
+    return undefined;
+  return `uses forbidden global-object identifier ${node.text} outside the globalThis.crypto allowlist`;
+}
+
 function dependencyDeclarationReason(manifest, dependency, typeOnly) {
   const dependencies = manifest.dependencies ?? {};
   const peers = manifest.peerDependencies ?? {};
@@ -107,21 +136,8 @@ function moduleReferences(sourceFile) {
     ["eval", "runtime-eval"],
     ["Function", "runtime-function-constructor"],
   ]);
-  const unwrapExpression = (expression) => {
-    let current = expression;
-    while (
-      ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isTypeAssertionExpression(current) ||
-      ts.isNonNullExpression(current) ||
-      ts.isSatisfiesExpression(current)
-    ) {
-      current = current.expression;
-    }
-    return current;
-  };
   const requireKind = (expression) => {
-    const current = unwrapExpression(expression);
+    const current = unwrapTsExpression(expression);
     if (ts.isIdentifier(current)) return requireAliases.get(current.text);
     if (
       ts.isPropertyAccessExpression(current) ||
@@ -151,7 +167,7 @@ function moduleReferences(sourceFile) {
     return undefined;
   };
   const codeGenerationKind = (expression) => {
-    const current = unwrapExpression(expression);
+    const current = unwrapTsExpression(expression);
     if (ts.isIdentifier(current)) return codeGenerationAliases.get(current.text);
     if (
       ts.isBinaryExpression(current) &&
@@ -593,24 +609,10 @@ for (const sourceInfo of coreFiles) {
   inspectSql(parsed);
 
   const inspectGlobalReflection = (node) => {
-    if (
-      ts.isElementAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "globalThis"
-    )
+    const reason = globalIdentifierAccessReason(node);
+    if (reason)
       violations.push(
-        `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} uses forbidden computed globalThis access`,
-      );
-    else if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "globalThis" &&
-      node.name.text !== "crypto" &&
-      node.name.text !== "eval" &&
-      node.name.text !== "Function"
-    )
-      violations.push(
-        `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} uses non-allowlisted globalThis.${node.name.text}`,
+        `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} ${reason}`,
       );
     ts.forEachChild(node, inspectGlobalReflection);
   };
@@ -713,28 +715,25 @@ inspectSqlTemplateFixture(sqlTemplateParsed);
 if (!sqlTemplateRejected)
   violations.push("SQL template-expression negative fixture was not rejected");
 
-const computedGlobalFixture = path.join(
-  fixtureRoot,
-  "operations",
+const globalReflectionFixtures = [
   "computed-global-eval.ts",
-);
-const computedGlobalParsed = parse(
-  computedGlobalFixture,
-  await readFile(computedGlobalFixture, "utf8"),
-);
-let computedGlobalRejected = false;
-const inspectComputedGlobalFixture = (node) => {
-  if (
-    ts.isElementAccessExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === "globalThis"
-  )
-    computedGlobalRejected = true;
-  ts.forEachChild(node, inspectComputedGlobalFixture);
-};
-inspectComputedGlobalFixture(computedGlobalParsed);
-if (!computedGlobalRejected)
-  violations.push("computed globalThis reflection negative fixture was not rejected");
+  "aliased-global-eval.ts",
+  "destructured-global-eval.ts",
+];
+for (const fixture of globalReflectionFixtures) {
+  const filename = path.join(fixtureRoot, "operations", fixture);
+  const parsed = parse(filename, await readFile(filename, "utf8"));
+  let rejected = false;
+  const inspect = (node) => {
+    if (globalIdentifierAccessReason(node)) rejected = true;
+    ts.forEachChild(node, inspect);
+  };
+  inspect(parsed);
+  if (!rejected)
+    violations.push(
+      `global-object reflection negative fixture was not rejected: ${fixture}`,
+    );
+}
 
 const dependencyFixtureDirectory = path.join(
   root,
@@ -834,6 +833,6 @@ if (violations.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `architecture: ${coreFiles.length} core files; statically expressible module edges, realpath package graph, exact ports/directions, cycles, composition, SQL ownership, reviewed reflection/code-generation ban, and ${fixtureCases.length + 2} bypass fixtures valid`,
+    `architecture: ${coreFiles.length} core files; statically expressible module edges, realpath package graph, exact ports/directions, cycles, composition, SQL ownership, reviewed reflection/code-generation ban, and ${fixtureCases.length + 1 + globalReflectionFixtures.length} bypass fixtures valid`,
   );
 }

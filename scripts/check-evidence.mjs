@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -27,6 +28,63 @@ async function evidenceCommit(filename) {
       windowsHide: true,
     })
   ).stdout.trim();
+}
+function ownedByMilestone(milestone, filename) {
+  const rootFiles = new Set([
+    ".prettierignore",
+    ".prettierrc.json",
+    "eslint.config.mjs",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.base.json",
+    ".github/workflows/ci.yml",
+  ]);
+  const m0 =
+    rootFiles.has(filename) ||
+    (filename.startsWith("scripts/") &&
+      filename !== "scripts/check-workerd-algorithms.mjs") ||
+    /^packages\/[^/]+\/(?:package\.json|tsconfig\.json|README\.md|LICENSE)$/u.test(
+      filename,
+    ) ||
+    filename.includes("/api-snapshots/") ||
+    filename.startsWith("tests/architecture/") ||
+    filename.startsWith("tests/fixtures/");
+  if (milestone === "m0") return m0;
+  return (
+    m0 ||
+    /^(?:packages\/fs\/src\/(?:cas|cdc|cow|patches|manifests)\/|packages\/fs\/src\/operations\/(?:full-rebuild|local-rebuild|streamed-rebuild)\.ts$)/u.test(
+      filename,
+    ) ||
+    filename.startsWith("tests/algorithms/") ||
+    filename.startsWith("tests/workerd/") ||
+    filename === "scripts/check-workerd-algorithms.mjs" ||
+    filename.startsWith("docs/spec/") ||
+    filename.startsWith("docs/testing/") ||
+    filename === "docs/implementation/implementation-plan.md"
+  );
+}
+async function ownedTreeDigest(milestone, commit) {
+  const output = (
+    await execute("git", ["ls-tree", "-r", "--full-tree", commit], {
+      cwd: root,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  ).stdout;
+  const records = output
+    .trim()
+    .split("\n")
+    .map((line) => {
+      const match = line.match(/^\d+ blob ([0-9a-f]{40})\t(.+)$/u);
+      return match ? { hash: match[1], filename: match[2] } : undefined;
+    })
+    .filter((record) => record && ownedByMilestone(milestone, record.filename))
+    .sort((left, right) => left.filename.localeCompare(right.filename));
+  const digest = createHash("sha256");
+  for (const record of records)
+    digest.update(record.filename).update("\0").update(record.hash).update("\n");
+  return digest.digest("hex");
 }
 async function validateMilestone(name, requiredMetrics) {
   const directory = path.join(root, "docs", "evidence", name);
@@ -70,6 +128,14 @@ async function validateMilestone(name, requiredMetrics) {
     throw new Error(
       `${name} evidence commit is not directly parented by its candidate`,
     );
+  if (!/^[0-9a-f]{64}$/u.test(artifact.ownedTreeDigest ?? ""))
+    throw new Error(`${name} correctness artifact lacks an owned-tree digest`);
+  const candidateDigest = await ownedTreeDigest(name, candidate);
+  if (artifact.ownedTreeDigest !== candidateDigest)
+    throw new Error(`${name} evidence digest differs from its candidate tree`);
+  const currentDigest = await ownedTreeDigest(name, "HEAD");
+  if (artifact.ownedTreeDigest !== currentDigest)
+    throw new Error(`${name} accepted evidence is stale for milestone-owned files`);
   return { artifact, exit, candidate };
 }
 

@@ -108,6 +108,17 @@ function runtimeValueExportNames(entry, rootNames) {
   return checker
     .getExportsOfModule(moduleSymbol)
     .filter((symbol) => {
+      const declarations = symbol.declarations ?? [];
+      const explicitlyTypeOnly =
+        declarations.length > 0 &&
+        declarations.every(
+          (declaration) =>
+            ts.isExportSpecifier(declaration) &&
+            (declaration.isTypeOnly ||
+              (ts.isExportDeclaration(declaration.parent.parent) &&
+                declaration.parent.parent.isTypeOnly)),
+        );
+      if (explicitlyTypeOnly) return false;
       const target =
         symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
       return Boolean(target.flags & ts.SymbolFlags.Value);
@@ -238,6 +249,25 @@ const runtimeFixtureActual = Object.keys(
 ).sort();
 if (sameFiles(runtimeFixtureExpected, runtimeFixtureActual))
   throw new Error("missing runtime value negative fixture was not rejected");
+const typeOnlyFixtureDirectory = path.join(
+  root,
+  "tests",
+  "fixtures",
+  "runtime-export-bypasses",
+  "type-only-class",
+);
+const typeOnlyFixtureExpected = runtimeValueExportNames(
+  path.join(typeOnlyFixtureDirectory, "index.d.ts"),
+  [
+    path.join(typeOnlyFixtureDirectory, "index.d.ts"),
+    path.join(typeOnlyFixtureDirectory, "class.d.ts"),
+  ],
+);
+const typeOnlyFixtureActual = Object.keys(
+  await import(pathToFileURL(path.join(typeOnlyFixtureDirectory, "index.js")).href),
+).sort();
+if (!sameFiles(typeOnlyFixtureExpected, typeOnlyFixtureActual))
+  throw new Error("type-only class re-export positive fixture was rejected");
 
 await execute(
   process.execPath,

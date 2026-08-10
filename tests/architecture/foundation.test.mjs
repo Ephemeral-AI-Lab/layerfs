@@ -114,6 +114,14 @@ test("documentation links resolve inline and reference-style targets", async () 
     ["missing target missing.md"],
   );
   assert.deepEqual(
+    await documentationLinkErrors(
+      "```md\n[example][missing]\n```\n`[inline][missing]`\n",
+      filename,
+      { root, read },
+    ),
+    [],
+  );
+  assert.deepEqual(
     await documentationLinkErrors("[anchor](../README.md#not-present)", filename, {
       root,
       read,

@@ -50,6 +50,25 @@ function tokenTargets(tokens) {
   return targets.filter(Boolean);
 }
 
+function unresolvedReferenceLabels(tokens, references) {
+  const labels = [];
+  const visit = (items) => {
+    for (const token of items) {
+      if (token.type === "text")
+        for (const match of token.content.matchAll(/!?\[([^\]]+)\]\[([^\]]*)\]/gu)) {
+          const label = (match[2] || match[1])
+            .trim()
+            .replaceAll(/\s+/gu, " ")
+            .toUpperCase();
+          if (!Object.hasOwn(references, label)) labels.push(label);
+        }
+      if (token.children) visit(token.children);
+    }
+  };
+  visit(tokens);
+  return labels;
+}
+
 export async function documentationLinkErrors(source, filename, options = {}) {
   const repositoryRoot = path.resolve(options.root ?? path.dirname(filename));
   const read = options.read ?? readFile;
@@ -60,11 +79,8 @@ export async function documentationLinkErrors(source, filename, options = {}) {
   for (const reference of Object.values(environment.references ?? {}))
     targets.push(reference.href);
 
-  for (const match of source.matchAll(/!?\[([^\]]+)\]\[([^\]]*)\]/gu)) {
-    const label = (match[2] || match[1]).trim().replaceAll(/\s+/gu, " ").toUpperCase();
-    if (!Object.hasOwn(environment.references ?? {}, label))
-      errors.push(`undefined reference [${label.toLowerCase()}]`);
-  }
+  for (const label of unresolvedReferenceLabels(tokens, environment.references ?? {}))
+    errors.push(`undefined reference [${label.toLowerCase()}]`);
 
   const cache = new Map([[path.resolve(filename), source]]);
   for (const raw of new Set(targets)) {
