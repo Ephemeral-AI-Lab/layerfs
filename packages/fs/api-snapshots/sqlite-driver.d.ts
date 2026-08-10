@@ -55,8 +55,8 @@ export interface SQLiteDriverCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
-    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
-    readonly journalSizeLimitIsHard: false;
+    readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard?: false;
 }
 
 /* export: SQLitePhysicalStorage; kinds: type */

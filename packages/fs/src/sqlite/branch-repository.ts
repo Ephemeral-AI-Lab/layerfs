@@ -67,14 +67,14 @@ export class BranchRepository {
     return this.#tx.all<BranchHistoryRow>(
       "SELECT tombstone,encoded FROM efs_entry_revisions WHERE parent_inode=? AND name_sort=? AND revision<=? ORDER BY revision DESC LIMIT 1",
       [parentInode, nameSort, revision],
-      { maxRows: 1, maxBytes: 8192 },
+      { maxRows: 1, maxBytes: this.#limits.maxManifestNodeBytes * 2 + 1024 },
     )[0];
   }
   historicInode(inodeId: string, revision: number): BranchHistoryRow | undefined {
     return this.#tx.all<BranchHistoryRow>(
       "SELECT tombstone,encoded FROM efs_inode_revisions WHERE inode_id=? AND revision<=? ORDER BY revision DESC LIMIT 1",
       [inodeId, revision],
-      { maxRows: 1, maxBytes: 8192 },
+      { maxRows: 1, maxBytes: this.#limits.maxManifestNodeBytes * 2 + 1024 },
     )[0];
   }
   change(branchId: string, path: Uint8Array): BranchChangeRow | undefined {
@@ -172,6 +172,17 @@ export class BranchRepository {
     kind: number,
     encoded: Uint8Array | null,
   ): void {
+    const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
+      "SELECT length(path)+coalesce(length(encoded),0) bytes FROM efs_branch_changes WHERE branch_id=? AND path=?",
+      [branchId, path],
+      { maxRows: 1, maxBytes: 128 },
+    )[0];
+    const variableBytes =
+      intrinsicByteLength(path) + (encoded ? intrinsicByteLength(encoded) : 0);
+    this.#changeMetadata(
+      (prior ? 0 : CHARGED_ROW_BYTES) + variableBytes - (prior?.bytes ?? 0),
+      "branch change metadata",
+    );
     this.#tx.run(
       "INSERT INTO efs_branch_changes(branch_id,path,expected_token,kind,encoded) VALUES(?,?,?,?,?) ON CONFLICT(branch_id,path) DO UPDATE SET kind=excluded.kind,encoded=excluded.encoded",
       [branchId, path, expectedToken, kind, encoded],
@@ -182,12 +193,29 @@ export class BranchRepository {
     inodeId: string,
     expectedToken: number | null,
   ): void {
+    const exists =
+      this.#tx.all(
+        "SELECT 1 present FROM efs_branch_inode_expectations WHERE branch_id=? AND inode_id=?",
+        [branchId, inodeId],
+        { maxRows: 1, maxBytes: 128 },
+      ).length !== 0;
+    if (!exists) this.#changeMetadata(CHARGED_ROW_BYTES, "branch inode expectation");
     this.#tx.run(
       "INSERT INTO efs_branch_inode_expectations(branch_id,inode_id,expected_token) VALUES(?,?,?) ON CONFLICT(branch_id,inode_id) DO NOTHING",
       [branchId, inodeId, expectedToken],
     );
   }
   setManifestRoot(branchId: string, path: Uint8Array, manifestHash?: Uint8Array): void {
+    const prior = this.#tx.all<{ count: number; bytes: number } & SqliteRow>(
+      "SELECT count(*) count,coalesce(sum(length(path)),0) bytes FROM efs_branch_manifest_roots WHERE branch_id=? AND path=?",
+      [branchId, path],
+      { maxRows: 1, maxBytes: 128 },
+    )[0]!;
+    const nextCharge = manifestHash ? CHARGED_ROW_BYTES + intrinsicByteLength(path) : 0;
+    this.#changeMetadata(
+      nextCharge - (prior.count * CHARGED_ROW_BYTES + prior.bytes),
+      "branch manifest root metadata",
+    );
     this.#tx.run("DELETE FROM efs_branch_manifest_roots WHERE branch_id=? AND path=?", [
       branchId,
       path,
@@ -222,6 +250,27 @@ export class BranchRepository {
     this.clearChanges(branchId);
   }
   clearChanges(branchId: string): void {
+    const rows = this.#tx.all<
+      {
+        changes: number;
+        change_bytes: number;
+        expectations: number;
+        roots: number;
+        root_bytes: number;
+      } & SqliteRow
+    >(
+      "SELECT (SELECT count(*) FROM efs_branch_changes WHERE branch_id=?) changes,(SELECT coalesce(sum(length(path)+coalesce(length(encoded),0)),0) FROM efs_branch_changes WHERE branch_id=?) change_bytes,(SELECT count(*) FROM efs_branch_inode_expectations WHERE branch_id=?) expectations,(SELECT count(*) FROM efs_branch_manifest_roots WHERE branch_id=?) roots,(SELECT coalesce(sum(length(path)),0) FROM efs_branch_manifest_roots WHERE branch_id=?) root_bytes",
+      [branchId, branchId, branchId, branchId, branchId],
+      { maxRows: 1, maxBytes: 256 },
+    )[0]!;
+    this.#changeMetadata(
+      -(
+        (rows.changes + rows.expectations + rows.roots) * CHARGED_ROW_BYTES +
+        rows.change_bytes +
+        rows.root_bytes
+      ),
+      "terminal branch metadata cleanup",
+    );
     this.#tx.run("DELETE FROM efs_branch_changes WHERE branch_id=?", [branchId]);
     this.#tx.run("DELETE FROM efs_branch_inode_expectations WHERE branch_id=?", [
       branchId,
@@ -243,6 +292,13 @@ export class BranchRepository {
     this.#tx.run(
       "INSERT INTO efs_operation_results(operation_id,outcome,encoded,expires_at_ms) VALUES(?,?,?,?)",
       [operationId, outcome, encoded, expiresAt],
+    );
+  }
+  #changeMetadata(bytes: number, reason: string): void {
+    if (!bytes) return;
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { charged_metadata_bytes: bytes },
+      reason,
     );
   }
 }

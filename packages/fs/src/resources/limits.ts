@@ -200,6 +200,10 @@ export function constrainStorageLimits(
     throw new RangeError("adapter cannot admit canonical manifest nodes");
   if (adapter.maxBindings < 8)
     throw new RangeError("adapter must support at least eight bindings");
+  if (result.maxFinalTransactionRows < 64)
+    throw new RangeError(
+      "maxFinalTransactionRows must be at least 64 for bounded storage progress",
+    );
   if (result.maintenanceReserveBytes >= result.maxManagedPayloadBytes)
     throw new RangeError(
       "maintenance reserve must be smaller than managed payload limit",

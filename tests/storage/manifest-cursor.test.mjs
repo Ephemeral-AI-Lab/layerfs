@@ -45,6 +45,27 @@ function readManifestRange(tx, storage, hash, offset, length) {
   return readManifestRangeUnadmitted(repository, hash, offset, length, admission);
 }
 
+function measureAdmission(admission, callback) {
+  const reserve = admission.reserve.bind(admission);
+  const startingBytes = admission.usedBytes;
+  let peakBytes = startingBytes;
+  admission.reserve = (bytes) => {
+    const release = reserve(bytes);
+    peakBytes = Math.max(peakBytes, admission.usedBytes);
+    return release;
+  };
+  try {
+    return {
+      value: callback(),
+      startingBytes,
+      peakBytes,
+      temporaryBytes: peakBytes - startingBytes,
+    };
+  } finally {
+    admission.reserve = reserve;
+  }
+}
+
 function persistBuilt(tx, storage, manifest) {
   const content = new ContentRepository(tx, storage);
   for (const [hash, bytes] of manifest.objects)
@@ -335,7 +356,7 @@ test("CAS corruption is rejected before destination bytes are changed", async ()
   driver.close();
 });
 
-test("cold and warm one-byte ranges stay inside the admitted max-object envelope", async () => {
+test("cold and warm one-byte ranges stay inside the admitted max-object envelope", async (t) => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
   initializeOrValidateSchema(driver);
   const storage = limits(driver);
@@ -373,7 +394,8 @@ test("cold and warm one-byte ranges stay inside the admitted max-object envelope
         cache,
       ),
     );
-  assert.deepEqual(readOne(), Uint8Array.of(0x5a));
+  const cold = measureAdmission(admission, readOne);
+  assert.deepEqual(cold.value, Uint8Array.of(0x5a));
   const afterCold = cache.metrics();
   assert.ok(afterCold.admissions >= 3);
   assert.ok(
@@ -381,9 +403,23 @@ test("cold and warm one-byte ranges stay inside the admitted max-object envelope
       3 * MAX_CONTENT_OBJECT_BYTES + 2 * (storage.maxManifestNodeBytes + 96) + 512,
   );
   const coldPeak = admission.peakBytes;
-  assert.deepEqual(readOne(), Uint8Array.of(0x5a));
+  const warm = measureAdmission(admission, readOne);
+  assert.deepEqual(warm.value, Uint8Array.of(0x5a));
   assert.ok(cache.metrics().hits >= afterCold.hits + 3);
   assert.equal(admission.peakBytes, coldPeak);
+  assert.ok(warm.temporaryBytes <= MAX_CONTENT_OBJECT_BYTES + 2 * 1024 * 1024);
+  t.diagnostic(
+    JSON.stringify({
+      objectBytes: MAX_CONTENT_OBJECT_BYTES,
+      coldPeakBytes: cold.peakBytes,
+      coldTemporaryBytes: cold.temporaryBytes,
+      warmStartingCacheBytes: warm.startingBytes,
+      warmPeakBytes: warm.peakBytes,
+      warmTemporaryBytes: warm.temporaryBytes,
+      callerOutputReservationIncludedDuringRead: true,
+      callerOutputExcludedAfterReturn: true,
+    }),
+  );
   cache.clear();
   assert.equal(admission.usedBytes, 0);
   driver.close();

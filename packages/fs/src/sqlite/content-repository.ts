@@ -30,9 +30,11 @@ interface SequenceRow extends SqliteRow {
 interface EncodedRow extends SqliteRow {
   encoded: Uint8Array;
 }
+interface EncodedSizeRow extends SqliteRow {
+  size: number;
+}
 interface EncodedHashRow extends SqliteRow {
   hash: Uint8Array;
-  encoded: Uint8Array;
 }
 export interface ContentObjectInput {
   readonly hash: Uint8Array;
@@ -115,37 +117,27 @@ export class ContentRepository {
       }
       if (row.size !== intrinsicByteLength(item.bytes))
         throw new Error("ECORRUPT: CAS collision or stored size mismatch");
-      const cached = this.#cache?.get("object", item.hash);
+      const cached = this.#cache?.withCopy("object", item.hash, (bytes) =>
+        equalBytes(bytes, item.bytes),
+      );
       if (cached) {
-        if (!equalBytes(cached, item.bytes))
-          throw new Error("ECORRUPT: cached CAS collision");
+        if (!cached.value) throw new Error("ECORRUPT: cached CAS collision");
       } else uncached.push(item);
     }
     if (uncached.length) {
-      const missingPlaceholders = uncached.map(() => "?").join(",");
-      const expectedBytes = uncached.reduce(
-        (sum, item) => sum + intrinsicByteLength(item.bytes) + 128,
-        0,
-      );
-      const stored = this.#tx.all<ObjectRow>(
-        `SELECT hash,size,bytes FROM efs_cas_objects WHERE hash IN (${missingPlaceholders})`,
-        uncached.map((item) => item.hash),
-        { maxRows: uncached.length, maxBytes: Math.max(1024, expectedBytes) },
-      );
-      const storedByHash = new Map(stored.map((row) => [bytesToHex(row.hash!), row]));
+      if (!this.#cache)
+        throw new Error("content collision reads require operation-scoped admission");
       for (const item of uncached) {
-        const row = storedByHash.get(bytesToHex(item.hash));
-        if (
-          !row?.bytes ||
-          row.size !== intrinsicByteLength(item.bytes) ||
-          !equalBytes(row.bytes, item.bytes)
-        )
-          throw new Error("ECORRUPT: CAS collision or stored payload mismatch");
-        verifyCasObject(item.hash, row.bytes);
-        const reservation = this.#cache?.tryReserve(
-          checkedAdd(intrinsicByteLength(row.bytes), 96),
+        let matches = false;
+        const found = this.#withColdObject(
+          item.hash,
+          intrinsicByteLength(item.bytes),
+          (stored) => {
+            matches = equalBytes(stored, item.bytes);
+          },
         );
-        this.#admitCache("object", item.hash, row.bytes, reservation);
+        if (!found || !matches)
+          throw new Error("ECORRUPT: CAS collision or stored payload mismatch");
       }
     }
     const insertedBytes = insert.reduce(
@@ -277,10 +269,10 @@ export class ContentRepository {
       if (!row.bytes || row.size !== size || intrinsicByteLength(row.bytes) !== size)
         throw new Error("ECORRUPT: stored CAS length mismatch");
       verifyCasObject(hash, row.bytes);
-      consume(row.bytes);
       reservation = cache.tryReserve(checkedAdd(size, 96));
       this.#admitCache("object", hash, row.bytes, reservation);
       reservation = undefined;
+      consume(row.bytes);
       return true;
     } catch (error) {
       reservation?.release();
@@ -338,22 +330,49 @@ export class ContentRepository {
     const values = [...unique.values()];
     const placeholders = values.map(() => "?").join(",");
     const existing = this.#tx.all<EncodedHashRow>(
-      `SELECT hash,encoded FROM efs_manifest_nodes WHERE hash IN (${placeholders})`,
+      `SELECT hash FROM efs_manifest_nodes WHERE hash IN (${placeholders})`,
       values.map((node) => node.hash),
       {
         maxRows: values.length,
-        maxBytes: Math.max(
-          1024,
-          values.reduce((sum, node) => sum + intrinsicByteLength(node.encoded) + 96, 0),
-        ),
+        maxBytes: Math.max(1024, values.length * 96),
       },
     );
-    const byHash = new Map(existing.map((row) => [bytesToHex(row.hash), row.encoded]));
+    const byHash = new Set(existing.map((row) => bytesToHex(row.hash)));
+    const existingValues = values.filter((node) => byHash.has(bytesToHex(node.hash)));
+    if (existingValues.length && !this.#cache)
+      throw new Error("manifest collision reads require operation-scoped admission");
+    const existingBytes = existingValues.reduce(
+      (sum, node) =>
+        checkedAdd(
+          sum,
+          checkedAdd(intrinsicByteLength(node.encoded), 128),
+          "existing manifest result envelope",
+        ),
+      0,
+    );
+    const releaseExisting = existingBytes
+      ? this.#cache!.reserveOperation(
+          checkedMultiply(existingBytes, 2, "manifest collision ownership copies"),
+        )
+      : undefined;
+    try {
+      for (const node of existingValues) {
+        const prior = this.#tx.all<EncodedRow>(
+          "SELECT encoded FROM efs_manifest_nodes WHERE hash=?",
+          [node.hash],
+          {
+            maxRows: 1,
+            maxBytes: checkedAdd(intrinsicByteLength(node.encoded), 128),
+          },
+        )[0]?.encoded;
+        if (!prior || !equalBytes(prior, node.encoded))
+          throw new Error("ECORRUPT: manifest node collision");
+      }
+    } finally {
+      releaseExisting?.();
+    }
     const insert = values.filter((node) => {
-      const prior = byHash.get(bytesToHex(node.hash));
-      if (prior && !equalBytes(prior, node.encoded))
-        throw new Error("ECORRUPT: manifest node collision");
-      return !prior;
+      return !byHash.has(bytesToHex(node.hash));
     });
     const insertedBytes = insert.reduce(
       (sum, node) => sum + intrinsicByteLength(node.encoded),
@@ -402,14 +421,16 @@ export class ContentRepository {
       throw new RangeError(
         "manifest FastCDC maximum exceeds the durable object transaction envelope",
       );
-    const existing = this.#tx.all<EncodedRow>(
-      "SELECT encoded FROM efs_manifest_roots WHERE hash=?",
+    const existingSize = this.#tx.all<EncodedSizeRow>(
+      "SELECT length(encoded) size FROM efs_manifest_roots WHERE hash=?",
       [hash],
-      { maxRows: 1, maxBytes: this.#limits.maxManifestNodeBytes + 128 },
-    )[0];
-    if (existing) {
-      if (!equalBytes(existing.encoded, encoded))
-        throw new Error("ECORRUPT: manifest root collision");
+      { maxRows: 1, maxBytes: 256 },
+    )[0]?.size;
+    if (existingSize !== undefined) {
+      const matches = this.withManifestRoot(hash, (prior) =>
+        equalBytes(prior, encoded),
+      );
+      if (!matches) throw new Error("ECORRUPT: manifest root collision");
       return false;
     }
     this.#admit(
@@ -435,11 +456,17 @@ export class ContentRepository {
     return true;
   }
 
-  getManifestRoot(hash: Uint8Array): Uint8Array | undefined {
-    return this.#getEncoded("manifest-root", "efs_manifest_roots", hash);
+  withManifestRoot<T>(
+    hash: Uint8Array,
+    consume: (encoded: Uint8Array) => T,
+  ): T | undefined {
+    return this.#withEncoded("manifest-root", "efs_manifest_roots", hash, consume);
   }
-  getManifestNode(hash: Uint8Array): Uint8Array | undefined {
-    return this.#getEncoded("manifest-node", "efs_manifest_nodes", hash);
+  withManifestNode<T>(
+    hash: Uint8Array,
+    consume: (encoded: Uint8Array) => T,
+  ): T | undefined {
+    return this.#withEncoded("manifest-node", "efs_manifest_nodes", hash, consume);
   }
   openManifestCursor(
     manifestHash: Uint8Array,
@@ -454,29 +481,58 @@ export class ContentRepository {
     );
   }
 
-  #getEncoded(
+  #withEncoded<T>(
     kind: ContentCacheKind,
     table: "efs_manifest_roots" | "efs_manifest_nodes",
     hash: Uint8Array,
-  ): Uint8Array | undefined {
-    const cached = this.#cache?.get(kind, hash);
-    if (cached) return cached;
-    const reservation = this.#cache?.reserve(this.#limits.maxManifestNodeBytes + 96);
+    consume: (encoded: Uint8Array) => T,
+  ): T | undefined {
+    if (!this.#cache)
+      throw new Error("manifest reads require operation-scoped admission");
+    hash = intrinsicByteRange(hash);
+    if (intrinsicByteLength(hash) !== 32)
+      throw new RangeError("manifest hash must contain exactly 32 bytes");
+    const cached = this.#cache.withCopy(kind, hash, consume);
+    if (cached) return cached.value;
+    const size = this.#tx.all<EncodedSizeRow>(
+      `SELECT length(encoded) size FROM ${table} WHERE hash=?`,
+      [hash],
+      { maxRows: 1, maxBytes: 256 },
+    )[0]?.size;
+    if (size === undefined) return undefined;
+    if (
+      !Number.isSafeInteger(size) ||
+      size < 0 ||
+      size > this.#limits.maxManifestNodeBytes
+    )
+      throw new Error("ECORRUPT: invalid stored manifest size");
+    const releaseRead = this.#cache.reserveOperation(
+      checkedAdd(
+        checkedMultiply(size, 2, "driver manifest BLOB ownership copies"),
+        128,
+        "manifest read transient bytes",
+      ),
+    );
+    let reservation: ContentCacheReservation | undefined;
     try {
       const encoded = this.#tx.all<EncodedRow>(
         `SELECT encoded FROM ${table} WHERE hash=?`,
         [hash],
-        { maxRows: 1, maxBytes: this.#limits.maxManifestNodeBytes + 128 },
+        { maxRows: 1, maxBytes: checkedAdd(size, 128) },
       )[0]?.encoded;
-      if (!encoded) {
-        reservation?.release();
-        return undefined;
-      }
+      if (!encoded || intrinsicByteLength(encoded) !== size)
+        throw new Error("ECORRUPT: stored manifest length changed during read");
+      if (!equalBytes(sha256(encoded), hash))
+        throw new Error("ECORRUPT: stored manifest digest mismatch");
+      reservation = this.#cache.tryReserve(checkedAdd(size, 96));
       this.#admitCache(kind, hash, encoded, reservation);
-      return encoded;
+      reservation = undefined;
+      return consume(encoded);
     } catch (error) {
       reservation?.release();
       throw error;
+    } finally {
+      releaseRead();
     }
   }
   #admitCache(

@@ -183,13 +183,18 @@ transaction-only SQLite contract and a production-capable Node driver.
       reopen tests.
 - [ ] Implement exact `efs_usage` count and byte deltas.
 - [ ] Implement root-change journal and maintenance reserve accounting.
+- [ ] Own-test only the storage-safety maintenance prerequisites needed by M2: tombstone
+      cleanup, root-generation checks before sweep deletion, bounded mark/run cleanup,
+      and accounting recovery. Public maintenance orchestration and performance remain
+      M5 acceptance work.
 - [ ] Implement bounded repositories requiring an active transaction.
 - [ ] Implement batched CAS insertion and collision verification.
 - [ ] Implement staged closure sealing and constant-row final validation.
 - [ ] Implement the file-backed Node SQLite driver.
 - [ ] Configure foreign keys, acknowledged durability, busy timeout, WAL, checkpointing,
       16 MiB cache target, and zero-byte mmap default.
-- [ ] Enforce and report physical database and journal ceilings.
+- [ ] Enforce the main-database page ceiling and report observable soft WAL
+      checkpoint/backpressure behavior without claiming a hard journal ceiling.
 - [ ] Add initialization, reopen, read-only, second-connection, migration, corruption,
       and statement-fault tests.
 
@@ -204,8 +209,9 @@ transaction-only SQLite contract and a production-capable Node driver.
 - [ ] Manifest roots and nodes round-trip and traverse in bounded batches.
 - [ ] A staged file with more than 100,000 CAS entries finalizes from one sealed
       certificate without rescanning every membership row.
-- [ ] Concurrent quota races cannot exceed payload, metadata, database, or journal
-      ceilings.
+- [ ] Concurrent quota races cannot exceed hard payload, metadata, or main-database
+      ceilings; WAL overshoot remains observable and a pinned soft target backpressures
+      the next writer.
 - [ ] `efs_usage` matches bounded direct recalculation after commit, rollback,
       replacement, expiry, and collection setup.
 - [ ] The Node driver passes the milestone's shared storage suite.
@@ -232,6 +238,9 @@ commits, bounded range I/O, and snapshot streams on Node SQLite.
 - [ ] Implement timestamps using one nondecreasing clock sample per mutation.
 - [ ] Implement immutable revision deltas, checkpoints, and head projection.
 - [ ] Implement snapshot leases and bounded stream backpressure.
+- [ ] Select and pin the immutable root before any multi-transaction `readFile` or
+      `readRange` materialization; a concurrent writer and collector MUST NOT reclaim
+      the selected closure between windows.
 - [ ] Implement shared resident-memory admission and byte-weighted caches.
 - [ ] Implement stable error codes, precedence, lifecycle, and idempotent close.
 - [ ] Implement capabilities, limits, observations, and operation counters.

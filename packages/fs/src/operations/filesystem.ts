@@ -1191,11 +1191,12 @@ export class EphemeralFS implements EphemeralFilesystem {
         .resolve(path, true);
       const inode = this.#requireFile(selected, syscall);
       const manifestHash = copyBytes(inode.manifest_hash!);
-      const rootBytes = tx
+      const root = tx
         .content(this.#storageLimits, this.#cache)
-        .getManifestRoot(manifestHash);
-      if (!rootBytes) throw new Error("ECORRUPT: missing manifest root");
-      const root = decodeManifestRoot(rootBytes, manifestHash);
+        .withManifestRoot(manifestHash, (rootBytes) =>
+          decodeManifestRoot(rootBytes, manifestHash),
+        );
+      if (!root) throw new Error("ECORRUPT: missing manifest root");
       validateSupportedManifestParameters(root.parameters);
       if (root.fileSize !== inode.size)
         throw new Error("ECORRUPT: inode size disagrees with manifest root");
@@ -1211,15 +1212,14 @@ export class EphemeralFS implements EphemeralFilesystem {
       size: selected.size,
       parameters: selected.parameters,
       readStorageTransactions: 1,
-      // A cold one-byte object consumes two result rows (size then BLOB).
-      // Reserve path/root slack and keep each source read inside one UoW.
+      // Public durable-edit routing remains M3, but this storage prerequisite keeps
+      // fallback reads practical without pinning a long SQLite read transaction.
       maxReadWindowBytes: Math.max(
         1,
-        Math.floor(
-          (this.#storageLimits.maxFinalTransactionRows -
-            this.#storageLimits.maxManifestDepth * 4 -
-            16) /
-            2,
+        Math.min(
+          32 * 1024,
+          this.#runtimeLimits.maxQueryBatchBytes,
+          Math.floor(this.#storageLimits.maxFinalTransactionBytes / 2),
         ),
       ),
       read: (offset: number, length: number): Uint8Array =>

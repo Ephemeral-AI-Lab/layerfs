@@ -92,9 +92,10 @@ export class ManifestTreeRepository {
     manifestHash = copyBytes(manifestHash);
     if (!Number.isSafeInteger(offset) || offset < 0)
       throw new RangeError("manifest tree offset must be a nonnegative safe integer");
-    const rootBytes = this.#content.getManifestRoot(manifestHash);
-    if (!rootBytes) throw new Error("ECORRUPT: missing manifest root");
-    const root = decodeManifestRoot(rootBytes, manifestHash);
+    const root = this.#content.withManifestRoot(manifestHash, (rootBytes) =>
+      decodeManifestRoot(rootBytes, manifestHash),
+    );
+    if (!root) throw new Error("ECORRUPT: missing manifest root");
     validateSupportedManifestParameters(root.parameters);
     if (root.parameters.maximum > maxPersistedContentObjectBytes(this.#limits))
       throw new RangeError(
@@ -114,9 +115,10 @@ export class ManifestTreeRepository {
     for (let depth = 1; ; depth += 1) {
       if (depth > this.#limits.maxManifestDepth)
         throw new Error("ECORRUPT: manifest depth exceeds configured maximum");
-      const encoded = this.#content.getManifestNode(hash);
-      if (!encoded) throw new Error("ECORRUPT: missing manifest node");
-      const decoded = decodeManifestNode(encoded, hash);
+      const decoded = this.#content.withManifestNode(hash, (encoded) =>
+        decodeManifestNode(encoded, hash),
+      );
+      if (!decoded) throw new Error("ECORRUPT: missing manifest node");
       if (
         expected &&
         (decoded.span !== expected.span || decoded.entryCount !== expected.entryCount)
@@ -212,7 +214,7 @@ export class ManifestTreeRepository {
     manifestHash: Uint8Array,
   ): void {
     this.#activeOwner(leaseId, ownerNonce);
-    if (!this.#content.getManifestRoot(manifestHash))
+    if (!this.#content.withManifestRoot(manifestHash, () => true))
       throw new Error("ECORRUPT: source manifest root is missing");
     const inserted = this.#tx.run(
       "INSERT OR IGNORE INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
@@ -310,9 +312,10 @@ export class ManifestTreeRepository {
     sourcePath: readonly number[],
   ): { readonly hash: Uint8Array; readonly node: ManifestNode } {
     manifestHash = copyBytes(manifestHash);
-    const rootBytes = this.#content.getManifestRoot(manifestHash);
-    if (!rootBytes) throw new Error("ECORRUPT: missing source manifest root");
-    const root = decodeManifestRoot(rootBytes, manifestHash);
+    const root = this.#content.withManifestRoot(manifestHash, (rootBytes) =>
+      decodeManifestRoot(rootBytes, manifestHash),
+    );
+    if (!root) throw new Error("ECORRUPT: missing source manifest root");
     validateSupportedManifestParameters(root.parameters);
     if (root.parameters.maximum > maxPersistedContentObjectBytes(this.#limits))
       throw new RangeError(
@@ -324,9 +327,10 @@ export class ManifestTreeRepository {
     for (let depth = 1; ; depth += 1) {
       if (depth > this.#limits.maxManifestDepth)
         throw new Error("ECORRUPT: reused subtree path exceeds manifest depth");
-      const encoded = this.#content.getManifestNode(hash);
-      if (!encoded) throw new Error("ECORRUPT: missing reused manifest node");
-      const node = decodeManifestNode(encoded, hash);
+      const node = this.#content.withManifestNode(hash, (encoded) =>
+        decodeManifestNode(encoded, hash),
+      );
+      if (!node) throw new Error("ECORRUPT: missing reused manifest node");
       if (
         expected &&
         (node.span !== expected.span || node.entryCount !== expected.entryCount)

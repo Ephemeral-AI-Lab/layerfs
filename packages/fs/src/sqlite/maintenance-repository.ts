@@ -1,6 +1,30 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import type { StorageLimits } from "../resources/limits.js";
-import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import {
+  CHARGED_ROW_BYTES,
+  USAGE_COUNTER_COLUMNS,
+  USAGE_RECOUNT_PHASE_COUNT,
+  UsageRepository,
+} from "./usage-repository.js";
+
+const MAX_GC_RUN_ID_BYTES = 256;
+const GC_RUN_BASE_BYTES = 512;
+const GC_MARK_BASE_BYTES = 192;
+
+function runIdBytes(runId: string): number {
+  if (typeof runId !== "string" || runId.length === 0 || runId.includes("\0"))
+    throw new RangeError("invalid garbage-collection run id");
+  const bytes = new TextEncoder().encode(runId).byteLength;
+  if (bytes > MAX_GC_RUN_ID_BYTES)
+    throw new RangeError("garbage-collection run id exceeds byte limit");
+  return bytes;
+}
+function runCharge(runId: string): number {
+  return GC_RUN_BASE_BYTES + runIdBytes(runId) * 2;
+}
+function markCharge(runId: string): number {
+  return GC_MARK_BASE_BYTES + runIdBytes(runId) * 2;
+}
 
 export interface GcRunRow extends SqliteRow {
   id: string;
@@ -61,6 +85,7 @@ export class MaintenanceRepository {
     this.#limits = limits;
   }
   beginRun(runId: string, now: number): void {
+    runIdBytes(runId);
     if (this.run(runId)) return;
     const meta = this.#tx.all<
       { next_allocation_sequence: number; root_mutation_generation: number } & SqliteRow
@@ -71,7 +96,7 @@ export class MaintenanceRepository {
     )[0];
     if (!meta) throw new Error("ECORRUPT: missing metadata");
     new UsageRepository(this.#tx, this.#limits).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES },
+      { maintenance_bytes: runCharge(runId) },
       "garbage-collection run",
     );
     this.#tx.run(
@@ -87,6 +112,7 @@ export class MaintenanceRepository {
     ]);
   }
   run(id: string): GcRunRow | undefined {
+    runIdBytes(id);
     return this.#tx.all<GcRunRow>(
       "SELECT id,state,high_water,root_generation,examined_roots,deleted_roots,examined_nodes,deleted_nodes,examined_objects,deleted_objects,reclaimed_object_bytes,reclaimed_manifest_bytes FROM efs_gc_runs WHERE id=?",
       [id],
@@ -114,6 +140,32 @@ export class MaintenanceRepository {
   generation(): number {
     return this.#scalar(
       "SELECT root_mutation_generation value FROM efs_meta WHERE singleton=1",
+    );
+  }
+  usageVerificationState(): {
+    readonly mutationSequence: number;
+    readonly counters: readonly number[];
+  } {
+    const snapshot = new UsageRepository(this.#tx, this.#limits).snapshot();
+    return Object.freeze({
+      mutationSequence: snapshot.mutation_sequence,
+      counters: Object.freeze(USAGE_COUNTER_COLUMNS.map((column) => snapshot[column])),
+    });
+  }
+  usageVerificationPhaseCount(): number {
+    return USAGE_RECOUNT_PHASE_COUNT;
+  }
+  usageVerificationBatch(
+    phase: number,
+    afterKey: string | null,
+    limit: number,
+    maxBytes: number,
+  ) {
+    return new UsageRepository(this.#tx, this.#limits).recountBatch(
+      phase,
+      afterKey,
+      limit,
+      maxBytes,
     );
   }
   hashes(
@@ -157,7 +209,7 @@ export class MaintenanceRepository {
     );
     if (result.changes)
       new UsageRepository(this.#tx, this.#limits).apply(
-        { maintenance_bytes: CHARGED_ROW_BYTES },
+        { maintenance_bytes: markCharge(runId) },
         "garbage-collection mark",
       );
   }
@@ -197,7 +249,9 @@ export class MaintenanceRepository {
     if (!Number.isSafeInteger(run.cursor_kind) || run.cursor_kind < 0)
       throw new Error("ECORRUPT: invalid garbage-collection root cursor");
     if (run.cursor_kind >= 5) return this.#finishRootPass(runId, run.root_generation);
-    const after = run.cursor_value ?? new Uint8Array();
+    // A one-byte zero BLOB sorts before every 32-byte digest, while avoiding
+    // runtimes that normalize reconstructed empty typed-array views to NULL.
+    const after = run.cursor_value ?? Uint8Array.of(0);
     const queries = [
       "SELECT DISTINCT manifest_hash hash FROM efs_inodes WHERE manifest_hash IS NOT NULL AND manifest_hash>? ORDER BY manifest_hash LIMIT ?",
       "SELECT DISTINCT manifest_hash hash FROM efs_revision_manifest_roots WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
@@ -240,11 +294,34 @@ export class MaintenanceRepository {
           : "efs_cas_objects";
     const kind = state - 1;
     const size = state === 3 ? "size" : "length(encoded)";
+    const unreferenced =
+      state === 1
+        ? "NOT EXISTS(SELECT 1 FROM efs_inodes i WHERE i.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_revision_manifest_roots r WHERE r.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_branch_manifest_roots b WHERE b.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_manifests l WHERE l.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.source_manifest_hash=efs_manifest_roots.hash)"
+        : state === 2
+          ? "NOT EXISTS(SELECT 1 FROM efs_staging_level_records l WHERE l.node_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.node_hash=efs_manifest_nodes.hash)"
+          : "NOT EXISTS(SELECT 1 FROM efs_lease_objects l WHERE l.object_hash=efs_cas_objects.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_entries s WHERE s.object_hash=efs_cas_objects.hash)";
     return this.#tx.all<PayloadRow>(
-      `SELECT hash,${size} size,allocation_sequence FROM ${table} WHERE allocation_sequence<=? AND NOT EXISTS(SELECT 1 FROM efs_gc_marks m WHERE m.run_id=? AND m.kind=? AND m.hash=${table}.hash) ORDER BY allocation_sequence LIMIT ?`,
+      `SELECT hash,${size} size,allocation_sequence FROM ${table} WHERE allocation_sequence<=? AND NOT EXISTS(SELECT 1 FROM efs_gc_marks m WHERE m.run_id=? AND m.kind=? AND m.hash=${table}.hash) AND ${unreferenced} ORDER BY allocation_sequence LIMIT ?`,
       [highWater, runId, kind, limit],
       { maxRows: limit, maxBytes },
     );
+  }
+  reconcileSweepGeneration(runId: string, state: number): boolean {
+    const row = this.#tx.all<
+      { state: number; root_generation: number; generation: number } & SqliteRow
+    >(
+      "SELECT r.state,r.root_generation,m.root_mutation_generation generation FROM efs_gc_runs r JOIN efs_meta m ON m.singleton=1 WHERE r.id=?",
+      [runId],
+      { maxRows: 1, maxBytes: 512 },
+    )[0];
+    if (!row || row.state !== state)
+      throw new Error("ECORRUPT: garbage-collection sweep state changed");
+    if (row.root_generation === row.generation) return true;
+    this.#tx.run(
+      "UPDATE efs_gc_runs SET state=0,root_generation=?,cursor_kind=0,cursor_value=NULL WHERE id=? AND state=?",
+      [row.generation, runId, state],
+    );
+    return false;
   }
   applySweep(
     runId: string,
@@ -299,29 +376,90 @@ export class MaintenanceRepository {
     } else {
       const next = state === 3 ? completeState : state + 1;
       this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [next, runId]);
-      if (next === completeState) {
-        const before = Math.max(0, this.generation() - 10_000);
-        const journal = this.#tx.all<{ count: number; bytes: number } & SqliteRow>(
-          "SELECT count(*) count,coalesce(sum(length(root_id)),0) bytes FROM efs_root_journal WHERE generation<?",
-          [before],
-          { maxRows: 1, maxBytes: 256 },
-        )[0];
-        const deleted = this.#tx.run(
-          "DELETE FROM efs_root_journal WHERE generation<?",
-          [before],
-        ).changes;
-        if (deleted) {
-          if (!journal || journal.count !== deleted)
-            throw new Error("ECORRUPT: root journal cleanup count changed");
-          new UsageRepository(this.#tx, this.#limits).apply(
-            {
-              maintenance_bytes: -(deleted * CHARGED_ROW_BYTES + journal.bytes),
-            },
-            "root journal cleanup",
-          );
-        }
-      }
     }
+  }
+  cleanupMarks(runId: string, limit: number, nextState: number): boolean {
+    const rows = this.#tx.all<{ kind: number; hash: Uint8Array } & SqliteRow>(
+      "SELECT kind,hash FROM efs_gc_marks WHERE run_id=? ORDER BY kind,hash LIMIT ?",
+      [runId, limit],
+      { maxRows: limit, maxBytes: Math.max(256, limit * 128) },
+    );
+    for (const row of rows)
+      this.#tx.run("DELETE FROM efs_gc_marks WHERE run_id=? AND kind=? AND hash=?", [
+        runId,
+        row.kind,
+        row.hash,
+      ]);
+    if (rows.length)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: -rows.length * markCharge(runId) },
+        "garbage-collection mark cleanup",
+      );
+    else this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [nextState, runId]);
+    return rows.length > 0;
+  }
+  cleanupRootJournal(runId: string, limit: number, nextState: number): boolean {
+    const before = Math.max(0, this.generation() - 10_000);
+    const rows = this.#tx.all<{ generation: number; bytes: number } & SqliteRow>(
+      "SELECT generation,length(root_id) bytes FROM efs_root_journal WHERE generation<? ORDER BY generation LIMIT ?",
+      [before, limit],
+      { maxRows: limit, maxBytes: Math.max(256, limit * 64) },
+    );
+    let charged = 0;
+    for (const row of rows) {
+      this.#tx.run("DELETE FROM efs_root_journal WHERE generation=?", [row.generation]);
+      charged += CHARGED_ROW_BYTES + row.bytes;
+    }
+    if (rows.length)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: -charged },
+        "root journal cleanup",
+      );
+    else this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [nextState, runId]);
+    return rows.length > 0;
+  }
+  cleanupTerminalRuns(
+    runId: string,
+    limit: number,
+    completeState: number,
+    abandonedState: number,
+    nextState: number,
+  ): boolean {
+    const prior = this.#tx.all<{ id: string } & SqliteRow>(
+      "SELECT id FROM efs_gc_runs WHERE id<>? AND state IN (?,?) ORDER BY created_at_ms,id LIMIT 1",
+      [runId, completeState, abandonedState],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (!prior) {
+      this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [nextState, runId]);
+      return false;
+    }
+    const marks = this.#tx.all<{ kind: number; hash: Uint8Array } & SqliteRow>(
+      "SELECT kind,hash FROM efs_gc_marks WHERE run_id=? ORDER BY kind,hash LIMIT ?",
+      [prior.id, limit],
+      { maxRows: limit, maxBytes: Math.max(256, limit * 128) },
+    );
+    for (const mark of marks)
+      this.#tx.run("DELETE FROM efs_gc_marks WHERE run_id=? AND kind=? AND hash=?", [
+        prior.id,
+        mark.kind,
+        mark.hash,
+      ]);
+    if (marks.length) {
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: -marks.length * markCharge(prior.id) },
+        "terminal garbage-collection mark cleanup",
+      );
+      return true;
+    }
+    const deleted = this.#tx.run("DELETE FROM efs_gc_runs WHERE id=?", [prior.id]);
+    if (deleted.changes !== 1)
+      throw new Error("ECORRUPT: terminal garbage-collection run changed");
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { maintenance_bytes: -runCharge(prior.id) },
+      "terminal garbage-collection run cleanup",
+    );
+    return true;
   }
   #finishRootPass(runId: string, expectedGeneration: number): boolean {
     const generation = this.generation();

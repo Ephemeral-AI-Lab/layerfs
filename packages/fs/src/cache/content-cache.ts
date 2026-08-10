@@ -26,6 +26,9 @@ export interface ContentCacheReservation {
   readonly weight: number;
   release(): void;
 }
+export interface ContentCacheUse<T> {
+  readonly value: T;
+}
 
 export class ContentCache {
   readonly #limit: number;
@@ -44,7 +47,11 @@ export class ContentCache {
     this.#limit = limitBytes;
     this.#admission = admission;
   }
-  get(kind: ContentCacheKind, hash: Uint8Array): Uint8Array | undefined {
+  withCopy<T>(
+    kind: ContentCacheKind,
+    hash: Uint8Array,
+    consume: (bytes: Uint8Array) => T,
+  ): ContentCacheUse<T> | undefined {
     const key = `${kind}:${bytesToHex(hash)}`;
     const entry = this.#entries.get(key);
     if (!entry) {
@@ -54,7 +61,13 @@ export class ContentCache {
     this.#entries.delete(key);
     this.#entries.set(key, entry);
     this.#hits += 1;
-    return copyBytes(entry.bytes);
+    const size = intrinsicByteLength(entry.bytes);
+    const release = this.reserveOperation(size);
+    try {
+      return Object.freeze({ value: consume(copyBytes(entry.bytes)) });
+    } finally {
+      release();
+    }
   }
   copyInto(
     kind: ContentCacheKind,

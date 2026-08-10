@@ -30,8 +30,8 @@ export interface SQLiteDriverCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
-    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
-    readonly journalSizeLimitIsHard: false;
+    readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard?: false;
 }
 export interface SQLitePhysicalStorage {
     readonly mainFileBytes?: number;
@@ -71,7 +71,10 @@ export declare class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     #private;
     readonly kind: "sqlite";
     readonly readOnly: boolean;
-    readonly capabilities: SQLiteDriverCapabilities;
+    readonly capabilities: SQLiteDriverCapabilities & {
+        readonly journalQuotaPolicy: "checkpoint-backpressure";
+        readonly journalSizeLimitIsHard: false;
+    };
     constructor(options: OpenNodeSqliteOptions);
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;

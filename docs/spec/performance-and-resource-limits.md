@@ -283,7 +283,11 @@ insertion allocation and select the bounded streaming rebuild. The fallback uses
 meaningful bounded source window (32 KiB by default, at most 1 MiB), does not retain a
 SQLite read transaction between windows, and reports source reads and storage
 transactions separately. This fallback preserves large-file support; it is not a claim
-that public range writes use the path-copy fast path before M3 integration.
+that public range writes use the path-copy fast path before M3 integration. For the
+current 100 MiB storage-prerequisite fixture, the 32 KiB fallback reports 3,200
+source-read transactions plus bounded authentication and persistence transactions. That
+count is evidence of boundedness, not fast public small-edit performance; M3 must
+integrate path-copy or a reusable bounded read session before making such a claim.
 
 Opening MUST reject a configuration that cannot hold the six-capacity maximum-content
 working set and charged diagnostic collector envelope described above, one COW page, and

@@ -17,10 +17,13 @@ export interface ContentCacheReservation {
     readonly weight: number;
     release(): void;
 }
+export interface ContentCacheUse<T> {
+    readonly value: T;
+}
 export declare class ContentCache {
     #private;
     constructor(limitBytes: number, admission: AdmissionController);
-    get(kind: ContentCacheKind, hash: Uint8Array): Uint8Array | undefined;
+    withCopy<T>(kind: ContentCacheKind, hash: Uint8Array, consume: (bytes: Uint8Array) => T): ContentCacheUse<T> | undefined;
     copyInto(kind: ContentCacheKind, hash: Uint8Array, expectedSize: number, sourceOffset: number, destination: Uint8Array, destinationOffset: number, length: number): boolean | undefined;
     containsExact(kind: ContentCacheKind, hash: Uint8Array, expectedSize: number): boolean | undefined;
     reserveOperation(weight: number): () => void;
@@ -492,8 +495,8 @@ export interface ContentStore {
         readonly encoded: Uint8Array;
     }[]): ContentBatchResult;
     putManifestRoot(hash: Uint8Array, encoded: Uint8Array): boolean;
-    getManifestRoot(hash: Uint8Array): Uint8Array | undefined;
-    getManifestNode(hash: Uint8Array): Uint8Array | undefined;
+    withManifestRoot<T>(hash: Uint8Array, consume: (encoded: Uint8Array) => T): T | undefined;
+    withManifestNode<T>(hash: Uint8Array, consume: (encoded: Uint8Array) => T): T | undefined;
     openManifestCursor(manifestHash: Uint8Array, offset: number): AuthenticatedManifestCursor;
 }
 export interface AuthenticatedManifestTreePathNode {
@@ -785,6 +788,16 @@ export interface InodeVerifyRow {
     readonly nlink: number;
     readonly actual_links: number;
 }
+export interface UsageVerificationState {
+    readonly mutationSequence: number;
+    readonly counters: readonly number[];
+}
+export interface UsageVerificationBatch {
+    readonly checkedRows: number;
+    readonly deltas: readonly number[];
+    readonly nextKey: string | null;
+    readonly complete: boolean;
+}
 export interface MaintenanceStore {
     beginRun(runId: string, now: number): void;
     abandonRun(runId: string, completeState: number, abandonedState: number): void;
@@ -805,7 +818,14 @@ export interface MaintenanceStore {
     addExamined(runId: string, roots: number, nodes: number, objects: number): void;
     seedRootsBatch(runId: string, limit: number, maxBytes: number): boolean;
     sweepCandidates(runId: string, state: number, highWater: number, limit: number, maxBytes: number): readonly PayloadRow[];
+    reconcileSweepGeneration(runId: string, state: number): boolean;
     applySweep(runId: string, state: number, rows: readonly PayloadRow[], completeState: number): void;
+    cleanupMarks(runId: string, limit: number, nextState: number): boolean;
+    cleanupRootJournal(runId: string, limit: number, nextState: number): boolean;
+    cleanupTerminalRuns(runId: string, limit: number, completeState: number, abandonedState: number, nextState: number): boolean;
+    usageVerificationState(): UsageVerificationState;
+    usageVerificationPhaseCount(): number;
+    usageVerificationBatch(phase: number, afterKey: string | null, limit: number, maxBytes: number): UsageVerificationBatch;
 }
 export interface OverlayStore {
     writePages(branchId: string, inodeId: string, fileSize: number, pages: readonly CowPage[], now: number): number;
@@ -815,7 +835,7 @@ export interface StorageTransactionPorts {
     manifestTree(limits: StorageLimits, cache?: ContentCache): ManifestTreeStore;
     namespace(filesystem: FilesystemLimits, storage: StorageLimits, syscall: string): NamespaceStore;
     branches(limits: StorageLimits): BranchStore;
-    staging(limits: StorageLimits): StagingStore;
+    staging(limits: StorageLimits, cache?: ContentCache): StagingStore;
     maintenance(limits: StorageLimits): MaintenanceStore;
     overlay(limits: StorageLimits, pageBytes: CowPageBytes): OverlayStore;
 }
@@ -970,8 +990,8 @@ export interface SQLiteDriverCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
-    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
-    readonly journalSizeLimitIsHard: false;
+    readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard?: false;
 }
 export interface SQLitePhysicalStorage {
     readonly mainFileBytes?: number;

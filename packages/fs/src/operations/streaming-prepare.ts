@@ -19,7 +19,7 @@ import {
   type RuntimeLimits,
   type StorageLimits,
 } from "../resources/limits.js";
-import type { ContentCache } from "../cache/content-cache.js";
+import { ContentCache } from "../cache/content-cache.js";
 import type {
   ClosureCertificate,
   ContentObjectInput,
@@ -57,9 +57,13 @@ function randomNonce(): Uint8Array {
   return globalThis.crypto.getRandomValues(new Uint8Array(16));
 }
 
-function ingestReservationBytes(declaredBytes: number, storage: StorageLimits): number {
+function ingestReservationBytes(
+  declaredBytes: number,
+  storage: StorageLimits,
+  minimumChunkBytes = DEFAULT_FASTCDC.minimum,
+): number {
   const maximumEntries = checkedAdd(
-    Math.ceil(declaredBytes / DEFAULT_FASTCDC.minimum),
+    Math.ceil(declaredBytes / minimumChunkBytes),
     1,
     "declared stream entry envelope",
   );
@@ -116,6 +120,7 @@ export async function prepareContentStreaming(
       "streamed writes require a declared maximum byte length within maxFileBytes",
     );
   const durableIngestReservation = ingestReservationBytes(declaredBytes, storage);
+  cache ??= new ContentCache(1, admission);
   const leaseId = globalThis.crypto.randomUUID();
   const ownerId = globalThis.crypto.randomUUID();
   const ownerNonce = randomNonce();
@@ -161,7 +166,7 @@ export async function prepareContentStreaming(
     const batch = pending.splice(0);
     pendingBytes = 0;
     port.transaction("write", workBudget, (tx) => {
-      const staging = tx.staging(storage);
+      const staging = tx.staging(storage, cache);
       const unique = [
         ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
       ];
@@ -173,7 +178,7 @@ export async function prepareContentStreaming(
           0,
         ),
       );
-      tx.content(storage).putObjectsBatch(batch);
+      tx.content(storage, cache).putObjectsBatch(batch);
       for (const item of batch)
         staging.putEntry(
           leaseId,
@@ -232,7 +237,7 @@ export async function prepareContentStreaming(
     if (inputBudget) releases.push(admission.reserve(inputBudget));
     if (borrowedBufferedInput) bufferedInput = copyBytes(borrowedBufferedInput);
     port.transaction("write", workBudget, (tx) => {
-      const staging = tx.staging(storage);
+      const staging = tx.staging(storage, cache);
       staging.begin({
         leaseId,
         ownerId,
@@ -302,12 +307,13 @@ export async function prepareContentStreaming(
       total,
       entryIndex,
       true,
+      cache,
     );
   } catch (error) {
     if (leaseBegun)
       try {
         port.transaction("write", workBudget, (tx) => {
-          tx.staging(storage).delete(leaseId, ownerNonce);
+          tx.staging(storage, cache).delete(leaseId, ownerNonce);
         });
       } catch {}
     throw error;
@@ -339,6 +345,12 @@ export async function prepareContentEntriesStreaming(
     expectedSize > storage.maxFileBytes
   )
     throw new RangeError("staged manifest size exceeds configured limit");
+  const durableIngestReservation = ingestReservationBytes(
+    expectedSize,
+    storage,
+    parameters.minimum,
+  );
+  cache ??= new ContentCache(1, admission);
   const leaseId = globalThis.crypto.randomUUID();
   const ownerId = globalThis.crypto.randomUUID();
   const ownerNonce = randomNonce();
@@ -400,13 +412,18 @@ export async function prepareContentEntriesStreaming(
               item.bytes !== undefined,
           )
           .map((item) => Object.freeze({ hash: item.hash, bytes: item.bytes }));
-        if (objects.length) tx.content(storage).putObjectsBatch(objects);
-        const staging = tx.staging(storage);
+        if (objects.length) tx.content(storage, cache).putObjectsBatch(objects);
+        const staging = tx.staging(storage, cache);
         for (const item of batch)
           staging.putEntry(leaseId, entryIndex++, item.hash, item.length);
         const unique = [
           ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
         ];
+        staging.consumeIngestReservation(
+          leaseId,
+          ownerNonce,
+          unique.reduce((sum, item) => checkedAdd(sum, item.length), 0),
+        );
         staging.appendBatch(
           leaseId,
           ownerNonce,
@@ -427,13 +444,14 @@ export async function prepareContentEntriesStreaming(
   try {
     cache?.makeRoom(entrySnapshotBudget + builderBudget);
     port.transaction("write", workBudget, (tx) => {
-      const staging = tx.staging(storage);
+      const staging = tx.staging(storage, cache);
       staging.begin({
         leaseId,
         ownerId,
         ownerNonce,
         now,
         expiresAt: now + storage.stagingLeaseMs,
+        ingestReservationBytes: durableIngestReservation,
       });
       staging.bumpRoot(5, leaseId);
     });
@@ -501,13 +519,14 @@ export async function prepareContentEntriesStreaming(
       parameters,
       total,
       entryIndex,
-      false,
+      true,
+      cache,
     );
   } catch (error) {
     if (leaseBegun)
       try {
         port.transaction("write", workBudget, (tx) => {
-          tx.staging(storage).delete(leaseId, ownerNonce);
+          tx.staging(storage, cache).delete(leaseId, ownerNonce);
         });
       } catch {}
     throw error;
@@ -534,6 +553,7 @@ function finalizeStagedManifest(
   total: number,
   entryIndex: number,
   reservedIngest: boolean,
+  cache: ContentCache,
 ): StreamPreparedManifest {
   const rootNode = buildManifestLevels(
     port,
@@ -543,6 +563,7 @@ function finalizeStagedManifest(
     ownerNonce,
     workBudget,
     reservedIngest,
+    cache,
   );
   const root = encodeManifestRoot({
     parameters,
@@ -552,10 +573,10 @@ function finalizeStagedManifest(
   });
   const rootHash = sha256(root);
   const certificate = port.transaction("write", workBudget, (tx) => {
-    const staging = tx.staging(storage);
+    const staging = tx.staging(storage, cache);
     if (reservedIngest)
       staging.consumeIngestReservation(leaseId, ownerNonce, intrinsicByteLength(root));
-    tx.content(storage).putManifestRoot(rootHash, root);
+    tx.content(storage, cache).putManifestRoot(rootHash, root);
     staging.appendBatch(leaseId, ownerNonce, [
       Object.freeze({
         kind: "manifest-root",
@@ -576,7 +597,7 @@ function finalizeStagedManifest(
       workBudget,
       (tx) =>
         tx
-          .staging(storage)
+          .staging(storage, cache)
           .reconcileBatch(
             leaseId,
             ownerNonce,
@@ -590,7 +611,7 @@ function finalizeStagedManifest(
           ).complete,
     );
   port.transaction("write", workBudget, (tx) => {
-    const staging = tx.staging(storage);
+    const staging = tx.staging(storage, cache);
     staging.seal(certificate);
     staging.bumpRoot(5, leaseId);
   });
@@ -605,6 +626,7 @@ function buildManifestLevels(
   ownerNonce: Uint8Array,
   budget: { readonly maxRows: number; readonly maxBytes: number },
   reservedIngest: boolean,
+  cache: ContentCache,
 ): PreparedNode {
   let level = 0;
   let sourceKind: "entries" | "level" = "entries";
@@ -619,7 +641,7 @@ function buildManifestLevels(
       if (!pendingNodes.length) return;
       const nodes = pendingNodes.splice(0);
       port.transaction("write", budget, (tx) => {
-        const staging = tx.staging(storage);
+        const staging = tx.staging(storage, cache);
         if (reservedIngest)
           staging.consumeIngestReservation(
             leaseId,
@@ -629,7 +651,7 @@ function buildManifestLevels(
               0,
             ),
           );
-        tx.content(storage).putManifestNodesBatch(
+        tx.content(storage, cache).putManifestNodesBatch(
           nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
         );
         for (const node of nodes)
@@ -707,7 +729,7 @@ function buildManifestLevels(
     const maximum = level === 0 ? 256 : 128;
     while (true) {
       const rows = port.transaction("read", budget, (tx) => {
-        const staging = tx.staging(storage);
+        const staging = tx.staging(storage, cache);
         return sourceKind === "entries"
           ? staging.entriesAfter(
               leaseId,

@@ -1,6 +1,7 @@
 import type { RuntimeLimits, StorageLimits } from "../resources/limits.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
 import { bytesToHex, hexToBytes } from "../cas/bytes.js";
+import { sha256 } from "../cas/sha256.js";
 import type {
   FilesystemMaintenance,
   GarbageCollectionOptions,
@@ -18,8 +19,39 @@ import type {
 } from "./storage-ports.js";
 import type { ContentCache } from "../cache/content-cache.js";
 
-const COMPLETE = 4;
-const ABANDONED = 5;
+const CLEAN_MARKS = 4;
+const CLEAN_ROOT_JOURNAL = 5;
+const CLEAN_TERMINAL_RUNS = 6;
+const COMPLETE = 7;
+const ABANDONED = 8;
+const MAX_GC_RUN_ID_BYTES = 256;
+const USAGE_COUNTER_COUNT = 16;
+
+interface UsageVerificationCursor {
+  readonly phase: number;
+  readonly lastKey: string | null;
+  readonly mutationSequence: number;
+  readonly totals: readonly number[];
+}
+interface VerificationCursorState {
+  phase: number;
+  last: string;
+  rootMutationGeneration: number;
+  usage?: UsageVerificationCursor;
+}
+
+function encodeBase64Text(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function decodeBase64Text(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
 
 export class MaintenanceManager implements FilesystemMaintenance {
   readonly #port: OperationsStorage;
@@ -27,6 +59,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
   readonly #runtime: RuntimeLimits;
   readonly #clock: () => number;
   readonly #cache: ContentCache;
+  readonly #verificationSecret = globalThis.crypto.getRandomValues(new Uint8Array(32));
   constructor(
     port: OperationsStorage,
     storage: StorageLimits,
@@ -54,6 +87,18 @@ export class MaintenanceManager implements FilesystemMaintenance {
     if (options.signal?.aborted) throw abortError();
     const start = performance.now();
     const runId = options.runId ?? globalThis.crypto.randomUUID();
+    if (
+      typeof runId !== "string" ||
+      runId.length === 0 ||
+      runId.includes("\0") ||
+      new TextEncoder().encode(runId).byteLength > MAX_GC_RUN_ID_BYTES
+    )
+      throw fsError(
+        "EINVAL",
+        "collectGarbage",
+        undefined,
+        `runId must encode to at most ${MAX_GC_RUN_ID_BYTES} bytes`,
+      );
     const maxBatches = options.maxBatches ?? 100_000;
     if (!Number.isSafeInteger(maxBatches) || maxBatches < 0)
       throw fsError(
@@ -172,41 +217,144 @@ export class MaintenanceManager implements FilesystemMaintenance {
 
   async verify(options: VerificationOptions = {}): Promise<VerificationResult> {
     if (options.signal?.aborted) throw abortError();
-    const maximum = options.maxEntities ?? this.#storage.maxGcBatchSize;
-    if (!Number.isSafeInteger(maximum) || maximum <= 0)
+    const requestedMaximum = options.maxEntities ?? this.#storage.maxGcBatchSize;
+    if (!Number.isSafeInteger(requestedMaximum) || requestedMaximum <= 0)
       throw fsError(
         "EINVAL",
         "verify",
         undefined,
         "maxEntities must be a positive safe integer",
       );
+    const maximum = Math.min(
+      requestedMaximum,
+      this.#storage.maxGcBatchSize,
+      this.#storage.maxQueryBatchSize,
+      this.#storage.maxFinalTransactionRows - 4,
+    );
     const scopes = new Set<VerificationScope>(
       options.scopes ?? ["metadata", "namespace", "manifests", "objects", "head"],
     );
-    const phases = ["roots", "nodes", "objects", "inodes"] as const;
+    const phases = ["roots", "nodes", "objects", "inodes", "usage"] as const;
     let cursor = options.cursor
       ? this.#decodeCursor(options.cursor)
-      : { phase: 0, last: "" };
+      : { phase: 0, last: "", rootMutationGeneration: -1 };
     let checked = 0;
     const generation = this.#read((tx) => {
       const maintenance = tx.maintenance(this.#storage);
       const result = maintenance.generation();
+      if (cursor.rootMutationGeneration < 0)
+        cursor = { ...cursor, rootMutationGeneration: result };
+      else if (cursor.rootMutationGeneration !== result)
+        throw fsError(
+          "EBUSY",
+          "verify",
+          undefined,
+          "root mutation generation changed while verification was in progress",
+        );
       const repo = tx.content(this.#storage, this.#cache);
       while (checked < maximum && cursor.phase < phases.length) {
         const phase = phases[cursor.phase]!;
         if (
           ((phase === "roots" || phase === "nodes") && !scopes.has("manifests")) ||
           (phase === "objects" && !scopes.has("objects")) ||
-          (phase === "inodes" && !scopes.has("namespace") && !scopes.has("head"))
+          (phase === "inodes" && !scopes.has("namespace") && !scopes.has("head")) ||
+          (phase === "usage" && !scopes.has("metadata"))
         ) {
-          cursor = { phase: cursor.phase + 1, last: "" };
+          cursor = {
+            phase: cursor.phase + 1,
+            last: "",
+            rootMutationGeneration: cursor.rootMutationGeneration,
+          };
           continue;
         }
+        if (phase === "usage") {
+          const usageState = maintenance.usageVerificationState();
+          let usage = cursor.usage ?? {
+            phase: 0,
+            lastKey: null,
+            mutationSequence: usageState.mutationSequence,
+            totals: Object.freeze(Array.from({ length: USAGE_COUNTER_COUNT }, () => 0)),
+          };
+          if (usage.mutationSequence !== usageState.mutationSequence)
+            throw fsError(
+              "EBUSY",
+              "verify",
+              undefined,
+              "durable usage changed while verification was in progress",
+            );
+          const phaseCount = maintenance.usageVerificationPhaseCount();
+          while (checked < maximum && usage.phase < phaseCount) {
+            const batch = maintenance.usageVerificationBatch(
+              usage.phase,
+              usage.lastKey,
+              maximum - checked,
+              this.#runtime.maxQueryBatchBytes,
+            );
+            const totals = usage.totals.map((value, index) => {
+              const delta = batch.deltas[index];
+              if (delta === undefined) throw new Error("invalid usage recount result");
+              const total = value + delta;
+              if (!Number.isSafeInteger(total) || total < 0)
+                throw new Error("ECORRUPT: usage recount overflow");
+              return total;
+            });
+            checked += batch.checkedRows;
+            usage = {
+              phase: batch.complete ? usage.phase + 1 : usage.phase,
+              lastKey: batch.complete ? null : batch.nextKey,
+              mutationSequence: usage.mutationSequence,
+              totals: Object.freeze(totals),
+            };
+            if (!batch.complete) break;
+          }
+          if (usage.phase >= phaseCount) {
+            const finalState = maintenance.usageVerificationState();
+            if (finalState.mutationSequence !== usage.mutationSequence)
+              throw fsError(
+                "EBUSY",
+                "verify",
+                undefined,
+                "durable usage changed while verification was in progress",
+              );
+            if (
+              finalState.counters.length !== usage.totals.length ||
+              finalState.counters.some((value, index) => value !== usage.totals[index])
+            )
+              throw fsError(
+                "ECORRUPT",
+                "verify",
+                undefined,
+                "authoritative usage differs from the bounded durable recount",
+              );
+            cursor = {
+              phase: cursor.phase + 1,
+              last: "",
+              rootMutationGeneration: cursor.rootMutationGeneration,
+            };
+            continue;
+          }
+          cursor = {
+            phase: cursor.phase,
+            last: "",
+            rootMutationGeneration: cursor.rootMutationGeneration,
+            usage,
+          };
+          break;
+        }
         if (phase === "roots" || phase === "nodes") {
+          const remaining = maximum - checked;
+          const rowCapacity = Math.max(
+            1,
+            Math.floor(
+              this.#runtime.maxQueryBatchBytes /
+                (phase === "nodes" ? this.#storage.maxManifestNodeBytes + 256 : 512),
+            ),
+          );
+          const rowLimit = Math.min(remaining, rowCapacity);
           const rows = maintenance.hashes(
             phase,
-            cursor.last ? hexToBytes(cursor.last, 32) : new Uint8Array(),
-            maximum - checked,
+            cursor.last ? hexToBytes(cursor.last, 32) : Uint8Array.of(0),
+            rowLimit,
             this.#runtime.maxQueryBatchBytes,
           );
           for (const row of rows) {
@@ -215,12 +363,16 @@ export class MaintenanceManager implements FilesystemMaintenance {
             cursor.last = bytesToHex(row.hash);
             checked += 1;
           }
-          if (rows.length < maximum - (checked - rows.length))
-            cursor = { phase: cursor.phase + 1, last: "" };
+          if (rows.length < rowLimit)
+            cursor = {
+              phase: cursor.phase + 1,
+              last: "",
+              rootMutationGeneration: cursor.rootMutationGeneration,
+            };
           else break;
         } else if (phase === "objects") {
           const rows = maintenance.objects(
-            cursor.last ? hexToBytes(cursor.last, 32) : new Uint8Array(),
+            cursor.last ? hexToBytes(cursor.last, 32) : Uint8Array.of(0),
             maximum - checked,
             this.#runtime.maxQueryBatchBytes,
           );
@@ -231,7 +383,11 @@ export class MaintenanceManager implements FilesystemMaintenance {
             checked += 1;
           }
           if (rows.length < maximum - (checked - rows.length))
-            cursor = { phase: cursor.phase + 1, last: "" };
+            cursor = {
+              phase: cursor.phase + 1,
+              last: "",
+              rootMutationGeneration: cursor.rootMutationGeneration,
+            };
           else break;
         } else {
           const rows = maintenance.inodes(
@@ -243,11 +399,12 @@ export class MaintenanceManager implements FilesystemMaintenance {
             if (row.type === 0) {
               if (!row.manifest_hash || row.size === null)
                 throw new Error("ECORRUPT: file inode lacks content");
-              const rootBytes = repo.getManifestRoot(row.manifest_hash);
-              if (
-                !rootBytes ||
-                decodeManifestRoot(rootBytes, row.manifest_hash).fileSize !== row.size
-              )
+              const fileSize = repo.withManifestRoot(
+                row.manifest_hash,
+                (rootBytes) =>
+                  decodeManifestRoot(rootBytes, row.manifest_hash!).fileSize,
+              );
+              if (fileSize === undefined || fileSize !== row.size)
                 throw new Error("ECORRUPT: inode manifest size mismatch");
               if (row.actual_links !== row.nlink)
                 throw new Error("ECORRUPT: hard-link count mismatch");
@@ -256,7 +413,11 @@ export class MaintenanceManager implements FilesystemMaintenance {
             checked += 1;
           }
           if (rows.length < maximum - (checked - rows.length))
-            cursor = { phase: cursor.phase + 1, last: "" };
+            cursor = {
+              phase: cursor.phase + 1,
+              last: "",
+              rootMutationGeneration: cursor.rootMutationGeneration,
+            };
           else break;
         }
       }
@@ -284,18 +445,20 @@ export class MaintenanceManager implements FilesystemMaintenance {
       let objects = 0;
       for (const row of rows) {
         if (row.kind === 0) {
-          const encoded = repo.getManifestRoot(row.hash);
-          if (!encoded) throw new Error("ECORRUPT: reachable manifest root is missing");
-          const root = decodeManifestRoot(encoded, row.hash);
+          const root = repo.withManifestRoot(row.hash, (encoded) =>
+            decodeManifestRoot(encoded, row.hash),
+          );
+          if (!root) throw new Error("ECORRUPT: reachable manifest root is missing");
           if (row.edge_cursor > 0)
             throw new Error("ECORRUPT: invalid manifest-root GC edge cursor");
           maintenance.addMark(runId, 1, root.rootNodeHash);
           maintenance.advanceMark(runId, row.kind, row.hash, 1, true);
           roots = 1;
         } else if (row.kind === 1) {
-          const encoded = repo.getManifestNode(row.hash);
-          if (!encoded) throw new Error("ECORRUPT: reachable manifest node is missing");
-          const node = decodeManifestNode(encoded, row.hash);
+          const node = repo.withManifestNode(row.hash, (encoded) =>
+            decodeManifestNode(encoded, row.hash),
+          );
+          if (!node) throw new Error("ECORRUPT: reachable manifest node is missing");
           const edges = node.kind === "leaf" ? node.entries : node.children;
           if (row.edge_cursor > edges.length)
             throw new Error("ECORRUPT: invalid manifest-node GC edge cursor");
@@ -337,6 +500,35 @@ export class MaintenanceManager implements FilesystemMaintenance {
   #sweepBatch(runId: string, state: number): void {
     this.#write((tx) => {
       const maintenance = tx.maintenance(this.#storage);
+      const cleanupLimit = Math.max(
+        1,
+        Math.min(
+          this.#storage.maxGcBatchSize,
+          this.#storage.maxQueryBatchSize,
+          this.#storage.maxFinalTransactionRows - 4,
+        ),
+      );
+      if (state === CLEAN_MARKS) {
+        maintenance.cleanupMarks(runId, cleanupLimit, CLEAN_ROOT_JOURNAL);
+        return;
+      }
+      if (state === CLEAN_ROOT_JOURNAL) {
+        maintenance.cleanupRootJournal(runId, cleanupLimit, CLEAN_TERMINAL_RUNS);
+        return;
+      }
+      if (state === CLEAN_TERMINAL_RUNS) {
+        maintenance.cleanupTerminalRuns(
+          runId,
+          cleanupLimit,
+          COMPLETE,
+          ABANDONED,
+          COMPLETE,
+        );
+        return;
+      }
+      if (state < 1 || state > 3)
+        throw new Error("ECORRUPT: invalid garbage-collection state");
+      if (!maintenance.reconcileSweepGeneration(runId, state)) return;
       const run = maintenance.run(runId)!;
       const rowLimit = Math.max(
         1,
@@ -371,7 +563,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
         rows.push(candidate);
         payloadBytes += candidate.size;
       }
-      maintenance.applySweep(runId, state, rows, COMPLETE);
+      maintenance.applySweep(runId, state, rows, CLEAN_MARKS);
     });
   }
   #read<T>(callback: (tx: StorageTransactionPorts) => T): T {
@@ -428,17 +620,53 @@ export class MaintenanceManager implements FilesystemMaintenance {
       elapsedMs: performance.now() - start,
     });
   }
-  #encodeCursor(cursor: { phase: number; last: string }): string {
-    return btoa(JSON.stringify(cursor));
+  #encodeCursor(cursor: VerificationCursorState): string {
+    const payload = JSON.stringify(cursor);
+    return `${encodeBase64Text(payload)}.${bytesToHex(this.#cursorDigest(payload))}`;
   }
-  #decodeCursor(value: string): { phase: number; last: string } {
+  #decodeCursor(value: string): VerificationCursorState {
     try {
-      const result = JSON.parse(atob(value));
-      if (!Number.isInteger(result.phase) || typeof result.last !== "string")
+      const separator = value.lastIndexOf(".");
+      if (separator <= 0) throw new Error();
+      const payload = decodeBase64Text(value.slice(0, separator));
+      if (bytesToHex(this.#cursorDigest(payload)) !== value.slice(separator + 1))
         throw new Error();
+      const result = JSON.parse(payload);
+      if (
+        !Number.isInteger(result.phase) ||
+        result.phase < 0 ||
+        typeof result.last !== "string" ||
+        !Number.isSafeInteger(result.rootMutationGeneration) ||
+        result.rootMutationGeneration < 0
+      )
+        throw new Error();
+      if (result.usage !== undefined) {
+        const usage = result.usage;
+        if (
+          !Number.isInteger(usage.phase) ||
+          usage.phase < 0 ||
+          (usage.lastKey !== null && typeof usage.lastKey !== "string") ||
+          !Number.isSafeInteger(usage.mutationSequence) ||
+          usage.mutationSequence < 0 ||
+          !Array.isArray(usage.totals) ||
+          usage.totals.length !== USAGE_COUNTER_COUNT ||
+          usage.totals.some(
+            (counter: unknown) =>
+              !Number.isSafeInteger(counter) || (counter as number) < 0,
+          )
+        )
+          throw new Error();
+      }
       return result;
     } catch {
       throw fsError("EINVAL", "verify", undefined, "invalid verification cursor");
     }
+  }
+  #cursorDigest(payload: string): Uint8Array {
+    const encoded = new TextEncoder().encode(payload);
+    const input = new Uint8Array(this.#verificationSecret.length + encoded.length);
+    input.set(this.#verificationSecret);
+    input.set(encoded, this.#verificationSecret.length);
+    return sha256(input);
   }
 }

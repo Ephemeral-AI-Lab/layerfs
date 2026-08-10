@@ -117,14 +117,54 @@ test("Node read transactions reject DML, DDL, write PRAGMAs, and RETURNING throu
   }
 });
 
+test("callback scope rejects transaction escapes and result queries cannot mutate", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  driver.transaction("write", (tx) =>
+    tx.run("CREATE TABLE scoped(id INTEGER PRIMARY KEY,value INTEGER)"),
+  );
+  for (const sql of [
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT escaped",
+    "ATTACH ':memory:' AS escaped",
+  ])
+    assert.throws(
+      () => driver.transaction("write", (tx) => tx.run(sql)),
+      /callback-scoped transaction contract/,
+    );
+  assert.throws(
+    () =>
+      driver.transaction("write", (tx) =>
+        tx.all(
+          "WITH input(value) AS (VALUES(1)) INSERT INTO scoped(value) SELECT value FROM input RETURNING value",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        ),
+      ),
+    /read-only|readonly/,
+  );
+  assert.equal(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all("SELECT count(*) count FROM scoped", [], {
+          maxRows: 1,
+          maxBytes: 128,
+        })[0].count,
+    ),
+    0,
+  );
+  driver.close();
+});
+
 test("file-backed driver reopens read-only and supports a second snapshot connection", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-"));
   const filename = path.join(directory, "filesystem.db");
   try {
     const first = await openNodeSqlite({ filename });
     first.transaction("write", (tx) => {
-      tx.run("CREATE TABLE durable(value TEXT)");
-      tx.run("INSERT INTO durable VALUES(?)", ["committed"]);
+      tx.run("CREATE TABLE durable(id INTEGER PRIMARY KEY,value TEXT)");
+      tx.run("INSERT INTO durable(value) VALUES(?)", ["committed"]);
     });
     const second = await openNodeSqlite({ filename });
     assert.equal(
@@ -157,12 +197,14 @@ test("file-backed driver reopens read-only and supports a second snapshot connec
 
 test("bounded units of work roll back row and binding-byte overflow", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
-  driver.transaction("write", (tx) => tx.run("CREATE TABLE bounded(value BLOB)"));
+  driver.transaction("write", (tx) =>
+    tx.run("CREATE TABLE bounded(id INTEGER PRIMARY KEY,value BLOB)"),
+  );
   assert.throws(
     () =>
       runUnitOfWork(driver, "write", { maxRows: 1, maxBytes: 100 }, (tx) => {
-        tx.run("INSERT INTO bounded VALUES(?)", [Uint8Array.of(1)]);
-        tx.run("INSERT INTO bounded VALUES(?)", [Uint8Array.of(2)]);
+        tx.run("INSERT INTO bounded(value) VALUES(?)", [Uint8Array.of(1)]);
+        tx.run("INSERT INTO bounded(value) VALUES(?)", [Uint8Array.of(2)]);
       }),
     /row limit/,
   );
@@ -180,7 +222,7 @@ test("bounded units of work roll back row and binding-byte overflow", async () =
   assert.throws(
     () =>
       runUnitOfWork(driver, "write", { maxRows: 10, maxBytes: 2 }, (tx) =>
-        tx.run("INSERT INTO bounded VALUES(?)", [Uint8Array.of(1, 2, 3)]),
+        tx.run("INSERT INTO bounded(value) VALUES(?)", [Uint8Array.of(1, 2, 3)]),
       ),
     /byte limit/,
   );
@@ -268,11 +310,11 @@ test("a busy BEGIN leaves the second writer reusable after the first writer comm
     const first = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
     const second = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
     first.transaction("write", (tx) => {
-      tx.run("CREATE TABLE busy_probe(value INTEGER)");
+      tx.run("CREATE TABLE busy_probe(id INTEGER PRIMARY KEY,value INTEGER)");
       assert.throws(() => second.transaction("write", () => {}), /busy|locked/i);
     });
     second.transaction("write", (tx) =>
-      tx.run("INSERT INTO busy_probe VALUES(?)", [1]),
+      tx.run("INSERT INTO busy_probe(value) VALUES(?)", [1]),
     );
     assert.equal(
       second.transaction(
@@ -304,16 +346,18 @@ test("BLOB bindings and results are plain owned Uint8Arrays for Buffer and subcl
   }
   const backing = new HostileBytes([7, 8, 9]);
   const buffer = Buffer.from([10, 11, 12]);
+  const empty = new HostileBytes(0);
   driver.transaction("write", (tx) => {
     tx.run("CREATE TABLE owned(id INTEGER PRIMARY KEY,value BLOB NOT NULL)");
     tx.run("INSERT INTO owned VALUES(?,?)", [1, backing]);
     tx.run("INSERT INTO owned VALUES(?,?)", [2, buffer]);
+    tx.run("INSERT INTO owned VALUES(?,?)", [3, empty]);
     backing[0] = 99;
     buffer[0] = 99;
   });
   const rows = driver.transaction("read", (tx) =>
     tx.all("SELECT value FROM owned ORDER BY id", [], {
-      maxRows: 2,
+      maxRows: 3,
       maxBytes: 1024,
     }),
   );
@@ -321,6 +365,8 @@ test("BLOB bindings and results are plain owned Uint8Arrays for Buffer and subcl
   assert.deepEqual([...rows[1].value], [10, 11, 12]);
   assert.equal(Object.getPrototypeOf(rows[0].value), Uint8Array.prototype);
   assert.equal(Object.getPrototypeOf(rows[1].value), Uint8Array.prototype);
+  assert.equal(Object.getPrototypeOf(rows[2].value), Uint8Array.prototype);
+  assert.equal(rows[2].value.length, 0);
   const first = rows[0].value;
   first[0] = 0;
   const reread = driver.transaction(
@@ -404,19 +450,23 @@ test("WAL limits use observable checkpoint backpressure plus transaction admissi
   }
 });
 
-test("a pinned reader cannot let one transaction cross its admitted WAL envelope", async () => {
+test("a pinned reader exposes one soft-target overshoot then backpressures the next writer", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-wal-tx-"));
   const filename = path.join(directory, "filesystem.db");
   try {
+    const setup = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    setup.transaction("exclusive", (tx) => {
+      tx.run("CREATE TABLE wal_tx(id INTEGER PRIMARY KEY,value BLOB NOT NULL)");
+      for (let index = 0; index < 32; index += 1)
+        tx.run(`CREATE INDEX wal_tx_${index} ON wal_tx(value,id)`);
+    });
+    setup.close();
     const writer = await openNodeSqlite({
       filename,
       busyTimeoutMs: 0,
       durability: "relaxed-test",
       maxJournalBytes: 64 * 1024,
     });
-    writer.transaction("write", (tx) =>
-      tx.run("CREATE TABLE wal_tx(id INTEGER PRIMARY KEY,value BLOB NOT NULL)"),
-    );
     writer.checkpoint("truncate");
     const reader = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
     reader.transaction("read", (tx) => {
@@ -425,30 +475,16 @@ test("a pinned reader cannot let one transaction cross its admitted WAL envelope
         maxBytes: 128,
       });
       writer.transaction("write", (write) =>
-        write.run("INSERT INTO wal_tx(value) VALUES(?)", [new Uint8Array(8 * 1024)]),
+        write.run("INSERT INTO wal_tx(value) VALUES(?)", [Uint8Array.of(1)]),
       );
-      assert.ok(
-        writer.physicalStorage().walBytes <= writer.capabilities.maxJournalBytes,
-      );
+      const overshoot = writer.physicalStorage().walBytes;
+      assert.ok(overshoot > writer.capabilities.maxJournalBytes);
       assert.throws(
         () =>
           writer.transaction("write", (write) =>
-            write.run("INSERT INTO wal_tx(value) VALUES(?)", [
-              new Uint8Array(writer.capabilities.maxBlobBytes),
-            ]),
+            write.run("INSERT INTO wal_tx(value) VALUES(?)", [Uint8Array.of(2)]),
           ),
-        /rollback-safe transaction admission envelope/,
-      );
-      for (const mode of ["write", "exclusive"])
-        assert.throws(
-          () =>
-            writer.transaction(mode, (write) =>
-              write.run("INSERT INTO wal_tx(value) VALUES(zeroblob(200000))"),
-            ),
-          /SQL-generated payload expressions/,
-        );
-      assert.ok(
-        writer.physicalStorage().walBytes <= writer.capabilities.maxJournalBytes,
+        /WAL checkpoint backpressure threshold remains pinned/,
       );
     });
     assert.equal(
@@ -462,6 +498,65 @@ test("a pinned reader cannot let one transaction cross its admitted WAL envelope
       ),
       1,
     );
+    writer.checkpoint("truncate");
+    writer.transaction("write", (write) =>
+      write.run("INSERT INTO wal_tx(value) VALUES(?)", [Uint8Array.of(2)]),
+    );
+    reader.close();
+    writer.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("SQL-generated payloads use the same truthful soft-WAL backpressure policy", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-wal-expression-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    const setup = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    setup.transaction("write", (tx) =>
+      tx.run("CREATE TABLE expression_wal(value TEXT NOT NULL)"),
+    );
+    setup.close();
+    const writer = await openNodeSqlite({
+      filename,
+      busyTimeoutMs: 0,
+      durability: "relaxed-test",
+      maxJournalBytes: 64 * 1024,
+    });
+    writer.checkpoint("truncate");
+    const reader = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
+    reader.transaction("read", (tx) => {
+      tx.all("SELECT count(*) count FROM expression_wal", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      });
+      writer.transaction("write", (write) =>
+        write.run(
+          "WITH RECURSIVE c(x,n) AS (VALUES('x',0) UNION ALL SELECT x||x,n+1 FROM c WHERE n<18) INSERT INTO expression_wal(value) SELECT x FROM c ORDER BY n DESC LIMIT 1",
+        ),
+      );
+      assert.ok(writer.physicalStorage().walBytes > 64 * 1024);
+      assert.throws(
+        () =>
+          writer.transaction("write", (write) =>
+            write.run("INSERT INTO expression_wal(value) VALUES('blocked')"),
+          ),
+        /WAL checkpoint backpressure threshold remains pinned/,
+      );
+    });
+    assert.equal(
+      writer.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT count(*) count FROM expression_wal", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].count,
+      ),
+      1,
+    );
+    writer.checkpoint("truncate");
     reader.close();
     writer.close();
   } finally {

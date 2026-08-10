@@ -15,14 +15,17 @@ import type {
 import type { ContentCache } from "../cache/content-cache.js";
 import type { CowPageBytes } from "../cow/pages.js";
 import type { FilesystemLimits, StorageLimits } from "../resources/limits.js";
-import { UsageRepository } from "./usage-repository.js";
 
 export function createSqliteOperationsStorage(
   driver: FilesystemSQLiteDriver,
 ): OperationsStorage {
   return Object.freeze({
     readOnly: driver.readOnly,
-    capabilities: driver.capabilities,
+    capabilities: Object.freeze({
+      ...driver.capabilities,
+      journalQuotaPolicy: driver.capabilities.journalQuotaPolicy ?? "runtime-enforced",
+      journalSizeLimitIsHard: false,
+    }),
     initialize: (options = {}) => initializeOrValidateSchema(driver, options),
     transaction: <T>(
       mode: "read" | "write" | "exclusive",
@@ -47,17 +50,14 @@ export function createSqliteOperationsStorage(
           ) => new NamespaceRepository(tx, filesystem, limitsFor(storage), syscall),
           branches: (limits: StorageLimits) =>
             new BranchRepository(tx, limitsFor(limits)),
-          staging: (limits: StorageLimits) =>
-            new StagingRepository(tx, limitsFor(limits)),
+          staging: (limits: StorageLimits, cache?: ContentCache) =>
+            new StagingRepository(tx, limitsFor(limits), cache),
           maintenance: (limits: StorageLimits) =>
             new MaintenanceRepository(tx, limitsFor(limits)),
           overlay: (limits: StorageLimits, pageBytes: CowPageBytes) =>
             new OverlayRepository(tx, limitsFor(limits), pageBytes),
         });
-        const result = callback(ports);
-        if (mode !== "read" && transactionLimits)
-          new UsageRepository(tx, transactionLimits).reconcileDerivedUsage();
-        return result;
+        return callback(ports);
       }),
     physicalStorage: () => driver.physicalStorage?.() ?? Object.freeze({}),
     checkpoint: (mode: "passive" | "restart" | "truncate" = "passive") =>

@@ -76,7 +76,7 @@ export class NamespaceRepository {
     return this.#tx.all<InodeRow>(
       "SELECT id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token FROM efs_inodes WHERE id=?",
       [id],
-      { maxRows: 1, maxBytes: 8192 },
+      { maxRows: 1, maxBytes: this.#limits.maxSymlinkTargetBytes * 2 + 2048 },
     )[0];
   }
   entry(parentInode: string, nameSort: Uint8Array): EntryRow | undefined {
@@ -195,8 +195,12 @@ export class NamespaceRepository {
     if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(generation))
       throw new Error("ENOSPC: revision or generation space exhausted");
     const rootId = encodeUtf8(String(revision));
+    const writerBytes = intrinsicByteLength(encodeUtf8(writer));
     new UsageRepository(this.#tx, this.#storage).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
+      {
+        maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId),
+        charged_metadata_bytes: CHARGED_ROW_BYTES + writerBytes,
+      },
       "namespace root journal",
     );
     this.#tx.run(
@@ -223,6 +227,25 @@ export class NamespaceRepository {
           }),
         )
       : null;
+    const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
+      "SELECT coalesce(length(encoded),0) bytes FROM efs_inode_revisions WHERE revision=? AND inode_id=?",
+      [revision, inodeId],
+      { maxRows: 1, maxBytes: 128 },
+    )[0];
+    const priorRoots = this.#tx.all<{ count: number } & SqliteRow>(
+      "SELECT count(*) count FROM efs_revision_manifest_roots WHERE revision=? AND inode_id=?",
+      [revision, inodeId],
+      { maxRows: 1, maxBytes: 128 },
+    )[0]?.count;
+    const encodedBytes = encoded ? intrinsicByteLength(encoded) : 0;
+    this.#changeMetadata(
+      (prior ? 0 : CHARGED_ROW_BYTES) +
+        encodedBytes -
+        (prior?.bytes ?? 0) +
+        (inode?.manifest_hash ? CHARGED_ROW_BYTES : 0) -
+        (priorRoots ?? 0) * CHARGED_ROW_BYTES,
+      "inode revision metadata",
+    );
     this.#tx.run(
       "INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(?,?,?,?) ON CONFLICT(revision,inode_id) DO UPDATE SET tombstone=excluded.tombstone,encoded=excluded.encoded",
       [revision, inodeId, tombstone ? 1 : 0, encoded],
@@ -247,6 +270,17 @@ export class NamespaceRepository {
     const encoded = entry
       ? encodeUtf8(JSON.stringify({ ...entry, name_sort: bytesToHex(entry.name_sort) }))
       : null;
+    const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
+      "SELECT length(name_sort)+coalesce(length(encoded),0) bytes FROM efs_entry_revisions WHERE revision=? AND parent_inode=? AND name_sort=?",
+      [revision, parentInode, nameSort],
+      { maxRows: 1, maxBytes: 128 },
+    )[0];
+    const variableBytes =
+      intrinsicByteLength(nameSort) + (encoded ? intrinsicByteLength(encoded) : 0);
+    this.#changeMetadata(
+      (prior ? 0 : CHARGED_ROW_BYTES) + variableBytes - (prior?.bytes ?? 0),
+      "entry revision metadata",
+    );
     this.#tx.run(
       "INSERT INTO efs_entry_revisions(revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,?,?) ON CONFLICT(revision,parent_inode,name_sort) DO UPDATE SET tombstone=excluded.tombstone,encoded=excluded.encoded",
       [revision, parentInode, nameSort, tombstone ? 1 : 0, encoded],
@@ -259,6 +293,18 @@ export class NamespaceRepository {
     inodeId: string | null,
     token: number,
   ): void {
+    const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
+      "SELECT length(name_sort)+coalesce(length(CAST(name AS BLOB)),0) bytes FROM efs_entries WHERE parent_inode=? AND name_sort=?",
+      [parentInode, nameSort],
+      { maxRows: 1, maxBytes: 128 },
+    )[0];
+    const variableBytes =
+      intrinsicByteLength(nameSort) +
+      (name === null ? 0 : intrinsicByteLength(encodeUtf8(name)));
+    this.#changeMetadata(
+      (prior ? 0 : CHARGED_ROW_BYTES) + variableBytes - (prior?.bytes ?? 0),
+      "namespace entry metadata",
+    );
     this.#tx.run(
       "INSERT INTO efs_entries(parent_inode,name_sort,name,inode_id,token) VALUES(?,?,?,?,?) ON CONFLICT(parent_inode,name_sort) DO UPDATE SET name=excluded.name,inode_id=excluded.inode_id,token=excluded.token",
       [parentInode, nameSort, name, inodeId, token],
@@ -310,6 +356,13 @@ export class NamespaceRepository {
     readonly manifestHash?: Uint8Array | null;
     readonly symlinkTarget?: string | null;
   }): void {
+    this.#changeMetadata(
+      CHARGED_ROW_BYTES +
+        (value.symlinkTarget
+          ? intrinsicByteLength(encodeUtf8(value.symlinkTarget))
+          : 0),
+      "inode metadata",
+    );
     this.#tx.run(
       "INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,?,?,?,?,?,1,?,?,?,?)",
       [
@@ -339,6 +392,18 @@ export class NamespaceRepository {
     readonly symlinkTarget: string | null;
     readonly token: number;
   }): void {
+    const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
+      "SELECT coalesce(length(CAST(symlink_target AS BLOB)),0) bytes FROM efs_inodes WHERE id=?",
+      [value.id],
+      { maxRows: 1, maxBytes: 128 },
+    )[0];
+    const variableBytes = value.symlinkTarget
+      ? intrinsicByteLength(encodeUtf8(value.symlinkTarget))
+      : 0;
+    this.#changeMetadata(
+      (prior ? 0 : CHARGED_ROW_BYTES) + variableBytes - (prior?.bytes ?? 0),
+      "inode metadata",
+    );
     this.#tx.run(
       "INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET type=excluded.type,mode=excluded.mode,mtime_ms=excluded.mtime_ms,ctime_ms=excluded.ctime_ms,size=excluded.size,manifest_hash=excluded.manifest_hash,symlink_target=excluded.symlink_target,token=excluded.token",
       [
@@ -408,6 +473,18 @@ export class NamespaceRepository {
     );
   }
   deleteEntriesUnder(parentInode: string, tombstonesOnly = false): void {
+    const where = tombstonesOnly
+      ? "parent_inode=? AND inode_id IS NULL"
+      : "parent_inode=?";
+    const prior = this.#tx.all<{ count: number; bytes: number } & SqliteRow>(
+      `SELECT count(*) count,coalesce(sum(length(name_sort)+coalesce(length(CAST(name AS BLOB)),0)),0) bytes FROM efs_entries WHERE ${where}`,
+      [parentInode],
+      { maxRows: 1, maxBytes: 128 },
+    )[0]!;
+    this.#changeMetadata(
+      -(prior.count * CHARGED_ROW_BYTES + prior.bytes),
+      "namespace entry cleanup",
+    );
     this.#tx.run(
       tombstonesOnly
         ? "DELETE FROM efs_entries WHERE parent_inode=? AND inode_id IS NULL"
@@ -416,6 +493,13 @@ export class NamespaceRepository {
     );
   }
   deleteInode(id: string): void {
+    const prior = this.#tx.all<{ bytes: number } & SqliteRow>(
+      "SELECT coalesce(length(CAST(symlink_target AS BLOB)),0) bytes FROM efs_inodes WHERE id=?",
+      [id],
+      { maxRows: 1, maxBytes: 128 },
+    )[0];
+    if (prior)
+      this.#changeMetadata(-(CHARGED_ROW_BYTES + prior.bytes), "inode cleanup");
     this.#tx.run("DELETE FROM efs_inodes WHERE id=?", [id]);
   }
   bumpRoot(kind: number, id: string): void {
@@ -431,6 +515,13 @@ export class NamespaceRepository {
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
       [generation, kind, rootId],
+    );
+  }
+  #changeMetadata(bytes: number, reason: string): void {
+    if (!bytes) return;
+    new UsageRepository(this.#tx, this.#storage).apply(
+      { charged_metadata_bytes: bytes },
+      reason,
     );
   }
 }

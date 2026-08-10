@@ -7,7 +7,10 @@ export declare class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     #private;
     readonly kind: "sqlite";
     readonly readOnly: boolean;
-    readonly capabilities: SQLiteDriverCapabilities;
+    readonly capabilities: SQLiteDriverCapabilities & {
+        readonly journalQuotaPolicy: "checkpoint-backpressure";
+        readonly journalSizeLimitIsHard: false;
+    };
     constructor(options: OpenNodeSqliteOptions);
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;

@@ -140,8 +140,8 @@ interface FilesystemSQLiteDriver {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
-    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
-    readonly journalSizeLimitIsHard: false;
+    readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard?: false;
   };
   transaction<T>(
     mode: TransactionMode,
@@ -154,6 +154,11 @@ interface FilesystemSQLiteDriver {
 This is the same exported SQLite driver interface defined by
 [`filesystem-api.md`](./filesystem-api.md). An adapter MAY expose additional diagnostic
 properties, but the core MUST NOT require them for correctness.
+
+The raw port keeps the two journal-policy fields optional only as a compile-time scope
+boundary for adapters whose parity milestone is paused. The operations composition root
+normalizes an omission to `"runtime-enforced"` and `false`. The M2 Node driver MUST
+publish both fields explicitly; no Cloudflare runtime behavior is accepted by M2.
 
 The driver has no connection-level `run`, `all`, or cursor surface. Every SQL statement
 MUST execute through the transaction value supplied to one `transaction` callback. The
@@ -187,8 +192,10 @@ An adapter:
    adapter controls them; and
 10. MUST report finite conservative database and journal ceilings together with whether
     the driver or hosting runtime enforces them.
-11. MUST report checkpoint/backpressure journal policy separately and MUST report
-    `journalSizeLimitIsHard: false`; SQLite `journal_size_limit` is not a hard WAL cap.
+11. for the M2 Node driver, MUST report checkpoint/backpressure journal policy
+    separately and MUST report `journalSizeLimitIsHard: false`; SQLite
+    `journal_size_limit` is not a hard WAL cap. A raw adapter that omits these fields is
+    normalized to runtime enforcement and false before use.
 
 All dynamic values MUST be passed as bindings. Identifiers and SQL fragments MUST come
 from static core code, not from paths, branch identifiers, actor identifiers, or other
@@ -297,6 +304,13 @@ atomically reserve and append its required journal row MUST fail without changin
 root. Usage counters MUST be reconstructable by a bounded verification job, but a
 concurrent quota decision MUST use the authoritative row rather than a scan.
 
+The M2 metadata verifier keyset-scans one durable table at a time, carries fixed-size
+counter totals in an authenticated cursor, and compares all counter classes only after
+the complete scan. Each call is bounded by `maxEntities`, query bytes, and the storage
+row envelope. A changed usage mutation sequence rejects continuation with `EBUSY`
+instead of comparing rows from different snapshots. Small diagnostic fixtures may use
+the transaction-scoped direct recount; normal commits never run whole-table recounts.
+
 `staging_bytes` is a logical active-preparation reservation, not a second claim that the
 referenced immutable BLOB is physically stored twice. It is exactly the sum of the
 declared sizes of unique object, root, and node membership rows in certificates whose
@@ -306,14 +320,17 @@ CAS data for free. Tombstoning releases this logical reservation atomically; bou
 physical row cleanup follows. A recount MUST derive it from active lease and certificate
 rows and MUST NOT add referenced CAS or manifest BLOB sizes independently.
 
-Every retained staging metadata row is charged conservatively at 96 bytes in
+Every retained durable metadata row is charged at a conservative fixed 512-byte base in
 `charged_metadata_bytes`: leases, certificates, entry and level records, object and
 manifest memberships, root links, COW and patch lease memberships, reconciliation state
 and queue rows, durable edit workspaces, and authenticated reused-subtree claims. The
-charge remains until bounded deletion of that row. Cleanup cursor rows belong to
-`maintenance_bytes`, not staging metadata. Migration and verification recounts MUST use
-the same row classes and reconcile the authoritative counter to their direct count
-differential.
+fixed base covers bounded identifiers, hashes, scalar columns, and duplicate index keys.
+Variable namespace and branch fields (encoded revision rows, names, paths, symlink
+targets, and branch change encodings) are charged by their intrinsic stored byte length
+in addition to the base. The charge remains until bounded deletion of that row. Cleanup
+cursor rows belong to `maintenance_bytes`, not staging metadata. Migration and
+verification recounts MUST use the same row classes and reconcile the authoritative
+counter to their direct count differential.
 
 An unknown-length streamed ingest MUST declare a maximum byte count before its first
 producer pull. `ingest_reservation_bytes` durably reserves a conservative physical plus
@@ -372,6 +389,13 @@ bounded transactions, but the old schema MUST remain the authoritative readable
 representation until one final transaction validates the rewrite, switches readers, and
 advances the version. Opening MUST NOT return a normal filesystem handle while such a
 migration is incomplete.
+
+The M2 v3-to-v4 migration uses one atomic recount only after bounded probes prove that
+all contributing durable tables contain at most 100,000 rows in aggregate. It
+reconstructs every payload, row-count, staging, result, maintenance, identifier, and
+metadata counter before establishing the v4 usage integrity token. A larger v3 database
+is rejected before any v4 DDL or data change; a future shadow migration is required to
+raise this explicit atomic-migration profile without an unbounded exclusive transaction.
 
 Destructive downgrade is outside version 0.1. Unknown tables or columns MAY be
 preserved, but unknown values in a field whose meaning affects correctness MUST cause an
@@ -1613,11 +1637,12 @@ tombstones; reaching it rejects a new identifier but MUST NOT delete or reuse an
 existing one.
 
 Every final visible transaction MUST fit both `maxFinalTransactionRows` and
-`maxFinalTransactionBytes`, after adapter binding and BLOB limits are applied.
-Preparation MAY stage immutable values in bounded earlier transactions, but the final
-transaction MUST revalidate and attach them without exceeding these bounds.
-`maxRevisionReplaySteps` bounds delta reconstruction before a staged checkpoint is
-required.
+`maxFinalTransactionBytes`, after adapter binding and BLOB limits are applied. Version
+0.1 rejects `maxFinalTransactionRows` below 64 because no smaller profile can guarantee
+progress for every minimum one-item storage and maintenance transition. Preparation MAY
+stage immutable values in bounded earlier transactions, but the final transaction MUST
+revalidate and attach them without exceeding these bounds. `maxRevisionReplaySteps`
+bounds delta reconstruction before a staged checkpoint is required.
 
 `maxPatchesPerFile` and `maxPatchBytesPerFile` bound the structural overlay that a read
 may need to apply. Before accepting a patch that would exceed either bound, the core

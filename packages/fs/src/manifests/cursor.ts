@@ -21,6 +21,10 @@ export const MAX_MANIFEST_DEPTH = 64;
 export interface ManifestNodeReader {
   get(hash: Uint8Array): Uint8Array | undefined;
 }
+export interface ManifestNodeConsumer {
+  withNode<T>(hash: Uint8Array, consume: (encoded: Uint8Array) => T): T | undefined;
+}
+export type ManifestNodeSource = ManifestNodeReader | ManifestNodeConsumer;
 export interface ManifestLookup {
   readonly entry: ManifestEntry | null;
   readonly entryOffset: number;
@@ -77,7 +81,7 @@ export function validateCanonicalManifestNode(
 }
 
 export class ManifestSequentialCursor {
-  readonly #reader: ManifestNodeReader;
+  readonly #reader: ManifestNodeSource;
   readonly #maxDepth: number;
   readonly #parameters: ManifestParameters;
   readonly #stack: CursorFrame[] = [];
@@ -90,7 +94,7 @@ export class ManifestSequentialCursor {
   constructor(
     rootBytes: Uint8Array,
     offset: number,
-    reader: ManifestNodeReader,
+    reader: ManifestNodeSource,
     expectedRootHash?: Uint8Array,
     maxDepth = 8,
   ) {
@@ -154,9 +158,10 @@ export class ManifestSequentialCursor {
     if (depth > this.#maxDepth)
       throw new Error("manifest depth exceeds configured maximum");
     const authoritativeHash = copyBytes(hash);
-    const encoded = this.#reader.get(copyBytes(authoritativeHash));
-    if (!encoded) throw new Error("missing manifest node");
-    const node = decodeManifestNode(encoded, authoritativeHash);
+    const node = consumeManifestNode(this.#reader, authoritativeHash, (encoded) =>
+      decodeManifestNode(encoded, authoritativeHash),
+    );
+    if (!node) throw new Error("missing manifest node");
     this.#nodesRead += 1;
     if (
       expected &&
@@ -245,7 +250,7 @@ export class ManifestSequentialCursor {
 export function lookupManifest(
   rootBytes: Uint8Array,
   offset: number,
-  reader: ManifestNodeReader,
+  reader: ManifestNodeSource,
   expectedRootHash?: Uint8Array,
   maxDepth = 8,
 ): ManifestLookup {
@@ -266,7 +271,7 @@ export function lookupManifest(
 
 export function validateManifestTree(
   rootBytes: Uint8Array,
-  reader: ManifestNodeReader,
+  reader: ManifestNodeSource,
   expectedRootHash?: Uint8Array,
   maxDepth = 8,
 ): void {
@@ -281,9 +286,10 @@ export function validateManifestTree(
   ): { span: number; count: number } => {
     if (depth > maxDepth) throw new Error("manifest depth exceeds configured maximum");
     const authoritativeHash = copyBytes(hash);
-    const bytes = reader.get(copyBytes(authoritativeHash));
-    if (!bytes) throw new Error("missing manifest node");
-    const node = decodeManifestNode(bytes, authoritativeHash);
+    const node = consumeManifestNode(reader, authoritativeHash, (bytes) =>
+      decodeManifestNode(bytes, authoritativeHash),
+    );
+    if (!node) throw new Error("missing manifest node");
     validateCanonicalManifestNode(node, root.parameters, finalAtLevel, rootNode);
     if (node.kind === "leaf") {
       if (leafDepth === undefined) leafDepth = depth;
@@ -312,4 +318,14 @@ export function validateManifestTree(
     throw new Error("manifest root totals mismatch");
   if ((root.fileSize === 0) !== (root.entryCount === 0))
     throw new Error("manifest empty root totals mismatch");
+}
+
+function consumeManifestNode<T>(
+  source: ManifestNodeSource,
+  hash: Uint8Array,
+  consume: (encoded: Uint8Array) => T,
+): T | undefined {
+  if ("withNode" in source) return source.withNode(copyBytes(hash), consume);
+  const encoded = source.get(copyBytes(hash));
+  return encoded ? consume(encoded) : undefined;
 }

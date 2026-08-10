@@ -614,7 +614,7 @@ test("path-copy caps hostile nondegenerate rechunk output before retaining entry
   await port.close();
 });
 
-test("a high-entropy 100 MiB tiny edit completes through bounded fallback windows", async (t) => {
+test("a 100 MiB fallback reports bounded windows and its full source-transaction cost", async (t) => {
   const raw = await openNodeSqlite({ filename: ":memory:" });
   const observed = {
     transactions: 0,
@@ -674,7 +674,7 @@ test("a high-entropy 100 MiB tiny edit completes through bounded fallback window
       manifestHash: built.rootHash,
       size: built.fileSize,
       parameters,
-      readStorageTransactions: 0,
+      readStorageTransactions: 1,
       maxReadWindowBytes: 32 * 1024,
       read(offset, length) {
         reads += 1;
@@ -706,9 +706,15 @@ test("a high-entropy 100 MiB tiny edit completes through bounded fallback window
   );
   assert.ok(
     observed.transactions < 64,
-    `fallback used ${observed.transactions} transactions`,
+    `fallback persistence used ${observed.transactions} transactions`,
   );
-  const fallbackTransactions = observed.transactions;
+  assert.equal(prepared.fallbackMetrics.sourceReadCalls, reads);
+  assert.equal(prepared.fallbackMetrics.sourceReadTransactions, reads);
+  assert.equal(
+    prepared.fallbackMetrics.storageTransactions,
+    observed.transactions + reads,
+  );
+  const reportedTransactions = prepared.fallbackMetrics.storageTransactions;
   const expected = deterministicRange(editOffset - 16, 33);
   expected[16] = 0x42;
   assert.deepEqual(
@@ -724,7 +730,8 @@ test("a high-entropy 100 MiB tiny edit completes through bounded fallback window
       sourceReadCalls: reads,
       sourceBytesRead: requestedBytes,
       largestSourceReadBytes: largestRead,
-      storageTransactions: fallbackTransactions,
+      repositoryPersistenceTransactions: observed.transactions,
+      reportedStorageTransactions: reportedTransactions,
       managedPeakBytes: admission.peakBytes,
     }),
   );
@@ -753,6 +760,7 @@ test("durable edits authenticate empty, singleton, and every manifest height bef
   const admission = new AdmissionController(
     DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
   );
+  const cache = new ContentCache(1, admission);
   const shapes = [
     { count: 0, depth: 1, label: "empty" },
     { count: 1, depth: 1, label: "singleton" },
@@ -773,7 +781,7 @@ test("durable edits authenticate empty, singleton, and every manifest height bef
       "write",
       { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
       (tx) => {
-        const content = tx.content(storage);
+        const content = tx.content(storage, cache);
         if (shape.count) content.putObject(objectHash, object);
         content.putManifestNodesBatch([...workspace.nodes.values()]);
         content.putManifestRoot(built.rootHash, built.root);
@@ -807,7 +815,7 @@ test("durable edits authenticate empty, singleton, and every manifest height bef
       storage,
       DEFAULT_RUNTIME_LIMITS,
       admission,
-      undefined,
+      cache,
       () => 4000 + shapeIndex,
     );
     assert.equal(prepared.mode, "streamed-fallback", shape.label);
@@ -870,6 +878,7 @@ test("a singleton leaf expands through fallback into a canonical multi-leaf tree
   const admission = new AdmissionController(
     DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
   );
+  const cache = new ContentCache(1, admission);
   observed.transactions = 0;
   const prepared = await prepareDurableEditedContent(
     port,
@@ -888,7 +897,7 @@ test("a singleton leaf expands through fallback into a canonical multi-leaf tree
     storage,
     DEFAULT_RUNTIME_LIMITS,
     admission,
-    undefined,
+    cache,
     () => 5000,
   );
   assert.equal(prepared.mode, "streamed-fallback");
@@ -896,7 +905,8 @@ test("a singleton leaf expands through fallback into a canonical multi-leaf tree
   const resultPath = port.transaction(
     "read",
     { maxRows: 64, maxBytes: 1024 * 1024 },
-    (tx) => tx.manifestTree(storage).pathAtOffset(prepared.hash, insertedBytes / 2),
+    (tx) =>
+      tx.manifestTree(storage, cache).pathAtOffset(prepared.hash, insertedBytes / 2),
   );
   assert.ok(resultPath.nodes.length >= 2);
   assert.ok(resultPath.entryCount > 256);
@@ -1092,7 +1102,7 @@ test("public range edits admit intrinsic exact-bound bytes before ownership copy
   }
 });
 
-test("cold complete reads span bounded UoWs through 64 MiB while larger materialization is refused", async (t) => {
+test("Node storage prerequisite bounds 64 MiB materialization while public snapshot pinning remains M3", async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-materialized-read-"));
   const filename = path.join(directory, "filesystem.db");
   let driver = await openNodeSqlite({ filename });

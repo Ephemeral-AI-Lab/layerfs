@@ -3,7 +3,7 @@ import type { StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 import { intrinsicByteLength } from "../cas/bytes.js";
-import { checkedAdd } from "../resources/safe-integers.js";
+import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 
 interface BranchRow extends SqliteRow {
   generation: number;
@@ -13,6 +13,11 @@ interface PageRow extends SqliteRow {
   page_index: number;
   generation: number;
   bytes: Uint8Array;
+}
+interface PriorPageRow extends SqliteRow {
+  generation: number;
+  size: number;
+  pinned: number;
 }
 interface CountRow extends SqliteRow {
   count: number;
@@ -65,12 +70,19 @@ export class OverlayRepository {
     if (!pages.length) return this.#active(branchId).generation;
     this.#integer(fileSize, "fileSize");
     this.#integer(now, "now");
+    const maximumPages = Math.min(
+      this.#limits.maxQueryBatchSize,
+      Math.floor((this.#limits.maxFinalTransactionRows - 3) / 4),
+    );
+    if (pages.length > maximumPages)
+      throw new RangeError("COW page batch exceeds the final transaction row envelope");
     const branch = this.#active(branchId);
     const generation = branch.generation + 1;
     const seen = new Set<number>();
     let addedBytes = 0;
     let removedBytes = 0;
     let removedCount = 0;
+    let addedHeads = 0;
     for (const page of pages) {
       this.#integer(page.index, "page.index");
       if (seen.has(page.index)) throw new Error("duplicate page in one overlay write");
@@ -84,11 +96,41 @@ export class OverlayRepository {
         throw new RangeError(
           "COW page payload does not match its exact logical length",
         );
-      const prior = this.#tx.all<PageRow>(
-        "SELECT h.page_index,h.generation,v.bytes FROM efs_cow_page_heads h JOIN efs_cow_page_versions v ON v.branch_id=h.branch_id AND v.inode_id=h.inode_id AND v.page_index=h.page_index AND v.generation=h.generation WHERE h.branch_id=? AND h.inode_id=? AND h.page_index=?",
+      addedBytes = checkedAdd(addedBytes, pageLength);
+    }
+    const transactionEnvelope = checkedAdd(
+      addedBytes,
+      checkedMultiply(pages.length, 4096, "COW page transaction overhead"),
+      "COW page transaction envelope",
+    );
+    if (transactionEnvelope > this.#limits.maxFinalTransactionBytes)
+      throw new RangeError(
+        "COW page batch exceeds the final transaction byte envelope",
+      );
+    const priors: (PriorPageRow | undefined)[] = [];
+    for (const page of pages) {
+      const prior = this.#tx.all<PriorPageRow>(
+        "SELECT h.generation,length(v.bytes) size,EXISTS(SELECT 1 FROM efs_lease_cow_pages p JOIN efs_leases l ON l.id=p.lease_id WHERE p.branch_id=h.branch_id AND p.inode_id=h.inode_id AND p.page_index=h.page_index AND p.generation=h.generation AND l.state=1) pinned FROM efs_cow_page_heads h JOIN efs_cow_page_versions v ON v.branch_id=h.branch_id AND v.inode_id=h.inode_id AND v.page_index=h.page_index AND v.generation=h.generation WHERE h.branch_id=? AND h.inode_id=? AND h.page_index=?",
         [branchId, inodeId, page.index],
-        { maxRows: 1, maxBytes: this.#pageBytes + 256 },
+        { maxRows: 1, maxBytes: 256 },
       )[0];
+      priors.push(prior);
+      if (!prior) addedHeads += 1;
+      else if (!prior.pinned) {
+        removedBytes = checkedAdd(removedBytes, prior.size);
+        removedCount += 1;
+      }
+    }
+    this.#admitOverlay(
+      pages.length - removedCount,
+      addedBytes - removedBytes,
+      0,
+      0,
+      pages.length - removedCount + addedHeads,
+    );
+    for (let index = 0; index < pages.length; index += 1) {
+      const page = pages[index]!;
+      const prior = priors[index];
       this.#tx.run(
         "INSERT INTO efs_cow_page_versions(branch_id,inode_id,page_index,generation,bytes,created_at_ms) VALUES(?,?,?,?,?,?)",
         [branchId, inodeId, page.index, generation, page.bytes, now],
@@ -97,25 +139,12 @@ export class OverlayRepository {
         "INSERT INTO efs_cow_page_heads(branch_id,inode_id,page_index,generation) VALUES(?,?,?,?) ON CONFLICT(branch_id,inode_id,page_index) DO UPDATE SET generation=excluded.generation",
         [branchId, inodeId, page.index, generation],
       );
-      addedBytes = checkedAdd(addedBytes, pageLength);
-      if (prior) {
-        const pinned =
-          this.#tx.all(
-            "SELECT 1 present FROM efs_lease_cow_pages p JOIN efs_leases l ON l.id=p.lease_id WHERE p.branch_id=? AND p.inode_id=? AND p.page_index=? AND p.generation=? AND l.state=1 LIMIT 1",
-            [branchId, inodeId, page.index, prior.generation],
-            { maxRows: 1, maxBytes: 128 },
-          ).length > 0;
-        if (!pinned) {
-          this.#tx.run(
-            "DELETE FROM efs_cow_page_versions WHERE branch_id=? AND inode_id=? AND page_index=? AND generation=?",
-            [branchId, inodeId, page.index, prior.generation],
-          );
-          removedBytes = checkedAdd(removedBytes, intrinsicByteLength(prior.bytes));
-          removedCount += 1;
-        }
-      }
+      if (prior && !prior.pinned)
+        this.#tx.run(
+          "DELETE FROM efs_cow_page_versions WHERE branch_id=? AND inode_id=? AND page_index=? AND generation=?",
+          [branchId, inodeId, page.index, prior.generation],
+        );
     }
-    this.#admitOverlay(pages.length - removedCount, addedBytes - removedBytes, 0, 0);
     const updated = this.#tx.run(
       "UPDATE efs_branches SET generation=? WHERE id=? AND state=0 AND generation=?",
       [generation, branchId, branch.generation],
@@ -210,7 +239,7 @@ export class OverlayRepository {
     const branch = this.#active(branchId);
     const generation = branch.generation + 1;
     const sequence = (aggregate.sequence ?? -1) + 1;
-    this.#admitOverlay(0, 0, 1, insertLength);
+    this.#admitOverlay(0, 0, 1, insertLength, 1 + segments.length);
     this.#tx.run(
       "INSERT INTO efs_patches(branch_id,inode_id,sequence,generation,offset,delete_length,insert_length) VALUES(?,?,?,?,?,?,?)",
       [branchId, inodeId, sequence, generation, offset, deleteLength, insertLength],
@@ -292,6 +321,7 @@ export class OverlayRepository {
     pageBytes: number,
     patchCount: number,
     patchBytes: number,
+    metadataRows: number,
   ): void {
     new UsageRepository(this.#tx, this.#limits).apply(
       {
@@ -299,7 +329,7 @@ export class OverlayRepository {
         page_bytes: pageBytes,
         patch_count: patchCount,
         patch_bytes: patchBytes,
-        charged_metadata_bytes: (pageCount + patchCount) * CHARGED_ROW_BYTES,
+        charged_metadata_bytes: metadataRows * CHARGED_ROW_BYTES,
       },
       "branch overlay",
     );

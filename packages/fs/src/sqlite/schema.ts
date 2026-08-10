@@ -5,16 +5,17 @@ import type {
 } from "./driver.js";
 import type { CowPageBytes } from "../cow/pages.js";
 import {
-  CHARGED_METADATA_TABLES,
   CHARGED_ROW_BYTES,
-  DIRECT_CHARGED_METADATA_SQL,
-  DIRECT_INGEST_RESERVATION_SQL,
-  DIRECT_STAGING_BYTES_SQL,
+  DIRECT_CHARGED_METADATA_EXPRESSION,
+  DIRECT_USAGE_TABLES,
   USAGE_COUNTER_COLUMNS,
+  USAGE_INTEGRITY_SQL,
+  usageIntegrityToken,
 } from "./usage-repository.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
 export const EFS_SCHEMA_VERSION = 4;
+const MAX_ATOMIC_MIGRATION_RECOUNT_ROWS = 100_000;
 
 /** Frozen released schema-v3 DDL. Changes belong in a forward migration. */
 export const EFS_SCHEMA_V3_CREATE_STATEMENTS = Object.freeze([
@@ -62,11 +63,13 @@ export const EFS_SCHEMA_V3_CREATE_STATEMENTS = Object.freeze([
 const SCHEMA_V4_STATEMENTS = Object.freeze([
   `ALTER TABLE efs_usage ADD COLUMN mutation_sequence INTEGER NOT NULL DEFAULT 0 CHECK(mutation_sequence>=0)`,
   `ALTER TABLE efs_usage ADD COLUMN ingest_reservation_bytes INTEGER NOT NULL DEFAULT 0 CHECK(ingest_reservation_bytes>=0)`,
+  `ALTER TABLE efs_usage ADD COLUMN integrity_token TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE efs_gc_marks ADD COLUMN edge_cursor INTEGER NOT NULL DEFAULT 0 CHECK(edge_cursor>=0)`,
   `ALTER TABLE efs_staging_certificates ADD COLUMN ingest_reservation_bytes INTEGER NOT NULL DEFAULT 0 CHECK(ingest_reservation_bytes>=0)`,
   `CREATE TABLE efs_lease_cleanups (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, phase INTEGER NOT NULL CHECK(phase BETWEEN 0 AND 11), cursor_text TEXT, cursor_blob BLOB, released_staging_bytes INTEGER NOT NULL CHECK(released_staging_bytes>=0), tombstoned_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE INDEX efs_lease_cleanups_phase ON efs_lease_cleanups(phase,lease_id)`,
   `CREATE INDEX efs_leases_expiry ON efs_leases(expires_at_ms,id)`,
+  `CREATE TRIGGER efs_lease_tombstone_guard BEFORE UPDATE OF state ON efs_leases WHEN OLD.state IN (0,1) AND NEW.state=2 AND NOT EXISTS(SELECT 1 FROM efs_lease_cleanups x WHERE x.lease_id=OLD.id AND x.owner_nonce=OLD.owner_nonce) BEGIN SELECT RAISE(ABORT,'lease tombstone requires bounded cleanup state'); END`,
   `CREATE TABLE efs_staging_workspaces (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, source_manifest_hash BLOB CHECK(source_manifest_hash IS NULL OR length(source_manifest_hash)=32), edit_offset INTEGER NOT NULL CHECK(edit_offset>=0), delete_length INTEGER NOT NULL CHECK(delete_length>=0), insert_length INTEGER NOT NULL CHECK(insert_length>=0), source_entry_cursor INTEGER NOT NULL DEFAULT -1 CHECK(source_entry_cursor>=-1), output_entry_index INTEGER NOT NULL DEFAULT 0 CHECK(output_entry_index>=0), phase INTEGER NOT NULL DEFAULT 0 CHECK(phase BETWEEN 0 AND 10), cdc_buffer BLOB NOT NULL DEFAULT X'', updated_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_staging_reused_subtrees (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, node_hash BLOB NOT NULL REFERENCES efs_manifest_nodes(hash) ON DELETE RESTRICT, source_manifest_hash BLOB NOT NULL REFERENCES efs_manifest_roots(hash) ON DELETE RESTRICT, source_path BLOB NOT NULL CHECK(length(source_path)>0 AND length(source_path)<=64), span INTEGER NOT NULL CHECK(span>=0), entry_count INTEGER NOT NULL CHECK(entry_count>=0), PRIMARY KEY(lease_id,node_hash)) WITHOUT ROWID`,
   `CREATE TRIGGER efs_sealed_certificate_update BEFORE UPDATE ON efs_staging_certificates WHEN OLD.sealed=1 BEGIN SELECT RAISE(ABORT,'sealed staging certificate is immutable'); END`,
@@ -92,12 +95,15 @@ const SCHEMA_V4_STATEMENTS = Object.freeze([
   `CREATE TRIGGER efs_patch_sequence_insert BEFORE INSERT ON efs_patches WHEN NEW.sequence<>(SELECT coalesce(max(sequence),-1)+1 FROM efs_patches WHERE branch_id=NEW.branch_id AND inode_id=NEW.inode_id) BEGIN SELECT RAISE(ABORT,'structural patch sequence must be contiguous'); END`,
   `CREATE TRIGGER efs_patch_sequence_update BEFORE UPDATE OF branch_id,inode_id,sequence ON efs_patches WHEN OLD.branch_id<>NEW.branch_id OR OLD.inode_id<>NEW.inode_id OR OLD.sequence<>NEW.sequence BEGIN SELECT RAISE(ABORT,'structural patch sequence is immutable'); END`,
   `CREATE TRIGGER efs_patch_sequence_delete BEFORE DELETE ON efs_patches WHEN (SELECT state FROM efs_branches WHERE id=OLD.branch_id)=0 BEGIN SELECT RAISE(ABORT,'active structural patch sequence is immutable'); END`,
-  `UPDATE efs_usage SET charged_metadata_bytes=${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
-    (table) => `(SELECT count(*) FROM ${table})`,
-  ).join("+")}) WHERE singleton=1`,
+  `UPDATE efs_usage SET object_count=(SELECT count(*) FROM efs_cas_objects),object_bytes=(SELECT coalesce(sum(size),0) FROM efs_cas_objects) WHERE singleton=1`,
+  `UPDATE efs_usage SET manifest_root_count=(SELECT count(*) FROM efs_manifest_roots),manifest_root_bytes=(SELECT coalesce(sum(length(encoded)),0) FROM efs_manifest_roots),manifest_node_count=(SELECT count(*) FROM efs_manifest_nodes),manifest_node_bytes=(SELECT coalesce(sum(length(encoded)),0) FROM efs_manifest_nodes) WHERE singleton=1`,
+  `UPDATE efs_usage SET page_count=(SELECT count(*) FROM efs_cow_page_versions),page_bytes=(SELECT coalesce(sum(length(bytes)),0) FROM efs_cow_page_versions),patch_count=(SELECT count(*) FROM efs_patches),patch_bytes=(SELECT coalesce(sum(insert_length),0) FROM efs_patches) WHERE singleton=1`,
+  `UPDATE efs_usage SET charged_metadata_bytes=${DIRECT_CHARGED_METADATA_EXPRESSION} WHERE singleton=1`,
   `UPDATE efs_usage SET staging_bytes=(SELECT (SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o JOIN efs_leases l ON l.id=o.lease_id WHERE l.state IN (0,1))+(SELECT coalesce(sum(m.size),0) FROM efs_lease_staged_manifests m JOIN efs_leases l ON l.id=m.lease_id WHERE l.state IN (0,1))) WHERE singleton=1`,
   `UPDATE efs_usage SET ingest_reservation_bytes=0 WHERE singleton=1`,
-  `UPDATE efs_usage SET maintenance_bytes=(SELECT count(*)*96+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*96 FROM efs_gc_runs)+(SELECT count(*)*96 FROM efs_gc_marks) WHERE singleton=1`,
+  `UPDATE efs_usage SET result_bytes=(SELECT coalesce(sum(length(encoded)),0) FROM efs_operation_results),permanent_identifiers=(SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_operation_ids) WHERE singleton=1`,
+  `UPDATE efs_usage SET maintenance_bytes=(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs)+(SELECT count(*)*192+coalesce(sum(2*length(CAST(run_id AS BLOB))),0) FROM efs_gc_marks) WHERE singleton=1`,
+  `UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL} WHERE singleton=1`,
 ] as const);
 
 const REQUIRED_V4_SCHEMA_OBJECTS = Object.freeze(
@@ -183,7 +189,7 @@ function validateCurrent(
   if (schemaMatches !== REQUIRED_V4_SCHEMA_OBJECTS.length)
     throw new Error("ECORRUPT: required schema-v4 table, index, or trigger is missing");
   const usage = tx.all<SqliteRow>(
-    `SELECT ${USAGE_COUNTER_COLUMNS.join(",")},mutation_sequence FROM efs_usage WHERE singleton=1`,
+    `SELECT ${USAGE_COUNTER_COLUMNS.join(",")},mutation_sequence,integrity_token FROM efs_usage WHERE singleton=1`,
     [],
     { maxRows: 1, maxBytes: 4096 },
   )[0];
@@ -191,21 +197,16 @@ function validateCurrent(
   for (const column of [...USAGE_COUNTER_COLUMNS, "mutation_sequence"] as const)
     if (!Number.isSafeInteger(usage[column]) || (usage[column] as number) < 0)
       throw new Error(`ECORRUPT: invalid usage counter ${column}`);
-  const directChargedMetadata = oneNumber(
-    tx,
-    DIRECT_CHARGED_METADATA_SQL.replace(/^SELECT /u, "SELECT ").replace(
-      / value$/u,
-      " value",
-    ),
-  );
-  if (usage.charged_metadata_bytes !== directChargedMetadata)
-    throw new Error("ECORRUPT: charged metadata differs from direct recount");
-  const directStagingBytes = oneNumber(tx, DIRECT_STAGING_BYTES_SQL);
-  if (usage.staging_bytes !== directStagingBytes)
-    throw new Error("ECORRUPT: logical staging bytes differ from direct recount");
-  const directIngestReservation = oneNumber(tx, DIRECT_INGEST_RESERVATION_SQL);
-  if (usage.ingest_reservation_bytes !== directIngestReservation)
-    throw new Error("ECORRUPT: ingest reservation differs from direct recount");
+  if (
+    typeof usage.integrity_token !== "string" ||
+    usage.integrity_token !==
+      usageIntegrityToken(
+        usage as Readonly<Record<(typeof USAGE_COUNTER_COLUMNS)[number], number>> & {
+          readonly mutation_sequence: number;
+        },
+      )
+  )
+    throw new Error("ECORRUPT: usage integrity token mismatch");
   return meta;
 }
 
@@ -317,9 +318,36 @@ function migrateV3ToV4(tx: FilesystemSQLiteTransaction): void {
   )[0];
   if (!meta || meta.schema_version !== 3)
     throw new Error("ECORRUPT: invalid schema v3 metadata");
+  assertBoundedMigrationRecount(tx);
   for (const statement of SCHEMA_V4_STATEMENTS) tx.run(statement);
   tx.run("UPDATE efs_meta SET schema_version=4 WHERE singleton=1");
   tx.run("PRAGMA user_version=4");
+}
+
+function assertBoundedMigrationRecount(tx: FilesystemSQLiteTransaction): void {
+  const existing = new Set(
+    tx
+      .all<{ name: string } & SqliteRow>(
+        "SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name",
+        [],
+        { maxRows: 128, maxBytes: 16 * 1024 },
+      )
+      .map((row) => row.name),
+  );
+  let remaining = MAX_ATOMIC_MIGRATION_RECOUNT_ROWS;
+  for (const table of DIRECT_USAGE_TABLES) {
+    if (!existing.has(table)) continue;
+    const limit = remaining + 1;
+    const rows = tx.all(`SELECT 1 present FROM ${table} LIMIT ?`, [limit], {
+      maxRows: limit,
+      maxBytes: Math.max(128, limit * 64),
+    });
+    if (rows.length > remaining)
+      throw new Error(
+        `ESCHEMA: v4 atomic usage recount exceeds ${MAX_ATOMIC_MIGRATION_RECOUNT_ROWS} rows`,
+      );
+    remaining -= rows.length;
+  }
 }
 
 export interface StorageMetadata {

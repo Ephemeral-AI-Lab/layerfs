@@ -6,6 +6,10 @@ import { test } from "node:test";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
 import { buildManifestFromEntries } from "../../packages/fs/dist/manifests/builder.js";
 import {
+  encodeManifestNode,
+  encodeManifestRoot,
+} from "../../packages/fs/dist/manifests/codec.js";
+import {
   AdmissionController,
   DEFAULT_RUNTIME_LIMITS,
   constrainStorageLimits,
@@ -14,10 +18,17 @@ import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { prepareContent } from "../../packages/fs/dist/operations/manifest-io.js";
 import { prepareContentEntriesStreaming } from "../../packages/fs/dist/operations/streaming-prepare.js";
 import { MaintenanceManager } from "../../packages/fs/dist/operations/maintenance.js";
+import { BranchRepository } from "../../packages/fs/dist/sqlite/branch-repository.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { OverlayRepository } from "../../packages/fs/dist/sqlite/overlay-repository.js";
 import { initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
 import { StagingRepository } from "../../packages/fs/dist/sqlite/staging-repository.js";
+import {
+  CHARGED_ROW_BYTES,
+  USAGE_COUNTER_COLUMNS,
+  USAGE_RECOUNT_PHASE_COUNT,
+  UsageRepository,
+} from "../../packages/fs/dist/sqlite/usage-repository.js";
 import { runUnitOfWork } from "../../packages/fs/dist/sqlite/unit-of-work.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { createSqliteOperationsStorage } from "../../packages/fs/dist/sqlite/operations-storage.js";
@@ -44,13 +55,32 @@ function maintenanceCache() {
   return new ContentCache(DEFAULT_RUNTIME_LIMITS.maxCacheBytes, admission);
 }
 function createBranch(driver, id = "branch") {
-  driver.transaction("write", (tx) => {
-    tx.run("INSERT INTO efs_branch_ids(id,created_at_ms) VALUES(?,0)", [id]);
-    tx.run(
-      "INSERT INTO efs_branches(id,base_revision,state,generation,created_at_ms,terminal_at_ms) VALUES(?,0,0,0,0,NULL)",
-      [id],
-    );
-  });
+  driver.transaction("write", (tx) =>
+    new BranchRepository(tx, limits(driver)).create(id, 0, 0),
+  );
+}
+function verifyKeysetUsage(tx, storage) {
+  const repository = new UsageRepository(tx, storage);
+  const totals = USAGE_COUNTER_COLUMNS.map(() => 0);
+  for (let phase = 0; phase < USAGE_RECOUNT_PHASE_COUNT; phase += 1) {
+    let afterKey = null;
+    for (;;) {
+      const batch = repository.recountBatch(phase, afterKey, 7, 64 * 1024);
+      for (let index = 0; index < totals.length; index += 1)
+        totals[index] += batch.deltas[index];
+      if (batch.complete) break;
+      afterKey = batch.nextKey;
+    }
+  }
+  const snapshot = repository.snapshot();
+  assert.deepEqual(
+    Object.fromEntries(
+      USAGE_COUNTER_COLUMNS.map((column, index) => [column, totals[index]]),
+    ),
+    Object.fromEntries(
+      USAGE_COUNTER_COLUMNS.map((column) => [column, snapshot[column]]),
+    ),
+  );
 }
 
 test("immutable COW heads retain one current page and atomically cross boundaries at every page size", async () => {
@@ -111,6 +141,7 @@ test("immutable COW heads retain one current page and atomically cross boundarie
       )[0].count,
     }));
     assert.deepEqual(state, { versions: 2, heads: 2 });
+    driver.transaction("read", (tx) => verifyKeysetUsage(tx, storage));
     assert.throws(
       () =>
         driver.transaction("write", (tx) =>
@@ -231,6 +262,7 @@ test("structural patches are segmented, ordered, bounded, and exact", async () =
     ),
     2,
   );
+  driver.transaction("read", (tx) => verifyKeysetUsage(tx, storage));
   driver.close();
 });
 
@@ -313,6 +345,47 @@ test("content cache owns Buffer and subclass inputs and detaches every outward h
     );
     assert.equal(Object.getPrototypeOf(second), Uint8Array.prototype);
     assert.deepEqual(second, expected);
+  }
+  cache.clear();
+  const nodeBytes = encodeManifestNode({
+    kind: "leaf",
+    span: 0,
+    entryCount: 0,
+    entries: [],
+  });
+  const nodeHash = sha256(nodeBytes);
+  const rootBytes = encodeManifestRoot({
+    parameters: { minimum: 32_768, average: 131_072, maximum: 524_288 },
+    fileSize: 0,
+    entryCount: 0,
+    rootNodeHash: nodeHash,
+  });
+  const rootHash = sha256(rootBytes);
+  driver.transaction("write", (tx) => {
+    const content = new ContentRepository(tx, storage, cache);
+    content.putManifestNode(nodeHash, new HostileBytes(nodeBytes));
+    content.putManifestRoot(rootHash, Buffer.from(rootBytes));
+  });
+  for (const [kind, hash, expected] of [
+    ["node", nodeHash, nodeBytes],
+    ["root", rootHash, rootBytes],
+  ]) {
+    const consume = (repository, callback) =>
+      kind === "node"
+        ? repository.withManifestNode(hash, callback)
+        : repository.withManifestRoot(hash, callback);
+    driver.transaction("read", (tx) =>
+      consume(new ContentRepository(tx, storage, cache), (encoded) => {
+        assert.equal(Object.getPrototypeOf(encoded), Uint8Array.prototype);
+        encoded.fill(255);
+      }),
+    );
+    const reread = driver.transaction("read", (tx) =>
+      consume(new ContentRepository(tx, storage, cache), (encoded) =>
+        Uint8Array.from(encoded),
+      ),
+    );
+    assert.deepEqual(reread, expected);
   }
   cache.clear();
   assert.equal(admission.usedBytes, 0);
@@ -462,6 +535,58 @@ test("declared streamed-ingest quota is reserved before the first producer pull"
     /aggregate managed payload quota/,
   );
   assert.equal(pulls, 0);
+  assert.deepEqual(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT ingest_reservation_bytes,(SELECT count(*) FROM efs_leases) leases,(SELECT count(*) FROM efs_cas_objects) objects FROM efs_usage",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
+    ),
+    { ingest_reservation_bytes: 0, leases: 0, objects: 0 },
+  );
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
+test("declared entry-stream quota is reserved before iterable work or durable batches", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const port = createSqliteOperationsStorage(driver);
+  initializeOrValidateSchema(driver);
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 128 * 1024,
+      maintenanceReserveBytes: 1024,
+      maxQueryBatchSize: 1,
+    },
+    driver.capabilities,
+  );
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  let entriesRead = 0;
+  function* entries() {
+    for (let index = 0; index < 60; index += 1) {
+      entriesRead += 1;
+      const bytes = Uint8Array.of(index);
+      yield { hash: sha256(bytes), length: 1, bytes };
+    }
+  }
+  await assert.rejects(
+    prepareContentEntriesStreaming(
+      port,
+      entries(),
+      { minimum: 1, average: 1, maximum: 1 },
+      60,
+      storage,
+      DEFAULT_RUNTIME_LIMITS,
+      admission,
+    ),
+    /aggregate managed payload quota/,
+  );
+  assert.equal(entriesRead, 0);
   assert.deepEqual(
     driver.transaction(
       "read",
@@ -767,11 +892,18 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
   const nonce = new Uint8Array(16).fill(14);
   const bytes = Uint8Array.of(9);
   const hash = sha256(bytes);
-  const metadataLimit = 288 + 96 + 3 * 96;
+  let metadataLimit;
+  let baselineMetadata;
   let driver;
   try {
     driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
     initializeOrValidateSchema(driver);
+    const defaults = constrainStorageLimits(undefined, driver.capabilities);
+    baselineMetadata = driver.transaction(
+      "read",
+      (tx) => new UsageRepository(tx, defaults).snapshot().charged_metadata_bytes,
+    );
+    metadataLimit = baselineMetadata + 4 * CHARGED_ROW_BYTES;
     let storage = constrainStorageLimits(
       {
         maxManagedPayloadBytes: 16 * 1024 * 1024,
@@ -819,15 +951,19 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
       },
       driver.capabilities,
     );
-    const recounted = driver.transaction(
-      "read",
-      (tx) =>
-        tx.all(
-          "SELECT charged_metadata_bytes,96*((SELECT count(*) FROM efs_cas_objects)+(SELECT count(*) FROM efs_manifest_nodes)+(SELECT count(*) FROM efs_manifest_roots)+(SELECT count(*) FROM efs_revisions)+(SELECT count(*) FROM efs_inodes)+(SELECT count(*) FROM efs_entries)+(SELECT count(*) FROM efs_inode_revisions)+(SELECT count(*) FROM efs_revision_manifest_roots)+(SELECT count(*) FROM efs_entry_revisions)+(SELECT count(*) FROM efs_branches)+(SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_branch_changes)+(SELECT count(*) FROM efs_branch_inode_expectations)+(SELECT count(*) FROM efs_branch_manifest_roots)+(SELECT count(*) FROM efs_cow_page_versions)+(SELECT count(*) FROM efs_cow_page_heads)+(SELECT count(*) FROM efs_patches)+(SELECT count(*) FROM efs_patch_segments)+(SELECT count(*) FROM efs_leases)+(SELECT count(*) FROM efs_lease_manifests)+(SELECT count(*) FROM efs_lease_objects)+(SELECT count(*) FROM efs_lease_staged_manifests)+(SELECT count(*) FROM efs_staging_entries)+(SELECT count(*) FROM efs_staging_level_records)+(SELECT count(*) FROM efs_lease_cow_pages)+(SELECT count(*) FROM efs_lease_patches)+(SELECT count(*) FROM efs_staging_certificates)+(SELECT count(*) FROM efs_staging_reconciliations)+(SELECT count(*) FROM efs_staging_reconciliation_queue)+(SELECT count(*) FROM efs_staging_workspaces)+(SELECT count(*) FROM efs_staging_reused_subtrees)+(SELECT count(*) FROM efs_operation_ids)+(SELECT count(*) FROM efs_operation_results)) direct,(SELECT count(*) FROM efs_lease_objects) members,staging_bytes FROM efs_usage",
-          [],
-          { maxRows: 1, maxBytes: 256 },
-        )[0],
-    );
+    const recounted = driver.transaction("read", (tx) => {
+      new UsageRepository(tx, storage).verifyDerivedUsage();
+      verifyKeysetUsage(tx, storage);
+      const usage = tx.all(
+        "SELECT charged_metadata_bytes,(SELECT count(*) FROM efs_lease_objects) members,staging_bytes FROM efs_usage",
+        [],
+        { maxRows: 1, maxBytes: 256 },
+      )[0];
+      return {
+        ...usage,
+        direct: new UsageRepository(tx, storage).directChargedMetadataBytes(),
+      };
+    });
     assert.deepEqual(recounted, {
       charged_metadata_bytes: metadataLimit,
       direct: metadataLimit,
@@ -861,7 +997,10 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
             { maxRows: 1, maxBytes: 128 },
           )[0],
       ),
-      { charged_metadata_bytes: 384, leases: 0 },
+      {
+        charged_metadata_bytes: baselineMetadata + CHARGED_ROW_BYTES,
+        leases: 0,
+      },
     );
     driver.close();
     driver = undefined;
@@ -1351,7 +1490,7 @@ test("sealed recovery rows reject raw mutation until tombstoned cleanup", async 
         tx.run("UPDATE efs_leases SET state=2 WHERE id=?", [leaseId]);
         tx.run("DELETE FROM efs_staging_certificates WHERE lease_id=?", [leaseId]);
       }),
-    /sealed staging certificate is immutable/,
+    /lease tombstone requires bounded cleanup state/,
     "a raw tombstone without its authenticated cleanup authority bypassed sealing",
   );
   driver.close();
@@ -1421,6 +1560,10 @@ test(
     });
     initializeOrValidateSchema(driver);
     const storage = limits(driver);
+    const admission = new AdmissionController(
+      DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+    );
+    const cache = new ContentCache(1, admission);
     const leaseId = "large-stage";
     const nonce = Uint8Array.from({ length: 16 }, (_, index) => index + 1);
     const budget = {
@@ -1458,7 +1601,7 @@ test(
       writeNode(record) {
         runUnitOfWork(driver, "write", budget, (tx) => {
           const staging = new StagingRepository(tx, storage);
-          new ContentRepository(tx, storage).putManifestNode(
+          new ContentRepository(tx, storage, cache).putManifestNode(
             record.value.hash,
             record.value.encoded,
           );
@@ -1541,9 +1684,9 @@ test(
       },
     };
     const certificate = runUnitOfWork(counted, "write", budget, (tx) => {
-      const content = new ContentRepository(tx, storage);
+      const content = new ContentRepository(tx, storage, cache);
       content.putManifestRoot(built.rootHash, built.root);
-      const staging = new StagingRepository(tx, storage);
+      const staging = new StagingRepository(tx, storage, cache);
       staging.appendBatch(leaseId, nonce, [
         { kind: "manifest-root", hash: built.rootHash, size: built.root.length },
       ]);
@@ -1557,7 +1700,7 @@ test(
         "write",
         budget,
         (tx) =>
-          new StagingRepository(tx, storage).reconcileBatch(
+          new StagingRepository(tx, storage, cache).reconcileBatch(
             leaseId,
             nonce,
             storage.maxQueryBatchSize,
@@ -1620,7 +1763,7 @@ test(
         )[0],
     );
     assert.equal(metadata.entries, total);
-    assert.ok(metadata.charged_metadata_bytes >= 256 + total * 96);
+    assert.ok(metadata.charged_metadata_bytes >= (3 + total) * CHARGED_ROW_BYTES);
     t.diagnostic(
       JSON.stringify({
         manifestEntries: total,

@@ -21,8 +21,14 @@ export interface SQLiteManifestContentSource {
     destinationOffset: number,
     length: number,
   ): boolean;
-  getManifestRoot(hash: Uint8Array): Uint8Array | undefined;
-  getManifestNode(hash: Uint8Array): Uint8Array | undefined;
+  withManifestRoot<T>(
+    hash: Uint8Array,
+    consume: (encoded: Uint8Array) => T,
+  ): T | undefined;
+  withManifestNode<T>(
+    hash: Uint8Array,
+    consume: (encoded: Uint8Array) => T,
+  ): T | undefined;
 }
 
 export class SQLiteAuthenticatedManifestCursor {
@@ -39,27 +45,39 @@ export class SQLiteAuthenticatedManifestCursor {
     maxObjectBytes: number,
   ) {
     manifestHash = copyBytes(manifestHash);
-    const rootBytes = source.getManifestRoot(copyBytes(manifestHash));
-    if (!rootBytes) throw new Error("ECORRUPT: missing manifest root");
-    const root = decodeManifestRoot(rootBytes, manifestHash);
-    validateSupportedManifestParameters(root.parameters);
-    if (root.parameters.maximum > maxObjectBytes)
-      throw new RangeError(
-        "manifest FastCDC maximum exceeds the durable object transaction envelope",
-      );
     if (!Number.isSafeInteger(offset) || offset < 0)
       throw new RangeError("manifest offset must be a nonnegative safe integer");
-    const effectiveOffset = Math.min(offset, root.fileSize);
-    this.#source = source;
-    this.#cursor = new ManifestSequentialCursor(
-      rootBytes,
-      effectiveOffset,
-      { get: (hash) => source.getManifestNode(copyBytes(hash)) },
-      manifestHash,
-      maxDepth,
+    const initialized = source.withManifestRoot(
+      copyBytes(manifestHash),
+      (rootBytes) => {
+        const root = decodeManifestRoot(rootBytes, manifestHash);
+        validateSupportedManifestParameters(root.parameters);
+        if (root.parameters.maximum > maxObjectBytes)
+          throw new RangeError(
+            "manifest FastCDC maximum exceeds the durable object transaction envelope",
+          );
+        const effectiveOffset = Math.min(offset, root.fileSize);
+        return Object.freeze({
+          cursor: new ManifestSequentialCursor(
+            rootBytes,
+            effectiveOffset,
+            {
+              withNode: <T>(hash: Uint8Array, consume: (encoded: Uint8Array) => T) =>
+                source.withManifestNode(copyBytes(hash), consume),
+            },
+            manifestHash,
+            maxDepth,
+          ),
+          fileSize: root.fileSize,
+          effectiveOffset,
+        });
+      },
     );
-    this.fileSize = root.fileSize;
-    this.#position = effectiveOffset;
+    if (!initialized) throw new Error("ECORRUPT: missing manifest root");
+    this.#source = source;
+    this.#cursor = initialized.cursor;
+    this.fileSize = initialized.fileSize;
+    this.#position = initialized.effectiveOffset;
   }
 
   get position(): number {

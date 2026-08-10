@@ -51,6 +51,14 @@ function intrinsicBytes(value: Uint8Array): Uint8Array {
   }
 }
 
+function intrinsicByteLength(value: Uint8Array): number {
+  try {
+    return Reflect.apply(typedArrayByteLength, value, []) as number;
+  } catch {
+    throw new TypeError("SQLite BLOB values must be Uint8Array instances");
+  }
+}
+
 function ownBytes(value: Uint8Array): Uint8Array {
   const source = intrinsicBytes(value);
   const owned = new Uint8Array(source.byteLength);
@@ -65,10 +73,15 @@ function binding(
   if (typeof value === "number" && !Number.isSafeInteger(value))
     throw new RangeError("SQLite numbers must be safe integers");
   if (value instanceof Uint8Array) {
-    const bytes = intrinsicBytes(value);
-    if (bytes.byteLength > capabilities.maxBlobBytes)
+    const byteLength = intrinsicByteLength(value);
+    if (byteLength > capabilities.maxBlobBytes)
       throw new RangeError("SQLite BLOB exceeds adapter limit");
-    return ownBytes(bytes);
+    // node:sqlite consumes bindings synchronously. The intrinsic view strips
+    // subclass overrides without allocating an untracked duplicate.
+    // node:sqlite 24 treats a reconstructed zero-length typed-array view as
+    // NULL. The original Uint8Array still has trustworthy intrinsic slots and
+    // is synchronously consumed, so preserve it for the empty-BLOB case.
+    return byteLength === 0 ? value : intrinsicBytes(value);
   }
   return value;
 }
@@ -92,7 +105,7 @@ function sqliteOutputRowBytes(row: Record<string, SQLOutputValue>): number {
     bytes +=
       name.length * 2 +
       (value instanceof Uint8Array
-        ? intrinsicBytes(value).byteLength
+        ? intrinsicByteLength(value)
         : typeof value === "string"
           ? value.length * 2
           : 8);
@@ -104,7 +117,7 @@ function bindingBytes(bindings: SqliteBindings): number {
   for (const value of bindings)
     bytes +=
       value instanceof Uint8Array
-        ? intrinsicBytes(value).byteLength
+        ? intrinsicByteLength(value)
         : typeof value === "string"
           ? value.length * 2
           : 8;
@@ -141,10 +154,25 @@ function assertReadOnlySql(sql: string): void {
     throw new Error("EROFS: read transaction accepts only read-only SQL");
 }
 
+function assertResultSql(sql: string): void {
+  const keyword = leadingSqlKeyword(sql);
+  if (
+    keyword !== "SELECT" &&
+    keyword !== "VALUES" &&
+    keyword !== "WITH" &&
+    keyword !== "EXPLAIN" &&
+    !/^\s*PRAGMA\s+temp_store\s*;?\s*$/iu.test(sql)
+  )
+    throw new Error("EROFS: SQLite result statements must be read-only");
+}
+
 export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
   readonly kind = "sqlite" as const;
   readonly readOnly: boolean;
-  readonly capabilities: SQLiteDriverCapabilities;
+  readonly capabilities: SQLiteDriverCapabilities & {
+    readonly journalQuotaPolicy: "checkpoint-backpressure";
+    readonly journalSizeLimitIsHard: false;
+  };
   readonly #database: DatabaseSync;
   readonly #filename: string;
   readonly #pageSize: number;
@@ -298,7 +326,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             mode === "read" ? 0 : this.#pageSize * 4 + bindingBytes(bindings) * 2;
           if (journalEstimate + bindingEstimate > this.#maxJournalBytes)
             throw new Error(
-              "ENOSPC: WAL backpressure exceeds rollback-safe transaction admission envelope",
+              "ENOSPC: WAL backpressure exceeds the configured soft transaction estimate",
             );
           const result = this.#database
             .prepare(sql)
@@ -312,7 +340,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             journalEstimate += Math.max(bindingEstimate, changedPageEstimate);
             if (journalEstimate > this.#maxJournalBytes)
               throw new Error(
-                "ENOSPC: WAL backpressure exceeds rollback-safe transaction change envelope",
+                "ENOSPC: WAL backpressure exceeds the configured soft change estimate",
               );
           }
           return { changes, lastInsertRowid: rowid };
@@ -324,6 +352,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
         ): readonly Row[] => {
           if (!active) throw new Error("SQLite transaction value is no longer active");
           this.#validateStatement(sql, bindings, mode);
+          assertResultSql(sql);
           if (
             !Number.isSafeInteger(budget.maxRows) ||
             budget.maxRows <= 0 ||
@@ -333,19 +362,29 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             throw new RangeError("invalid query budget");
           const result: Row[] = [];
           let bytes = 0;
-          for (const raw of this.#database
-            .prepare(sql)
-            .iterate(...bindings.map((value) => binding(value, this.capabilities)))) {
-            if (result.length >= budget.maxRows)
-              throw new RangeError("SQLite result row budget exceeded");
-            const nextBytes = sqliteOutputRowBytes(raw);
-            if (bytes + nextBytes > budget.maxBytes)
-              throw new RangeError("SQLite result byte budget exceeded");
-            bytes += nextBytes;
-            const normalized = Object.fromEntries(
-              Object.entries(raw).map(([name, value]) => [name, output(value)]),
-            ) as Row;
-            result.push(Object.freeze(normalized));
+          let resultQueryOnly = false;
+          try {
+            if (mode !== "read") {
+              this.#database.exec("PRAGMA query_only=ON");
+              resultQueryOnly = true;
+            }
+            const iterator = this.#database
+              .prepare(sql)
+              .iterate(...bindings.map((value) => binding(value, this.capabilities)));
+            for (const raw of iterator) {
+              if (result.length >= budget.maxRows)
+                throw new RangeError("SQLite result row budget exceeded");
+              const nextBytes = sqliteOutputRowBytes(raw);
+              if (bytes + nextBytes > budget.maxBytes)
+                throw new RangeError("SQLite result byte budget exceeded");
+              bytes += nextBytes;
+              const normalized = Object.fromEntries(
+                Object.entries(raw).map(([name, value]) => [name, output(value)]),
+              ) as Row;
+              result.push(Object.freeze(normalized));
+            }
+          } finally {
+            if (resultQueryOnly) this.#database.exec("PRAGMA query_only=OFF");
           }
           return Object.freeze(result);
         },
@@ -358,14 +397,6 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       )
         throw new TypeError("SQLite transaction callbacks must be synchronous");
       active = false;
-      if (
-        mode !== "read" &&
-        this.#filename !== ":memory:" &&
-        (this.#fileBytes(`${this.#filename}-wal`) ?? 0) > this.#maxJournalBytes
-      )
-        throw new Error(
-          "ENOSPC: WAL exceeded the rollback-safe post-statement envelope",
-        );
       this.#database.exec("COMMIT");
       begun = false;
       if (mode !== "read") this.#checkpointAfterCommit();
@@ -420,15 +451,40 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     if (bindings.length > this.capabilities.maxBindings)
       throw new RangeError("SQLite binding limit exceeded");
     if (mode === "read") assertReadOnlySql(sql);
+    const keyword = leadingSqlKeyword(sql);
     if (
       mode !== "read" &&
-      /\b(?:zero|random)blob\s*\(|\bprintf\s*\(|\breplace\s*\(/iu.test(sql)
+      new Set([
+        "BEGIN",
+        "COMMIT",
+        "END",
+        "ROLLBACK",
+        "SAVEPOINT",
+        "RELEASE",
+        "ATTACH",
+        "DETACH",
+        "VACUUM",
+      ]).has(keyword)
     )
       throw new Error(
-        "ENOSPC: SQL-generated payload expressions are outside the WAL admission contract",
+        "SQLite statement is outside the callback-scoped transaction contract",
       );
+    if (
+      mode !== "read" &&
+      (/^\s*CREATE\s+(?:TEMP|TEMPORARY|VIRTUAL)\b/iu.test(sql) ||
+        /^\s*(?:DROP|ALTER)\s+(?:TEMP|TEMPORARY|VIRTUAL)\b/iu.test(sql))
+    )
+      throw new Error("temporary and virtual schemas are outside the storage contract");
+    if (
+      mode !== "read" &&
+      keyword === "PRAGMA" &&
+      !/^\s*PRAGMA\s+temp_store\s*;?\s*$/iu.test(sql) &&
+      (mode !== "exclusive" ||
+        !/^\s*PRAGMA\s+(?:application_id|user_version)\s*=\s*\d+\s*;?\s*$/iu.test(sql))
+    )
+      throw new Error("SQLite PRAGMA is outside the storage transaction contract");
     if (mode !== "read" && sql.length * 2 > this.#maxJournalBytes)
-      throw new Error("ENOSPC: SQL text exceeds the WAL admission contract");
+      throw new Error("ENOSPC: SQL text exceeds the configured WAL target");
   }
   #fileBytes(filename: string): number | undefined {
     try {

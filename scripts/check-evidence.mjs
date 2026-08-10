@@ -7,6 +7,18 @@ import ts from "typescript";
 
 const execute = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
+const packageManifest = JSON.parse(
+  await readFile(path.join(root, "package.json"), "utf8"),
+);
+const acceptedValidation = packageManifest.scripts?.["validate:accepted"];
+const acceptedMatch = /^pnpm validate:(m\d+)$/u.exec(acceptedValidation ?? "");
+if (!acceptedMatch)
+  throw new Error("validate:accepted must select one milestone validation command");
+const activeAcceptedMilestone = acceptedMatch[1];
+if (!new Set(["m0", "m1", "m2"]).has(activeAcceptedMilestone))
+  throw new Error(
+    `evidence checker has no validation schema for ${activeAcceptedMilestone}`,
+  );
 
 function requireObject(value, name) {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -183,7 +195,11 @@ async function assertOwnedWorktreeClean(milestone) {
   if (status)
     throw new Error(`${milestone} evidence requires a completely clean worktree`);
 }
-async function validateMilestone(name, requiredMetrics) {
+async function validateMilestone(
+  name,
+  requiredMetrics,
+  { requireCurrentDigest = false } = {},
+) {
   const directory = path.join(root, "docs", "evidence", name);
   const jsonFilename = path.join(directory, "correctness.json");
   const exitFilename = path.join(directory, "exit.md");
@@ -230,9 +246,11 @@ async function validateMilestone(name, requiredMetrics) {
   const candidateDigest = await ownedTreeDigest(name, candidate);
   if (artifact.ownedTreeDigest !== candidateDigest)
     throw new Error(`${name} evidence digest differs from its candidate tree`);
-  const currentDigest = await ownedTreeDigest(name, "HEAD");
-  if (artifact.ownedTreeDigest !== currentDigest)
-    throw new Error(`${name} accepted evidence is stale for milestone-owned files`);
+  if (requireCurrentDigest) {
+    const currentDigest = await ownedTreeDigest(name, "HEAD");
+    if (artifact.ownedTreeDigest !== currentDigest)
+      throw new Error(`${name} accepted evidence is stale for milestone-owned files`);
+  }
   await assertOwnedWorktreeClean(name);
   return { artifact, exit, candidate };
 }
@@ -246,36 +264,44 @@ if (process.argv[2] === "--owned-tree-digest") {
   process.exit(0);
 }
 
-const m0 = await validateMilestone("m0", [
-  "operatingSystems",
-  "nodeVersions",
-  "matrixRuns",
-  "architectureTestsPerCell",
-  "coreSourceFiles",
-  "negativeArchitectureFixtures",
-  "publishablePackages",
-  "publicEntrypoints",
-  "exportedSymbols",
-  "cleanDistFiles",
-  "packedTarballs",
-  "packedFiles",
-]);
+const m0 = await validateMilestone(
+  "m0",
+  [
+    "operatingSystems",
+    "nodeVersions",
+    "matrixRuns",
+    "architectureTestsPerCell",
+    "coreSourceFiles",
+    "negativeArchitectureFixtures",
+    "publishablePackages",
+    "publicEntrypoints",
+    "exportedSymbols",
+    "cleanDistFiles",
+    "packedTarballs",
+    "packedFiles",
+  ],
+  { requireCurrentDigest: activeAcceptedMilestone === "m0" },
+);
 if (
   m0.artifact.passed !==
   m0.artifact.metrics.matrixRuns * m0.artifact.metrics.architectureTestsPerCell
 )
   throw new Error("m0 passed count differs from the recorded tests per matrix cell");
 
-const m1 = await validateMilestone("m1", [
-  "operatingSystems",
-  "nodeVersions",
-  "matrixRuns",
-  "nodeAlgorithmTests",
-  "workerdChecks",
-  "streamedManifestEntries",
-  "streamedManifestReadBatchRecords",
-  "streamedManifestPeakRetainedRecords",
-]);
+const m1 = await validateMilestone(
+  "m1",
+  [
+    "operatingSystems",
+    "nodeVersions",
+    "matrixRuns",
+    "nodeAlgorithmTests",
+    "workerdChecks",
+    "streamedManifestEntries",
+    "streamedManifestReadBatchRecords",
+    "streamedManifestPeakRetainedRecords",
+  ],
+  { requireCurrentDigest: activeAcceptedMilestone === "m1" },
+);
 if (
   m1.artifact.passed !==
   m1.artifact.metrics.nodeAlgorithmTests + m1.artifact.metrics.workerdChecks
@@ -287,21 +313,25 @@ const predecessor = m1.exit.match(
 if (predecessor !== m0.candidate)
   throw new Error("m1 sequential predecessor differs from the accepted m0 candidate");
 
-const m2 = await validateMilestone("m2", [
-  "operatingSystems",
-  "nodeVersions",
-  "matrixRuns",
-  "nodeStorageTests",
-  "maintenanceTests",
-  "streamedBytes",
-  "streamManagedPeakBytes",
-  "fallbackManagedPeakBytes",
-  "fallbackSourceReadCalls",
-  "fallbackStorageTransactions",
-  "observedWalBytes",
-  "sealedManifestEntries",
-  "finalCertificateValidationStatements",
-]);
+const m2 = await validateMilestone(
+  "m2",
+  [
+    "operatingSystems",
+    "nodeVersions",
+    "matrixRuns",
+    "nodeStorageTests",
+    "maintenanceTests",
+    "streamedBytes",
+    "streamManagedPeakBytes",
+    "fallbackManagedPeakBytes",
+    "fallbackSourceReadCalls",
+    "fallbackStorageTransactions",
+    "observedWalBytes",
+    "sealedManifestEntries",
+    "finalCertificateValidationStatements",
+  ],
+  { requireCurrentDigest: activeAcceptedMilestone === "m2" },
+);
 if (
   m2.artifact.passed !==
   m2.artifact.metrics.nodeStorageTests + m2.artifact.metrics.maintenanceTests
@@ -316,5 +346,5 @@ if (m2Predecessor !== m1.candidate)
   throw new Error("m2 sequential predecessor differs from the accepted m1 candidate");
 
 console.log(
-  `evidence: M0/M1/M2 schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,
+  `evidence: preserved predecessor candidates and current ${activeAcceptedMilestone.toUpperCase()} schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,
 );

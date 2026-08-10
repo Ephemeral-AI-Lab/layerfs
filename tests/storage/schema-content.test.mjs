@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { EphemeralFS } from "../../packages/fs/dist/index.js";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
 import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import {
@@ -15,7 +16,10 @@ import { ContentRepository } from "../../packages/fs/dist/sqlite/content-reposit
 import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { NamespaceRepository } from "../../packages/fs/dist/sqlite/namespace-repository.js";
 import { StagingRepository } from "../../packages/fs/dist/sqlite/staging-repository.js";
-import { UsageRepository } from "../../packages/fs/dist/sqlite/usage-repository.js";
+import {
+  CHARGED_ROW_BYTES,
+  UsageRepository,
+} from "../../packages/fs/dist/sqlite/usage-repository.js";
 import {
   EFS_APPLICATION_ID,
   EFS_SCHEMA_VERSION,
@@ -85,7 +89,15 @@ test("current schema recovery authority is revalidated after physical reopen", a
           tx.run(
             "UPDATE efs_usage SET charged_metadata_bytes=charged_metadata_bytes+96 WHERE singleton=1",
           ),
-        expected: /charged metadata differs from direct recount/,
+        expected: /usage integrity token mismatch/,
+      },
+      {
+        name: "payload-counters",
+        mutate: (tx) =>
+          tx.run(
+            "UPDATE efs_usage SET object_count=7,object_bytes=123,page_bytes=41,maintenance_bytes=77 WHERE singleton=1",
+          ),
+        expected: /usage integrity token mismatch/,
       },
       {
         name: "trigger",
@@ -284,6 +296,9 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
   const probe = await openNodeSqlite({ filename: ":memory:" });
   createV3Schema(probe);
   probe.transaction("write", (tx) => {
+    tx.run(
+      "UPDATE efs_usage SET object_count=7,object_bytes=123,manifest_root_count=5,manifest_root_bytes=99,manifest_node_count=4,manifest_node_bytes=88,page_count=3,page_bytes=77,patch_count=2,patch_bytes=66,staging_bytes=55,result_bytes=44,maintenance_bytes=33,permanent_identifiers=22,charged_metadata_bytes=11",
+    );
     tx.run("INSERT INTO efs_root_journal VALUES(1,1,?)", [Uint8Array.of(1, 2, 3)]);
     tx.run(
       "INSERT INTO efs_gc_runs(id,state,high_water,root_generation,cursor_kind,cursor_value,created_at_ms) VALUES('run',0,0,0,0,NULL,1)",
@@ -292,29 +307,45 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
   });
   const count = { value: 0 };
   initializeOrValidateSchema(migrationDriver(probe, Number.POSITIVE_INFINITY, count));
-  const migrated = probe.transaction("read", (tx) => ({
-    userVersion: tx.all("SELECT user_version value FROM pragma_user_version", [], {
-      maxRows: 1,
-      maxBytes: 128,
-    })[0].value,
-    metaVersion: tx.all("SELECT schema_version value FROM efs_meta", [], {
-      maxRows: 1,
-      maxBytes: 128,
-    })[0].value,
-    usage: tx.all("SELECT mutation_sequence,maintenance_bytes FROM efs_usage", [], {
-      maxRows: 1,
-      maxBytes: 128,
-    })[0],
-    v4Tables: tx.all(
-      "SELECT count(*) count FROM sqlite_schema WHERE type='table' AND name IN ('efs_lease_cleanups','efs_staging_workspaces','efs_staging_reused_subtrees')",
-      [],
-      { maxRows: 1, maxBytes: 128 },
-    )[0].count,
-  }));
+  const migrated = probe.transaction("read", (tx) => {
+    new UsageRepository(
+      tx,
+      constrainStorageLimits(undefined, probe.capabilities),
+    ).verifyDerivedUsage();
+    return {
+      userVersion: tx.all("SELECT user_version value FROM pragma_user_version", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].value,
+      metaVersion: tx.all("SELECT schema_version value FROM efs_meta", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].value,
+      usage: tx.all(
+        "SELECT mutation_sequence,object_count,object_bytes,page_count,page_bytes,result_bytes,permanent_identifiers,maintenance_bytes FROM efs_usage",
+        [],
+        { maxRows: 1, maxBytes: 1024 },
+      )[0],
+      v4Tables: tx.all(
+        "SELECT count(*) count FROM sqlite_schema WHERE type='table' AND name IN ('efs_lease_cleanups','efs_staging_workspaces','efs_staging_reused_subtrees')",
+        [],
+        { maxRows: 1, maxBytes: 128 },
+      )[0].count,
+    };
+  });
   assert.deepEqual(migrated, {
     userVersion: 4,
     metaVersion: 4,
-    usage: { mutation_sequence: 0, maintenance_bytes: 291 },
+    usage: {
+      mutation_sequence: 0,
+      object_count: 0,
+      object_bytes: 0,
+      page_count: 0,
+      page_bytes: 0,
+      result_bytes: 0,
+      permanent_identifiers: 0,
+      maintenance_bytes: 1231,
+    },
     v4Tables: 3,
   });
   assert.ok(count.value >= 8);
@@ -364,6 +395,36 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
   } finally {
     await rm(faultDirectory, { recursive: true, force: true });
   }
+});
+
+test("v4 migration refuses an unbounded atomic recount before changing v3", async () => {
+  const driver = await openNodeSqlite({
+    filename: ":memory:",
+    maxJournalBytes: 4 * 1024 ** 3,
+  });
+  createV3Schema(driver);
+  driver.transaction("write", (tx) =>
+    tx.run(
+      "WITH RECURSIVE n(value) AS (VALUES(0) UNION ALL SELECT value+1 FROM n WHERE value<100000) INSERT INTO efs_operation_ids(id,branch_id,generation,created_at_ms) SELECT 'op-'||value,'branch',0,0 FROM n",
+    ),
+  );
+  assert.throws(
+    () => initializeOrValidateSchema(driver),
+    /atomic usage recount exceeds 100000 rows/,
+  );
+  assert.deepEqual(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT (SELECT user_version FROM pragma_user_version) version,(SELECT schema_version FROM efs_meta) meta,(SELECT count(*) FROM sqlite_schema WHERE name='efs_lease_cleanups') v4",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0],
+    ),
+    { version: 3, meta: 3, v4: 0 },
+  );
+  driver.close();
 });
 
 test("one usage authority enforces aggregate and category quotas transactionally", async () => {
@@ -416,6 +477,10 @@ test("staging identities and nonces are intrinsically bounded before durable adm
   const driver = await openNodeSqlite({ filename: ":memory:" });
   initializeOrValidateSchema(driver);
   const limits = constrainStorageLimits(undefined, driver.capabilities);
+  const baselineMetadata = driver.transaction(
+    "read",
+    (tx) => new UsageRepository(tx, limits).snapshot().charged_metadata_bytes,
+  );
   for (const options of [
     {
       leaseId: "x".repeat(129),
@@ -454,7 +519,11 @@ test("staging identities and nonces are intrinsically bounded before durable adm
           { maxRows: 1, maxBytes: 256 },
         )[0],
     ),
-    { leases: 0, certificates: 0, charged_metadata_bytes: 288 },
+    {
+      leases: 0,
+      certificates: 0,
+      charged_metadata_bytes: baselineMetadata,
+    },
   );
   driver.close();
 });
@@ -463,7 +532,7 @@ test("namespace root journals reserve maintenance quota before changing the head
   const driver = await openNodeSqlite({ filename: ":memory:" });
   initializeOrValidateSchema(driver);
   const tight = constrainStorageLimits(
-    { maxMaintenanceBytes: 96 },
+    { maxMaintenanceBytes: CHARGED_ROW_BYTES },
     driver.capabilities,
   );
   assert.throws(
@@ -505,7 +574,7 @@ test("namespace root journals reserve maintenance quota before changing the head
     },
   );
   const admitted = constrainStorageLimits(
-    { maxMaintenanceBytes: 97 },
+    { maxMaintenanceBytes: CHARGED_ROW_BYTES + 1 },
     driver.capabilities,
   );
   assert.equal(
@@ -530,11 +599,83 @@ test("namespace root journals reserve maintenance quota before changing the head
         )[0],
     ),
     {
-      maintenance_bytes: 97,
+      maintenance_bytes: CHARGED_ROW_BYTES + 1,
       main_revision: 1,
       root_mutation_generation: 1,
       journals: 1,
     },
+  );
+  driver.close();
+});
+
+test("namespace variable metadata deltas match a bounded direct recount across reopen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-usage-variable-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver;
+  let filesystem;
+  try {
+    driver = await openNodeSqlite({ filename });
+    filesystem = await EphemeralFS.open({ database: driver });
+    await filesystem.mkdir("/目录");
+    await filesystem.symlink("x".repeat(4096), "/目录/链接");
+    await filesystem.rename("/目录/链接", "/目录/重命名");
+    const limits = constrainStorageLimits(undefined, driver.capabilities);
+    const before = driver.transaction("read", (tx) => {
+      const usage = new UsageRepository(tx, limits);
+      usage.verifyDerivedUsage();
+      return {
+        actual: usage.snapshot().charged_metadata_bytes,
+        direct: usage.directChargedMetadataBytes(),
+      };
+    });
+    assert.equal(before.actual, before.direct);
+    await filesystem.close();
+    filesystem = undefined;
+    driver.close();
+    driver = undefined;
+    driver = await openNodeSqlite({ filename, create: false });
+    initializeOrValidateSchema(driver);
+    const after = driver.transaction("read", (tx) => {
+      const usage = new UsageRepository(tx, limits);
+      return {
+        actual: usage.snapshot().charged_metadata_bytes,
+        direct: usage.directChargedMetadataBytes(),
+      };
+    });
+    assert.deepEqual(after, before);
+    driver.close();
+    driver = undefined;
+  } finally {
+    try {
+      await filesystem?.close();
+    } catch {}
+    try {
+      driver?.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("direct usage recount refuses before scanning beyond its configured row envelope", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const limits = constrainStorageLimits(
+    { maxQueryBatchSize: 256 },
+    driver.capabilities,
+  );
+  driver.transaction("write", (tx) => {
+    for (let index = 0; index < 257; index += 1)
+      tx.run(
+        "INSERT INTO efs_operation_ids(id,branch_id,generation,created_at_ms) VALUES(?,?,0,0)",
+        [`operation-${index}`, "branch"],
+      );
+  });
+  assert.throws(
+    () =>
+      driver.transaction("read", (tx) =>
+        new UsageRepository(tx, limits).directChargedMetadataBytes(),
+      ),
+    /bounded row envelope/,
   );
   driver.close();
 });
@@ -590,9 +731,14 @@ test("two connections serialize staging metadata admission without an orphan row
     initializeOrValidateSchema(first);
     second = await openNodeSqlite({ filename });
     initializeOrValidateSchema(second);
+    const defaults = constrainStorageLimits(undefined, first.capabilities);
+    const baselineMetadata = first.transaction(
+      "read",
+      (tx) => new UsageRepository(tx, defaults).snapshot().charged_metadata_bytes,
+    );
     const limits = constrainStorageLimits(
       {
-        maxChargedMetadataBytes: 480,
+        maxChargedMetadataBytes: baselineMetadata + 2 * CHARGED_ROW_BYTES,
         maxManagedPayloadBytes: 1024 * 1024,
         maintenanceReserveBytes: 1024,
       },
@@ -630,7 +776,11 @@ test("two connections serialize staging metadata admission without an orphan row
             { maxRows: 1, maxBytes: 256 },
           )[0],
       ),
-      { charged_metadata_bytes: 480, leases: 1, certificates: 1 },
+      {
+        charged_metadata_bytes: baselineMetadata + 2 * CHARGED_ROW_BYTES,
+        leases: 1,
+        certificates: 1,
+      },
     );
     second.close();
     first.close();
@@ -670,10 +820,16 @@ test("CAS and segmented manifests persist with verified deduplication and exact 
     assert.equal(repo.putManifestRoot(manifest.rootHash, manifest.root), true);
   });
   driver.transaction("write", (tx) => {
-    const repo = new ContentRepository(tx, limits);
+    const admission = new AdmissionController(128 * 1024 * 1024);
+    const cache = new ContentCache(32 * 1024 * 1024, admission);
+    const repo = new ContentRepository(tx, limits, cache);
     for (const [hash, object] of manifest.objects)
       assert.equal(repo.putObject(Buffer.from(hash, "hex"), object), false);
-    assert.deepEqual(repo.getManifestRoot(manifest.rootHash), manifest.root);
+    assert.deepEqual(
+      repo.withManifestRoot(manifest.rootHash, (encoded) => Uint8Array.from(encoded)),
+      manifest.root,
+    );
+    cache.clear();
   });
   const usage = driver.transaction(
     "read",

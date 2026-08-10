@@ -1,8 +1,10 @@
 import { checkedAdd } from "../resources/safe-integers.js";
+import { bytesToHex, hexToBytes } from "../cas/bytes.js";
 import type { StorageLimits } from "../resources/limits.js";
-import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
+import type { FilesystemSQLiteTransaction, SqliteRow, SqliteValue } from "./driver.js";
 
-export const CHARGED_ROW_BYTES = 96;
+/** Conservative fixed metadata envelope; variable payload classes are charged separately. */
+export const CHARGED_ROW_BYTES = 512;
 
 export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_cas_objects",
@@ -40,13 +42,50 @@ export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_operation_results",
 ] as const);
 
-export const DIRECT_CHARGED_METADATA_SQL = `SELECT ${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
+const DIRECT_VARIABLE_METADATA_TERMS = Object.freeze([
+  "(SELECT coalesce(sum(length(CAST(writer_id AS BLOB))),0) FROM efs_revisions)",
+  "(SELECT coalesce(sum(coalesce(length(CAST(symlink_target AS BLOB)),0)),0) FROM efs_inodes)",
+  "(SELECT coalesce(sum(length(name_sort)+coalesce(length(CAST(name AS BLOB)),0)),0) FROM efs_entries)",
+  "(SELECT coalesce(sum(coalesce(length(encoded),0)),0) FROM efs_inode_revisions)",
+  "(SELECT coalesce(sum(length(name_sort)+coalesce(length(encoded),0)),0) FROM efs_entry_revisions)",
+  "(SELECT coalesce(sum(length(path)+coalesce(length(encoded),0)),0) FROM efs_branch_changes)",
+  "(SELECT coalesce(sum(length(path)),0) FROM efs_branch_manifest_roots)",
+  "(SELECT coalesce(sum(coalesce(length(cdc_buffer),0)),0) FROM efs_staging_workspaces)",
+] as const);
+export const DIRECT_CHARGED_METADATA_EXPRESSION = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
   (table) => `(SELECT count(*) FROM ${table})`,
-).join("+")}) value`;
+).join("+")})+${DIRECT_VARIABLE_METADATA_TERMS.join("+")}`;
+export const DIRECT_CHARGED_METADATA_SQL = `SELECT ${DIRECT_CHARGED_METADATA_EXPRESSION} value`;
 export const DIRECT_STAGING_BYTES_SQL =
   "SELECT (SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o JOIN efs_leases l ON l.id=o.lease_id WHERE l.state IN (0,1))+(SELECT coalesce(sum(m.size),0) FROM efs_lease_staged_manifests m JOIN efs_leases l ON l.id=m.lease_id WHERE l.state IN (0,1)) value";
 export const DIRECT_INGEST_RESERVATION_SQL =
   "SELECT coalesce(sum(c.ingest_reservation_bytes),0) value FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id WHERE l.state IN (0,1)";
+
+export const DIRECT_USAGE_TABLES = Object.freeze([
+  ...CHARGED_METADATA_TABLES,
+  "efs_root_journal",
+  "efs_gc_runs",
+  "efs_gc_marks",
+  "efs_lease_cleanups",
+] as const);
+
+const DIRECT_USAGE_SQL = `SELECT
+  (SELECT count(*) FROM efs_cas_objects) object_count,
+  (SELECT coalesce(sum(size),0) FROM efs_cas_objects) object_bytes,
+  (SELECT count(*) FROM efs_manifest_roots) manifest_root_count,
+  (SELECT coalesce(sum(length(encoded)),0) FROM efs_manifest_roots) manifest_root_bytes,
+  (SELECT count(*) FROM efs_manifest_nodes) manifest_node_count,
+  (SELECT coalesce(sum(length(encoded)),0) FROM efs_manifest_nodes) manifest_node_bytes,
+  (SELECT count(*) FROM efs_cow_page_versions) page_count,
+  (SELECT coalesce(sum(length(bytes)),0) FROM efs_cow_page_versions) page_bytes,
+  (SELECT count(*) FROM efs_patches) patch_count,
+  (SELECT coalesce(sum(insert_length),0) FROM efs_patches) patch_bytes,
+  (${DIRECT_STAGING_BYTES_SQL.replace(/^SELECT /u, "").replace(/ value$/u, "")}) staging_bytes,
+  (${DIRECT_INGEST_RESERVATION_SQL.replace(/ value FROM/u, " FROM")}) ingest_reservation_bytes,
+  (SELECT coalesce(sum(length(encoded)),0) FROM efs_operation_results) result_bytes,
+  ((SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs)+(SELECT count(*)*192+coalesce(sum(2*length(CAST(run_id AS BLOB))),0) FROM efs_gc_marks)+(SELECT count(*)*${CHARGED_ROW_BYTES} FROM efs_lease_cleanups)) maintenance_bytes,
+  ((SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_operation_ids)) permanent_identifiers,
+  (${DIRECT_CHARGED_METADATA_EXPRESSION}) charged_metadata_bytes`;
 
 export const USAGE_COUNTER_COLUMNS = Object.freeze([
   "object_count",
@@ -67,12 +106,391 @@ export const USAGE_COUNTER_COLUMNS = Object.freeze([
   "charged_metadata_bytes",
 ] as const);
 
-type UsageCounter = (typeof USAGE_COUNTER_COLUMNS)[number];
+export const USAGE_INTEGRITY_SQL = [...USAGE_COUNTER_COLUMNS, "mutation_sequence"]
+  .map((column) => `CAST(${column} AS TEXT)`)
+  .join("||':'||");
+
+export type UsageCounter = (typeof USAGE_COUNTER_COLUMNS)[number];
 export type UsageDelta = Partial<Readonly<Record<UsageCounter, number>>>;
 export type UsageSnapshot = SqliteRow &
   Readonly<Record<UsageCounter, number>> & {
     readonly mutation_sequence: number;
+    readonly integrity_token: string;
   };
+
+export function usageIntegrityToken(
+  usage: Readonly<Record<UsageCounter, number>> & {
+    readonly mutation_sequence: number;
+  },
+): string {
+  const columns = [...USAGE_COUNTER_COLUMNS, "mutation_sequence"] as const;
+  return columns.map((column) => String(usage[column])).join(":");
+}
+
+type RecountKeyKind = "number" | "string" | "blob";
+interface RecountPhase {
+  readonly table: string;
+  readonly keys: readonly {
+    readonly column: string;
+    readonly kind: RecountKeyKind;
+  }[];
+  readonly contributions: UsageDeltaSql;
+}
+type UsageDeltaSql = Partial<Readonly<Record<UsageCounter, string>>>;
+
+function metadataContributions(
+  extra: UsageDeltaSql = {},
+  variableBytes = "0",
+): UsageDeltaSql {
+  return Object.freeze({
+    ...extra,
+    charged_metadata_bytes:
+      variableBytes === "0"
+        ? String(CHARGED_ROW_BYTES)
+        : `${CHARGED_ROW_BYTES}+(${variableBytes})`,
+  });
+}
+
+const key = (column: string, kind: RecountKeyKind) => Object.freeze({ column, kind });
+const activeLeaseSize =
+  "CASE WHEN EXISTS(SELECT 1 FROM efs_leases l WHERE l.id=t.lease_id AND l.state IN (0,1)) THEN t.size ELSE 0 END";
+const activeIngestReservation =
+  "CASE WHEN EXISTS(SELECT 1 FROM efs_leases l WHERE l.id=t.lease_id AND l.state IN (0,1)) THEN t.ingest_reservation_bytes ELSE 0 END";
+
+const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
+  {
+    table: "efs_cas_objects",
+    keys: [key("hash", "blob")],
+    contributions: metadataContributions({ object_count: "1", object_bytes: "t.size" }),
+  },
+  {
+    table: "efs_manifest_roots",
+    keys: [key("hash", "blob")],
+    contributions: metadataContributions({
+      manifest_root_count: "1",
+      manifest_root_bytes: "length(t.encoded)",
+    }),
+  },
+  {
+    table: "efs_manifest_nodes",
+    keys: [key("hash", "blob")],
+    contributions: metadataContributions({
+      manifest_node_count: "1",
+      manifest_node_bytes: "length(t.encoded)",
+    }),
+  },
+  {
+    table: "efs_revisions",
+    keys: [key("revision", "number")],
+    contributions: metadataContributions({}, "length(CAST(t.writer_id AS BLOB))"),
+  },
+  {
+    table: "efs_inodes",
+    keys: [key("id", "string")],
+    contributions: metadataContributions(
+      {},
+      "coalesce(length(CAST(t.symlink_target AS BLOB)),0)",
+    ),
+  },
+  {
+    table: "efs_entries",
+    keys: [key("parent_inode", "string"), key("name_sort", "blob")],
+    contributions: metadataContributions(
+      {},
+      "length(t.name_sort)+coalesce(length(CAST(t.name AS BLOB)),0)",
+    ),
+  },
+  {
+    table: "efs_inode_revisions",
+    keys: [key("revision", "number"), key("inode_id", "string")],
+    contributions: metadataContributions({}, "coalesce(length(t.encoded),0)"),
+  },
+  {
+    table: "efs_revision_manifest_roots",
+    keys: [
+      key("revision", "number"),
+      key("inode_id", "string"),
+      key("manifest_hash", "blob"),
+    ],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_entry_revisions",
+    keys: [
+      key("revision", "number"),
+      key("parent_inode", "string"),
+      key("name_sort", "blob"),
+    ],
+    contributions: metadataContributions(
+      {},
+      "length(t.name_sort)+coalesce(length(t.encoded),0)",
+    ),
+  },
+  {
+    table: "efs_branches",
+    keys: [key("id", "string")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_branch_ids",
+    keys: [key("id", "string")],
+    contributions: metadataContributions({ permanent_identifiers: "1" }),
+  },
+  {
+    table: "efs_branch_changes",
+    keys: [key("branch_id", "string"), key("path", "blob")],
+    contributions: metadataContributions(
+      {},
+      "length(t.path)+coalesce(length(t.encoded),0)",
+    ),
+  },
+  {
+    table: "efs_branch_inode_expectations",
+    keys: [key("branch_id", "string"), key("inode_id", "string")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_branch_manifest_roots",
+    keys: [
+      key("branch_id", "string"),
+      key("path", "blob"),
+      key("manifest_hash", "blob"),
+    ],
+    contributions: metadataContributions({}, "length(t.path)"),
+  },
+  {
+    table: "efs_cow_page_versions",
+    keys: [
+      key("branch_id", "string"),
+      key("inode_id", "string"),
+      key("page_index", "number"),
+      key("generation", "number"),
+    ],
+    contributions: metadataContributions({
+      page_count: "1",
+      page_bytes: "length(t.bytes)",
+    }),
+  },
+  {
+    table: "efs_cow_page_heads",
+    keys: [
+      key("branch_id", "string"),
+      key("inode_id", "string"),
+      key("page_index", "number"),
+    ],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_patches",
+    keys: [
+      key("branch_id", "string"),
+      key("inode_id", "string"),
+      key("sequence", "number"),
+    ],
+    contributions: metadataContributions({
+      patch_count: "1",
+      patch_bytes: "t.insert_length",
+    }),
+  },
+  {
+    table: "efs_patch_segments",
+    keys: [
+      key("branch_id", "string"),
+      key("inode_id", "string"),
+      key("sequence", "number"),
+      key("segment_index", "number"),
+    ],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_leases",
+    keys: [key("id", "string")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_lease_manifests",
+    keys: [key("lease_id", "string"), key("manifest_hash", "blob")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_lease_objects",
+    keys: [key("lease_id", "string"), key("object_hash", "blob")],
+    contributions: metadataContributions({ staging_bytes: activeLeaseSize }),
+  },
+  {
+    table: "efs_lease_staged_manifests",
+    keys: [
+      key("lease_id", "string"),
+      key("kind", "number"),
+      key("manifest_hash", "blob"),
+    ],
+    contributions: metadataContributions({ staging_bytes: activeLeaseSize }),
+  },
+  {
+    table: "efs_staging_entries",
+    keys: [key("lease_id", "string"), key("entry_index", "number")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_staging_level_records",
+    keys: [
+      key("lease_id", "string"),
+      key("level", "number"),
+      key("record_index", "number"),
+    ],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_lease_cow_pages",
+    keys: [
+      key("lease_id", "string"),
+      key("branch_id", "string"),
+      key("inode_id", "string"),
+      key("page_index", "number"),
+      key("generation", "number"),
+    ],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_lease_patches",
+    keys: [
+      key("lease_id", "string"),
+      key("branch_id", "string"),
+      key("inode_id", "string"),
+      key("sequence", "number"),
+    ],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_staging_certificates",
+    keys: [key("lease_id", "string")],
+    contributions: metadataContributions({
+      ingest_reservation_bytes: activeIngestReservation,
+    }),
+  },
+  {
+    table: "efs_staging_reconciliations",
+    keys: [key("lease_id", "string")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_staging_reconciliation_queue",
+    keys: [key("lease_id", "string"), key("kind", "number"), key("hash", "blob")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_staging_workspaces",
+    keys: [key("lease_id", "string")],
+    contributions: metadataContributions({}, "length(t.cdc_buffer)"),
+  },
+  {
+    table: "efs_staging_reused_subtrees",
+    keys: [key("lease_id", "string"), key("node_hash", "blob")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_operation_ids",
+    keys: [key("id", "string")],
+    contributions: metadataContributions({ permanent_identifiers: "1" }),
+  },
+  {
+    table: "efs_operation_results",
+    keys: [key("operation_id", "string")],
+    contributions: metadataContributions({ result_bytes: "length(t.encoded)" }),
+  },
+  {
+    table: "efs_root_journal",
+    keys: [key("generation", "number")],
+    contributions: { maintenance_bytes: `${CHARGED_ROW_BYTES}+length(t.root_id)` },
+  },
+  {
+    table: "efs_gc_runs",
+    keys: [key("id", "string")],
+    contributions: { maintenance_bytes: "512+2*length(CAST(t.id AS BLOB))" },
+  },
+  {
+    table: "efs_gc_marks",
+    keys: [key("run_id", "string"), key("kind", "number"), key("hash", "blob")],
+    contributions: { maintenance_bytes: "192+2*length(CAST(t.run_id AS BLOB))" },
+  },
+  {
+    table: "efs_lease_cleanups",
+    keys: [key("lease_id", "string")],
+    contributions: { maintenance_bytes: String(CHARGED_ROW_BYTES) },
+  },
+]);
+
+if (
+  USAGE_RECOUNT_PHASES.length !== DIRECT_USAGE_TABLES.length ||
+  USAGE_RECOUNT_PHASES.some(
+    (phase, index) => phase.table !== DIRECT_USAGE_TABLES[index],
+  )
+)
+  throw new Error("usage recount phases differ from the authoritative table list");
+
+export const USAGE_RECOUNT_PHASE_COUNT = USAGE_RECOUNT_PHASES.length;
+export interface UsageRecountBatch {
+  readonly checkedRows: number;
+  readonly deltas: readonly number[];
+  readonly nextKey: string | null;
+  readonly complete: boolean;
+}
+
+function encodeRecountKey(phase: RecountPhase, row: SqliteRow): string {
+  return JSON.stringify(
+    phase.keys.map(({ kind }, index) => {
+      const value = row[`__key${index}`];
+      if (kind === "blob") {
+        if (!(value instanceof Uint8Array))
+          throw new Error("ECORRUPT: usage recount returned a non-BLOB key");
+        return { blob: bytesToHex(value) };
+      }
+      if (kind === "number") {
+        if (!Number.isSafeInteger(value))
+          throw new Error("ECORRUPT: usage recount returned an invalid numeric key");
+        return value;
+      }
+      if (typeof value !== "string")
+        throw new Error("ECORRUPT: usage recount returned a non-text key");
+      return value;
+    }),
+  );
+}
+
+function decodeRecountKey(phase: RecountPhase, encoded: string): SqliteValue[] {
+  let values: unknown;
+  try {
+    values = JSON.parse(encoded);
+  } catch {
+    throw new RangeError("invalid usage recount key");
+  }
+  if (!Array.isArray(values) || values.length !== phase.keys.length)
+    throw new RangeError("invalid usage recount key");
+  return values.map((value, index) => {
+    const kind = phase.keys[index]!.kind;
+    if (kind === "number") {
+      if (!Number.isSafeInteger(value))
+        throw new RangeError("invalid usage recount key");
+      return value as number;
+    }
+    if (kind === "string") {
+      if (typeof value !== "string") throw new RangeError("invalid usage recount key");
+      return value;
+    }
+    if (
+      !value ||
+      typeof value !== "object" ||
+      !("blob" in value) ||
+      typeof value.blob !== "string"
+    )
+      throw new RangeError("invalid usage recount key");
+    try {
+      return value.blob === "" ? new Uint8Array() : hexToBytes(value.blob);
+    } catch {
+      throw new RangeError("invalid usage recount key");
+    }
+  });
+}
 
 function add(left: number, right: number, name: string): number {
   if (!Number.isSafeInteger(right)) throw new RangeError(`invalid usage delta ${name}`);
@@ -94,7 +512,7 @@ export class UsageRepository {
 
   snapshot(): UsageSnapshot {
     const row = this.#tx.all<UsageSnapshot>(
-      `SELECT ${USAGE_COUNTER_COLUMNS.join(",")},mutation_sequence FROM efs_usage WHERE singleton=1`,
+      `SELECT ${USAGE_COUNTER_COLUMNS.join(",")},mutation_sequence,integrity_token FROM efs_usage WHERE singleton=1`,
       [],
       { maxRows: 1, maxBytes: 2048 },
     )[0];
@@ -102,6 +520,11 @@ export class UsageRepository {
     for (const column of [...USAGE_COUNTER_COLUMNS, "mutation_sequence"] as const)
       if (!Number.isSafeInteger(row[column]) || row[column] < 0)
         throw new Error(`ECORRUPT: invalid usage counter ${column}`);
+    if (
+      typeof row.integrity_token !== "string" ||
+      row.integrity_token !== usageIntegrityToken(row)
+    )
+      throw new Error("ECORRUPT: usage integrity token mismatch");
     return row;
   }
 
@@ -156,27 +579,97 @@ export class UsageRepository {
       (column) => (delta[column] ?? 0) !== 0,
     );
     if (!changed.length) return current;
+    const mutationSequence = checkedAdd(
+      current.mutation_sequence,
+      1,
+      "usage mutation sequence",
+    );
+    const integrityToken = usageIntegrityToken({
+      ...next,
+      mutation_sequence: mutationSequence,
+    });
     const result = this.#tx.run(
       `UPDATE efs_usage SET ${changed
         .map((column) => `${column}=${column}+?`)
         .join(
           ",",
-        )},mutation_sequence=mutation_sequence+1 WHERE singleton=1 AND mutation_sequence=?`,
-      [...changed.map((column) => delta[column] ?? 0), current.mutation_sequence],
+        )},mutation_sequence=mutation_sequence+1,integrity_token=? WHERE singleton=1 AND mutation_sequence=?`,
+      [
+        ...changed.map((column) => delta[column] ?? 0),
+        integrityToken,
+        current.mutation_sequence,
+      ],
     );
     if (result.changes !== 1)
       throw new Error("ECORRUPT: concurrent or missing usage singleton update");
     return Object.freeze({
       ...next,
-      mutation_sequence: checkedAdd(
-        current.mutation_sequence,
-        1,
-        "usage mutation sequence",
-      ),
+      mutation_sequence: mutationSequence,
+      integrity_token: integrityToken,
     }) as UsageSnapshot;
   }
 
+  recountBatch(
+    phaseIndex: number,
+    afterKey: string | null,
+    limit: number,
+    maxBytes: number,
+  ): UsageRecountBatch {
+    if (
+      !Number.isSafeInteger(phaseIndex) ||
+      phaseIndex < 0 ||
+      phaseIndex >= USAGE_RECOUNT_PHASES.length
+    )
+      throw new RangeError("invalid usage recount phase");
+    if (
+      !Number.isSafeInteger(limit) ||
+      limit <= 0 ||
+      limit > this.#limits.maxQueryBatchSize
+    )
+      throw new RangeError("invalid usage recount row limit");
+    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)
+      throw new RangeError("invalid usage recount byte limit");
+    const phase = USAGE_RECOUNT_PHASES[phaseIndex]!;
+    const bindings = afterKey === null ? [] : decodeRecountKey(phase, afterKey);
+    const keyColumns = phase.keys.map(({ column }) => `t.${column}`);
+    const keyProjection = keyColumns
+      .map((column, index) => `${column} __key${index}`)
+      .join(",");
+    const contributionProjection = Object.entries(phase.contributions)
+      .map(([column, expression]) => `${expression} ${column}`)
+      .join(",");
+    const where =
+      afterKey === null
+        ? ""
+        : keyColumns.length === 1
+          ? `WHERE ${keyColumns[0]}>?`
+          : `WHERE (${keyColumns.join(",")})>(${keyColumns.map(() => "?").join(",")})`;
+    const rows = this.#tx.all(
+      `SELECT ${keyProjection},${contributionProjection} FROM ${phase.table} t ${where} ORDER BY ${keyColumns.join(",")} LIMIT ?`,
+      [...bindings, limit],
+      { maxRows: limit, maxBytes },
+    );
+    const deltas = USAGE_COUNTER_COLUMNS.map(() => 0);
+    for (const row of rows)
+      for (const [column, index] of USAGE_COUNTER_COLUMNS.map(
+        (name, index) => [name, index] as const,
+      )) {
+        const value = row[column];
+        if (value === undefined) continue;
+        if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+          throw new Error(`ECORRUPT: invalid usage recount contribution ${column}`);
+        deltas[index] = checkedAdd(deltas[index]!, value, `usage recount ${column}`);
+      }
+    return Object.freeze({
+      checkedRows: rows.length,
+      deltas: Object.freeze(deltas),
+      nextKey: rows.length ? encodeRecountKey(phase, rows.at(-1)!) : null,
+      complete: rows.length < limit,
+    });
+  }
+
   directChargedMetadataBytes(): number {
+    this.#assertDirectRecountBounded();
     const value = this.#tx.all<{ value: number } & SqliteRow>(
       DIRECT_CHARGED_METADATA_SQL,
       [],
@@ -188,6 +681,7 @@ export class UsageRepository {
   }
 
   directStagingBytes(): number {
+    this.#assertDirectRecountBounded();
     const value = this.#tx.all<{ value: number } & SqliteRow>(
       DIRECT_STAGING_BYTES_SQL,
       [],
@@ -199,6 +693,7 @@ export class UsageRepository {
   }
 
   directIngestReservationBytes(): number {
+    this.#assertDirectRecountBounded();
     const value = this.#tx.all<{ value: number } & SqliteRow>(
       DIRECT_INGEST_RESERVATION_SQL,
       [],
@@ -207,6 +702,24 @@ export class UsageRepository {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
       throw new Error("ECORRUPT: invalid direct ingest-reservation recount");
     return value;
+  }
+
+  directUsage(): Readonly<Record<UsageCounter, number>> {
+    this.#assertDirectRecountBounded();
+    const row = this.#tx.all<Readonly<Record<UsageCounter, number>> & SqliteRow>(
+      DIRECT_USAGE_SQL,
+      [],
+      { maxRows: 1, maxBytes: 2048 },
+    )[0];
+    if (!row) throw new Error("ECORRUPT: direct usage recount returned no row");
+    for (const column of USAGE_COUNTER_COLUMNS)
+      if (!Number.isSafeInteger(row[column]) || row[column] < 0)
+        throw new Error(`ECORRUPT: invalid direct usage counter ${column}`);
+    return Object.freeze(
+      Object.fromEntries(
+        USAGE_COUNTER_COLUMNS.map((column) => [column, row[column]]),
+      ) as unknown as Readonly<Record<UsageCounter, number>>,
+    );
   }
 
   reconcileChargedMetadata(reason = "durable metadata rows"): UsageSnapshot {
@@ -220,16 +733,14 @@ export class UsageRepository {
 
   reconcileDerivedUsage(reason = "durable row accounting"): UsageSnapshot {
     const current = this.snapshot();
-    const chargedMetadata = this.directChargedMetadataBytes();
-    const stagingBytes = this.directStagingBytes();
-    const ingestReservationBytes = this.directIngestReservationBytes();
+    const direct = this.directUsage();
     return this.apply(
-      {
-        charged_metadata_bytes: chargedMetadata - current.charged_metadata_bytes,
-        staging_bytes: stagingBytes - current.staging_bytes,
-        ingest_reservation_bytes:
-          ingestReservationBytes - current.ingest_reservation_bytes,
-      },
+      Object.fromEntries(
+        USAGE_COUNTER_COLUMNS.map((column) => [
+          column,
+          direct[column] - current[column],
+        ]),
+      ) as UsageDelta,
       reason,
     );
   }
@@ -245,14 +756,29 @@ export class UsageRepository {
 
   verifyDerivedUsage(): void {
     const current = this.snapshot();
-    const metadata = this.directChargedMetadataBytes();
-    const staging = this.directStagingBytes();
-    const ingestReservation = this.directIngestReservationBytes();
-    if (metadata !== current.charged_metadata_bytes)
-      throw new Error("ECORRUPT: charged metadata differs from direct recount");
-    if (staging !== current.staging_bytes)
-      throw new Error("ECORRUPT: logical staging bytes differ from direct recount");
-    if (ingestReservation !== current.ingest_reservation_bytes)
-      throw new Error("ECORRUPT: ingest reservation differs from direct recount");
+    const direct = this.directUsage();
+    for (const column of USAGE_COUNTER_COLUMNS)
+      if (direct[column] !== current[column])
+        throw new Error(`ECORRUPT: ${column} differs from bounded direct recount`);
+  }
+
+  #assertDirectRecountBounded(): void {
+    let remaining = this.#limits.maxQueryBatchSize;
+    for (const table of DIRECT_USAGE_TABLES) {
+      if (remaining <= 0)
+        throw new RangeError(
+          "direct usage recount exceeds the configured bounded row envelope",
+        );
+      const limit = remaining + 1;
+      const rows = this.#tx.all(`SELECT 1 present FROM ${table} LIMIT ?`, [limit], {
+        maxRows: limit,
+        maxBytes: limit * 64,
+      });
+      if (rows.length > remaining)
+        throw new RangeError(
+          "direct usage recount exceeds the configured bounded row envelope",
+        );
+      remaining -= rows.length;
+    }
   }
 }

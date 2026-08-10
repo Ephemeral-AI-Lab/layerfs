@@ -18,7 +18,7 @@ import type {
   RuntimeLimits,
   StorageLimits,
 } from "../resources/limits.js";
-import type { ContentCache } from "../cache/content-cache.js";
+import { ContentCache } from "../cache/content-cache.js";
 import type {
   AuthenticatedManifestTreePath,
   ClosureCertificate,
@@ -69,6 +69,15 @@ export interface DurableEditPreparedManifest extends StreamPreparedManifest {
   readonly mode: "durable-path-copy" | "streamed-fallback";
   readonly pathCopyReason?: string;
   readonly pathCopyMetrics?: DurablePathCopyMetrics;
+  readonly fallbackMetrics?: {
+    readonly sourceReadCalls: number;
+    readonly sourceReadTransactions: number;
+    readonly sourceBytesRead: number;
+    readonly pathAuthenticationTransactions: number;
+    readonly persistenceTransactions: number;
+    readonly storageTransactions: number;
+    readonly readWindowBytes: number;
+  };
 }
 
 interface PreparedNode {
@@ -636,7 +645,7 @@ function persistCandidate(
   };
   try {
     transact<void>("write", (tx) => {
-      const staging = tx.staging(storage);
+      const staging = tx.staging(storage, cache);
       staging.begin({
         leaseId,
         ownerId,
@@ -668,7 +677,7 @@ function persistCandidate(
         tx.content(storage, cache).putObjectsBatch(
           batch.map((entry) => ({ hash: entry.hash, bytes: entry.bytes })),
         );
-        tx.staging(storage).appendBatch(
+        tx.staging(storage, cache).appendBatch(
           leaseId,
           ownerNonce,
           batch.map((entry) => ({
@@ -684,7 +693,7 @@ function persistCandidate(
       content.putManifestNodesBatch(
         candidate.nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
       );
-      tx.staging(storage).appendBatch(
+      tx.staging(storage, cache).appendBatch(
         leaseId,
         ownerNonce,
         candidate.nodes.map((node) => ({
@@ -701,15 +710,16 @@ function persistCandidate(
       transact<void>("write", (tx) => {
         const content = tx.content(storage, cache);
         const members = batch.map((claim) => {
-          const encoded = content.getManifestNode(claim.nodeHash);
-          if (!encoded) throw new Error("ECORRUPT: reused subtree node is missing");
+          const size = content.withManifestNode(claim.nodeHash, intrinsicByteLength);
+          if (size === undefined)
+            throw new Error("ECORRUPT: reused subtree node is missing");
           return Object.freeze({
             kind: "manifest-node" as const,
             hash: claim.nodeHash,
-            size: intrinsicByteLength(encoded),
+            size,
           });
         });
-        tx.staging(storage).appendBatch(leaseId, ownerNonce, members);
+        tx.staging(storage, cache).appendBatch(leaseId, ownerNonce, members);
       });
     }
     if (reused.length)
@@ -724,7 +734,7 @@ function persistCandidate(
 
     const certificate = transact<ClosureCertificate>("write", (tx) => {
       tx.content(storage, cache).putManifestRoot(candidate.rootHash, candidate.root);
-      const staging = tx.staging(storage);
+      const staging = tx.staging(storage, cache);
       staging.appendBatch(leaseId, ownerNonce, [
         {
           kind: "manifest-root",
@@ -742,11 +752,11 @@ function persistCandidate(
     while (!complete)
       complete = transact<{ readonly complete: boolean }>("write", (tx) =>
         tx
-          .staging(storage)
+          .staging(storage, cache)
           .reconcileBatch(leaseId, ownerNonce, reconciliationWorkLimit(storage)),
       ).complete;
     transact<void>("write", (tx) => {
-      const staging = tx.staging(storage);
+      const staging = tx.staging(storage, cache);
       staging.seal(certificate);
       staging.bumpRoot(5, leaseId);
     });
@@ -760,7 +770,7 @@ function persistCandidate(
     if (begun)
       try {
         port.transaction("write", budget, (tx) => {
-          tx.staging(storage).delete(leaseId, ownerNonce);
+          tx.staging(storage, cache).delete(leaseId, ownerNonce);
         });
       } catch {}
     throw error;
@@ -777,10 +787,12 @@ export async function prepareDurableEditedContent(
   cache?: ContentCache,
   clock: () => number = Date.now,
 ): Promise<DurableEditPreparedManifest> {
+  cache ??= new ContentCache(1, admission);
   const newSize = validateInputs(source, edit);
   if (newSize > storage.maxFileBytes)
     throw new RangeError("edited file exceeds maxFileBytes");
   let reason: string | undefined;
+  let pathAuthenticationTransactions = 0;
   try {
     const pathCapacity = checkedMultiply(
       storage.maxManifestDepth + 1,
@@ -803,6 +815,11 @@ export async function prepareDurableEditedContent(
       throw error;
     }
     try {
+      pathAuthenticationTransactions = checkedAdd(
+        pathAuthenticationTransactions,
+        1,
+        "durable edit path transactions",
+      );
       const path = port.transaction(
         "read",
         {
@@ -899,9 +916,50 @@ export async function prepareDurableEditedContent(
       Math.floor(storage.maxFinalTransactionBytes / 2),
     ),
   );
+  let sourceReadCalls = 0;
+  let sourceBytesRead = 0;
+  let persistenceTransactions = 0;
+  const measuredSource: DurableEditSource = Object.freeze({
+    ...source,
+    read(offset: number, length: number): Uint8Array {
+      sourceReadCalls = checkedAdd(
+        sourceReadCalls,
+        1,
+        "streamed fallback source reads",
+      );
+      sourceBytesRead = checkedAdd(
+        sourceBytesRead,
+        length,
+        "streamed fallback source bytes",
+      );
+      return source.read(offset, length);
+    },
+  });
+  const measuredPort: OperationsStorage = Object.freeze({
+    ...port,
+    transaction<T>(
+      mode: StorageTransactionMode,
+      budget: StorageWorkBudget,
+      callback: (ports: StorageTransactionPorts) => T,
+    ): T {
+      persistenceTransactions = checkedAdd(
+        persistenceTransactions,
+        1,
+        "streamed fallback persistence transactions",
+      );
+      return port.transaction(mode, budget, callback);
+    },
+  });
   const prepared = await prepareContentStreaming(
-    port,
-    editedContentStream(source, edit, newSize, readWindowBytes, admission, cache),
+    measuredPort,
+    editedContentStream(
+      measuredSource,
+      edit,
+      newSize,
+      readWindowBytes,
+      admission,
+      cache,
+    ),
     storage,
     runtime,
     admission,
@@ -914,5 +972,30 @@ export async function prepareDurableEditedContent(
     ...prepared,
     mode: "streamed-fallback",
     pathCopyReason: reason,
+    fallbackMetrics: Object.freeze({
+      sourceReadCalls,
+      sourceReadTransactions: checkedMultiply(
+        sourceReadCalls,
+        source.readStorageTransactions ?? 0,
+        "streamed fallback source transactions",
+      ),
+      sourceBytesRead,
+      pathAuthenticationTransactions,
+      persistenceTransactions,
+      storageTransactions: checkedAdd(
+        checkedAdd(
+          pathAuthenticationTransactions,
+          persistenceTransactions,
+          "streamed fallback storage transactions",
+        ),
+        checkedMultiply(
+          sourceReadCalls,
+          source.readStorageTransactions ?? 0,
+          "streamed fallback source transactions",
+        ),
+        "streamed fallback storage transactions",
+      ),
+      readWindowBytes,
+    }),
   });
 }

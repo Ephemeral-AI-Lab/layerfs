@@ -185,7 +185,9 @@ test("memory and transaction ceilings reject without a visible partial mutation"
   const fixture = await memoryFilesystem({
     filesystem: { maxMaterializedBytes: 512 * 1024 },
     runtime: {
-      maxManagedResidentBytes: 1024 * 1024,
+      // The M1 intrinsic progress envelope is just under 100 MiB; this test
+      // constrains the transaction without advertising an impossible runtime.
+      maxManagedResidentBytes: 128 * 1024 * 1024,
       maxCacheBytes: 256 * 1024,
       maxPendingWriteBytes: 256 * 1024,
       maxWriteSessionBytes: 64 * 1024,
@@ -198,7 +200,7 @@ test("memory and transaction ceilings reject without a visible partial mutation"
   try {
     await assert.rejects(
       fixture.filesystem.writeFile("/too-large", new Uint8Array(2 * 1024 * 1024)),
-      (error) => error.code === "ENOSPC",
+      (error) => error.code === "EFBIG",
     );
     await assert.rejects(
       fixture.filesystem.stat("/too-large"),

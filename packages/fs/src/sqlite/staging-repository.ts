@@ -7,6 +7,8 @@ import type { StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 import { ManifestTreeRepository } from "./manifest-tree-repository.js";
+import { ContentRepository } from "./content-repository.js";
+import type { ContentCache } from "../cache/content-cache.js";
 
 export type StagingMemberKind = "object" | "manifest-root" | "manifest-node";
 export interface StagingMember {
@@ -77,7 +79,6 @@ interface QueueRow extends SqliteRow {
 interface BackingRow extends SqliteRow {
   stored_size: number;
   membership_size: number;
-  encoded?: Uint8Array;
 }
 interface LeaseChargeRow extends SqliteRow {
   state: number;
@@ -164,9 +165,17 @@ function counters(values: readonly number[]): void {
 export class StagingRepository {
   readonly #tx: FilesystemSQLiteTransaction;
   readonly #limits: StorageLimits;
-  constructor(tx: FilesystemSQLiteTransaction, limits: StorageLimits) {
+  readonly #cache: ContentCache | undefined;
+  readonly #content: ContentRepository;
+  constructor(
+    tx: FilesystemSQLiteTransaction,
+    limits: StorageLimits,
+    cache?: ContentCache,
+  ) {
     this.#tx = tx;
     this.#limits = limits;
+    this.#cache = cache;
+    this.#content = new ContentRepository(tx, limits, cache);
   }
 
   begin(options: {
@@ -318,42 +327,49 @@ export class StagingRepository {
   release(leaseId: string, ownerNonce: Uint8Array, requireSealed: boolean): boolean {
     const charge = this.#leaseCharge(leaseId);
     if (!charge || !equalBytes(charge.owner_nonce, ownerNonce)) return false;
-    const state = requireSealed ? "state=1" : "state IN (0,1)";
-    const result = this.#tx.run(
-      `UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND ${state}`,
-      [leaseId, ownerNonce],
-    );
-    if (result.changes) {
+    const releasable = requireSealed
+      ? charge.state === 1
+      : charge.state === 0 || charge.state === 1;
+    if (releasable) {
+      this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
+      const result = this.#tx.run(
+        "UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND state IN (0,1)",
+        [leaseId, ownerNonce],
+      );
+      if (result.changes !== 1)
+        throw new Error("ECORRUPT: staging lease tombstone changed unexpectedly");
       this.#releaseLeaseReservations(
         charge.staged_bytes,
         charge.ingest_reservation_bytes,
       );
-      this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
       this.bumpRoot(6, leaseId);
     } else if (charge.state === 2) {
       this.#scheduleCleanup(leaseId, ownerNonce, 0, 0);
     }
-    return result.changes === 1;
+    return releasable;
   }
   delete(leaseId: string, ownerNonce: Uint8Array): boolean {
     const charge = this.#leaseCharge(leaseId);
     if (!charge || !equalBytes(charge.owner_nonce, ownerNonce)) return false;
-    const result = this.#tx.run(
-      "UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND state IN (0,1)",
-      [leaseId, ownerNonce],
-    );
-    if (result.changes) {
+    const releasable = charge.state === 0 || charge.state === 1;
+    if (releasable) {
+      this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
+      const result = this.#tx.run(
+        "UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND state IN (0,1)",
+        [leaseId, ownerNonce],
+      );
+      if (result.changes !== 1)
+        throw new Error("ECORRUPT: staging lease tombstone changed unexpectedly");
       if (charge.state === 0 || charge.state === 1)
         this.#releaseLeaseReservations(
           charge.staged_bytes,
           charge.ingest_reservation_bytes,
         );
-      this.#scheduleCleanup(leaseId, ownerNonce, charge.staged_bytes, 0);
       this.bumpRoot(6, leaseId);
     } else if (charge.state === 2) {
       this.#scheduleCleanup(leaseId, ownerNonce, 0, 0);
     }
-    return result.changes === 1;
+    return releasable;
   }
   acquireReadLease(
     leaseId: string,
@@ -383,17 +399,20 @@ export class StagingRepository {
       { maxRows: 1, maxBytes: 256 },
     )[0];
     if (!lease) return false;
-    const result = this.#tx.run(
-      "UPDATE efs_leases SET state=2 WHERE id=? AND owner_id=? AND state IN (0,1)",
-      [leaseId, ownerId],
-    );
-    if (result.changes) {
+    const releasable = lease.state === 0 || lease.state === 1;
+    if (releasable) {
       this.#scheduleCleanup(leaseId, lease.owner_nonce, 0, 0);
+      const result = this.#tx.run(
+        "UPDATE efs_leases SET state=2 WHERE id=? AND owner_id=? AND state IN (0,1)",
+        [leaseId, ownerId],
+      );
+      if (result.changes !== 1)
+        throw new Error("ECORRUPT: read lease tombstone changed unexpectedly");
       this.bumpRoot(3, leaseId);
     } else if (lease.state === 2) {
       this.#scheduleCleanup(leaseId, lease.owner_nonce, 0, 0);
     }
-    return result.changes === 1;
+    return releasable;
   }
 
   expireBatch(now: number, limit: number): number {
@@ -413,6 +432,12 @@ export class StagingRepository {
     let releasedIngestBytes = 0;
     let tombstoned = 0;
     for (const row of rows) {
+      this.#scheduleCleanup(
+        row.id,
+        row.owner_nonce,
+        row.state === 0 || row.state === 1 ? row.staged_bytes : 0,
+        now,
+      );
       const result = this.#tx.run(
         "UPDATE efs_leases SET state=2 WHERE id=? AND (expires_at_ms<? OR state=2)",
         [row.id, now],
@@ -426,12 +451,8 @@ export class StagingRepository {
             releasedIngestBytes,
             row.ingest_reservation_bytes,
           );
-        this.#scheduleCleanup(
-          row.id,
-          row.owner_nonce,
-          row.state === 0 || row.state === 1 ? row.staged_bytes : 0,
-          now,
-        );
+      } else {
+        throw new Error("ECORRUPT: expired lease tombstone changed unexpectedly");
       }
     }
     this.#releaseLeaseReservations(releasedBytes, releasedIngestBytes);
@@ -688,10 +709,13 @@ export class StagingRepository {
       if (remaining <= 0) break;
       if (item.kind === 0) continue;
       const backing = this.#manifestBacking(leaseId, item.kind, item.hash);
-      if (!backing.encoded || backing.stored_size !== item.declared_size)
+      if (backing.stored_size !== item.declared_size)
         throw new Error("ECORRUPT: reconciled manifest size changed");
       if (item.kind === 1) {
-        const root = decodeManifestRoot(backing.encoded, item.hash);
+        const root = this.#content.withManifestRoot(item.hash, (encoded) =>
+          decodeManifestRoot(encoded, item.hash),
+        );
+        if (!root) throw new Error("ECORRUPT: reconciled manifest root is missing");
         this.#enqueueVerified(
           leaseId,
           2,
@@ -707,7 +731,10 @@ export class StagingRepository {
         processed += 1;
         continue;
       }
-      const node = decodeManifestNode(backing.encoded, item.hash);
+      const node = this.#content.withManifestNode(item.hash, (encoded) =>
+        decodeManifestNode(encoded, item.hash),
+      );
+      if (!node) throw new Error("ECORRUPT: reconciled manifest node is missing");
       if (
         item.declared_span !== node.span ||
         item.declared_entry_count !== node.entryCount
@@ -872,14 +899,14 @@ export class StagingRepository {
     const row =
       kind === 1
         ? this.#tx.all<BackingRow>(
-            "SELECT length(r.encoded) stored_size,m.size membership_size,r.encoded FROM efs_manifest_roots r JOIN efs_lease_staged_manifests m ON m.lease_id=? AND m.kind=0 AND m.manifest_hash=r.hash WHERE r.hash=?",
+            "SELECT length(r.encoded) stored_size,m.size membership_size FROM efs_manifest_roots r JOIN efs_lease_staged_manifests m ON m.lease_id=? AND m.kind=0 AND m.manifest_hash=r.hash WHERE r.hash=?",
             [leaseId, hash],
-            { maxRows: 1, maxBytes: this.#limits.maxManifestNodeBytes + 256 },
+            { maxRows: 1, maxBytes: 256 },
           )[0]
         : this.#tx.all<BackingRow>(
-            "SELECT length(n.encoded) stored_size,m.size membership_size,n.encoded FROM efs_manifest_nodes n JOIN efs_lease_staged_manifests m ON m.lease_id=? AND m.kind=1 AND m.manifest_hash=n.hash WHERE n.hash=?",
+            "SELECT length(n.encoded) stored_size,m.size membership_size FROM efs_manifest_nodes n JOIN efs_lease_staged_manifests m ON m.lease_id=? AND m.kind=1 AND m.manifest_hash=n.hash WHERE n.hash=?",
             [leaseId, hash],
-            { maxRows: 1, maxBytes: this.#limits.maxManifestNodeBytes + 256 },
+            { maxRows: 1, maxBytes: 256 },
           )[0];
     if (!row || row.stored_size !== row.membership_size)
       throw new Error(
@@ -932,9 +959,19 @@ export class StagingRepository {
     } else {
       const row = this.#manifestBacking(leaseId, kind, hash);
       size = row.stored_size;
-      if (kind === 1) decodeManifestRoot(row.encoded!, hash);
-      else {
-        const node = decodeManifestNode(row.encoded!, hash);
+      if (kind === 1) {
+        if (
+          !this.#content.withManifestRoot(hash, (encoded) => {
+            decodeManifestRoot(encoded, hash);
+            return true;
+          })
+        )
+          throw new Error("ECORRUPT: closure manifest root is missing");
+      } else {
+        const node = this.#content.withManifestNode(hash, (encoded) =>
+          decodeManifestNode(encoded, hash),
+        );
+        if (!node) throw new Error("ECORRUPT: closure manifest node is missing");
         if (node.span !== declaredSpan || node.entryCount !== declaredEntryCount)
           throw new Error("ECORRUPT: manifest child declaration mismatch");
         const claim = this.#tx.all<ReusedSubtreeRow>(
@@ -948,6 +985,7 @@ export class StagingRepository {
           const authenticated = new ManifestTreeRepository(
             this.#tx,
             this.#limits,
+            this.#cache,
           ).authenticateNodePath(
             claim.source_manifest_hash,
             Array.from(claim.source_path),
