@@ -407,6 +407,9 @@ export interface StorageAdapterLimits {
 }
 /** Hard version-0.1 content-object/streaming CDC allocation ceiling. */
 export declare const MAX_CONTENT_OBJECT_BYTES: number;
+/** Conservative per-object binding/row/index envelope in a durable transaction. */
+export declare const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES = 256;
+export declare function maxPersistedContentObjectBytes(storage: Pick<StorageLimits, "maxFinalTransactionBytes">): number;
 /** Additional caller input one collecting FastCDC push may return with a prebuffer. */
 export declare const MAX_CONTENT_COLLECTOR_PUSH_BYTES: number;
 /** Maximum retained chunk references returned by one collecting push call. */
@@ -465,12 +468,27 @@ export interface SQLiteDriverCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard: false;
+}
+export interface SQLitePhysicalStorage {
+    readonly mainFileBytes?: number;
+    readonly walBytes?: number;
+}
+export interface SQLiteCheckpointResult {
+    readonly mode: "passive" | "restart" | "truncate";
+    readonly busy: number;
+    readonly logFrames: number;
+    readonly checkpointedFrames: number;
+    readonly walBytes?: number;
 }
 export interface FilesystemSQLiteDriver {
     readonly kind: "sqlite";
     readonly readOnly: boolean;
     readonly capabilities: SQLiteDriverCapabilities;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
+    physicalStorage?(): SQLitePhysicalStorage;
+    checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
     close(): void | Promise<void>;
 }
 
@@ -586,7 +604,7 @@ export type NodeVfsObserver = (event: NodeVfsObservation) => void;
 export declare function openNodeVfs(options: OpenNodeVfsOptions): Promise<NodeVfsHandle>;
 
 /* ===== packages/sqlite-node/dist/index.d.ts ===== */
-import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SQLiteDriverCapabilities, TransactionMode } from "@ephemeralai/fs/sqlite-driver";
+import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SQLiteDriverCapabilities, SQLiteCheckpointResult, SQLitePhysicalStorage, TransactionMode } from "@ephemeralai/fs/sqlite-driver";
 export interface OpenNodeSqliteOptions {
     readonly filename: string;
     readonly readOnly?: boolean;
@@ -606,5 +624,7 @@ export declare class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     constructor(options: OpenNodeSqliteOptions);
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;
+    physicalStorage(): SQLitePhysicalStorage;
+    checkpoint(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
 }
 export declare function openNodeSqlite(options: OpenNodeSqliteOptions): Promise<NodeSQLiteDriver>;

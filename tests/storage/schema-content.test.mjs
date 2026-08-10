@@ -185,7 +185,7 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
       maxBytes: 128,
     })[0],
     v4Tables: tx.all(
-      "SELECT count(*) count FROM sqlite_schema WHERE type='table' AND name IN ('efs_lease_cleanups','efs_staging_workspaces')",
+      "SELECT count(*) count FROM sqlite_schema WHERE type='table' AND name IN ('efs_lease_cleanups','efs_staging_workspaces','efs_staging_reused_subtrees')",
       [],
       { maxRows: 1, maxBytes: 128 },
     )[0].count,
@@ -194,7 +194,7 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
     userVersion: 4,
     metaVersion: 4,
     usage: { mutation_sequence: 0, maintenance_bytes: 291 },
-    v4Tables: 2,
+    v4Tables: 3,
   });
   assert.ok(count.value >= 8);
   probe.close();
@@ -293,20 +293,21 @@ test("namespace root journals reserve maintenance quota before changing the head
   assert.throws(
     () =>
       driver.transaction("write", (tx) =>
-        new NamespaceRepository(tx, DEFAULT_FILESYSTEM_LIMITS, tight, "test").nextRevision(
-          2,
-          1,
-        ),
+        new NamespaceRepository(
+          tx,
+          DEFAULT_FILESYSTEM_LIMITS,
+          tight,
+          "test",
+        ).nextRevision(2, 1),
       ),
     /maintenance quota/,
   );
   assert.deepEqual(
     driver.transaction("read", (tx) => ({
-      meta: tx.all(
-        "SELECT main_revision,root_mutation_generation FROM efs_meta",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0],
+      meta: tx.all("SELECT main_revision,root_mutation_generation FROM efs_meta", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0],
       revisions: tx.all("SELECT count(*) count FROM efs_revisions", [], {
         maxRows: 1,
         maxBytes: 128,
@@ -343,12 +344,14 @@ test("namespace root journals reserve maintenance quota before changing the head
     1,
   );
   assert.deepEqual(
-    driver.transaction("read", (tx) =>
-      tx.all(
-        "SELECT u.maintenance_bytes,m.main_revision,m.root_mutation_generation,(SELECT count(*) FROM efs_root_journal) journals FROM efs_usage u JOIN efs_meta m ON m.singleton=u.singleton",
-        [],
-        { maxRows: 1, maxBytes: 256 },
-      )[0],
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT u.maintenance_bytes,m.main_revision,m.root_mutation_generation,(SELECT count(*) FROM efs_root_journal) journals FROM efs_usage u JOIN efs_meta m ON m.singleton=u.singleton",
+          [],
+          { maxRows: 1, maxBytes: 256 },
+        )[0],
     ),
     {
       maintenance_bytes: 97,
@@ -573,10 +576,7 @@ test("the exact supported content-object bound persists and bound plus one rolls
       driver.capabilities,
     );
     const reopened = driver.transaction("read", (tx) =>
-      new ContentRepository(tx, storage).getObject(
-        exactHash,
-        MAX_CONTENT_OBJECT_BYTES,
-      ),
+      new ContentRepository(tx, storage).getObject(exactHash, MAX_CONTENT_OBJECT_BYTES),
     );
     assert.equal(reopened.byteLength, MAX_CONTENT_OBJECT_BYTES);
     assert.deepEqual(sha256(reopened), exactHash);

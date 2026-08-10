@@ -73,13 +73,12 @@ export const MAX_CONTENT_OBJECT_BYTES = 16 * 1024 * 1024;
 export const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES = 256;
 
 export function maxPersistedContentObjectBytes(
-  storage: Pick<StorageLimits, "maxWriteBytes" | "maxFinalTransactionBytes">,
+  storage: Pick<StorageLimits, "maxFinalTransactionBytes">,
 ): number {
   return Math.max(
     0,
     Math.min(
       MAX_CONTENT_OBJECT_BYTES,
-      storage.maxWriteBytes,
       storage.maxFinalTransactionBytes - CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES,
     ),
   );
@@ -180,6 +179,10 @@ export function constrainStorageLimits(
   const result = {
     ...limits,
     maxWriteBytes: Math.min(limits.maxWriteBytes, adapter.maxBlobBytes),
+    maxFinalTransactionBytes: Math.min(
+      limits.maxFinalTransactionBytes,
+      adapter.maxBlobBytes + CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES,
+    ),
     maxPhysicalDatabaseBytes: Math.min(
       limits.maxPhysicalDatabaseBytes,
       adapter.maxPhysicalDatabaseBytes,

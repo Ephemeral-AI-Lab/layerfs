@@ -7,6 +7,10 @@ import type {
 import type { CanonicalPath } from "../namespace/paths.js";
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { ContentCache } from "../cache/content-cache.js";
+import type {
+  ManifestNode,
+  ManifestParameters,
+} from "../manifests/codec.js";
 
 export type StorageTransactionMode = "read" | "write" | "exclusive";
 export interface StorageWorkBudget {
@@ -85,6 +89,48 @@ export interface ContentStore {
     manifestHash: Uint8Array,
     offset: number,
   ): AuthenticatedManifestCursor;
+}
+
+export interface AuthenticatedManifestTreePathNode {
+  readonly hash: Uint8Array;
+  readonly path: readonly number[];
+  readonly offset: number;
+  readonly finalAtLevel: boolean;
+  readonly node: ManifestNode;
+  readonly selectedChildIndex?: number;
+}
+export interface AuthenticatedManifestTreePath {
+  readonly manifestHash: Uint8Array;
+  readonly parameters: ManifestParameters;
+  readonly fileSize: number;
+  readonly entryCount: number;
+  readonly nodesRead: number;
+  readonly nodes: readonly AuthenticatedManifestTreePathNode[];
+  readonly leafOffset: number;
+  readonly entryIndex: number;
+  readonly entryOffset: number;
+}
+export interface ManifestTreeStore {
+  pathAtOffset(
+    manifestHash: Uint8Array,
+    offset: number,
+  ): AuthenticatedManifestTreePath;
+  protectSourceManifest(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    manifestHash: Uint8Array,
+  ): void;
+  registerReusedSubtrees(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    sourceManifestHash: Uint8Array,
+    claims: readonly {
+      readonly sourcePath: readonly number[];
+      readonly nodeHash: Uint8Array;
+      readonly span: number;
+      readonly entryCount: number;
+    }[],
+  ): void;
 }
 
 export interface InodeRow {
@@ -492,6 +538,7 @@ export interface OverlayStore {
 
 export interface StorageTransactionPorts {
   content(limits: StorageLimits, cache?: ContentCache): ContentStore;
+  manifestTree(limits: StorageLimits, cache?: ContentCache): ManifestTreeStore;
   namespace(
     filesystem: FilesystemLimits,
     storage: StorageLimits,

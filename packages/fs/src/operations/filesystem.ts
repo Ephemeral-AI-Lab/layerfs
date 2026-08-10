@@ -1172,6 +1172,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       };
     });
     const source: DurableEditSource = Object.freeze({
+      manifestHash: copyBytes(selected.manifestHash),
       size: selected.size,
       parameters: selected.parameters,
       read: (offset: number, length: number): Uint8Array =>
@@ -1185,25 +1186,6 @@ export class EphemeralFS implements EphemeralFilesystem {
             this.#cache,
           ),
         ),
-      entries: (offset: number, limit: number) =>
-        this.#transaction("read", (tx) => {
-          checkedInteger(offset, "authenticated entry offset", selected.size);
-          checkedInteger(limit, "authenticated entry batch size");
-          if (limit <= 0 || limit > this.#storageLimits.maxQueryBatchSize)
-            throw new RangeError("authenticated entry batch exceeds configured limit");
-          const cursor = tx
-            .content(this.#storageLimits, this.#cache)
-            .openManifestCursor(selected.manifestHash, offset);
-          if (cursor.fileSize !== selected.size)
-            throw new Error("ECORRUPT: manifest size changed across cursor opens");
-          const rows = [];
-          for (let index = 0; index < limit; index += 1) {
-            const row = cursor.nextEntry();
-            if (!row) break;
-            rows.push(row);
-          }
-          return Object.freeze(rows);
-        }),
     });
     return Object.freeze({ source, token: selected.token });
   }

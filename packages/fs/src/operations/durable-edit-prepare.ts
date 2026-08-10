@@ -1,27 +1,42 @@
-import { copyBytes, intrinsicByteLength } from "../cas/bytes.js";
+import { bytesToHex, copyBytes, intrinsicByteLength } from "../cas/bytes.js";
 import { sha256 } from "../cas/sha256.js";
 import { StreamingFastCdc } from "../cdc/fastcdc.js";
-import type { ManifestParameters } from "../manifests/codec.js";
-import { checkedAdd } from "../resources/safe-integers.js";
+import {
+  encodeManifestNode,
+  encodeManifestRoot,
+  type ManifestChild,
+  type ManifestEntry,
+  type ManifestInternal,
+  type ManifestLeaf,
+  type ManifestNode,
+  type ManifestParameters,
+} from "../manifests/codec.js";
+import { validateCanonicalManifestNode } from "../manifests/cursor.js";
+import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 import type {
   AdmissionController,
   RuntimeLimits,
   StorageLimits,
 } from "../resources/limits.js";
 import type { ContentCache } from "../cache/content-cache.js";
-import type { AuthenticatedManifestEntry, OperationsStorage } from "./storage-ports.js";
+import type {
+  AuthenticatedManifestTreePath,
+  ClosureCertificate,
+  OperationsStorage,
+  StorageTransactionPorts,
+  StorageTransactionMode,
+  StorageWorkBudget,
+} from "./storage-ports.js";
 import {
-  prepareContentEntriesStreaming,
   prepareContentStreaming,
-  type StagedManifestEntryInput,
   type StreamPreparedManifest,
 } from "./streaming-prepare.js";
 
 export interface DurableEditSource {
+  readonly manifestHash: Uint8Array;
   readonly size: number;
   readonly parameters: ManifestParameters;
   read(offset: number, length: number): Uint8Array;
-  entries(offset: number, limit: number): readonly AuthenticatedManifestEntry[];
 }
 
 export interface DurableContentEdit {
@@ -33,16 +48,57 @@ export interface DurableContentEdit {
   readInsert(offset: number, length: number): Uint8Array;
 }
 
+export interface DurablePathCopyMetrics {
+  readonly authenticatedNodesRead: number;
+  readonly emittedNodes: number;
+  readonly reusedSubtrees: number;
+  readonly storageTransactions: number;
+  readonly sourceBytesRead: number;
+}
+
 export interface DurableEditPreparedManifest extends StreamPreparedManifest {
   readonly mode: "durable-path-copy" | "streamed-fallback";
   readonly pathCopyReason?: string;
+  readonly pathCopyMetrics?: DurablePathCopyMetrics;
+}
+
+interface PreparedNode {
+  readonly hash: Uint8Array;
+  readonly encoded: Uint8Array;
+  readonly node: ManifestNode;
+}
+
+interface ReusedClaim {
+  readonly sourcePath: readonly number[];
+  readonly nodeHash: Uint8Array;
+  readonly span: number;
+  readonly entryCount: number;
+}
+
+interface PathCopyCandidate {
+  readonly path: AuthenticatedManifestTreePath;
+  readonly entries: readonly {
+    readonly hash: Uint8Array;
+    readonly bytes: Uint8Array;
+  }[];
+  readonly nodes: readonly PreparedNode[];
+  readonly reused: readonly ReusedClaim[];
+  readonly root: Uint8Array;
+  readonly rootHash: Uint8Array;
+  readonly entryCount: number;
+  readonly sourceBytesRead: number;
+  readonly authenticatedNodesRead: number;
 }
 
 class DurablePathCopyFallbackError extends Error {}
 
 function validateInputs(source: DurableEditSource, edit: DurableContentEdit): number {
-  if (!Number.isSafeInteger(source.size) || source.size < 0)
-    throw new RangeError("source size must be a nonnegative safe integer");
+  if (
+    intrinsicByteLength(source.manifestHash) !== 32 ||
+    !Number.isSafeInteger(source.size) ||
+    source.size < 0
+  )
+    throw new RangeError("durable edit source identity or size is invalid");
   if (
     !Number.isSafeInteger(edit.offset) ||
     edit.offset < 0 ||
@@ -67,10 +123,10 @@ function exactRead(
   length: number,
   label: string,
 ): Uint8Array {
-  const bytes = copyBytes(read(offset, length));
-  if (intrinsicByteLength(bytes) !== length)
+  const borrowed = read(offset, length);
+  if (intrinsicByteLength(borrowed) !== length)
     throw new Error(`ECORRUPT: ${label} returned a partial range`);
-  return bytes;
+  return copyBytes(borrowed);
 }
 
 function readEditedRange(
@@ -124,155 +180,440 @@ function readEditedRange(
   return output;
 }
 
-function discoverScanStart(
-  source: DurableEditSource,
-  edit: DurableContentEdit,
-): number {
-  if (source.size === 0) return 0;
-  const probe = edit.offset === source.size ? source.size - 1 : edit.offset;
-  const selected = source.entries(probe, 1)[0];
-  if (
-    !selected ||
-    selected.offset > probe ||
-    selected.offset + selected.length <= probe
-  )
-    throw new Error("ECORRUPT: authenticated manifest did not contain edit offset");
-  return selected.offset;
-}
-
-function isAuthenticatedBoundary(source: DurableEditSource, offset: number): boolean {
-  if (offset === source.size) return true;
-  if (offset < 0 || offset > source.size) return false;
-  return source.entries(offset, 1)[0]?.offset === offset;
-}
-
-function affectedPathCopyEntries(
-  source: DurableEditSource,
-  edit: DurableContentEdit,
-  newSize: number,
-  scanStart: number,
-  maxAffectedBytes: number,
-): {
-  readonly entries: readonly StagedManifestEntryInput[];
-  readonly reconnectOldOffset: number;
-} {
-  const delta = edit.insertLength - edit.deleteLength;
-  const dirtyOldEnd = checkedAdd(edit.offset, edit.deleteLength);
-  const dirtyNewEnd = checkedAdd(edit.offset, edit.insertLength);
-  const entries: StagedManifestEntryInput[] = [];
-  let affectedBytes = 0;
-  let newCursor = scanStart;
-  let feedCursor = scanStart;
-  let reconnectOldOffset: number | undefined;
-  const acceptReconnect = (): boolean => {
-    if (newCursor < dirtyNewEnd) return false;
-    const mappedOld = newCursor - delta;
-    if (mappedOld < dirtyOldEnd || !isAuthenticatedBoundary(source, mappedOld))
-      return false;
-    reconnectOldOffset = mappedOld;
-    return true;
-  };
-  if (acceptReconnect())
-    return Object.freeze({
-      entries: Object.freeze([]),
-      reconnectOldOffset: reconnectOldOffset!,
-    });
-  const chunker = new StreamingFastCdc(source.parameters);
-  const reconnected = Object.freeze({ kind: "reconnected" });
-  const capped = Object.freeze({ kind: "capped" });
-  const acceptChunk = (borrowed: Uint8Array): void => {
-    const chunk = copyBytes(borrowed);
-    if (chunk.byteLength > maxAffectedBytes - affectedBytes) throw capped;
-    affectedBytes = checkedAdd(affectedBytes, chunk.byteLength);
-    entries.push(
-      Object.freeze({
-        hash: sha256(chunk),
-        length: chunk.byteLength,
-        bytes: chunk,
-      }),
-    );
-    newCursor = checkedAdd(newCursor, chunk.byteLength);
-    if (acceptReconnect()) throw reconnected;
-  };
-  while (feedCursor < newSize && reconnectOldOffset === undefined) {
-    if (affectedBytes + chunker.bufferedBytes >= maxAffectedBytes)
-      throw new DurablePathCopyFallbackError(
-        "local FastCDC reconnection exceeded its bounded durable window",
-      );
-    const length = Math.min(
-      source.parameters.maximum,
-      newSize - feedCursor,
-      maxAffectedBytes - affectedBytes - chunker.bufferedBytes,
-    );
-    if (length <= 0)
-      throw new DurablePathCopyFallbackError(
-        "local FastCDC reconnection exceeded its bounded durable window",
-      );
-    const input = readEditedRange(source, edit, newSize, feedCursor, length);
-    feedCursor += length;
-    try {
-      chunker.drain(input, acceptChunk, feedCursor === newSize);
-    } catch (error) {
-      if (error === reconnected) break;
-      if (error === capped)
-        throw new DurablePathCopyFallbackError(
-          "local FastCDC reconnection exceeded its bounded durable window",
-        );
-      throw error;
-    }
-  }
-  if (reconnectOldOffset === undefined)
-    throw new Error("ECORRUPT: FastCDC rebuild did not reconnect at end of file");
-  return Object.freeze({
-    entries: Object.freeze(entries),
-    reconnectOldOffset,
-  });
-}
-
-function* copyAuthenticatedEntries(
-  source: DurableEditSource,
-  start: number,
-  end: number,
-  batchSize: number,
-): Generator<StagedManifestEntryInput> {
-  let cursor = start;
-  while (cursor < end) {
-    const rows = source.entries(cursor, batchSize);
-    if (!rows.length || rows[0]!.offset !== cursor)
-      throw new DurablePathCopyFallbackError(
-        "authenticated entry cursor rejected a stale derived boundary",
-      );
-    for (const row of rows) {
-      if (row.offset !== cursor || row.offset + row.length > end)
-        throw new DurablePathCopyFallbackError(
-          "authenticated entry cursor rejected a stale derived span",
-        );
-      yield Object.freeze({ hash: copyBytes(row.hash), length: row.length });
-      cursor = checkedAdd(cursor, row.length);
-      if (cursor === end) break;
-    }
-  }
-}
-
 function editedContentStream(
   source: DurableEditSource,
   edit: DurableContentEdit,
   newSize: number,
   readWindowBytes: number,
+  admission: AdmissionController,
+  cache?: ContentCache,
 ): ReadableStream<Uint8Array> {
   let position = 0;
+  let queuedRelease: (() => void) | undefined;
   return new ReadableStream<Uint8Array>({
     pull(controller) {
+      queuedRelease?.();
+      queuedRelease = undefined;
       if (position === newSize) {
         controller.close();
         return;
       }
       const length = Math.min(readWindowBytes, newSize - position);
-      const bytes = readEditedRange(source, edit, newSize, position, length);
-      position += length;
-      controller.enqueue(bytes);
+      // Account for the output, the source-owned return value, and the detached
+      // snapshot while exactRead is copying. Only the output survives enqueue,
+      // but all three may coexist during a hostile or uncached source read.
+      const workingBytes = checkedMultiply(
+        length,
+        3,
+        "durable edit streamed read windows",
+      );
+      cache?.makeRoom(workingBytes);
+      const release = admission.reserve(workingBytes);
+      try {
+        const bytes = readEditedRange(source, edit, newSize, position, length);
+        position += length;
+        controller.enqueue(bytes);
+        queuedRelease = release;
+      } catch (error) {
+        release();
+        throw error;
+      }
+    },
+    cancel() {
+      queuedRelease?.();
+      queuedRelease = undefined;
     },
   });
+}
+
+function makeNode(node: ManifestNode): PreparedNode {
+  const encoded = encodeManifestNode(node);
+  return Object.freeze({ hash: sha256(encoded), encoded, node });
+}
+
+function buildCandidate(
+  path: AuthenticatedManifestTreePath,
+  source: DurableEditSource,
+  edit: DurableContentEdit,
+  newSize: number,
+  storage: StorageLimits,
+  runtime: RuntimeLimits,
+  admission: AdmissionController,
+  cache?: ContentCache,
+): PathCopyCandidate {
+  if (edit.deleteLength !== edit.insertLength)
+    throw new DurablePathCopyFallbackError(
+      "bounded one-path copy requires an equal-length replacement",
+    );
+  const leafFrame = path.nodes.at(-1);
+  if (!leafFrame || leafFrame.node.kind !== "leaf" || path.fileSize === 0)
+    throw new DurablePathCopyFallbackError(
+      "bounded one-path copy requires a nonempty authenticated leaf",
+    );
+  const leafEnd = checkedAdd(path.leafOffset, leafFrame.node.span);
+  const editEnd = checkedAdd(edit.offset, edit.deleteLength);
+  if (edit.offset < path.leafOffset || editEnd > leafEnd)
+    throw new DurablePathCopyFallbackError(
+      "edit crosses an authenticated leaf boundary",
+    );
+  const maxAffectedBytes = Math.min(
+    runtime.maxWriteSessionBytes,
+    runtime.maxPendingWriteBytes,
+    Math.floor(runtime.maxManagedResidentBytes / 6),
+  );
+  if (leafFrame.node.span > maxAffectedBytes)
+    throw new DurablePathCopyFallbackError(
+      "authenticated leaf exceeds the bounded durable edit window",
+    );
+  let attemptBytes = checkedMultiply(
+    leafFrame.node.span,
+    6,
+    "durable path-copy byte windows",
+  );
+  attemptBytes = checkedAdd(
+    attemptBytes,
+    checkedMultiply(
+      path.nodes.length + 2,
+      storage.maxManifestNodeBytes,
+      "durable path-copy node windows",
+    ),
+    "durable path-copy working set",
+  );
+  cache?.makeRoom(attemptBytes);
+  const releaseAttempt = admission.reserve(attemptBytes);
+  try {
+    let sourceBytesRead = 0;
+    const measuredSource: DurableEditSource = Object.freeze({
+      ...source,
+      read(offset: number, length: number): Uint8Array {
+        sourceBytesRead = checkedAdd(sourceBytesRead, length);
+        return source.read(offset, length);
+      },
+    });
+    const editedLeaf = readEditedRange(
+      measuredSource,
+      edit,
+      newSize,
+      path.leafOffset,
+      leafFrame.node.span,
+    );
+    const entries: Array<{ readonly hash: Uint8Array; readonly bytes: Uint8Array }> =
+      [];
+    const chunker = new StreamingFastCdc(source.parameters);
+    chunker.drain(
+      editedLeaf,
+      (borrowed) => {
+        const bytes = copyBytes(borrowed);
+        entries.push(Object.freeze({ hash: sha256(bytes), bytes }));
+      },
+      leafFrame.finalAtLevel,
+    );
+    if (chunker.bufferedBytes !== 0)
+      throw new DurablePathCopyFallbackError(
+        "edited FastCDC stream did not reconnect at the authenticated leaf boundary",
+      );
+    const manifestEntries: ManifestEntry[] = entries.map((entry) =>
+      Object.freeze({ hash: copyBytes(entry.hash), length: entry.bytes.byteLength }),
+    );
+    const leaf: ManifestLeaf = Object.freeze({
+      kind: "leaf",
+      span: manifestEntries.reduce((sum, entry) => checkedAdd(sum, entry.length), 0),
+      entryCount: manifestEntries.length,
+      entries: Object.freeze(manifestEntries),
+    });
+    if (leaf.span !== leafFrame.node.span)
+      throw new DurablePathCopyFallbackError(
+        "edited leaf span did not reconnect to the source tree",
+      );
+    try {
+      validateCanonicalManifestNode(
+        leaf,
+        source.parameters,
+        leafFrame.finalAtLevel,
+        path.nodes.length === 1,
+      );
+    } catch (error) {
+      throw new DurablePathCopyFallbackError(
+        `edited leaf requires regrouping beyond one authenticated path: ${String(error)}`,
+      );
+    }
+    const prepared: PreparedNode[] = [makeNode(leaf)];
+    const reused = new Map<string, ReusedClaim>();
+    let replacement: ManifestChild = Object.freeze({
+      hash: copyBytes(prepared[0]!.hash),
+      span: leaf.span,
+      entryCount: leaf.entryCount,
+    });
+    for (let level = path.nodes.length - 2; level >= 0; level -= 1) {
+      const frame = path.nodes[level]!;
+      if (frame.node.kind !== "internal" || frame.selectedChildIndex === undefined)
+        throw new Error("ECORRUPT: authenticated path lost an internal child");
+      const children = frame.node.children.map((child, index) => {
+        if (index === frame.selectedChildIndex) return replacement;
+        const claim = Object.freeze({
+          sourcePath: Object.freeze([...frame.path, index]),
+          nodeHash: copyBytes(child.hash),
+          span: child.span,
+          entryCount: child.entryCount,
+        });
+        reused.set(bytesToHex(child.hash), claim);
+        return Object.freeze({
+          hash: copyBytes(child.hash),
+          span: child.span,
+          entryCount: child.entryCount,
+        });
+      });
+      const internal: ManifestInternal = Object.freeze({
+        kind: "internal",
+        span: children.reduce((sum, child) => checkedAdd(sum, child.span), 0),
+        entryCount: children.reduce(
+          (sum, child) => checkedAdd(sum, child.entryCount),
+          0,
+        ),
+        children: Object.freeze(children),
+      });
+      try {
+        validateCanonicalManifestNode(
+          internal,
+          source.parameters,
+          frame.finalAtLevel,
+          level === 0,
+        );
+      } catch (error) {
+        throw new DurablePathCopyFallbackError(
+          `copied ancestor requires bounded sibling regrouping: ${String(error)}`,
+        );
+      }
+      const next = makeNode(internal);
+      prepared.push(next);
+      replacement = Object.freeze({
+        hash: copyBytes(next.hash),
+        span: internal.span,
+        entryCount: internal.entryCount,
+      });
+    }
+    if (replacement.span !== newSize)
+      throw new Error("ECORRUPT: copied manifest root span differs from edited size");
+    const entryCount = path.entryCount - leafFrame.node.entryCount + leaf.entryCount;
+    const root = encodeManifestRoot({
+      parameters: source.parameters,
+      fileSize: newSize,
+      entryCount,
+      rootNodeHash: replacement.hash,
+    });
+    return Object.freeze({
+      path,
+      entries: Object.freeze(entries),
+      nodes: Object.freeze(prepared),
+      reused: Object.freeze([...reused.values()]),
+      root,
+      rootHash: sha256(root),
+      entryCount,
+      sourceBytesRead,
+      // This is the initial authenticated root-to-leaf traversal. Tests count
+      // the additional bounded claim/reconciliation reads at the driver edge.
+      authenticatedNodesRead: path.nodesRead,
+    });
+  } finally {
+    releaseAttempt();
+  }
+}
+
+function batchesByBytes<T>(
+  values: readonly T[],
+  rowLimit: number,
+  byteLimit: number,
+  size: (value: T) => number,
+): readonly (readonly T[])[] {
+  const batches: T[][] = [];
+  let batch: T[] = [];
+  let bytes = 0;
+  for (const value of values) {
+    const valueBytes = checkedAdd(size(value), 256);
+    if (batch.length && (batch.length >= rowLimit || bytes + valueBytes > byteLimit)) {
+      batches.push(batch);
+      batch = [];
+      bytes = 0;
+    }
+    if (valueBytes > byteLimit)
+      throw new RangeError("one durable path-copy value exceeds transaction envelope");
+    batch.push(value);
+    bytes = checkedAdd(bytes, valueBytes);
+  }
+  if (batch.length) batches.push(batch);
+  return Object.freeze(batches.map((value) => Object.freeze(value)));
+}
+
+function persistCandidate(
+  port: OperationsStorage,
+  source: DurableEditSource,
+  candidate: PathCopyCandidate,
+  storage: StorageLimits,
+  cache: ContentCache | undefined,
+  clock: () => number,
+): StreamPreparedManifest & { readonly storageTransactions: number } {
+  const leaseId = globalThis.crypto.randomUUID();
+  const ownerId = globalThis.crypto.randomUUID();
+  const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  const now = clock();
+  if (!Number.isSafeInteger(now) || now < 0)
+    throw new Error("clock must return a nonnegative safe integer");
+  const budget: StorageWorkBudget = Object.freeze({
+    maxRows: storage.maxFinalTransactionRows,
+    maxBytes: storage.maxFinalTransactionBytes,
+    maxStatements: storage.maxFinalTransactionRows,
+    maxElapsedMs: 250,
+  });
+  let storageTransactions = 0;
+  let begun = false;
+  const transact = <T>(
+    mode: StorageTransactionMode,
+    callback: (tx: StorageTransactionPorts) => T,
+  ): T => {
+    storageTransactions += 1;
+    return port.transaction(mode, budget, callback);
+  };
+  try {
+    transact<void>("write", (tx) => {
+      const staging = tx.staging(storage);
+      staging.begin({
+        leaseId,
+        ownerId,
+        ownerNonce,
+        now,
+        expiresAt: checkedAdd(now, storage.stagingLeaseMs),
+      });
+      tx.manifestTree(storage, cache).protectSourceManifest(
+        leaseId,
+        ownerNonce,
+        source.manifestHash,
+      );
+      staging.bumpRoot(5, leaseId);
+    });
+    begun = true;
+
+    const uniqueObjects = [
+      ...new Map(
+        candidate.entries.map((entry) => [bytesToHex(entry.hash), entry]),
+      ).values(),
+    ];
+    for (const batch of batchesByBytes(
+      uniqueObjects,
+      storage.maxQueryBatchSize,
+      storage.maxFinalTransactionBytes,
+      (entry) => entry.bytes.byteLength,
+    ))
+      transact<void>("write", (tx) => {
+        tx.content(storage, cache).putObjectsBatch(
+          batch.map((entry) => ({ hash: entry.hash, bytes: entry.bytes })),
+        );
+        tx.staging(storage).appendBatch(
+          leaseId,
+          ownerNonce,
+          batch.map((entry) => ({
+            kind: "object" as const,
+            hash: entry.hash,
+            size: entry.bytes.byteLength,
+          })),
+        );
+      });
+
+    transact<void>("write", (tx) => {
+      const content = tx.content(storage, cache);
+      content.putManifestNodesBatch(
+        candidate.nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
+      );
+      tx.staging(storage).appendBatch(
+        leaseId,
+        ownerNonce,
+        candidate.nodes.map((node) => ({
+          kind: "manifest-node" as const,
+          hash: node.hash,
+          size: node.encoded.byteLength,
+        })),
+      );
+    });
+
+    const newNodeHashes = new Set(candidate.nodes.map((node) => bytesToHex(node.hash)));
+    const reused = candidate.reused.filter(
+      (claim) => !newNodeHashes.has(bytesToHex(claim.nodeHash)),
+    );
+    for (let start = 0; start < reused.length; start += storage.maxQueryBatchSize) {
+      const batch = reused.slice(start, start + storage.maxQueryBatchSize);
+      transact<void>("write", (tx) => {
+        const content = tx.content(storage, cache);
+        const members = batch.map((claim) => {
+          const encoded = content.getManifestNode(claim.nodeHash);
+          if (!encoded) throw new Error("ECORRUPT: reused subtree node is missing");
+          return Object.freeze({
+            kind: "manifest-node" as const,
+            hash: claim.nodeHash,
+            size: encoded.byteLength,
+          });
+        });
+        tx.staging(storage).appendBatch(leaseId, ownerNonce, members);
+      });
+    }
+    if (reused.length)
+      transact<void>("write", (tx) => {
+        tx.manifestTree(storage, cache).registerReusedSubtrees(
+          leaseId,
+          ownerNonce,
+          source.manifestHash,
+          reused,
+        );
+      });
+
+    const certificate = transact<ClosureCertificate>("write", (tx) => {
+      tx.content(storage, cache).putManifestRoot(candidate.rootHash, candidate.root);
+      const staging = tx.staging(storage);
+      staging.appendBatch(leaseId, ownerNonce, [
+        {
+          kind: "manifest-root",
+          hash: candidate.rootHash,
+          size: candidate.root.byteLength,
+        },
+      ]);
+      staging.beginReconciliation(leaseId, ownerNonce, candidate.rootHash);
+      return Object.freeze({
+        ...staging.snapshot(leaseId, ownerNonce),
+        manifestHash: copyBytes(candidate.rootHash),
+      });
+    });
+    let complete = false;
+    while (!complete)
+      complete = transact<{ readonly complete: boolean }>("write", (tx) =>
+        tx
+          .staging(storage)
+          .reconcileBatch(
+            leaseId,
+            ownerNonce,
+            Math.max(
+              1,
+              Math.min(storage.maxQueryBatchSize, storage.maxFinalTransactionRows - 8),
+            ),
+          ),
+      ).complete;
+    transact<void>("write", (tx) => {
+      const staging = tx.staging(storage);
+      staging.seal(certificate);
+      staging.bumpRoot(5, leaseId);
+    });
+    return Object.freeze({
+      hash: copyBytes(candidate.rootHash),
+      size: candidate.path.fileSize,
+      certificate,
+      storageTransactions,
+    });
+  } catch (error) {
+    if (begun)
+      try {
+        transact<void>("write", (tx) => {
+          tx.staging(storage).delete(leaseId, ownerNonce);
+        });
+      } catch {}
+    throw error;
+  }
 }
 
 export async function prepareDurableEditedContent(
@@ -288,70 +629,69 @@ export async function prepareDurableEditedContent(
   const newSize = validateInputs(source, edit);
   if (newSize > storage.maxFileBytes)
     throw new RangeError("edited file exceeds maxFileBytes");
-  const maxAffectedBytes = Math.max(
-    source.parameters.maximum,
-    Math.min(
-      runtime.maxWriteSessionBytes,
-      runtime.maxPendingWriteBytes,
-      Math.floor(runtime.maxManagedResidentBytes / 8),
-    ),
-  );
   let reason: string | undefined;
-  let releaseAttempt: (() => void) | undefined;
   try {
-    cache?.makeRoom(maxAffectedBytes);
-    releaseAttempt = admission.reserve(maxAffectedBytes);
-    const scanStart = discoverScanStart(source, edit);
-    const affected = affectedPathCopyEntries(
+    const path = port.transaction(
+      "read",
+      {
+        maxRows: storage.maxQueryBatchSize,
+        maxBytes: runtime.maxQueryBatchBytes,
+        maxStatements: storage.maxManifestDepth * 4 + 8,
+        maxElapsedMs: 250,
+      },
+      (tx) =>
+        tx.manifestTree(storage, cache).pathAtOffset(source.manifestHash, edit.offset),
+    );
+    if (
+      path.fileSize !== source.size ||
+      path.parameters.minimum !== source.parameters.minimum ||
+      path.parameters.average !== source.parameters.average ||
+      path.parameters.maximum !== source.parameters.maximum
+    )
+      throw new Error("ECORRUPT: durable edit source disagrees with manifest root");
+    const candidate = buildCandidate(
+      path,
       source,
       edit,
-      newSize,
-      scanStart,
-      maxAffectedBytes,
-    );
-    const entries = (function* (): Generator<StagedManifestEntryInput> {
-      yield* copyAuthenticatedEntries(source, 0, scanStart, storage.maxQueryBatchSize);
-      yield* affected.entries;
-      yield* copyAuthenticatedEntries(
-        source,
-        affected.reconnectOldOffset,
-        source.size,
-        storage.maxQueryBatchSize,
-      );
-    })();
-    const prepared = await prepareContentEntriesStreaming(
-      port,
-      entries,
-      source.parameters,
       newSize,
       storage,
       runtime,
       admission,
       cache,
-      clock,
     );
-    return Object.freeze({ ...prepared, mode: "durable-path-copy" });
+    const prepared = persistCandidate(port, source, candidate, storage, cache, clock);
+    return Object.freeze({
+      hash: prepared.hash,
+      size: newSize,
+      certificate: prepared.certificate,
+      mode: "durable-path-copy",
+      pathCopyMetrics: Object.freeze({
+        authenticatedNodesRead: candidate.authenticatedNodesRead,
+        emittedNodes: candidate.nodes.length,
+        reusedSubtrees: candidate.reused.length,
+        storageTransactions: prepared.storageTransactions + 1,
+        sourceBytesRead: candidate.sourceBytesRead,
+      }),
+    });
   } catch (error) {
     if (!(error instanceof DurablePathCopyFallbackError)) throw error;
     reason = error.message;
-  } finally {
-    releaseAttempt?.();
   }
+  const readWindowBytes = Math.max(
+    1,
+    Math.min(
+      runtime.maxWriteSessionBytes,
+      runtime.maxQueryBatchBytes,
+      Math.floor(storage.maxFinalTransactionBytes / 2),
+      // A supported manifest can contain one-byte objects. Leave room for the
+      // authenticated root/path rows so one source read cannot force an
+      // unbounded result set merely because its byte window is small.
+      Math.max(1, storage.maxQueryBatchSize - storage.maxManifestDepth - 2),
+    ),
+  );
   const prepared = await prepareContentStreaming(
     port,
-    editedContentStream(
-      source,
-      edit,
-      newSize,
-      Math.max(
-        1,
-        Math.min(
-          runtime.maxWriteSessionBytes,
-          runtime.maxQueryBatchBytes,
-          Math.floor(storage.maxFinalTransactionBytes / 2),
-        ),
-      ),
-    ),
+    editedContentStream(source, edit, newSize, readWindowBytes, admission, cache),
     storage,
     runtime,
     admission,

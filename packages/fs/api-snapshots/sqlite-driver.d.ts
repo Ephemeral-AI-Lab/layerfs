@@ -8,6 +8,8 @@ export interface FilesystemSQLiteDriver {
     readonly readOnly: boolean;
     readonly capabilities: SQLiteDriverCapabilities;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
+    physicalStorage?(): SQLitePhysicalStorage;
+    checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
     close(): void | Promise<void>;
 }
 
@@ -30,6 +32,16 @@ export interface QueryBudget {
 /* source: packages/fs/dist/sqlite/driver.d.ts */
 export type SqliteBindings = readonly SqliteValue[];
 
+/* export: SQLiteCheckpointResult; kinds: type */
+/* source: packages/fs/dist/sqlite/driver.d.ts */
+export interface SQLiteCheckpointResult {
+    readonly mode: "passive" | "restart" | "truncate";
+    readonly busy: number;
+    readonly logFrames: number;
+    readonly checkpointedFrames: number;
+    readonly walBytes?: number;
+}
+
 /* export: SQLiteDriverCapabilities; kinds: type */
 /* source: packages/fs/dist/sqlite/driver.d.ts */
 export interface SQLiteDriverCapabilities {
@@ -43,6 +55,15 @@ export interface SQLiteDriverCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard: false;
+}
+
+/* export: SQLitePhysicalStorage; kinds: type */
+/* source: packages/fs/dist/sqlite/driver.d.ts */
+export interface SQLitePhysicalStorage {
+    readonly mainFileBytes?: number;
+    readonly walBytes?: number;
 }
 
 /* export: SqliteRow; kinds: type */

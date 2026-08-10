@@ -7,6 +7,7 @@ import { BranchRepository } from "./branch-repository.js";
 import { StagingRepository } from "./staging-repository.js";
 import { MaintenanceRepository } from "./maintenance-repository.js";
 import { OverlayRepository } from "./overlay-repository.js";
+import { ManifestTreeRepository } from "./manifest-tree-repository.js";
 import type {
   OperationsStorage,
   StorageTransactionPorts,
@@ -31,6 +32,8 @@ export function createSqliteOperationsStorage(
         const ports: StorageTransactionPorts = Object.freeze({
           content: (limits: StorageLimits, cache?: ContentCache) =>
             new ContentRepository(tx, limits, cache),
+          manifestTree: (limits: StorageLimits, cache?: ContentCache) =>
+            new ManifestTreeRepository(tx, limits, cache),
           namespace: (
             filesystem: FilesystemLimits,
             storage: StorageLimits,

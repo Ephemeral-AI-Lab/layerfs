@@ -52,7 +52,31 @@
       ]
     },
     {
+      "name": "SQLiteCheckpointResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "SQLiteDriverCapabilities",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SQLitePhysicalStorage",
       "kinds": [
         "type"
       ],

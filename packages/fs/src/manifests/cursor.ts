@@ -43,7 +43,7 @@ function validateDepthLimit(maxDepth: number): void {
   if (maxDepth === 0) throw new RangeError("maxDepth must be positive");
 }
 
-function validateNodeCanonicality(
+export function validateCanonicalManifestNode(
   node: ManifestLeaf | ManifestInternal,
   parameters: ManifestParameters,
   finalAtLevel: boolean,
@@ -163,7 +163,7 @@ export class ManifestSequentialCursor {
       (node.span !== expected.span || node.entryCount !== expected.entryCount)
     )
       throw new Error("manifest child totals mismatch");
-    validateNodeCanonicality(node, this.#parameters, finalAtLevel, rootNode);
+    validateCanonicalManifestNode(node, this.#parameters, finalAtLevel, rootNode);
     return node;
   }
 
@@ -284,7 +284,7 @@ export function validateManifestTree(
     const bytes = reader.get(copyBytes(authoritativeHash));
     if (!bytes) throw new Error("missing manifest node");
     const node = decodeManifestNode(bytes, authoritativeHash);
-    validateNodeCanonicality(node, root.parameters, finalAtLevel, rootNode);
+    validateCanonicalManifestNode(node, root.parameters, finalAtLevel, rootNode);
     if (node.kind === "leaf") {
       if (leafDepth === undefined) leafDepth = depth;
       else if (leafDepth !== depth) throw new Error("unbalanced manifest tree");

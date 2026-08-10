@@ -30,17 +30,32 @@ export interface SQLiteDriverCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard: false;
+}
+export interface SQLitePhysicalStorage {
+    readonly mainFileBytes?: number;
+    readonly walBytes?: number;
+}
+export interface SQLiteCheckpointResult {
+    readonly mode: "passive" | "restart" | "truncate";
+    readonly busy: number;
+    readonly logFrames: number;
+    readonly checkpointedFrames: number;
+    readonly walBytes?: number;
 }
 export interface FilesystemSQLiteDriver {
     readonly kind: "sqlite";
     readonly readOnly: boolean;
     readonly capabilities: SQLiteDriverCapabilities;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
+    physicalStorage?(): SQLitePhysicalStorage;
+    checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
     close(): void | Promise<void>;
 }
 
 /* ===== packages/sqlite-node/dist/index.d.ts ===== */
-import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SQLiteDriverCapabilities, TransactionMode } from "@ephemeralai/fs/sqlite-driver";
+import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SQLiteDriverCapabilities, SQLiteCheckpointResult, SQLitePhysicalStorage, TransactionMode } from "@ephemeralai/fs/sqlite-driver";
 export interface OpenNodeSqliteOptions {
     readonly filename: string;
     readonly readOnly?: boolean;
@@ -60,5 +75,7 @@ export declare class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     constructor(options: OpenNodeSqliteOptions);
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;
+    physicalStorage(): SQLitePhysicalStorage;
+    checkpoint(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
 }
 export declare function openNodeSqlite(options: OpenNodeSqliteOptions): Promise<NodeSQLiteDriver>;

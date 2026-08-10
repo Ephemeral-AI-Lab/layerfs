@@ -290,6 +290,58 @@ export interface CreateNodeVfsBridgeOptions {
 export declare function createNodeVfsBridge(options: CreateNodeVfsBridgeOptions): NodeVfsFilesystemBridge;
 export type { NodeVfsFilesystemBridge, SyncPreparedContent };
 
+/* ===== packages/fs/dist/manifests/codec.d.ts ===== */
+export declare const ROOT_ENVELOPE_BYTES = 68;
+export declare const NODE_HEADER_BYTES = 32;
+export declare const LEAF_RECORD_BYTES = 36;
+export declare const INTERNAL_RECORD_BYTES = 48;
+export declare const MAX_MANIFEST_ENTRY_COUNT = 4294967295;
+export declare const MAX_MANIFEST_NODE_BYTES: number;
+export interface ManifestParameters {
+    readonly minimum: number;
+    readonly average: number;
+    readonly maximum: number;
+}
+export interface ManifestRoot {
+    readonly parameters: ManifestParameters;
+    readonly fileSize: number;
+    readonly entryCount: number;
+    readonly rootNodeHash: Uint8Array;
+}
+export interface ManifestEntry {
+    readonly hash: Uint8Array;
+    readonly length: number;
+}
+export interface ManifestChild {
+    readonly hash: Uint8Array;
+    readonly span: number;
+    readonly entryCount: number;
+}
+export interface ManifestLeaf {
+    readonly kind: "leaf";
+    readonly span: number;
+    readonly entryCount: number;
+    readonly entries: readonly ManifestEntry[];
+}
+export interface ManifestInternal {
+    readonly kind: "internal";
+    readonly span: number;
+    readonly entryCount: number;
+    readonly children: readonly ManifestChild[];
+}
+export type ManifestNode = ManifestLeaf | ManifestInternal;
+export declare function snapshotManifestParameters(parameters: ManifestParameters): Readonly<ManifestParameters>;
+export declare function validateManifestParameters(parameters: ManifestParameters): void;
+/**
+ * Validates parameters that this runtime may use to construct or materialize
+ * content. Binary inspection remains format-complete for valid uint32 values.
+ */
+export declare function validateSupportedManifestParameters(parameters: ManifestParameters): void;
+export declare function encodeManifestRoot(root: ManifestRoot): Uint8Array;
+export declare function decodeManifestRoot(bytes: Uint8Array, expectedHash?: Uint8Array): ManifestRoot;
+export declare function encodeManifestNode(node: ManifestNode): Uint8Array;
+export declare function decodeManifestNode(bytes: Uint8Array, expectedHash?: Uint8Array): ManifestNode;
+
 /* ===== packages/fs/dist/namespace/paths.d.ts ===== */
 import type { FilesystemLimits } from "../resources/limits.js";
 export interface CanonicalPath {
@@ -361,10 +413,15 @@ import type { BranchConfiguration, FilesystemLimits, RuntimeLimits, StorageLimit
 import type { CanonicalPath } from "../namespace/paths.js";
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { ContentCache } from "../cache/content-cache.js";
+import type { ManifestNode, ManifestParameters } from "../manifests/codec.js";
 export type StorageTransactionMode = "read" | "write" | "exclusive";
 export interface StorageWorkBudget {
     readonly maxRows: number;
     readonly maxBytes: number;
+    readonly maxStatements?: number;
+    readonly maxElapsedMs?: number;
+    readonly maxResultRows?: number;
+    readonly maxResultBytes?: number;
 }
 export interface StorageAdapterCapabilities {
     readonly maxBlobBytes: number;
@@ -377,6 +434,19 @@ export interface StorageAdapterCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard: false;
+}
+export interface StoragePhysicalFiles {
+    readonly mainFileBytes?: number;
+    readonly walBytes?: number;
+}
+export interface StorageCheckpointResult {
+    readonly mode: "passive" | "restart" | "truncate";
+    readonly busy: number;
+    readonly logFrames: number;
+    readonly checkpointedFrames: number;
+    readonly walBytes?: number;
 }
 export interface StorageMetadata {
     readonly filesystemId: string;
@@ -393,6 +463,18 @@ export interface ContentBatchResult {
     readonly deduplicated: number;
     readonly insertedBytes: number;
 }
+export interface AuthenticatedManifestCursor {
+    readonly fileSize: number;
+    readonly position: number;
+    peekEntry(): AuthenticatedManifestEntry | null;
+    nextEntry(): AuthenticatedManifestEntry | null;
+    readInto(destination: Uint8Array, destinationOffset: number, length: number): number;
+}
+export interface AuthenticatedManifestEntry {
+    readonly hash: Uint8Array;
+    readonly length: number;
+    readonly offset: number;
+}
 export interface ContentStore {
     putObject(hash: Uint8Array, bytes: Uint8Array): boolean;
     putObjectsBatch(input: readonly ContentObjectInput[]): ContentBatchResult;
@@ -405,6 +487,36 @@ export interface ContentStore {
     putManifestRoot(hash: Uint8Array, encoded: Uint8Array): boolean;
     getManifestRoot(hash: Uint8Array): Uint8Array | undefined;
     getManifestNode(hash: Uint8Array): Uint8Array | undefined;
+    openManifestCursor(manifestHash: Uint8Array, offset: number): AuthenticatedManifestCursor;
+}
+export interface AuthenticatedManifestTreePathNode {
+    readonly hash: Uint8Array;
+    readonly path: readonly number[];
+    readonly offset: number;
+    readonly finalAtLevel: boolean;
+    readonly node: ManifestNode;
+    readonly selectedChildIndex?: number;
+}
+export interface AuthenticatedManifestTreePath {
+    readonly manifestHash: Uint8Array;
+    readonly parameters: ManifestParameters;
+    readonly fileSize: number;
+    readonly entryCount: number;
+    readonly nodesRead: number;
+    readonly nodes: readonly AuthenticatedManifestTreePathNode[];
+    readonly leafOffset: number;
+    readonly entryIndex: number;
+    readonly entryOffset: number;
+}
+export interface ManifestTreeStore {
+    pathAtOffset(manifestHash: Uint8Array, offset: number): AuthenticatedManifestTreePath;
+    protectSourceManifest(leaseId: string, ownerNonce: Uint8Array, manifestHash: Uint8Array): void;
+    registerReusedSubtrees(leaseId: string, ownerNonce: Uint8Array, sourceManifestHash: Uint8Array, claims: readonly {
+        readonly sourcePath: readonly number[];
+        readonly nodeHash: Uint8Array;
+        readonly span: number;
+        readonly entryCount: number;
+    }[]): void;
 }
 export interface InodeRow {
     readonly id: string;
@@ -580,6 +692,11 @@ export interface ReconciliationProgress {
     readonly processed: number;
     readonly complete: boolean;
 }
+export interface LeaseCleanupProgress {
+    readonly worked: boolean;
+    readonly deletedRows: number;
+    readonly deletedLeases: number;
+}
 export interface StagingStore {
     begin(options: {
         readonly leaseId: string;
@@ -601,6 +718,7 @@ export interface StagingStore {
     acquireReadLease(leaseId: string, ownerId: string, manifestHash: Uint8Array, expiresAt: number): void;
     releaseReadLease(leaseId: string, ownerId: string): boolean;
     expireBatch(now: number, limit: number): number;
+    cleanupBatch(limit: number): LeaseCleanupProgress;
     appendBatch(leaseId: string, ownerNonce: Uint8Array, members: readonly StagingMember[]): ClosureCertificate;
     snapshot(leaseId: string, ownerNonce: Uint8Array): ClosureCertificate;
     beginReconciliation(leaseId: string, ownerNonce: Uint8Array, manifestHash: Uint8Array): void;
@@ -684,10 +802,11 @@ export interface OverlayStore {
 }
 export interface StorageTransactionPorts {
     content(limits: StorageLimits, cache?: ContentCache): ContentStore;
-    namespace(limits: FilesystemLimits, syscall: string): NamespaceStore;
-    branches(): BranchStore;
+    manifestTree(limits: StorageLimits, cache?: ContentCache): ManifestTreeStore;
+    namespace(filesystem: FilesystemLimits, storage: StorageLimits, syscall: string): NamespaceStore;
+    branches(limits: StorageLimits): BranchStore;
     staging(limits: StorageLimits): StagingStore;
-    maintenance(): MaintenanceStore;
+    maintenance(limits: StorageLimits): MaintenanceStore;
     overlay(limits: StorageLimits, pageBytes: CowPageBytes): OverlayStore;
 }
 export interface OperationsStorage {
@@ -698,6 +817,8 @@ export interface OperationsStorage {
         readonly now?: number;
     }): StorageMetadata;
     transaction<T>(mode: StorageTransactionMode, budget: StorageWorkBudget, callback: (ports: StorageTransactionPorts) => T): T;
+    physicalStorage(): StoragePhysicalFiles;
+    checkpoint(mode?: "passive" | "restart" | "truncate"): StorageCheckpointResult | undefined;
     close(): void | Promise<void>;
 }
 export interface OperationsContext {
@@ -778,6 +899,9 @@ export interface StorageAdapterLimits {
 }
 /** Hard version-0.1 content-object/streaming CDC allocation ceiling. */
 export declare const MAX_CONTENT_OBJECT_BYTES: number;
+/** Conservative per-object binding/row/index envelope in a durable transaction. */
+export declare const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES = 256;
+export declare function maxPersistedContentObjectBytes(storage: Pick<StorageLimits, "maxFinalTransactionBytes">): number;
 /** Additional caller input one collecting FastCDC push may return with a prebuffer. */
 export declare const MAX_CONTENT_COLLECTOR_PUSH_BYTES: number;
 /** Maximum retained chunk references returned by one collecting push call. */
@@ -836,11 +960,26 @@ export interface SQLiteDriverCapabilities {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+    readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+    readonly journalSizeLimitIsHard: false;
+}
+export interface SQLitePhysicalStorage {
+    readonly mainFileBytes?: number;
+    readonly walBytes?: number;
+}
+export interface SQLiteCheckpointResult {
+    readonly mode: "passive" | "restart" | "truncate";
+    readonly busy: number;
+    readonly logFrames: number;
+    readonly checkpointedFrames: number;
+    readonly walBytes?: number;
 }
 export interface FilesystemSQLiteDriver {
     readonly kind: "sqlite";
     readonly readOnly: boolean;
     readonly capabilities: SQLiteDriverCapabilities;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
+    physicalStorage?(): SQLitePhysicalStorage;
+    checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
     close(): void | Promise<void>;
 }

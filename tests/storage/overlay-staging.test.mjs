@@ -208,12 +208,14 @@ test("structural patches are segmented, ordered, bounded, and exact", async () =
     /immutable/,
   );
   assert.equal(
-    driver.transaction("read", (tx) =>
-      tx.all(
-        "SELECT count(*) count FROM efs_patches WHERE branch_id='branch' AND inode_id='inode'",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0].count,
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT count(*) count FROM efs_patches WHERE branch_id='branch' AND inode_id='inode'",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].count,
     ),
     2,
   );
@@ -543,7 +545,7 @@ test("staging row metadata is exact at limit, rolls back at plus one, recounts, 
       "read",
       (tx) =>
         tx.all(
-          "SELECT charged_metadata_bytes,256+96*((SELECT count(*) FROM efs_cas_objects)+(SELECT count(*) FROM efs_leases)+(SELECT count(*) FROM efs_lease_manifests)+(SELECT count(*) FROM efs_lease_objects)+(SELECT count(*) FROM efs_lease_staged_manifests)+(SELECT count(*) FROM efs_staging_entries)+(SELECT count(*) FROM efs_staging_level_records)+(SELECT count(*) FROM efs_lease_cow_pages)+(SELECT count(*) FROM efs_lease_patches)+(SELECT count(*) FROM efs_staging_certificates)+(SELECT count(*) FROM efs_staging_reconciliations)+(SELECT count(*) FROM efs_staging_reconciliation_queue)+(SELECT count(*) FROM efs_staging_workspaces)) direct,(SELECT count(*) FROM efs_lease_objects) members,staging_bytes FROM efs_usage",
+          "SELECT charged_metadata_bytes,256+96*((SELECT count(*) FROM efs_cas_objects)+(SELECT count(*) FROM efs_leases)+(SELECT count(*) FROM efs_lease_manifests)+(SELECT count(*) FROM efs_lease_objects)+(SELECT count(*) FROM efs_lease_staged_manifests)+(SELECT count(*) FROM efs_staging_entries)+(SELECT count(*) FROM efs_staging_level_records)+(SELECT count(*) FROM efs_lease_cow_pages)+(SELECT count(*) FROM efs_lease_patches)+(SELECT count(*) FROM efs_staging_certificates)+(SELECT count(*) FROM efs_staging_reconciliations)+(SELECT count(*) FROM efs_staging_reconciliation_queue)+(SELECT count(*) FROM efs_staging_workspaces)+(SELECT count(*) FROM efs_staging_reused_subtrees)) direct,(SELECT count(*) FROM efs_lease_objects) members,staging_bytes FROM efs_usage",
           [],
           { maxRows: 1, maxBytes: 256 },
         )[0],

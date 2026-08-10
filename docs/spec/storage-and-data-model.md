@@ -293,23 +293,23 @@ atomically reserve and append its required journal row MUST fail without changin
 root. Usage counters MUST be reconstructable by a bounded verification job, but a
 concurrent quota decision MUST use the authoritative row rather than a scan.
 
-`staging_bytes` is a logical active-preparation reservation, not a second claim that
-the referenced immutable BLOB is physically stored twice. It is exactly the sum of the
+`staging_bytes` is a logical active-preparation reservation, not a second claim that the
+referenced immutable BLOB is physically stored twice. It is exactly the sum of the
 declared sizes of unique object, root, and node membership rows in certificates whose
-lease is active or sealed (`state IN (0,1)`). It intentionally participates in
-aggregate managed-payload admission so an unbounded number of preparations cannot
-retain the same CAS data for free. Tombstoning releases this logical reservation
-atomically; bounded physical row cleanup follows. A recount MUST derive it from active
-lease and certificate rows and MUST NOT add referenced CAS or manifest BLOB sizes
-independently.
+lease is active or sealed (`state IN (0,1)`). It intentionally participates in aggregate
+managed-payload admission so an unbounded number of preparations cannot retain the same
+CAS data for free. Tombstoning releases this logical reservation atomically; bounded
+physical row cleanup follows. A recount MUST derive it from active lease and certificate
+rows and MUST NOT add referenced CAS or manifest BLOB sizes independently.
 
 Every retained staging metadata row is charged conservatively at 96 bytes in
 `charged_metadata_bytes`: leases, certificates, entry and level records, object and
-manifest memberships, root links, COW and patch lease memberships, reconciliation
-state and queue rows, and durable edit workspaces. The charge remains until bounded
-deletion of that row. Cleanup cursor rows belong to `maintenance_bytes`, not staging
-metadata. Migration and verification recounts MUST use the same row classes and
-reconcile the authoritative counter to their direct count differential.
+manifest memberships, root links, COW and patch lease memberships, reconciliation state
+and queue rows, durable edit workspaces, and authenticated reused-subtree claims. The
+charge remains until bounded deletion of that row. Cleanup cursor rows belong to
+`maintenance_bytes`, not staging metadata. Migration and verification recounts MUST use
+the same row classes and reconcile the authoritative counter to their direct count
+differential.
 
 SQLite `user_version` MUST equal `efs_meta.schema_version`. A mismatch is an integrity
 failure, not permission to guess which value is current.

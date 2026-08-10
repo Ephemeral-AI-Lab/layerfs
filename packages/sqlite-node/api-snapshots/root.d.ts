@@ -11,6 +11,8 @@ export declare class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     constructor(options: OpenNodeSqliteOptions);
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;
+    physicalStorage(): SQLitePhysicalStorage;
+    checkpoint(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
 }
 
 /* export: openNodeSqlite; kinds: value */

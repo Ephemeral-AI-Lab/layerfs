@@ -6,6 +6,7 @@ import { checkedAdd } from "../resources/safe-integers.js";
 import type { StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
+import { ManifestTreeRepository } from "./manifest-tree-repository.js";
 
 export type StagingMemberKind = "object" | "manifest-root" | "manifest-node";
 export interface StagingMember {
@@ -89,6 +90,12 @@ interface CleanupRow extends SqliteRow {
   lease_id: string;
   phase: number;
 }
+interface ReusedSubtreeRow extends SqliteRow {
+  source_manifest_hash: Uint8Array;
+  source_path: Uint8Array;
+  span: number;
+  entry_count: number;
+}
 
 export interface ReconciliationProgress {
   readonly processed: number;
@@ -104,6 +111,7 @@ const CLEANUP_DELETE_STATEMENTS = Object.freeze([
   "DELETE FROM efs_staging_entries WHERE lease_id=? AND entry_index IN (SELECT entry_index FROM efs_staging_entries WHERE lease_id=? ORDER BY entry_index LIMIT ?)",
   "DELETE FROM efs_staging_level_records WHERE lease_id=? AND (level,record_index) IN (SELECT level,record_index FROM efs_staging_level_records WHERE lease_id=? ORDER BY level,record_index LIMIT ?)",
   "DELETE FROM efs_staging_reconciliation_queue WHERE lease_id=? AND (kind,hash) IN (SELECT kind,hash FROM efs_staging_reconciliation_queue WHERE lease_id=? ORDER BY kind,hash LIMIT ?)",
+  "DELETE FROM efs_staging_reused_subtrees WHERE lease_id=? AND node_hash IN (SELECT node_hash FROM efs_staging_reused_subtrees WHERE lease_id=? ORDER BY node_hash LIMIT ?)",
   "DELETE FROM efs_lease_objects WHERE lease_id=? AND object_hash IN (SELECT object_hash FROM efs_lease_objects WHERE lease_id=? ORDER BY object_hash LIMIT ?)",
   "DELETE FROM efs_lease_staged_manifests WHERE lease_id=? AND (kind,manifest_hash) IN (SELECT kind,manifest_hash FROM efs_lease_staged_manifests WHERE lease_id=? ORDER BY kind,manifest_hash LIMIT ?)",
   "DELETE FROM efs_lease_manifests WHERE lease_id=? AND manifest_hash IN (SELECT manifest_hash FROM efs_lease_manifests WHERE lease_id=? ORDER BY manifest_hash LIMIT ?)",
@@ -377,7 +385,7 @@ export class StagingRepository {
     )[0];
     if (!cleanup)
       return Object.freeze({ worked: false, deletedRows: 0, deletedLeases: 0 });
-    if (!Number.isSafeInteger(cleanup.phase) || cleanup.phase < 0 || cleanup.phase > 10)
+    if (!Number.isSafeInteger(cleanup.phase) || cleanup.phase < 0 || cleanup.phase > 11)
       throw new Error("ECORRUPT: invalid lease cleanup phase");
     if (cleanup.phase < CLEANUP_DELETE_STATEMENTS.length) {
       const deletedRows = this.#tx.run(CLEANUP_DELETE_STATEMENTS[cleanup.phase]!, [
@@ -389,7 +397,7 @@ export class StagingRepository {
       if (deletedRows < limit) this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
-    if (cleanup.phase === 8) {
+    if (cleanup.phase === 9) {
       const deletedRows = this.#tx.run(
         "DELETE FROM efs_staging_reconciliations WHERE lease_id=?",
         [cleanup.lease_id],
@@ -398,7 +406,7 @@ export class StagingRepository {
       this.#advanceCleanup(cleanup.lease_id, cleanup.phase);
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
-    if (cleanup.phase === 9) {
+    if (cleanup.phase === 10) {
       const deletedRows = this.#tx.run(
         "DELETE FROM efs_staging_workspaces WHERE lease_id=?",
         [cleanup.lease_id],
@@ -408,8 +416,8 @@ export class StagingRepository {
       return Object.freeze({ worked: true, deletedRows, deletedLeases: 0 });
     }
     const remaining = this.#tx.all<{ count: number } & SqliteRow>(
-      "SELECT (SELECT count(*) FROM efs_staging_entries WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_level_records WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_objects WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_staged_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_cow_pages WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_patches WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_workspaces WHERE lease_id=?) count",
-      Array.from({ length: 10 }, () => cleanup.lease_id),
+      "SELECT (SELECT count(*) FROM efs_staging_entries WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_level_records WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reused_subtrees WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_objects WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_staged_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_manifests WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_cow_pages WHERE lease_id=?)+(SELECT count(*) FROM efs_lease_patches WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?)+(SELECT count(*) FROM efs_staging_workspaces WHERE lease_id=?) count",
+      Array.from({ length: 11 }, () => cleanup.lease_id),
       { maxRows: 1, maxBytes: 256 },
     )[0]?.count;
     if (remaining !== 0)
@@ -427,8 +435,7 @@ export class StagingRepository {
     new UsageRepository(this.#tx, this.#limits).apply(
       {
         maintenance_bytes: -CHARGED_ROW_BYTES,
-        charged_metadata_bytes:
-          -(deletedRows + deletedLeases) * CHARGED_ROW_BYTES,
+        charged_metadata_bytes: -(deletedRows + deletedLeases) * CHARGED_ROW_BYTES,
       },
       "lease cleanup completion",
     );
@@ -811,7 +818,25 @@ export class StagingRepository {
     declaredSpan: number | undefined,
     declaredEntryCount: number | undefined,
   ): void {
+    // A manifest is a DAG. Repeated edges to a queue member that was already
+    // authenticated need only agree with its immutable declaration; fetching
+    // and decoding the same BLOB once per sibling would turn highly deduplicated
+    // trees into avoidable fanout work.
+    const queued = this.#tx.all<QueueRow>(
+      "SELECT kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor FROM efs_staging_reconciliation_queue WHERE lease_id=? AND kind=? AND hash=?",
+      [leaseId, kind, hash],
+      { maxRows: 1, maxBytes: 512 },
+    )[0];
+    if (queued) {
+      if (
+        queued.declared_span !== (declaredSpan ?? null) ||
+        queued.declared_entry_count !== (declaredEntryCount ?? null)
+      )
+        throw new Error("ECORRUPT: repeated manifest closure edge disagrees");
+      return;
+    }
     let size: number;
+    let reused = false;
     if (kind === 0) {
       const row = this.#tx.all<BackingRow>(
         "SELECT o.size stored_size,m.size membership_size FROM efs_cas_objects o JOIN efs_lease_objects m ON m.lease_id=? AND m.object_hash=o.hash WHERE o.hash=?",
@@ -835,12 +860,35 @@ export class StagingRepository {
         const node = decodeManifestNode(row.encoded!, hash);
         if (node.span !== declaredSpan || node.entryCount !== declaredEntryCount)
           throw new Error("ECORRUPT: manifest child declaration mismatch");
+        const claim = this.#tx.all<ReusedSubtreeRow>(
+          "SELECT source_manifest_hash,source_path,span,entry_count FROM efs_staging_reused_subtrees WHERE lease_id=? AND node_hash=?",
+          [leaseId, hash],
+          { maxRows: 1, maxBytes: 512 },
+        )[0];
+        if (claim) {
+          if (claim.span !== node.span || claim.entry_count !== node.entryCount)
+            throw new Error("ECORRUPT: reused subtree declaration mismatch");
+          const authenticated = new ManifestTreeRepository(
+            this.#tx,
+            this.#limits,
+          ).authenticateNodePath(
+            claim.source_manifest_hash,
+            Array.from(claim.source_path),
+          );
+          if (
+            !equalBytes(authenticated.hash, hash) ||
+            authenticated.node.span !== node.span ||
+            authenticated.node.entryCount !== node.entryCount
+          )
+            throw new Error("ECORRUPT: reused subtree authentication changed");
+          reused = true;
+        }
       }
     }
     const state = this.#reconciliation(leaseId);
     if (!state) throw new Error("ECORRUPT: missing staging reconciliation");
     const inserted = this.#tx.run(
-      "INSERT OR IGNORE INTO efs_staging_reconciliation_queue(lease_id,kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor,processed) VALUES(?,?,?,?,?,?,?,0,0)",
+      "INSERT OR IGNORE INTO efs_staging_reconciliation_queue(lease_id,kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor,processed) VALUES(?,?,?,?,?,?,?,0,?)",
       [
         leaseId,
         kind,
@@ -849,23 +897,11 @@ export class StagingRepository {
         size,
         declaredSpan ?? null,
         declaredEntryCount ?? null,
+        reused ? 1 : 0,
       ],
     );
-    if (!inserted.changes) {
-      const existing = this.#tx.all<QueueRow>(
-        "SELECT kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor FROM efs_staging_reconciliation_queue WHERE lease_id=? AND kind=? AND hash=?",
-        [leaseId, kind, hash],
-        { maxRows: 1, maxBytes: 512 },
-      )[0];
-      if (
-        !existing ||
-        existing.declared_size !== size ||
-        existing.declared_span !== (declaredSpan ?? null) ||
-        existing.declared_entry_count !== (declaredEntryCount ?? null)
-      )
-        throw new Error("ECORRUPT: repeated manifest closure edge disagrees");
-      return;
-    }
+    if (!inserted.changes)
+      throw new Error("ECORRUPT: reconciliation queue changed during insertion");
     this.#changeMetadataRows(1, "staging reconciliation queue");
     const object = kind === 0 ? 1 : 0;
     const node = kind === 0 ? 0 : 1;
