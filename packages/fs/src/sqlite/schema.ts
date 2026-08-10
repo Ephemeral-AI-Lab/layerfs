@@ -83,10 +83,9 @@ export function initializeOrValidateSchema(driver: FilesystemSQLiteDriver, optio
     tx.run("INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(0,NULL,?,'bootstrap',1)", [now]);
     tx.run("INSERT INTO efs_meta(singleton,schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,next_allocation_sequence,cow_page_bytes,created_at_ms) VALUES(1,?,?,?,?,0,1,?,?)", [EFS_SCHEMA_VERSION, filesystemId, 0, rootInode, pageBytes, now]);
     tx.run("INSERT INTO efs_usage VALUES(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,256)");
-    tx.run("INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,1,493,?,?,?,?,NULL,NULL,NULL,0)", [rootInode, now, now, now, 2]);
+    tx.run("INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,1,493,?,?,?,?,NULL,NULL,NULL,0)", [rootInode, now, now, now, 1]);
     tx.run(`PRAGMA user_version=${EFS_SCHEMA_VERSION}`);
     validateCurrent(tx, pageBytes);
   });
   return Object.freeze({ filesystemId, mainRevision: 0, rootInode, cowPageBytes: pageBytes });
 }
-
