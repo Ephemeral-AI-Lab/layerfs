@@ -1,13 +1,21 @@
 import { decodeManifestNode, decodeManifestRoot, type ManifestEntry } from "../manifests/codec.js";
-import { concatBytes } from "../utils/bytes.js";
+import { checkedAdd } from "../resources/safe-integers.js";
 import { ContentRepository } from "../sqlite/content-repository.js";
 import { runUnitOfWork } from "../sqlite/unit-of-work.js";
-import type { FilesystemSQLiteDriver } from "../sqlite-driver.js";
+import type { FilesystemSQLiteDriver } from "../sqlite/driver.js";
 import type { RuntimeLimits, StorageLimits } from "../resources/limits.js";
 import { AdmissionController } from "../resources/limits.js";
 import { prepareContentStreaming } from "./streaming-prepare.js";
 import type { ClosureCertificate } from "../sqlite/staging-repository.js";
-import type { ContentCache } from "../resources/content-cache.js";
+import type { ContentCache } from "../cache/content-cache.js";
+
+function concatParts(parts: readonly Uint8Array[]): Uint8Array {
+  const length = parts.reduce((sum, part) => checkedAdd(sum, part.byteLength), 0);
+  const output = new Uint8Array(length);
+  let offset = 0;
+  for (const part of parts) { output.set(part, offset); offset += part.byteLength; }
+  return output;
+}
 
 export interface PreparedManifest { readonly hash: Uint8Array; readonly size: number; readonly certificate: ClosureCertificate }
 
@@ -34,7 +42,7 @@ export function readManifestRange(repository: ContentRepository, manifestHash: U
   };
   const rootNodeBytes = repository.getManifestNode(root.rootNodeHash); if (!rootNodeBytes) throw new Error("ECORRUPT: missing root manifest node");
   const rootNode = decodeManifestNode(rootNodeBytes, root.rootNodeHash); if (rootNode.span !== root.fileSize || rootNode.entryCount !== root.entryCount) throw new Error("ECORRUPT: manifest root totals mismatch");
-  visit(root.rootNodeHash, 0, 1); return concatBytes(parts);
+  visit(root.rootNodeHash, 0, 1); return concatParts(parts);
 }
 
 export function readManifestInto(repository: ContentRepository, manifestHash: Uint8Array, position: number, destination: Uint8Array, destinationOffset: number, length: number): number {

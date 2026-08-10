@@ -1,6 +1,6 @@
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { StorageLimits } from "../resources/limits.js";
-import type { FilesystemSQLiteTransaction, SqliteRow } from "../sqlite-driver.js";
+import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 
 interface BranchRow extends SqliteRow { generation: number; state: number }
 interface PageRow extends SqliteRow { page_index: number; generation: number; bytes: Uint8Array }

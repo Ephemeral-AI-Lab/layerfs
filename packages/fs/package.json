@@ -5,7 +5,7 @@
   "files": ["dist", "README.md", "LICENSE"],
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./sqlite-driver": { "types": "./dist/sqlite-driver.d.ts", "import": "./dist/sqlite-driver.js" },
+    "./sqlite-driver": { "types": "./dist/sqlite/driver.d.ts", "import": "./dist/sqlite/driver.js" },
     "./integrations/replication": { "types": "./dist/integrations/replication.d.ts", "import": "./dist/integrations/replication.js" },
     "./integrations/node-vfs": { "types": "./dist/integrations/node-vfs.d.ts", "import": "./dist/integrations/node-vfs.js" }
   },
@@ -15,4 +15,3 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   }
 }
-

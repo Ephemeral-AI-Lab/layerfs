@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
-import { buildManifest } from "../../packages/fs/dist/manifests/builder.js";
+import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import { constrainStorageLimits } from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { EFS_APPLICATION_ID, initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";

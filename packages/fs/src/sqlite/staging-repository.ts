@@ -1,9 +1,12 @@
 import { sha256 } from "../cas/sha256.js";
-import { concatBytes, equalBytes, utf8 } from "../utils/bytes.js";
-import type { FilesystemSQLiteTransaction, SqliteRow } from "../sqlite-driver.js";
+import { equalBytes } from "../cas/bytes.js";
+import { encodeUtf8 } from "../namespace/utf8.js";
+import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 
 export type StagingMemberKind = "object" | "manifest-root" | "manifest-node";
 export interface StagingMember { readonly kind: StagingMemberKind; readonly hash: Uint8Array; readonly size: number }
+export interface StagingEntryRow extends SqliteRow { entry_index: number; object_hash: Uint8Array; length: number }
+export interface StagingLevelRow extends SqliteRow { record_index: number; node_hash: Uint8Array; span: number; entry_count: number }
 export interface ClosureCertificate {
   readonly leaseId: string;
   readonly ownerNonce: Uint8Array;
@@ -17,7 +20,7 @@ export interface ClosureCertificate {
 }
 interface CertificateRow extends SqliteRow { owner_nonce: Uint8Array; manifest_hash: Uint8Array | null; chain_digest: Uint8Array; object_count: number; object_bytes: number; node_count: number; node_bytes: number; membership_count: number; next_sequence: number; sealed: number; verified: number; expires_at_ms?: number; state?: number; lease_nonce?: Uint8Array; rooted?: number }
 
-export const EMPTY_STAGING_CHAIN = sha256(utf8("efs-staging-chain-v1"));
+export const EMPTY_STAGING_CHAIN = sha256(encodeUtf8("efs-staging-chain-v1"));
 
 function memberKind(kind: StagingMemberKind): number { return kind === "object" ? 0 : kind === "manifest-root" ? 1 : 2; }
 function extendChain(previous: Uint8Array, sequence: number, member: StagingMember): Uint8Array {
@@ -25,7 +28,9 @@ function extendChain(previous: Uint8Array, sequence: number, member: StagingMemb
   const view = new DataView(encoded.buffer);
   encoded[0] = memberKind(member.kind); encoded.set(member.hash, 1);
   view.setBigUint64(33, BigInt(sequence), true); view.setBigUint64(41, BigInt(member.size), true);
-  return sha256(concatBytes([previous, encoded]));
+  const chained = new Uint8Array(previous.byteLength + encoded.byteLength);
+  chained.set(previous); chained.set(encoded, previous.byteLength);
+  return sha256(chained);
 }
 function counters(values: readonly number[]): void { for (const value of values) if (!Number.isSafeInteger(value) || value < 0) throw new RangeError("invalid closure certificate counter"); }
 
@@ -38,6 +43,38 @@ export class StagingRepository {
     counters([options.now, options.expiresAt]); if (options.expiresAt <= options.now) throw new RangeError("staging lease expiry must be in the future");
     this.#tx.run("INSERT INTO efs_leases(id,kind,owner_id,owner_nonce,branch_id,generation,created_at_ms,last_renewal_at_ms,expires_at_ms,state) VALUES(?,?,?,?,?,?,?,?,?,0)", [options.leaseId, options.kind ?? 1, options.ownerId, options.ownerNonce, options.branchId ?? null, options.generation ?? null, options.now, options.now, options.expiresAt]);
     this.#tx.run("INSERT INTO efs_staging_certificates(lease_id,owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified) VALUES(?,?,NULL,?,0,0,0,0,0,0,0,0)", [options.leaseId, options.ownerNonce, EMPTY_STAGING_CHAIN]);
+  }
+
+  putEntry(leaseId: string, entryIndex: number, objectHash: Uint8Array, length: number): void { this.#tx.run("INSERT INTO efs_staging_entries(lease_id,entry_index,object_hash,length) VALUES(?,?,?,?)", [leaseId, entryIndex, objectHash, length]); }
+  entriesAfter(leaseId: string, cursor: number, limit: number, maxBytes: number): readonly StagingEntryRow[] { return this.#tx.all<StagingEntryRow>("SELECT entry_index,object_hash,length FROM efs_staging_entries WHERE lease_id=? AND entry_index>? ORDER BY entry_index LIMIT ?", [leaseId, cursor, limit], { maxRows: limit, maxBytes }); }
+  putLevelRecord(leaseId: string, level: number, recordIndex: number, nodeHash: Uint8Array, span: number, entryCount: number): void { this.#tx.run("INSERT INTO efs_staging_level_records(lease_id,level,record_index,node_hash,span,entry_count) VALUES(?,?,?,?,?,?)", [leaseId, level, recordIndex, nodeHash, span, entryCount]); }
+  levelRecordsAfter(leaseId: string, level: number, cursor: number, limit: number, maxBytes: number): readonly StagingLevelRow[] { return this.#tx.all<StagingLevelRow>("SELECT record_index,node_hash,span,entry_count FROM efs_staging_level_records WHERE lease_id=? AND level=? AND record_index>? ORDER BY record_index LIMIT ?", [leaseId, level, cursor, limit], { maxRows: limit, maxBytes }); }
+  bumpRoot(kind: number, id: string): void {
+    this.#tx.run("UPDATE efs_meta SET root_mutation_generation=root_mutation_generation+1 WHERE singleton=1");
+    const generation = this.#tx.all<{ root_mutation_generation: number } & SqliteRow>("SELECT root_mutation_generation FROM efs_meta WHERE singleton=1", [], { maxRows: 1, maxBytes: 128 })[0]?.root_mutation_generation;
+    if (!Number.isSafeInteger(generation)) throw new Error("ECORRUPT: invalid root mutation generation");
+    this.#tx.run("INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)", [generation!, kind, encodeUtf8(id)]);
+  }
+  release(leaseId: string, ownerNonce: Uint8Array, requireSealed: boolean): boolean {
+    const state = requireSealed ? "state=1" : "state IN (0,1)";
+    const result = this.#tx.run(`UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND ${state}`, [leaseId, ownerNonce]);
+    if (result.changes) this.bumpRoot(6, leaseId);
+    return result.changes === 1;
+  }
+  delete(leaseId: string, ownerNonce: Uint8Array): boolean {
+    const result = this.#tx.run("DELETE FROM efs_leases WHERE id=? AND owner_nonce=?", [leaseId, ownerNonce]);
+    if (result.changes) this.bumpRoot(6, leaseId);
+    return result.changes === 1;
+  }
+  acquireReadLease(leaseId: string, ownerId: string, manifestHash: Uint8Array, expiresAt: number): void {
+    this.#tx.run("INSERT INTO efs_leases(id,kind,owner_id,expires_at_ms,state) VALUES(?,0,?,?,1)", [leaseId, ownerId, expiresAt]);
+    this.#tx.run("INSERT INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)", [leaseId, manifestHash]);
+    this.bumpRoot(2, leaseId);
+  }
+  releaseReadLease(leaseId: string, ownerId: string): boolean {
+    const result = this.#tx.run("DELETE FROM efs_leases WHERE id=? AND owner_id=?", [leaseId, ownerId]);
+    if (result.changes) this.bumpRoot(3, leaseId);
+    return result.changes === 1;
   }
 
   appendBatch(leaseId: string, ownerNonce: Uint8Array, members: readonly StagingMember[]): ClosureCertificate {

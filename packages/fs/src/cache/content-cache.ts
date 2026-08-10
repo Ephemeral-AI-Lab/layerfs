@@ -1,5 +1,5 @@
-import { bytesToHex } from "../utils/bytes.js";
-import { AdmissionController } from "./limits.js";
+import { bytesToHex } from "../cas/bytes.js";
+import { AdmissionController } from "../resources/limits.js";
 
 export type ContentCacheKind = "object" | "manifest-root" | "manifest-node";
 interface Entry { readonly bytes: Uint8Array; readonly weight: number; readonly release: () => void }

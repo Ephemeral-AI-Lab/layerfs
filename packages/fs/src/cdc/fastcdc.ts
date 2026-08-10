@@ -1,4 +1,4 @@
-import { checkedAdd, checkedInteger } from "../utils/bytes.js";
+import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
 
 export interface FastCdcConfiguration { readonly minimum: number; readonly average: number; readonly maximum: number }
 export interface FastCdcChunk { readonly offset: number; readonly length: number }

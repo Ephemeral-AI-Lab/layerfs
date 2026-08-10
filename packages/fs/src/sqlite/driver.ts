@@ -28,4 +28,3 @@ export interface FilesystemSQLiteDriver {
   transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
   close(): void | Promise<void>;
 }
-

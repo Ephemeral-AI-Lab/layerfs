@@ -1,4 +1,6 @@
-import { checkedAdd, checkedInteger, concatBytes } from "../utils/bytes.js";
+import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
+
+function concatBytes(parts: readonly Uint8Array[]): Uint8Array { const length = parts.reduce((sum, part) => checkedAdd(sum, part.byteLength), 0); const result = new Uint8Array(length); let offset = 0; for (const part of parts) { result.set(part, offset); offset += part.byteLength; } return result; }
 
 export interface StructuralPatch { readonly sequence: number; readonly offset: number; readonly deleteLength: number; readonly insertBytes: Uint8Array }
 

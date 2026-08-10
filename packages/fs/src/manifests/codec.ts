@@ -1,4 +1,6 @@
-import { checkedAdd, equalBytes, readU64, writeU64 } from "../utils/bytes.js";
+import { equalBytes } from "../cas/bytes.js";
+import { checkedAdd } from "../resources/safe-integers.js";
+import { readU64, writeU64 } from "./binary.js";
 import { sha256 } from "../cas/sha256.js";
 
 export const ROOT_ENVELOPE_BYTES = 68;
@@ -105,4 +107,3 @@ export function decodeManifestNode(bytes: Uint8Array, expectedHash?: Uint8Array)
   if (computedSpan !== span || computedCount !== entryCount) throw new Error("manifest internal totals mismatch");
   return Object.freeze({ kind: "internal", span, entryCount, children: Object.freeze(children) });
 }
-

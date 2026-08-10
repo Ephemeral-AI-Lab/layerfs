@@ -1,6 +1,6 @@
 import { sha256Hex } from "./cas/sha256.js";
 import { FASTCDC_GEAR_V1, fastCdcChunks } from "./cdc/fastcdc.js";
-import { buildManifest } from "./manifests/builder.js";
+import { buildManifest } from "./operations/full-rebuild.js";
 import { rebuildManifestLocally } from "./operations/local-rebuild.js";
 import { bytesToHex } from "./utils/bytes.js";
 

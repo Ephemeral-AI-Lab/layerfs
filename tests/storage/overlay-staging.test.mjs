@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
-import { buildManifest } from "../../packages/fs/dist/manifests/builder.js";
+import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import { AdmissionController, DEFAULT_RUNTIME_LIMITS, constrainStorageLimits } from "../../packages/fs/dist/resources/limits.js";
-import { ContentCache } from "../../packages/fs/dist/resources/content-cache.js";
+import { ContentCache } from "../../packages/fs/dist/cache/content-cache.js";
 import { prepareContent } from "../../packages/fs/dist/operations/manifest-io.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { OverlayRepository } from "../../packages/fs/dist/sqlite/overlay-repository.js";

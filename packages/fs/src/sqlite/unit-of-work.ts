@@ -1,4 +1,4 @@
-import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, QueryBudget, SqliteBindings, SqliteRow, SqliteRunResult, TransactionMode } from "../sqlite-driver.js";
+import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, QueryBudget, SqliteBindings, SqliteRow, SqliteRunResult, TransactionMode } from "./driver.js";
 
 export interface TransactionLimits { readonly maxRows: number; readonly maxBytes: number; readonly maxStatements?: number; readonly maxElapsedMs?: number; readonly maxResultRows?: number; readonly maxResultBytes?: number }
 

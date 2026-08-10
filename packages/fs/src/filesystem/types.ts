@@ -1,4 +1,4 @@
-import type { FilesystemSQLiteDriver, SQLiteDriverCapabilities } from "../sqlite-driver.js";
+import type { FilesystemSQLiteDriver, SQLiteDriverCapabilities } from "../sqlite/driver.js";
 import type { BranchConfiguration, FilesystemLimits, RuntimeLimits, StorageLimits } from "../resources/limits.js";
 import type { CowPageBytes } from "../cow/pages.js";
 import type { FilesystemErrorCode } from "./errors.js";

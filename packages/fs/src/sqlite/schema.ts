@@ -1,4 +1,4 @@
-import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SqliteRow } from "../sqlite-driver.js";
+import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import type { CowPageBytes } from "../cow/pages.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;

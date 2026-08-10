@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EphemeralFS } from "../../packages/fs/dist/index.js";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
-import { buildManifest } from "../../packages/fs/dist/manifests/builder.js";
+import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import { constrainStorageLimits } from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";

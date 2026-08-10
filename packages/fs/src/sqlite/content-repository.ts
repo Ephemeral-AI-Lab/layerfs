@@ -1,9 +1,9 @@
 import { sha256, verifyCasObject } from "../cas/sha256.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
-import { bytesToHex, equalBytes } from "../utils/bytes.js";
-import type { FilesystemSQLiteTransaction, SqliteRow } from "../sqlite-driver.js";
+import { bytesToHex, equalBytes } from "../cas/bytes.js";
+import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import type { StorageLimits } from "../resources/limits.js";
-import { ContentCache, type ContentCacheKind, type ContentCacheReservation } from "../resources/content-cache.js";
+import { ContentCache, type ContentCacheKind, type ContentCacheReservation } from "../cache/content-cache.js";
 
 interface UsageRow extends SqliteRow { object_count: number; object_bytes: number; manifest_root_count: number; manifest_root_bytes: number; manifest_node_count: number; manifest_node_bytes: number; charged_metadata_bytes: number }
 interface ObjectRow extends SqliteRow { hash?: Uint8Array; size: number; bytes?: Uint8Array }

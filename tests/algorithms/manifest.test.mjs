@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bytesToHex } from "../../packages/fs/dist/utils/bytes.js";
-import { buildManifest } from "../../packages/fs/dist/manifests/builder.js";
+import { bytesToHex } from "../../packages/fs/dist/cas/bytes.js";
+import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import { decodeManifestNode, decodeManifestRoot } from "../../packages/fs/dist/manifests/codec.js";
 import { lookupManifest, ManifestSequentialCursor, validateManifestTree } from "../../packages/fs/dist/manifests/cursor.js";
 import { applyEntrySplice, rebuildManifestLocally } from "../../packages/fs/dist/operations/local-rebuild.js";

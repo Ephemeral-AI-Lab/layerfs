@@ -1,4 +1,4 @@
-import { checkedAdd, checkedInteger } from "../utils/bytes.js";
+import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
 
 export type CowPageBytes = 4096 | 8192 | 16384;
 export interface DirtyRange { readonly start: number; readonly end: number }
@@ -71,4 +71,3 @@ export function overlayCowPages(base: Uint8Array, pages: readonly CowPage[], pag
   }
   return result;
 }
-

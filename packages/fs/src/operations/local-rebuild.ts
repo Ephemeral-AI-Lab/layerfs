@@ -2,8 +2,9 @@ import { sha256 } from "../cas/sha256.js";
 import { findFastCdcBoundary, type FastCdcConfiguration } from "../cdc/fastcdc.js";
 import { decodeManifestRoot, encodeManifestNode, encodeManifestRoot, type ManifestChild, type ManifestEntry, type ManifestInternal, type ManifestLeaf, type ManifestNode } from "../manifests/codec.js";
 import type { BuiltManifest, EncodedManifestNode } from "../manifests/builder.js";
-import { bytesToHex, checkedAdd } from "../utils/bytes.js";
-import { FASTCDC_GEAR_V1 } from "../cdc/fastcdc.js";
+import { bytesToHex } from "../cas/bytes.js";
+import { checkedAdd } from "../resources/safe-integers.js";
+import { advanceManifestGroupingState, isManifestGroupBoundary } from "../manifests/grouping.js";
 
 export interface RandomAccessContentSource {
   readonly size: number;
@@ -64,21 +65,6 @@ interface RegroupedLevel {
   readonly reconnectGroup: number;
   readonly segment: readonly EncodedManifestNode[];
   readonly totalGroupCount: number;
-}
-
-function recordBytes(record: RecordValue): Uint8Array {
-  if ("length" in record) {
-    const bytes = new Uint8Array(36);
-    bytes.set(record.hash);
-    new DataView(bytes.buffer).setUint32(32, record.length, true);
-    return bytes;
-  }
-  const bytes = new Uint8Array(48);
-  const view = new DataView(bytes.buffer);
-  bytes.set(record.hash);
-  view.setBigUint64(32, BigInt(record.span), true);
-  view.setBigUint64(40, BigInt(record.entryCount), true);
-  return bytes;
 }
 
 function toChild(node: EncodedManifestNode): ManifestChild {
@@ -186,8 +172,8 @@ function regroupLevel(
     }
     if (!record) break;
     group.push(record);
-    for (const byte of recordBytes(record)) state = ((state << 1n) + BigInt(FASTCDC_GEAR_V1[byte]!)) & 0xffff_ffff_ffff_ffffn;
-    if (group.length >= maximum || (group.length >= minimum && (state & BigInt(target - 1)) === 0n)) stopped = emit();
+    state = advanceManifestGroupingState(state, record);
+    if (isManifestGroupBoundary(group.length, state, minimum, target, maximum)) stopped = emit();
   }
   if (!stopped && group.length > 0) emit();
   if (level === 0 && startGroup === 0 && reconnectGroup === bounds.length && segment.length === 0) segment.push(makeNode(0, [], old, newNodes));

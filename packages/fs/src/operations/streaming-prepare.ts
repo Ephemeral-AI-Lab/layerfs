@@ -1,30 +1,18 @@
 import { sha256 } from "../cas/sha256.js";
-import { DEFAULT_FASTCDC, FASTCDC_GEAR_V1, StreamingFastCdc } from "../cdc/fastcdc.js";
+import { DEFAULT_FASTCDC, StreamingFastCdc } from "../cdc/fastcdc.js";
 import { encodeManifestNode, encodeManifestRoot, type ManifestChild, type ManifestEntry, type ManifestInternal, type ManifestLeaf } from "../manifests/codec.js";
+import { advanceManifestGroupingState, isManifestGroupBoundary } from "../manifests/grouping.js";
 import { AdmissionController, type RuntimeLimits, type StorageLimits } from "../resources/limits.js";
-import type { ContentCache } from "../resources/content-cache.js";
+import type { ContentCache } from "../cache/content-cache.js";
 import { ContentRepository, type ContentObjectInput } from "../sqlite/content-repository.js";
-import { StagingRepository, type ClosureCertificate } from "../sqlite/staging-repository.js";
+import { StagingRepository, type ClosureCertificate, type StagingEntryRow as EntryRow, type StagingLevelRow as LevelRow } from "../sqlite/staging-repository.js";
 import { runUnitOfWork } from "../sqlite/unit-of-work.js";
-import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SqliteRow } from "../sqlite-driver.js";
-import { bytesToHex, checkedAdd, utf8 } from "../utils/bytes.js";
-
-interface EntryRow extends SqliteRow { entry_index: number; object_hash: Uint8Array; length: number }
-interface LevelRow extends SqliteRow { record_index: number; node_hash: Uint8Array; span: number; entry_count: number }
-interface GenerationRow extends SqliteRow { root_mutation_generation: number }
+import type { FilesystemSQLiteDriver } from "../sqlite/driver.js";
+import { bytesToHex } from "../cas/bytes.js";
+import { checkedAdd } from "../resources/safe-integers.js";
 interface PreparedNode { readonly hash: Uint8Array; readonly encoded: Uint8Array; readonly span: number; readonly entryCount: number }
 export interface StreamPreparedManifest { readonly hash: Uint8Array; readonly size: number; readonly certificate: ClosureCertificate }
 
-function recordBytes(record: ManifestEntry | ManifestChild): Uint8Array {
-  if ("length" in record) { const bytes = new Uint8Array(36); bytes.set(record.hash); new DataView(bytes.buffer).setUint32(32, record.length, true); return bytes; }
-  const bytes = new Uint8Array(48); const view = new DataView(bytes.buffer); bytes.set(record.hash); view.setBigUint64(32, BigInt(record.span), true); view.setBigUint64(40, BigInt(record.entryCount), true); return bytes;
-}
-function bumpRoot(tx: FilesystemSQLiteTransaction, leaseId: string): void {
-  tx.run("UPDATE efs_meta SET root_mutation_generation=root_mutation_generation+1 WHERE singleton=1");
-  const generation = tx.all<GenerationRow>("SELECT root_mutation_generation FROM efs_meta WHERE singleton=1", [], { maxRows: 1, maxBytes: 128 })[0]?.root_mutation_generation;
-  if (!Number.isSafeInteger(generation)) throw new Error("ECORRUPT: invalid root mutation generation");
-  tx.run("INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,5,?)", [generation!, utf8(leaseId)]);
-}
 function randomNonce(): Uint8Array { return globalThis.crypto.getRandomValues(new Uint8Array(16)); }
 
 export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, input: Uint8Array | ReadableStream<Uint8Array>, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, signal?: AbortSignal, cache?: ContentCache): Promise<StreamPreparedManifest> {
@@ -42,10 +30,11 @@ export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, in
     if (!pending.length) return; const batch = pending.splice(0); pendingBytes = 0;
     runUnitOfWork(driver, "write", workBudget, (tx) => {
       const repository = new ContentRepository(tx, storage); repository.putObjectsBatch(batch);
-      for (const item of batch) tx.run("INSERT INTO efs_staging_entries(lease_id,entry_index,object_hash,length) VALUES(?,?,?,?)", [leaseId, entryIndex++, item.hash, item.bytes.byteLength]);
+      const staging = new StagingRepository(tx);
+      for (const item of batch) staging.putEntry(leaseId, entryIndex++, item.hash, item.bytes.byteLength);
       const unique = [...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values()];
-      new StagingRepository(tx).appendBatch(leaseId, ownerNonce, unique.map((item) => Object.freeze({ kind: "object" as const, hash: item.hash, size: item.bytes.byteLength })));
-      bumpRoot(tx, leaseId);
+      staging.appendBatch(leaseId, ownerNonce, unique.map((item) => Object.freeze({ kind: "object" as const, hash: item.hash, size: item.bytes.byteLength })));
+      staging.bumpRoot(5, leaseId);
     });
   };
   const acceptChunks = (chunks: readonly Uint8Array[]): void => {
@@ -58,7 +47,7 @@ export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, in
   const feed = (bytes: Uint8Array): void => { for (let offset = 0; offset < bytes.byteLength; offset += runtime.maxWriteSessionBytes) acceptChunks(chunker.push(bytes.subarray(offset, offset + runtime.maxWriteSessionBytes))); };
   try {
     cache?.makeRoom(reservationBytes);
-    runUnitOfWork(driver, "write", workBudget, (tx) => { new StagingRepository(tx).begin({ leaseId, ownerId, ownerNonce, now, expiresAt: now + storage.stagingLeaseMs }); bumpRoot(tx, leaseId); }); leaseBegun = true;
+    runUnitOfWork(driver, "write", workBudget, (tx) => { const staging = new StagingRepository(tx); staging.begin({ leaseId, ownerId, ownerNonce, now, expiresAt: now + storage.stagingLeaseMs }); staging.bumpRoot(5, leaseId); }); leaseBegun = true;
     releases.push(admission.reserve(DEFAULT_FASTCDC.maximum));
     releases.push(admission.reserve(pendingLimit));
     releases.push(admission.reserve(builderBudget));
@@ -76,11 +65,11 @@ export async function prepareContentStreaming(driver: FilesystemSQLiteDriver, in
     const certificate = runUnitOfWork(driver, "write", workBudget, (tx) => {
       const repository = new ContentRepository(tx, storage); repository.putManifestRoot(rootHash, root);
       const staging = new StagingRepository(tx); staging.appendBatch(leaseId, ownerNonce, [Object.freeze({ kind: "manifest-root", hash: rootHash, size: root.byteLength })]);
-      const snapshot = staging.snapshot(leaseId, ownerNonce); const sealed = Object.freeze({ ...snapshot, manifestHash: rootHash }); staging.seal(sealed); bumpRoot(tx, leaseId); return sealed;
+      const snapshot = staging.snapshot(leaseId, ownerNonce); const sealed = Object.freeze({ ...snapshot, manifestHash: rootHash }); staging.seal(sealed); staging.bumpRoot(5, leaseId); return sealed;
     });
     return Object.freeze({ hash: rootHash, size: total, certificate });
   } catch (error) {
-    if (leaseBegun) try { runUnitOfWork(driver, "write", workBudget, (tx) => { const removed = tx.run("DELETE FROM efs_leases WHERE id=? AND owner_nonce=?", [leaseId, ownerNonce]); if (removed.changes) bumpRoot(tx, leaseId); }); } catch {}
+    if (leaseBegun) try { runUnitOfWork(driver, "write", workBudget, (tx) => { new StagingRepository(tx).delete(leaseId, ownerNonce); }); } catch {}
     throw error;
   } finally { for (let index = releases.length - 1; index >= 0; index -= 1) releases[index]!(); }
 }
@@ -94,10 +83,11 @@ function buildManifestLevels(driver: FilesystemSQLiteDriver, storage: StorageLim
       if (!pendingNodes.length) return; const nodes = pendingNodes.splice(0);
       runUnitOfWork(driver, "write", budget, (tx) => {
         const repository = new ContentRepository(tx, storage); repository.putManifestNodesBatch(nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })));
-        for (const node of nodes) tx.run("INSERT INTO efs_staging_level_records(lease_id,level,record_index,node_hash,span,entry_count) VALUES(?,?,?,?,?,?)", [leaseId, level, outputIndex++, node.hash, node.span, node.entryCount]);
+        const staging = new StagingRepository(tx);
+        for (const node of nodes) staging.putLevelRecord(leaseId, level, outputIndex++, node.hash, node.span, node.entryCount);
         const unique = [...new Map(nodes.map((node) => [bytesToHex(node.hash), node])).values()];
-        new StagingRepository(tx).appendBatch(leaseId, ownerNonce, unique.map((node) => Object.freeze({ kind: "manifest-node" as const, hash: node.hash, size: node.encoded.byteLength })));
-        bumpRoot(tx, leaseId);
+        staging.appendBatch(leaseId, ownerNonce, unique.map((node) => Object.freeze({ kind: "manifest-node" as const, hash: node.hash, size: node.encoded.byteLength })));
+        staging.bumpRoot(5, leaseId);
       });
     };
     const emit = (): void => {
@@ -109,15 +99,15 @@ function buildManifestLevels(driver: FilesystemSQLiteDriver, storage: StorageLim
     };
     const minimum = level === 0 ? 64 : 32; const target = level === 0 ? 128 : 64; const maximum = level === 0 ? 256 : 128;
     while (true) {
-      const rows = runUnitOfWork(driver, "read", budget, (tx) => sourceKind === "entries"
-        ? tx.all<EntryRow>("SELECT entry_index,object_hash,length FROM efs_staging_entries WHERE lease_id=? AND entry_index>? ORDER BY entry_index LIMIT ?", [leaseId, cursor, storage.maxQueryBatchSize], { maxRows: storage.maxQueryBatchSize, maxBytes: runtime.maxQueryBatchBytes })
-        : tx.all<LevelRow>("SELECT record_index,node_hash,span,entry_count FROM efs_staging_level_records WHERE lease_id=? AND level=? AND record_index>? ORDER BY record_index LIMIT ?", [leaseId, level - 1, cursor, storage.maxQueryBatchSize], { maxRows: storage.maxQueryBatchSize, maxBytes: runtime.maxQueryBatchBytes }));
+      const rows = runUnitOfWork(driver, "read", budget, (tx) => { const staging = new StagingRepository(tx); return sourceKind === "entries"
+        ? staging.entriesAfter(leaseId, cursor, storage.maxQueryBatchSize, runtime.maxQueryBatchBytes)
+        : staging.levelRecordsAfter(leaseId, level - 1, cursor, storage.maxQueryBatchSize, runtime.maxQueryBatchBytes); });
       if (!rows.length) break;
       for (const row of rows) {
         cursor = sourceKind === "entries" ? (row as EntryRow).entry_index : (row as LevelRow).record_index;
         const record: ManifestEntry | ManifestChild = sourceKind === "entries" ? Object.freeze({ hash: (row as EntryRow).object_hash, length: (row as EntryRow).length }) : Object.freeze({ hash: (row as LevelRow).node_hash, span: (row as LevelRow).span, entryCount: (row as LevelRow).entry_count });
-        group.push(record); for (const byte of recordBytes(record)) state = ((state << 1n) + BigInt(FASTCDC_GEAR_V1[byte]!)) & 0xffff_ffff_ffff_ffffn;
-        if (group.length >= maximum || (group.length >= minimum && (state & BigInt(target - 1)) === 0n)) emit();
+        group.push(record); state = advanceManifestGroupingState(state, record);
+        if (isManifestGroupBoundary(group.length, state, minimum, target, maximum)) emit();
       }
       if (rows.length < storage.maxQueryBatchSize) break;
     }

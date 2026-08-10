@@ -1,4 +1,4 @@
-import type { SQLiteDriverCapabilities } from "../sqlite-driver.js";
+import type { SQLiteDriverCapabilities } from "../sqlite/driver.js";
 
 export interface FilesystemLimits {
   readonly maxPathBytes: number; readonly maxNameBytes: number; readonly maxSymlinkTargetBytes: number; readonly maxSymlinkTraversals: number;
