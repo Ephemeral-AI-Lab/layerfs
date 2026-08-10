@@ -64,3 +64,15 @@ export function readManifestRange(repository: ContentRepository, manifestHash: U
   visit(root.rootNodeHash, 0, 1); return concatBytes(parts);
 }
 
+export function readManifestInto(repository: ContentRepository, manifestHash: Uint8Array, position: number, destination: Uint8Array, destinationOffset: number, length: number): number {
+  if (!Number.isSafeInteger(position) || position < 0 || !Number.isSafeInteger(destinationOffset) || destinationOffset < 0 || !Number.isSafeInteger(length) || length < 0 || destinationOffset + length > destination.byteLength) throw new RangeError("invalid direct manifest read range");
+  const rootBytes = repository.getManifestRoot(manifestHash); if (!rootBytes) throw new Error("ECORRUPT: missing manifest root"); const root = decodeManifestRoot(rootBytes, manifestHash); if (!length || position >= root.fileSize) return 0;
+  const end = Math.min(root.fileSize, position + length); let written = 0;
+  const visit = (hash: Uint8Array, nodeStart: number, depth: number): void => {
+    if (depth > 8) throw new Error("ECORRUPT: manifest depth exceeded"); if (nodeStart >= end || nodeStart >= position + length) return;
+    const encoded = repository.getManifestNode(hash); if (!encoded) throw new Error("ECORRUPT: missing manifest node"); const node = decodeManifestNode(encoded, hash); if (nodeStart + node.span <= position) return;
+    if (node.kind === "leaf") { let cursor = nodeStart; for (const entry of node.entries) { const entryEnd = cursor + entry.length; if (cursor < end && entryEnd > position) { const object = repository.getObject(entry.hash); if (!object) throw new Error("ECORRUPT: missing CAS object"); const start = Math.max(0, position - cursor); const stop = Math.min(entry.length, end - cursor); destination.set(object.subarray(start, stop), destinationOffset + written); written += stop - start; } cursor = entryEnd; if (cursor >= end) break; } }
+    else { let cursor = nodeStart; for (const child of node.children) { if (cursor < end && cursor + child.span > position) visit(child.hash, cursor, depth + 1); cursor += child.span; if (cursor >= end) break; } }
+  };
+  visit(root.rootNodeHash, 0, 1); return written;
+}
