@@ -41,6 +41,9 @@ export function createSqliteOperationsStorage(
         });
         return callback(ports);
       }),
+    physicalStorage: () => driver.physicalStorage?.() ?? Object.freeze({}),
+    checkpoint: (mode: "passive" | "restart" | "truncate" = "passive") =>
+      driver.checkpoint?.(mode),
     close: () => driver.close(),
   });
 }

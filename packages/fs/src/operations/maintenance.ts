@@ -134,12 +134,18 @@ export class MaintenanceManager implements FilesystemMaintenance {
   async snapshotStorage(): Promise<StorageSnapshot> {
     const row = this.#read((tx) => tx.maintenance(this.#storage).snapshot());
     if (!row) throw new Error("ECORRUPT: usage metadata is missing");
-    const physical = this.#read((tx) => {
+    const pagePhysical = this.#read((tx) => {
       const value = tx.maintenance(this.#storage).physical();
       return Object.freeze({
         mainFileBytes: value.pageCount * value.pageSize,
         freelistBytes: value.freePages * value.pageSize,
       });
+    });
+    const files = this.#port.physicalStorage();
+    const physical = Object.freeze({
+      mainFileBytes: files.mainFileBytes ?? pagePhysical.mainFileBytes,
+      ...(files.walBytes === undefined ? {} : { walBytes: files.walBytes }),
+      freelistBytes: pagePhysical.freelistBytes,
     });
     const manifestBytes = row.manifest_root_bytes + row.manifest_node_bytes;
     return Object.freeze({

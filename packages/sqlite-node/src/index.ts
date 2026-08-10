@@ -1,10 +1,12 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
 import type {
   FilesystemSQLiteDriver,
   FilesystemSQLiteTransaction,
   QueryBudget,
   SQLiteDriverCapabilities,
+  SQLiteCheckpointResult,
+  SQLitePhysicalStorage,
   SqliteBindings,
   SqliteRow,
   SqliteRunResult,
@@ -132,6 +134,9 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
   readonly readOnly: boolean;
   readonly capabilities: SQLiteDriverCapabilities;
   readonly #database: DatabaseSync;
+  readonly #filename: string;
+  readonly #pageSize: number;
+  readonly #journalBackpressureBytes: number;
   #closed = false;
   #transactionActive = false;
   constructor(options: OpenNodeSqliteOptions) {
@@ -144,22 +149,22 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     )
       throw new Error("SQLite database does not exist and create is false");
     this.readOnly = options.readOnly ?? false;
+    this.#filename = options.filename;
     const cacheTargetBytes = options.cacheTargetBytes ?? 16 * 1024 * 1024;
     const mmapLimitBytes = options.mmapLimitBytes ?? 0;
     const maxPhysicalDatabaseBytes = options.maxPhysicalDatabaseBytes ?? 10 * 1024 ** 3;
     const maxJournalBytes = options.maxJournalBytes ?? 1024 ** 3;
-    this.capabilities = Object.freeze({
-      maxBlobBytes: 64 * 1024 * 1024,
-      maxBindings: 32_766,
-      durability: options.durability ?? "acknowledged",
-      journalMode: this.readOnly ? "wal" : "wal",
-      memoryPolicy: "configured",
-      cacheTargetBytes,
-      mmapLimitBytes,
-      maxPhysicalDatabaseBytes,
-      maxJournalBytes,
-      physicalQuotaPolicy: "driver-enforced",
-    });
+    const durability = options.durability ?? "acknowledged";
+    for (const [name, value, allowZero] of [
+      ["cacheTargetBytes", cacheTargetBytes, false],
+      ["mmapLimitBytes", mmapLimitBytes, true],
+      ["maxPhysicalDatabaseBytes", maxPhysicalDatabaseBytes, false],
+      ["maxJournalBytes", maxJournalBytes, false],
+    ] as const)
+      if (!Number.isSafeInteger(value) || value < (allowZero ? 0 : 1))
+        throw new RangeError(
+          `${name} must be a ${allowZero ? "nonnegative" : "positive"} safe integer`,
+        );
     this.#database = new DatabaseSync(options.filename, {
       readOnly: this.readOnly,
       timeout: options.busyTimeoutMs ?? 5_000,
@@ -170,15 +175,56 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     });
     if (!this.readOnly) {
       this.#database.exec(
-        `PRAGMA journal_mode=WAL; PRAGMA synchronous=${this.capabilities.durability === "acknowledged" ? "FULL" : "NORMAL"}; PRAGMA cache_size=-${Math.max(1, Math.floor(cacheTargetBytes / 1024))}; PRAGMA mmap_size=${mmapLimitBytes}; PRAGMA journal_size_limit=${maxJournalBytes};`,
-      );
-      const pageSize = Number(
-        this.#database.prepare("PRAGMA page_size").get()?.page_size ?? 4096,
-      );
-      this.#database.exec(
-        `PRAGMA max_page_count=${Math.max(1, Math.floor(maxPhysicalDatabaseBytes / pageSize))}`,
+        `PRAGMA journal_mode=WAL; PRAGMA synchronous=${durability === "acknowledged" ? "FULL" : "NORMAL"}; PRAGMA cache_size=-${Math.max(1, Math.floor(cacheTargetBytes / 1024))}; PRAGMA mmap_size=${mmapLimitBytes}; PRAGMA journal_size_limit=${maxJournalBytes};`,
       );
     }
+    this.#pageSize = Number(
+      this.#database.prepare("PRAGMA page_size").get()?.page_size ?? 4096,
+    );
+    if (!Number.isSafeInteger(this.#pageSize) || this.#pageSize <= 0)
+      throw new Error("SQLite returned an invalid page size");
+    if (maxJournalBytes < this.#pageSize * 8)
+      throw new RangeError("maxJournalBytes must hold at least eight SQLite pages");
+    let effectiveMaxPhysicalDatabaseBytes = maxPhysicalDatabaseBytes;
+    if (!this.readOnly) {
+      const requestedPageCount = Math.max(
+        1,
+        Math.floor(maxPhysicalDatabaseBytes / this.#pageSize),
+      );
+      this.#database.exec(
+        `PRAGMA max_page_count=${requestedPageCount}; PRAGMA wal_autocheckpoint=${Math.max(
+          1,
+          Math.floor(maxJournalBytes / (this.#pageSize + 24) / 2),
+        )}`,
+      );
+      const effectivePageCount = Number(
+        this.#database.prepare("PRAGMA max_page_count").get()?.max_page_count,
+      );
+      if (!Number.isSafeInteger(effectivePageCount) || effectivePageCount <= 0)
+        throw new Error("SQLite returned an invalid max_page_count");
+      effectiveMaxPhysicalDatabaseBytes = effectivePageCount * this.#pageSize;
+    }
+    this.#journalBackpressureBytes = Math.max(
+      this.#pageSize * 4,
+      Math.floor(maxJournalBytes * 0.75),
+    );
+    const rawJournalMode = String(
+      this.#database.prepare("PRAGMA journal_mode").get()?.journal_mode ?? "",
+    ).toLowerCase();
+    this.capabilities = Object.freeze({
+      maxBlobBytes: 64 * 1024 * 1024,
+      maxBindings: 32_766,
+      durability,
+      journalMode: rawJournalMode === "wal" ? "wal" : "rollback",
+      memoryPolicy: "configured",
+      cacheTargetBytes,
+      mmapLimitBytes,
+      maxPhysicalDatabaseBytes: effectiveMaxPhysicalDatabaseBytes,
+      maxJournalBytes,
+      physicalQuotaPolicy: "driver-enforced",
+      journalQuotaPolicy: "checkpoint-backpressure",
+      journalSizeLimitIsHard: false,
+    });
   }
   transaction<T>(
     mode: TransactionMode,
@@ -189,6 +235,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       throw new Error("nested SQLite transactions are forbidden");
     if (this.readOnly && mode !== "read")
       throw new Error("EROFS: write transaction requested on read-only adapter");
+    if (mode !== "read") this.#enforceJournalBackpressure();
     this.#transactionActive = true;
     let active = true;
     let begun = false;
@@ -258,6 +305,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       active = false;
       this.#database.exec("COMMIT");
       begun = false;
+      if (mode !== "read") this.#checkpointAfterCommit();
       return result;
     } catch (error) {
       active = false;
@@ -283,6 +331,23 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       this.#database.close();
     }
   }
+  physicalStorage(): SQLitePhysicalStorage {
+    if (this.#closed) throw new Error("SQLite driver is closed");
+    if (this.#filename === ":memory:") return Object.freeze({});
+    return Object.freeze({
+      mainFileBytes: this.#fileBytes(this.#filename) ?? 0,
+      walBytes: this.#fileBytes(`${this.#filename}-wal`) ?? 0,
+    });
+  }
+  checkpoint(
+    mode: "passive" | "restart" | "truncate" = "passive",
+  ): SQLiteCheckpointResult {
+    if (this.#closed) throw new Error("SQLite driver is closed");
+    if (this.#transactionActive)
+      throw new Error("cannot checkpoint SQLite during a transaction");
+    if (this.readOnly) throw new Error("EROFS: cannot checkpoint a read-only adapter");
+    return this.#checkpointInternal(mode);
+  }
   #validateStatement(
     sql: string,
     bindings: SqliteBindings,
@@ -292,6 +357,69 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     if (bindings.length > this.capabilities.maxBindings)
       throw new RangeError("SQLite binding limit exceeded");
     if (mode === "read") assertReadOnlySql(sql);
+  }
+  #fileBytes(filename: string): number | undefined {
+    try {
+      return statSync(filename).size;
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error.code === "ENOENT" || error.code === "ENOTDIR")
+      )
+        return undefined;
+      throw error;
+    }
+  }
+  #checkpointInternal(
+    mode: "passive" | "restart" | "truncate",
+  ): SQLiteCheckpointResult {
+    if (this.#filename === ":memory:")
+      return Object.freeze({
+        mode,
+        busy: 0,
+        logFrames: 0,
+        checkpointedFrames: 0,
+      });
+    const pragma = mode.toUpperCase();
+    const row = this.#database.prepare(`PRAGMA wal_checkpoint(${pragma})`).get();
+    const busy = Number(row?.busy ?? 0);
+    const logFrames = Number(row?.log ?? 0);
+    const checkpointedFrames = Number(row?.checkpointed ?? 0);
+    if (
+      !Number.isSafeInteger(busy) ||
+      !Number.isSafeInteger(logFrames) ||
+      !Number.isSafeInteger(checkpointedFrames) ||
+      busy < 0 ||
+      logFrames < 0 ||
+      checkpointedFrames < 0
+    )
+      throw new Error("SQLite returned invalid checkpoint counters");
+    return Object.freeze({
+      mode,
+      busy,
+      logFrames,
+      checkpointedFrames,
+      walBytes: this.#fileBytes(`${this.#filename}-wal`) ?? 0,
+    });
+  }
+  #enforceJournalBackpressure(): void {
+    if (this.#filename === ":memory:") return;
+    const walBytes = this.#fileBytes(`${this.#filename}-wal`) ?? 0;
+    if (walBytes < this.#journalBackpressureBytes) return;
+    const checkpoint = this.#checkpointInternal("truncate");
+    const remaining = checkpoint.walBytes ?? 0;
+    if (checkpoint.busy !== 0 || remaining >= this.#journalBackpressureBytes)
+      throw new Error("ENOSPC: WAL checkpoint backpressure threshold remains pinned");
+  }
+  #checkpointAfterCommit(): void {
+    if (this.#filename === ":memory:") return;
+    const walBytes = this.#fileBytes(`${this.#filename}-wal`) ?? 0;
+    if (walBytes < Math.floor(this.#journalBackpressureBytes / 2)) return;
+    try {
+      this.#checkpointInternal("passive");
+    } catch {}
   }
 }
 

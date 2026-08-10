@@ -121,6 +121,8 @@ export class CloudflareSQLiteDriver implements FilesystemSQLiteDriver {
       ),
       maxJournalBytes: options.maxJournalBytes ?? 256 * 1024 ** 2,
       physicalQuotaPolicy: "runtime-enforced",
+      journalQuotaPolicy: "runtime-enforced",
+      journalSizeLimitIsHard: false,
     });
   }
   transaction<T>(

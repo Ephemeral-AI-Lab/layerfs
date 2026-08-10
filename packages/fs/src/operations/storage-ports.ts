@@ -28,6 +28,19 @@ export interface StorageAdapterCapabilities {
   readonly maxPhysicalDatabaseBytes: number;
   readonly maxJournalBytes: number;
   readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+  readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+  readonly journalSizeLimitIsHard: false;
+}
+export interface StoragePhysicalFiles {
+  readonly mainFileBytes?: number;
+  readonly walBytes?: number;
+}
+export interface StorageCheckpointResult {
+  readonly mode: "passive" | "restart" | "truncate";
+  readonly busy: number;
+  readonly logFrames: number;
+  readonly checkpointedFrames: number;
+  readonly walBytes?: number;
 }
 export interface StorageMetadata {
   readonly filesystemId: string;
@@ -481,6 +494,10 @@ export interface OperationsStorage {
     budget: StorageWorkBudget,
     callback: (ports: StorageTransactionPorts) => T,
   ): T;
+  physicalStorage(): StoragePhysicalFiles;
+  checkpoint(
+    mode?: "passive" | "restart" | "truncate",
+  ): StorageCheckpointResult | undefined;
   close(): void | Promise<void>;
 }
 

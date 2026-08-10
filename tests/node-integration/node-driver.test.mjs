@@ -262,3 +262,113 @@ test("BLOB bindings and results are plain owned Uint8Arrays for Buffer and subcl
   assert.deepEqual([...reread], [7, 8, 9]);
   driver.close();
 });
+
+test("WAL limits are observable checkpoint backpressure, not a claimed hard file ceiling", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-wal-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    const writer = await openNodeSqlite({
+      filename,
+      busyTimeoutMs: 0,
+      durability: "relaxed-test",
+      maxJournalBytes: 64 * 1024,
+    });
+    writer.transaction("write", (tx) =>
+      tx.run("CREATE TABLE wal_probe(id INTEGER PRIMARY KEY,value BLOB NOT NULL)"),
+    );
+    writer.checkpoint("truncate");
+    const reader = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
+    let committed = 0;
+    let rejected = false;
+    reader.transaction("read", (tx) => {
+      tx.all("SELECT count(*) count FROM wal_probe", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      });
+      for (let index = 0; index < 100; index += 1) {
+        try {
+          writer.transaction("write", (write) =>
+            write.run("INSERT INTO wal_probe(value) VALUES(?)", [
+              new Uint8Array(4096).fill(index),
+            ]),
+          );
+          committed += 1;
+        } catch (error) {
+          assert.match(String(error), /ENOSPC.*WAL.*backpressure/i);
+          rejected = true;
+          break;
+        }
+      }
+      assert.equal(rejected, true);
+      assert.ok(writer.physicalStorage().walBytes > 0);
+    });
+    const count = writer.transaction(
+      "read",
+      (tx) =>
+        tx.all("SELECT count(*) count FROM wal_probe", [], {
+          maxRows: 1,
+          maxBytes: 128,
+        })[0].count,
+    );
+    assert.equal(count, committed);
+    const checkpoint = writer.checkpoint("truncate");
+    assert.equal(checkpoint.mode, "truncate");
+    assert.equal(checkpoint.busy, 0);
+    assert.ok((checkpoint.walBytes ?? 0) < writer.capabilities.maxJournalBytes);
+    assert.equal(writer.capabilities.journalQuotaPolicy, "checkpoint-backpressure");
+    assert.equal(writer.capabilities.journalSizeLimitIsHard, false);
+    reader.close();
+    writer.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("max_page_count rejects an over-budget transaction without a partial row", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-pages-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    const driver = await openNodeSqlite({
+      filename,
+      durability: "relaxed-test",
+      maxPhysicalDatabaseBytes: 128 * 1024,
+      maxJournalBytes: 1024 * 1024,
+    });
+    driver.transaction("write", (tx) =>
+      tx.run("CREATE TABLE page_probe(id INTEGER PRIMARY KEY,value BLOB NOT NULL)"),
+    );
+    let committed = 0;
+    for (let index = 0; index < 100; index += 1) {
+      try {
+        driver.transaction("write", (tx) =>
+          tx.run("INSERT INTO page_probe(value) VALUES(?)", [
+            new Uint8Array(8192).fill(index),
+          ]),
+        );
+        committed += 1;
+      } catch (error) {
+        assert.match(String(error), /full|ENOSPC/i);
+        break;
+      }
+    }
+    assert.ok(committed > 0 && committed < 100);
+    assert.equal(
+      driver.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT count(*) count FROM page_probe", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].count,
+      ),
+      committed,
+    );
+    driver.checkpoint("truncate");
+    const physical = driver.physicalStorage();
+    assert.ok(physical.mainFileBytes <= driver.capabilities.maxPhysicalDatabaseBytes);
+    assert.equal(driver.capabilities.physicalQuotaPolicy, "driver-enforced");
+    driver.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

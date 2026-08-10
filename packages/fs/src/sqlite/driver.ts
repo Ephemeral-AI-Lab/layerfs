@@ -30,6 +30,19 @@ export interface SQLiteDriverCapabilities {
   readonly maxPhysicalDatabaseBytes: number;
   readonly maxJournalBytes: number;
   readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
+  readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
+  readonly journalSizeLimitIsHard: false;
+}
+export interface SQLitePhysicalStorage {
+  readonly mainFileBytes?: number;
+  readonly walBytes?: number;
+}
+export interface SQLiteCheckpointResult {
+  readonly mode: "passive" | "restart" | "truncate";
+  readonly busy: number;
+  readonly logFrames: number;
+  readonly checkpointedFrames: number;
+  readonly walBytes?: number;
 }
 export interface FilesystemSQLiteDriver {
   readonly kind: "sqlite";
@@ -39,5 +52,7 @@ export interface FilesystemSQLiteDriver {
     mode: TransactionMode,
     callback: (tx: FilesystemSQLiteTransaction) => T,
   ): T;
+  physicalStorage?(): SQLitePhysicalStorage;
+  checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
   close(): void | Promise<void>;
 }
