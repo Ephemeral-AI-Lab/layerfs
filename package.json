@@ -27,6 +27,7 @@
     "fixtures:check": "node scripts/generate-fixtures.mjs --check",
     "validate:m0": "pnpm fixtures:check && pnpm check:docs && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:unit",
     "validate:m1": "pnpm validate:m0 && pnpm test:workerd",
+    "validate:m2": "pnpm validate:m1",
     "validate": "pnpm fixtures:check && pnpm check:docs && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:unit && pnpm test:smoke:built && pnpm test:fault:built && pnpm test:performance:built"
   },
   "devDependencies": {

@@ -61,14 +61,14 @@ test("leased streams retain the selected snapshot across overwrite and release o
     const original = Uint8Array.from({ length: 20_000 }, (_, index) => index & 0xff); await fixture.filesystem.writeFile("/snapshot", original);
     const stream = await fixture.filesystem.readStream("/snapshot"); await fixture.filesystem.writeFile("/snapshot", "new");
     assert.deepEqual(await bytes(stream), original); assert.equal(await fixture.filesystem.readFile("/snapshot", { encoding: "utf8" }), "new");
-    const leaseCount = fixture.database.transaction("read", (tx) => tx.all("SELECT count(*) count FROM efs_leases", [], { maxRows: 1, maxBytes: 100 })[0].count); assert.equal(leaseCount, 0);
+    const leaseCount = fixture.database.transaction("read", (tx) => tx.all("SELECT count(*) count FROM efs_leases WHERE state<>2", [], { maxRows: 1, maxBytes: 100 })[0].count); assert.equal(leaseCount, 0);
   } finally { await fixture.close(); }
 });
 
 test("memory and transaction ceilings reject without a visible partial mutation", async () => {
-  const fixture = await memoryFilesystem({ runtime: { maxManagedResidentBytes: 4096, maxWriteSessionBytes: 1024 }, storage: { maxFinalTransactionRows: 4, maxFinalTransactionBytes: 4096 } });
+  const fixture = await memoryFilesystem({ filesystem: { maxMaterializedBytes: 512 * 1024 }, runtime: { maxManagedResidentBytes: 1024 * 1024, maxCacheBytes: 256 * 1024, maxPendingWriteBytes: 256 * 1024, maxWriteSessionBytes: 64 * 1024, maxPrefetchBytes: 64 * 1024, maxQueryBatchBytes: 64 * 1024, maxPreparedResultBytes: 512 * 1024 }, storage: { maxFinalTransactionRows: 64, maxFinalTransactionBytes: 256 * 1024 } });
   try {
-    await assert.rejects(fixture.filesystem.writeFile("/too-large", new Uint8Array(8192)), (error) => error.code === "ENOSPC");
+    await assert.rejects(fixture.filesystem.writeFile("/too-large", new Uint8Array(2 * 1024 * 1024)), (error) => error.code === "ENOSPC");
     await assert.rejects(fixture.filesystem.stat("/too-large"), (error) => error.code === "ENOENT");
   } finally { await fixture.close(); }
 });
@@ -77,4 +77,3 @@ test("close is idempotent and rejects later operations", async () => {
   const fixture = await memoryFilesystem(); await fixture.filesystem.close(); await fixture.filesystem.close();
   await assert.rejects(fixture.filesystem.stat("/"), (error) => error.code === "EBADF"); fixture.database.close();
 });
-

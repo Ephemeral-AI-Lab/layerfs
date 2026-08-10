@@ -1,5 +1,5 @@
 import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SqliteRow, TransactionMode } from "../sqlite-driver.js";
-import { DEFAULT_BRANCH_CONFIGURATION, DEFAULT_FILESYSTEM_LIMITS, DEFAULT_RUNTIME_LIMITS, AdmissionController, constrainStorageLimits, resolveLimits, type BranchConfiguration, type FilesystemLimits, type RuntimeLimits, type StorageLimits } from "../resources/limits.js";
+import { DEFAULT_BRANCH_CONFIGURATION, DEFAULT_FILESYSTEM_LIMITS, DEFAULT_RUNTIME_LIMITS, AdmissionController, constrainStorageLimits, resolveLimits, validateRuntimeLimits, type BranchConfiguration, type FilesystemLimits, type RuntimeLimits, type StorageLimits } from "../resources/limits.js";
 import { initializeOrValidateSchema } from "../sqlite/schema.js";
 import { runUnitOfWork } from "../sqlite/unit-of-work.js";
 import { ContentRepository } from "../sqlite/content-repository.js";
@@ -12,6 +12,8 @@ import type { DirectoryEntry, EphemeralFilesystem, FileContent, FileStat, FileTy
 import { BranchManager } from "../branches/branch-engine.js";
 import type { Branches } from "../branches/types.js";
 import { MaintenanceManager } from "../maintenance/maintenance.js";
+import { StagingRepository, type ClosureCertificate } from "../sqlite/staging-repository.js";
+import { ContentCache } from "../resources/content-cache.js";
 
 interface ChildRow extends SqliteRow { name: string; name_sort: Uint8Array; type: number }
 interface CountRow extends SqliteRow { count: number }
@@ -32,14 +34,15 @@ export class EphemeralFS implements EphemeralFilesystem {
   readonly maintenance: FilesystemMaintenance;
   readonly #database: FilesystemSQLiteDriver; readonly #clock: () => number; readonly #observer: FilesystemObserver | undefined; readonly #ownsDatabase: boolean;
   readonly #filesystemLimits: FilesystemLimits; readonly #storageLimits: StorageLimits; readonly #runtimeLimits: RuntimeLimits; readonly #branchLimits: BranchConfiguration;
-  readonly #admission: AdmissionController; readonly #pending = new Set<Promise<unknown>>(); readonly #streams = new Map<string, { release: () => Promise<void>; error: () => void }>();
+  readonly #admission: AdmissionController; readonly #cache: ContentCache; readonly #pending = new Set<Promise<unknown>>(); readonly #streams = new Map<string, { release: () => Promise<void>; error: () => void }>();
   #closing = false; #closed = false; #closePromise?: Promise<void>;
 
   private constructor(options: OpenFilesystemOptions, capabilities: FilesystemCapabilities) {
     this.#database = options.database; this.#clock = options.clock ?? Date.now; this.#observer = options.observer; this.#ownsDatabase = options.ownsDatabase ?? false;
     this.capabilities = capabilities; this.#filesystemLimits = capabilities.filesystem; this.#storageLimits = capabilities.storage; this.#runtimeLimits = capabilities.runtime; this.#branchLimits = capabilities.branch;
     this.#admission = new AdmissionController(this.#runtimeLimits.maxManagedResidentBytes);
-    this.branches = new BranchManager(this.#database, this.#filesystemLimits, this.#storageLimits, this.#runtimeLimits, this.#branchLimits, this.#clock, this.#admission);
+    this.#cache = new ContentCache(this.#runtimeLimits.maxCacheBytes, this.#admission);
+    this.branches = new BranchManager(this.#database, this.#filesystemLimits, this.#storageLimits, this.#runtimeLimits, this.#branchLimits, this.#clock, this.#admission, this.#cache);
     this.maintenance = new MaintenanceManager(this.#database, this.#storageLimits, this.#runtimeLimits, this.#clock);
   }
 
@@ -47,6 +50,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     const filesystem = resolveLimits(DEFAULT_FILESYSTEM_LIMITS, options.filesystem); const runtime = resolveLimits(DEFAULT_RUNTIME_LIMITS, options.runtime); const branch = resolveLimits(DEFAULT_BRANCH_CONFIGURATION, options.branch);
     const storage = constrainStorageLimits(options.storage, options.database.capabilities);
     const metadata = initializeOrValidateSchema(options.database, { ...(options.format?.cowPageBytes === undefined ? {} : { cowPageBytes: options.format.cowPageBytes }), now: (options.clock ?? Date.now)() });
+    validateRuntimeLimits(filesystem, storage, runtime, metadata.cowPageBytes);
     const format = Object.freeze({ cowPageBytes: metadata.cowPageBytes, hashAlgorithm: "sha256" as const, chunkerAlgorithm: "fastcdc-v1" as const, manifestFormat: "efs-merkle-manifest-v1" as const });
     const effectiveLimits = Object.freeze([
       ...Object.entries(filesystem).map(([name, value]) => Object.freeze({ domain: "filesystem" as const, name, value, scope: "persisted" as const, constrainedBy: "configuration" as const })),
@@ -65,7 +69,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       const bytes = this.#transaction("read", (tx) => {
         const inode = this.#requireFile(new NamespaceRepository(tx, this.#filesystemLimits, "readFile").resolve(canonical, true), "readFile");
         if (inode.size! > this.#filesystemLimits.maxMaterializedBytes) throw fsError("EFBIG", "readFile", canonical.value, "file exceeds complete materialization limit");
-        return readManifestRange(new ContentRepository(tx, this.#storageLimits), inode.manifest_hash!, 0, inode.size!);
+        return readManifestRange(new ContentRepository(tx, this.#storageLimits, this.#cache), inode.manifest_hash!, 0, inode.size!);
       });
       return options ? new TextDecoder("utf-8", { fatal: false }).decode(bytes) : bytes;
     });
@@ -75,7 +79,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     return this.#operation("readRange", path, undefined, async () => {
       checkedInteger(options?.offset, "offset"); checkedInteger(options?.length, "length", this.#filesystemLimits.maxMaterializedBytes);
       const canonical = canonicalizePath(path, this.#filesystemLimits, "readRange");
-      return this.#transaction("read", (tx) => { const inode = this.#requireFile(new NamespaceRepository(tx, this.#filesystemLimits, "readRange").resolve(canonical, true), "readRange"); return readManifestRange(new ContentRepository(tx, this.#storageLimits), inode.manifest_hash!, options.offset, options.length); });
+       return this.#transaction("read", (tx) => { const inode = this.#requireFile(new NamespaceRepository(tx, this.#filesystemLimits, "readRange").resolve(canonical, true), "readRange"); return readManifestRange(new ContentRepository(tx, this.#storageLimits, this.#cache), inode.manifest_hash!, options.offset, options.length); });
     });
   }
 
@@ -102,7 +106,7 @@ export class EphemeralFS implements EphemeralFilesystem {
           if (this.#closing || options.signal?.aborted) { await release(); controller.error(options.signal?.aborted ? abortError() : fsError("EBADF", "readStream", canonical.value, "filesystem is closing")); return; }
           if (position >= end) { await release(); controller.close(); return; }
           const length = Math.min(this.#filesystemLimits.preferredStreamChunkBytes, end - position); const free = this.#admission.reserve(length);
-          try { const bytes = this.#transaction("read", (tx) => readManifestRange(new ContentRepository(tx, this.#storageLimits), selected.manifestHash, position, length)); position += bytes.byteLength; controller.enqueue(bytes); queuedRelease = free; } catch (error) { free(); await release(); controller.error(error); }
+           try { const bytes = this.#transaction("read", (tx) => readManifestRange(new ContentRepository(tx, this.#storageLimits, this.#cache), selected.manifestHash, position, length)); position += bytes.byteLength; controller.enqueue(bytes); queuedRelease = free; } catch (error) { free(); await release(); controller.error(error); }
         },
         cancel: async () => { await release(); },
       }, { highWaterMark: 1, size: (chunk) => chunk.byteLength });
@@ -118,14 +122,15 @@ export class EphemeralFS implements EphemeralFilesystem {
       if (frozen instanceof Uint8Array && frozen.byteLength > this.#storageLimits.maxWriteBytes) throw fsError("EFBIG", "writeFile", path, "buffered write exceeds maxWriteBytes");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "writeFile"); if (canonical.value === "/") throw fsError("EISDIR", "writeFile", canonical.value, "root is a directory");
       if (options.exclusive) { const exists = this.#transaction("read", (tx) => new NamespaceRepository(tx, this.#filesystemLimits, "writeFile").resolveOptional(canonical, false)); if (exists) throw fsError("EEXIST", "writeFile", canonical.value, "destination exists"); }
-      const prepared = await prepareContent(this.#database, frozen, this.#storageLimits, this.#runtimeLimits, this.#admission, options.signal);
-      this.#transaction("write", (tx) => {
+      const prepared = await prepareContent(this.#database, frozen, this.#storageLimits, this.#runtimeLimits, this.#admission, options.signal, this.#cache);
+      try { this.#transaction("write", (tx) => {
         const ns = new NamespaceRepository(tx, this.#filesystemLimits, "writeFile"); const raw = ns.resolveOptional(canonical, false); let existing = raw;
         if (options.exclusive && raw) throw fsError("EEXIST", "writeFile", canonical.value, "destination exists");
         if (raw?.inode.type === 2 && !options.exclusive) existing = ns.resolve(canonical, true);
         if (existing?.inode.type === 1) throw fsError("EISDIR", "writeFile", canonical.value, "destination is a directory");
         if (existing && existing.inode.type !== 0) throw fsError("ENOENT", "writeFile", canonical.value, "symbolic link target is not a regular file");
         const now = this.#now(); const revision = ns.nextRevision(now, existing ? 1 : 2);
+        this.#validatePrepared(tx, prepared.certificate, now);
         if (existing) {
           const time = Math.max(now, existing.inode.mtime_ms, existing.inode.ctime_ms);
           tx.run("UPDATE efs_inodes SET size=?,manifest_hash=?,mtime_ms=?,ctime_ms=?,token=? WHERE id=?", [prepared.size, prepared.hash, time, time, revision, existing.inode.id]); ns.recordInode(revision, existing.inode.id);
@@ -133,7 +138,8 @@ export class EphemeralFS implements EphemeralFilesystem {
           const { parent, name, nameSort } = ns.resolveParent(canonical); const inodeId = globalThis.crypto.randomUUID(); const mode = validatedMode(options.mode, 0o666, "writeFile", canonical.value);
           tx.run("INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,0,?,?,?,?,1,?,?,NULL,?)", [inodeId, mode, now, now, now, prepared.size, prepared.hash, revision]); ns.putEntry(parent.inode.id, nameSort, name, inodeId, revision); ns.recordInode(revision, inodeId); ns.recordEntry(revision, parent.inode.id, nameSort); this.#touchParent(tx, ns, parent.inode, now, revision);
         }
-      });
+        this.#releasePrepared(tx, prepared.certificate);
+      }); } catch (error) { this.#abandonPrepared(prepared.certificate); throw error; }
     });
   }
 
@@ -248,15 +254,15 @@ export class EphemeralFS implements EphemeralFilesystem {
     if (this.#closePromise) return this.#closePromise; this.#closing = true;
     this.#closePromise = (async () => {
       for (const stream of this.#streams.values()) stream.error(); await Promise.allSettled([...this.#streams.values()].map((stream) => stream.release())); await Promise.allSettled([...this.#pending]);
-      try { if (this.#ownsDatabase) await this.#database.close(); } finally { this.#closed = true; }
+       try { this.#cache.clear(); if (this.#ownsDatabase) await this.#database.close(); } finally { this.#closed = true; }
     })(); return this.#closePromise;
   }
 
   async [Symbol.asyncDispose](): Promise<void> { await this.close(); }
 
   #stat(path: string, followFinal: boolean, syscall: string): Promise<FileStat> { return this.#operation(syscall, path, undefined, async () => { const canonical = canonicalizePath(path, this.#filesystemLimits, syscall); return this.#transaction("read", (tx) => { const selected = new NamespaceRepository(tx, this.#filesystemLimits, syscall).resolve(canonical, followFinal); return fileStat(selected.inode, canonical.segments.at(-1) ?? ""); }); }); }
-  #readCompleteForMutation(path: string, syscall: string): { bytes: Uint8Array; token: number } { return this.#transaction("read", (tx) => { const selected = new NamespaceRepository(tx, this.#filesystemLimits, syscall).resolve(path, true); const inode = this.#requireFile(selected, syscall); if (inode.size! > this.#runtimeLimits.maxManagedResidentBytes) throw fsError("EFBIG", syscall, path, "file exceeds bounded mutation memory"); return { bytes: readManifestRange(new ContentRepository(tx, this.#storageLimits), inode.manifest_hash!, 0, inode.size!), token: inode.token }; }); }
-  async #replaceExisting(path: string, bytes: Uint8Array, expectedToken: number, syscall: string): Promise<void> { const prepared = await prepareContent(this.#database, bytes, this.#storageLimits, this.#runtimeLimits, this.#admission); this.#transaction("write", (tx) => { const ns = new NamespaceRepository(tx, this.#filesystemLimits, syscall); const selected = ns.resolve(path, true); const inode = this.#requireFile(selected, syscall); if (inode.token !== expectedToken) throw fsError("EAGAIN", syscall, path, "file changed while content was prepared"); const now = Math.max(this.#now(), inode.mtime_ms, inode.ctime_ms); const revision = ns.nextRevision(now, 1); tx.run("UPDATE efs_inodes SET size=?,manifest_hash=?,mtime_ms=?,ctime_ms=?,token=? WHERE id=? AND token=?", [prepared.size, prepared.hash, now, now, revision, inode.id, expectedToken]); ns.recordInode(revision, inode.id); }); }
+  #readCompleteForMutation(path: string, syscall: string): { bytes: Uint8Array; token: number } { return this.#transaction("read", (tx) => { const selected = new NamespaceRepository(tx, this.#filesystemLimits, syscall).resolve(path, true); const inode = this.#requireFile(selected, syscall); if (inode.size! > this.#runtimeLimits.maxManagedResidentBytes) throw fsError("EFBIG", syscall, path, "file exceeds bounded mutation memory"); return { bytes: readManifestRange(new ContentRepository(tx, this.#storageLimits, this.#cache), inode.manifest_hash!, 0, inode.size!), token: inode.token }; }); }
+  async #replaceExisting(path: string, bytes: Uint8Array, expectedToken: number, syscall: string): Promise<void> { const prepared = await prepareContent(this.#database, bytes, this.#storageLimits, this.#runtimeLimits, this.#admission, undefined, this.#cache); try { this.#transaction("write", (tx) => { const ns = new NamespaceRepository(tx, this.#filesystemLimits, syscall); const selected = ns.resolve(path, true); const inode = this.#requireFile(selected, syscall); if (inode.token !== expectedToken) throw fsError("EAGAIN", syscall, path, "file changed while content was prepared"); const now = Math.max(this.#now(), inode.mtime_ms, inode.ctime_ms); this.#validatePrepared(tx, prepared.certificate, now); const revision = ns.nextRevision(now, 1); tx.run("UPDATE efs_inodes SET size=?,manifest_hash=?,mtime_ms=?,ctime_ms=?,token=? WHERE id=? AND token=?", [prepared.size, prepared.hash, now, now, revision, inode.id, expectedToken]); ns.recordInode(revision, inode.id); this.#releasePrepared(tx, prepared.certificate); }); } catch (error) { this.#abandonPrepared(prepared.certificate); throw error; } }
   #requireFile(selected: ResolvedPath, syscall: string): InodeRow { if (selected.inode.type === 1) throw fsError("EISDIR", syscall, selected.path.value, "path is a directory"); if (selected.inode.type !== 0 || selected.inode.manifest_hash === null || selected.inode.size === null) throw fsError("EINVAL", syscall, selected.path.value, "path is not a regular file"); return selected.inode; }
   #createDirectory(tx: FilesystemSQLiteTransaction, ns: NamespaceRepository, parent: InodeRow, name: string, nameSort: Uint8Array, mode: number, now: number, revision: number, id: string = globalThis.crypto.randomUUID()): InodeRow { tx.run("INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,1,?,?,?,?,1,NULL,NULL,NULL,?)", [id, mode, now, now, now, revision]); ns.putEntry(parent.id, nameSort, name, id, revision); ns.recordInode(revision, id); ns.recordEntry(revision, parent.id, nameSort); this.#touchParent(tx, ns, parent, now, revision); return { id, type: 1, mode, birthtime_ms: now, mtime_ms: now, ctime_ms: now, nlink: 1, size: null, manifest_hash: null, symlink_target: null, token: revision }; }
   #touchParent(tx: FilesystemSQLiteTransaction, ns: NamespaceRepository, parent: InodeRow, now: number, revision: number): void { const time = Math.max(now, parent.mtime_ms, parent.ctime_ms); tx.run("UPDATE efs_inodes SET mtime_ms=?,ctime_ms=?,token=? WHERE id=?", [time, time, revision, parent.id]); ns.recordInode(revision, parent.id); }
@@ -265,11 +271,14 @@ export class EphemeralFS implements EphemeralFilesystem {
   #remove(path: string, recursive: boolean, force: boolean, syscall: string, filesOnly: boolean): Promise<void> { return this.#operation(syscall, path, undefined, async () => { const canonical = canonicalizePath(path, this.#filesystemLimits, syscall); if (canonical.value === "/") throw fsError("EPERM", syscall, canonical.value, "root cannot be removed"); this.#transaction("write", (tx) => { const ns = new NamespaceRepository(tx, this.#filesystemLimits, syscall); const selected = ns.resolveOptional(canonical, false); if (!selected) { if (force) return; throw fsError("ENOENT", syscall, canonical.value, "path does not exist"); } if (filesOnly && selected.inode.type === 1) throw fsError("EISDIR", syscall, canonical.value, "unlink cannot remove a directory"); const children = selected.inode.type === 1 ? this.#collectTree(tx, ns, selected.inode.id) : []; if (children.length && !recursive) throw fsError("ENOTEMPTY", syscall, canonical.value, "directory is not empty"); if (children.length + 1 > this.#filesystemLimits.maxAtomicTreeEntries) throw fsError("EFBIG", syscall, canonical.value, "recursive removal exceeds atomic tree limit"); const now = this.#now(); const revision = ns.nextRevision(now, children.length * 2 + 3); for (const child of children.reverse()) this.#removeDestination(tx, ns, child, now, revision); this.#removeDestination(tx, ns, selected, now, revision); const parent = ns.inode(selected.parentInode!); if (parent) this.#touchParent(tx, ns, parent, now, revision); }); }); }
   #collectTree(tx: FilesystemSQLiteTransaction, ns: NamespaceRepository, rootId: string): ResolvedPath[] { const result: ResolvedPath[] = []; const stack = [rootId]; while (stack.length) { const parentId = stack.pop()!; const rows = tx.all<ChildRow & { inode_id: string; token: number }>("SELECT e.name,e.name_sort,e.inode_id,e.token,i.type FROM efs_entries e JOIN efs_inodes i ON i.id=e.inode_id WHERE e.parent_inode=? AND e.inode_id IS NOT NULL ORDER BY e.name_sort", [parentId], { maxRows: this.#filesystemLimits.maxAtomicTreeEntries + 1, maxBytes: this.#runtimeLimits.maxQueryBatchBytes }); for (const row of rows) { const inode = ns.inode(row.inode_id); if (!inode) throw new Error("ECORRUPT: missing descendant inode"); result.push({ path: canonicalizePath(`/${row.name}`, this.#filesystemLimits, "rm"), inode, parentInode: parentId, name: row.name, nameSort: row.name_sort, entryToken: row.token }); if (inode.type === 1) stack.push(inode.id); } if (result.length > this.#filesystemLimits.maxAtomicTreeEntries) break; } return result; }
   #bumpRoot(tx: FilesystemSQLiteTransaction, kind: number, id: string): void { const ns = new NamespaceRepository(tx, this.#filesystemLimits, "maintenance"); const generation = ns.meta().root_mutation_generation + 1; tx.run("UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1", [generation]); tx.run("INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)", [generation, kind, utf8(id)]); }
+  #validatePrepared(tx: FilesystemSQLiteTransaction, certificate: ClosureCertificate, now: number): void { new StagingRepository(tx).validateSealed(certificate, now); }
+  #releasePrepared(tx: FilesystemSQLiteTransaction, certificate: ClosureCertificate): void { const result = tx.run("UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND state=1", [certificate.leaseId, certificate.ownerNonce]); if (result.changes !== 1) throw new Error("ECORRUPT: staging lease could not be released"); this.#bumpRoot(tx, 6, certificate.leaseId); }
+  #abandonPrepared(certificate: ClosureCertificate): void { try { this.#transaction("write", (tx) => { const result = tx.run("UPDATE efs_leases SET state=2 WHERE id=? AND owner_nonce=? AND state IN (0,1)", [certificate.leaseId, certificate.ownerNonce]); if (result.changes) this.#bumpRoot(tx, 6, certificate.leaseId); }); } catch {} }
   #now(): number { const value = this.#clock(); if (!Number.isSafeInteger(value) || value < 0) throw new Error("clock must return a nonnegative safe integer"); return value; }
   #transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T { return runUnitOfWork(this.#database, mode, { maxRows: this.#storageLimits.maxFinalTransactionRows, maxBytes: this.#storageLimits.maxFinalTransactionBytes }, callback); }
   #operation<T>(operation: string, path: string | undefined, signal: AbortSignal | undefined, callback: () => Promise<T>): Promise<T> {
     if (this.#closing || this.#closed) return Promise.reject(fsError("EBADF", operation, path, "filesystem is closed or closing")); if (signal?.aborted) return Promise.reject(abortError()); if (this.#pending.size >= this.#runtimeLimits.maxConcurrentOperations) return Promise.reject(fsError("EAGAIN", operation, path, "concurrent operation limit exceeded"));
-    const start = performance.now(); const work = (async () => { try { const result = await callback(); this.#observe({ type: "operation", operation, outcome: "success", elapsedMs: performance.now() - start, counters: Object.freeze({ managedResidentBytes: this.#admission.usedBytes, peakManagedResidentBytes: this.#admission.peakBytes }) }); return result; } catch (error) { const mapped = error instanceof FilesystemError || (error instanceof DOMException && error.name === "AbortError") ? error : (() => { try { mapStorageError(error, operation, path); } catch (value) { return value; } })(); const code = mapped instanceof FilesystemError ? mapped.code : undefined; this.#observe({ type: "operation", operation, outcome: "error", elapsedMs: performance.now() - start, counters: Object.freeze({ managedResidentBytes: this.#admission.usedBytes, peakManagedResidentBytes: this.#admission.peakBytes }), ...(code === undefined ? {} : { errorCode: code }) }); throw mapped; } })(); this.#pending.add(work); void work.finally(() => this.#pending.delete(work)).catch(() => {}); return work;
+    const start = performance.now(); const work = (async () => { try { const result = await callback(); const cache = this.#cache.metrics(); this.#observe({ type: "operation", operation, outcome: "success", elapsedMs: performance.now() - start, counters: Object.freeze({ managedResidentBytes: this.#admission.usedBytes, peakManagedResidentBytes: this.#admission.peakBytes, cacheBytes: cache.bytes, cacheHits: cache.hits, cacheMisses: cache.misses, cacheEvictions: cache.evictions }) }); return result; } catch (error) { const mapped = error instanceof FilesystemError || (error instanceof DOMException && error.name === "AbortError") ? error : (() => { try { mapStorageError(error, operation, path); } catch (value) { return value; } })(); const code = mapped instanceof FilesystemError ? mapped.code : undefined; const cache = this.#cache.metrics(); this.#observe({ type: "operation", operation, outcome: "error", elapsedMs: performance.now() - start, counters: Object.freeze({ managedResidentBytes: this.#admission.usedBytes, peakManagedResidentBytes: this.#admission.peakBytes, cacheBytes: cache.bytes, cacheHits: cache.hits, cacheMisses: cache.misses, cacheEvictions: cache.evictions }), ...(code === undefined ? {} : { errorCode: code }) }); throw mapped; } })(); this.#pending.add(work); void work.finally(() => this.#pending.delete(work)).catch(() => {}); return work;
   }
   #observe(event: FilesystemObservation): void { try { this.#observer?.(Object.freeze(event)); } catch {} }
 }

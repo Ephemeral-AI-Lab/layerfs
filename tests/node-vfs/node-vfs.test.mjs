@@ -22,7 +22,7 @@ test("three sessions on one inode preserve every commit order without lost updat
 });
 
 test("shared backpressure bounds 64 sessions and rejects excess bytes", async () => {
-  const database = await openNodeSqlite({ filename: ":memory:" }); const handle = await openNodeVfs({ database, runtime: { maxManagedResidentBytes: 128 * 1024, maxPendingWriteBytes: 32 * 1024, maxWriteSessionBytes: 1024, maxOpenNodeVfsSessions: 64 } }); const sessions = [];
+  const database = await openNodeSqlite({ filename: ":memory:" }); const handle = await openNodeVfs({ database, runtime: { maxManagedResidentBytes: 1024 * 1024, maxPendingWriteBytes: 32 * 1024, maxWriteSessionBytes: 1024, maxOpenNodeVfsSessions: 64 } }); const sessions = [];
   for (let index = 0; index < 64; index += 1) { const session = handle.provider.openFileSync(`/file-${index}`, { writable: true, create: true }); session.writeSync(new Uint8Array(512), 0); sessions.push(session); }
   assert.throws(() => sessions[0].writeSync(Uint8Array.of(1), 512), (error) => error.code === "EAGAIN"); const peak = handle.provider.metrics.snapshot().peakManagedResidentBytes; assert.ok(peak <= handle.provider.capabilities.runtime.maxManagedResidentBytes); for (const session of sessions) session.abortSync(); assert.equal(handle.provider.metrics.snapshot().residentWriteBytes, 0); await handle.close(); database.close();
 });
@@ -34,4 +34,3 @@ test("flush, close, physical restart, and remount preserve the digest", async ()
     database = await openNodeSqlite({ filename }); handle = await openNodeVfs({ database }); const actual = handle.provider.readRangeSync("/large", 0, expected.length); assert.deepEqual(actual, expected); await handle.close(); database.close();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
-

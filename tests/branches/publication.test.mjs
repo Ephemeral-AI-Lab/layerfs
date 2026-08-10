@@ -45,3 +45,10 @@ test("branch stream is immutable across later edit and discard", async () => {
   const { database, filesystem } = await setup(); await filesystem.writeFile("/stream", "base"); const branch = await filesystem.branches.create("stream-branch"); await branch.writeFile("/stream", "snapshot"); const stream = await branch.readStream("/stream"); await branch.writeFile("/stream", "later"); await branch.discard(); let text = ""; for await (const chunk of stream) text += new TextDecoder().decode(chunk); assert.equal(text, "snapshot"); assert.equal((await branch.info()).state, "discarded"); await branch.close(); await filesystem.close(); database.close();
 });
 
+test("prepared branch content is released on attach and abandoned on mutation rejection", async () => {
+  const database = await openNodeSqlite({ filename: ":memory:" }); const filesystem = await EphemeralFS.open({ database, branch: { maxChangedPathsPerBranch: 1 } });
+  const branch = await filesystem.branches.create("lease-cleanup"); await branch.writeFile("/first", "attached");
+  await assert.rejects(branch.writeFile("/second", "must-be-abandoned"), (error) => error instanceof BranchError && error.code === "LimitExceeded");
+  const active = database.transaction("read", (tx) => tx.all("SELECT count(*) count FROM efs_leases WHERE state<>2", [], { maxRows: 1, maxBytes: 128 })[0].count);
+  assert.equal(active, 0); assert.equal(await branch.readFile("/first", { encoding: "utf8" }), "attached"); await branch.close(); await filesystem.close(); database.close();
+});

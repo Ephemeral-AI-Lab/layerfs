@@ -2,7 +2,7 @@ import type { FilesystemSQLiteDriver, FilesystemSQLiteTransaction, SqliteRow } f
 import type { CowPageBytes } from "../cow/pages.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
-export const EFS_SCHEMA_VERSION = 1;
+export const EFS_SCHEMA_VERSION = 2;
 
 const CREATE_STATEMENTS = [
   `CREATE TABLE efs_meta (singleton INTEGER PRIMARY KEY CHECK(singleton=1), schema_version INTEGER NOT NULL, filesystem_id TEXT NOT NULL UNIQUE, main_revision INTEGER NOT NULL, root_inode TEXT NOT NULL, root_mutation_generation INTEGER NOT NULL, next_allocation_sequence INTEGER NOT NULL, cow_page_bytes INTEGER NOT NULL CHECK(cow_page_bytes IN (4096,8192,16384)), created_at_ms INTEGER NOT NULL)`,
@@ -22,11 +22,19 @@ const CREATE_STATEMENTS = [
   `CREATE TABLE efs_branch_changes (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, path BLOB NOT NULL, expected_token INTEGER, kind INTEGER NOT NULL, encoded BLOB, PRIMARY KEY(branch_id,path)) WITHOUT ROWID`,
   `CREATE TABLE efs_branch_inode_expectations (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, expected_token INTEGER, PRIMARY KEY(branch_id,inode_id)) WITHOUT ROWID`,
   `CREATE TABLE efs_branch_manifest_roots (branch_id TEXT NOT NULL, path BLOB NOT NULL, manifest_hash BLOB NOT NULL REFERENCES efs_manifest_roots(hash), PRIMARY KEY(branch_id,path,manifest_hash), FOREIGN KEY(branch_id,path) REFERENCES efs_branch_changes(branch_id,path) ON DELETE CASCADE) WITHOUT ROWID`,
-  `CREATE TABLE efs_cow_pages (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL, generation INTEGER NOT NULL, bytes BLOB NOT NULL, PRIMARY KEY(branch_id,inode_id,page_index)) WITHOUT ROWID`,
-  `CREATE TABLE efs_patches (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL, offset INTEGER NOT NULL, delete_length INTEGER NOT NULL, insert_bytes BLOB NOT NULL, PRIMARY KEY(branch_id,inode_id,sequence)) WITHOUT ROWID`,
-  `CREATE TABLE efs_leases (id TEXT PRIMARY KEY, kind INTEGER NOT NULL, owner_id TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, state INTEGER NOT NULL) WITHOUT ROWID`,
+  `CREATE TABLE efs_cow_page_versions (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL CHECK(page_index>=0), generation INTEGER NOT NULL CHECK(generation>=0), bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL, PRIMARY KEY(branch_id,inode_id,page_index,generation)) WITHOUT ROWID`,
+  `CREATE TABLE efs_cow_page_heads (branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(branch_id,inode_id,page_index), FOREIGN KEY(branch_id,inode_id,page_index,generation) REFERENCES efs_cow_page_versions(branch_id,inode_id,page_index,generation) ON DELETE RESTRICT) WITHOUT ROWID`,
+  `CREATE TABLE efs_patches (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL CHECK(sequence>=0), generation INTEGER NOT NULL CHECK(generation>=0), offset INTEGER NOT NULL CHECK(offset>=0), delete_length INTEGER NOT NULL CHECK(delete_length>=0), insert_length INTEGER NOT NULL CHECK(insert_length>=0), PRIMARY KEY(branch_id,inode_id,sequence)) WITHOUT ROWID`,
+  `CREATE TABLE efs_patch_segments (branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL, segment_index INTEGER NOT NULL CHECK(segment_index>=0), bytes BLOB NOT NULL, PRIMARY KEY(branch_id,inode_id,sequence,segment_index), FOREIGN KEY(branch_id,inode_id,sequence) REFERENCES efs_patches(branch_id,inode_id,sequence) ON DELETE CASCADE) WITHOUT ROWID`,
+  `CREATE TABLE efs_leases (id TEXT PRIMARY KEY, kind INTEGER NOT NULL, owner_id TEXT NOT NULL, owner_nonce BLOB NOT NULL DEFAULT X'', branch_id TEXT, generation INTEGER, created_at_ms INTEGER NOT NULL DEFAULT 0, last_renewal_at_ms INTEGER NOT NULL DEFAULT 0, expires_at_ms INTEGER NOT NULL, state INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_lease_manifests (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, manifest_hash BLOB NOT NULL REFERENCES efs_manifest_roots(hash), PRIMARY KEY(lease_id,manifest_hash)) WITHOUT ROWID`,
-  `CREATE TABLE efs_staging_certificates (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, manifest_hash BLOB NOT NULL, chain_digest BLOB NOT NULL, object_count INTEGER NOT NULL, object_bytes INTEGER NOT NULL, node_count INTEGER NOT NULL, node_bytes INTEGER NOT NULL, sealed INTEGER NOT NULL CHECK(sealed IN (0,1))) WITHOUT ROWID`,
+  `CREATE TABLE efs_lease_objects (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, object_hash BLOB NOT NULL REFERENCES efs_cas_objects(hash) ON DELETE RESTRICT, sequence INTEGER NOT NULL CHECK(sequence>=0), size INTEGER NOT NULL CHECK(size>=0), PRIMARY KEY(lease_id,object_hash), UNIQUE(lease_id,sequence)) WITHOUT ROWID`,
+  `CREATE TABLE efs_lease_staged_manifests (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind IN (0,1)), manifest_hash BLOB NOT NULL, sequence INTEGER NOT NULL CHECK(sequence>=0), size INTEGER NOT NULL CHECK(size>=0), PRIMARY KEY(lease_id,kind,manifest_hash), UNIQUE(lease_id,sequence)) WITHOUT ROWID`,
+  `CREATE TABLE efs_staging_entries (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, entry_index INTEGER NOT NULL CHECK(entry_index>=0), object_hash BLOB NOT NULL REFERENCES efs_cas_objects(hash) ON DELETE RESTRICT, length INTEGER NOT NULL CHECK(length>0), PRIMARY KEY(lease_id,entry_index)) WITHOUT ROWID`,
+  `CREATE TABLE efs_staging_level_records (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, level INTEGER NOT NULL CHECK(level>=0), record_index INTEGER NOT NULL CHECK(record_index>=0), node_hash BLOB NOT NULL REFERENCES efs_manifest_nodes(hash) ON DELETE RESTRICT, span INTEGER NOT NULL CHECK(span>=0), entry_count INTEGER NOT NULL CHECK(entry_count>=0), PRIMARY KEY(lease_id,level,record_index)) WITHOUT ROWID`,
+  `CREATE TABLE efs_lease_cow_pages (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(lease_id,branch_id,inode_id,page_index,generation), FOREIGN KEY(branch_id,inode_id,page_index,generation) REFERENCES efs_cow_page_versions(branch_id,inode_id,page_index,generation) ON DELETE RESTRICT) WITHOUT ROWID`,
+  `CREATE TABLE efs_lease_patches (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY(lease_id,branch_id,inode_id,sequence), FOREIGN KEY(branch_id,inode_id,sequence) REFERENCES efs_patches(branch_id,inode_id,sequence) ON DELETE RESTRICT) WITHOUT ROWID`,
+  `CREATE TABLE efs_staging_certificates (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, manifest_hash BLOB, chain_digest BLOB NOT NULL CHECK(length(chain_digest)=32), object_count INTEGER NOT NULL CHECK(object_count>=0), object_bytes INTEGER NOT NULL CHECK(object_bytes>=0), node_count INTEGER NOT NULL CHECK(node_count>=0), node_bytes INTEGER NOT NULL CHECK(node_bytes>=0), membership_count INTEGER NOT NULL CHECK(membership_count>=0), next_sequence INTEGER NOT NULL CHECK(next_sequence>=0), sealed INTEGER NOT NULL CHECK(sealed IN (0,1)), verified INTEGER NOT NULL CHECK(verified IN (0,1))) WITHOUT ROWID`,
   `CREATE TABLE efs_operation_ids (id TEXT PRIMARY KEY, branch_id TEXT NOT NULL, generation INTEGER NOT NULL, created_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_operation_results (operation_id TEXT PRIMARY KEY REFERENCES efs_operation_ids(id), outcome INTEGER NOT NULL, encoded BLOB NOT NULL, expires_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_root_journal (generation INTEGER PRIMARY KEY, kind INTEGER NOT NULL, root_id BLOB NOT NULL)`,
@@ -66,12 +74,52 @@ function validateCurrent(tx: FilesystemSQLiteTransaction, requestedPageBytes?: C
   return meta;
 }
 
+function migrateV1ToV2(tx: FilesystemSQLiteTransaction): void {
+  const state = inspect(tx);
+  if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 1) throw new Error("ESCHEMA: schema v1 migration precondition failed");
+  const meta = tx.all<MetaRow>("SELECT schema_version,filesystem_id,main_revision,root_inode,cow_page_bytes FROM efs_meta WHERE singleton=1", [], { maxRows: 1, maxBytes: 4096 })[0];
+  if (!meta || meta.schema_version !== 1) throw new Error("ECORRUPT: invalid schema v1 metadata");
+  tx.run("ALTER TABLE efs_cow_pages RENAME TO efs_cow_pages_v1");
+  tx.run(`CREATE TABLE efs_cow_page_versions (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL CHECK(page_index>=0), generation INTEGER NOT NULL CHECK(generation>=0), bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL, PRIMARY KEY(branch_id,inode_id,page_index,generation)) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_cow_page_heads (branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(branch_id,inode_id,page_index), FOREIGN KEY(branch_id,inode_id,page_index,generation) REFERENCES efs_cow_page_versions(branch_id,inode_id,page_index,generation) ON DELETE RESTRICT) WITHOUT ROWID`);
+  tx.run("INSERT INTO efs_cow_page_versions(branch_id,inode_id,page_index,generation,bytes,created_at_ms) SELECT branch_id,inode_id,page_index,generation,bytes,0 FROM efs_cow_pages_v1");
+  tx.run("INSERT INTO efs_cow_page_heads(branch_id,inode_id,page_index,generation) SELECT branch_id,inode_id,page_index,generation FROM efs_cow_pages_v1");
+  tx.run("DROP TABLE efs_cow_pages_v1");
+  tx.run("ALTER TABLE efs_patches RENAME TO efs_patches_v1");
+  tx.run(`CREATE TABLE efs_patches (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL CHECK(sequence>=0), generation INTEGER NOT NULL CHECK(generation>=0), offset INTEGER NOT NULL CHECK(offset>=0), delete_length INTEGER NOT NULL CHECK(delete_length>=0), insert_length INTEGER NOT NULL CHECK(insert_length>=0), PRIMARY KEY(branch_id,inode_id,sequence)) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_patch_segments (branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL, segment_index INTEGER NOT NULL CHECK(segment_index>=0), bytes BLOB NOT NULL, PRIMARY KEY(branch_id,inode_id,sequence,segment_index), FOREIGN KEY(branch_id,inode_id,sequence) REFERENCES efs_patches(branch_id,inode_id,sequence) ON DELETE CASCADE) WITHOUT ROWID`);
+  tx.run("INSERT INTO efs_patches(branch_id,inode_id,sequence,generation,offset,delete_length,insert_length) SELECT branch_id,inode_id,sequence,sequence,offset,delete_length,length(insert_bytes) FROM efs_patches_v1");
+  tx.run("INSERT INTO efs_patch_segments(branch_id,inode_id,sequence,segment_index,bytes) SELECT branch_id,inode_id,sequence,0,insert_bytes FROM efs_patches_v1 WHERE length(insert_bytes)>0");
+  tx.run("DROP TABLE efs_patches_v1");
+  tx.run("ALTER TABLE efs_leases ADD COLUMN owner_nonce BLOB NOT NULL DEFAULT X''");
+  tx.run("ALTER TABLE efs_leases ADD COLUMN branch_id TEXT");
+  tx.run("ALTER TABLE efs_leases ADD COLUMN generation INTEGER");
+  tx.run("ALTER TABLE efs_leases ADD COLUMN created_at_ms INTEGER NOT NULL DEFAULT 0");
+  tx.run("ALTER TABLE efs_leases ADD COLUMN last_renewal_at_ms INTEGER NOT NULL DEFAULT 0");
+  tx.run(`CREATE TABLE efs_lease_objects (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, object_hash BLOB NOT NULL REFERENCES efs_cas_objects(hash) ON DELETE RESTRICT, sequence INTEGER NOT NULL CHECK(sequence>=0), size INTEGER NOT NULL CHECK(size>=0), PRIMARY KEY(lease_id,object_hash), UNIQUE(lease_id,sequence)) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_lease_staged_manifests (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind IN (0,1)), manifest_hash BLOB NOT NULL, sequence INTEGER NOT NULL CHECK(sequence>=0), size INTEGER NOT NULL CHECK(size>=0), PRIMARY KEY(lease_id,kind,manifest_hash), UNIQUE(lease_id,sequence)) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_staging_entries (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, entry_index INTEGER NOT NULL CHECK(entry_index>=0), object_hash BLOB NOT NULL REFERENCES efs_cas_objects(hash) ON DELETE RESTRICT, length INTEGER NOT NULL CHECK(length>0), PRIMARY KEY(lease_id,entry_index)) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_staging_level_records (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, level INTEGER NOT NULL CHECK(level>=0), record_index INTEGER NOT NULL CHECK(record_index>=0), node_hash BLOB NOT NULL REFERENCES efs_manifest_nodes(hash) ON DELETE RESTRICT, span INTEGER NOT NULL CHECK(span>=0), entry_count INTEGER NOT NULL CHECK(entry_count>=0), PRIMARY KEY(lease_id,level,record_index)) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_lease_cow_pages (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(lease_id,branch_id,inode_id,page_index,generation), FOREIGN KEY(branch_id,inode_id,page_index,generation) REFERENCES efs_cow_page_versions(branch_id,inode_id,page_index,generation) ON DELETE RESTRICT) WITHOUT ROWID`);
+  tx.run(`CREATE TABLE efs_lease_patches (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, branch_id TEXT NOT NULL, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY(lease_id,branch_id,inode_id,sequence), FOREIGN KEY(branch_id,inode_id,sequence) REFERENCES efs_patches(branch_id,inode_id,sequence) ON DELETE RESTRICT) WITHOUT ROWID`);
+  tx.run("ALTER TABLE efs_staging_certificates RENAME TO efs_staging_certificates_v1");
+  tx.run(`CREATE TABLE efs_staging_certificates (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, manifest_hash BLOB, chain_digest BLOB NOT NULL CHECK(length(chain_digest)=32), object_count INTEGER NOT NULL CHECK(object_count>=0), object_bytes INTEGER NOT NULL CHECK(object_bytes>=0), node_count INTEGER NOT NULL CHECK(node_count>=0), node_bytes INTEGER NOT NULL CHECK(node_bytes>=0), membership_count INTEGER NOT NULL CHECK(membership_count>=0), next_sequence INTEGER NOT NULL CHECK(next_sequence>=0), sealed INTEGER NOT NULL CHECK(sealed IN (0,1)), verified INTEGER NOT NULL CHECK(verified IN (0,1))) WITHOUT ROWID`);
+  tx.run("INSERT INTO efs_staging_certificates(lease_id,owner_nonce,manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,membership_count,next_sequence,sealed,verified) SELECT lease_id,X'',manifest_hash,chain_digest,object_count,object_bytes,node_count,node_bytes,object_count+node_count,object_count+node_count,0,0 FROM efs_staging_certificates_v1");
+  tx.run("DROP TABLE efs_staging_certificates_v1");
+  tx.run("UPDATE efs_meta SET schema_version=2 WHERE singleton=1");
+  tx.run("PRAGMA user_version=2");
+}
+
 export interface StorageMetadata { readonly filesystemId: string; readonly mainRevision: number; readonly rootInode: string; readonly cowPageBytes: CowPageBytes }
 
 export function initializeOrValidateSchema(driver: FilesystemSQLiteDriver, options: { readonly cowPageBytes?: CowPageBytes; readonly now?: number } = {}): StorageMetadata {
   const requestedPageBytes = options.cowPageBytes;
   const state = driver.transaction("read", (tx) => inspect(tx));
   if (state.applicationId === EFS_APPLICATION_ID) {
+    if (state.userVersion === 1) {
+      if (driver.readOnly) throw new Error("ESCHEMA: schema v1 requires a writable migration");
+      driver.transaction("exclusive", (tx) => migrateV1ToV2(tx));
+    }
     const meta = driver.transaction("read", (tx) => validateCurrent(tx, requestedPageBytes));
     return Object.freeze({ filesystemId: meta.filesystem_id, mainRevision: meta.main_revision, rootInode: meta.root_inode, cowPageBytes: meta.cow_page_bytes as CowPageBytes });
   }
