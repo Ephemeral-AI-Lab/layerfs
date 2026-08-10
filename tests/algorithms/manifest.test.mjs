@@ -6,7 +6,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { bytesToHex } from "../../packages/fs/dist/cas/bytes.js";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
-import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
+import { findFastCdcBoundary } from "../../packages/fs/dist/cdc/fastcdc.js";
+import {
+  buildManifest,
+  MAX_DIAGNOSTIC_CONTENT_BYTES,
+} from "../../packages/fs/dist/operations/full-rebuild.js";
 import { buildManifestFromEntries } from "../../packages/fs/dist/manifests/builder.js";
 import {
   decodeManifestNode,
@@ -14,6 +18,7 @@ import {
   encodeManifestNode,
   encodeManifestRoot,
   MAX_MANIFEST_ENTRY_COUNT,
+  MAX_MANIFEST_NODE_BYTES,
 } from "../../packages/fs/dist/manifests/codec.js";
 import {
   lookupManifest,
@@ -26,9 +31,15 @@ import {
 } from "../../packages/fs/dist/manifests/grouping.js";
 import {
   applyEntrySplice,
-  rebuildManifestLocally,
+  DEFAULT_LOCAL_REBUILD_LIMITS,
+  LocalRebuildLimitError,
+  rebuildDiagnosticManifestLocally,
 } from "../../packages/fs/dist/operations/local-rebuild.js";
-import { rebuildManifestLocallyOrStream } from "../../packages/fs/dist/operations/streamed-rebuild.js";
+import {
+  rebuildEditedContentStreaming,
+  rebuildManifestLocallyOrStream,
+} from "../../packages/fs/dist/operations/streamed-rebuild.js";
+import { MAX_CONTENT_OBJECT_BYTES } from "../../packages/fs/dist/resources/limits.js";
 
 function fixture(length, seed = 0x12345678) {
   const bytes = new Uint8Array(length);
@@ -43,6 +54,21 @@ function fixture(length, seed = 0x12345678) {
 }
 
 const defaults = { minimum: 32768, average: 131072, maximum: 524288 };
+
+function countUint8ArraySetCalls(callback) {
+  const original = Uint8Array.prototype.set;
+  let calls = 0;
+  Uint8Array.prototype.set = function countedSet(...args) {
+    calls += 1;
+    return Reflect.apply(original, this, args);
+  };
+  try {
+    callback();
+    return calls;
+  } finally {
+    Uint8Array.prototype.set = original;
+  }
+}
 
 class DurableManifestWorkspace {
   constructor(filename) {
@@ -109,6 +135,28 @@ class MemoryManifestWorkspace {
   }
 }
 
+function mutableDiagnosticCopy(manifest) {
+  return {
+    id: manifest.id,
+    rootHash: manifest.rootHash.slice(),
+    root: manifest.root.slice(),
+    entries: manifest.entries.map((entry) => ({
+      hash: entry.hash.slice(),
+      length: entry.length,
+    })),
+    nodes: new Map(
+      [...manifest.nodes].map(([key, value]) => [
+        key,
+        {
+          hash: value.hash.slice(),
+          encoded: value.encoded.slice(),
+          node: decodeManifestNode(value.encoded),
+        },
+      ]),
+    ),
+  };
+}
+
 function storedNode(nodes, node) {
   const encoded = encodeManifestNode(node);
   const hash = sha256(encoded);
@@ -126,7 +174,33 @@ function storedRoot(parameters, child) {
   return Object.freeze({ root, rootHash: sha256(root) });
 }
 
+function variedEntry(index) {
+  const identity = new Uint8Array(8);
+  new DataView(identity.buffer).setBigUint64(0, BigInt(index), true);
+  return Object.freeze({ hash: sha256(identity), length: 100 + (index % 17) });
+}
+
+function diverseGoldenEntry(index) {
+  const identity = new Uint8Array(4);
+  new DataView(identity.buffer).setUint32(0, index, true);
+  return Object.freeze({ hash: sha256(identity), length: (index % 4) + 1 });
+}
+
 test("root, leaf, internal, grouping, and complete manifest golden vectors are exact", () => {
+  const emptyLeaf = encodeManifestNode({
+    kind: "leaf",
+    span: 0,
+    entryCount: 0,
+    entries: [],
+  });
+  assert.equal(
+    bytesToHex(emptyLeaf),
+    "4541464e01000001000000000000000000000000000000000000000000000000",
+  );
+  assert.equal(
+    bytesToHex(sha256(emptyLeaf)),
+    "166659473d5d3838ca47c6a541fc969e6377d165e2b6f36e40b7be1db7b92527",
+  );
   const entryA = { hash: new Uint8Array(32).fill(0x11), length: 1 };
   const entryB = { hash: new Uint8Array(32).fill(0x22), length: 2 };
   const leafBytes = encodeManifestNode({
@@ -142,6 +216,36 @@ test("root, leaf, internal, grouping, and complete manifest golden vectors are e
   assert.equal(
     bytesToHex(sha256(leafBytes)),
     "e7b7034cb872766a9d02249f745276b89a32f2a53a7680641987ef93dc2f6c70",
+  );
+  const fullEntries = Array.from({ length: 256 }, (_, index) => {
+    const identity = new Uint8Array(4);
+    new DataView(identity.buffer).setUint32(0, index, true);
+    return { hash: sha256(identity), length: index + 1 };
+  });
+  const fullLeaf = encodeManifestNode({
+    kind: "leaf",
+    span: 32_896,
+    entryCount: 256,
+    entries: fullEntries,
+  });
+  const expectedFullLeaf = new Uint8Array(32 + 256 * 36);
+  expectedFullLeaf.set([0x45, 0x41, 0x46, 0x4e]);
+  const fullView = new DataView(expectedFullLeaf.buffer);
+  fullView.setUint16(4, 1, true);
+  expectedFullLeaf[6] = 0;
+  expectedFullLeaf[7] = 1;
+  fullView.setUint32(8, 256, true);
+  fullView.setBigUint64(16, 32_896n, true);
+  fullView.setBigUint64(24, 256n, true);
+  for (let index = 0; index < fullEntries.length; index += 1) {
+    const offset = 32 + index * 36;
+    expectedFullLeaf.set(fullEntries[index].hash, offset);
+    fullView.setUint32(offset + 32, index + 1, true);
+  }
+  assert.deepEqual(fullLeaf, expectedFullLeaf);
+  assert.equal(
+    bytesToHex(sha256(fullLeaf)),
+    "39a12e626c1e1dde1ff0b47d26e0190e288e8e3652325f55763461917027ba87",
   );
   const childA = { hash: sha256(leafBytes), span: 3, entryCount: 2 };
   const childB = { hash: new Uint8Array(32).fill(0x33), span: 5, entryCount: 1 };
@@ -212,6 +316,338 @@ test("root, leaf, internal, grouping, and complete manifest golden vectors are e
   const node = decodeManifestNode(manifest.nodes.values().next().value.encoded);
   assert.equal(node.kind, "leaf");
   assert.equal(node.span, root.fileSize);
+});
+
+test("diagnostic full rebuild detaches Node Buffer object ranges", () => {
+  const source = Buffer.from(fixture(4096, 0xb0ffee));
+  const reference = buildManifest(new Uint8Array(source), {
+    minimum: 64,
+    average: 128,
+    maximum: 512,
+  });
+  const built = buildManifest(source, { minimum: 64, average: 128, maximum: 512 });
+  const firstObject = built.objects.values().next().value;
+  const expectedObject = firstObject.slice();
+  source.fill(0);
+  assert.equal(bytesToHex(built.rootHash), bytesToHex(reference.rootHash));
+  assert.deepEqual(firstObject, expectedObject);
+  assert.equal(Buffer.isBuffer(firstObject), false);
+});
+
+test("varied manifest grouping has natural boundaries and reconnecting subtree goldens", () => {
+  const goldenWorkspace = new MemoryManifestWorkspace();
+  const golden = buildManifestFromEntries(
+    Array.from({ length: 600 }, (_, index) => diverseGoldenEntry(index)),
+    { minimum: 1, average: 2, maximum: 4 },
+    goldenWorkspace,
+    { readBatchRecords: 17 },
+  );
+  let goldenEnd = 0;
+  assert.deepEqual(
+    goldenWorkspace.levels.get(0).map((record) => {
+      goldenEnd += record.value.node.entries.length;
+      return goldenEnd;
+    }),
+    [105, 204, 272, 528, 600],
+  );
+  assert.equal(
+    bytesToHex(golden.rootHash),
+    "bd7ed42c2a32cea19d79921bf94b19ea7c7ff42e04dd8da1de4acd826cd46d42",
+  );
+  assert.equal(golden.fileSize, 1500);
+  assert.equal(golden.nodeCount, 6);
+  assert.equal(golden.depth, 2);
+  assert.equal(golden.groupingRecordCount, 605);
+  assert.equal(golden.groupingRecordBytesProcessed, 21_840);
+
+  const deepWorkspace = new MemoryManifestWorkspace();
+  const deep = buildManifestFromEntries(
+    Array.from({ length: 22_000 }, (_, index) => diverseGoldenEntry(index)),
+    { minimum: 1, average: 2, maximum: 4 },
+    deepWorkspace,
+    { readBatchRecords: 17 },
+  );
+  assert.equal(deep.depth, 3);
+  assert.equal(deep.nodeCount, 146);
+  assert.equal(
+    bytesToHex(deep.root),
+    "4541465201000101010000000200000004000000d8d6000000000000f0550000000000005bf66b17b8e92ae5965acdec219647377bfeb27349088cbeeb45dada9513bc9e",
+  );
+  assert.equal(
+    bytesToHex(deep.rootHash),
+    "2501ef8b9619af95229002f5062d8a33275b948f74867908a069b32861bdb72d",
+  );
+
+  let state = 0n;
+  let count = 0;
+  const groups = [];
+  for (let index = 0; index < 10_000; index += 1) {
+    state = advanceManifestGroupingState(state, variedEntry(index));
+    count += 1;
+    if (isManifestGroupBoundary(count, state, 64, 128, 256)) {
+      groups.push(count);
+      count = 0;
+      state = 0n;
+    }
+  }
+  if (count) groups.push(count);
+  assert.deepEqual(
+    groups.slice(0, 20),
+    [
+      196, 256, 85, 109, 78, 163, 256, 153, 214, 228, 256, 166, 139, 231, 123, 117, 106,
+      110, 70, 253,
+    ],
+  );
+  assert.equal(groups.length, 56);
+  assert.ok(Math.min(...groups.slice(0, -1)) > 64);
+  assert.ok(groups.some((value) => value < 256));
+
+  const entries = Array.from({ length: 5000 }, (_, index) => variedEntry(index));
+  const originalWorkspace = new MemoryManifestWorkspace();
+  const original = buildManifestFromEntries(
+    entries,
+    { minimum: 64, average: 128, maximum: 512 },
+    originalWorkspace,
+    { readBatchRecords: 17 },
+  );
+  assert.equal(
+    bytesToHex(original.rootHash),
+    "97df2a12f31787e1e91bbccb5298654f28fbe90ad462b14ae700321ae5a3e04f",
+  );
+  assert.deepEqual(
+    originalWorkspace.levels
+      .get(0)
+      .slice(0, 20)
+      .map((record) => record.value.node.entries.length),
+    [
+      196, 256, 85, 109, 78, 163, 256, 153, 214, 228, 256, 166, 139, 231, 123, 117, 106,
+      110, 70, 253,
+    ],
+  );
+  const prependedWorkspace = new MemoryManifestWorkspace();
+  const prepended = buildManifestFromEntries(
+    [variedEntry(999_999), ...entries],
+    { minimum: 64, average: 128, maximum: 512 },
+    prependedWorkspace,
+    { readBatchRecords: 17 },
+  );
+  assert.equal(
+    bytesToHex(prepended.rootHash),
+    "61c96b19854b88623c0fa773346c4ce9698b8a952adc1ba960e642f5465dd6bb",
+  );
+  const oldHashes = new Set(
+    [...originalWorkspace.levels.values()].flatMap((records) =>
+      records.map((record) => bytesToHex(record.value.hash)),
+    ),
+  );
+  const reused = [...prependedWorkspace.levels.values()]
+    .flatMap((records) => records)
+    .filter((record) => oldHashes.has(bytesToHex(record.value.hash))).length;
+  assert.ok(reused >= 28, `expected substantial suffix reuse, observed ${reused}`);
+});
+
+test("recomputed-digest corruption matrix rejects before affected content is exposed", () => {
+  const parameters = { minimum: 1, average: 2, maximum: 4 };
+  const workspace = new MemoryManifestWorkspace();
+  const manifest = buildManifestFromEntries(
+    Array.from({ length: 600 }, (_, index) => diverseGoldenEntry(index)),
+    parameters,
+    workspace,
+    { readBatchRecords: 17 },
+  );
+  const nodeBytes = new Map(
+    [...workspace.levels.values()]
+      .flatMap((records) => records)
+      .map((record) => [bytesToHex(record.value.hash), record.value.encoded.slice()]),
+  );
+  const readerFor = (nodes) => ({
+    get(hash) {
+      return nodes.get(bytesToHex(hash));
+    },
+  });
+  const rootWithNode = (encoded, root = manifest.root) => {
+    const rootBytes = root.slice();
+    const hash = sha256(encoded);
+    rootBytes.set(hash, 36);
+    const nodes = new Map(nodeBytes);
+    nodes.set(bytesToHex(hash), encoded);
+    return { root: rootBytes, rootHash: sha256(rootBytes), nodes, hash };
+  };
+  const assertStructuralRejection = (root, rootHash, nodes, name) =>
+    assert.throws(
+      () => lookupManifest(root, 0, readerFor(nodes), rootHash),
+      undefined,
+      name,
+    );
+
+  const rootMutations = [
+    ["root magic", (bytes) => (bytes[0] ^= 1)],
+    ["root version", (bytes) => (bytes[4] = 2)],
+    ["root flags", (bytes) => (bytes[6] = 2)],
+    ["root chunker", (bytes) => (bytes[7] = 2)],
+    ["root minimum", (bytes) => new DataView(bytes.buffer).setUint32(8, 0, true)],
+    ["root average", (bytes) => new DataView(bytes.buffer).setUint32(12, 3, true)],
+    ["root maximum", (bytes) => new DataView(bytes.buffer).setUint32(16, 0, true)],
+    [
+      "root file span",
+      (bytes) => new DataView(bytes.buffer).setBigUint64(20, 1501n, true),
+    ],
+    [
+      "root entry count",
+      (bytes) => new DataView(bytes.buffer).setBigUint64(28, 601n, true),
+    ],
+    ["root node hash", (bytes) => bytes.fill(0, 36, 68)],
+  ];
+  for (const [name, mutate] of rootMutations) {
+    const root = manifest.root.slice();
+    mutate(root);
+    assertStructuralRejection(root, sha256(root), nodeBytes, name);
+  }
+
+  const rootNodeKey = bytesToHex(manifest.root.slice(36));
+  const rootNode = nodeBytes.get(rootNodeKey);
+  const nodeHeaderMutations = [
+    ["node magic", (bytes) => (bytes[0] ^= 1)],
+    ["node version", (bytes) => (bytes[4] = 2)],
+    ["node kind", (bytes) => (bytes[6] = 0)],
+    ["node algorithm", (bytes) => (bytes[7] = 2)],
+    ["node record count", (bytes) => new DataView(bytes.buffer).setUint32(8, 6, true)],
+    ["node reserved", (bytes) => new DataView(bytes.buffer).setUint32(12, 1, true)],
+    ["node span", (bytes) => new DataView(bytes.buffer).setBigUint64(16, 1501n, true)],
+    [
+      "node entry count",
+      (bytes) => new DataView(bytes.buffer).setBigUint64(24, 601n, true),
+    ],
+  ];
+  for (const [name, mutate] of nodeHeaderMutations) {
+    const encoded = rootNode.slice();
+    mutate(encoded);
+    const variant = rootWithNode(encoded);
+    assertStructuralRejection(variant.root, variant.rootHash, variant.nodes, name);
+  }
+
+  const decodedRootNode = decodeManifestNode(rootNode);
+  assert.equal(decodedRootNode.kind, "internal");
+  const firstChild = decodedRootNode.children[0];
+  const leafKey = bytesToHex(firstChild.hash);
+  const leaf = nodeBytes.get(leafKey);
+  const replaceFirstLeaf = (encoded) => {
+    const leafHash = sha256(encoded);
+    const parent = rootNode.slice();
+    parent.set(leafHash, 32);
+    const variant = rootWithNode(parent);
+    variant.nodes.set(bytesToHex(leafHash), encoded);
+    return variant;
+  };
+
+  const zeroLengthLeaf = leaf.slice();
+  new DataView(zeroLengthLeaf.buffer).setUint32(64, 0, true);
+  let variant = replaceFirstLeaf(zeroLengthLeaf);
+  assertStructuralRejection(
+    variant.root,
+    variant.rootHash,
+    variant.nodes,
+    "leaf record length",
+  );
+
+  const missingObjectLeaf = leaf.slice();
+  missingObjectLeaf[32] ^= 1;
+  variant = replaceFirstLeaf(missingObjectLeaf);
+  let exposedBytes = 0;
+  assert.throws(() => {
+    const selected = lookupManifest(
+      variant.root,
+      0,
+      readerFor(variant.nodes),
+      variant.rootHash,
+    );
+    const object = new Map().get(bytesToHex(selected.entry.hash));
+    if (!object) throw new Error("missing CAS object");
+    exposedBytes += object.byteLength;
+  }, /missing CAS object/);
+  assert.equal(exposedBytes, 0, "leaf object-hash corruption exposed content");
+
+  const missingChildParent = rootNode.slice();
+  missingChildParent.fill(0, 32, 64);
+  variant = rootWithNode(missingChildParent);
+  assertStructuralRejection(
+    variant.root,
+    variant.rootHash,
+    variant.nodes,
+    "internal child hash",
+  );
+
+  for (const field of ["span", "count"]) {
+    const parent = rootNode.slice();
+    const parentView = new DataView(parent.buffer);
+    const root = manifest.root.slice();
+    const rootView = new DataView(root.buffer);
+    if (field === "span") {
+      parentView.setBigUint64(64, BigInt(firstChild.span + 1), true);
+      parentView.setBigUint64(16, 1501n, true);
+      rootView.setBigUint64(20, 1501n, true);
+    } else {
+      parentView.setBigUint64(72, BigInt(firstChild.entryCount + 1), true);
+      parentView.setBigUint64(24, 601n, true);
+      rootView.setBigUint64(28, 601n, true);
+    }
+    variant = rootWithNode(parent, root);
+    assertStructuralRejection(
+      variant.root,
+      variant.rootHash,
+      variant.nodes,
+      `internal child ${field}`,
+    );
+  }
+
+  const missingRootNodes = new Map(nodeBytes);
+  missingRootNodes.delete(rootNodeKey);
+  assertStructuralRejection(
+    manifest.root,
+    manifest.rootHash,
+    missingRootNodes,
+    "missing root node",
+  );
+  const missingLeafNodes = new Map(nodeBytes);
+  missingLeafNodes.delete(leafKey);
+  assertStructuralRejection(
+    manifest.root,
+    manifest.rootHash,
+    missingLeafNodes,
+    "missing child node",
+  );
+
+  const children = decodedRootNode.children;
+  for (const [name, changedChildren] of [
+    ["deleted child", children.slice(1)],
+    ["duplicate child", [children[0], ...children]],
+  ]) {
+    const encoded = encodeManifestNode({
+      kind: "internal",
+      span: changedChildren.reduce((sum, child) => sum + child.span, 0),
+      entryCount: changedChildren.reduce((sum, child) => sum + child.entryCount, 0),
+      children: changedChildren,
+    });
+    variant = rootWithNode(encoded);
+    assertStructuralRejection(variant.root, variant.rootHash, variant.nodes, name);
+  }
+
+  // Reordering can describe a different valid file under a different root identity.
+  // It is corruption only relative to the selected authenticated root, which must not
+  // be replaced merely because every altered descendant was rehashed.
+  const reordered = encodeManifestNode({
+    kind: "internal",
+    span: decodedRootNode.span,
+    entryCount: decodedRootNode.entryCount,
+    children: [children[1], children[0], ...children.slice(2)],
+  });
+  variant = rootWithNode(reordered);
+  assertStructuralRejection(
+    variant.root,
+    manifest.rootHash,
+    variant.nodes,
+    "reordered child under the authoritative root identity",
+  );
 });
 
 test("builder, validation, and lookup reject noncanonical manifest structures", () => {
@@ -400,8 +836,300 @@ test("builder, validation, and lookup reject noncanonical manifest structures", 
   }
 });
 
+test("manifest builder snapshots caller records, parameters, and borrowed workspace pages", () => {
+  const parameters = { minimum: 1, average: 2, maximum: 4 };
+  const firstHash = sha256(Uint8Array.of(1));
+  const secondHash = sha256(Uint8Array.of(2));
+  const reused = { hash: firstHash.slice(), length: 1 };
+  function* aliasedEntries() {
+    yield reused;
+    reused.hash.set(secondHash);
+    reused.length = 2;
+    yield reused;
+  }
+  const aliasedWorkspace = new MemoryManifestWorkspace();
+  const aliased = buildManifestFromEntries(
+    aliasedEntries(),
+    parameters,
+    aliasedWorkspace,
+  );
+  const ownedWorkspace = new MemoryManifestWorkspace();
+  const owned = buildManifestFromEntries(
+    [
+      { hash: firstHash, length: 1 },
+      { hash: secondHash, length: 2 },
+    ],
+    parameters,
+    ownedWorkspace,
+  );
+  assert.equal(bytesToHex(aliased.rootHash), bytesToHex(owned.rootHash));
+
+  const borrowedBufferHash = Buffer.from(firstHash);
+  function* bufferEntry() {
+    yield { hash: borrowedBufferHash, length: 1 };
+    borrowedBufferHash.fill(0);
+  }
+  const bufferBuilt = buildManifestFromEntries(
+    bufferEntry(),
+    parameters,
+    new MemoryManifestWorkspace(),
+  );
+  const expectedBufferBuilt = buildManifestFromEntries(
+    [{ hash: firstHash, length: 1 }],
+    parameters,
+    new MemoryManifestWorkspace(),
+  );
+  assert.equal(
+    bytesToHex(bufferBuilt.rootHash),
+    bytesToHex(expectedBufferBuilt.rootHash),
+  );
+
+  const mutableParameters = { minimum: 1, average: 2, maximum: 4 };
+  function* mutatingParameters() {
+    yield { hash: firstHash, length: 1 };
+    mutableParameters.minimum = 4;
+    mutableParameters.average = 4;
+    mutableParameters.maximum = 4;
+    yield { hash: secondHash, length: 2 };
+  }
+  const parameterResult = buildManifestFromEntries(
+    mutatingParameters(),
+    mutableParameters,
+    new MemoryManifestWorkspace(),
+  );
+  assert.deepEqual(decodeManifestRoot(parameterResult.root).parameters, parameters);
+
+  const parameterGetterReads = { minimum: 0, average: 0, maximum: 0 };
+  const getterParameterResult = buildManifestFromEntries(
+    [{ hash: firstHash, length: 1 }],
+    {
+      get minimum() {
+        parameterGetterReads.minimum += 1;
+        return 1;
+      },
+      get average() {
+        parameterGetterReads.average += 1;
+        return 2;
+      },
+      get maximum() {
+        parameterGetterReads.maximum += 1;
+        return 4;
+      },
+    },
+    new MemoryManifestWorkspace(),
+  );
+  assert.deepEqual(
+    decodeManifestRoot(getterParameterResult.root).parameters,
+    parameters,
+  );
+  assert.deepEqual(parameterGetterReads, { minimum: 1, average: 1, maximum: 1 });
+
+  class InvalidatingWorkspace extends MemoryManifestWorkspace {
+    activeRows = [];
+    invalidate() {
+      for (const row of this.activeRows) row.child.hash.fill(0);
+      this.activeRows = [];
+    }
+    writeNode(record) {
+      this.invalidate();
+      const stored = {
+        ...record,
+        child: { ...record.child, hash: record.child.hash.slice() },
+        value: {
+          ...record.value,
+          hash: record.value.hash.slice(),
+          encoded: record.value.encoded.slice(),
+        },
+      };
+      super.writeNode(stored);
+      record.child.hash.fill(0);
+      record.value.hash.fill(0);
+      record.value.encoded.fill(0);
+    }
+    readLevel(level, afterIndex, limit) {
+      this.invalidate();
+      this.activeRows = super.readLevel(level, afterIndex, limit).map((row) => ({
+        index: row.index,
+        child: { ...row.child, hash: Buffer.from(row.child.hash) },
+      }));
+      return this.activeRows;
+    }
+  }
+  const many = Array.from({ length: 20_000 }, (_, index) => variedEntry(index));
+  const invalidating = buildManifestFromEntries(
+    many,
+    { minimum: 64, average: 128, maximum: 512 },
+    new InvalidatingWorkspace(),
+    { readBatchRecords: 64 },
+  );
+  const reference = buildManifestFromEntries(
+    many,
+    { minimum: 64, average: 128, maximum: 512 },
+    new MemoryManifestWorkspace(),
+    { readBatchRecords: 64 },
+  );
+  assert.equal(bytesToHex(invalidating.rootHash), bytesToHex(reference.rootHash));
+
+  class CorruptTotalsWorkspace extends MemoryManifestWorkspace {
+    readLevel(level, afterIndex, limit) {
+      const rows = super.readLevel(level, afterIndex, limit);
+      return rows.map((row, index) =>
+        afterIndex < 0 && index === 0
+          ? { ...row, child: { ...row.child, span: row.child.span + 1 } }
+          : row,
+      );
+    }
+  }
+  assert.throws(
+    () =>
+      buildManifestFromEntries(
+        many,
+        { minimum: 64, average: 128, maximum: 512 },
+        new CorruptTotalsWorkspace(),
+        { readBatchRecords: 17 },
+      ),
+    /root totals differ/,
+  );
+});
+
+test("manifest builder enforces maxEntries before copying or over-pulling", () => {
+  const entry = { hash: sha256(Uint8Array.of(1)), length: 1 };
+  let pulls = 0;
+  function* entries(count) {
+    for (let index = 0; index < count; index += 1) {
+      pulls += 1;
+      yield entry;
+    }
+  }
+  const acceptedWorkspace = new MemoryManifestWorkspace();
+  assert.doesNotThrow(() =>
+    buildManifestFromEntries(
+      entries(1),
+      { minimum: 1, average: 2, maximum: 4 },
+      acceptedWorkspace,
+      { maxEntries: 1 },
+    ),
+  );
+  assert.equal(pulls, 1);
+  assert.equal(acceptedWorkspace.levels.get(0).length, 1);
+  pulls = 0;
+  const rejectedWorkspace = new MemoryManifestWorkspace();
+  assert.throws(
+    () =>
+      buildManifestFromEntries(
+        entries(3),
+        { minimum: 1, average: 2, maximum: 4 },
+        rejectedWorkspace,
+        { maxEntries: 1 },
+      ),
+    /observed manifest entry count/,
+  );
+  assert.equal(pulls, 2);
+  assert.equal(rejectedWorkspace.levels.size, 0);
+});
+
 test("manifest codecs reject overflow and malformed encodings without digest checks", () => {
   const hash = new Uint8Array(32).fill(0x44);
+  class SubstitutingBytes extends Uint8Array {
+    subarray() {
+      return new Uint8Array(this.byteLength).fill(0xff);
+    }
+  }
+  const rootHashView = new SubstitutingBytes(32);
+  rootHashView.set(hash);
+  const expectedRootHashView = new Uint8Array(rootHashView);
+  const rootParameterReads = { minimum: 0, average: 0, maximum: 0 };
+  let rootEntryCountReads = 0;
+  const getterRoot = encodeManifestRoot({
+    parameters: {
+      get minimum() {
+        rootParameterReads.minimum += 1;
+        rootHashView.fill(0);
+        return 1;
+      },
+      get average() {
+        rootParameterReads.average += 1;
+        return 2;
+      },
+      get maximum() {
+        rootParameterReads.maximum += 1;
+        return 4;
+      },
+    },
+    fileSize: 1,
+    get entryCount() {
+      rootEntryCountReads += 1;
+      return rootEntryCountReads === 1 ? 1 : 2;
+    },
+    rootNodeHash: rootHashView,
+  });
+  assert.deepEqual(rootParameterReads, { minimum: 1, average: 1, maximum: 1 });
+  assert.equal(rootEntryCountReads, 1);
+  assert.equal(decodeManifestRoot(getterRoot).entryCount, 1);
+  assert.deepEqual(decodeManifestRoot(getterRoot).rootNodeHash, expectedRootHashView);
+
+  const leafHashView = new SubstitutingBytes(32);
+  leafHashView.fill(0x55);
+  const expectedLeafHash = new Uint8Array(leafHashView);
+  let leafSpanReads = 0;
+  let leafCountReads = 0;
+  let leafLengthReads = 0;
+  const getterLeaf = encodeManifestNode({
+    kind: "leaf",
+    get span() {
+      leafSpanReads += 1;
+      return leafSpanReads === 1 ? 1 : 2;
+    },
+    get entryCount() {
+      leafCountReads += 1;
+      return leafCountReads === 1 ? 1 : 2;
+    },
+    entries: [
+      {
+        hash: leafHashView,
+        get length() {
+          leafLengthReads += 1;
+          leafHashView.fill(0);
+          return leafLengthReads === 1 ? 1 : 2;
+        },
+      },
+    ],
+  });
+  const decodedGetterLeaf = decodeManifestNode(getterLeaf);
+  assert.equal(leafSpanReads, 1);
+  assert.equal(leafCountReads, 1);
+  assert.equal(leafLengthReads, 1);
+  assert.equal(decodedGetterLeaf.span, 1);
+  assert.deepEqual(decodedGetterLeaf.entries[0].hash, expectedLeafHash);
+
+  const childHashView = new SubstitutingBytes(32);
+  childHashView.fill(0x66);
+  const expectedChildHash = new Uint8Array(childHashView);
+  let childSpanReads = 0;
+  let childCountReads = 0;
+  const getterInternal = encodeManifestNode({
+    kind: "internal",
+    span: 1,
+    entryCount: 1,
+    children: [
+      {
+        hash: childHashView,
+        get span() {
+          childSpanReads += 1;
+          return childSpanReads === 1 ? 1 : 2;
+        },
+        get entryCount() {
+          childCountReads += 1;
+          childHashView.fill(0);
+          return childCountReads === 1 ? 1 : 2;
+        },
+      },
+    ],
+  });
+  const decodedGetterInternal = decodeManifestNode(getterInternal);
+  assert.equal(childSpanReads, 1);
+  assert.equal(childCountReads, 1);
+  assert.deepEqual(decodedGetterInternal.children[0].hash, expectedChildHash);
   const maximumRoot = encodeManifestRoot({
     parameters: { minimum: 1, average: 2, maximum: 4 },
     fileSize: MAX_MANIFEST_ENTRY_COUNT,
@@ -485,6 +1213,14 @@ test("manifest codecs reject overflow and malformed encodings without digest che
     entryCount: 1,
     entries: [{ hash, length: 1 }],
   });
+  assert.throws(
+    () =>
+      decodeManifestNode(
+        new Uint8Array(MAX_MANIFEST_NODE_BYTES + 1),
+        new Uint8Array(32),
+      ),
+    /absolute v1 byte maximum/,
+  );
   for (let length = 0; length < 32; length += 1)
     assert.throws(() => decodeManifestNode(leaf.slice(0, length)), /truncated/);
   for (let extra = 1; extra <= 16; extra += 1) {
@@ -577,6 +1313,99 @@ test("manifest codecs reject overflow and malformed encodings without digest che
   assert.throws(() => decodeManifestRoot(root), /Number.MAX_SAFE_INTEGER/);
 });
 
+test("format inspection accepts uint32 parameters while materializing paths reject unsupported maxima", () => {
+  const unsupported = {
+    minimum: 1,
+    average: 2,
+    maximum: MAX_CONTENT_OBJECT_BYTES + 1,
+  };
+  const emptyNode = encodeManifestNode({
+    kind: "leaf",
+    span: 0,
+    entryCount: 0,
+    entries: [],
+  });
+  const emptyHash = sha256(emptyNode);
+  const root = encodeManifestRoot({
+    parameters: unsupported,
+    fileSize: 0,
+    entryCount: 0,
+    rootNodeHash: emptyHash,
+  });
+  assert.deepEqual(decodeManifestRoot(root).parameters, unsupported);
+  let nodeLookups = 0;
+  class CountingNodes extends Map {
+    get(key) {
+      nodeLookups += 1;
+      return super.get(key);
+    }
+  }
+  const old = Object.freeze({
+    id: bytesToHex(sha256(root)),
+    root,
+    rootHash: sha256(root),
+    entries: Object.freeze([]),
+    nodes: new CountingNodes([
+      [
+        bytesToHex(emptyHash),
+        Object.freeze({
+          hash: emptyHash,
+          encoded: emptyNode,
+          node: decodeManifestNode(emptyNode),
+        }),
+      ],
+    ]),
+  });
+  let reads = 0;
+  const source = {
+    size: 0,
+    read() {
+      reads += 1;
+      return new Uint8Array();
+    },
+  };
+  class TrackedInsertion extends Uint8Array {
+    copyAttempts = 0;
+    subarray(start, end) {
+      this.copyAttempts += 1;
+      return super.subarray(start, end);
+    }
+  }
+  const insertion = new TrackedInsertion(1);
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(source, old, {
+        offset: 0,
+        deleteLength: 0,
+        insertBytes: insertion,
+      }),
+    /effective content-object limit/,
+  );
+  assert.equal(nodeLookups, 0);
+  assert.equal(insertion.copyAttempts, 0);
+  assert.throws(
+    () => buildManifest(new Uint8Array(), unsupported),
+    /effective content-object limit/,
+  );
+  assert.throws(
+    () =>
+      rebuildEditedContentStreaming(
+        source,
+        { offset: 0, deleteLength: 0, insertBytes: new Uint8Array() },
+        unsupported,
+        new MemoryManifestWorkspace(),
+        { putObject() {} },
+      ),
+    /effective content-object limit/,
+  );
+  assert.equal(reads, 0);
+  assert.equal(MAX_DIAGNOSTIC_CONTENT_BYTES, MAX_CONTENT_OBJECT_BYTES);
+  assert.throws(
+    () => buildManifest(new Uint8Array(MAX_DIAGNOSTIC_CONTENT_BYTES + 1), defaults),
+    /diagnostic manifest input/,
+  );
+});
+
 test("manifest trees are canonical, bounded, corruption-detecting, and lookup exact", () => {
   const bytes = fixture(1024 * 1024 + 333, 0xcafebabe);
   const parameters = { minimum: 64, average: 128, maximum: 512 };
@@ -641,6 +1470,82 @@ test("manifest trees are canonical, bounded, corruption-detecting, and lookup ex
   );
 });
 
+test("manifest readers isolate authoritative hashes from malicious reader mutation", () => {
+  const entryA = { hash: sha256(Uint8Array.of(1)), length: 1 };
+  const entryB = { hash: sha256(Uint8Array.of(2)), length: 1 };
+  const encodedA = encodeManifestNode({
+    kind: "leaf",
+    span: 1,
+    entryCount: 1,
+    entries: [entryA],
+  });
+  const encodedB = encodeManifestNode({
+    kind: "leaf",
+    span: 1,
+    entryCount: 1,
+    entries: [entryB],
+  });
+  const hashA = sha256(encodedA);
+  const hashB = sha256(encodedB);
+  const root = encodeManifestRoot({
+    parameters: { minimum: 1, average: 2, maximum: 4 },
+    fileSize: 1,
+    entryCount: 1,
+    rootNodeHash: hashA,
+  });
+  const reader = {
+    get(lookupHash) {
+      assert.equal(Buffer.isBuffer(lookupHash), false);
+      lookupHash.set(hashB);
+      return encodedB;
+    },
+  };
+  const bufferRoot = Buffer.from(root);
+  const bufferRootHash = Buffer.from(sha256(root));
+  assert.throws(
+    () => lookupManifest(bufferRoot, 0, reader, bufferRootHash),
+    /digest mismatch/,
+  );
+  assert.throws(
+    () => validateManifestTree(bufferRoot, reader, bufferRootHash),
+    /digest mismatch/,
+  );
+
+  const stableReader = {
+    get(lookupHash) {
+      assert.equal(Buffer.isBuffer(lookupHash), false);
+      return Buffer.from(encodedA);
+    },
+  };
+  const cursor = new ManifestSequentialCursor(
+    Buffer.from(root),
+    0,
+    stableReader,
+    Buffer.from(sha256(root)),
+  );
+  const peeked = cursor.peek();
+  const expectedEntryHash = bytesToHex(peeked.entry.hash);
+  peeked.entry.hash.fill(0);
+  assert.equal(bytesToHex(cursor.peek().entry.hash), expectedEntryHash);
+  const returned = cursor.next();
+  assert.equal(bytesToHex(returned.entry.hash), expectedEntryHash);
+  returned.entry.hash.fill(0);
+  assert.equal(cursor.peek(), null);
+
+  const encodedBuffer = Buffer.from(encodedA);
+  const decoded = decodeManifestNode(encodedBuffer, Buffer.from(hashA));
+  const decodedHash = decoded.entries[0].hash.slice();
+  encodedBuffer.fill(0);
+  assert.deepEqual(decoded.entries[0].hash, decodedHash);
+  assert.equal(Buffer.isBuffer(decoded.entries[0].hash), false);
+  const rootBuffer = Buffer.from(root);
+  const decodedRoot = decodeManifestRoot(rootBuffer, Buffer.from(sha256(root)));
+  const decodedRootNodeHash = decodedRoot.rootNodeHash.slice();
+  rootBuffer.fill(0);
+  assert.deepEqual(decodedRoot.rootNodeHash, decodedRootNodeHash);
+  assert.equal(Buffer.isBuffer(decodedRoot.rootNodeHash), false);
+});
+
 test("100001-entry canonical construction retains only a group and keyset page", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "efs-m1-builder-"));
   const workspace = new DurableManifestWorkspace(path.join(directory, "manifest.db"));
@@ -658,8 +1563,12 @@ test("100001-entry canonical construction retains only a group and keyset page",
     );
     assert.equal(built.entryCount, 100_001);
     assert.equal(built.fileSize, 100_001);
-    assert.ok(built.nodeCount > 390);
-    assert.ok(built.peakRetainedRecords <= 256 + 17);
+    assert.equal(built.nodeCount, 396);
+    assert.equal(built.depth, 3);
+    assert.equal(built.peakRetainedRecords, 259);
+    assert.equal(built.peakRetainedSerializedRecordBytes, 9336);
+    assert.equal(built.groupingRecordCount, 100_396);
+    assert.equal(built.groupingRecordBytesProcessed, 3_618_996);
     assert.ok(workspace.largestPage <= 17);
     validateManifestTree(built.root, workspace, built.rootHash, 8);
   } finally {
@@ -672,7 +1581,8 @@ test("local rebuild crosses a fixed cap into a durable streamed fallback", () =>
   const parameters = { minimum: 64, average: 128, maximum: 512 };
   const original = fixture(64 * 1024 + 19, 0xa11ce);
   const before = buildManifest(original, parameters);
-  const edit = { offset: 25_000, deleteLength: 1, insertBytes: Uint8Array.of(42) };
+  const insertion = Buffer.from([42]);
+  const edit = { offset: 25_000, deleteLength: 1, insertBytes: insertion };
   const directory = mkdtempSync(path.join(tmpdir(), "efs-m1-fallback-"));
   const workspace = new DurableManifestWorkspace(path.join(directory, "fallback.db"));
   try {
@@ -680,6 +1590,7 @@ test("local rebuild crosses a fixed cap into a durable streamed fallback", () =>
       {
         size: original.length,
         read(offset, length) {
+          insertion.fill(0);
           return original.slice(offset, offset + length);
         },
       },
@@ -700,6 +1611,9 @@ test("local rebuild crosses a fixed cap into a durable streamed fallback", () =>
     assert.match(result.localLimitReason, /streamed workspace fallback/);
     assert.ok(result.metrics.largestSourceRead <= 257);
     assert.ok(result.metrics.peakRetainedRecords <= 267);
+    assert.ok(result.metrics.peakPendingEntries <= 256);
+    assert.equal(result.metrics.insertionCopyCount, 1);
+    assert.equal(result.metrics.insertionBytesCopied, 1);
     assert.equal(result.metrics.sourceBytesRead, original.length - 1);
     const edited = original.slice();
     edited[edit.offset] = 42;
@@ -710,6 +1624,968 @@ test("local rebuild crosses a fixed cap into a durable streamed fallback", () =>
     workspace.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("diagnostic local rebuild authenticates cached entries and the complete capped closure", () => {
+  const parameters = { minimum: 64, average: 128, maximum: 512 };
+  const original = fixture(64 * 1024 + 19, 0xcac4ed);
+  const built = buildManifest(original, parameters);
+  const edit = { offset: 20_000, deleteLength: 1, insertBytes: Uint8Array.of(42) };
+  const cases = [
+    ["entry hash", (copy) => (copy.entries[0].hash[0] ^= 1)],
+    ["encoded node", (copy) => (copy.nodes.values().next().value.encoded[16] ^= 1)],
+    ["cached hash", (copy) => (copy.nodes.values().next().value.hash[0] ^= 1)],
+    [
+      "cached decoded node",
+      (copy) => {
+        const node = [...copy.nodes.values()].find(
+          (value) => value.node.kind === "leaf" && value.node.entries.length > 0,
+        ).node;
+        node.entries[0].hash[0] ^= 1;
+      },
+    ],
+    ["missing node", (copy) => copy.nodes.delete(bytesToHex(copy.root.slice(36)))],
+    [
+      "extra node",
+      (copy) => {
+        const value = copy.nodes.values().next().value;
+        copy.nodes.set("00".repeat(32), value);
+      },
+    ],
+  ];
+  for (const [name, mutate] of cases) {
+    const copy = mutableDiagnosticCopy(built);
+    mutate(copy);
+    let sourceReads = 0;
+    assert.throws(
+      () =>
+        rebuildDiagnosticManifestLocally(
+          {
+            size: original.length,
+            read(offset, length) {
+              sourceReads += 1;
+              return original.slice(offset, offset + length);
+            },
+          },
+          copy,
+          edit,
+        ),
+      undefined,
+      name,
+    );
+    assert.equal(sourceReads, 0, `${name} was detected after source I/O`);
+  }
+
+  class CountingMap extends Map {
+    reads = 0;
+    get(key) {
+      this.reads += 1;
+      return super.get(key);
+    }
+  }
+  const overCap = mutableDiagnosticCopy(built);
+  const decoded = decodeManifestRoot(overCap.root, overCap.rootHash);
+  overCap.root = encodeManifestRoot({
+    parameters: decoded.parameters,
+    fileSize: decoded.fileSize,
+    entryCount: 16_385,
+    rootNodeHash: decoded.rootNodeHash,
+  });
+  overCap.rootHash = sha256(overCap.root);
+  overCap.id = bytesToHex(overCap.rootHash);
+  overCap.nodes = new CountingMap(overCap.nodes);
+  let overCapSourceReads = 0;
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(
+        {
+          size: original.length,
+          read(offset, length) {
+            overCapSourceReads += 1;
+            return original.slice(offset, offset + length);
+          },
+        },
+        overCap,
+        edit,
+      ),
+    LocalRebuildLimitError,
+  );
+  assert.equal(overCap.nodes.reads, 0);
+  assert.equal(overCapSourceReads, 0);
+
+  const oversizedBytes = new Uint8Array(MAX_CONTENT_OBJECT_BYTES);
+  const malformedByteCases = [
+    [
+      "oversized root",
+      (copy) => {
+        copy.root = oversizedBytes;
+      },
+      0,
+      /exactly 68 bytes/,
+    ],
+    [
+      "oversized root hash",
+      (copy) => {
+        copy.rootHash = oversizedBytes;
+      },
+      0,
+      /32 bytes/,
+    ],
+    [
+      "oversized cached hash",
+      (copy) => {
+        const rootNode = bytesToHex(decodeManifestRoot(copy.root).rootNodeHash);
+        copy.nodes.get(rootNode).hash = oversizedBytes;
+      },
+      1,
+      /cached node hash must contain 32 bytes/,
+    ],
+    [
+      "oversized cached encoding",
+      (copy) => {
+        const rootNode = bytesToHex(decodeManifestRoot(copy.root).rootNodeHash);
+        copy.nodes.get(rootNode).encoded = new Uint8Array(MAX_MANIFEST_NODE_BYTES + 1);
+      },
+      1,
+      /cached node exceeds the v1 byte maximum/,
+    ],
+  ];
+  for (const [name, mutate, expectedMapReads, message] of malformedByteCases) {
+    const copy = mutableDiagnosticCopy(built);
+    mutate(copy);
+    copy.nodes = new CountingMap(copy.nodes);
+    let sourceReads = 0;
+    assert.throws(
+      () =>
+        rebuildDiagnosticManifestLocally(
+          {
+            size: original.length,
+            read() {
+              sourceReads += 1;
+              return new Uint8Array();
+            },
+          },
+          copy,
+          edit,
+        ),
+      message,
+      name,
+    );
+    assert.equal(copy.nodes.reads, expectedMapReads, `${name} node reads`);
+    assert.equal(sourceReads, 0, `${name} reached source I/O`);
+  }
+
+  const repeatedEntry = { hash: sha256(Uint8Array.of(99)), length: 1 };
+  const repeatedLeafNode = {
+    kind: "leaf",
+    span: 256,
+    entryCount: 256,
+    entries: Array.from({ length: 256 }, () => repeatedEntry),
+  };
+  const repeatedLeafEncoded = encodeManifestNode(repeatedLeafNode);
+  const repeatedLeafHash = sha256(repeatedLeafEncoded);
+  const repeatedChild = { hash: repeatedLeafHash, span: 256, entryCount: 256 };
+  const repeatedRootNode = {
+    kind: "internal",
+    span: 768,
+    entryCount: 768,
+    children: [repeatedChild, repeatedChild, repeatedChild],
+  };
+  const repeatedRootEncoded = encodeManifestNode(repeatedRootNode);
+  const repeatedRootNodeHash = sha256(repeatedRootEncoded);
+  const repeatedRoot = encodeManifestRoot({
+    parameters: { minimum: 1, average: 2, maximum: 4 },
+    fileSize: 768,
+    entryCount: 768,
+    rootNodeHash: repeatedRootNodeHash,
+  });
+  const repeatedRootHash = sha256(repeatedRoot);
+  let repeatedSourceReads = 0;
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(
+        {
+          size: 768,
+          read() {
+            repeatedSourceReads += 1;
+            return new Uint8Array();
+          },
+        },
+        {
+          id: bytesToHex(repeatedRootHash),
+          root: repeatedRoot,
+          rootHash: repeatedRootHash,
+          entries: Array.from({ length: 768 }, () => repeatedEntry),
+          nodes: new Map([
+            [
+              bytesToHex(repeatedRootNodeHash),
+              {
+                hash: repeatedRootNodeHash,
+                encoded: repeatedRootEncoded,
+                node: repeatedRootNode,
+              },
+            ],
+            [
+              bytesToHex(repeatedLeafHash),
+              {
+                hash: repeatedLeafHash,
+                encoded: repeatedLeafEncoded,
+                node: repeatedLeafNode,
+              },
+            ],
+          ]),
+        },
+        { offset: 1, deleteLength: 1, insertBytes: Uint8Array.of(1) },
+        {
+          maxRetainedEntries: 16_384,
+          maxRetainedNodes: 2,
+          maxAffectedEntries: 4096,
+          maxAffectedBytes: 16 * 1024 * 1024,
+        },
+      ),
+    /node-visit limit/,
+  );
+  assert.equal(repeatedSourceReads, 0);
+
+  const insertion = Buffer.from([7, 8, 9]);
+  const insertionOriginal = Buffer.from(insertion);
+  const inserted = rebuildDiagnosticManifestLocally(
+    {
+      size: original.length,
+      read(offset, length) {
+        insertion.fill(0);
+        return original.slice(offset, offset + length);
+      },
+    },
+    built,
+    { offset: 20_000, deleteLength: 0, insertBytes: insertion },
+  );
+  const expectedInserted = new Uint8Array(original.length + insertionOriginal.length);
+  expectedInserted.set(original.subarray(0, 20_000));
+  expectedInserted.set(insertionOriginal, 20_000);
+  expectedInserted.set(original.subarray(20_000), 20_000 + insertionOriginal.length);
+  assert.equal(
+    bytesToHex(inserted.rootHash),
+    buildManifest(expectedInserted, parameters).id,
+  );
+  assert.equal(inserted.metrics.insertionCopyCount, 1);
+  assert.equal(inserted.metrics.insertionBytesCopied, insertionOriginal.length);
+
+  const wrapperInsertion = Buffer.from([11, 12, 13]);
+  const wrapperOriginal = Buffer.from(wrapperInsertion);
+  const wrapperResult = rebuildManifestLocallyOrStream(
+    {
+      size: original.length,
+      read(offset, length) {
+        wrapperInsertion.fill(0);
+        return original.slice(offset, offset + length);
+      },
+    },
+    built,
+    { offset: 20_000, deleteLength: 0, insertBytes: wrapperInsertion },
+    parameters,
+    new MemoryManifestWorkspace(),
+    { putObject() {} },
+  );
+  assert.equal(wrapperResult.mode, "local");
+  assert.equal(wrapperResult.manifest.metrics.insertionCopyCount, 1);
+  assert.equal(
+    wrapperResult.manifest.metrics.insertionBytesCopied,
+    wrapperOriginal.length,
+  );
+  const wrapperExpected = new Uint8Array(original.length + wrapperOriginal.length);
+  wrapperExpected.set(original.subarray(0, 20_000));
+  wrapperExpected.set(wrapperOriginal, 20_000);
+  wrapperExpected.set(original.subarray(20_000), 20_000 + wrapperOriginal.length);
+  assert.equal(
+    bytesToHex(wrapperResult.manifest.rootHash),
+    buildManifest(wrapperExpected, parameters).id,
+  );
+});
+
+test("diagnostic local rebuild enforces its exact content cap before source work", () => {
+  const original = new Uint8Array(MAX_DIAGNOSTIC_CONTENT_BYTES);
+  const before = buildManifest(original, defaults);
+  const source = {
+    size: original.length,
+    reads: 0,
+    read(offset, length) {
+      this.reads += 1;
+      return original.slice(offset, offset + length);
+    },
+  };
+  const exact = rebuildDiagnosticManifestLocally(source, before, {
+    offset: 1,
+    deleteLength: 1,
+    insertBytes: Uint8Array.of(1),
+  });
+  assert.equal(exact.fileSize, MAX_DIAGNOSTIC_CONTENT_BYTES);
+
+  source.reads = 0;
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(source, before, {
+        offset: original.length,
+        deleteLength: 0,
+        insertBytes: Uint8Array.of(1),
+      }),
+    (error) => {
+      assert.ok(error instanceof LocalRebuildLimitError);
+      assert.deepEqual(error.attemptMetrics, {
+        sourceBytesRead: 0,
+        bytesHashed: 0,
+        largestSourceRead: 0,
+        chunkerInputBytesCopied: 0,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 0,
+      });
+      return true;
+    },
+  );
+  assert.equal(source.reads, 0);
+
+  const workspace = new MemoryManifestWorkspace();
+  const streamed = rebuildManifestLocallyOrStream(
+    source,
+    before,
+    {
+      offset: original.length,
+      deleteLength: 0,
+      insertBytes: Uint8Array.of(1),
+    },
+    defaults,
+    workspace,
+    { putObject() {} },
+    undefined,
+    { readWindowBytes: defaults.maximum, manifestReadBatchRecords: 17 },
+  );
+  assert.equal(streamed.mode, "streamed-fallback");
+  assert.equal(
+    decodeManifestRoot(streamed.manifest.root, streamed.manifest.rootHash).fileSize,
+    MAX_DIAGNOSTIC_CONTENT_BYTES + 1,
+  );
+  assert.ok(streamed.metrics.peakPendingEntries <= 256);
+});
+
+test("diagnostic local limits are fixed lowering-only caps", () => {
+  const parameters = { minimum: 1, average: 1, maximum: 1 };
+  const original = Uint8Array.of(1, 2);
+  const before = buildManifest(original, parameters);
+  let sourceReads = 0;
+  const source = {
+    size: original.length,
+    read(offset, length) {
+      sourceReads += 1;
+      return original.slice(offset, offset + length);
+    },
+  };
+  const insertBytes = Uint8Array.of(7, 8);
+  const edit = { offset: 1, deleteLength: 1, insertBytes };
+  for (const name of Object.keys(DEFAULT_LOCAL_REBUILD_LIMITS)) {
+    let insertionReads = 0;
+    const unreadEdit = {
+      offset: 1,
+      deleteLength: 1,
+      get insertBytes() {
+        insertionReads += 1;
+        return insertBytes;
+      },
+    };
+    const limits = {
+      ...DEFAULT_LOCAL_REBUILD_LIMITS,
+      [name]: DEFAULT_LOCAL_REBUILD_LIMITS[name] + 1,
+    };
+    assert.throws(
+      () => rebuildDiagnosticManifestLocally(source, before, unreadEdit, limits),
+      /fixed diagnostic cap/,
+      `${name} accepted an expanded diagnostic cap`,
+    );
+    assert.equal(insertionReads, 0, `${name} read insertion before admission`);
+  }
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(source, before, edit, {
+        ...DEFAULT_LOCAL_REBUILD_LIMITS,
+        maxRetainedEntries: 1,
+        maxAffectedEntries: 2,
+      }),
+    /maxAffectedEntries exceeds maxRetainedEntries/,
+  );
+  assert.equal(sourceReads, 0);
+
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(source, before, edit, {
+        ...DEFAULT_LOCAL_REBUILD_LIMITS,
+        maxRetainedEntries: 2,
+        maxAffectedEntries: 2,
+      }),
+    /local result exceeds its retained-entry limit/,
+  );
+
+  class SpoofedOversizedInsertion extends Uint8Array {
+    get byteLength() {
+      return 1;
+    }
+    subarray() {
+      return Uint8Array.of(99);
+    }
+  }
+  class CountingMap extends Map {
+    reads = 0;
+    get(key) {
+      this.reads += 1;
+      return super.get(key);
+    }
+  }
+  const oversizedInsertion = new SpoofedOversizedInsertion(
+    MAX_CONTENT_OBJECT_BYTES + 1,
+  );
+  const countedBefore = mutableDiagnosticCopy(before);
+  countedBefore.nodes = new CountingMap(countedBefore.nodes);
+  sourceReads = 0;
+  const copyCalls = countUint8ArraySetCalls(() =>
+    assert.throws(
+      () =>
+        rebuildDiagnosticManifestLocally(source, countedBefore, {
+          offset: 0,
+          deleteLength: 0,
+          insertBytes: oversizedInsertion,
+        }),
+      /supported object limit/,
+    ),
+  );
+  assert.equal(copyCalls, 0);
+  assert.equal(sourceReads, 0);
+  assert.equal(countedBefore.nodes.reads, 0);
+
+  const largeInsertion = new Uint8Array(
+    DEFAULT_LOCAL_REBUILD_LIMITS.maxAffectedEntries + 1,
+  );
+  const empty = buildManifest(new Uint8Array(), parameters);
+  const streamed = rebuildManifestLocallyOrStream(
+    { size: 0, read: () => new Uint8Array() },
+    empty,
+    { offset: 0, deleteLength: 0, insertBytes: largeInsertion },
+    parameters,
+    new MemoryManifestWorkspace(),
+    { putObject() {} },
+    undefined,
+    { readWindowBytes: 64, manifestReadBatchRecords: 17 },
+  );
+  assert.equal(streamed.mode, "streamed-fallback");
+  assert.equal(streamed.metrics.insertionCopyCount, 1);
+  assert.equal(streamed.metrics.insertionBytesCopied, largeInsertion.length);
+  assert.equal(
+    decodeManifestRoot(streamed.manifest.root, streamed.manifest.rootHash).entryCount,
+    largeInsertion.length,
+  );
+});
+
+test("streamed rebuild owns callback inputs and isolates mutating object sinks", () => {
+  const original = fixture(64 * 1024 + 19, 0xbadc0de);
+  const parameters = { minimum: 64, average: 128, maximum: 512 };
+  const edit = {
+    offset: 25_000,
+    deleteLength: 1,
+    insertBytes: Buffer.from([42]),
+  };
+  const options = { readWindowBytes: 257, manifestReadBatchRecords: 11 };
+  const source = {
+    size: original.length,
+    read(offset, length) {
+      source.size = 0;
+      edit.offset = 0;
+      edit.deleteLength = 0;
+      edit.insertBytes.fill(0);
+      parameters.minimum = 1;
+      parameters.average = 2;
+      parameters.maximum = 4;
+      options.readWindowBytes = 1;
+      return original.slice(offset, offset + length);
+    },
+  };
+  const workspace = new MemoryManifestWorkspace();
+  const result = rebuildEditedContentStreaming(
+    source,
+    edit,
+    parameters,
+    workspace,
+    {
+      putObject(hash, bytes) {
+        assert.equal(Buffer.isBuffer(hash), false);
+        assert.equal(Buffer.isBuffer(bytes), false);
+        hash.fill(0);
+        bytes.fill(0);
+      },
+    },
+    "ownership regression",
+    options,
+  );
+  const edited = original.slice();
+  edited[25_000] = 42;
+  assert.equal(
+    bytesToHex(result.manifest.rootHash),
+    buildManifest(edited, { minimum: 64, average: 128, maximum: 512 }).id,
+  );
+  assert.ok(result.metrics.peakPendingEntries <= 256);
+  assert.equal(result.metrics.insertionCopyCount, 1);
+  assert.equal(result.metrics.insertionBytesCopied, 1);
+});
+
+test("streamed rebuild normalizes subclass source ranges before consumption", () => {
+  class SubstitutingSourceRange extends Uint8Array {
+    get byteLength() {
+      return 1;
+    }
+    subarray() {
+      return Uint8Array.of(0xff);
+    }
+  }
+  const original = fixture(4096 + 37, 0x51ced);
+  const parameters = { minimum: 64, average: 128, maximum: 512 };
+  const result = rebuildEditedContentStreaming(
+    {
+      size: original.length,
+      read(offset, length) {
+        const range = new SubstitutingSourceRange(length);
+        range.set(original.slice(offset, offset + length));
+        return range;
+      },
+    },
+    { offset: 0, deleteLength: 0, insertBytes: new Uint8Array() },
+    parameters,
+    new MemoryManifestWorkspace(),
+    { putObject() {} },
+    "subclass source normalization",
+    { readWindowBytes: 100, manifestReadBatchRecords: 17 },
+  );
+  const decoded = decodeManifestRoot(result.manifest.root, result.manifest.rootHash);
+  assert.equal(
+    bytesToHex(result.manifest.rootHash),
+    buildManifest(original, parameters).id,
+  );
+  assert.equal(decoded.fileSize, original.length);
+  assert.equal(result.metrics.sourceBytesRead, original.length);
+  assert.equal(result.metrics.bytesHashed, original.length);
+});
+
+test("streamed rebuild validates size and attempted-local metrics before callbacks", () => {
+  let sourceReads = 0;
+  let workspaceReads = 0;
+  let workspaceWrites = 0;
+  let objectPuts = 0;
+  const source = {
+    size: Number.MAX_SAFE_INTEGER,
+    read() {
+      sourceReads += 1;
+      return new Uint8Array();
+    },
+  };
+  const workspace = {
+    readLevel() {
+      workspaceReads += 1;
+      return [];
+    },
+    writeNode() {
+      workspaceWrites += 1;
+    },
+  };
+  const sink = {
+    putObject() {
+      objectPuts += 1;
+    },
+  };
+  assert.throws(
+    () =>
+      rebuildEditedContentStreaming(
+        source,
+        {
+          offset: Number.MAX_SAFE_INTEGER,
+          deleteLength: 0,
+          insertBytes: Uint8Array.of(1),
+        },
+        { minimum: 1, average: 2, maximum: 4 },
+        workspace,
+        sink,
+      ),
+    /rebuilt content size/,
+  );
+  const invalidAttemptedMetrics = [
+    ["negative", { sourceBytesRead: -1, bytesHashed: 0, largestSourceRead: 0 }],
+    [
+      "largest exceeds source",
+      { sourceBytesRead: 1, bytesHashed: 0, largestSourceRead: 2 },
+    ],
+    [
+      "output exceeds input",
+      {
+        sourceBytesRead: 0,
+        bytesHashed: 0,
+        largestSourceRead: 0,
+        chunkerInputBytesCopied: 1,
+        chunkerOutputBytesCopied: 2,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 2,
+      },
+    ],
+    [
+      "scan exceeds input",
+      {
+        sourceBytesRead: 0,
+        bytesHashed: 0,
+        largestSourceRead: 0,
+        chunkerInputBytesCopied: 1,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 2,
+        editedInputBytesPrepared: 1,
+      },
+    ],
+    [
+      "hashed exceeds output",
+      {
+        sourceBytesRead: 0,
+        bytesHashed: 1,
+        largestSourceRead: 0,
+        chunkerInputBytesCopied: 1,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 1,
+      },
+    ],
+    [
+      "input exceeds prepared",
+      {
+        sourceBytesRead: 0,
+        bytesHashed: 0,
+        largestSourceRead: 0,
+        chunkerInputBytesCopied: 2,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 1,
+      },
+    ],
+    [
+      "source exceeds prepared",
+      {
+        sourceBytesRead: 2,
+        bytesHashed: 0,
+        largestSourceRead: 1,
+        chunkerInputBytesCopied: 0,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 1,
+      },
+    ],
+    [
+      "largest read exceeds configured maximum",
+      {
+        sourceBytesRead: 5,
+        bytesHashed: 0,
+        largestSourceRead: 5,
+        chunkerInputBytesCopied: 5,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 5,
+      },
+    ],
+    [
+      "prepared input exceeds one-window read-ahead",
+      {
+        sourceBytesRead: 0,
+        bytesHashed: 0,
+        largestSourceRead: 0,
+        chunkerInputBytesCopied: 1,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 6,
+      },
+    ],
+  ];
+  for (const [name, attempted] of invalidAttemptedMetrics)
+    assert.throws(
+      () =>
+        rebuildEditedContentStreaming(
+          { ...source, size: 1 },
+          { offset: 0, deleteLength: 0, insertBytes: new Uint8Array() },
+          { minimum: 1, average: 2, maximum: 4 },
+          workspace,
+          sink,
+          "invalid attempted metrics",
+          {},
+          attempted,
+        ),
+      undefined,
+      name,
+    );
+  assert.equal(sourceReads, 0);
+  assert.equal(workspaceReads, 0);
+  assert.equal(workspaceWrites, 0);
+  assert.equal(objectPuts, 0);
+
+  const exactBoundary = rebuildEditedContentStreaming(
+    {
+      size: 4,
+      read(_offset, length) {
+        return new Uint8Array(length);
+      },
+    },
+    { offset: 0, deleteLength: 0, insertBytes: new Uint8Array() },
+    { minimum: 1, average: 2, maximum: 4 },
+    new MemoryManifestWorkspace(),
+    { putObject() {} },
+    "exact attempted metric boundary",
+    {},
+    {
+      sourceBytesRead: 4,
+      bytesHashed: 4,
+      largestSourceRead: 4,
+      chunkerInputBytesCopied: 4,
+      chunkerOutputBytesCopied: 4,
+      chunkerBoundaryBytesScanned: 4,
+      editedInputBytesPrepared: 8,
+    },
+  );
+  assert.equal(exactBoundary.metrics.attemptedLocalLargestSourceRead, 4);
+  assert.equal(exactBoundary.metrics.attemptedLocalEditedInputBytesPrepared, 8);
+});
+
+test("invalid rebuild controls reject before copying insertion bytes", () => {
+  class TrackedInsertion extends Uint8Array {
+    subarray(start, end) {
+      this.copyAttempts += 1;
+      return super.subarray(start, end);
+    }
+    copyAttempts = 0;
+  }
+  const insertion = new TrackedInsertion(1);
+  insertion[0] = 9;
+  const bytes = fixture(4096, 0xabad1dea);
+  const parameters = { minimum: 64, average: 128, maximum: 512 };
+  const before = buildManifest(bytes, parameters);
+  const source = {
+    size: bytes.length,
+    read(offset, length) {
+      return bytes.slice(offset, offset + length);
+    },
+  };
+  const edit = { offset: 1, deleteLength: 1, insertBytes: insertion };
+  const workspace = new MemoryManifestWorkspace();
+  const sink = { putObject() {} };
+  assert.throws(() =>
+    rebuildEditedContentStreaming(
+      source,
+      edit,
+      { minimum: 1, average: 3, maximum: 4 },
+      workspace,
+      sink,
+    ),
+  );
+  assert.throws(() =>
+    rebuildEditedContentStreaming(source, edit, parameters, workspace, sink, "bad", {
+      readWindowBytes: 0,
+    }),
+  );
+  assert.throws(() =>
+    rebuildEditedContentStreaming(
+      source,
+      edit,
+      parameters,
+      workspace,
+      sink,
+      "bad",
+      {},
+      { sourceBytesRead: -1, bytesHashed: 0, largestSourceRead: 0 },
+    ),
+  );
+  assert.throws(() =>
+    rebuildDiagnosticManifestLocally(source, before, edit, {
+      maxRetainedEntries: 0,
+      maxRetainedNodes: 1,
+      maxAffectedEntries: 1,
+      maxAffectedBytes: 1,
+    }),
+  );
+  assert.throws(() =>
+    rebuildManifestLocallyOrStream(source, before, edit, parameters, workspace, sink, {
+      maxRetainedEntries: 1,
+      maxRetainedNodes: 1,
+      maxAffectedEntries: 1,
+      maxAffectedBytes: 0,
+    }),
+  );
+  assert.throws(() =>
+    rebuildEditedContentStreaming(
+      source,
+      { ...edit, offset: source.size + 1 },
+      parameters,
+      workspace,
+      sink,
+    ),
+  );
+  assert.equal(insertion.copyAttempts, 0);
+});
+
+test("local fallback preflights work and reports both attempted and fallback phases", () => {
+  const parameters = { minimum: 64, average: 128, maximum: 512 };
+  const original = fixture(64 * 1024 + 19, 0xa11ce);
+  const before = buildManifest(original, parameters);
+  const edit = { offset: 25_000, deleteLength: 1, insertBytes: Uint8Array.of(42) };
+  let reads = 0;
+  let readBytes = 0;
+  let largestRead = 0;
+  const source = {
+    size: original.length,
+    read(offset, length) {
+      reads += 1;
+      readBytes += length;
+      largestRead = Math.max(largestRead, length);
+      return original.slice(offset, offset + length);
+    },
+  };
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(source, before, edit, {
+        maxRetainedEntries: 16_384,
+        maxRetainedNodes: 32_768,
+        maxAffectedEntries: 4096,
+        maxAffectedBytes: 1,
+      }),
+    (error) => {
+      assert.ok(error instanceof LocalRebuildLimitError);
+      assert.equal(error.attemptMetrics.bytesHashed, 0);
+      assert.ok(error.attemptMetrics.sourceBytesRead <= 2);
+      return true;
+    },
+  );
+  assert.ok(reads <= 1);
+
+  reads = 0;
+  readBytes = 0;
+  largestRead = 0;
+  const workspace = new MemoryManifestWorkspace();
+  const result = rebuildManifestLocallyOrStream(
+    source,
+    before,
+    edit,
+    parameters,
+    workspace,
+    { putObject() {} },
+    {
+      maxRetainedEntries: 16_384,
+      maxRetainedNodes: 32_768,
+      maxAffectedEntries: 1,
+      maxAffectedBytes: MAX_CONTENT_OBJECT_BYTES,
+    },
+    { readWindowBytes: 257, manifestReadBatchRecords: 11 },
+  );
+  assert.equal(result.mode, "streamed-fallback");
+  assert.ok(result.metrics.attemptedLocalSourceBytesRead > 0);
+  assert.ok(result.metrics.fallbackSourceBytesRead > 0);
+  assert.equal(result.metrics.sourceBytesRead, readBytes);
+  assert.equal(result.metrics.largestSourceRead, largestRead);
+  assert.equal(
+    result.metrics.sourceBytesRead,
+    result.metrics.attemptedLocalSourceBytesRead +
+      result.metrics.fallbackSourceBytesRead,
+  );
+  assert.equal(
+    result.metrics.bytesHashed,
+    result.metrics.attemptedLocalBytesHashed + result.metrics.fallbackBytesHashed,
+  );
+  assert.equal(
+    result.metrics.chunkerInputBytesCopied,
+    result.metrics.attemptedLocalChunkerInputBytesCopied +
+      result.metrics.fallbackChunkerInputBytesCopied,
+  );
+  assert.equal(
+    result.metrics.chunkerOutputBytesCopied,
+    result.metrics.attemptedLocalChunkerOutputBytesCopied +
+      result.metrics.fallbackChunkerOutputBytesCopied,
+  );
+});
+
+test("diagnostic local FastCDC work stays linear under hostile valid ratios", () => {
+  const parameters = {
+    minimum: 1,
+    average: 2,
+    maximum: 8 * 1024 * 1024,
+  };
+  const before = buildManifest(new Uint8Array(), parameters);
+  const insertion = new Uint8Array(MAX_DIAGNOSTIC_CONTENT_BYTES);
+  const started = performance.now();
+  let attempt;
+  assert.throws(
+    () =>
+      rebuildDiagnosticManifestLocally(
+        {
+          size: 0,
+          read() {
+            throw new Error("empty source must not be read");
+          },
+        },
+        before,
+        { offset: 0, deleteLength: 0, insertBytes: insertion },
+        {
+          maxRetainedEntries: 16_384,
+          maxRetainedNodes: 32_768,
+          maxAffectedEntries: 4096,
+          maxAffectedBytes: 13_913,
+        },
+      ),
+    (error) => {
+      assert.ok(error instanceof LocalRebuildLimitError);
+      attempt = error.attemptMetrics;
+      return true;
+    },
+  );
+  const elapsedMs = performance.now() - started;
+  assert.equal(attempt.sourceBytesRead, 0);
+  assert.ok(attempt.chunkerInputBytesCopied <= 13_914);
+  assert.ok(attempt.chunkerOutputBytesCopied <= attempt.chunkerInputBytesCopied);
+  assert.ok(attempt.chunkerBoundaryBytesScanned <= attempt.chunkerInputBytesCopied);
+  assert.ok(
+    attempt.editedInputBytesPrepared <=
+      attempt.chunkerInputBytesCopied + parameters.maximum,
+  );
+  assert.ok(elapsedMs < 3_000, `linear local fallback took ${elapsedMs}ms`);
+});
+
+test("local and forced-fallback modes reject manifest parameter changes identically", () => {
+  const originalParameters = { minimum: 64, average: 128, maximum: 512 };
+  const mismatched = { minimum: 64, average: 128, maximum: 256 };
+  const original = fixture(4096, 123);
+  const before = buildManifest(original, originalParameters);
+  const source = {
+    size: original.length,
+    read(offset, length) {
+      return original.slice(offset, offset + length);
+    },
+  };
+  const edit = { offset: 1, deleteLength: 1, insertBytes: Uint8Array.of(9) };
+  for (const limits of [
+    undefined,
+    {
+      maxRetainedEntries: 1,
+      maxRetainedNodes: 1,
+      maxAffectedEntries: 1,
+      maxAffectedBytes: 1,
+    },
+  ])
+    assert.throws(
+      () =>
+        rebuildManifestLocallyOrStream(
+          source,
+          before,
+          edit,
+          mismatched,
+          new MemoryManifestWorkspace(),
+          { putObject() {} },
+          limits,
+        ),
+      /parameters must match/,
+    );
 });
 
 test("local CDC reconnection and manifest-spine rebuilding equal a canonical full scan", () => {
@@ -746,7 +2622,7 @@ test("local CDC reconnection and manifest-spine rebuilding equal a canonical ful
   for (const edit of edits) {
     let sourceBytesRead = 0;
     let largestRead = 0;
-    const local = rebuildManifestLocally(
+    const local = rebuildDiagnosticManifestLocally(
       {
         size: original.length,
         read(offset, length) {
@@ -827,7 +2703,7 @@ test("seeded local rebuild property cases match full rebuilds at boundaries and 
         : random() % (original.length + 1);
     const deleteLength = Math.min(random() % 33, original.length - offset);
     const insert = fixture(random() % 33, random());
-    const local = rebuildManifestLocally(
+    const local = rebuildDiagnosticManifestLocally(
       {
         size: original.length,
         read(start, length) {

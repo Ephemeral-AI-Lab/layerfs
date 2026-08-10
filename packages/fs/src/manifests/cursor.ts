@@ -1,4 +1,5 @@
 import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
+import { copyBytes } from "../cas/bytes.js";
 import {
   decodeManifestNode,
   decodeManifestRoot,
@@ -113,13 +114,22 @@ export class ManifestSequentialCursor {
 
   peek(): ManifestCursorEntry | null {
     const entry = this.#leaf?.entries[this.#entryIndex];
-    return entry ? Object.freeze({ entry, offset: this.#entryOffset }) : null;
+    return entry
+      ? Object.freeze({
+          entry: Object.freeze({ hash: copyBytes(entry.hash), length: entry.length }),
+          offset: this.#entryOffset,
+        })
+      : null;
   }
 
   next(): ManifestCursorEntry | null {
-    const current = this.peek();
-    if (!current) return null;
-    this.#entryOffset = checkedAdd(this.#entryOffset, current.entry.length);
+    const entry = this.#leaf?.entries[this.#entryIndex];
+    if (!entry) return null;
+    const current = Object.freeze({
+      entry: Object.freeze({ hash: copyBytes(entry.hash), length: entry.length }),
+      offset: this.#entryOffset,
+    });
+    this.#entryOffset = checkedAdd(this.#entryOffset, entry.length);
     this.#entryIndex += 1;
     if (this.#entryIndex >= this.#leaf!.entries.length) this.#advanceLeaf();
     return current;
@@ -141,9 +151,10 @@ export class ManifestSequentialCursor {
   ): ManifestLeaf | ManifestInternal {
     if (depth > this.#maxDepth)
       throw new Error("manifest depth exceeds configured maximum");
-    const encoded = this.#reader.get(hash);
+    const authoritativeHash = copyBytes(hash);
+    const encoded = this.#reader.get(copyBytes(authoritativeHash));
     if (!encoded) throw new Error("missing manifest node");
-    const node = decodeManifestNode(encoded, hash);
+    const node = decodeManifestNode(encoded, authoritativeHash);
     this.#nodesRead += 1;
     if (
       expected &&
@@ -267,9 +278,10 @@ export function validateManifestTree(
     rootNode: boolean,
   ): { span: number; count: number } => {
     if (depth > maxDepth) throw new Error("manifest depth exceeds configured maximum");
-    const bytes = reader.get(hash);
+    const authoritativeHash = copyBytes(hash);
+    const bytes = reader.get(copyBytes(authoritativeHash));
     if (!bytes) throw new Error("missing manifest node");
-    const node = decodeManifestNode(bytes, hash);
+    const node = decodeManifestNode(bytes, authoritativeHash);
     validateNodeCanonicality(node, root.parameters, finalAtLevel, rootNode);
     if (node.kind === "leaf") {
       if (leafDepth === undefined) leafDepth = depth;

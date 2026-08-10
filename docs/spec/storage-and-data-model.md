@@ -653,10 +653,14 @@ New regular-file manifests MUST use these defaults:
 | Maximum        | 524,288 |
 
 The chunker configuration MUST satisfy `0 < minimum <= average <= maximum`, and the
-average MUST be a power of two. Configuration is embedded in every manifest. A
-filesystem MAY choose different valid parameters for new writes, but readers MUST honor
-the parameters stored in each manifest. Changing the filesystem default MUST NOT
-reinterpret existing manifests.
+average MUST be a power of two. The binary format admits unsigned 32-bit parameter
+values so roots can be decoded and inspected without allocating a chunk buffer. This
+version 0.1 runtime supports construction and materialization only when `maximum` is at
+most 16 MiB; operations MUST reject a larger stored value before reading source bytes or
+allocating a content window. Configuration is embedded in every manifest. A filesystem
+MAY choose different format-valid parameters for new writes only when its runtime and
+adapter capabilities admit them. Changing the filesystem default MUST NOT reinterpret
+existing manifests.
 
 ### 8.2 Gear table
 
@@ -807,9 +811,16 @@ state = ((state << 1) + FASTCDC_GEAR_V1[byte]) mod 2^64
 The state starts at zero after every group boundary. A boundary is considered only after
 a complete record. Leaf groups use minimum, target, and maximum counts of 64, 128,
 and 256. Internal groups use 32, 64, and 128. At or after the minimum, a group ends when
-`state & (target - 1) == 0`; it always ends at the maximum or end of input. The fixed
-`FASTCDC_GEAR_V1` table is the same checked-in table used by `fastcdc-v1` and is part of
-the golden vectors.
+the high `log2(target)` state bits are zero; it always ends at the maximum or end of
+input. Using the high bits avoids the deterministic low-bit bias introduced by trailing
+zero scalar bytes in ordinary leaf and internal records. The fixed `FASTCDC_GEAR_V1`
+table is the same checked-in table used by `fastcdc-v1` and is part of the golden
+vectors.
+
+This high-bit rule is the normative manifest-format-v1 grouping rule. Earlier
+pre-release `0.1.0-rc` candidate artifacts used a broken low-bit draft and are
+explicitly invalidated; no deployed compatibility contract exists for those candidate
+manifests.
 
 The builder groups CAS records into leaves, then groups the resulting canonical child
 records into the next level, repeating until one node remains. An empty file has one
@@ -852,6 +863,17 @@ MUST reuse every unchanged CAS object and authenticated manifest node outside th
 changed region. If reconnection cannot be proved, it MAY expand in bounded steps and
 ultimately rebuild the manifest, while retaining bounded memory and reporting the
 fallback.
+
+The pure version 0.1 algorithm package includes a fixed-capacity diagnostic
+implementation of this rule. It is acceptance evidence only within its declared entry,
+node, affected byte, and total-content caps. Reaching a cap invokes the bounded streamed
+full-scan fallback and reports both phases; it is not an unrestricted large-file
+local-edit path. The public persisted edit path is not conformant until its durable
+cursor authenticates the selected boundary and ancestor membership against the selected
+root, treats every offset/group side index as disposable non-authoritative data, and
+bounds per-level and aggregate record, node, segment, byte, and transaction work. Index
+corruption or staleness MUST cause rejection or safe fallback and MUST NOT redirect a
+splice.
 
 The prototype's repeated 36-byte-entry format and the former compact `EAFM` format MAY
 be accepted only by explicit legacy importers. A legacy value MUST be fully validated
@@ -923,14 +945,14 @@ all lower sequence numbers. The values MUST be nonnegative safe integers, `offse
 NOT exceed that value's size, and `offset + deleteLength` MUST NOT exceed it. The sum of
 insertion segment lengths MUST equal `insertLength`.
 
-Patch sequence numbers MUST be unique and strictly increasing for one branch file. All
-rows and segments for one logical patch MUST be added atomically. Insertion segments
-MUST be ordered, gap-free, and no larger than 524,288 bytes. An implementation MAY
-materialize the current branch value into a manifest before a configured threshold. It
-MUST do so before accepting a patch that would exceed `maxPatchesPerFile` or
-`maxPatchBytesPerFile`, or reject the edit without changing the branch. Materialization
-MUST atomically install the new manifest and clear only the pages and patches it
-supersedes.
+Patch sequence numbers MUST be contiguous unsigned integers beginning at zero for one
+branch file. All rows and segments for one logical patch MUST be added atomically.
+Insertion segments MUST be ordered, gap-free, and no larger than 524,288 bytes. An
+implementation MAY materialize the current branch value into a manifest before a
+configured threshold. It MUST do so before accepting a patch that would exceed
+`maxPatchesPerFile` or `maxPatchBytesPerFile`, or reject the edit without changing the
+branch. Materialization MUST atomically install the new manifest and clear only the
+pages and patches it supersedes.
 
 If page writes precede the first structural patch, the resulting view is:
 

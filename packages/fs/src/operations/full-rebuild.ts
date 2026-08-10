@@ -1,6 +1,10 @@
-import { bytesToHex } from "../cas/bytes.js";
-import { sha256 } from "../cas/sha256.js";
-import { findFastCdcBoundary, type FastCdcConfiguration } from "../cdc/fastcdc.js";
+import { bytesToHex, copyBytes, intrinsicByteRange } from "../cas/bytes.js";
+import { manifestIdFromHash, sha256 } from "../cas/sha256.js";
+import {
+  findFastCdcBoundary,
+  type FastCdcConfiguration,
+  validateSupportedFastCdcConfiguration,
+} from "../cdc/fastcdc.js";
 import {
   buildManifestFromEntries,
   type EncodedManifestNode,
@@ -8,6 +12,7 @@ import {
   type ManifestBuildWorkspace,
 } from "../manifests/builder.js";
 import type { ManifestEntry } from "../manifests/codec.js";
+import { MAX_CONTENT_OBJECT_BYTES } from "../resources/limits.js";
 
 export interface DiagnosticBuiltManifest {
   readonly id: string;
@@ -17,6 +22,7 @@ export interface DiagnosticBuiltManifest {
   readonly entries: readonly ManifestEntry[];
 }
 export const MAX_DIAGNOSTIC_MANIFEST_ENTRIES = 16_384;
+export const MAX_DIAGNOSTIC_CONTENT_BYTES = MAX_CONTENT_OBJECT_BYTES;
 
 class BoundedDiagnosticWorkspace implements ManifestBuildWorkspace {
   readonly nodes = new Map<string, EncodedManifestNode>();
@@ -48,6 +54,17 @@ export function buildManifest(
   bytes: Uint8Array,
   parameters: FastCdcConfiguration,
 ): DiagnosticBuiltManifest & { readonly objects: ReadonlyMap<string, Uint8Array> } {
+  bytes = intrinsicByteRange(bytes);
+  parameters = Object.freeze({
+    minimum: parameters.minimum,
+    average: parameters.average,
+    maximum: parameters.maximum,
+  });
+  validateSupportedFastCdcConfiguration(parameters);
+  if (bytes.byteLength > MAX_DIAGNOSTIC_CONTENT_BYTES)
+    throw new RangeError(
+      `diagnostic manifest input exceeds ${MAX_DIAGNOSTIC_CONTENT_BYTES} bytes`,
+    );
   const objects = new Map<string, Uint8Array>();
   const entries: ManifestEntry[] = [];
   for (let offset = 0; offset < bytes.byteLength;) {
@@ -56,7 +73,7 @@ export function buildManifest(
         "diagnostic manifest entry limit exceeded; use a durable streaming workspace",
       );
     const boundary = findFastCdcBoundary(bytes, offset, parameters);
-    const object = bytes.slice(offset, boundary);
+    const object = copyBytes(bytes, offset, boundary);
     const hash = sha256(object);
     objects.set(bytesToHex(hash), object);
     entries.push(Object.freeze({ hash, length: object.byteLength }));
@@ -65,7 +82,7 @@ export function buildManifest(
   const workspace = new BoundedDiagnosticWorkspace();
   const built = buildManifestFromEntries(entries, parameters, workspace);
   return Object.freeze({
-    id: bytesToHex(built.rootHash),
+    id: manifestIdFromHash(built.rootHash),
     rootHash: built.rootHash,
     root: built.root,
     nodes: workspace.nodes,

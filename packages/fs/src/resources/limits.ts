@@ -67,6 +67,27 @@ export interface StorageAdapterLimits {
   readonly maxJournalBytes: number;
 }
 
+/** Hard version-0.1 content-object/streaming CDC allocation ceiling. */
+export const MAX_CONTENT_OBJECT_BYTES = 16 * 1024 * 1024;
+/** Additional caller input one collecting FastCDC push may return with a prebuffer. */
+export const MAX_CONTENT_COLLECTOR_PUSH_BYTES = 1024 * 1024;
+/** Maximum retained chunk references returned by one collecting push call. */
+export const MAX_CONTENT_COLLECTOR_REFERENCES = 16_384;
+/** Conservative allocated-capacity charge for one JavaScript array element slot. */
+export const CONTENT_COLLECTOR_REFERENCE_BYTES = 16;
+/**
+ * Source/carry, chunker, emitted chunk, sink handoff, retained object, and
+ * replacement-window copies may coexist in the bounded rebuild pipeline.
+ */
+export const MAX_CONTENT_WORKING_SET_COPIES = 6;
+export const MIN_CANONICAL_MANIFEST_NODE_BYTES = 9248;
+
+function validateCowPageBytes(cowPageBytes: number): 4096 | 8192 | 16384 {
+  if (cowPageBytes !== 4096 && cowPageBytes !== 8192 && cowPageBytes !== 16384)
+    throw new RangeError("cowPageBytes must be exactly 4096, 8192, or 16384");
+  return cowPageBytes;
+}
+
 export const DEFAULT_FILESYSTEM_LIMITS: FilesystemLimits = Object.freeze({
   maxPathBytes: 4096,
   maxNameBytes: 255,
@@ -172,6 +193,10 @@ export function validateRuntimeLimits(
   runtime: RuntimeLimits,
   cowPageBytes: number,
 ): void {
+  filesystem = Object.freeze({ ...filesystem });
+  storage = Object.freeze({ ...storage });
+  runtime = Object.freeze({ ...runtime });
+  cowPageBytes = validateCowPageBytes(cowPageBytes);
   for (const [name, value] of Object.entries({ ...filesystem, ...runtime }))
     if (!Number.isSafeInteger(value) || value <= 0)
       throw new RangeError(`${name} must be a positive safe integer`);
@@ -179,15 +204,59 @@ export function validateRuntimeLimits(
     throw new RangeError("maxMaterializedBytes exceeds maxPreparedResultBytes");
   if (runtime.maxWriteSessionBytes > runtime.maxPendingWriteBytes)
     throw new RangeError("maxWriteSessionBytes exceeds aggregate pending-write limit");
-  const progress =
-    524_288 +
-    cowPageBytes +
-    storage.maxManifestNodeBytes * 2 +
-    filesystem.preferredStreamChunkBytes;
+  const progress = requiredRuntimeProgressBytes(filesystem, storage, cowPageBytes);
   if (runtime.maxManagedResidentBytes < progress)
     throw new RangeError(
       "managed-memory limit cannot hold the minimum progress working set",
     );
+}
+
+export function requiredRuntimeProgressBytes(
+  filesystem: FilesystemLimits,
+  storage: StorageLimits,
+  cowPageBytes: number,
+): number {
+  const preferredStreamChunkBytes = checkedInteger(
+    filesystem.preferredStreamChunkBytes,
+    "preferredStreamChunkBytes",
+  );
+  const maxManifestNodeBytes = checkedInteger(
+    storage.maxManifestNodeBytes,
+    "maxManifestNodeBytes",
+  );
+  cowPageBytes = validateCowPageBytes(cowPageBytes);
+  if (preferredStreamChunkBytes === 0)
+    throw new RangeError("preferredStreamChunkBytes must be positive");
+  if (maxManifestNodeBytes < MIN_CANONICAL_MANIFEST_NODE_BYTES)
+    throw new RangeError(
+      `maxManifestNodeBytes must be at least ${MIN_CANONICAL_MANIFEST_NODE_BYTES}`,
+    );
+  let progress = checkedMultiply(
+    MAX_CONTENT_OBJECT_BYTES,
+    MAX_CONTENT_WORKING_SET_COPIES,
+    "content working-set bytes",
+  );
+  progress = checkedAdd(progress, cowPageBytes, "runtime progress bytes");
+  progress = checkedAdd(
+    progress,
+    MAX_CONTENT_COLLECTOR_PUSH_BYTES,
+    "runtime collector output bytes",
+  );
+  progress = checkedAdd(
+    progress,
+    checkedMultiply(
+      MAX_CONTENT_COLLECTOR_REFERENCES,
+      CONTENT_COLLECTOR_REFERENCE_BYTES,
+      "runtime collector reference bytes",
+    ),
+    "runtime progress bytes",
+  );
+  progress = checkedAdd(
+    progress,
+    checkedMultiply(maxManifestNodeBytes, 2, "manifest progress bytes"),
+    "runtime progress bytes",
+  );
+  return checkedAdd(progress, preferredStreamChunkBytes, "runtime progress bytes");
 }
 
 export class AdmissionController {
@@ -222,3 +291,4 @@ export class AdmissionController {
     return this.#limit;
   }
 }
+import { checkedAdd, checkedInteger, checkedMultiply } from "./safe-integers.js";

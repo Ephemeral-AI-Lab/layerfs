@@ -128,7 +128,13 @@ its application operation.
 - Produce identical boundaries across input buffer sizes and both drivers.
 - Cover every byte exactly and never exceed the configured maximum chunk.
 - Resume streaming scanner state across bounded staging flushes.
-- Verify that local reconnection produces the byte-identical full-scan result.
+- Use getter-backed configurations to prove validation, capacity selection, and scanning
+  consume one immutable scalar snapshot.
+- Exercise a valid minimum-to-maximum ratio with many short chunks and require copied
+  and scanned work linear in prepared input, including a quick bounded fallback.
+- Verify that fixed-capacity pure diagnostic reconnection produces the byte-identical
+  full-scan result and that exceeding a cap takes the bounded streamed fallback while
+  reporting both phases.
 
 ## 6. Segmented Merkle manifests
 
@@ -137,6 +143,10 @@ its application operation.
 Golden vectors MUST cover the root envelope, empty leaf, full and partial leaf, internal
 node, multiple levels, and content-defined grouping boundaries. The encoded bytes and
 SHA-256 hashes MUST match on every runtime.
+
+Encoder ownership cases MUST use getter-backed scalars and mutating/subclassed byte
+views for root hashes, entries, and children. Encoding followed by decoding MUST remain
+self-consistent and byte ownership MUST not call caller-overridable typed-array methods.
 
 ### CT-MANIFEST-2: Integrity
 
@@ -151,11 +161,22 @@ traverse at most `maxManifestDepth + 1` manifest values and scan at most one 256
 leaf. Run cold, after reopen, after cache eviction, and with a corrupted disposable
 derived index.
 
-### CT-MANIFEST-4: Local rebuild
+### CT-MANIFEST-4: Diagnostic and durable local rebuild
 
-Insertion, deletion, truncation, equal-size overwrite, and sparse COW materialization
-MUST produce exactly the full rebuild root. After deterministic reconnection, unchanged
-CAS objects and unchanged manifest subtrees MUST retain their identifiers.
+Within its documented entry, node, byte, and content-size caps, the pure diagnostic
+algorithm MUST make insertion, deletion, truncation, and equal-size overwrite produce
+exactly the full rebuild root. Above a diagnostic cap it MUST take the bounded streamed
+full-scan fallback and report the attempted-local and fallback work. This helper is not
+evidence that arbitrary large-file edits are locally incremental.
+
+The persisted implementation MUST authenticate every located boundary and ancestor path
+against the selected root before reuse. Derived offset/group indexes are
+non-authoritative. Tests MUST corrupt and stale those indexes, cover empty and
+single-leaf height growth, compare every result with a full scan, and edit a manifest
+with more than 16,384 entries under explicit per-level and aggregate record-read,
+emitted-node, retained-segment, byte, and transaction caps. After authenticated
+reconnection, unchanged CAS objects and unchanged manifest subtrees MUST retain their
+identifiers.
 
 ## 7. COW pages and structural patches
 

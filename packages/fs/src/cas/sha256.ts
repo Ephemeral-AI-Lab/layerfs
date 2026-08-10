@@ -1,4 +1,11 @@
-import { bytesToHex, equalBytes, freezeBytes } from "./bytes.js";
+import {
+  bytesToHex,
+  copyBytes,
+  equalBytes,
+  freezeBytes,
+  intrinsicByteLength,
+  intrinsicByteRange,
+} from "./bytes.js";
 
 const K = new Uint32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
@@ -29,6 +36,7 @@ export class IncrementalSha256 {
   #finished = false;
 
   update(input: Uint8Array): this {
+    input = intrinsicByteRange(input);
     if (this.#finished) throw new Error("SHA-256 has already been finalized");
     if (this.#bytesHashed + input.byteLength > Number.MAX_SAFE_INTEGER)
       throw new RangeError("SHA-256 input is too large");
@@ -118,20 +126,53 @@ export function sha256Hex(bytes: Uint8Array): CasObjectId {
   return bytesToHex(sha256(bytes)) as CasObjectId;
 }
 
+function validatedDigestId<T extends string>(value: string, name: string): T {
+  if (!/^[0-9a-f]{64}$/u.test(value))
+    throw new TypeError(`${name} must be exactly 64 lowercase hexadecimal characters`);
+  return value as T;
+}
+
+export function casObjectId(value: string): CasObjectId {
+  return validatedDigestId<CasObjectId>(value, "CAS object id");
+}
+
+export function manifestId(value: string): ManifestId {
+  return validatedDigestId<ManifestId>(value, "manifest id");
+}
+
+export function manifestIdFromHash(hash: Uint8Array): ManifestId {
+  if (intrinsicByteLength(hash) !== 32)
+    throw new RangeError("manifest hash must contain exactly 32 bytes");
+  return manifestId(bytesToHex(hash));
+}
+
 export interface CasObject {
   readonly id: CasObjectId;
   readonly bytes: Uint8Array;
 }
 
 export function createCasObject(bytes: Uint8Array): CasObject {
-  const frozen = freezeBytes(bytes);
-  return Object.freeze({ id: sha256Hex(frozen), bytes: frozen });
+  const owned = freezeBytes(bytes);
+  const id = sha256Hex(owned);
+  return Object.freeze({
+    id,
+    get bytes(): Uint8Array {
+      return copyBytes(owned);
+    },
+  });
 }
 
 export function verifyCasObject(
   expectedDigest: Uint8Array | string,
   bytes: Uint8Array,
 ): void {
+  if (typeof expectedDigest === "string")
+    validatedDigestId<CasObjectId>(expectedDigest, "CAS object digest");
+  else if (
+    !(expectedDigest instanceof Uint8Array) ||
+    intrinsicByteLength(expectedDigest) !== 32
+  )
+    throw new TypeError("CAS object digest must contain exactly 32 bytes");
   const actual = sha256(bytes);
   const valid =
     typeof expectedDigest === "string"

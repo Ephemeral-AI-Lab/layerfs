@@ -1,20 +1,36 @@
 import { sha256 } from "../cas/sha256.js";
-import { StreamingFastCdc, type FastCdcConfiguration } from "../cdc/fastcdc.js";
+import { copyBytes, intrinsicByteLength, intrinsicByteRange } from "../cas/bytes.js";
+import {
+  StreamingFastCdc,
+  type FastCdcConfiguration,
+  validateSupportedFastCdcConfiguration,
+} from "../cdc/fastcdc.js";
 import {
   buildManifestFromEntries,
   type BuiltManifestRoot,
   type ManifestBuildWorkspace,
 } from "../manifests/builder.js";
 import type { ManifestEntry } from "../manifests/codec.js";
-import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
+import {
+  checkedAdd,
+  checkedInteger,
+  checkedMultiply,
+} from "../resources/safe-integers.js";
+import { MAX_CONTENT_OBJECT_BYTES } from "../resources/limits.js";
 import type { DiagnosticBuiltManifest } from "./full-rebuild.js";
 import {
   DEFAULT_LOCAL_REBUILD_LIMITS,
   LocalRebuildLimitError,
-  rebuildManifestLocally,
+  ownLocalContentInputs,
+  rebuildManifestLocallyWithParametersOwned,
+  snapshotLocalRebuildLimits,
+  snapshotMatchingLocalParameters,
+  validateLocalContentInputs,
+  type LocalRebuildAttemptMetrics,
   type LocalContentEdit,
   type LocalRebuildLimits,
   type LocallyRebuiltManifest,
+  type OwnedLocalContentInputs,
   type RandomAccessContentSource,
 } from "./local-rebuild.js";
 
@@ -29,9 +45,28 @@ export interface StreamedRebuildOptions {
 export interface StreamedRebuildMetrics {
   readonly sourceBytesRead: number;
   readonly bytesHashed: number;
+  readonly attemptedLocalSourceBytesRead: number;
+  readonly attemptedLocalBytesHashed: number;
+  readonly attemptedLocalLargestSourceRead: number;
+  readonly attemptedLocalChunkerInputBytesCopied: number;
+  readonly attemptedLocalChunkerOutputBytesCopied: number;
+  readonly attemptedLocalChunkerBoundaryBytesScanned: number;
+  readonly attemptedLocalEditedInputBytesPrepared: number;
+  readonly fallbackSourceBytesRead: number;
+  readonly fallbackBytesHashed: number;
+  readonly fallbackLargestSourceRead: number;
+  readonly fallbackChunkerInputBytesCopied: number;
+  readonly fallbackChunkerOutputBytesCopied: number;
+  readonly fallbackChunkerBoundaryBytesScanned: number;
   readonly objectCount: number;
   readonly largestSourceRead: number;
   readonly peakRetainedRecords: number;
+  readonly peakPendingEntries: number;
+  readonly insertionCopyCount: 1;
+  readonly insertionBytesCopied: number;
+  readonly chunkerInputBytesCopied: number;
+  readonly chunkerOutputBytesCopied: number;
+  readonly chunkerBoundaryBytesScanned: number;
 }
 export interface StreamedRebuildResult {
   readonly mode: "streamed-fallback";
@@ -44,18 +79,107 @@ export interface LocalRebuildResult {
   readonly manifest: LocallyRebuiltManifest;
 }
 
-function validateEdit(source: RandomAccessContentSource, edit: LocalContentEdit): void {
-  if (!Number.isSafeInteger(source.size) || source.size < 0)
-    throw new RangeError("source size must be a nonnegative safe integer");
+export const MAX_STREAMED_REBUILD_PENDING_ENTRIES = 256;
+
+interface StreamedRebuildControls {
+  readonly parameters: Readonly<FastCdcConfiguration>;
+  readonly options: Readonly<Required<StreamedRebuildOptions>>;
+  readonly attemptedLocal: Readonly<LocalRebuildAttemptMetrics>;
+}
+
+function snapshotStreamedRebuildControls(
+  parameters: FastCdcConfiguration,
+  options: StreamedRebuildOptions,
+  attemptedLocal: LocalRebuildAttemptMetrics,
+): StreamedRebuildControls {
+  const ownedParameters = Object.freeze({
+    minimum: parameters.minimum,
+    average: parameters.average,
+    maximum: parameters.maximum,
+  });
+  validateSupportedFastCdcConfiguration(ownedParameters);
+  const readWindowBytes = checkedInteger(
+    options.readWindowBytes ?? ownedParameters.maximum,
+    "readWindowBytes",
+    MAX_CONTENT_OBJECT_BYTES,
+  );
+  const manifestReadBatchRecords = checkedInteger(
+    options.manifestReadBatchRecords ?? 64,
+    "manifestReadBatchRecords",
+    4096,
+  );
+  const maxManifestDepth = checkedInteger(
+    options.maxManifestDepth ?? 8,
+    "maxManifestDepth",
+    64,
+  );
+  if (readWindowBytes === 0 || manifestReadBatchRecords === 0 || maxManifestDepth === 0)
+    throw new RangeError("streamed rebuild controls must be positive");
+  const ownedAttempt = Object.freeze({
+    sourceBytesRead: checkedInteger(
+      attemptedLocal.sourceBytesRead,
+      "attemptedLocal.sourceBytesRead",
+    ),
+    bytesHashed: checkedInteger(
+      attemptedLocal.bytesHashed,
+      "attemptedLocal.bytesHashed",
+    ),
+    largestSourceRead: checkedInteger(
+      attemptedLocal.largestSourceRead,
+      "attemptedLocal.largestSourceRead",
+    ),
+    chunkerInputBytesCopied: checkedInteger(
+      attemptedLocal.chunkerInputBytesCopied ?? 0,
+      "attemptedLocal.chunkerInputBytesCopied",
+    ),
+    chunkerOutputBytesCopied: checkedInteger(
+      attemptedLocal.chunkerOutputBytesCopied ?? 0,
+      "attemptedLocal.chunkerOutputBytesCopied",
+    ),
+    chunkerBoundaryBytesScanned: checkedInteger(
+      attemptedLocal.chunkerBoundaryBytesScanned ?? 0,
+      "attemptedLocal.chunkerBoundaryBytesScanned",
+    ),
+    editedInputBytesPrepared: checkedInteger(
+      attemptedLocal.editedInputBytesPrepared ?? 0,
+      "attemptedLocal.editedInputBytesPrepared",
+    ),
+  });
+  if (ownedAttempt.largestSourceRead > ownedAttempt.sourceBytesRead)
+    throw new RangeError(
+      "attemptedLocal.largestSourceRead exceeds attemptedLocal.sourceBytesRead",
+    );
   if (
-    !Number.isSafeInteger(edit.offset) ||
-    edit.offset < 0 ||
-    !Number.isSafeInteger(edit.deleteLength) ||
-    edit.deleteLength < 0 ||
-    edit.offset > source.size ||
-    edit.deleteLength > source.size - edit.offset
+    ownedAttempt.chunkerOutputBytesCopied > ownedAttempt.chunkerInputBytesCopied ||
+    ownedAttempt.chunkerBoundaryBytesScanned > ownedAttempt.chunkerInputBytesCopied
   )
-    throw new RangeError("streamed edit is outside the source");
+    throw new RangeError(
+      "attempted-local chunker copy/scan metrics exceed chunker input",
+    );
+  if (
+    ownedAttempt.bytesHashed > ownedAttempt.chunkerOutputBytesCopied ||
+    ownedAttempt.chunkerInputBytesCopied > ownedAttempt.editedInputBytesPrepared ||
+    ownedAttempt.sourceBytesRead > ownedAttempt.editedInputBytesPrepared ||
+    ownedAttempt.largestSourceRead > ownedParameters.maximum
+  )
+    throw new RangeError("attempted-local phase metrics are internally inconsistent");
+  if (
+    ownedAttempt.editedInputBytesPrepared > ownedAttempt.chunkerInputBytesCopied &&
+    ownedAttempt.editedInputBytesPrepared - ownedAttempt.chunkerInputBytesCopied >
+      ownedParameters.maximum
+  )
+    throw new RangeError(
+      "attempted-local prepared input exceeds processed input plus one window",
+    );
+  return Object.freeze({
+    parameters: ownedParameters,
+    options: Object.freeze({
+      readWindowBytes,
+      manifestReadBatchRecords,
+      maxManifestDepth,
+    }),
+    attemptedLocal: ownedAttempt,
+  });
 }
 
 export function rebuildEditedContentStreaming(
@@ -66,39 +190,86 @@ export function rebuildEditedContentStreaming(
   objects: StreamedObjectSink,
   reason = "explicit streamed rebuild",
   options: StreamedRebuildOptions = {},
+  attemptedLocal: LocalRebuildAttemptMetrics = Object.freeze({
+    sourceBytesRead: 0,
+    bytesHashed: 0,
+    largestSourceRead: 0,
+    chunkerInputBytesCopied: 0,
+    chunkerOutputBytesCopied: 0,
+    chunkerBoundaryBytesScanned: 0,
+    editedInputBytesPrepared: 0,
+  }),
 ): StreamedRebuildResult {
-  validateEdit(source, edit);
-  const readWindowBytes = checkedInteger(
-    options.readWindowBytes ?? parameters.maximum,
-    "readWindowBytes",
-    16 * 1024 * 1024,
+  const controls = snapshotStreamedRebuildControls(parameters, options, attemptedLocal);
+  const owned = ownLocalContentInputs(validateLocalContentInputs(source, edit));
+  return rebuildEditedContentStreamingOwned(
+    owned,
+    controls,
+    workspace,
+    objects,
+    reason,
   );
-  if (readWindowBytes === 0) throw new RangeError("readWindowBytes must be positive");
+}
+
+function rebuildEditedContentStreamingOwned(
+  owned: OwnedLocalContentInputs,
+  controls: StreamedRebuildControls,
+  workspace: ManifestBuildWorkspace,
+  objects: StreamedObjectSink,
+  reason: string,
+): StreamedRebuildResult {
+  const { source, edit } = owned;
+  const { parameters, options, attemptedLocal } = controls;
+  const { readWindowBytes } = options;
   let sourceBytesRead = 0;
   let bytesHashed = 0;
   let objectCount = 0;
   let largestSourceRead = 0;
+  let peakPendingEntries = 0;
+  let activeChunker: StreamingFastCdc | undefined;
   const read = (offset: number, length: number): Uint8Array => {
     const bytes = source.read(offset, length);
-    if (!(bytes instanceof Uint8Array) || bytes.byteLength !== length)
+    if (!(bytes instanceof Uint8Array) || intrinsicByteLength(bytes) !== length)
       throw new Error("random-access source returned a partial range");
     sourceBytesRead = checkedAdd(sourceBytesRead, length);
     largestSourceRead = Math.max(largestSourceRead, length);
-    return bytes;
+    return intrinsicByteRange(bytes);
   };
   function* entries(): Generator<ManifestEntry> {
     const chunker = new StreamingFastCdc(parameters);
+    activeChunker = chunker;
+    const drainInputBytes = Math.min(
+      readWindowBytes,
+      checkedMultiply(
+        parameters.minimum,
+        MAX_STREAMED_REBUILD_PENDING_ENTRIES - 1,
+        "streamed rebuild drain input bytes",
+      ),
+    );
+    const prepareEntry = (chunk: Uint8Array): ManifestEntry => {
+      const hash = sha256(chunk);
+      const retainedHash = copyBytes(hash);
+      bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
+      objectCount = checkedAdd(objectCount, 1);
+      objects.putObject(copyBytes(hash), copyBytes(chunk));
+      return Object.freeze({ hash: retainedHash, length: chunk.byteLength });
+    };
     const accept = function* (input: Uint8Array): Generator<ManifestEntry> {
-      for (let offset = 0; offset < input.byteLength; offset += chunker.maxPushBytes) {
-        for (const chunk of chunker.push(
-          input.subarray(offset, offset + chunker.maxPushBytes),
-        )) {
-          const hash = sha256(chunk);
-          bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
-          objectCount = checkedAdd(objectCount, 1);
-          objects.putObject(hash, chunk);
-          yield Object.freeze({ hash, length: chunk.byteLength });
-        }
+      const inputBytes = intrinsicByteRange(input);
+      for (let offset = 0; offset < inputBytes.byteLength; offset += drainInputBytes) {
+        const pending: ManifestEntry[] = [];
+        chunker.drain(
+          intrinsicByteRange(
+            inputBytes,
+            offset,
+            Math.min(inputBytes.byteLength, offset + drainInputBytes),
+          ),
+          (chunk) => pending.push(prepareEntry(chunk)),
+        );
+        if (pending.length > MAX_STREAMED_REBUILD_PENDING_ENTRIES)
+          throw new Error("streamed rebuild pending-entry bound exceeded");
+        peakPendingEntries = Math.max(peakPendingEntries, pending.length);
+        yield* pending;
       }
     };
     for (let offset = 0; offset < edit.offset;) {
@@ -116,31 +287,60 @@ export function rebuildEditedContentStreaming(
       yield* accept(read(offset, length));
       offset += length;
     }
-    for (const chunk of chunker.finish()) {
-      const hash = sha256(chunk);
-      bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
-      objectCount = checkedAdd(objectCount, 1);
-      objects.putObject(hash, chunk);
-      yield Object.freeze({ hash, length: chunk.byteLength });
-    }
+    const finalEntries: ManifestEntry[] = [];
+    chunker.drain(
+      new Uint8Array(),
+      (chunk) => finalEntries.push(prepareEntry(chunk)),
+      true,
+    );
+    peakPendingEntries = Math.max(peakPendingEntries, finalEntries.length);
+    yield* finalEntries;
   }
   const manifest = buildManifestFromEntries(entries(), parameters, workspace, {
-    ...(options.manifestReadBatchRecords === undefined
-      ? {}
-      : { readBatchRecords: options.manifestReadBatchRecords }),
-    ...(options.maxManifestDepth === undefined
-      ? {}
-      : { maxDepth: options.maxManifestDepth }),
+    readBatchRecords: options.manifestReadBatchRecords,
+    maxDepth: options.maxManifestDepth,
   });
+  if (!activeChunker)
+    throw new Error("streamed rebuild did not initialize its content chunker");
+  const fallbackChunkerMetrics = activeChunker.metrics;
   return Object.freeze({
     mode: "streamed-fallback",
     manifest,
     metrics: Object.freeze({
-      sourceBytesRead,
-      bytesHashed,
+      sourceBytesRead: checkedAdd(attemptedLocal.sourceBytesRead, sourceBytesRead),
+      bytesHashed: checkedAdd(attemptedLocal.bytesHashed, bytesHashed),
+      attemptedLocalSourceBytesRead: attemptedLocal.sourceBytesRead,
+      attemptedLocalBytesHashed: attemptedLocal.bytesHashed,
+      attemptedLocalLargestSourceRead: attemptedLocal.largestSourceRead,
+      attemptedLocalChunkerInputBytesCopied: attemptedLocal.chunkerInputBytesCopied,
+      attemptedLocalChunkerOutputBytesCopied: attemptedLocal.chunkerOutputBytesCopied,
+      attemptedLocalChunkerBoundaryBytesScanned:
+        attemptedLocal.chunkerBoundaryBytesScanned,
+      attemptedLocalEditedInputBytesPrepared: attemptedLocal.editedInputBytesPrepared,
+      fallbackSourceBytesRead: sourceBytesRead,
+      fallbackBytesHashed: bytesHashed,
+      fallbackLargestSourceRead: largestSourceRead,
+      fallbackChunkerInputBytesCopied: fallbackChunkerMetrics.inputBytesCopied,
+      fallbackChunkerOutputBytesCopied: fallbackChunkerMetrics.outputBytesCopied,
+      fallbackChunkerBoundaryBytesScanned: fallbackChunkerMetrics.boundaryBytesScanned,
       objectCount,
-      largestSourceRead,
+      largestSourceRead: Math.max(attemptedLocal.largestSourceRead, largestSourceRead),
       peakRetainedRecords: manifest.peakRetainedRecords,
+      peakPendingEntries,
+      insertionCopyCount: 1,
+      insertionBytesCopied: edit.insertBytes.byteLength,
+      chunkerInputBytesCopied: checkedAdd(
+        attemptedLocal.chunkerInputBytesCopied,
+        fallbackChunkerMetrics.inputBytesCopied,
+      ),
+      chunkerOutputBytesCopied: checkedAdd(
+        attemptedLocal.chunkerOutputBytesCopied,
+        fallbackChunkerMetrics.outputBytesCopied,
+      ),
+      chunkerBoundaryBytesScanned: checkedAdd(
+        attemptedLocal.chunkerBoundaryBytesScanned,
+        fallbackChunkerMetrics.boundaryBytesScanned,
+      ),
     }),
     localLimitReason: reason,
   });
@@ -156,21 +356,46 @@ export function rebuildManifestLocallyOrStream(
   localLimits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
   options: StreamedRebuildOptions = {},
 ): LocalRebuildResult | StreamedRebuildResult {
+  parameters = snapshotMatchingLocalParameters(old, parameters);
+  localLimits = snapshotLocalRebuildLimits(localLimits);
+  const baseControls = snapshotStreamedRebuildControls(
+    parameters,
+    options,
+    Object.freeze({
+      sourceBytesRead: 0,
+      bytesHashed: 0,
+      largestSourceRead: 0,
+      chunkerInputBytesCopied: 0,
+      chunkerOutputBytesCopied: 0,
+      chunkerBoundaryBytesScanned: 0,
+      editedInputBytesPrepared: 0,
+    }),
+  );
+  const owned = ownLocalContentInputs(validateLocalContentInputs(source, edit));
   try {
     return Object.freeze({
       mode: "local",
-      manifest: rebuildManifestLocally(source, old, edit, localLimits),
+      manifest: rebuildManifestLocallyWithParametersOwned(
+        owned.source,
+        old,
+        owned.edit,
+        parameters,
+        localLimits,
+      ),
     });
   } catch (error) {
     if (!(error instanceof LocalRebuildLimitError)) throw error;
-    return rebuildEditedContentStreaming(
-      source,
-      edit,
-      parameters,
+    const fallbackControls = snapshotStreamedRebuildControls(
+      baseControls.parameters,
+      baseControls.options,
+      error.attemptMetrics,
+    );
+    return rebuildEditedContentStreamingOwned(
+      owned,
+      fallbackControls,
       workspace,
       objects,
       error.message,
-      options,
     );
   }
 }

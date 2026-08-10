@@ -30,6 +30,9 @@ export declare class ContentCache {
 
 /* ===== packages/fs/dist/cow/pages.d.ts ===== */
 export type CowPageBytes = 4096 | 8192 | 16384;
+/** 64 MiB at 4 KiB plus both partial endpoints. */
+export declare const MAX_COW_PAGES_PER_WRITE = 16385;
+export declare const MAX_DIRTY_RANGES = 16384;
 export interface DirtyRange {
     readonly start: number;
     readonly end: number;
@@ -38,12 +41,22 @@ export interface CowPage {
     readonly index: number;
     readonly bytes: Uint8Array;
 }
+export type CowPageIndex = number & {
+    readonly __cowPageIndex: unique symbol;
+};
+export interface CowPageKey {
+    readonly branchId: string;
+    readonly inodeId: string;
+    readonly pageIndex: CowPageIndex;
+}
 export declare function validateCowPageBytes(value: number): asserts value is CowPageBytes;
-export declare function pageIndex(offset: number, pageBytes: CowPageBytes): number;
-export declare function pageRange(offset: number, length: number, pageBytes: CowPageBytes): readonly number[];
-export declare function mergeDirtyRanges(ranges: readonly DirtyRange[]): DirtyRange[];
+export declare function cowPageIndex(value: number): CowPageIndex;
+export declare function createCowPageKey(branchId: string, inodeId: string, index: number): CowPageKey;
+export declare function pageIndex(offset: number, pageBytes: CowPageBytes): CowPageIndex;
+export declare function pageRange(offset: number, length: number, pageBytes: CowPageBytes, maxPages?: number): readonly number[];
+export declare function mergeDirtyRanges(ranges: readonly DirtyRange[], maxRanges?: number): DirtyRange[];
 export declare function writeCowPages(base: Uint8Array, offset: number, content: Uint8Array, pageBytes: CowPageBytes): CowPage[];
-export declare function overlayCowPages(base: Uint8Array, pages: readonly CowPage[], pageBytes: CowPageBytes, logicalSize?: number): Uint8Array;
+export declare function overlayCowPages(base: Uint8Array, pages: readonly CowPage[], pageBytes: CowPageBytes, logicalSize?: number, maxPages?: number): Uint8Array;
 
 /* ===== packages/fs/dist/filesystem/errors.d.ts ===== */
 export type FilesystemErrorCode = "EINVAL" | "ENOENT" | "ENOTDIR" | "EISDIR" | "EEXIST" | "ENOTEMPTY" | "ELOOP" | "EPERM" | "EROFS" | "EBADF" | "EAGAIN" | "EBUSY" | "EFBIG" | "ENOSPC" | "ECORRUPT" | "ESCHEMA" | "EIO";
@@ -763,6 +776,20 @@ export interface StorageAdapterLimits {
     readonly maxPhysicalDatabaseBytes: number;
     readonly maxJournalBytes: number;
 }
+/** Hard version-0.1 content-object/streaming CDC allocation ceiling. */
+export declare const MAX_CONTENT_OBJECT_BYTES: number;
+/** Additional caller input one collecting FastCDC push may return with a prebuffer. */
+export declare const MAX_CONTENT_COLLECTOR_PUSH_BYTES: number;
+/** Maximum retained chunk references returned by one collecting push call. */
+export declare const MAX_CONTENT_COLLECTOR_REFERENCES = 16384;
+/** Conservative allocated-capacity charge for one JavaScript array element slot. */
+export declare const CONTENT_COLLECTOR_REFERENCE_BYTES = 16;
+/**
+ * Source/carry, chunker, emitted chunk, sink handoff, retained object, and
+ * replacement-window copies may coexist in the bounded rebuild pipeline.
+ */
+export declare const MAX_CONTENT_WORKING_SET_COPIES = 6;
+export declare const MIN_CANONICAL_MANIFEST_NODE_BYTES = 9248;
 export declare const DEFAULT_FILESYSTEM_LIMITS: FilesystemLimits;
 export declare const DEFAULT_STORAGE_LIMITS: StorageLimits;
 export declare const DEFAULT_RUNTIME_LIMITS: RuntimeLimits;
@@ -770,6 +797,7 @@ export declare const DEFAULT_BRANCH_CONFIGURATION: BranchConfiguration;
 export declare function resolveLimits<T extends object>(defaults: T, configured?: Partial<T>): Readonly<T>;
 export declare function constrainStorageLimits(configured: Partial<StorageLimits> | undefined, adapter: StorageAdapterLimits): Readonly<StorageLimits>;
 export declare function validateRuntimeLimits(filesystem: FilesystemLimits, storage: StorageLimits, runtime: RuntimeLimits, cowPageBytes: number): void;
+export declare function requiredRuntimeProgressBytes(filesystem: FilesystemLimits, storage: StorageLimits, cowPageBytes: number): number;
 export declare class AdmissionController {
     #private;
     constructor(limit: number);

@@ -1,5 +1,11 @@
-import { sha256 } from "../cas/sha256.js";
-import { findFastCdcBoundary, type FastCdcConfiguration } from "../cdc/fastcdc.js";
+import {
+  bytesToHex,
+  copyBytes,
+  equalBytes,
+  intrinsicByteLength,
+} from "../cas/bytes.js";
+import { manifestIdFromHash, sha256 } from "../cas/sha256.js";
+import { StreamingFastCdc, type FastCdcConfiguration } from "../cdc/fastcdc.js";
 import {
   decodeManifestRoot,
   encodeManifestNode,
@@ -9,11 +15,19 @@ import {
   type ManifestInternal,
   type ManifestLeaf,
   type ManifestNode,
+  decodeManifestNode,
+  MAX_MANIFEST_NODE_BYTES,
+  ROOT_ENVELOPE_BYTES,
+  validateSupportedManifestParameters,
 } from "../manifests/codec.js";
 import type { EncodedManifestNode } from "../manifests/builder.js";
-import type { DiagnosticBuiltManifest } from "./full-rebuild.js";
-import { bytesToHex } from "../cas/bytes.js";
+import { ManifestSequentialCursor } from "../manifests/cursor.js";
+import {
+  MAX_DIAGNOSTIC_CONTENT_BYTES,
+  type DiagnosticBuiltManifest,
+} from "./full-rebuild.js";
 import { checkedAdd } from "../resources/safe-integers.js";
+import { MAX_CONTENT_OBJECT_BYTES } from "../resources/limits.js";
 import {
   advanceManifestGroupingState,
   isManifestGroupBoundary,
@@ -30,6 +44,92 @@ export interface LocalContentEdit {
   readonly insertBytes: Uint8Array;
 }
 
+export interface OwnedLocalContentInputs {
+  readonly source: RandomAccessContentSource;
+  readonly edit: LocalContentEdit;
+}
+
+export interface ValidatedLocalContentInputs {
+  readonly source: RandomAccessContentSource;
+  readonly edit: LocalContentEdit;
+}
+
+/** Validates and snapshots scalars without copying caller payload bytes. */
+export function validateLocalContentInputs(
+  source: RandomAccessContentSource,
+  edit: LocalContentEdit,
+): ValidatedLocalContentInputs {
+  const size = source.size;
+  const read = source.read;
+  const offset = edit.offset;
+  const deleteLength = edit.deleteLength;
+  const insertBytes = edit.insertBytes;
+  if (!Number.isSafeInteger(size) || size < 0)
+    throw new RangeError("source size must be a nonnegative safe integer");
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(deleteLength) ||
+    deleteLength < 0 ||
+    offset > size ||
+    deleteLength > size - offset
+  )
+    throw new RangeError("local edit is outside the source");
+  if (!(insertBytes instanceof Uint8Array))
+    throw new TypeError("local edit insertion must be a Uint8Array");
+  const insertionByteLength = intrinsicByteLength(insertBytes);
+  if (insertionByteLength > MAX_CONTENT_OBJECT_BYTES)
+    throw new RangeError("edit insertion exceeds the supported object limit");
+  checkedAdd(size - deleteLength, insertionByteLength, "rebuilt content size");
+  return Object.freeze({
+    source: Object.freeze({
+      size,
+      read(offsetValue: number, length: number): Uint8Array {
+        return read.call(source, offsetValue, length);
+      },
+    }),
+    edit: Object.freeze({
+      offset,
+      deleteLength,
+      insertBytes,
+    }),
+  });
+}
+
+/** Internal ownership boundary; scalar validation must already have succeeded. */
+export function ownLocalContentInputs(
+  validated: ValidatedLocalContentInputs,
+): OwnedLocalContentInputs {
+  return Object.freeze({
+    source: validated.source,
+    edit: Object.freeze({
+      offset: validated.edit.offset,
+      deleteLength: validated.edit.deleteLength,
+      insertBytes: copyBytes(validated.edit.insertBytes),
+    }),
+  });
+}
+
+export function snapshotLocalRebuildLimits(
+  limits: LocalRebuildLimits,
+): Readonly<LocalRebuildLimits> {
+  const owned = Object.freeze({
+    maxRetainedEntries: limits.maxRetainedEntries,
+    maxRetainedNodes: limits.maxRetainedNodes,
+    maxAffectedEntries: limits.maxAffectedEntries,
+    maxAffectedBytes: limits.maxAffectedBytes,
+  });
+  for (const [name, value] of Object.entries(owned))
+    if (!Number.isSafeInteger(value) || value <= 0)
+      throw new RangeError(`${name} must be a positive safe integer`);
+  for (const name of Object.keys(owned) as Array<keyof LocalRebuildLimits>)
+    if (owned[name] > DEFAULT_LOCAL_REBUILD_LIMITS[name])
+      throw new RangeError(`${name} may only lower the fixed diagnostic cap`);
+  if (owned.maxAffectedEntries > owned.maxRetainedEntries)
+    throw new RangeError("maxAffectedEntries exceeds maxRetainedEntries");
+  return owned;
+}
+
 export interface LocalRebuildLimits {
   readonly maxRetainedEntries: number;
   readonly maxRetainedNodes: number;
@@ -44,8 +144,31 @@ export const DEFAULT_LOCAL_REBUILD_LIMITS: Readonly<LocalRebuildLimits> = Object
     maxAffectedBytes: 16 * 1024 * 1024,
   },
 );
+export interface LocalRebuildAttemptMetrics {
+  readonly sourceBytesRead: number;
+  readonly bytesHashed: number;
+  readonly largestSourceRead: number;
+  readonly chunkerInputBytesCopied: number;
+  readonly chunkerOutputBytesCopied: number;
+  readonly chunkerBoundaryBytesScanned: number;
+  readonly editedInputBytesPrepared: number;
+}
 export class LocalRebuildLimitError extends RangeError {
   readonly name = "LocalRebuildLimitError";
+  constructor(
+    message: string,
+    readonly attemptMetrics: Readonly<LocalRebuildAttemptMetrics> = Object.freeze({
+      sourceBytesRead: 0,
+      bytesHashed: 0,
+      largestSourceRead: 0,
+      chunkerInputBytesCopied: 0,
+      chunkerOutputBytesCopied: 0,
+      chunkerBoundaryBytesScanned: 0,
+      editedInputBytesPrepared: 0,
+    }),
+  ) {
+    super(message);
+  }
 }
 
 export interface ManifestEntrySplice {
@@ -67,6 +190,12 @@ export interface LocalRebuildMetrics {
   readonly newManifestNodeCount: number;
   readonly reusedManifestNodeCount: number;
   readonly fellBackToEnd: boolean;
+  readonly insertionCopyCount: 1;
+  readonly insertionBytesCopied: number;
+  readonly chunkerInputBytesCopied: number;
+  readonly chunkerOutputBytesCopied: number;
+  readonly chunkerBoundaryBytesScanned: number;
+  readonly editedInputBytesPrepared: number;
 }
 
 export interface LocallyRebuiltManifest {
@@ -345,49 +474,162 @@ function containingEntry(offsets: readonly number[], offset: number): number {
   return Math.max(0, low - 1);
 }
 
-export function rebuildManifestLocally(
-  source: RandomAccessContentSource,
+function authenticateDiagnosticManifest(
   old: DiagnosticBuiltManifest,
-  edit: LocalContentEdit,
-  limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
-): LocallyRebuiltManifest {
-  if (!Number.isSafeInteger(source.size) || source.size < 0)
-    throw new RangeError("source size must be a nonnegative safe integer");
+  limits: LocalRebuildLimits,
+  sourceSize: number,
+): DiagnosticBuiltManifest {
+  if (intrinsicByteLength(old.root) !== ROOT_ENVELOPE_BYTES)
+    throw new Error("diagnostic manifest root must contain exactly 68 bytes");
+  if (intrinsicByteLength(old.rootHash) !== 32)
+    throw new Error("diagnostic manifest root hash must contain 32 bytes");
+  const root = copyBytes(old.root);
+  const rootHash = copyBytes(old.rootHash);
+  const decodedRoot = decodeManifestRoot(root, rootHash);
+  validateSupportedManifestParameters(decodedRoot.parameters);
+  if (decodedRoot.fileSize !== sourceSize)
+    throw new Error("source size does not match old manifest root");
   if (
-    !Number.isSafeInteger(edit.offset) ||
-    edit.offset < 0 ||
-    !Number.isSafeInteger(edit.deleteLength) ||
-    edit.deleteLength < 0 ||
-    edit.offset > source.size ||
-    edit.deleteLength > source.size - edit.offset
-  )
-    throw new RangeError("local edit is outside the source");
-  for (const [name, value] of Object.entries(limits))
-    if (!Number.isSafeInteger(value) || value <= 0)
-      throw new RangeError(`${name} must be a positive safe integer`);
-  if (
+    decodedRoot.entryCount > limits.maxRetainedEntries ||
     old.entries.length > limits.maxRetainedEntries ||
     old.nodes.size > limits.maxRetainedNodes
   )
     throw new LocalRebuildLimitError(
       "diagnostic local-rebuild state exceeds its fixed retained-entry/node limit; use the streamed workspace fallback",
     );
-  if (edit.insertBytes.byteLength > limits.maxAffectedBytes)
+  const sourceNodes = old.nodes;
+  const authenticatedBytes = new Map<string, Uint8Array>();
+  const reachable = new Set<string>();
+  let nodeVisits = 0;
+  const reader = {
+    get(hash: Uint8Array): Uint8Array | undefined {
+      nodeVisits = checkedAdd(nodeVisits, 1, "diagnostic manifest node visits");
+      if (nodeVisits > limits.maxRetainedNodes)
+        throw new LocalRebuildLimitError(
+          "diagnostic manifest traversal exceeds its node-visit limit; use the streamed workspace fallback",
+        );
+      const key = bytesToHex(hash);
+      const cached = sourceNodes.get(key);
+      if (!cached) return undefined;
+      if (intrinsicByteLength(cached.hash) !== 32)
+        throw new Error("diagnostic manifest cached node hash must contain 32 bytes");
+      if (intrinsicByteLength(cached.encoded) > MAX_MANIFEST_NODE_BYTES)
+        throw new Error("diagnostic manifest cached node exceeds the v1 byte maximum");
+      const encoded = copyBytes(cached.encoded);
+      if (bytesToHex(cached.hash) !== key)
+        throw new Error("diagnostic manifest cached node hash differs from its key");
+      let cachedEncoding: Uint8Array;
+      try {
+        cachedEncoding = encodeManifestNode(cached.node);
+      } catch {
+        throw new Error("diagnostic manifest cached node is malformed");
+      }
+      if (!equalBytes(cachedEncoding, encoded))
+        throw new Error(
+          "diagnostic manifest cached node differs from authenticated bytes",
+        );
+      reachable.add(key);
+      authenticatedBytes.set(key, encoded);
+      return copyBytes(encoded);
+    },
+  };
+  const authenticatedEntries: ManifestEntry[] = [];
+  const cursor = new ManifestSequentialCursor(root, 0, reader, rootHash, 32);
+  for (let record = cursor.next(); record; record = cursor.next())
+    authenticatedEntries.push(
+      Object.freeze({
+        hash: copyBytes(record.entry.hash),
+        length: record.entry.length,
+      }),
+    );
+  if (authenticatedEntries.length !== decodedRoot.entryCount)
+    throw new Error("diagnostic manifest authenticated entry count mismatch");
+  if (reachable.size !== sourceNodes.size)
+    throw new Error("diagnostic manifest contains unreachable cached nodes");
+  if (old.entries.length !== authenticatedEntries.length)
+    throw new Error("diagnostic manifest cached entry stream length mismatch");
+  for (let index = 0; index < authenticatedEntries.length; index += 1) {
+    const cached = old.entries[index]!;
+    const authenticated = authenticatedEntries[index]!;
+    if (
+      cached.length !== authenticated.length ||
+      !equalBytes(cached.hash, authenticated.hash)
+    )
+      throw new Error(
+        "diagnostic manifest cached entry differs from authenticated tree",
+      );
+  }
+  if (old.id !== manifestIdFromHash(rootHash))
+    throw new Error("diagnostic manifest cached identifier differs from root hash");
+  const authenticatedNodes = new Map<string, EncodedManifestNode>();
+  for (const [key, encoded] of authenticatedBytes) {
+    const cached = sourceNodes.get(key)!;
+    const hash = copyBytes(cached.hash);
+    authenticatedNodes.set(
+      key,
+      Object.freeze({ hash, encoded, node: decodeManifestNode(encoded, hash) }),
+    );
+  }
+  return Object.freeze({
+    id: old.id,
+    rootHash,
+    root,
+    nodes: authenticatedNodes,
+    entries: Object.freeze(authenticatedEntries),
+  });
+}
+
+/** Fixed-size diagnostic helper; it is not a storage-scale incremental-edit path. */
+function rebuildDiagnosticManifestLocallyOwned(
+  source: RandomAccessContentSource,
+  old: DiagnosticBuiltManifest,
+  edit: LocalContentEdit,
+  limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
+): LocallyRebuiltManifest {
+  const sourceSize = source.size;
+  const editOffset = edit.offset;
+  const deleteLength = edit.deleteLength;
+  const callerInsertBytes = edit.insertBytes;
+  if (!Number.isSafeInteger(sourceSize) || sourceSize < 0)
+    throw new RangeError("source size must be a nonnegative safe integer");
+  if (
+    !Number.isSafeInteger(editOffset) ||
+    editOffset < 0 ||
+    !Number.isSafeInteger(deleteLength) ||
+    deleteLength < 0 ||
+    editOffset > sourceSize ||
+    deleteLength > sourceSize - editOffset
+  )
+    throw new RangeError("local edit is outside the source");
+  if (!(callerInsertBytes instanceof Uint8Array))
+    throw new TypeError("local edit insertion must be a Uint8Array");
+  const newSize = checkedAdd(sourceSize - deleteLength, callerInsertBytes.byteLength);
+  if (
+    sourceSize > MAX_DIAGNOSTIC_CONTENT_BYTES ||
+    newSize > MAX_DIAGNOSTIC_CONTENT_BYTES
+  )
+    throw new LocalRebuildLimitError(
+      "diagnostic local rebuild exceeds its fixed content-size cap; use the streamed workspace fallback",
+    );
+  old = authenticateDiagnosticManifest(old, limits, sourceSize);
+  const oldRoot = decodeManifestRoot(old.root, old.rootHash);
+  validateSupportedManifestParameters(oldRoot.parameters);
+  if (callerInsertBytes.byteLength > limits.maxAffectedBytes)
     throw new LocalRebuildLimitError(
       "local edit insertion exceeds the affected-byte window; use the streamed workspace fallback",
     );
-  const insertBytes = edit.insertBytes.slice();
+  const insertBytes = callerInsertBytes;
+  edit = Object.freeze({ offset: editOffset, deleteLength, insertBytes });
   const oldLayout = entryOffsets(old.entries);
-  if (oldLayout.size !== source.size)
+  if (oldLayout.size !== sourceSize)
     throw new Error("source size does not match old manifest entries");
-  const oldRoot = decodeManifestRoot(old.root, old.rootHash);
-  if (oldRoot.fileSize !== source.size || oldRoot.entryCount !== old.entries.length)
+  if (oldRoot.fileSize !== sourceSize || oldRoot.entryCount !== old.entries.length)
     throw new Error("old manifest totals do not match its entry stream");
   if (edit.deleteLength === 0 && insertBytes.byteLength === 0) {
     return Object.freeze({
       rootHash: old.rootHash,
       root: old.root,
-      fileSize: source.size,
+      fileSize: sourceSize,
       entryCount: old.entries.length,
       entrySplice: Object.freeze({
         start: 0,
@@ -409,32 +651,45 @@ export function rebuildManifestLocally(
         newManifestNodeCount: 0,
         reusedManifestNodeCount: old.nodes.size,
         fellBackToEnd: false,
+        insertionCopyCount: 1,
+        insertionBytesCopied: insertBytes.byteLength,
+        chunkerInputBytesCopied: 0,
+        chunkerOutputBytesCopied: 0,
+        chunkerBoundaryBytesScanned: 0,
+        editedInputBytesPrepared: 0,
       }),
     });
   }
 
   const delta = insertBytes.byteLength - edit.deleteLength;
-  const newSize = checkedAdd(source.size - edit.deleteLength, insertBytes.byteLength);
   const locatedStart = containingEntry(oldLayout.offsets, edit.offset);
   // EOF is a forced FastCDC boundary. Appending must reopen the final chunk
   // because more bytes can move that boundary.
   const startEntry =
-    edit.offset === source.size && insertBytes.byteLength > 0 && old.entries.length > 0
+    edit.offset === sourceSize && insertBytes.byteLength > 0 && old.entries.length > 0
       ? old.entries.length - 1
       : locatedStart;
   const scanStart = oldLayout.offsets[startEntry]!;
   const dirtyOldEnd = edit.offset + edit.deleteLength;
   const dirtyNewEnd = edit.offset + insertBytes.byteLength;
   let sourceBytesRead = 0;
+  let largestSourceRead = 0;
+  let editedInputBytesPrepared = 0;
   const readOld = (offset: number, length: number): Uint8Array => {
     if (length === 0) return new Uint8Array();
     const bytes = source.read(offset, length);
-    if (!(bytes instanceof Uint8Array) || bytes.byteLength !== length)
+    if (!(bytes instanceof Uint8Array) || intrinsicByteLength(bytes) !== length)
       throw new Error("random-access source returned a partial range");
     sourceBytesRead = checkedAdd(sourceBytesRead, length);
+    largestSourceRead = Math.max(largestSourceRead, length);
     return bytes;
   };
   const readEdited = (position: number, length: number): Uint8Array => {
+    editedInputBytesPrepared = checkedAdd(
+      editedInputBytesPrepared,
+      length,
+      "prepared edited-input bytes",
+    );
     const output = new Uint8Array(length);
     let written = 0;
     let cursor = position;
@@ -473,6 +728,7 @@ export function rebuildManifestLocally(
   let bytesHashed = 0;
   let newObjectCount = 0;
   let newCursor = scanStart;
+  let feedCursor = scanStart;
   let reconnectOldOffset: number | undefined;
   let reconnectEntry: number | undefined;
   const acceptReconnect = (): boolean => {
@@ -486,29 +742,79 @@ export function rebuildManifestLocally(
     return true;
   };
   acceptReconnect();
-  while (newCursor < newSize && reconnectEntry === undefined) {
-    const window = readEdited(
-      newCursor,
-      Math.min(oldRoot.parameters.maximum, newSize - newCursor),
-    );
-    const boundary = findFastCdcBoundary(window, 0, oldRoot.parameters);
-    const chunk = window.slice(0, boundary);
+  const chunker = new StreamingFastCdc(oldRoot.parameters);
+  const attemptMetrics = (): Readonly<LocalRebuildAttemptMetrics> => {
+    const metrics = chunker.metrics;
+    return Object.freeze({
+      sourceBytesRead,
+      bytesHashed,
+      largestSourceRead,
+      chunkerInputBytesCopied: metrics.inputBytesCopied,
+      chunkerOutputBytesCopied: metrics.outputBytesCopied,
+      chunkerBoundaryBytesScanned: metrics.boundaryBytesScanned,
+      editedInputBytesPrepared,
+    });
+  };
+  const reconnected = Object.freeze({ kind: "reconnected" });
+  const affectedLimit = Object.freeze({ kind: "affected-limit" });
+  let affectedLimitMessage = "";
+  const acceptChunk = (chunk: Uint8Array): void => {
+    if (affectedEntries.length >= limits.maxAffectedEntries) {
+      affectedLimitMessage =
+        "local reconnection exceeds its affected-entry limit; use the streamed workspace fallback";
+      throw affectedLimit;
+    }
+    if (chunk.byteLength > limits.maxAffectedBytes - bytesHashed) {
+      affectedLimitMessage =
+        "local reconnection exceeds its affected-byte limit; use the streamed workspace fallback";
+      throw affectedLimit;
+    }
     const hash = sha256(chunk);
     const key = bytesToHex(hash);
     bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
     affectedEntries.push(Object.freeze({ hash, length: chunk.byteLength }));
-    if (
-      affectedEntries.length > limits.maxAffectedEntries ||
-      bytesHashed > limits.maxAffectedBytes
-    )
-      throw new LocalRebuildLimitError(
-        "local reconnection exceeded its fixed affected window; use the streamed workspace fallback",
-      );
     const firstAffectedOccurrence = !affectedObjects.has(key);
     if (firstAffectedOccurrence) affectedObjects.set(key, chunk);
     if (firstAffectedOccurrence && !oldObjectIds.has(key)) newObjectCount += 1;
-    newCursor += boundary;
-    acceptReconnect();
+    newCursor += chunk.byteLength;
+    if (acceptReconnect()) throw reconnected;
+  };
+  while (feedCursor < newSize && reconnectEntry === undefined) {
+    if (affectedEntries.length >= limits.maxAffectedEntries)
+      throw new LocalRebuildLimitError(
+        "local reconnection exceeds its affected-entry limit; use the streamed workspace fallback",
+        attemptMetrics(),
+      );
+    const remainingByteBudget = limits.maxAffectedBytes - bytesHashed;
+    const budgetProbe =
+      remainingByteBudget === Number.MAX_SAFE_INTEGER
+        ? remainingByteBudget
+        : remainingByteBudget + 1;
+    const inputLength = Math.min(
+      oldRoot.parameters.maximum,
+      newSize - feedCursor,
+      budgetProbe,
+    );
+    if (inputLength <= 0)
+      throw new LocalRebuildLimitError(
+        "local reconnection exceeds its affected-byte limit; use the streamed workspace fallback",
+        attemptMetrics(),
+      );
+    const input = readEdited(feedCursor, inputLength);
+    feedCursor += inputLength;
+    try {
+      chunker.drain(input, acceptChunk, feedCursor === newSize);
+    } catch (error) {
+      if (error === reconnected) break;
+      if (error === affectedLimit)
+        throw new LocalRebuildLimitError(affectedLimitMessage, attemptMetrics());
+      throw error;
+    }
+    if (bytesHashed + chunker.bufferedBytes > limits.maxAffectedBytes)
+      throw new LocalRebuildLimitError(
+        "local reconnection exceeds its affected-byte limit; use the streamed workspace fallback",
+        attemptMetrics(),
+      );
   }
   if (reconnectEntry === undefined || reconnectOldOffset === undefined)
     throw new Error("local FastCDC scan did not reconnect at end of file");
@@ -518,6 +824,16 @@ export function rebuildManifestLocally(
     deleteCount: reconnectEntry - startEntry,
     entries: Object.freeze(affectedEntries),
   });
+  const finalEntryCount = checkedAdd(
+    old.entries.length - entrySplice.deleteCount,
+    entrySplice.entries.length,
+    "locally rebuilt entry count",
+  );
+  if (finalEntryCount > limits.maxRetainedEntries)
+    throw new LocalRebuildLimitError(
+      "local result exceeds its retained-entry limit; use the streamed workspace fallback",
+      attemptMetrics(),
+    );
   const levels = orderedLevels(old);
   const newNodes = new Map<string, EncodedManifestNode>();
   let levelIndex = 0;
@@ -572,8 +888,7 @@ export function rebuildManifestLocally(
       rebuilt.segment.filter((node) => old.nodes.has(bytesToHex(node.hash))).length;
   }
   const rootNode = onlyNode(rebuilt);
-  const entryCount =
-    old.entries.length - entrySplice.deleteCount + entrySplice.entries.length;
+  const entryCount = finalEntryCount;
   const root = encodeManifestRoot({
     parameters: oldRoot.parameters,
     fileSize: newSize,
@@ -601,9 +916,39 @@ export function rebuildManifestLocally(
       newObjectCount,
       newManifestNodeCount: newNodes.size,
       reusedManifestNodeCount,
-      fellBackToEnd: reconnectOldOffset === source.size && dirtyOldEnd < source.size,
+      fellBackToEnd: reconnectOldOffset === sourceSize && dirtyOldEnd < sourceSize,
+      insertionCopyCount: 1,
+      insertionBytesCopied: insertBytes.byteLength,
+      chunkerInputBytesCopied: chunker.metrics.inputBytesCopied,
+      chunkerOutputBytesCopied: chunker.metrics.outputBytesCopied,
+      chunkerBoundaryBytesScanned: chunker.metrics.boundaryBytesScanned,
+      editedInputBytesPrepared,
     }),
   });
+}
+
+export function rebuildDiagnosticManifestLocally(
+  source: RandomAccessContentSource,
+  old: DiagnosticBuiltManifest,
+  edit: LocalContentEdit,
+  limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
+): LocallyRebuiltManifest {
+  limits = snapshotLocalRebuildLimits(limits);
+  const validated = validateLocalContentInputs(source, edit);
+  const preflightRoot = decodeManifestRoot(old.root, old.rootHash);
+  validateSupportedManifestParameters(preflightRoot.parameters);
+  if (preflightRoot.fileSize !== validated.source.size)
+    throw new Error("source size does not match old manifest root");
+  if (
+    preflightRoot.entryCount > limits.maxRetainedEntries ||
+    old.entries.length > limits.maxRetainedEntries ||
+    old.nodes.size > limits.maxRetainedNodes
+  )
+    throw new LocalRebuildLimitError(
+      "diagnostic local-rebuild state exceeds its fixed retained-entry/node limit; use the streamed workspace fallback",
+    );
+  const owned = ownLocalContentInputs(validated);
+  return rebuildDiagnosticManifestLocallyOwned(owned.source, old, owned.edit, limits);
 }
 
 export function applyEntrySplice(
@@ -637,12 +982,47 @@ export function rebuildManifestLocallyWithParameters(
   parameters: FastCdcConfiguration,
   limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
 ): LocallyRebuiltManifest {
+  parameters = snapshotMatchingLocalParameters(old, parameters);
+  limits = snapshotLocalRebuildLimits(limits);
+  const owned = ownLocalContentInputs(validateLocalContentInputs(source, edit));
+  return rebuildManifestLocallyWithParametersOwned(
+    owned.source,
+    old,
+    owned.edit,
+    parameters,
+    limits,
+  );
+}
+
+/** Operations-internal entry: source/edit have already crossed the ownership boundary. */
+export function rebuildManifestLocallyWithParametersOwned(
+  source: RandomAccessContentSource,
+  old: DiagnosticBuiltManifest,
+  edit: LocalContentEdit,
+  parameters: FastCdcConfiguration,
+  limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
+): LocallyRebuiltManifest {
+  snapshotMatchingLocalParameters(old, parameters);
+  limits = snapshotLocalRebuildLimits(limits);
+  return rebuildDiagnosticManifestLocallyOwned(source, old, edit, limits);
+}
+
+export function snapshotMatchingLocalParameters(
+  old: DiagnosticBuiltManifest,
+  parameters: FastCdcConfiguration,
+): Readonly<FastCdcConfiguration> {
+  const owned = Object.freeze({
+    minimum: parameters.minimum,
+    average: parameters.average,
+    maximum: parameters.maximum,
+  });
+  validateSupportedManifestParameters(owned);
   const root = decodeManifestRoot(old.root, old.rootHash);
   if (
-    root.parameters.minimum !== parameters.minimum ||
-    root.parameters.average !== parameters.average ||
-    root.parameters.maximum !== parameters.maximum
+    root.parameters.minimum !== owned.minimum ||
+    root.parameters.average !== owned.average ||
+    root.parameters.maximum !== owned.maximum
   )
     throw new Error("local rebuild parameters must match the old manifest");
-  return rebuildManifestLocally(source, old, edit, limits);
+  return owned;
 }

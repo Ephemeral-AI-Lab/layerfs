@@ -116,7 +116,8 @@ algorithms before adding persistence.
 - [x] Implement deterministic content-defined manifest grouping.
 - [x] Implement bounded root-to-leaf lookup and sequential manifest cursors.
 - [x] Implement canonical manifest building from a CAS-entry stream.
-- [x] Implement local FastCDC and manifest-tree reconnection.
+- [x] Implement fixed-capacity pure diagnostic FastCDC/manifest reconnection with a
+      bounded streamed full-scan fallback when any diagnostic cap is reached.
 - [x] Add golden vectors for CAS, FastCDC, root envelopes, leaves, internal nodes,
       grouping, and complete manifest roots.
 - [x] Add property tests for byte coverage, determinism, overflow, malformed encodings,
@@ -131,10 +132,13 @@ algorithms before adding persistence.
       bounded tree path.
 - [x] Corrupt root, node, span, count, or child data is rejected before affected bytes
       are returned.
-- [x] Local insertion, deletion, truncation, and overwrite produce exactly the
-      full-rebuild manifest root.
-- [x] Unchanged CAS objects and manifest subtrees are reused after deterministic
-      reconnection.
+- [x] Within the explicit pure diagnostic caps, local insertion, deletion, truncation,
+      and overwrite produce exactly the full-rebuild manifest root.
+- [x] Above those caps, the pure operation takes the bounded streamed fallback and
+      reports the local-attempt plus fallback work; M1 makes no large-file local-edit
+      performance claim.
+- [x] Within the diagnostic fixtures, unchanged CAS objects and manifest subtrees are
+      reused after deterministic reconnection.
 - [x] COW and patch cases pass at 4, 8, and 16 KiB page sizes.
 - [x] Pure algorithms import no SQLite, branch, host, RPC, or FUSE module.
 
@@ -153,10 +157,30 @@ transaction-only SQLite contract and a production-capable Node driver.
 - [ ] Implement bounded statement, binding, BLOB, and result handling.
 - [ ] Implement schema identity, version metadata, migrations, and fixtures.
 - [ ] Implement CAS object, manifest-root, and manifest-node relations.
+- [ ] Implement an authenticated durable manifest cursor/path port whose root-to-leaf
+      membership is verified against the selected root. Offset/group side indexes are
+      non-authoritative and corruption or staleness may cause only rejection or a safe
+      fallback, never redirect a splice.
+- [ ] Implement durable local manifest path-copy with explicit per-level and aggregate
+      record-read, emitted-node, retained-segment, byte, and transaction caps. Test
+      full-scan equivalence, empty/single-leaf height growth, stale/corrupt indexes, and
+      a tiny edit in a manifest with more than 16,384 entries.
+- [ ] Route `readManifestRange` and `readManifestInto` through the authenticated
+      sequential cursor (or an equivalent single validated traversal). Before exposing
+      bytes, enforce supported materialization parameters, root totals, child span/count
+      declarations, canonical grouping, and depth; remove the provisional double-decode
+      path and add recomputed-digest corruption regressions.
+- [ ] Re-audit every provisional storage streaming/chunking caller, including
+      `streaming-prepare`, against the M1 draining-consumer contract. No storage path
+      may use collecting `push()` as an uncharged output buffer; admission and
+      cancellation tests must cover prebuffered output and pending-entry metadata.
 - [ ] Implement namespace-head and immutable revision relations.
 - [ ] Implement lease, staged-membership, and closure-certificate relations.
 - [ ] Implement immutable COW page versions and mutable page heads.
 - [ ] Implement structural-patch and insertion-segment relations.
+- [ ] Enforce the canonical structural-patch sequence as contiguous integers beginning
+      at zero in repository/schema transactions, with gap, duplicate, rollback, and
+      reopen tests.
 - [ ] Implement exact `efs_usage` count and byte deltas.
 - [ ] Implement root-change journal and maintenance reserve accounting.
 - [ ] Implement bounded repositories requiring an active transaction.
@@ -199,6 +223,9 @@ commits, bounded range I/O, and snapshot streams on Node SQLite.
 - [ ] Implement inode and directory-entry resolution.
 - [ ] Implement `readFile`, `readRange`, and `readStream`.
 - [ ] Implement `writeFile`, `writeRange`, `replaceRange`, and `truncate`.
+- [ ] Route public range edits through persisted COW and the authenticated durable local
+      manifest path-copy; a small edit MUST NOT read or rebuild the complete file, and a
+      capped path-copy MUST fall back safely without trusting a derived side index.
 - [ ] Implement `mkdir`, `readdir`, `stat`, `lstat`, and `chmod`.
 - [ ] Implement symbolic links, hard links, link counts, and final-link rules.
 - [ ] Implement atomic rename, unlink, and recursive removal.
@@ -218,6 +245,10 @@ commits, bounded range I/O, and snapshot streams on Node SQLite.
 - [ ] Reads return exact selected bytes and create no durable content state except a
       required bounded lease.
 - [ ] A cold range lookup does not enumerate the complete manifest.
+- [ ] A one-byte edit in files with both fewer and more than 16,384 manifest entries
+      reads authenticated work bounded by manifest depth plus affected groups, or takes
+      an explicitly reported safe fallback; stale/corrupt derived indexes cannot change
+      the result.
 - [ ] Increasing a streamed fixture from 100 MiB to 1 GiB adds no more than one output
       chunk, one maximum CAS object, and one manifest node to managed memory high-water.
 - [ ] Cancellation, failure, and close release every lease and reservation.

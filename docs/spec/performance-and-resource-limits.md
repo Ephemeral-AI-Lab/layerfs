@@ -120,6 +120,12 @@ alter object identity or manifest encoding.
 Conformance tests MUST run page-overlay correctness cases with all three page sizes.
 Performance reports MUST identify the selected page size.
 
+Runtime-progress admission MUST snapshot this value once and reject every value other
+than 4,096, 8,192, or 16,384 before progress arithmetic or allocation. With the version
+0.1 limits below, the exact minimum progress totals are respectively 102,273,024,
+102,277,120, and 102,285,312 bytes. Admission MUST also validate the snapshotted maximum
+manifest-node byte scalar before including two nodes in that equation.
+
 ## 4. Accounted memory
 
 Memory boundedness is defined by tracked allocation capacity, not by object or entry
@@ -203,19 +209,74 @@ codec headroom fits its 10 MiB session reservation. Manifest traversal retains o
 bounded nodes. The sub-limits are admission ceilings and MUST NOT be preallocated.
 
 Several workspaces in one process share one explicitly configured process budget. They
-MUST NOT each assume an independent 256 MiB allowance. Smaller profiles are conformant
-when they can hold one maximum required value, retain cleanup reserve, and pass progress
-and fault tests with earlier backpressure.
+MUST NOT each assume an independent 256 MiB allowance.
+
+Version 0.1 supports content objects and streaming FastCDC windows up to 16 MiB. A
+materializing rebuild can simultaneously retain six independently backed capacities:
+
+1. a source-read or carried-suffix window;
+2. the FastCDC scan buffer;
+3. the emitted chunk passed to hashing;
+4. the defensive sink-handoff copy;
+5. the retained object/manifest-builder input; and
+6. the replacement-window or insertion ownership copy.
+
+Because sharing between those values is not part of the public sink/source contract,
+admission MUST conservatively charge all six. With the 16 MiB effective object ceiling,
+the content portion of the minimum progress working set is therefore 96 MiB. The
+implementation MUST additionally admit the diagnostic collector envelope described
+below, one configured COW page, two maximum 16 KiB manifest nodes, and one 256 KiB
+preferred output chunk. Under the default 8 KiB COW page, the exact minimum is
+102,277,120 bytes (97.5390625 MiB). The 128 MiB default leaves approximately 30.46 MiB
+for other admitted managed work.
+
+This is an intentional version 0.1 minimum profile, not an estimate of typical use and
+not six eager allocations. A smaller `maxManagedResidentBytes` profile is conformant
+only when it also lowers the effective admitted content-object/FastCDC maximum so the
+same six-capacity equation, one COW page, and progress metadata fit. Version 0.1 does
+not yet expose that lower effective maximum, so an implementation supporting the fixed
+16 MiB ceiling MUST reject a profile below the computed minimum before allocating a
+content window. Backpressure can reduce concurrency above this floor but cannot make a
+single admitted maximum-size rebuild safe below it.
+
+Streaming FastCDC's production interface is the draining consumer: each emitted chunk
+MUST be hashed, handed to its synchronous sink using the accounted defensive copy, and
+released before scanning can retain an unbounded output collection. A streamed rebuild
+MAY queue only one bounded manifest-entry batch; version 0.1 caps that batch at 256
+records and accounts its serialized capacity within the manifest progress allowance.
+
+The convenience `push()` collector is diagnostic. Including bytes already buffered from
+prior calls, one call MUST return no more than one effective maximum content object plus
+the configured `maxPushBytes`, and no more than 16,384 chunk references. Version 0.1
+caps `maxPushBytes` at 1 MiB and conservatively charges 16 bytes of array capacity per
+reference, so the minimum progress equation adds 1.25 MiB for this collector. This keeps
+repeated fixed-size partitions independent of hidden buffered state. A call that cannot
+prove both bounds before draining MUST reject and direct the caller to the consumer API.
+Metrics MUST expose the peak returned byte total and reference count.
+
+Public local and streamed edit entries MUST validate and snapshot every scalar
+parameter, option, limit, edit range, and attempted-phase metric before copying caller
+payload. After admission, insertion bytes are detached exactly once. A local-or-streamed
+wrapper MUST pass that same owned value through either branch and MUST NOT create a
+second insertion copy during fallback. Metrics expose the insertion copy count and byte
+capacity.
+
+The fixed-capacity diagnostic local scanner MUST use linear stateful chunking rather
+than reallocating a maximum-sized suffix for every short chunk. It reports chunker input
+bytes copied, output bytes copied, boundary bytes scanned, and edited-input bytes
+prepared. Output and scanned work MUST NOT exceed processed input. Prepared input MAY
+lead processed input only by the one already-admitted maximum scan window when a
+consumer stops at an early reconnection or limit.
 
 A Durable Object adapter with runtime-managed native memory MUST say that an exact
 process bound is unavailable. Computer must then use the platform's isolate limit,
 conservative managed limits, and measured resident memory; it must not report the core
 counter as total process memory.
 
-Opening MUST reject a configuration that cannot hold one maximum content object, one COW
-page, and the minimum metadata needed to make progress. The accepted manifest-entry
-limit MUST also ensure that a canonical manifest can be decoded within the aggregate
-limit.
+Opening MUST reject a configuration that cannot hold the six-capacity maximum-content
+working set and charged diagnostic collector envelope described above, one COW page, and
+the minimum metadata needed to make progress. The accepted manifest-entry limit MUST
+also ensure that a canonical manifest can be decoded within the aggregate limit.
 
 The filesystem `maxMaterializedBytes` value MUST NOT exceed `maxPreparedResultBytes`.
 Each admitted operation and open branch handle MUST consume a count slot and reserve
@@ -239,6 +300,10 @@ The core MUST account for the allocated capacity of:
 If two values share one backing allocation, that allocation MAY be counted once. If the
 implementation cannot prove that they share storage, it MUST count both allocated
 capacities.
+
+Bounded manifest-builder record metrics count simultaneously live borrowed keyset rows,
+owned row snapshots, the canonical grouping window, lookahead, and root record. The
+serialized-record byte value is a capacity proxy, not measured JavaScript heap usage.
 
 Caller-owned input before admission, bytes already transferred to a consumer, JavaScript
 runtime metadata, native SQLite page caches, host transport and FUSE buffers before core
