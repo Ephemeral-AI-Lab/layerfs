@@ -85,7 +85,7 @@ test("milestone gates select only their owned suites and sequential predecessors
     );
     const expectedValidation =
       Number(milestone) === 0
-        ? "pnpm fixtures:check && pnpm check:docs && pnpm check:evidence && pnpm check:style && pnpm check:architecture && pnpm build && pnpm check:exports && node --test tests/architecture/foundation.test.mjs"
+        ? "pnpm validate:m0:pre-evidence && pnpm check:evidence"
         : Number(milestone) === 1
           ? "pnpm validate:m0 && pnpm test:m1 && pnpm test:workerd"
           : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
@@ -100,6 +100,10 @@ test("milestone gates select only their owned suites and sequential predecessors
         new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `),
       );
   }
+  assert.equal(
+    scripts["validate:m0:pre-evidence"],
+    "pnpm fixtures:check && pnpm check:docs && pnpm check:style && pnpm check:architecture && pnpm build && pnpm check:exports && node --test tests/architecture/foundation.test.mjs",
+  );
   assert.equal(scripts["validate:accepted"], "pnpm validate:m1");
 });
 
