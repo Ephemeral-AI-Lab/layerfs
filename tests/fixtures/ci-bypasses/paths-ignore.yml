@@ -1,0 +1,12 @@
+on:
+  push:
+    paths-ignore: ["packages/**"]
+  pull_request:
+jobs:
+  validate:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22, 24]
+    steps:
+      - run: pnpm validate:accepted

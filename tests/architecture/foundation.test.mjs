@@ -1,19 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createRecordingFactory } from "../../packages/testkit/dist/index.js";
 import { load as parseYaml } from "js-yaml";
 import { documentationLinkErrors } from "../../scripts/documentation-links.mjs";
+import { workflowPolicyErrors } from "../../scripts/workflow-policy.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
-test("M0 architecture and exports are locked", () => {
-  execFileSync(process.execPath, ["scripts/check-architecture.mjs"], { cwd: root });
-  execFileSync(process.execPath, ["scripts/check-exports.mjs"], { cwd: root });
-  assert.ok(true);
-});
-
 test("CI invokes only the explicit highest accepted milestone gate", () => {
   const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   assert.match(manifest.scripts["validate:accepted"], /^pnpm validate:m\d+$/);
@@ -22,12 +16,7 @@ test("CI invokes only the explicit highest accepted milestone gate", () => {
     "utf8",
   );
   const parsed = parseYaml(workflow);
-  assert.deepEqual(Object.keys(parsed.on).sort(), ["pull_request", "push"]);
-  assert.deepEqual(parsed.jobs.validate.strategy.matrix.os, [
-    "ubuntu-latest",
-    "windows-latest",
-  ]);
-  assert.deepEqual(parsed.jobs.validate.strategy.matrix.node, [22, 24]);
+  assert.deepEqual(workflowPolicyErrors(parsed), []);
   const runSteps = parsed.jobs.validate.steps
     .filter((step) => Object.hasOwn(step, "run"))
     .map((step) => step.run);
@@ -38,15 +27,19 @@ test("CI invokes only the explicit highest accepted milestone gate", () => {
   assert.ok(runSteps.includes("pnpm install --frozen-lockfile"));
   assert.ok(!runSteps.includes("pnpm validate"));
 
-  const spoof = parseYaml(
-    readFileSync(
-      path.join(root, "tests/fixtures/ci-bypasses/comment-spoof.yml"),
-      "utf8",
-    ),
-  );
-  assert.ok(
-    !spoof.jobs.validate.steps.some((step) => step.run === "pnpm validate:accepted"),
-  );
+  for (const fixture of [
+    "comment-spoof.yml",
+    "disabled-job.yml",
+    "disabled-step.yml",
+    "continue-on-error.yml",
+    "paths-ignore.yml",
+    "matrix-unused.yml",
+  ]) {
+    const invalid = parseYaml(
+      readFileSync(path.join(root, "tests/fixtures/ci-bypasses", fixture), "utf8"),
+    );
+    assert.ok(workflowPolicyErrors(invalid).length > 0, fixture);
+  }
 });
 
 test("milestone gates select only their owned suites and sequential predecessors", () => {
@@ -73,7 +66,7 @@ test("milestone gates select only their owned suites and sequential predecessors
     );
     const expectedValidation =
       Number(milestone) === 0
-        ? "pnpm fixtures:check && pnpm check:docs && pnpm check:evidence && pnpm check:style && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:m0"
+        ? "pnpm fixtures:check && pnpm check:docs && pnpm check:evidence && pnpm check:style && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:m0:validated"
         : Number(milestone) === 1
           ? "pnpm validate:m0 && pnpm test:m1 && pnpm test:workerd"
           : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;

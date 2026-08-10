@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import ts from "typescript";
 
 const execute = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
@@ -33,7 +34,8 @@ function ownedByMilestone(milestone, filename) {
   const rootFiles = new Set([
     ".prettierignore",
     ".prettierrc.json",
-    "eslint.config.mjs",
+    ".markdownlint-cli2.jsonc",
+    "eslint.config.js",
     "package.json",
     "pnpm-lock.yaml",
     "pnpm-workspace.yaml",
@@ -53,9 +55,6 @@ function ownedByMilestone(milestone, filename) {
   if (milestone === "m0") return m0;
   return (
     m0 ||
-    /^(?:packages\/fs\/src\/(?:cas|cdc|cow|patches|manifests)\/|packages\/fs\/src\/operations\/(?:full-rebuild|local-rebuild|streamed-rebuild)\.ts$)/u.test(
-      filename,
-    ) ||
     filename.startsWith("tests/algorithms/") ||
     filename.startsWith("tests/workerd/") ||
     filename === "scripts/check-workerd-algorithms.mjs" ||
@@ -63,6 +62,76 @@ function ownedByMilestone(milestone, filename) {
     filename.startsWith("docs/testing/") ||
     filename === "docs/implementation/implementation-plan.md"
   );
+}
+const m1SourceEntrypoints = [
+  "packages/fs/src/cas/sha256.ts",
+  "packages/fs/src/cdc/fastcdc.ts",
+  "packages/fs/src/cow/pages.ts",
+  "packages/fs/src/patches/patches.ts",
+  "packages/fs/src/manifests/builder.ts",
+  "packages/fs/src/manifests/codec.ts",
+  "packages/fs/src/manifests/cursor.ts",
+  "packages/fs/src/manifests/grouping.ts",
+  "packages/fs/src/operations/full-rebuild.ts",
+  "packages/fs/src/operations/local-rebuild.ts",
+  "packages/fs/src/operations/streamed-rebuild.ts",
+];
+async function gitFile(commit, filename) {
+  return (
+    await execute("git", ["show", `${commit}:${filename}`], {
+      cwd: root,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  ).stdout;
+}
+function relativeModuleSpecifiers(filename, source) {
+  const parsed = ts.createSourceFile(
+    filename,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const result = [];
+  const visit = (node) => {
+    let specifier;
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    )
+      specifier = node.moduleSpecifier.text;
+    else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      const literal = node.argument.literal;
+      if (ts.isStringLiteralLike(literal)) specifier = literal.text;
+    }
+    if (specifier?.startsWith(".")) result.push(specifier);
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed);
+  return result;
+}
+async function m1SourceClosure(commit, available) {
+  const closure = new Set();
+  const pending = [...m1SourceEntrypoints];
+  while (pending.length) {
+    const filename = pending.pop();
+    if (closure.has(filename) || !available.has(filename)) continue;
+    closure.add(filename);
+    const source = await gitFile(commit, filename);
+    for (const specifier of relativeModuleSpecifiers(filename, source)) {
+      const base = path.posix.normalize(
+        path.posix.join(path.posix.dirname(filename), specifier),
+      );
+      const candidates = base.endsWith(".js")
+        ? [`${base.slice(0, -3)}.ts`]
+        : [base, `${base}.ts`, `${base}/index.ts`];
+      const target = candidates.find((candidate) => available.has(candidate));
+      if (target) pending.push(target);
+    }
+  }
+  return closure;
 }
 async function ownedTreeDigest(milestone, commit) {
   const output = (
@@ -79,12 +148,32 @@ async function ownedTreeDigest(milestone, commit) {
       const match = line.match(/^\d+ blob ([0-9a-f]{40})\t(.+)$/u);
       return match ? { hash: match[1], filename: match[2] } : undefined;
     })
-    .filter((record) => record && ownedByMilestone(milestone, record.filename))
+    .filter(Boolean);
+  const available = new Set(records.map((record) => record.filename));
+  const sourceClosure =
+    milestone === "m1" ? await m1SourceClosure(commit, available) : new Set();
+  const ownedRecords = records
+    .filter(
+      (record) =>
+        ownedByMilestone(milestone, record.filename) ||
+        sourceClosure.has(record.filename),
+    )
     .sort((left, right) => left.filename.localeCompare(right.filename));
   const digest = createHash("sha256");
-  for (const record of records)
+  for (const record of ownedRecords)
     digest.update(record.filename).update("\0").update(record.hash).update("\n");
   return digest.digest("hex");
+}
+async function assertOwnedWorktreeClean(milestone) {
+  const status = (
+    await execute("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
+      cwd: root,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  ).stdout;
+  if (status)
+    throw new Error(`${milestone} evidence requires a completely clean worktree`);
 }
 async function validateMilestone(name, requiredMetrics) {
   const directory = path.join(root, "docs", "evidence", name);
@@ -136,6 +225,7 @@ async function validateMilestone(name, requiredMetrics) {
   const currentDigest = await ownedTreeDigest(name, "HEAD");
   if (artifact.ownedTreeDigest !== currentDigest)
     throw new Error(`${name} accepted evidence is stale for milestone-owned files`);
+  await assertOwnedWorktreeClean(name);
   return { artifact, exit, candidate };
 }
 
@@ -143,6 +233,7 @@ const m0 = await validateMilestone("m0", [
   "operatingSystems",
   "nodeVersions",
   "matrixRuns",
+  "architectureTestsPerCell",
   "coreSourceFiles",
   "negativeArchitectureFixtures",
   "publishablePackages",
@@ -152,8 +243,11 @@ const m0 = await validateMilestone("m0", [
   "packedTarballs",
   "packedFiles",
 ]);
-if (m0.artifact.passed !== m0.artifact.metrics.matrixRuns * 4)
-  throw new Error("m0 passed count differs from four tests per matrix cell");
+if (
+  m0.artifact.passed !==
+  m0.artifact.metrics.matrixRuns * m0.artifact.metrics.architectureTestsPerCell
+)
+  throw new Error("m0 passed count differs from the recorded tests per matrix cell");
 
 const m1 = await validateMilestone("m1", [
   "operatingSystems",

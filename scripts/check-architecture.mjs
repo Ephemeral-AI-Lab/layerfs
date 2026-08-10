@@ -607,16 +607,6 @@ for (const sourceInfo of coreFiles) {
     ts.forEachChild(node, inspectSql);
   };
   inspectSql(parsed);
-
-  const inspectGlobalReflection = (node) => {
-    const reason = globalIdentifierAccessReason(node);
-    if (reason)
-      violations.push(
-        `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} ${reason}`,
-      );
-    ts.forEachChild(node, inspectGlobalReflection);
-  };
-  inspectGlobalReflection(parsed);
 }
 findCycles(graph, "source", (filename) => relative(filename));
 
@@ -660,6 +650,15 @@ for (const info of packages) {
       sourceInfo.logical,
       await readFile(sourceInfo.logical, "utf8"),
     );
+    const inspectGlobalAccess = (node) => {
+      const reason = globalIdentifierAccessReason(node);
+      if (reason)
+        violations.push(
+          `${relative(sourceInfo.logical)}:${parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1} ${reason}`,
+        );
+      ts.forEachChild(node, inspectGlobalAccess);
+    };
+    inspectGlobalAccess(parsed);
     for (const reference of moduleReferences(parsed)) {
       if (reference.kind.startsWith("runtime-")) {
         violations.push(
@@ -716,12 +715,13 @@ if (!sqlTemplateRejected)
   violations.push("SQL template-expression negative fixture was not rejected");
 
 const globalReflectionFixtures = [
-  "computed-global-eval.ts",
-  "aliased-global-eval.ts",
-  "destructured-global-eval.ts",
+  "operations/computed-global-eval.ts",
+  "operations/aliased-global-eval.ts",
+  "operations/destructured-global-eval.ts",
+  "fs/adapter-computed-global.ts",
 ];
 for (const fixture of globalReflectionFixtures) {
-  const filename = path.join(fixtureRoot, "operations", fixture);
+  const filename = path.join(fixtureRoot, ...fixture.split("/"));
   const parsed = parse(filename, await readFile(filename, "utf8"));
   let rejected = false;
   const inspect = (node) => {
@@ -832,7 +832,12 @@ if (violations.length) {
   console.error([...new Set(violations)].join("\n"));
   process.exitCode = 1;
 } else {
+  const negativeFixtureCount =
+    fixtureCases.length +
+    1 + // SQL template expression
+    globalReflectionFixtures.length +
+    1; // dev-only workspace dependency
   console.log(
-    `architecture: ${coreFiles.length} core files; statically expressible module edges, realpath package graph, exact ports/directions, cycles, composition, SQL ownership, reviewed reflection/code-generation ban, and ${fixtureCases.length + 1 + globalReflectionFixtures.length} bypass fixtures valid`,
+    `architecture: ${coreFiles.length} core files; statically expressible module edges, realpath package graph, exact ports/directions, cycles, composition, SQL ownership, reviewed reflection/code-generation ban, and ${negativeFixtureCount} bypass fixtures valid`,
   );
 }
