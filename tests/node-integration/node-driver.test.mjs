@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { runUnitOfWork } from "../../packages/fs/dist/sqlite/unit-of-work.js";
+import { EphemeralFS } from "../../packages/fs/dist/index.js";
 
 function proveReadTransactionsAreReadOnly(driver) {
   driver.transaction("write", (tx) =>
@@ -263,7 +264,7 @@ test("BLOB bindings and results are plain owned Uint8Arrays for Buffer and subcl
   driver.close();
 });
 
-test("WAL limits are observable checkpoint backpressure, not a claimed hard file ceiling", async () => {
+test("WAL limits use observable checkpoint backpressure plus transaction admission", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-wal-"));
   const filename = path.join(directory, "filesystem.db");
   try {
@@ -301,6 +302,9 @@ test("WAL limits are observable checkpoint backpressure, not a claimed hard file
       }
       assert.equal(rejected, true);
       assert.ok(writer.physicalStorage().walBytes > 0);
+      assert.ok(
+        writer.physicalStorage().walBytes <= writer.capabilities.maxJournalBytes,
+      );
     });
     const count = writer.transaction(
       "read",
@@ -319,6 +323,124 @@ test("WAL limits are observable checkpoint backpressure, not a claimed hard file
     assert.equal(writer.capabilities.journalSizeLimitIsHard, false);
     reader.close();
     writer.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a pinned reader cannot let one transaction cross its admitted WAL envelope", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-wal-tx-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    const writer = await openNodeSqlite({
+      filename,
+      busyTimeoutMs: 0,
+      durability: "relaxed-test",
+      maxJournalBytes: 64 * 1024,
+    });
+    writer.transaction("write", (tx) =>
+      tx.run("CREATE TABLE wal_tx(id INTEGER PRIMARY KEY,value BLOB NOT NULL)"),
+    );
+    writer.checkpoint("truncate");
+    const reader = await openNodeSqlite({ filename, busyTimeoutMs: 0 });
+    reader.transaction("read", (tx) => {
+      tx.all("SELECT count(*) count FROM wal_tx", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      });
+      writer.transaction("write", (write) =>
+        write.run("INSERT INTO wal_tx(value) VALUES(?)", [new Uint8Array(8 * 1024)]),
+      );
+      assert.ok(
+        writer.physicalStorage().walBytes <= writer.capabilities.maxJournalBytes,
+      );
+      assert.throws(
+        () =>
+          writer.transaction("write", (write) =>
+            write.run("INSERT INTO wal_tx(value) VALUES(?)", [
+              new Uint8Array(writer.capabilities.maxBlobBytes),
+            ]),
+          ),
+        /rollback-safe transaction admission envelope/,
+      );
+    });
+    assert.equal(
+      writer.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT count(*) count FROM wal_tx", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].count,
+      ),
+      1,
+    );
+    reader.close();
+    writer.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("filesystem storage caps cannot silently undercut the configured Node driver", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  await assert.rejects(
+    EphemeralFS.open({
+      database: driver,
+      storage: {
+        maxPhysicalDatabaseBytes:
+          driver.capabilities.maxPhysicalDatabaseBytes - 4096,
+      },
+    }),
+    /must be configured on the SQLite adapter/,
+  );
+  driver.close();
+});
+
+test("matching lower physical caps admit below-cap writes and survive reopen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sqlite-fs-caps-"));
+  const filename = path.join(directory, "filesystem.db");
+  const physicalCap = 2 * 1024 * 1024;
+  const journalCap = 8 * 1024 * 1024;
+  try {
+    let driver = await openNodeSqlite({
+      filename,
+      maxPhysicalDatabaseBytes: physicalCap,
+      maxJournalBytes: journalCap,
+    });
+    let filesystem = await EphemeralFS.open({
+      database: driver,
+      storage: {
+        maxPhysicalDatabaseBytes: driver.capabilities.maxPhysicalDatabaseBytes,
+        maxJournalBytes: driver.capabilities.maxJournalBytes,
+      },
+    });
+    const expected = new Uint8Array(64 * 1024).fill(37);
+    await filesystem.writeFile("/below-cap", expected);
+    assert.deepEqual(await filesystem.readFile("/below-cap"), expected);
+    await filesystem.close();
+    driver.close();
+
+    driver = await openNodeSqlite({
+      filename,
+      create: false,
+      maxPhysicalDatabaseBytes: physicalCap,
+      maxJournalBytes: journalCap,
+    });
+    filesystem = await EphemeralFS.open({
+      database: driver,
+      storage: {
+        maxPhysicalDatabaseBytes: driver.capabilities.maxPhysicalDatabaseBytes,
+        maxJournalBytes: driver.capabilities.maxJournalBytes,
+      },
+    });
+    assert.deepEqual(await filesystem.readFile("/below-cap"), expected);
+    assert.ok(
+      driver.physicalStorage().mainFileBytes <=
+        driver.capabilities.maxPhysicalDatabaseBytes,
+    );
+    await filesystem.close();
+    driver.close();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

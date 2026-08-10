@@ -163,6 +163,7 @@ export function constrainStorageLimits(
   const limits = resolveLimits(DEFAULT_STORAGE_LIMITS, configured);
   const result = {
     ...limits,
+    maxWriteBytes: Math.min(limits.maxWriteBytes, adapter.maxBlobBytes),
     maxPhysicalDatabaseBytes: Math.min(
       limits.maxPhysicalDatabaseBytes,
       adapter.maxPhysicalDatabaseBytes,

@@ -190,6 +190,18 @@ export class EphemeralFS implements EphemeralFilesystem {
     const runtime = resolveLimits(DEFAULT_RUNTIME_LIMITS, options.runtime);
     const branch = resolveLimits(DEFAULT_BRANCH_CONFIGURATION, options.branch);
     const storage = constrainStorageLimits(options.storage, storagePort.capabilities);
+    for (const name of [
+      "maxPhysicalDatabaseBytes",
+      "maxJournalBytes",
+    ] as const) {
+      if (
+        options.storage?.[name] !== undefined &&
+        storage[name] !== storagePort.capabilities[name]
+      )
+        throw new RangeError(
+          `${name} must be configured on the SQLite adapter; a filesystem-only lower cap is not enforceable`,
+        );
+    }
     const metadata = storagePort.initialize({
       ...(options.format?.cowPageBytes === undefined
         ? {}

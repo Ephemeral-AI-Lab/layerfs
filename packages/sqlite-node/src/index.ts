@@ -99,6 +99,18 @@ function rowBytes(row: SqliteRow): number {
   return bytes;
 }
 
+function bindingBytes(bindings: SqliteBindings): number {
+  let bytes = 0;
+  for (const value of bindings)
+    bytes +=
+      value instanceof Uint8Array
+        ? intrinsicBytes(value).byteLength
+        : typeof value === "string"
+          ? value.length * 2
+          : 8;
+  return bytes;
+}
+
 function leadingSqlKeyword(sql: string): string {
   let source = sql;
   while (true) {
@@ -136,6 +148,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
   readonly #database: DatabaseSync;
   readonly #filename: string;
   readonly #pageSize: number;
+  readonly #maxJournalBytes: number;
   readonly #journalBackpressureBytes: number;
   #closed = false;
   #transactionActive = false;
@@ -183,8 +196,12 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     );
     if (!Number.isSafeInteger(this.#pageSize) || this.#pageSize <= 0)
       throw new Error("SQLite returned an invalid page size");
-    if (maxJournalBytes < this.#pageSize * 8)
-      throw new RangeError("maxJournalBytes must hold at least eight SQLite pages");
+    const minimumJournalBytes = this.#pageSize * 8 + 2 * 9248;
+    if (maxJournalBytes < minimumJournalBytes)
+      throw new RangeError(
+        `maxJournalBytes must hold SQLite overhead and one canonical manifest node (${minimumJournalBytes} bytes)`,
+      );
+    this.#maxJournalBytes = maxJournalBytes;
     let effectiveMaxPhysicalDatabaseBytes = maxPhysicalDatabaseBytes;
     if (!this.readOnly) {
       const requestedPageCount = Math.max(
@@ -212,7 +229,10 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
       this.#database.prepare("PRAGMA journal_mode").get()?.journal_mode ?? "",
     ).toLowerCase();
     this.capabilities = Object.freeze({
-      maxBlobBytes: 64 * 1024 * 1024,
+      maxBlobBytes: Math.min(
+        64 * 1024 * 1024,
+        Math.floor((maxJournalBytes - this.#pageSize * 8) / 2),
+      ),
       maxBindings: 32_766,
       durability,
       journalMode: rawJournalMode === "wal" ? "wal" : "rollback",
@@ -253,11 +273,23 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             : "BEGIN EXCLUSIVE",
       );
       begun = true;
+      let journalEstimate =
+        mode === "read" || this.#filename === ":memory:"
+          ? 0
+          : (this.#fileBytes(`${this.#filename}-wal`) ?? 0);
       const tx: FilesystemSQLiteTransaction = Object.freeze({
         scope: Symbol("sqlite-transaction"),
         run: (sql: string, bindings: SqliteBindings = []): SqliteRunResult => {
           if (!active) throw new Error("SQLite transaction value is no longer active");
           this.#validateStatement(sql, bindings, mode);
+          const bindingEstimate =
+            mode === "read"
+              ? 0
+              : this.#pageSize * 4 + bindingBytes(bindings) * 2;
+          if (journalEstimate + bindingEstimate > this.#maxJournalBytes)
+            throw new Error(
+              "ENOSPC: WAL backpressure exceeds rollback-safe transaction admission envelope",
+            );
           const result = this.#database
             .prepare(sql)
             .run(...bindings.map((value) => binding(value, this.capabilities)));
@@ -265,6 +297,14 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
           const rowid = Number(result.lastInsertRowid);
           if (!Number.isSafeInteger(changes) || !Number.isSafeInteger(rowid))
             throw new RangeError("SQLite returned unsafe write counters");
+          if (mode !== "read") {
+            const changedPageEstimate = changes * this.#pageSize * 4;
+            journalEstimate += Math.max(bindingEstimate, changedPageEstimate);
+            if (journalEstimate > this.#maxJournalBytes)
+              throw new Error(
+                "ENOSPC: WAL backpressure exceeds rollback-safe transaction change envelope",
+              );
+          }
           return { changes, lastInsertRowid: rowid };
         },
         all: <Row extends SqliteRow = SqliteRow>(
