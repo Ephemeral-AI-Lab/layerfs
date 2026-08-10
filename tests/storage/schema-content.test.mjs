@@ -7,6 +7,7 @@ import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
 import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import {
   DEFAULT_FILESYSTEM_LIMITS,
+  MAX_CONTENT_OBJECT_BYTES,
   constrainStorageLimits,
 } from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
@@ -458,6 +459,81 @@ test("CAS and segmented manifests persist with verified deduplication and exact 
     /digest mismatch/,
   );
   driver.close();
+});
+
+test("the exact supported content-object bound persists and bound plus one rolls back", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-object-envelope-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    let driver = await openNodeSqlite({ filename, durability: "relaxed-test" });
+    initializeOrValidateSchema(driver);
+    let storage = constrainStorageLimits(
+      {
+        maxManagedPayloadBytes: 128 * 1024 * 1024,
+        maintenanceReserveBytes: 1024 * 1024,
+      },
+      driver.capabilities,
+    );
+    const exact = new Uint8Array(MAX_CONTENT_OBJECT_BYTES).fill(71);
+    const exactHash = sha256(exact);
+    assert.equal(
+      driver.transaction("write", (tx) =>
+        new ContentRepository(tx, storage).putObject(exactHash, exact),
+      ),
+      true,
+    );
+    const over = new Uint8Array(MAX_CONTENT_OBJECT_BYTES + 1).fill(72);
+    const overHash = sha256(over);
+    assert.throws(
+      () =>
+        driver.transaction("write", (tx) =>
+          new ContentRepository(tx, storage).putObject(overHash, over),
+        ),
+      /object exceeds configured limit/,
+    );
+    driver.close();
+
+    driver = await openNodeSqlite({
+      filename,
+      create: false,
+      durability: "relaxed-test",
+    });
+    initializeOrValidateSchema(driver);
+    storage = constrainStorageLimits(
+      {
+        maxManagedPayloadBytes: 128 * 1024 * 1024,
+        maintenanceReserveBytes: 1024 * 1024,
+      },
+      driver.capabilities,
+    );
+    const reopened = driver.transaction("read", (tx) =>
+      new ContentRepository(tx, storage).getObject(
+        exactHash,
+        MAX_CONTENT_OBJECT_BYTES,
+      ),
+    );
+    assert.equal(reopened.byteLength, MAX_CONTENT_OBJECT_BYTES);
+    assert.deepEqual(sha256(reopened), exactHash);
+    assert.deepEqual(
+      driver.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT object_count,object_bytes,(SELECT count(*) FROM efs_cas_objects) rows FROM efs_usage",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0],
+      ),
+      {
+        object_count: 1,
+        object_bytes: MAX_CONTENT_OBJECT_BYTES,
+        rows: 1,
+      },
+    );
+    driver.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 function failingDriver(base, occurrence) {

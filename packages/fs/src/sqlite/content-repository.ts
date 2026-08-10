@@ -2,7 +2,10 @@ import { sha256, verifyCasObject } from "../cas/sha256.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
 import { bytesToHex, equalBytes, intrinsicByteLength } from "../cas/bytes.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
-import type { StorageLimits } from "../resources/limits.js";
+import {
+  maxPersistedContentObjectBytes,
+  type StorageLimits,
+} from "../resources/limits.js";
 import {
   ContentCache,
   type ContentCacheKind,
@@ -59,10 +62,11 @@ export class ContentRepository {
     if (input.length > this.#limits.maxQueryBatchSize)
       throw new RangeError("content batch exceeds configured row limit");
     const unique = new Map<string, ContentObjectInput>();
+    const maxObjectBytes = maxPersistedContentObjectBytes(this.#limits);
     for (const item of input) {
       if (
         intrinsicByteLength(item.hash) !== 32 ||
-        intrinsicByteLength(item.bytes) > this.#limits.maxWriteBytes
+        intrinsicByteLength(item.bytes) > maxObjectBytes
       )
         throw new RangeError("object exceeds configured limit");
       verifyCasObject(item.hash, item.bytes);
@@ -284,6 +288,12 @@ export class ContentRepository {
     )
       throw new Error("invalid manifest root digest or size");
     const root = decodeManifestRoot(encoded, hash);
+    if (
+      root.parameters.maximum > maxPersistedContentObjectBytes(this.#limits)
+    )
+      throw new RangeError(
+        "manifest FastCDC maximum exceeds the durable object transaction envelope",
+      );
     const existing = this.#tx.all<EncodedRow>(
       "SELECT encoded FROM efs_manifest_roots WHERE hash=?",
       [hash],
@@ -332,6 +342,7 @@ export class ContentRepository {
       manifestHash,
       offset,
       this.#limits.maxManifestDepth,
+      maxPersistedContentObjectBytes(this.#limits),
     );
   }
 

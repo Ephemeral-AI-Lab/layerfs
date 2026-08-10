@@ -69,6 +69,21 @@ export interface StorageAdapterLimits {
 
 /** Hard version-0.1 content-object/streaming CDC allocation ceiling. */
 export const MAX_CONTENT_OBJECT_BYTES = 16 * 1024 * 1024;
+/** Conservative per-object binding/row/index envelope in a durable transaction. */
+export const CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES = 256;
+
+export function maxPersistedContentObjectBytes(
+  storage: Pick<StorageLimits, "maxWriteBytes" | "maxFinalTransactionBytes">,
+): number {
+  return Math.max(
+    0,
+    Math.min(
+      MAX_CONTENT_OBJECT_BYTES,
+      storage.maxWriteBytes,
+      storage.maxFinalTransactionBytes - CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES,
+    ),
+  );
+}
 /** Additional caller input one collecting FastCDC push may return with a prebuffer. */
 export const MAX_CONTENT_COLLECTOR_PUSH_BYTES = 1024 * 1024;
 /** Maximum retained chunk references returned by one collecting push call. */
@@ -114,7 +129,8 @@ export const DEFAULT_STORAGE_LIMITS: StorageLimits = Object.freeze({
   maintenanceReserveBytes: 64 * 1024 ** 2,
   maxPermanentIdentifiers: 10_000_000,
   maxFinalTransactionRows: 100_000,
-  maxFinalTransactionBytes: 16 * 1024 ** 2,
+  maxFinalTransactionBytes:
+    MAX_CONTENT_OBJECT_BYTES + CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES,
   maxRevisionReplaySteps: 1_000,
   maxPatchesPerFile: 256,
   maxPatchBytesPerFile: 16 * 1024 ** 2,

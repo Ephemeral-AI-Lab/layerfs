@@ -141,9 +141,29 @@ test("cursor rejects unsupported parameters and root totals before exposing byte
     1,
     leaf.hash,
   );
-  driver.transaction("write", (tx) =>
-    persistManual(tx, storage, { hash, bytes }, [leaf], unsupported),
-  );
+  driver.transaction("write", (tx) => {
+    const content = new ContentRepository(tx, storage);
+    content.putObject(hash, bytes);
+    content.putManifestNode(leaf.hash, leaf.encoded);
+    assert.throws(
+      () => content.putManifestRoot(unsupported.hash, unsupported.encoded),
+      /durable object transaction envelope/,
+    );
+    tx.run(
+      "INSERT INTO efs_manifest_roots(hash,root_node_hash,file_size,entry_count,chunk_min,chunk_avg,chunk_max,encoded,allocation_sequence) VALUES(?,?,?,?,?,?,?,?,?)",
+      [
+        unsupported.hash,
+        leaf.hash,
+        1,
+        1,
+        1,
+        1,
+        32 * 1024 * 1024,
+        unsupported.encoded,
+        999,
+      ],
+    );
+  });
   assert.throws(
     () =>
       driver.transaction("read", (tx) =>

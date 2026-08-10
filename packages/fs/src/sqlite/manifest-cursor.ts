@@ -30,12 +30,17 @@ export class SQLiteAuthenticatedManifestCursor {
     manifestHash: Uint8Array,
     offset: number,
     maxDepth: number,
+    maxObjectBytes: number,
   ) {
     manifestHash = copyBytes(manifestHash);
     const rootBytes = source.getManifestRoot(copyBytes(manifestHash));
     if (!rootBytes) throw new Error("ECORRUPT: missing manifest root");
     const root = decodeManifestRoot(rootBytes, manifestHash);
     validateSupportedManifestParameters(root.parameters);
+    if (root.parameters.maximum > maxObjectBytes)
+      throw new RangeError(
+        "manifest FastCDC maximum exceeds the durable object transaction envelope",
+      );
     if (!Number.isSafeInteger(offset) || offset < 0)
       throw new RangeError("manifest offset must be a nonnegative safe integer");
     const effectiveOffset = Math.min(offset, root.fileSize);
