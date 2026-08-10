@@ -816,6 +816,110 @@ test("lease maintenance observes aborts between bounded committed batches", asyn
   driver.close();
 });
 
+test("sealed recovery rows reject raw mutation until tombstoned cleanup", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-sealed-reopen-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver = await openNodeSqlite({ filename });
+  t.after(async () => {
+    try {
+      driver.close();
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  });
+  let port = createSqliteOperationsStorage(driver);
+  initializeOrValidateSchema(driver);
+  let storage = limits(driver);
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  const prepared = await prepareContent(
+    port,
+    Uint8Array.of(1, 2, 3, 4),
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    admission,
+    undefined,
+    undefined,
+    () => 10,
+  );
+  const leaseId = prepared.certificate.leaseId;
+  const mutations = [
+    "UPDATE efs_staging_certificates SET verified=verified WHERE lease_id=?",
+    "DELETE FROM efs_staging_certificates WHERE lease_id=?",
+    "UPDATE efs_staging_reconciliations SET complete=complete WHERE lease_id=?",
+    "DELETE FROM efs_staging_reconciliations WHERE lease_id=?",
+    "UPDATE efs_staging_reconciliation_queue SET processed=processed WHERE lease_id=?",
+    "DELETE FROM efs_staging_reconciliation_queue WHERE lease_id=?",
+    "UPDATE efs_lease_objects SET size=size WHERE lease_id=?",
+    "DELETE FROM efs_lease_objects WHERE lease_id=?",
+    "UPDATE efs_lease_staged_manifests SET size=size WHERE lease_id=?",
+    "DELETE FROM efs_lease_staged_manifests WHERE lease_id=?",
+    "DELETE FROM efs_lease_manifests WHERE lease_id=?",
+    "INSERT OR IGNORE INTO efs_lease_manifests(lease_id,manifest_hash) SELECT lease_id,manifest_hash FROM efs_lease_manifests WHERE lease_id=?",
+  ];
+  for (const sql of mutations)
+    assert.throws(
+      () => driver.transaction("write", (tx) => tx.run(sql, [leaseId])),
+      /sealed staging/,
+      sql,
+    );
+  driver.close();
+  driver = await openNodeSqlite({ filename });
+  port = createSqliteOperationsStorage(driver);
+  initializeOrValidateSchema(driver);
+  storage = limits(driver);
+  let recoveryStatements = 0;
+  const counted = {
+    ...driver,
+    transaction(mode, callback) {
+      return driver.transaction(mode, (tx) =>
+        callback({
+          scope: tx.scope,
+          run(...args) {
+            recoveryStatements += 1;
+            return tx.run(...args);
+          },
+          all(...args) {
+            recoveryStatements += 1;
+            return tx.all(...args);
+          },
+        }),
+      );
+    },
+  };
+  runUnitOfWork(counted, "read", { maxRows: 8, maxBytes: 4096 }, (tx) =>
+    new StagingRepository(tx, storage).validateSealed(prepared.certificate, 10),
+  );
+  assert.equal(recoveryStatements, 1);
+  driver.transaction("write", (tx) => {
+    assert.equal(
+      new StagingRepository(tx, storage).release(
+        leaseId,
+        prepared.certificate.ownerNonce,
+        true,
+      ),
+      true,
+    );
+  });
+  let batches = 0;
+  while (
+    driver.transaction("read", (tx) =>
+      tx.all("SELECT id FROM efs_leases WHERE id=?", [leaseId], {
+        maxRows: 1,
+        maxBytes: 128,
+      }),
+    ).length
+  ) {
+    driver.transaction("write", (tx) =>
+      new StagingRepository(tx, storage).cleanupBatch(8),
+    );
+    batches += 1;
+    assert.ok(batches < 32);
+  }
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
 test(
   "a genuine 100001-entry manifest closure reconciles durably and final-validates with constant-row work",
   { timeout: 120_000 },
