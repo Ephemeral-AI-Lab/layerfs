@@ -1,0 +1,2 @@
+export const CLOUDFLARE_SQLITE_ADAPTER_VERSION = 1;
+

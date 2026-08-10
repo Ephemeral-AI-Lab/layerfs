@@ -1,0 +1,2 @@
+export const NODE_SQLITE_ADAPTER_VERSION = 1;
+

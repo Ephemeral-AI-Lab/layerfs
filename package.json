@@ -1,0 +1,29 @@
+{
+  "name": "ephemeral-ai-fs-workspace",
+  "version": "0.1.0-rc.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "clean": "pnpm -r clean",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm build && node --test --test-concurrency=1 tests/**/*.test.mjs",
+    "test:smoke": "pnpm build && node --test --test-concurrency=1 tests/smoke/*.test.mjs",
+    "test:fault": "pnpm build && node --test --test-concurrency=1 tests/fault/*.test.mjs",
+    "test:performance": "pnpm build && node --test --test-concurrency=1 tests/performance/*.test.mjs",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "check:exports": "node scripts/check-exports.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
+    "fixtures": "node scripts/generate-fixtures.mjs",
+    "validate": "pnpm fixtures && pnpm check:docs && pnpm check:architecture && pnpm check:exports && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}
+

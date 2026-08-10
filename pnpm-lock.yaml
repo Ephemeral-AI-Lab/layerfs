@@ -1,0 +1,74 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
+  packages/fs: {}
+
+  packages/node-vfs:
+    dependencies:
+      '@ephemeralai/fs':
+        specifier: workspace:^
+        version: link:../fs
+      '@ephemeralai/fs-sqlite-node':
+        specifier: workspace:^
+        version: link:../sqlite-node
+
+  packages/replication:
+    dependencies:
+      '@ephemeralai/fs':
+        specifier: workspace:^
+        version: link:../fs
+
+  packages/sqlite-cloudflare:
+    dependencies:
+      '@ephemeralai/fs':
+        specifier: workspace:^
+        version: link:../fs
+
+  packages/sqlite-node:
+    dependencies:
+      '@ephemeralai/fs':
+        specifier: workspace:^
+        version: link:../fs
+
+  packages/testkit:
+    dependencies:
+      '@ephemeralai/fs':
+        specifier: workspace:^
+        version: link:../fs
+
+packages:
+
+  '@types/node@24.13.3':
+    resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  undici-types@7.18.2:
+    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
+
+snapshots:
+
+  '@types/node@24.13.3':
+    dependencies:
+      undici-types: 7.18.2
+
+  typescript@5.9.3: {}
+
+  undici-types@7.18.2: {}

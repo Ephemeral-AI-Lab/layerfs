@@ -1,0 +1,6 @@
+{
+  "algorithm": "xorshift32",
+  "seed": 1592639710,
+  "bytes": 1048576,
+  "sha256": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086"
+}
