@@ -28,7 +28,8 @@ database.
 ## Current evidence
 
 The starting prototype lives in the Agent Infra Book storage benchmarks. It
-implements content-addressed storage, FastCDC chunking, compact manifests,
+implements content-addressed storage, FastCDC chunking, segmented Merkle
+manifests,
 4 KiB copy-on-write pages, private branches, conflict-aware publication,
 recovery, and garbage collection in Durable Object SQLite.
 
@@ -160,9 +161,10 @@ EphemeralAI FS API
     |  default production engine in Computer
     +-- namespace and metadata
     +-- branch views and publication
-    +-- content-addressed objects
-    +-- FastCDC manifests
-    +-- copy-on-write pages
+    +-- CAS: SHA-256 content-addressed objects
+    +-- CDC: deterministic FastCDC boundaries
+    +-- COW: persisted 4/8/16 KiB page overlays
+    +-- authenticated segmented manifests
     +-- recovery and garbage collection
     |
 Transactional database contract
@@ -200,6 +202,34 @@ examples/
     multi-agent-branches/
 docs/
 ```
+
+Within `packages/fs`, CAS, CDC, and COW are explicit top-level source areas.
+The repository does not use generic `api`, `internal`, or `SPI` directories:
+
+```text
+packages/fs/src/
+    filesystem/         public filesystem facade and contracts
+    cas/                SHA-256 identity and object verification
+    cdc/                pure FastCDC scanning and boundary state
+    cow/                page math, dirty ranges, and overlay composition
+    patches/            insertion, deletion, and truncation plans
+    manifests/          authenticated Merkle nodes, roots, and cursors
+    namespace/          inode and directory-entry semantics
+    branches/           branch state, conflicts, and publication models
+    revisions/          immutable history and reconstruction
+    operations/         reads, writes, rechunking, materialization, publication
+    sqlite/             driver contract, transactions, schema, and repositories
+    resources/          shared memory and durable-usage admission
+    streams/            bounded read and write stream state
+    cache/              disposable byte-weighted caches
+    maintenance/        verification, accounting, migration, and collection
+    integrations/       narrow replication and Node VFS bridges
+```
+
+Only the root filesystem contract, the SQLite driver contract, and the two
+narrow integration bridges are exported. CAS, CDC, COW, manifest, schema,
+repository, and transaction implementations remain package-private through an
+explicit package export map.
 
 ## Functional requirements
 
@@ -358,6 +388,12 @@ Version 0.1 must:
 - coalesce contiguous Node virtual filesystem writes within per-session and
   global bounds rather than commit once per FUSE callback; and
 - report benchmark distributions rather than a single best run.
+- locate a cold random range through authenticated manifest nodes without
+  reading or hashing metadata proportional to the complete file;
+- make every SQLite statement execute through a callback-scoped transaction;
+  and
+- keep open stream snapshots stable across later branch edits, publication,
+  discard, garbage collection, and restart.
 
 The release workload must include a one-byte edit in a 100 MiB file, a cold
 and warm sequential read of a 100 MiB incompressible file, and FUSE
@@ -367,6 +403,14 @@ process peak resident memory, SQLite cache policy, SQLite query and
 transaction counts, logical bytes, object bytes, main
 database bytes, write-ahead-log bytes when available, and retained overlay
 bytes.
+
+Every target first runs a high-volume smoke profile with a 60-second hard
+limit. The default correctness and benchmark selection should finish within
+10 minutes per target. Tests use finite operation counts and bounded timeouts;
+they do not sleep to create a soak. A separately selected 10-minute load
+profile may provide additional rollout evidence but is not an integration
+blocker. Ten-gibibyte logical manifests and millions-of-rows scans are extended,
+non-gating diagnostics.
 
 The small-edit path must not read, hash, or materialize the complete file. The
 large-read path must honor backpressure and must not perform durable mutation
@@ -438,21 +482,30 @@ workload. This repository does not package or depend on DOFS.
 ## Version 0.1 acceptance criteria
 
 - Node.js and Durable Object adapters pass one shared conformance suite.
+- Every normative correctness case in
+  [`docs/testing/correctness-tests.md`](./docs/testing/correctness-tests.md)
+  passes on both adapters.
 - Main and branch operations survive database reopen and process restart tests.
 - Same-path concurrent writers produce an explicit conflict with no lost update.
 - Independent-path writers publish successfully in either order.
 - Idempotent publication returns the original durable result after restart.
 - Garbage collection preserves active branches and all retained revisions.
 - Benchmark results state the measured boundary and include reproducible inputs.
+- The 60-second high-volume smoke profile passes on Node SQLite, production-like
+  Durable Object SQLite, and real FUSE without a duration-based soak.
 - Resource tests prove that concurrent readers, writers, and slow streams stay
   within configured aggregate memory budgets.
-- A millions-of-rows storage test proves that managed-memory high-water does
-  not grow with SQLite row count, and Node runs use finite reported SQLite
-  cache and memory-map settings.
+- A 100,000-row storage test proves that managed-memory high-water does not grow
+  with SQLite row count, and Node runs use finite reported SQLite cache and
+  memory-map settings. A millions-of-rows profile is extended, non-gating
+  evidence.
 - Copy-on-write conformance passes with persisted 4, 8, and 16 KiB page sizes;
   a new filesystem defaults to 8 KiB.
 - The small-edit, large-read, and FUSE-materialization release workloads meet
   their recorded regression gates without replacing or bypassing SQLite.
+- Every mandatory workload and reporting requirement in
+  [`docs/benchmarks/release-benchmarks.md`](./docs/benchmarks/release-benchmarks.md)
+  has a reproducible accepted result.
 - EphemeralAI Computer defaults to EphemeralAI FS for its authoritative and
   local mirror filesystem paths without importing Computer-specific code into
   `@ephemeralai/fs`.

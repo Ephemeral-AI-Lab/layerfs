@@ -125,10 +125,12 @@ NOT combine a base lookup from one generation with overlay rows from another.
 An implementation MAY achieve this with a transaction, snapshot, lock, or an
 optimistic generation check.
 
-`readStream` MUST select one immutable snapshot when its promise resolves. If
-the selected bytes still depend on mutable page, patch, or namespace overlay
-rows, the implementation MUST materialize them into immutable content or hold
-a snapshot pin or durable read lease over the exact selected representation.
+`readStream` MUST select one immutable snapshot when its promise resolves. Page
+heads are mutable and cannot be leased as snapshot identity. In the opening
+transaction, the implementation resolves the path and inode, then resolves
+content to immutable manifest, page, and patch versions. It holds a durable
+read lease over those exact version identifiers or materializes an immutable
+manifest root.
 Successful publication, discard, and garbage collection MUST NOT abort the
 stream or change its bytes. The stream MUST remain readable until it is fully
 consumed, canceled, or errors, and then release every pin or lease.

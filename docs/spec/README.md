@@ -20,6 +20,13 @@ contracts:
 [`design-rationale.md`](./design-rationale.md) records the non-normative
 evidence, tradeoffs, and rejected alternatives behind those contracts.
 
+The executable release plans are:
+
+- [`../testing/correctness-tests.md`](../testing/correctness-tests.md) for the
+  required correctness, fault, integrity, and integration matrix; and
+- [`../benchmarks/release-benchmarks.md`](../benchmarks/release-benchmarks.md)
+  for fixtures, measurements, thresholds, DOFS comparisons, and go-live gates.
+
 Start with the repository-level [`SPEC.md`](../../SPEC.md) for scope and
 normative language.
 

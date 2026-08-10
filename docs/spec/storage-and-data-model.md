@@ -71,8 +71,9 @@ compatibility promise.
   bytes. In version 0.1, an object is one content-defined file chunk.
 
 **Manifest**
-: A canonical binary value that identifies a complete regular-file value and
-  contains the ordered object hashes and lengths needed to reconstruct it.
+: A canonical authenticated root envelope and segmented Merkle tree that
+  identify a complete regular-file value and commit its ordered CAS object
+  hashes, lengths, and logical spans.
 
 **Inode**
 : A stable identity for a filesystem object and its metadata. More than one
@@ -124,7 +125,9 @@ interface QueryBudget {
   readonly maxBytes: number;
 }
 
-interface FilesystemSqlExecutor {
+interface FilesystemSQLiteTransaction {
+  /** Opaque callback scope; users cannot construct a transaction value. */
+  readonly scope: unique symbol;
   run(sql: string, bindings?: SqliteBindings): SqliteRunResult;
   all<Row extends SqliteRow = SqliteRow>(
     sql: string,
@@ -135,7 +138,7 @@ interface FilesystemSqlExecutor {
 
 type TransactionMode = "read" | "write" | "exclusive";
 
-interface FilesystemDatabaseAdapter extends FilesystemSqlExecutor {
+interface FilesystemSQLiteDriver {
   readonly kind: "sqlite";
   readonly readOnly: boolean;
   readonly capabilities: {
@@ -146,18 +149,29 @@ interface FilesystemDatabaseAdapter extends FilesystemSqlExecutor {
     readonly memoryPolicy: "configured" | "runtime-managed";
     readonly cacheTargetBytes?: number;
     readonly mmapLimitBytes?: number;
+    readonly maxPhysicalDatabaseBytes: number;
+    readonly maxJournalBytes: number;
+    readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
   };
   transaction<T>(
     mode: TransactionMode,
-    callback: (tx: FilesystemSqlExecutor) => T,
+    callback: (tx: FilesystemSQLiteTransaction) => T,
   ): T;
   close(): void | Promise<void>;
 }
 ```
 
-This is the same public adapter interface defined by
+This is the same exported SQLite driver interface defined by
 [`filesystem-api.md`](./filesystem-api.md). An adapter MAY expose additional
 diagnostic properties, but the core MUST NOT require them for correctness.
+
+The driver has no connection-level `run`, `all`, or cursor surface. Every SQL
+statement MUST execute through the transaction value supplied to one
+`transaction` callback. The value is callback-scoped: retaining it and using it
+after the callback returns MUST fail. Only the private SQLite unit-of-work layer
+may open transactions or pass the transaction value to private repositories.
+CAS, CDC, COW, manifest, namespace, branch, revision, and integration modules
+MUST NOT import the driver or issue SQL directly.
 
 ### 4.2 SQL and value behavior
 
@@ -182,7 +196,9 @@ An adapter:
    transaction returns successfully; and
 9. MUST report whether SQLite cache and memory-map policy is explicitly
    configured by the adapter or owned by the runtime, including effective
-   finite targets when the adapter controls them.
+   finite targets when the adapter controls them; and
+10. MUST report finite conservative database and journal ceilings together
+    with whether the driver or hosting runtime enforces them.
 
 All dynamic values MUST be passed as bindings. Identifiers and SQL fragments
 MUST come from static core code, not from paths, branch identifiers, actor
@@ -217,6 +233,12 @@ core MUST perform asynchronous hashing, compression experiments, or other
 awaited work before entering a write transaction. After such work, the write
 transaction MUST re-read and validate every generation, head, or base value on
 which the prepared result depends.
+
+The driver MUST invalidate the transaction object before returning or throwing
+from the callback. A statement attempted outside its active callback MUST fail
+before reaching SQLite. Repositories MUST accept an active transaction as a
+required parameter; they MUST NOT retain a driver or open an independent
+transaction during a larger filesystem operation.
 
 If a transaction callback throws, the adapter MUST roll back every statement
 executed by that callback and rethrow the failure. Nested calls MAY use
@@ -275,6 +297,22 @@ The database MUST contain one `efs_meta` row with at least:
 | `next_allocation_sequence` | Monotonic sequence for objects and manifests |
 | `cow_page_bytes` | Persisted copy-on-write page size |
 | `created_at_ms` | Informational creation time |
+
+The database MUST also contain one authoritative `efs_usage` row. It stores
+exact durable payload bytes and row counts for CAS objects, manifest roots,
+manifest nodes, COW versions, patches, staging, results, maintenance state, and
+permanent identifiers. It additionally stores a conservative metadata-byte
+charge. Every inserting, replacing, or deleting transaction MUST apply the
+exact count and byte delta and validate the applicable durable quota before it
+commits. Deduplication has zero payload delta, and replacing a COW value charges
+only the retained difference.
+
+Normal operations MUST NOT consume `maintenanceReserveBytes`. Maintenance
+journal and root-change records use their reserved class. A root-changing
+transaction that cannot atomically reserve and append its required journal row
+MUST fail without changing the root. Usage counters MUST be reconstructable by
+a bounded verification job, but a concurrent quota decision MUST use the
+authoritative row rather than a scan.
 
 SQLite `user_version` MUST equal `efs_meta.schema_version`. A mismatch is an
 integrity failure, not permission to guess which value is current.
@@ -340,26 +378,37 @@ schema migration without changing filesystem behavior.
 
 ### 6.1 Content relations
 
-`efs_objects` stores:
+`efs_cas_objects` stores:
 
 - `hash`: 32-byte SHA-256 digest, primary key;
 - `size`: byte length, equal to `length(bytes)`;
 - `bytes`: exact immutable payload; and
 - `allocation_sequence`: unique, monotonically increasing integer.
 
-`efs_manifests` stores:
+`efs_manifest_roots` stores:
 
-- `hash`: 32-byte SHA-256 digest of the canonical encoded manifest, primary
-  key;
+- `hash`: SHA-256 digest of the canonical root envelope, primary key;
+- `root_node_hash`: hash of the authenticated top-level manifest node;
 - `file_size`: logical file byte length;
-- `entry_count`: number of encoded chunk entries;
-- `encoded`: canonical manifest bytes; and
+- `entry_count`: total CAS object entry count;
+- persisted FastCDC algorithm and minimum, average, and maximum parameters;
+- `encoded`: canonical root-envelope bytes; and
 - `allocation_sequence`: unique, monotonically increasing integer.
 
-There MUST NOT be one steady-state database row per manifest entry. Readers
-MUST decode entries from the compact BLOB. A migration MAY temporarily retain
-legacy entry rows, but new writes MUST use the compact format and garbage
-collection MUST understand both representations until the migration completes.
+`efs_manifest_nodes` stores immutable authenticated tree nodes:
+
+- `hash`: SHA-256 digest of the canonical node encoding, primary key;
+- `kind`: `leaf` or `internal`;
+- `logical_bytes`: total logical span committed by the node;
+- `entry_count`: total CAS object entry count below the node;
+- `encoded`: canonical node bytes; and
+- `allocation_sequence`: unique, monotonically increasing integer.
+
+One leaf contains up to 256 ordered CAS entries. One internal node contains up
+to 128 ordered child records. There MUST NOT be one steady-state database row
+per manifest entry. A migration MAY temporarily retain a legacy compact
+manifest BLOB, but new writes MUST use the segmented format and garbage
+collection MUST understand both formats until migration completes.
 
 ### 6.2 Revisions and namespace
 
@@ -494,7 +543,10 @@ The mutable relations include:
 - one branch-file row containing an explicit base-existence expectation,
   nullable base manifest and size, plus an optional materialized manifest and
   size;
-- branch page rows keyed by `(branch, inode, pageIndex)`;
+- branch page-head rows keyed by `(branch, inode, pageIndex)` and pointing to
+  one immutable page version;
+- immutable branch page-version rows keyed by a collision-resistant version
+  identifier and recording branch generation, page index, and exact bytes;
 - ordered structural patch rows keyed by `(branch, inode, sequence)`; and
 - zero or more insertion segments keyed by patch and segment index;
 - durable expectation rows for entry slots, nodes, subtrees, and ancestor
@@ -565,11 +617,25 @@ One manifest root transitively protects every object it references;
 read-stream acquisition MUST NOT duplicate that closure as one lease row per
 object.
 
-`efs_lease_objects` stores staged or legacy object membership that is not yet
-protected through an immutable manifest. `efs_lease_overlays` stores exact
-page and patch row identities selected by an active branch stream. Membership
-rows MUST reference one live lease. Section 13 defines acquisition, renewal,
-release, expiry, and garbage-collection behavior.
+`efs_lease_staged_manifests` stores staged root envelopes and authenticated
+nodes not yet protected through a complete sealed root. `efs_lease_objects`
+stores staged or legacy CAS object membership that is not yet protected through
+an immutable manifest.
+`efs_lease_overlays` stores exact
+immutable page-version and immutable patch-version identifiers selected by an
+active branch stream. A mutable page-head identity is not a snapshot root.
+Membership rows MUST reference one live lease and use restrictive foreign keys
+or equivalent serialized checks that prevent deletion of a selected version.
+Section 13 defines acquisition, renewal, release, expiry, and
+garbage-collection behavior.
+
+`efs_staging_certificates` stores one optional sealed closure certificate per
+staging lease. It commits the lease and owner identity, manifest-root hash,
+ordered batch-chain digest, CAS object count and bytes, manifest-node count and
+bytes, membership count, and final verified state. Membership batches extend
+the digest and counters in the same transaction that inserts verified immutable
+values and lease membership. Sealing is allowed only after the complete
+manifest closure has been traversed and reconciled against those counters.
 
 ## 7. Content objects
 
@@ -607,6 +673,12 @@ An implementation MAY cache a successful digest verification for an immutable
 object during one process lifetime. It MUST invalidate that cache when the
 database is reopened, restored, or mutated outside the core. A size check alone
 is never proof that bytes match a content hash.
+
+Sequential insertion and collision checks MUST use bounded multi-object
+batches sized by BLOB bytes, bindings, rows, query bytes, and aggregate memory.
+One staging transaction SHOULD insert multiple verified CAS objects and their
+lease membership when limits permit. Implementations MUST NOT use one query or
+transaction per object merely because the input arrived as a stream.
 
 The core MUST copy or otherwise freeze caller-owned byte arrays before an
 asynchronous hash can race with caller mutation.
@@ -696,82 +768,148 @@ reconnection cannot be proved, the implementation MUST expand the window and
 MAY fall back to a full-file scan. Widely distributed pages and multiple
 structural patches are expected fallback cases.
 
-## 9. Compact manifest version 1
+## 9. Segmented Merkle manifest version 1
 
-### 9.1 Canonical encoding
+### 9.1 Goals and identity
 
-A version 1 manifest is one binary value. Multibyte integers are unsigned
-little-endian. The 32-byte header is:
+Manifest version 1 is an authenticated, content-defined Merkle tree. A cold
+range read validates one small root envelope, a bounded root-to-leaf path, and
+the intersecting CAS objects. It MUST NOT read, allocate, or hash manifest
+metadata proportional to the complete file before returning the first range.
+
+The manifest identifier is the SHA-256 digest of the canonical root envelope.
+Every node identifier is the SHA-256 digest of that node's canonical encoding.
+Identifiers are stored as 32 raw bytes. The root envelope commits the file
+size, CAS entry count, FastCDC algorithm and parameters, and root-node hash.
+
+### 9.2 Root envelope
+
+Multibyte integers are unsigned little-endian. The root envelope is exactly
+68 bytes:
 
 | Offset | Size | Field | Required value |
 | ---: | ---: | --- | --- |
-| 0 | 4 | Magic | ASCII `EAFM` |
-| 4 | 2 | Manifest version | `1` |
+| 0 | 4 | Magic | ASCII `EAFR` |
+| 4 | 2 | Manifest format | `1` |
 | 6 | 1 | Hash algorithm | `1` for SHA-256 |
 | 7 | 1 | Chunker algorithm | `1` for `fastcdc-v1` |
 | 8 | 4 | Minimum chunk size | Manifest parameter |
 | 12 | 4 | Average chunk size | Manifest parameter |
 | 16 | 4 | Maximum chunk size | Manifest parameter |
 | 20 | 8 | Logical file size | Unsigned byte length |
-| 28 | 4 | Entry count | Number of entries |
+| 28 | 8 | CAS entry count | Unsigned count |
+| 36 | 32 | Root node hash | Raw SHA-256 digest |
 
-The header is followed immediately by `entryCount` entries of 36 bytes:
+There is no padding, trailer, text conversion, or host-dependent field.
 
-| Entry offset | Size | Field |
+### 9.3 Node encoding
+
+Every leaf or internal node begins with this 32-byte header:
+
+| Offset | Size | Field | Required value |
+| ---: | ---: | --- | --- |
+| 0 | 4 | Magic | ASCII `EAFN` |
+| 4 | 2 | Node format | `1` |
+| 6 | 1 | Kind | `0` leaf, `1` internal |
+| 7 | 1 | Hash algorithm | `1` for SHA-256 |
+| 8 | 4 | Item count | Records in this node |
+| 12 | 4 | Reserved | Zero |
+| 16 | 8 | Logical byte span | Sum below this node |
+| 24 | 8 | CAS entry count | Sum below this node |
+
+A leaf record is exactly 36 bytes:
+
+| Record offset | Size | Field |
 | ---: | ---: | --- |
-| 0 | 32 | Raw SHA-256 object hash |
+| 0 | 32 | Raw CAS object hash |
 | 32 | 4 | Object byte length |
 
-The encoded length MUST equal `32 + entryCount * 36`. There is no padding,
-trailer, map ordering, text conversion, or platform-dependent value. The
-manifest identifier is `SHA-256(encodedManifestBytes)` and MUST be stored as 32
-raw bytes.
+An internal child record is exactly 48 bytes:
 
-### 9.2 Validation
+| Record offset | Size | Field |
+| ---: | ---: | --- |
+| 0 | 32 | Raw child-node hash |
+| 32 | 8 | Child logical byte span |
+| 40 | 8 | Child CAS entry count |
 
-Before using a manifest, a reader MUST validate:
+Leaf records are ordered by file position. Internal records are ordered by
+their child spans. A leaf contains at most 256 records. An internal node
+contains at most 128 records. The encoded size MUST equal the header plus the
+exact record count and record size for its kind.
 
-- exact magic and supported version and algorithm identifiers;
-- valid chunking parameters;
-- exact encoded length with no trailing bytes;
-- entry count within configured limits;
-- every entry size is positive and does not exceed the manifest maximum chunk
-  size;
-- the sum of entry sizes equals the logical file size without integer
-  overflow;
-- zero entries occur if and only if file size is zero;
-- SHA-256 of the complete encoding equals the requested manifest hash; and
-- every referenced object passes verification before its bytes are returned,
-  hashed into a derived value, or installed into visible state.
+### 9.4 Canonical content-defined grouping
 
-Structural manifest validation MUST NOT load or verify every referenced object
-merely to open or begin reading a manifest. Object verification is lazy and
-bounded by the operation that consumes each object.
+Fixed record-count grouping would rewrite every later leaf after a front
+insertion. Version 1 therefore uses deterministic content-defined grouping so
+an edit can reconnect to unchanged manifest leaves and internal subtrees.
+
+For each node level, the builder scans complete canonical records in order. It
+updates a 64-bit unsigned state for each record byte:
+
+```text
+state = ((state << 1) + FASTCDC_GEAR_V1[byte]) mod 2^64
+```
+
+The state starts at zero after every group boundary. A boundary is considered
+only after a complete record. Leaf groups use minimum, target, and maximum
+counts of 64, 128, and 256. Internal groups use 32, 64, and 128. At or after the
+minimum, a group ends when `state & (target - 1) == 0`; it always ends at the
+maximum or end of input. The fixed `FASTCDC_GEAR_V1` table is the same checked-in
+table used by `fastcdc-v1` and is part of the golden vectors.
+
+The builder groups CAS records into leaves, then groups the resulting canonical
+child records into the next level, repeating until one node remains. An empty
+file has one canonical empty leaf. A level containing one node becomes the
+root directly and MUST NOT gain a unary wrapper. These rules define one tree
+and one manifest identifier for a given byte string and FastCDC parameter set.
+
+### 9.5 Validation and range traversal
+
+Before using a root envelope or node, a reader MUST validate its digest, magic,
+version, algorithms, exact encoded size, checked counts, checked byte spans,
+and canonical record ordering. An internal record's declared span and count
+MUST equal its verified child header before that child is used. The root node's
+verified totals MUST equal the root envelope.
+
+To locate a logical offset, a reader subtracts authenticated child spans while
+descending from the root and scans at most one leaf's 256 entries. It MUST NOT
+trust an unauthenticated offset side table. A disposable, byte-accounted cache
+MAY remember verified nodes or derived offsets, but eviction or corruption of
+that cache can affect performance only.
+
+Sequential traversal MUST use a bounded node cursor and bounded CAS-object
+batches. Object verification is lazy: each intersecting CAS object MUST pass
+length and digest verification before its bytes are returned, hashed into a
+derived value, or installed into visible state.
 
 The core MUST use checked integer arithmetic. It MUST reject a decoded file
 size greater than `Number.MAX_SAFE_INTEGER` in APIs that use JavaScript numeric
-offsets, even though the binary field can represent a larger unsigned value.
+offsets, even though canonical unsigned fields can represent a larger value.
 
-Two identical file byte strings written with the same chunker identifier and
-parameters MUST produce identical manifest encodings and hashes. Timestamps,
-paths, inode identifiers, revisions, branches, and host information MUST NOT
-appear in a manifest.
+Timestamps, paths, inode identifiers, revisions, branches, and host information
+MUST NOT appear in a manifest. Rebuilding identical file bytes with identical
+FastCDC parameters MUST produce byte-identical roots and nodes.
 
-### 9.3 Prototype compatibility
+### 9.6 Local rebuild and prototype compatibility
 
-The prototype encodes only repeated 36-byte entries and hashes a decimal file
-size prefix plus those entries. That format MAY be accepted by a one-time
-importer identified as a legacy format. New writes MUST use the self-describing
-version 1 format above. A legacy value MUST be validated and rewritten before
-it is reported as migrated; it MUST NOT be relabeled without re-encoding and
-rehashing.
+Materialization begins at the preceding canonical content boundary and expands
+until both FastCDC content boundaries and manifest grouping boundaries safely
+reconnect. It MUST reuse every unchanged CAS object and authenticated manifest
+node outside the changed region. If reconnection cannot be proved, it MAY
+expand in bounded steps and ultimately rebuild the manifest, while retaining
+bounded memory and reporting the fallback.
+
+The prototype's repeated 36-byte-entry format and the former compact `EAFM`
+format MAY be accepted only by explicit legacy importers. A legacy value MUST
+be fully validated and rewritten into the segmented format before migration is
+reported complete. It MUST NOT be relabeled without re-encoding and rehashing.
 
 ## 10. Copy-on-write pages and structural patches
 
 ### 10.1 Page overlays
 
 The persisted `cow_page_bytes` value MUST be one of 4,096, 8,192, or 16,384.
-A new filesystem defaults to 8,192 bytes. A page overlay is keyed by branch,
+A new filesystem defaults to 8,192 bytes. A page head is keyed by branch,
 inode, and zero-based page index. Its logical offset is
 `pageIndex * cow_page_bytes`, computed with checked arithmetic.
 
@@ -799,10 +937,26 @@ It MUST NOT scan or hash the complete manifest or file merely to update one
 page. Implementations MAY batch adjacent affected pages in one SQLite
 transaction while preserving the aggregate runtime budget.
 
-Writing a page that already exists MUST update the same row; it MUST NOT append
-another version. One write crossing a page boundary MUST update both page rows
-atomically. Reads apply the complete set of page overlays to the materialized
-base before applying any later structural patches.
+Writing a page MUST create an immutable version and atomically move the page
+head to it with the branch generation increment. If the prior version has no
+lease reference, that same transaction SHOULD delete it so 1,000 repeated
+writes retain one current page. If a stream lease pins the prior version, the
+writer MUST retain it until bounded maintenance observes that no head or lease
+references it. A page-version payload MUST never change after creation.
+
+One write crossing a page boundary MUST create both versions and move both
+heads atomically. A branch stream selects all required page and patch versions
+in the same transaction that captures the branch generation and activates its
+lease. Publication, discard, materialization, later writes, and garbage
+collection MUST NOT invalidate those selected bytes. Reads apply the selected
+page versions to the materialized base before applying selected later
+structural patches.
+
+A multi-page range write SHOULD load one bounded adjacent page interval and
+upsert every changed page version in one transaction when limits permit. It
+MUST NOT issue one base-manifest traversal or transaction per page. Rewriting a
+page with a current overlay starts from that overlay; it does not return to the
+base CAS object for bytes already represented by the current page.
 
 ### 10.2 Structural patches
 
@@ -879,7 +1033,8 @@ One main revision transaction MUST atomically:
 
 1. revalidate the expected main head and every baseline applicable to the
    operation;
-2. verify or insert required immutable manifests and objects;
+2. verify a sealed staging closure certificate, or insert a bounded complete
+   immutable closure that fits the final transaction limits;
 3. insert the revision record and immutable change rows;
 4. update the head inode and directory-entry projections;
 5. record an operation result when the operation has a replay identifier;
@@ -893,12 +1048,18 @@ may execute statements in another safe order, but no committed database state
 may expose a new head without all of its content and namespace records.
 
 Hashing and canonical manifest preparation MAY occur before this transaction.
-If immutable objects are staged in earlier bounded transactions, each staged
-allocation MUST receive a new allocation sequence. Staging for a prepared
-publication or streamed write MUST have a durable, unexpired staging lease that
-garbage collection treats as a root. Unleased staging is an unreachable orphan
-and MAY be collected. The final transaction MUST verify that every referenced
-row still exists and matches its digest.
+If immutable objects or manifest nodes are staged in earlier bounded
+transactions, each staged allocation MUST receive a new allocation sequence.
+Staging for a prepared publication or streamed write MUST have a durable,
+unexpired staging lease that garbage collection treats as a root. Unleased
+staging is an unreachable orphan and MAY be collected.
+
+The final transaction MUST validate the constant-row sealed certificate,
+active lease, owner binding, root hash, counts, and verified state. It MUST NOT
+rescan one row per object or manifest node. Foreign keys and immutable active
+lease membership MUST prevent a certified row from disappearing before
+finalization. Missing or inconsistent certificate state is corruption or an
+expired-staging failure; it is never permission to attach an unchecked root.
 
 Rename MUST update source and destination directory entries in one transaction.
 A hard-link operation MUST add the directory entry and update the shared
@@ -1071,10 +1232,19 @@ before reading another object and surface the corresponding public error.
 #### Staging acquisition
 
 A streamed write or publication MAY create one staging lease before storing
-prepared content. Each object or manifest insertion and its membership row
-MUST commit together. A final write or publication transaction MUST recheck
-the active, unexpired lease, exact owner binding, and complete membership
-before referencing staged content.
+prepared content. Each CAS object, manifest root, or manifest-node insertion,
+its membership row, and the certificate batch-chain update MUST commit
+together. Batches MUST be canonical and bounded by row, binding, BLOB, query,
+and aggregate-memory limits.
+
+After traversing the complete manifest closure, one bounded transaction MUST
+reconcile the certificate counts and chained digest, bind the exact manifest
+root, add that now-complete root to `efs_lease_manifests`, and mark the
+certificate sealed. The active lease makes its membership immutable after
+sealing. A final write or publication transaction MUST recheck
+the active unexpired lease, exact owner binding, and sealed certificate before
+referencing staged content; it MUST do constant-row work independent of the
+file's CAS entry count.
 
 Successful finalization MUST make the content reachable from main or a branch
 and change the staging lease to a non-rooting released state in the same
@@ -1175,10 +1345,19 @@ A collection cycle MUST begin in one short transaction that:
 Every later root addition or replacement MUST append a bounded durable
 root-change record in the same transaction that changes the root. Root removal
 MAY be ignored for the current cycle and over-retain data until a later run.
+The transaction MUST reserve that journal row from the maintenance class before
+changing the root; quota exhaustion rejects the entire root mutation.
 
-The collector MUST enumerate root snapshots and decode manifests in bounded
-batches. It MUST durably mark manifest hashes and object hashes keyed by run
-identifier. It MUST trace both manifest and object membership of every
+Journal records MAY be compacted only after every active accounting,
+verification, migration, and collection cursor has durably advanced beyond
+their generation. `maintenanceReserveBytes` MUST include a non-consumable
+emergency portion sufficient to expire leases, reconcile one root-change
+batch, and compact one journal batch even when normal maintenance state is at
+its limit.
+
+The collector MUST enumerate root snapshots and traverse manifest trees in
+bounded batches. It MUST durably mark manifest-root, manifest-node, and CAS
+object hashes keyed by run identifier. It MUST trace every membership of every
 unexpired preparing or active lease. Leases MUST be checked again before
 sweep. A missing or invalid reachable manifest or object MUST fail the cycle
 as an integrity error; it MUST NOT be treated as already collected.
@@ -1196,8 +1375,8 @@ Each sweep batch MUST run in its own write transaction and MUST:
 1. verify that the run is still active and no root addition or replacement
    exists after its reconciled generation;
 2. select at most the configured batch limit;
-3. delete only unmarked manifests or objects whose allocation sequence is no
-   greater than the run's captured high-water value;
+3. delete only unmarked manifest roots, manifest nodes, or CAS objects whose
+   allocation sequence is no greater than the run's captured high-water value;
 4. record progress and exact deleted payload bytes; and
 5. commit before starting another batch.
 
@@ -1214,10 +1393,10 @@ eventually reach and complete sweep. Root churn MUST NOT force permanent
 restart from the first root. Change-journal and mark rows count against
 `maxMaintenanceBytes`.
 
-Objects MUST NOT be swept until all eligible manifest rows for that batch's
-consistent mark set have been considered. Revision and terminal-branch pruning
-MUST also be bounded and MUST increment root mutation generation when it
-changes roots.
+CAS objects MUST NOT be swept until all eligible manifest-root and node rows
+for that batch's consistent mark set have been considered. Revision and
+terminal-branch pruning MUST also be bounded and MUST increment root mutation
+generation when it changes roots.
 
 The default delete batch MUST be finite and configurable. Tests SHOULD use a
 small batch to force interruption boundaries. Implementations MUST bind values
@@ -1256,13 +1435,14 @@ define at least:
 : Sum of `size` for all object rows.
 
 `storedManifestPayloadBytes`
-: Sum of encoded manifest BLOB lengths.
+: Sum of encoded manifest-root and manifest-node BLOB lengths.
 
 `reachableObjectPayloadBytes`
 : Unique object bytes reachable from all selected roots.
 
 `reachableManifestPayloadBytes`
-: Unique encoded manifest bytes reachable from all selected roots.
+: Unique encoded manifest-root and node bytes reachable from all selected
+  roots.
 
 `reclaimablePayloadBytes`
 : Stored object, manifest, and overlay payload not reachable or retained by
@@ -1284,8 +1464,18 @@ define at least:
 `objectCount`
 : Number of object rows.
 
+`manifestRootCount`
+: Number of manifest-root rows.
+
+`manifestNodeCount`
+: Number of authenticated manifest-node rows.
+
 `manifestCount`
-: Number of manifest rows.
+: Sum of manifest-root and manifest-node rows.
+
+`chargedMetadataBytes`
+: Conservative metadata and index charge stored in `efs_usage`. It is not an
+  estimate of the physical SQLite file.
 
 `revisionCount`
 : Number of retained revision rows.
@@ -1308,15 +1498,19 @@ result. Under finite or slower mutation, repeated maintenance steps MUST
 eventually complete.
 
 The snapshot MUST state whether namespace metadata and operation-result BLOBs
-are included. The default counters above exclude relational row overhead,
-indexes, rollback journals, and WAL files.
+are included. Payload counters exclude relational row overhead, indexes,
+rollback journals, and WAL files. `chargedMetadataBytes` and physical counters
+MUST report those separate boundaries so metadata-only growth cannot be hidden
+behind a payload limit.
 
 ### 15.2 Physical and operation metrics
 
-An adapter SHOULD expose database main-file bytes, WAL bytes, and free-list
-bytes when those values are meaningful. The core MUST label these as physical
-storage metrics and MUST NOT compare them directly with logical or payload
-bytes without stating the boundary.
+An adapter MUST expose, or conservatively account for, database main-file and
+journal bytes against its reported finite ceilings. It SHOULD expose WAL and
+free-list bytes separately when meaningful. The core MUST label these as
+physical storage metrics and MUST NOT compare them directly with logical or
+payload bytes without stating the boundary. A write predicted to exceed a
+driver- or runtime-enforced ceiling MUST fail atomically with `ENOSPC`.
 
 The core SHOULD emit structured operation observations for bytes read, bytes
 hashed, BLOB bytes submitted, BLOB bytes retained, query count, transaction
@@ -1364,10 +1558,14 @@ to filesystem and branch configuration defined by the companion specs:
 ```ts
 interface StorageLimits {
   readonly maxManifestEntries: number;
-  readonly maxManifestBytes: number;
+  readonly maxManifestNodeBytes: number;
+  readonly maxManifestDepth: number;
   readonly maxFileBytes: number;
   readonly maxWriteBytes: number;
   readonly maxManagedPayloadBytes: number;
+  readonly maxChargedMetadataBytes: number;
+  readonly maxPhysicalDatabaseBytes: number;
+  readonly maxJournalBytes: number;
   readonly maxStagingPayloadBytes: number;
   readonly maxBranchOverlayBytes: number;
   readonly maxMaintenanceBytes: number;
@@ -1396,11 +1594,12 @@ not the total of a bounded streamed file. `maxRetainedRevisions` bounds the
 discretionary history window; mandatory main, branch-base, result, checkpoint,
 and ancestor roots override it and MUST NOT be deleted to enforce the number.
 
-`maxManifestBytes` bounds one canonical encoded manifest and its required
-decode allocation. It MUST NOT exceed the adapter BLOB capability or the
-aggregate runtime budget. Version 0.1 deliberately uses one compact bounded
-manifest BLOB to minimize SQLite rows and range-scan queries. A later segmented
-format requires a new manifest identifier and conformance fixtures.
+`maxManifestNodeBytes` bounds one canonical root envelope or authenticated
+manifest node and its decode allocation. It MUST NOT exceed the driver BLOB
+capability or aggregate runtime budget. Version 1 node fanout makes the largest
+canonical leaf 9,248 bytes and the largest internal node 6,176 bytes;
+configuration MUST admit both plus driver framing. `maxManifestDepth` bounds
+range traversal and malformed-tree work.
 
 Aggregate caches, pending writes, prefetch, prepared results, streams, and
 write sessions are governed by the runtime limits in the filesystem and
@@ -1413,6 +1612,11 @@ and staging payload measured by the accounting contract. Staging and branch
 overlays also have their own sub-limits. Admission MUST reserve
 `maintenanceReserveBytes` so collection, lease expiry, checkpoints, and
 recovery can still make progress after normal writes reach their limit.
+
+`maxChargedMetadataBytes` bounds the conservative metadata charge maintained in
+`efs_usage`. `maxPhysicalDatabaseBytes` and `maxJournalBytes` MUST be no larger
+than the driver's reported ceilings. These limits are independent of logical
+and payload counters; a workload must satisfy all of them.
 
 `maxMaintenanceBytes` bounds durable temporary mark, migration, checkpoint,
 and verification state. `maxPermanentIdentifiers` bounds lifetime branch and
@@ -1431,27 +1635,28 @@ that a read may need to apply. Before accepting a patch that would exceed
 either bound, the core MUST materialize the existing overlay through bounded
 staging and then record the new edit, or reject without changing the branch.
 
-For compact manifest version 1, let:
+For segmented manifest version 1, let:
 
 ```text
-manifestBlobCapacity = min(adapter.capabilities.maxBlobBytes,
-                           configuredMaxManifestBytes)
-blobEntryCapacity = floor((manifestBlobCapacity - 32) / 36)
-maxManifestEntries = min(configuredEntryCap, 2^32 - 1, blobEntryCapacity)
+leafCapacity = 256
+internalCapacity = 128
+treeEntryCapacity = leafCapacity * internalCapacity^(maxManifestDepth - 1)
+maxManifestEntries = min(configuredEntryCap, 2^32 - 1,
+                         treeEntryCapacity)
 formatFileCapacity = maxManifestEntries * (fastCdcMinimum + 1)
 maxFileBytes = min(configuredFileCap, Number.MAX_SAFE_INTEGER,
                    formatFileCapacity)
 ```
 
-The products MUST use checked arithmetic. The defaults for
-`configuredEntryCap` and `configuredFileCap` are their respective calculated
-capacities, not `Number.MAX_SAFE_INTEGER`. The `minimum + 1` bound follows the
-exact version 1 scan index and guarantees that every possible canonical
-manifest for an accepted file fits in one adapter BLOB.
+The products and exponentiation MUST use checked arithmetic. The configured
+file cap MUST be finite and defaults to 16 GiB. The `minimum + 1` bound follows
+the exact FastCDC scan index and guarantees that every canonical file within
+the configured limit fits the tree depth. A caller MAY choose a smaller cap.
 
 Opening MUST reject a default chunk maximum greater than
-`adapter.capabilities.maxBlobBytes`, fewer than eight available bindings, or a
-manifest capacity below one entry. Query builders MUST additionally divide
+`adapter.capabilities.maxBlobBytes`, fewer than eight available bindings, a
+manifest-node limit below 9,248 bytes, or a tree capacity below one entry.
+Query builders MUST additionally divide
 the binding capability by bindings per row. No statement or BLOB MAY exceed
 the reported adapter capability.
 
@@ -1486,9 +1691,13 @@ is explicitly created with another valid configuration:
 - 65,536-byte page-overlay eligibility limit;
 - 524,288-byte maximum patch insertion segment;
 - 32,768/131,072/524,288-byte FastCDC parameters;
-- 16 MiB `maxManifestBytes`;
+- 16 KiB `maxManifestNodeBytes` and depth `8`;
+- 16 GiB `maxFileBytes`;
 - 64 MiB `maxWriteBytes`;
 - 8 GiB `maxManagedPayloadBytes`;
+- 1 GiB `maxChargedMetadataBytes`;
+- 10 GiB `maxPhysicalDatabaseBytes` and 1 GiB `maxJournalBytes`, further
+  limited by driver capabilities;
 - 512 MiB `maxStagingPayloadBytes`;
 - 1 GiB `maxBranchOverlayBytes`;
 - 64 MiB each for `maxMaintenanceBytes` and `maintenanceReserveBytes`;
@@ -1576,6 +1785,10 @@ required adapter.
    binding limit.
 7. Verify that a read sees one consistent snapshot while another connection
    commits.
+8. Prove that the driver exposes no connection-level statement method and that
+   a retained transaction value fails after its callback returns.
+9. Instrument every repository call and reject any statement outside the one
+   unit-of-work transaction admitted for its application operation.
 
 ### 18.2 Schema and migration
 
@@ -1603,11 +1816,17 @@ required adapter.
 6. Cover every input byte exactly with no chunk above the configured maximum.
 7. Preserve most unchanged boundaries after a small front insertion as a
    regression measurement; correctness MUST NOT depend on a reuse percentage.
-8. Match checked-in binary manifest golden vectors and their SHA-256 hashes.
+8. Match checked-in root-envelope, leaf, internal-node, and content-defined
+   grouping golden vectors and their SHA-256 hashes.
 9. Reject bad magic, unknown algorithms, trailing bytes, zero-sized entries,
-   overflow, wrong total size, and wrong manifest digest.
-10. Prove that local rechunking after insertion, deletion, truncation, and
-    sparse page edits yields the exact full-scan canonical manifest.
+   overflow, wrong spans, wrong counts, bad child hashes, and wrong root digest.
+10. Corrupt, delete, duplicate, and reorder every root, child, and leaf field;
+    no affected range may return bytes before detecting the failure.
+11. Locate start, middle, end, and EOF ranges through no more than the declared
+    tree depth plus one leaf, including after cache eviction and restart.
+12. Prove that local rechunking after insertion, deletion, truncation, and
+    sparse page edits yields the exact full-scan canonical manifest and reuses
+    unchanged CAS objects and authenticated subtrees after reconnection.
 
 ### 18.4 Pages, patches, namespace, and revisions
 
@@ -1636,11 +1855,17 @@ required adapter.
     ancestor replacement, and recursive subtree changes.
 14. Publish independent sibling entries while merging implied parent
     timestamps monotonically and preserving explicit metadata conflicts.
-15. Edit one byte in 100 MiB and 10 GiB logical files at every supported page
+15. Edit one byte in 100 MiB and 1 GiB logical files at every supported page
     size; bound object reads and hashing to intersecting objects and retain one
     latest page row after 1,000 repeated edits.
 16. Reopen each page-size fixture with a conflicting requested value and fail
     with `ESCHEMA` without writes.
+17. Pin a page version in a branch stream, overwrite that page, materialize,
+    publish or discard, collect, and prove the stream returns its original
+    bytes until close while a new stream returns the new bytes.
+18. Finalize a staged manifest with more than 100,000 CAS entries by validating
+    one sealed closure certificate in constant-row final work. Corrupt every
+    certificate field and crash after every staging batch.
 
 ### 18.5 Recovery, collection, and metrics
 
@@ -1682,10 +1907,25 @@ required adapter.
 17. Add and remove roots continuously below reconciliation capacity while
     collecting; prove eventual sweep progress without deleting new roots or
     restarting the mark cursor from the beginning.
-18. Build a fixture with millions of object, namespace, and mark rows, then
+18. Build a fixture with 100,000 object, namespace, and mark rows, then
     enumerate, verify, replicate, and collect it under tiny query and memory
     limits; assert keyset progress and no resident collection proportional to
     total row count.
+19. Race two connections at every payload and metadata quota boundary. Assert
+    exact `efs_usage` counters after commit, rollback, deduplication, page
+    replacement, staging expiry, and collection.
+20. Fill the root-change journal to its normal maintenance limit and prove a
+    root mutation either appends its record atomically or changes nothing while
+    emergency reconciliation and compaction retain progress.
+21. Grow metadata, database pages, and WAL without payload growth; enforce the
+    declared ceilings, recover after checkpoint pressure, and return `ENOSPC`
+    without a partial mutation.
+22. Run bounded `snapshotStorage` over 100,000 rows with concurrent writers;
+    bound memory, read-transaction duration, and WAL retention, then reconcile
+    exact counters to direct database sums.
+23. In an extended non-gating profile, repeat manifest lookup with a 10 GiB
+    logical shared-content fixture and cursor maintenance with millions of rows.
+    This profile MUST remain finite and MUST NOT become an elapsed-time soak.
 
 ## 19. Open implementation choices
 

@@ -120,10 +120,11 @@ Reading an immutable base manifest already identifies the selected bytes.
 Creating another file value, branch manifest, or object set during a read adds
 write amplification and first-byte latency without improving correctness.
 
-Range reads therefore fetch only intersecting manifest entries and objects.
-Snapshot streams root their selected manifest and exact branch overlay rows,
-then verify objects lazily before emitting them. They do not enumerate one
-lease row per object and do not materialize a branch merely to open a stream.
+Range reads therefore traverse only the authenticated root-to-leaf manifest
+path and fetch intersecting objects. Snapshot streams root their selected
+manifest and exact immutable branch-overlay versions, then verify nodes and
+objects lazily before emitting them. They do not enumerate one lease row per
+object and do not materialize a branch merely to open a stream.
 
 This rule is structural rather than a timing promise: increasing a file from
 100 MiB to one GiB may increase total scan time, but it must not increase the
@@ -153,23 +154,30 @@ workspaces share the host ceiling. Node SQLite defaults to a 16 MiB cache
 target and zero-byte memory mapping so native storage memory cannot silently
 grow with database size.
 
-## 7. Why manifests remain compact and bounded
+## 7. Why manifests are segmented and authenticated
 
-Version 0.1 uses one canonical compact manifest BLOB rather than one SQLite row
-per content object. One lookup and sequential decode are favorable for the
-large-read path, while branch page overlays avoid creating a new manifest for
-every private small edit.
+A single compact manifest BLOB is memory-bounded but not work-bounded. After a
+restart, a one-byte range near the end of a large file would require reading,
+hashing, and prefix-scanning the complete BLOB before its offset could be
+trusted. A sparse side index cannot solve that integrity problem unless the
+manifest hash authenticates the indexed pieces.
 
-The BLOB is capped by `maxManifestBytes`, defaults to 16 MiB, and participates
-in aggregate memory accounting. This bounds its worst-case decode allocation.
-The local rechunker reuses unchanged content objects even though the final
-canonical manifest metadata is encoded again.
+Version 0.1 therefore uses a segmented Merkle manifest. A small root envelope
+commits FastCDC parameters, file size, entry count, and the root-node hash.
+Authenticated internal nodes commit child hashes and logical spans; leaves
+commit bounded ordered CAS entries. A cold range validates one path and one
+leaf, while a sequential cursor retains only bounded node and object windows.
 
-A segmented manifest tree could share metadata leaves for extremely large
-files, but would add queries, node verification, garbage-collection roots, and
-a more complex persisted format. It is deferred until measured manifest-byte
-amplification justifies that cost. Such a change requires a new manifest format
-identifier and migration fixtures.
+Manifest records use deterministic content-defined grouping rather than fixed
+record-count blocks. This allows a local edit to reconnect to unchanged leaves
+and subtrees instead of shifting every later group. Each node remains far below
+the configured 16 KiB node limit. The additional node queries buy bounded cold
+random access, independently verifiable pieces, local metadata reuse, and
+time-to-first-byte that does not depend on complete-file entry count.
+
+Derived offset indexes and verified-node caches remain optional, disposable,
+and byte-accounted. They are never authoritative and never replace SHA-256
+verification of the root, traversed nodes, and returned CAS objects.
 
 ## 8. Package boundary justification
 

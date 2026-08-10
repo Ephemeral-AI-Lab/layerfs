@@ -200,9 +200,10 @@ The reference single-workspace Node and Computer profile is 256 MiB:
 
 This profile is justified by useful concurrency without per-handle
 multiplication: a 64 MiB result can coexist with bounded query and control
-work, four full 16 MiB write sessions fit before forced flushing, and a
-maximum compact manifest can cross one bounded replication envelope. The
-sub-limits are admission ceilings and MUST NOT be preallocated.
+work, four full 16 MiB write sessions fit before forced staging, and a 4 MiB
+replication batch plus response and codec headroom fits its 10 MiB session
+reservation. Manifest traversal retains only bounded nodes. The sub-limits are
+admission ceilings and MUST NOT be preallocated.
 
 Several workspaces in one process share one explicitly configured process
 budget. They MUST NOT each assume an independent 256 MiB allowance. Smaller
@@ -314,8 +315,9 @@ entries.
 
 Increasing total stored rows or logical file size MUST increase total work but
 MUST NOT increase managed-memory high-water beyond the configured aggregate
-and one admitted bounded value. Tests MUST exercise millions of SQLite rows
-with deliberately small query and memory limits.
+and one admitted bounded value. Mandatory tests exercise 100,000 SQLite rows
+with deliberately small query and memory limits. A non-gating extended job
+SHOULD exercise millions when CI capacity permits.
 
 ## 5. Lazy, non-materializing reads
 
@@ -437,6 +439,12 @@ mount options, engine selection, and process peak resident memory.
 
 ## 8. Benchmark method
 
+The concrete fixtures, workload identifiers, result artifact, environment
+matrix, and go-live checklist are normative in
+[`../benchmarks/release-benchmarks.md`](../benchmarks/release-benchmarks.md).
+The correctness prerequisite is normative in
+[`../testing/correctness-tests.md`](../testing/correctness-tests.md).
+
 Release measurements MUST use checked-in deterministic fixture generators.
 Every storage-sensitive workload MUST have both:
 
@@ -458,10 +466,11 @@ Reports MUST identify:
 - every metric required by the applicable release gate; and
 - physical storage measured before and after checkpoint or vacuum operations.
 
-At least 20 measured trials are required for latency distributions. Setup,
+Five measured whole-workload trials are required for large I/O cases. Small
+operations MUST contribute at least 100 iterations per measured trial. Setup,
 fixture creation, and teardown are outside the timed region. Correctness MUST
 be verified after every trial by byte comparison or a separately computed
-fixture digest.
+fixture digest. No benchmark waits merely to accumulate soak duration.
 
 ## 9. Release gates
 
@@ -474,6 +483,19 @@ A candidate MUST NOT regress p50 or p95 latency by more than 10 percent for a
 gate workload unless the change is approved with a recorded correctness or
 resource-safety justification and a new accepted baseline.
 
+### 9.0 Fast smoke gate
+
+Every supported target MUST first complete the operation-count smoke profile
+in the benchmark plan within 60 seconds. It performs one 16 MiB persistence
+round trip, 5,000 small COW edits, 2,000 namespace operations, 16 readers and
+16 writers, three restarts, bounded collection, and final integrity and usage
+verification. It MUST NOT sleep to consume the time allowance.
+
+The complete default correctness and benchmark selection SHOULD finish within
+10 minutes per target. A separately selected `load-10m` profile MAY continuously
+repeat real work until a hard 10-minute deadline. It is rollout evidence, not a
+version 0.1 integration blocker.
+
 ### 9.1 Small-edit gate
 
 For each 4 KiB, 8 KiB, and 16 KiB page configuration, the suite MUST create a
@@ -482,7 +504,7 @@ For each 4 KiB, 8 KiB, and 16 KiB page configuration, the suite MUST create a
 Before publication or explicit materialization:
 
 - exactly one page overlay MUST contain the changed byte;
-- no complete file value or new complete manifest may be retained;
+- no complete file value, manifest root, or manifest node may be retained;
 - adapter content bytes read and bytes hashed MUST be bounded by the
   intersecting FastCDC object set and one COW page, not by file size;
 - managed memory MUST remain within every configured limit; and
@@ -512,11 +534,17 @@ metadata and adapter-owned temporary journal records; those bytes MUST be
 reported separately and released or expired by bounded maintenance.
 
 The stream MUST pass under a test aggregate-memory limit equal to the greater
-of 32 MiB or `maxManifestBytes + maxChunkBytes + preferredStreamChunkBytes +
-2 MiB` of decoder and query headroom, regardless of file size. Tracked managed
-memory MUST NOT exceed that limit. Increasing the fixture to 1 GiB MUST NOT
-increase high-water managed memory by more than one preferred output chunk and
-one maximum content object.
+of 32 MiB or `2 * maxManifestNodeBytes + maxChunkBytes +
+preferredStreamChunkBytes + 2 MiB` of decoder and query headroom, regardless
+of file size. Tracked managed memory MUST NOT exceed that limit. Increasing the
+fixture to 1 GiB MUST NOT increase high-water managed memory by more than one
+preferred output chunk, one maximum content object, and one manifest node.
+
+A cold random range near the end of the 1 GiB logical fixture MUST validate no
+more than `maxManifestDepth + 1` manifest values and scan no more than one
+leaf's 256 CAS entries. Time to first byte for a cold sequential read MUST occur
+before complete manifest enumeration. A test-only corrupted derived index or
+empty manifest cache MUST not change returned bytes.
 
 The report MUST include bytes read from SQLite, query count, cache behavior,
 prefetch high-water, total managed-memory high-water, process peak resident
@@ -560,8 +588,8 @@ the final fixture digest does not match.
 ### 9.4 Concurrency and release gate
 
 With deliberately small budgets, the suite MUST run 64 concurrent readers,
-64 concurrent sequential writers, and a mixed read/write workload. It MUST
-prove that:
+64 concurrent sequential writers, and a mixed read, write, replication, and
+garbage-collection workload. It MUST prove that:
 
 - aggregate tracked memory remains at or below its configured limit;
 - backpressure occurs instead of per-handle memory multiplication;
@@ -569,6 +597,11 @@ prove that:
 - injected SQLite busy and commit failures do not duplicate buffers;
 - cache eviction never changes returned bytes; and
 - the filesystem remains usable after all fault injections.
+
+A metadata-only workload and blocked-checkpoint workload MUST separately prove
+that charged metadata, physical database, and journal ceilings remain finite.
+Quota failure MUST leave `efs_usage` equal to bounded direct recalculation and
+must not consume the emergency maintenance reserve.
 
 ## 10. Non-gates and future work
 

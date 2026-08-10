@@ -9,4 +9,7 @@ remains a supported database backend; it is not the component being replaced.
 
 The project is in its specification phase. Start with the
 [`PRD.md`](./PRD.md) product boundary and the [`SPEC.md`](./SPEC.md) technical
-specification. Implementation packages have not been created yet.
+specification. The release gates are the
+[`correctness test plan`](./docs/testing/correctness-tests.md) and
+[`benchmark plan`](./docs/benchmarks/release-benchmarks.md). Implementation
+packages have not been created yet.

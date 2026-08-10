@@ -67,15 +67,24 @@ interface ReplicationPlan {
   readonly pullBranchId?: string;
 }
 
+interface ReplicationFilesystemBridge {
+  readonly capabilities: ReplicationCapabilities;
+  captureExport(plan: ReplicationPlan): Promise<ReplicationExportCursor>;
+  readExportBatch(request: ReplicationBatchRequest): Promise<ReplicationBatch>;
+  applyImportBatch(batch: ReplicationBatch): Promise<ReplicationBatchReceipt>;
+  finalizeImport(request: ReplicationFinalizeRequest): Promise<void>;
+  abortSession(sessionId: string): Promise<void>;
+}
+
 interface ReplicateOptions {
-  readonly filesystem: EphemeralFS;
+  readonly bridge: ReplicationFilesystemBridge;
   readonly transport: ReplicationTransport;
   readonly plan: ReplicationPlan;
   readonly signal?: AbortSignal;
 }
 
 declare function createReplicationEndpoint(options: {
-  filesystem: EphemeralFS;
+  bridge: ReplicationFilesystemBridge;
   policy: ReplicationPolicy;
 }): ReplicationEndpoint;
 
@@ -88,6 +97,12 @@ Names may change before the first release candidate. The division of ownership
 is normative. A host provides one request-response transport function. The
 package performs the handshake, batch loop, validation, durable application,
 retry, and final result construction.
+
+The bridge is created by `@ephemeralai/fs/integrations/replication`. Its types
+are semantic and schema-free. It MUST perform validation, resource admission,
+lease handling, staging-certificate updates, and final transactions through
+core operations. It MUST NOT expose SQL, tables, repositories, standalone CAS
+insertion, or standalone COW mutation to the replication package.
 
 `ReplicationEndpoint.exchange` MUST be safe to expose through an existing host
 RPC mechanism. Its `Uint8Array` is one package-defined bounded canonical
@@ -146,7 +161,8 @@ interface ReplicationCapabilities {
 
 interface ReplicationStorageCapabilities {
   readonly maxBlobBytes: number;
-  readonly maxManifestBytes: number;
+  readonly maxManifestNodeBytes: number;
+  readonly maxManifestDepth: number;
   readonly maxManagedPayloadBytes: number;
   readonly maxStagingPayloadBytes: number;
   readonly maxMaintenanceBytes: number;
@@ -158,6 +174,7 @@ interface ReplicationStorageCapabilities {
 ```
 
 The protocol identifier for this document is `efs-replication-v1`.
+The required new-write manifest format is `efs-merkle-manifest-v1`.
 
 The filesystem identifier, application identifier, schema compatibility,
 hash algorithm, manifest format, chunker format, FastCDC parameters, and
@@ -179,7 +196,7 @@ Feature flags MUST state support for:
 - checkpoint bootstrap;
 - branch push;
 - branch pull;
-- compact manifest transfer;
+- segmented Merkle manifest transfer;
 - durable staging leases; and
 - physical restart recovery.
 
@@ -195,6 +212,8 @@ Each endpoint MUST expose effective limits equivalent to:
 interface ReplicationLimits {
   readonly maxBatchEntries: number;
   readonly maxBatchBytes: number;
+  readonly maxRequestBytes: number;
+  readonly maxResponseBytes: number;
   readonly maxBufferedBytes: number;
   readonly maxInFlightBatches: number;
   readonly maxConcurrentSessions: number;
@@ -216,11 +235,13 @@ interface ReplicationLimits {
 ```
 
 All values MUST be positive safe integers. Version 0.1 MUST use one in-flight
-batch per session. The default `maxBatchEntries` is 256. `maxBatchBytes`
-defaults to the configured `maxManifestBytes` plus 64 KiB of protocol
-overhead, which is 16 MiB plus 64 KiB under storage defaults.
-`maxBufferedBytes` defaults to `maxBatchBytes + 1 MiB`. These are admission
-ceilings, not eager allocations. Other defaults are 16 concurrent sessions,
+batch per session. The default `maxBatchEntries` is 256 and `maxBatchBytes` is
+4 MiB. `maxRequestBytes` defaults to 4 MiB plus 64 KiB framing;
+`maxResponseBytes` defaults to the same value, while an acknowledgement to a
+mutating payload MUST remain at or below 64 KiB. `maxBufferedBytes` defaults to
+10 MiB so one request, one response, and 2 MiB of codec and query headroom fit
+simultaneously. These are admission ceilings, not eager allocations. Other
+defaults are 16 concurrent sessions,
 64 MiB of durable staging per session, a 24-hour maximum
 cursor age, and the filesystem's `StorageLimits.stagingLeaseMs`, which
 defaults to 15 minutes. Aggregate durable staging remains constrained by
@@ -263,6 +284,13 @@ message, a produced response, hash input, decoded records, and queued output,
 MUST fit within `maxBufferedBytes`. A package-wide admission controller MUST
 also bound aggregate session buffers. Starting work above the configured
 aggregate limit MUST wait with backpressure or fail with `ResourceLimit`.
+
+Incoming envelope storage MUST be borrowed or transferred into the incremental
+decoder; decoding MUST NOT create a second complete envelope. A mutating phase
+MUST release its request payload before constructing any response larger than
+the 64 KiB acknowledgement bound. A nonmutating phase that may require both
+large request and response MUST reserve their declared maxima plus codec
+headroom before accepting the request.
 
 The package-wide controller MUST reserve those buffers from the opened
 filesystem's `RuntimeLimits.maxManagedResidentBytes`. Encoded results also count
@@ -385,9 +413,10 @@ batch while a prior mutating batch is unacknowledged.
 ## 9. Object and manifest negotiation
 
 Immutable content negotiation MUST operate on bounded pages of descriptors.
-An object descriptor contains its SHA-256 hash and byte length. A manifest
-descriptor contains its format, SHA-256 hash, encoded length, and logical file
-length. Compact manifest version 1 is one bounded BLOB, not a block tree.
+An object descriptor contains its SHA-256 hash and byte length. A manifest-root
+descriptor contains its format, SHA-256 hash, encoded length, logical file
+length, entry count, and root-node hash. A manifest-node descriptor contains
+its hash, kind, encoded length, logical span, and entry count.
 
 The sender first offers descriptors. The receiver returns only missing or
 unverified identities. The sender MUST NOT send bytes that were not requested,
@@ -397,20 +426,22 @@ The receiver MUST verify before accepting immutable content:
 
 - the descriptor and payload lengths;
 - the SHA-256 digest;
-- the object or manifest format;
-- manifest structure, ordering, and checked size arithmetic; and
+- the object, manifest-root, or manifest-node format;
+- manifest structure, child spans, ordering, and checked size arithmetic; and
 - every adapter BLOB and binding capability.
 
 An existing digest is deduplication only after its stored value is verified.
 A mismatch is `IntegrityFailure`; the receiver MUST NOT overwrite either value.
 
-Each accepted object or manifest and its staging-lease membership MUST commit
-in one SQLite transaction. A compact version 1 manifest MUST fit one batch;
-the receiver MUST verify its complete canonical BLOB before insertion. A
-future segmented manifest format requires a separately negotiated format and
-fragment contract. Accepted immutable content MUST remain invisible to main
-and branch namespace state until final activation. Orphaned immutable content
-is safe for later bounded garbage collection.
+Each accepted object, manifest root, or manifest node, its staging-lease
+membership, and staging-certificate batch-chain update MUST commit in one
+bounded SQLite transaction. The receiver negotiates missing roots and nodes in
+bounded graph-frontier pages and verifies every piece independently before
+insertion. It MUST NOT hold the complete manifest graph or missing-object set
+in memory. Final activation validates the sealed closure certificate in
+constant-row work. Accepted immutable content remains invisible to main and
+branch namespace state until that activation. Orphaned immutable content is
+safe for later bounded garbage collection.
 
 Negotiation MUST be storage proportional to missing immutable content. It MUST
 NOT copy an object merely because its path, inode, revision, or branch changed.
@@ -744,9 +775,10 @@ At minimum, release candidates MUST measure:
 - end-to-end 100 MiB materialization through Computer's Node virtual
   filesystem or FUSE path after replication.
 
-The one-byte edit MUST transfer the new bounded canonical manifest, only
-missing content-object payloads, bounded revision metadata, and protocol
-overhead. It MUST NOT retransmit unchanged content-object payload bytes.
+The one-byte edit MUST transfer the new root envelope, only changed manifest
+nodes, only missing CAS object payloads, bounded revision metadata, and protocol
+overhead. It MUST NOT retransmit unchanged object payloads or unchanged
+manifest subtrees.
 Sequential transfer throughput and first-progress latency MUST be reported
 separately. The sequential workload MUST prove that neither peer called a
 complete-file materialization API or retained buffers proportional to file

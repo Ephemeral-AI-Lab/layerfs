@@ -336,7 +336,7 @@ export interface EphemeralFilesystem {
 }
 
 export interface OpenFilesystemOptions {
-  readonly database: FilesystemDatabaseAdapter;
+  readonly database: FilesystemSQLiteDriver;
   readonly clock?: () => number;
   readonly filesystem?: Partial<FilesystemLimits>;
   readonly storage?: Partial<StorageLimits>;
@@ -707,7 +707,7 @@ export interface EffectiveLimit {
 }
 
 export interface FilesystemCapabilities {
-  readonly adapter: DatabaseAdapterCapabilities;
+  readonly adapter: SQLiteDriverCapabilities;
   readonly filesystem: Readonly<FilesystemLimits>;
   readonly storage: Readonly<StorageLimits>;
   readonly branch: Readonly<BranchConfiguration>;
@@ -726,6 +726,11 @@ export interface GarbageCollectionOptions {
 export interface GarbageCollectionResult {
   readonly runId: string;
   readonly state: "complete" | "paused" | "abandoned";
+  readonly examinedManifestRootCount: number;
+  readonly deletedManifestRootCount: number;
+  readonly examinedManifestNodeCount: number;
+  readonly deletedManifestNodeCount: number;
+  /** Aggregate roots plus nodes. */
   readonly examinedManifestCount: number;
   readonly deletedManifestCount: number;
   readonly examinedObjectCount: number;
@@ -757,7 +762,11 @@ export interface StorageSnapshot {
   readonly branchExclusiveManifestBytes: number;
   readonly branchExclusivePayloadBytes: number;
   readonly objectCount: number;
+  readonly manifestRootCount: number;
+  readonly manifestNodeCount: number;
+  /** Sum of manifest roots and nodes. */
   readonly manifestCount: number;
+  readonly chargedMetadataBytes: number;
   readonly revisionCount: number;
   readonly includesNamespaceMetadata: boolean;
   readonly includesOperationResults: boolean;
@@ -818,10 +827,19 @@ and MUST be a positive safe integer. A paused run MUST return a reusable
 `runId`; a later call MAY resume it. A read-only filesystem MUST reject
 collection with `EROFS`.
 
-`snapshotStorage` MUST compute all logical and payload counters in one read
-transaction. Physical counters are optional and MUST be clearly separated
-from payload counters. Hard-linked file bytes count once in logical set-based
-metrics. The two inclusion booleans MUST state the accounting boundary.
+`snapshotStorage` MUST use the bounded accounting algorithm in the storage
+specification. Its default path captures a root generation and row high-water
+marks in one short transaction, walks keyset batches using durable cursors and
+marks, then reconciles in another short transaction. It MUST NOT hold a read
+transaction or pin WAL history for work proportional to database size. A
+single-read-transaction fast path is permitted only under configured row and
+elapsed-time limits.
+
+Physical counters are optional and MUST be clearly separated from payload
+counters. Hard-linked file bytes count once in logical set-based metrics. The
+two inclusion booleans MUST state the accounting boundary. Manifest payload
+and counts include both root envelopes and authenticated nodes; the two count
+fields expose that split.
 
 One `verify` call MUST examine at most `maxEntities`, which defaults to
 `maxQueryBatchSize` and MUST NOT exceed it. `nextCursor` is opaque and bound to
@@ -975,7 +993,9 @@ export interface QueryBudget {
   readonly maxBytes: number;
 }
 
-export interface FilesystemSqlExecutor {
+export interface FilesystemSQLiteTransaction {
+  /** Opaque callback scope; values are invalid after the callback returns. */
+  readonly scope: unique symbol;
   run(sql: string, bindings?: SqliteBindings): SqliteRunResult;
   all<Row extends SqliteRow = SqliteRow>(
     sql: string,
@@ -986,7 +1006,7 @@ export interface FilesystemSqlExecutor {
 
 export type TransactionMode = "read" | "write" | "exclusive";
 
-export interface DatabaseAdapterCapabilities {
+export interface SQLiteDriverCapabilities {
   /** Largest BLOB the adapter can bind and return exactly. */
   readonly maxBlobBytes: number;
   /** Largest number of positional bindings in one statement. */
@@ -996,19 +1016,30 @@ export interface DatabaseAdapterCapabilities {
   readonly memoryPolicy: "configured" | "runtime-managed";
   readonly cacheTargetBytes?: number;
   readonly mmapLimitBytes?: number;
+  readonly maxPhysicalDatabaseBytes?: number;
+  readonly maxJournalBytes?: number;
+  readonly maxPhysicalDatabaseBytes: number;
+  readonly maxJournalBytes: number;
+  readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
 }
 
-export interface FilesystemDatabaseAdapter extends FilesystemSqlExecutor {
+export interface FilesystemSQLiteDriver {
   readonly kind: "sqlite";
   readonly readOnly: boolean;
-  readonly capabilities: DatabaseAdapterCapabilities;
+  readonly capabilities: SQLiteDriverCapabilities;
   transaction<T>(
     mode: TransactionMode,
-    callback: (tx: FilesystemSqlExecutor) => T,
+    callback: (tx: FilesystemSQLiteTransaction) => T,
   ): T;
   close(): void | Promise<void>;
 }
 ```
+
+The driver MUST NOT expose `run`, `all`, or cursor methods outside the
+transaction callback. The callback-scoped transaction value MUST become invalid
+before `transaction` returns or throws; later use MUST fail without issuing SQL.
+Only the core's private SQLite unit-of-work and repositories may receive it.
+Content algorithms and exported integrations MUST never receive raw SQL access.
 
 Bindings MUST use positional `?` parameters. The core MUST bind application
 values and MUST NOT interpolate path, content, identifier, or metadata values
@@ -1108,7 +1139,7 @@ export interface OpenNodeSqliteOptions {
 
 export declare function openNodeSqlite(
   options: OpenNodeSqliteOptions,
-): Promise<FilesystemDatabaseAdapter>;
+): Promise<FilesystemSQLiteDriver>;
 ```
 
 The package MAY select the concrete Node.js SQLite driver until its first
@@ -1134,13 +1165,18 @@ work. These adapter-managed allocations are measured separately from the
 core's exact managed-memory counter. Computer MUST include them in its
 process-wide memory configuration and resident-memory measurements.
 
+The Node driver MUST enforce its reported physical database and journal
+ceilings with a finite SQLite page-count policy, file-size checks, and bounded
+WAL checkpoint policy. A blocked checkpoint may produce backpressure or
+`ENOSPC`; it MUST NOT permit unbounded WAL growth.
+
 The Node adapter owns a database it opens and MUST close its connection when
 its `close()` resolves. `filename: ":memory:"` MUST be supported for tests.
 
 ### Durable Object SQLite
 
 `@ephemeralai/fs-sqlite-cloudflare` MUST adapt Durable Object SQLite storage
-to `FilesystemDatabaseAdapter`. Cloudflare-specific types MAY appear in this
+to `FilesystemSQLiteDriver`. Cloudflare-specific types MAY appear in this
 adapter package but MUST NOT leak through `@ephemeralai/fs` declarations.
 
 The adapter MUST use the Durable Object's transactional SQLite facility; it
@@ -1149,6 +1185,12 @@ such as `ArrayBuffer` to detached `Uint8Array` values and normalize cursor rows
 to ordinary JavaScript objects. It MUST preserve statement order and
 transaction serialization within the object. It MUST report conservative
 tested Durable Object BLOB and binding limits through `capabilities`.
+
+The Cloudflare driver MUST also report conservative physical database and
+runtime-journal ceilings from the platform capabilities available to the
+configured deployment. Runtime enforcement is acceptable, but an unavailable
+exact byte counter MUST be stated through `physicalQuotaPolicy` and MUST NOT be
+represented as unlimited capacity.
 It MUST report `"acknowledged"` durability and `"runtime-managed"` journal
 mode when the runtime owns those policies. It MUST also report
 `"runtime-managed"` memory policy. The portable core MUST still use bounded
@@ -1243,10 +1285,14 @@ export interface FilesystemLimits {
 
 export interface StorageLimits {
   readonly maxManifestEntries: number;
-  readonly maxManifestBytes: number;
+  readonly maxManifestNodeBytes: number;
+  readonly maxManifestDepth: number;
   readonly maxFileBytes: number;
   readonly maxWriteBytes: number;
   readonly maxManagedPayloadBytes: number;
+  readonly maxChargedMetadataBytes: number;
+  readonly maxPhysicalDatabaseBytes: number;
+  readonly maxJournalBytes: number;
   readonly maxStagingPayloadBytes: number;
   readonly maxBranchOverlayBytes: number;
   readonly maxMaintenanceBytes: number;
@@ -1288,7 +1334,7 @@ export interface StorageFormat {
   readonly cowPageBytes: CowPageBytes;
   readonly hashAlgorithm: "sha256";
   readonly chunkerAlgorithm: "fastcdc-v1";
-  readonly manifestFormat: "efs-manifest-v1";
+  readonly manifestFormat: "efs-merkle-manifest-v1";
 }
 ```
 
@@ -1345,25 +1391,26 @@ Exceeding a file, materialization, or atomic-tree limit MUST fail with
 database, the core MUST derive a finite upper bound from all of:
 
 - JavaScript's safe-integer offset bound;
-- the compact manifest's 32-byte header and 36-byte entries;
-- the adapter's `maxBlobBytes` for encoded manifests and objects;
+- the segmented manifest's leaf and internal fanout;
+- the configured maximum authenticated-tree depth;
+- the adapter's `maxBlobBytes` for manifest nodes and objects;
 - the configured `maxManifestEntries`; and
 - the persisted maximum chunk size.
 
-For compact manifest version 1, the exact derivation is:
+For segmented manifest version 1, the exact derivation is:
 
 ```text
-blobEntryCapacity = floor((adapter.capabilities.maxBlobBytes - 32) / 36)
+treeEntryCapacity = 256 * 128^(maxManifestDepth - 1)
 maxManifestEntries = min(configuredEntryCap, 2^32 - 1,
-                         blobEntryCapacity)
+                         treeEntryCapacity)
 formatFileCapacity = maxManifestEntries * (fastCdcMinimum + 1)
 maxFileBytes = min(configuredFileCap, Number.MAX_SAFE_INTEGER,
                    formatFileCapacity)
 ```
 
 All arithmetic MUST be checked. The `fastCdcMinimum + 1` span is the safe
-worst case for the exact version 1 scan index. It guarantees that every
-canonical manifest for an accepted file fits in one adapter BLOB. Object and
+worst case for the exact FastCDC scan index. Every root envelope and node MUST
+fit `maxManifestNodeBytes` and `adapter.capabilities.maxBlobBytes`. Object and
 chunk BLOBs MUST separately fit `maxBlobBytes` and their unsigned 32-bit size
 fields.
 
@@ -1410,24 +1457,24 @@ export interface ConformanceFaultController {
 }
 
 export interface ConformanceOwnershipProbe {
-  readonly adapter: FilesystemDatabaseAdapter;
+  readonly adapter: FilesystemSQLiteDriver;
   closeCallCount(): number;
 }
 
 export interface ConformanceDatabase {
-  readonly adapter: FilesystemDatabaseAdapter;
+  readonly adapter: FilesystemSQLiteDriver;
   readonly capabilities: readonly ConformanceCapability[];
   readonly faults?: ConformanceFaultController;
   reopen(
     options?: ConformanceReopenOptions,
-  ): Promise<FilesystemDatabaseAdapter>;
-  openSecondConnection?(): Promise<FilesystemDatabaseAdapter>;
-  reopenFromFixture?(fixtureName: string): Promise<FilesystemDatabaseAdapter>;
+  ): Promise<FilesystemSQLiteDriver>;
+  openSecondConnection?(): Promise<FilesystemSQLiteDriver>;
+  reopenFromFixture?(fixtureName: string): Promise<FilesystemSQLiteDriver>;
   collectGarbage?(
     filesystem: EphemeralFS,
     options?: GarbageCollectionOptions,
   ): Promise<GarbageCollectionResult>;
-  crashAndReopen?(): Promise<FilesystemDatabaseAdapter>;
+  crashAndReopen?(): Promise<FilesystemSQLiteDriver>;
   createOwnershipProbe?(): Promise<ConformanceOwnershipProbe>;
   dispose(): Promise<void>;
 }

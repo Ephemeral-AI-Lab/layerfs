@@ -15,7 +15,8 @@ independently.
 ## Status and evidence
 
 This repository contains a target specification, not an implementation. The
-Agent Infra Book prototype demonstrates FastCDC chunking, compact manifests,
+Agent Infra Book prototype demonstrates FastCDC chunking, content-addressed
+objects,
 copy-on-write pages, private branches, publication, recovery, and garbage
 collection on Durable Object SQLite. It is design evidence only: version 0.1
 must implement the contracts here and pass the shared conformance suite on
@@ -31,6 +32,8 @@ both required database adapters.
 | [Replication](./docs/spec/replication.md) | Host-neutral negotiation, batches, cursors, staging, retry, and import/export |
 | [Node virtual filesystem](./docs/spec/node-vfs.md) | Node handles, range I/O, bounded write sessions, flush, errors, and metrics |
 | [Performance and resource limits](./docs/spec/performance-and-resource-limits.md) | Aggregate memory, backpressure, workload invariants, metrics, and release gates |
+| [Correctness tests](./docs/testing/correctness-tests.md) | Executable architecture, conformance, fault, integrity, adapter, and Computer integration matrix |
+| [Release benchmarks](./docs/benchmarks/release-benchmarks.md) | Reproducible fixtures, metrics, thresholds, DOFS comparison, and go-live evidence |
 
 The non-normative
 [`design rationale`](./docs/spec/design-rationale.md) records the evidence,
@@ -87,7 +90,7 @@ workspace.fs: EphemeralFilesystem     asynchronous filesystem API
                         |
         revisions and content engine
                         |
-   SHA-256 + FastCDC v1 + manifests + COW pages
+     CAS + CDC + COW + segmented Merkle manifests
                         |
              portable database contract
                  /                 \
@@ -155,6 +158,40 @@ examples/
 docs/spec/
 ```
 
+The core source tree makes the content mechanisms explicit and avoids generic
+`api`, `internal`, and `SPI` buckets:
+
+```text
+packages/fs/src/
+  filesystem/            public facade, limits, capabilities, and errors
+  cas/                   SHA-256 object identity and verification
+  cdc/                   pure FastCDC v1 boundary calculation
+  cow/                   page overlays and dirty-range composition
+  patches/               length-changing structural edits
+  manifests/             authenticated Merkle roots, nodes, and cursors
+  namespace/             inode, link, path, and directory semantics
+  branches/              durable branch and publication state
+  revisions/             immutable revision history
+  operations/            cross-subsystem read, write, and publish workflows
+  sqlite/                driver contract, unit of work, schema, repositories
+  resources/             resident and durable admission controllers
+  streams/               bounded snapshot and staged-write state
+  cache/                 disposable byte-weighted caches
+  maintenance/           verification, accounting, migration, and collection
+  integrations/          narrow replication and Node VFS bridges
+```
+
+Dependency direction is `filesystem -> operations -> content/domain + storage
+ports`, while the private SQLite repositories implement those storage ports.
+CAS does not issue SQL, CDC is a pure algorithm, COW does not invoke FastCDC,
+and only operations compose them. Materialization and CDC reconnection therefore
+belong to `operations`, not to `cow` or `cdc`.
+
+The package export map exposes only `@ephemeralai/fs`,
+`@ephemeralai/fs/sqlite-driver`,
+`@ephemeralai/fs/integrations/replication`, and
+`@ephemeralai/fs/integrations/node-vfs`. There is no wildcard or schema export.
+
 Implementation packages do not exist yet. They are created in this order so
 the shared testkit, rather than either host, remains the behavioral authority.
 
@@ -164,7 +201,9 @@ the shared testkit, rather than either host, remains the behavioral authority.
 
 - The database has a versioned application identity and transactional
   migrations.
-- File content uses verified SHA-256 objects and canonical compact manifests.
+- File content uses verified SHA-256 objects and canonical authenticated
+  segmented Merkle manifests. A range lookup validates only its root-to-leaf
+  path and intersecting objects; it never trusts an unauthenticated side index.
 - FastCDC version 1 has fixed, test-vector-backed boundary behavior. Chunking
   parameters are persisted or encoded with the data they interpret.
 - Copy-on-write page size is persisted independently of FastCDC. Version 0.1
@@ -263,6 +302,12 @@ workloads.
 Version 0.1 is not stable until every normative MUST and MUST NOT has a passing
 test on both adapters. Adapter-specific tests may exercise setup and physical
 restart mechanisms, but may not weaken portable outcomes.
+
+[`docs/testing/correctness-tests.md`](./docs/testing/correctness-tests.md) is
+the required correctness matrix. Every listed mandatory case must pass before
+an integration candidate is built. The reproducible workloads, metrics, trial
+method, regression policy, and DOFS comparison gates are defined by
+[`docs/benchmarks/release-benchmarks.md`](./docs/benchmarks/release-benchmarks.md).
 
 ## Implementation sequence
 
