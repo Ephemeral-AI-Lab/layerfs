@@ -64,40 +64,40 @@ later implementations from bypassing the architecture.
 
 ### M0 checklist
 
-- [ ] Create the package workspace and lockfile.
-- [ ] Add `packages/fs` as `@ephemeralai/fs`.
-- [ ] Add `packages/sqlite-node` as `@ephemeralai/fs-sqlite-node`.
-- [ ] Add `packages/sqlite-cloudflare` as
+- [x] Create the package workspace and lockfile.
+- [x] Add `packages/fs` as `@ephemeralai/fs`.
+- [x] Add `packages/sqlite-node` as `@ephemeralai/fs-sqlite-node`.
+- [x] Add `packages/sqlite-cloudflare` as
       `@ephemeralai/fs-sqlite-cloudflare`.
-- [ ] Add `packages/node-vfs` as `@ephemeralai/fs-node-vfs`.
-- [ ] Add `packages/replication` as `@ephemeralai/fs-replication`.
-- [ ] Add `packages/testkit` as `@ephemeralai/fs-testkit`.
-- [ ] Add shared TypeScript, lint, formatting, build, and test configuration.
-- [ ] Add clean-package and packed-tarball test fixtures.
-- [ ] Add architecture checks for cycles and forbidden imports.
-- [ ] Add API extraction or an equivalent export-snapshot check.
-- [ ] Configure the `@ephemeralai/fs` export map with only the root,
+- [x] Add `packages/node-vfs` as `@ephemeralai/fs-node-vfs`.
+- [x] Add `packages/replication` as `@ephemeralai/fs-replication`.
+- [x] Add `packages/testkit` as `@ephemeralai/fs-testkit`.
+- [x] Add shared TypeScript, lint, formatting, build, and test configuration.
+- [x] Add clean-package and packed-tarball test fixtures.
+- [x] Add architecture checks for cycles and forbidden imports.
+- [x] Add API extraction or an equivalent export-snapshot check.
+- [x] Configure the `@ephemeralai/fs` export map with only the root,
       `sqlite-driver`, and two integration bridge subpaths.
-- [ ] Add deterministic fixture generation with recorded seeds and SHA-256
+- [x] Add deterministic fixture generation with recorded seeds and SHA-256
       digests.
-- [ ] Add Node and Durable Object testkit factory contracts.
-- [ ] Add fault-controller, restart, read-only, and second-connection hooks.
-- [ ] Add machine-readable correctness and benchmark result schemas.
-- [ ] Add CI jobs for documentation, architecture, unit, package, and testkit
+- [x] Add Node and Durable Object testkit factory contracts.
+- [x] Add fault-controller, restart, read-only, and second-connection hooks.
+- [x] Add machine-readable correctness and benchmark result schemas.
+- [x] Add CI jobs for documentation, architecture, unit, package, and testkit
       harness checks.
 
 ### M0 acceptance criteria
 
-- [ ] A clean install builds every empty package without unpublished local
+- [x] A clean install builds every empty package without unpublished local
       state.
-- [ ] The dependency graph has zero cycles and matches the allowed direction.
-- [ ] Packed consumers can import only documented export paths.
-- [ ] Deep imports of CAS, CDC, COW, manifests, repositories, schema, and
+- [x] The dependency graph has zero cycles and matches the allowed direction.
+- [x] Packed consumers can import only documented export paths.
+- [x] Deep imports of CAS, CDC, COW, manifests, repositories, schema, and
       transactions fail.
-- [ ] The testkit can create, label, seed, and dispose a driver fixture through
+- [x] The testkit can create, label, seed, and dispose a driver fixture through
       a recording implementation.
-- [ ] Fixture generation is byte-identical across two clean runs.
-- [ ] Documentation lint, link validation, build, and architecture checks pass.
+- [x] Fixture generation is byte-identical across two clean runs.
+- [x] Documentation lint, link validation, build, and architecture checks pass.
 
 ## 4. Milestone 1: Content algorithms and binary formats
 

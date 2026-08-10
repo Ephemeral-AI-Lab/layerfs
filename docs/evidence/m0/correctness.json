@@ -1,13 +1,24 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "28b9cdf072777ff09f663aef733dc4caf85bdade",
+  "commit": "f1c4ebd111eee269a2a4f2d0a786f41d4cae63b2",
   "adapter": "workspace-foundation",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "formatVersion": "efs-merkle-manifest-v1",
   "seed": 1592639710,
   "fixtureDigest": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086",
   "faultPoint": null,
-  "passed": 44,
+  "passed": 4,
   "failed": 0,
-  "elapsedMs": 20800
+  "elapsedMs": 37070,
+  "metrics": {
+    "coreSourceFiles": 45,
+    "negativeArchitectureFixtures": 4,
+    "lintedFiles": 118,
+    "publishablePackages": 6,
+    "publicEntrypoints": 9,
+    "exportedSymbols": 96,
+    "cleanDistFiles": 200,
+    "packedTarballs": 6,
+    "packedFiles": 206
+  }
 }
