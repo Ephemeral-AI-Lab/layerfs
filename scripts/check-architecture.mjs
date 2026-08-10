@@ -786,6 +786,7 @@ const globalReflectionFixtures = [
   "fs/adapter-computed-global.ts",
   "fs/process-create-require.ts",
   "fs/crypto-constructor.ts",
+  "fs/array-constructor.ts",
 ];
 for (const fixture of globalReflectionFixtures) {
   const filename = path.join(fixtureRoot, ...fixture.split("/"));
