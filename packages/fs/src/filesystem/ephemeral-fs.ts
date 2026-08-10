@@ -8,9 +8,10 @@ import { canonicalizePath, compareUtf8, validateName, validateSymlinkTarget } fr
 import { checkedAdd, checkedInteger, utf8 } from "../utils/bytes.js";
 import { prepareContent, readManifestRange } from "../operations/manifest-io.js";
 import { abortError, FilesystemError, fsError, mapStorageError } from "./errors.js";
-import type { DirectoryEntry, EphemeralFilesystem, FileContent, FileStat, FileType, FilesystemCapabilities, FilesystemObservation, FilesystemObserver, MkdirOptions, OpenFilesystemOptions, ReadRangeOptions, ReadStreamOptions, ReadTextOptions, ReaddirOptions, RmOptions, WriteFileOptions } from "./types.js";
+import type { DirectoryEntry, EphemeralFilesystem, FileContent, FileStat, FileType, FilesystemCapabilities, FilesystemMaintenance, FilesystemObservation, FilesystemObserver, MkdirOptions, OpenFilesystemOptions, ReadRangeOptions, ReadStreamOptions, ReadTextOptions, ReaddirOptions, RmOptions, WriteFileOptions } from "./types.js";
 import { BranchManager } from "../branches/branch-engine.js";
 import type { Branches } from "../branches/types.js";
+import { MaintenanceManager } from "../maintenance/maintenance.js";
 
 interface ChildRow extends SqliteRow { name: string; name_sort: Uint8Array; type: number }
 interface CountRow extends SqliteRow { count: number }
@@ -28,6 +29,7 @@ function validatedMode(mode: number | undefined, fallback: number, syscall: stri
 export class EphemeralFS implements EphemeralFilesystem {
   readonly capabilities: FilesystemCapabilities;
   readonly branches: Branches;
+  readonly maintenance: FilesystemMaintenance;
   readonly #database: FilesystemSQLiteDriver; readonly #clock: () => number; readonly #observer: FilesystemObserver | undefined; readonly #ownsDatabase: boolean;
   readonly #filesystemLimits: FilesystemLimits; readonly #storageLimits: StorageLimits; readonly #runtimeLimits: RuntimeLimits; readonly #branchLimits: BranchConfiguration;
   readonly #admission: AdmissionController; readonly #pending = new Set<Promise<unknown>>(); readonly #streams = new Map<string, { release: () => Promise<void>; error: () => void }>();
@@ -38,6 +40,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     this.capabilities = capabilities; this.#filesystemLimits = capabilities.filesystem; this.#storageLimits = capabilities.storage; this.#runtimeLimits = capabilities.runtime; this.#branchLimits = capabilities.branch;
     this.#admission = new AdmissionController(this.#runtimeLimits.maxManagedResidentBytes);
     this.branches = new BranchManager(this.#database, this.#filesystemLimits, this.#storageLimits, this.#runtimeLimits, this.#branchLimits, this.#clock, this.#admission);
+    this.maintenance = new MaintenanceManager(this.#database, this.#storageLimits, this.#runtimeLimits, this.#clock);
   }
 
   static async open(options: OpenFilesystemOptions): Promise<EphemeralFS> {
