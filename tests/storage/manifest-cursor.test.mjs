@@ -8,9 +8,12 @@ import {
 import { buildManifest } from "../../packages/fs/dist/operations/full-rebuild.js";
 import {
   readManifestInto,
-  readManifestRange,
+  readManifestRange as readManifestRangeUnadmitted,
 } from "../../packages/fs/dist/operations/manifest-io.js";
-import { constrainStorageLimits } from "../../packages/fs/dist/resources/limits.js";
+import {
+  AdmissionController,
+  constrainStorageLimits,
+} from "../../packages/fs/dist/resources/limits.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
 import { initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
@@ -23,6 +26,16 @@ function limits(driver, overrides = {}) {
       ...overrides,
     },
     driver.capabilities,
+  );
+}
+
+function readManifestRange(repository, hash, offset, length) {
+  return readManifestRangeUnadmitted(
+    repository,
+    hash,
+    offset,
+    length,
+    new AdmissionController(256 * 1024 * 1024),
   );
 }
 

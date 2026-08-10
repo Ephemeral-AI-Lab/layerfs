@@ -67,8 +67,15 @@ export async function prepareContentStreaming(
   cache?: ContentCache,
   clock: () => number = Date.now,
 ): Promise<StreamPreparedManifest> {
-  const bufferedInput = input instanceof Uint8Array ? copyBytes(input) : undefined;
-  const streamInput = bufferedInput ? undefined : (input as ReadableStream<Uint8Array>);
+  const borrowedBufferedInput = input instanceof Uint8Array ? input : undefined;
+  const bufferedLength = borrowedBufferedInput
+    ? intrinsicByteLength(borrowedBufferedInput)
+    : 0;
+  if (bufferedLength > storage.maxWriteBytes)
+    throw new RangeError("buffered write exceeds maxWriteBytes");
+  const streamInput = borrowedBufferedInput
+    ? undefined
+    : (input as ReadableStream<Uint8Array>);
   const leaseId = globalThis.crypto.randomUUID();
   const ownerId = globalThis.crypto.randomUUID();
   const ownerNonce = randomNonce();
@@ -86,7 +93,7 @@ export async function prepareContentStreaming(
       Math.floor(storage.maxFinalTransactionBytes / 2),
     ),
   );
-  const inputBudget = bufferedInput?.byteLength ?? 0;
+  const inputBudget = bufferedLength;
   const builderBudget = Math.min(
     runtime.maxQueryBatchBytes + storage.maxManifestNodeBytes * 2,
     runtime.maxManagedResidentBytes -
@@ -101,6 +108,7 @@ export async function prepareContentStreaming(
   const reservationBytes =
     DEFAULT_FASTCDC.maximum + pendingLimit + builderBudget + inputBudget;
   const releases: Array<() => void> = [];
+  let bufferedInput: Uint8Array | undefined;
   let leaseBegun = false;
   let chunker!: StreamingFastCdc;
   let total = 0;
@@ -164,6 +172,11 @@ export async function prepareContentStreaming(
   };
   try {
     cache?.makeRoom(reservationBytes);
+    releases.push(admission.reserve(DEFAULT_FASTCDC.maximum));
+    releases.push(admission.reserve(pendingLimit));
+    releases.push(admission.reserve(builderBudget));
+    if (inputBudget) releases.push(admission.reserve(inputBudget));
+    if (borrowedBufferedInput) bufferedInput = copyBytes(borrowedBufferedInput);
     port.transaction("write", workBudget, (tx) => {
       const staging = tx.staging(storage);
       staging.begin({
@@ -176,10 +189,6 @@ export async function prepareContentStreaming(
       staging.bumpRoot(5, leaseId);
     });
     leaseBegun = true;
-    releases.push(admission.reserve(DEFAULT_FASTCDC.maximum));
-    releases.push(admission.reserve(pendingLimit));
-    releases.push(admission.reserve(builderBudget));
-    if (inputBudget) releases.push(admission.reserve(inputBudget));
     chunker = new StreamingFastCdc(DEFAULT_FASTCDC);
     if (bufferedInput) feed(bufferedInput);
     else {
@@ -197,9 +206,13 @@ export async function prepareContentStreaming(
           }
           if (!(value instanceof Uint8Array))
             throw new TypeError("write stream chunks must be Uint8Array values");
-          const ownedValue = copyBytes(value);
-          const releaseInput = admission.reserve(ownedValue.byteLength);
+          const valueLength = intrinsicByteLength(value);
+          if (valueLength > runtime.maxWriteSessionBytes)
+            throw new RangeError("write stream chunk exceeds maxWriteSessionBytes");
+          cache?.makeRoom(valueLength);
+          const releaseInput = admission.reserve(valueLength);
           try {
+            const ownedValue = copyBytes(value);
             feed(ownedValue);
           } finally {
             releaseInput();

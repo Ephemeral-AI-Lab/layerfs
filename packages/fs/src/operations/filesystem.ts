@@ -277,6 +277,8 @@ export class EphemeralFS implements EphemeralFilesystem {
           inode.manifest_hash!,
           0,
           inode.size!,
+          this.#admission,
+          this.#cache,
         );
       });
       return options ? new TextDecoder("utf-8", { fatal: false }).decode(bytes) : bytes;
@@ -304,6 +306,8 @@ export class EphemeralFS implements EphemeralFilesystem {
           inode.manifest_hash!,
           options.offset,
           options.length,
+          this.#admission,
+          this.#cache,
         );
       });
     });
@@ -411,6 +415,8 @@ export class EphemeralFS implements EphemeralFilesystem {
                   selected.manifestHash,
                   position,
                   length,
+                  this.#admission,
+                  this.#cache,
                 ),
               );
               position += bytes.byteLength;
@@ -574,11 +580,27 @@ export class EphemeralFS implements EphemeralFilesystem {
   }
 
   writeRange(path: string, offset: number, content: Uint8Array): Promise<void> {
-    const frozen = copyBytes(content);
+    const inputLength = intrinsicByteLength(content);
+    if (inputLength > this.#storageLimits.maxWriteBytes)
+      return Promise.reject(
+        fsError("EFBIG", "writeRange", path, "write exceeds maxWriteBytes"),
+      );
+    this.#cache.makeRoom(inputLength);
+    let releaseInput: () => void;
+    try {
+      releaseInput = this.#admission.reserve(inputLength);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    let frozen: Uint8Array;
+    try {
+      frozen = copyBytes(content);
+    } catch (error) {
+      releaseInput();
+      return Promise.reject(error);
+    }
     return this.#operation("writeRange", path, undefined, async () => {
       checkedInteger(offset, "offset");
-      if (frozen.byteLength > this.#storageLimits.maxWriteBytes)
-        throw fsError("EFBIG", "writeRange", path, "write exceeds maxWriteBytes");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "writeRange");
       const selected = this.#selectMutationSource(canonical.value, "writeRange");
       if (!frozen.byteLength) return;
@@ -607,7 +629,7 @@ export class EphemeralFS implements EphemeralFilesystem {
         selected.token,
         "writeRange",
       );
-    });
+    }).finally(releaseInput);
   }
 
   replaceRange(
@@ -616,12 +638,33 @@ export class EphemeralFS implements EphemeralFilesystem {
     deleteLength: number,
     insertBytes: Uint8Array,
   ): Promise<void> {
-    const frozen = copyBytes(insertBytes);
+    const inputLength = intrinsicByteLength(insertBytes);
+    if (inputLength > this.#storageLimits.maxWriteBytes)
+      return Promise.reject(
+        fsError(
+          "EFBIG",
+          "replaceRange",
+          path,
+          "insertion exceeds maxWriteBytes",
+        ),
+      );
+    this.#cache.makeRoom(inputLength);
+    let releaseInput: () => void;
+    try {
+      releaseInput = this.#admission.reserve(inputLength);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    let frozen: Uint8Array;
+    try {
+      frozen = copyBytes(insertBytes);
+    } catch (error) {
+      releaseInput();
+      return Promise.reject(error);
+    }
     return this.#operation("replaceRange", path, undefined, async () => {
       checkedInteger(offset, "offset");
       checkedInteger(deleteLength, "deleteLength");
-      if (frozen.byteLength > this.#storageLimits.maxWriteBytes)
-        throw fsError("EFBIG", "replaceRange", path, "insertion exceeds maxWriteBytes");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "replaceRange");
       const selected = this.#selectMutationSource(canonical.value, "replaceRange");
       if (offset > selected.source.size || deleteLength > selected.source.size - offset)
@@ -647,7 +690,7 @@ export class EphemeralFS implements EphemeralFilesystem {
         selected.token,
         "replaceRange",
       );
-    });
+    }).finally(releaseInput);
   }
 
   truncate(path: string, size = 0): Promise<void> {
@@ -1126,6 +1169,8 @@ export class EphemeralFS implements EphemeralFilesystem {
             selected.manifestHash,
             offset,
             length,
+            this.#admission,
+            this.#cache,
           ),
         ),
       entries: (offset: number, limit: number) =>
@@ -1188,20 +1233,18 @@ export class EphemeralFS implements EphemeralFilesystem {
     expectedToken: number,
     syscall: string,
   ): Promise<void> {
-    const releaseInsertion = this.#admission.reserve(edit.retainedBytes ?? 0);
+    const prepared = await prepareDurableEditedContent(
+      this.#storagePort,
+      source,
+      edit,
+      this.#storageLimits,
+      this.#runtimeLimits,
+      this.#admission,
+      this.#cache,
+      this.#clock,
+    );
     try {
-      const prepared = await prepareDurableEditedContent(
-        this.#storagePort,
-        source,
-        edit,
-        this.#storageLimits,
-        this.#runtimeLimits,
-        this.#admission,
-        this.#cache,
-        this.#clock,
-      );
-      try {
-        this.#transaction("write", (tx) => {
+      this.#transaction("write", (tx) => {
           const ns = tx.namespace(
             this.#filesystemLimits,
             this.#storageLimits,
@@ -1238,13 +1281,10 @@ export class EphemeralFS implements EphemeralFilesystem {
             );
           ns.recordInode(revision, inode.id);
           this.#releasePrepared(tx, prepared.certificate);
-        });
-      } catch (error) {
-        this.#abandonPrepared(prepared.certificate);
-        throw error;
-      }
-    } finally {
-      releaseInsertion();
+      });
+    } catch (error) {
+      this.#abandonPrepared(prepared.certificate);
+      throw error;
     }
   }
   #requireFile(selected: ResolvedPath, syscall: string): InodeRow {

@@ -677,7 +677,14 @@ export class BranchManager implements Branches {
   }
   readManifest(hash: Uint8Array, offset: number, length: number): Uint8Array {
     return this.#transaction("read", (tx) =>
-      readManifestRange(tx.content(this.#storage, this.#cache), hash, offset, length),
+      readManifestRange(
+        tx.content(this.#storage, this.#cache),
+        hash,
+        offset,
+        length,
+        this.#admission,
+        this.#cache,
+      ),
     );
   }
   releaseHandle(): void {

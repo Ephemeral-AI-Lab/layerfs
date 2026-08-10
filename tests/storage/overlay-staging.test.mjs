@@ -234,12 +234,11 @@ test("byte-weighted cache verifies once, remains bounded, and eviction preserves
       true,
     ),
   );
-  assert.deepEqual(
-    driver.transaction("read", (tx) =>
-      new ContentRepository(tx, storage, cache).getObject(hash, bytes.length),
-    ),
-    bytes,
+  const first = driver.transaction("read", (tx) =>
+    new ContentRepository(tx, storage, cache).getObject(hash, bytes.length),
   );
+  assert.deepEqual(first, bytes);
+  first.fill(0);
   assert.deepEqual(
     driver.transaction("read", (tx) =>
       new ContentRepository(tx, storage, cache).getObject(hash, bytes.length),
@@ -261,6 +260,45 @@ test("byte-weighted cache verifies once, remains bounded, and eviction preserves
     /digest mismatch/,
   );
   cache.clear();
+  driver.close();
+});
+
+test("content cache owns Buffer and subclass inputs and detaches every outward hit", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  initializeOrValidateSchema(driver);
+  const storage = limits(driver);
+  const admission = new AdmissionController(1024 * 1024);
+  const cache = new ContentCache(128 * 1024, admission);
+  class HostileBytes extends Uint8Array {
+    get byteLength() {
+      throw new Error("subclass byteLength must not be observed");
+    }
+    slice() {
+      throw new Error("subclass slice must not be called");
+    }
+    subarray() {
+      throw new Error("subclass subarray must not be called");
+    }
+  }
+  for (const borrowed of [Buffer.from([1, 2, 3, 4]), new HostileBytes([5, 6, 7])]) {
+    const expected = Uint8Array.from(borrowed);
+    const hash = sha256(borrowed);
+    driver.transaction("write", (tx) =>
+      new ContentRepository(tx, storage, cache).putObject(hash, borrowed),
+    );
+    const first = driver.transaction("read", (tx) =>
+      new ContentRepository(tx, storage, cache).getObject(hash, expected.length),
+    );
+    assert.equal(Object.getPrototypeOf(first), Uint8Array.prototype);
+    first.fill(255);
+    const second = driver.transaction("read", (tx) =>
+      new ContentRepository(tx, storage, cache).getObject(hash, expected.length),
+    );
+    assert.equal(Object.getPrototypeOf(second), Uint8Array.prototype);
+    assert.deepEqual(second, expected);
+  }
+  cache.clear();
+  assert.equal(admission.usedBytes, 0);
   driver.close();
 });
 
@@ -291,11 +329,11 @@ test("partial write-admission failure removes its staging lease and releases eve
         },
       )[0],
   );
-  assert.deepEqual(active, { active: 0, tombstoned: 1, cleanups: 1 });
+  assert.deepEqual(active, { active: 0, tombstoned: 0, cleanups: 0 });
   driver.close();
 });
 
-test("a huge upstream stream chunk is admitted at its full size, rejected before processing, and cancelled cleanly", async () => {
+test("an oversized hostile stream chunk is intrinsically preflighted and cancelled before copy or processing", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
   const port = createSqliteOperationsStorage(driver);
   initializeOrValidateSchema(driver);
@@ -310,9 +348,22 @@ test("a huge upstream stream chunk is admitted at its full size, rejected before
   const admission = new AdmissionController(runtime.maxManagedResidentBytes);
   let cancelled = false;
   let cancellationReason;
+  class HostileChunk extends Uint8Array {
+    get byteLength() {
+      return 1;
+    }
+    slice() {
+      throw new Error("subclass slice must not be called");
+    }
+    subarray() {
+      throw new Error("subclass subarray must not be called");
+    }
+  }
+  let pulls = 0;
   const stream = new ReadableStream({
     pull(controller) {
-      controller.enqueue(new Uint8Array(3 * 1024 * 1024));
+      pulls += 1;
+      controller.enqueue(new HostileChunk(3 * 1024 * 1024));
     },
     cancel(reason) {
       cancelled = true;
@@ -330,8 +381,9 @@ test("a huge upstream stream chunk is admitted at its full size, rejected before
       undefined,
       () => 7,
     ),
-    /managed resident memory limit/,
+    /maxWriteSessionBytes/,
   );
+  assert.equal(pulls, 1);
   assert.equal(cancelled, true);
   assert.ok(cancellationReason instanceof RangeError);
   assert.equal(admission.usedBytes, 0);

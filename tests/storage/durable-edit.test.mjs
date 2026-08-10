@@ -6,7 +6,7 @@ import { MAX_DIAGNOSTIC_CONTENT_BYTES } from "../../packages/fs/dist/operations/
 import { prepareDurableEditedContent } from "../../packages/fs/dist/operations/durable-edit-prepare.js";
 import {
   prepareContent,
-  readManifestRange,
+  readManifestRange as readManifestRangeUnadmitted,
 } from "../../packages/fs/dist/operations/manifest-io.js";
 import {
   AdmissionController,
@@ -15,6 +15,16 @@ import {
 } from "../../packages/fs/dist/resources/limits.js";
 import { createSqliteOperationsStorage } from "../../packages/fs/dist/sqlite/operations-storage.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
+
+function readManifestRange(repository, hash, offset, length) {
+  return readManifestRangeUnadmitted(
+    repository,
+    hash,
+    offset,
+    length,
+    new AdmissionController(DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes),
+  );
+}
 
 function bytePattern(length) {
   const output = new Uint8Array(length);
@@ -229,5 +239,39 @@ test("filesystem range mutations and streamed preparation own hostile byte views
   } finally {
     await filesystem.close();
     driver.close();
+  }
+});
+
+test("public range edits admit intrinsic exact-bound bytes before ownership copy or source work", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const filesystem = await EphemeralFS.open({
+    database: driver,
+    storage: { maxWriteBytes: 4 },
+  });
+  class HostileBytes extends Uint8Array {
+    get byteLength() {
+      return 0;
+    }
+    slice() {
+      throw new Error("subclass slice must not be called");
+    }
+    subarray() {
+      throw new Error("subclass subarray must not be called");
+    }
+  }
+  try {
+    await filesystem.writeFile("/data", Uint8Array.of(1, 2, 3, 4));
+    await filesystem.writeRange("/data", 0, new HostileBytes([5, 6, 7, 8]));
+    assert.deepEqual(await filesystem.readFile("/data"), Uint8Array.of(5, 6, 7, 8));
+    await assert.rejects(
+      filesystem.replaceRange("/missing", 0, 0, new HostileBytes(5)),
+      (error) => error?.code === "EFBIG",
+    );
+    assert.equal(
+      filesystem.capabilities.runtime.maxManagedResidentBytes >= 4,
+      true,
+    );
+  } finally {
+    await filesystem.close();
   }
 });

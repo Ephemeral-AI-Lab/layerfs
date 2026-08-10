@@ -1,4 +1,4 @@
-import { bytesToHex } from "../cas/bytes.js";
+import { bytesToHex, copyBytes } from "../cas/bytes.js";
 import { AdmissionController } from "../resources/limits.js";
 
 export type ContentCacheKind = "object" | "manifest-root" | "manifest-node";
@@ -48,7 +48,7 @@ export class ContentCache {
     this.#entries.delete(key);
     this.#entries.set(key, entry);
     this.#hits += 1;
-    return entry.bytes;
+    return copyBytes(entry.bytes);
   }
   reserve(weight: number): ContentCacheReservation | undefined {
     if (!Number.isSafeInteger(weight) || weight <= 0)
@@ -97,7 +97,7 @@ export class ContentCache {
       return;
     }
     const entry: Entry = Object.freeze({
-      bytes,
+      bytes: copyBytes(bytes),
       weight: reservation.weight,
       release: reservation.release,
     });

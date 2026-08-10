@@ -43,17 +43,24 @@ export function readManifestRange(
   manifestHash: Uint8Array,
   offset: number,
   length: number,
+  admission: AdmissionController,
+  cache?: ContentCache,
 ): Uint8Array {
   checkedInteger(offset, "manifest read offset");
   checkedInteger(length, "manifest read length");
   const cursor = repository.openManifestCursor(manifestHash, offset);
-  const output = new Uint8Array(
-    Math.max(0, Math.min(length, cursor.fileSize - offset)),
-  );
-  const written = cursor.readInto(output, 0, output.byteLength);
-  if (written !== output.byteLength)
-    throw new Error("ECORRUPT: authenticated manifest range ended early");
-  return output;
+  const outputLength = Math.max(0, Math.min(length, cursor.fileSize - offset));
+  cache?.makeRoom(outputLength);
+  const releaseOutput = admission.reserve(outputLength);
+  try {
+    const output = new Uint8Array(outputLength);
+    const written = cursor.readInto(output, 0, output.byteLength);
+    if (written !== output.byteLength)
+      throw new Error("ECORRUPT: authenticated manifest range ended early");
+    return output;
+  } finally {
+    releaseOutput();
+  }
 }
 
 export function readManifestInto(

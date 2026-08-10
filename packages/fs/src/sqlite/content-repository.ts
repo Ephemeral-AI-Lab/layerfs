@@ -1,6 +1,6 @@
 import { sha256, verifyCasObject } from "../cas/sha256.js";
 import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
-import { bytesToHex, equalBytes } from "../cas/bytes.js";
+import { bytesToHex, equalBytes, intrinsicByteLength } from "../cas/bytes.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
 import type { StorageLimits } from "../resources/limits.js";
 import {
@@ -61,8 +61,8 @@ export class ContentRepository {
     const unique = new Map<string, ContentObjectInput>();
     for (const item of input) {
       if (
-        item.hash.byteLength !== 32 ||
-        item.bytes.byteLength > this.#limits.maxWriteBytes
+        intrinsicByteLength(item.hash) !== 32 ||
+        intrinsicByteLength(item.bytes) > this.#limits.maxWriteBytes
       )
         throw new RangeError("object exceeds configured limit");
       verifyCasObject(item.hash, item.bytes);
@@ -73,7 +73,10 @@ export class ContentRepository {
       unique.set(key, item);
     }
     const values = [...unique.values()];
-    const inputBytes = values.reduce((sum, item) => sum + item.bytes.byteLength, 0);
+    const inputBytes = values.reduce(
+      (sum, item) => sum + intrinsicByteLength(item.bytes),
+      0,
+    );
     if (inputBytes + values.length * 256 > this.#limits.maxFinalTransactionBytes)
       throw new RangeError("content batch exceeds transaction byte limit");
     const placeholders = values.map(() => "?").join(",");
@@ -91,7 +94,7 @@ export class ContentRepository {
         insert.push(item);
         continue;
       }
-      if (row.size !== item.bytes.byteLength)
+      if (row.size !== intrinsicByteLength(item.bytes))
         throw new Error("ECORRUPT: CAS collision or stored size mismatch");
       const cached = this.#cache?.get("object", item.hash);
       if (cached) {
@@ -102,7 +105,7 @@ export class ContentRepository {
     if (uncached.length) {
       const missingPlaceholders = uncached.map(() => "?").join(",");
       const expectedBytes = uncached.reduce(
-        (sum, item) => sum + item.bytes.byteLength + 128,
+        (sum, item) => sum + intrinsicByteLength(item.bytes) + 128,
         0,
       );
       const stored = this.#tx.all<ObjectRow>(
@@ -115,7 +118,7 @@ export class ContentRepository {
         const row = storedByHash.get(bytesToHex(item.hash));
         if (
           !row?.bytes ||
-          row.size !== item.bytes.byteLength ||
+          row.size !== intrinsicByteLength(item.bytes) ||
           !equalBytes(row.bytes, item.bytes)
         )
           throw new Error("ECORRUPT: CAS collision or stored payload mismatch");
@@ -124,7 +127,10 @@ export class ContentRepository {
         this.#admitCache("object", item.hash, row.bytes, reservation);
       }
     }
-    const insertedBytes = insert.reduce((sum, item) => sum + item.bytes.byteLength, 0);
+    const insertedBytes = insert.reduce(
+      (sum, item) => sum + intrinsicByteLength(item.bytes),
+      0,
+    );
     if (insert.length) {
       this.#admit("object_bytes", insertedBytes, "object_count", insert.length);
       const sequence = this.#allocateSequenceRange(insert.length);
@@ -132,7 +138,7 @@ export class ContentRepository {
         const item = insert[index]!;
         this.#tx.run(
           "INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,?)",
-          [item.hash, item.bytes.byteLength, item.bytes, sequence + index],
+          [item.hash, intrinsicByteLength(item.bytes), item.bytes, sequence + index],
         );
       }
     }
@@ -199,7 +205,7 @@ export class ContentRepository {
     >();
     for (const node of nodes) {
       if (
-        node.encoded.byteLength > this.#limits.maxManifestNodeBytes ||
+        intrinsicByteLength(node.encoded) > this.#limits.maxManifestNodeBytes ||
         !equalBytes(sha256(node.encoded), node.hash)
       )
         throw new Error("invalid manifest node digest or size");
@@ -221,7 +227,10 @@ export class ContentRepository {
         maxRows: values.length,
         maxBytes: Math.max(
           1024,
-          values.reduce((sum, node) => sum + node.encoded.byteLength + 96, 0),
+          values.reduce(
+            (sum, node) => sum + intrinsicByteLength(node.encoded) + 96,
+            0,
+          ),
         ),
       },
     );
@@ -233,7 +242,7 @@ export class ContentRepository {
       return !prior;
     });
     const insertedBytes = insert.reduce(
-      (sum, node) => sum + node.encoded.byteLength,
+      (sum, node) => sum + intrinsicByteLength(node.encoded),
       0,
     );
     if (insertedBytes > this.#limits.maxFinalTransactionBytes)
@@ -270,7 +279,7 @@ export class ContentRepository {
 
   putManifestRoot(hash: Uint8Array, encoded: Uint8Array): boolean {
     if (
-      encoded.byteLength > this.#limits.maxManifestNodeBytes ||
+      intrinsicByteLength(encoded) > this.#limits.maxManifestNodeBytes ||
       !equalBytes(sha256(encoded), hash)
     )
       throw new Error("invalid manifest root digest or size");
@@ -285,7 +294,12 @@ export class ContentRepository {
         throw new Error("ECORRUPT: manifest root collision");
       return false;
     }
-    this.#admit("manifest_root_bytes", encoded.byteLength, "manifest_root_count", 1);
+    this.#admit(
+      "manifest_root_bytes",
+      intrinsicByteLength(encoded),
+      "manifest_root_count",
+      1,
+    );
     this.#tx.run(
       "INSERT INTO efs_manifest_roots(hash,root_node_hash,file_size,entry_count,chunk_min,chunk_avg,chunk_max,encoded,allocation_sequence) VALUES(?,?,?,?,?,?,?,?,?)",
       [
