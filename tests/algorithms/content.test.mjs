@@ -42,6 +42,6 @@ test("streaming FastCDC is invariant to every tested input partition", () => {
     actual.push(...stream.finish());
     assert.deepEqual(actual.map((chunk) => Buffer.from(chunk).toString("hex")), expected.map((chunk) => Buffer.from(chunk).toString("hex")));
     assert.equal(stream.bufferedBytes, 0);
+    assert.equal(stream.capacityBytes, DEFAULT_FASTCDC.maximum);
   }
 });
-

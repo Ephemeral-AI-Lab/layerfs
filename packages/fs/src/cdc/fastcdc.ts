@@ -1,4 +1,4 @@
-import { checkedAdd, checkedInteger, concatBytes } from "../utils/bytes.js";
+import { checkedAdd, checkedInteger } from "../utils/bytes.js";
 
 export interface FastCdcConfiguration { readonly minimum: number; readonly average: number; readonly maximum: number }
 export interface FastCdcChunk { readonly offset: number; readonly length: number }
@@ -59,37 +59,38 @@ export function fastCdcChunks(input: Uint8Array, configuration: FastCdcConfigura
 
 export class StreamingFastCdc {
   readonly #configuration: FastCdcConfiguration;
-  #parts: Uint8Array[] = [];
+  readonly #buffer: Uint8Array;
   #buffered = 0;
 
   constructor(configuration: FastCdcConfiguration = DEFAULT_FASTCDC) {
     validateFastCdcConfiguration(configuration);
     this.#configuration = Object.freeze({ ...configuration });
+    this.#buffer = new Uint8Array(configuration.maximum);
   }
 
   push(input: Uint8Array, final = false): Uint8Array[] {
-    if (input.byteLength) {
-      this.#parts.push(input.slice());
-      this.#buffered += input.byteLength;
-    }
-    if (!final && this.#buffered < this.#configuration.maximum) return [];
-    const combined = concatBytes(this.#parts);
     const chunks: Uint8Array[] = [];
     let offset = 0;
-    while (offset < combined.byteLength) {
-      if (!final && combined.byteLength - offset < this.#configuration.maximum) break;
-      const boundary = findFastCdcBoundary(combined, offset, this.#configuration);
-      if (!final && boundary === combined.byteLength && combined.byteLength - offset < this.#configuration.maximum) break;
-      chunks.push(combined.slice(offset, boundary));
-      offset = boundary;
+    while (offset < input.byteLength) {
+      const copied = Math.min(this.#buffer.byteLength - this.#buffered, input.byteLength - offset);
+      this.#buffer.set(input.subarray(offset, offset + copied), this.#buffered);
+      this.#buffered += copied; offset += copied;
+      if (this.#buffered === this.#buffer.byteLength) chunks.push(this.#emitChunk());
     }
-    const remainder = combined.slice(offset);
-    this.#parts = remainder.byteLength ? [remainder] : [];
-    this.#buffered = remainder.byteLength;
+    if (final) while (this.#buffered > 0) chunks.push(this.#emitChunk());
     return chunks;
   }
 
   finish(): Uint8Array[] { return this.push(new Uint8Array(), true); }
   get bufferedBytes(): number { return this.#buffered; }
-}
+  get capacityBytes(): number { return this.#buffer.byteLength; }
 
+  #emitChunk(): Uint8Array {
+    const view = this.#buffer.subarray(0, this.#buffered);
+    const boundary = findFastCdcBoundary(view, 0, this.#configuration);
+    const chunk = view.slice(0, boundary);
+    this.#buffer.copyWithin(0, boundary, this.#buffered);
+    this.#buffered -= boundary;
+    return chunk;
+  }
+}

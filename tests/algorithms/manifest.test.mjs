@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { bytesToHex } from "../../packages/fs/dist/utils/bytes.js";
 import { buildManifest } from "../../packages/fs/dist/manifests/builder.js";
 import { decodeManifestNode, decodeManifestRoot } from "../../packages/fs/dist/manifests/codec.js";
-import { lookupManifest, validateManifestTree } from "../../packages/fs/dist/manifests/cursor.js";
+import { lookupManifest, ManifestSequentialCursor, validateManifestTree } from "../../packages/fs/dist/manifests/cursor.js";
+import { applyEntrySplice, rebuildManifestLocally } from "../../packages/fs/dist/operations/local-rebuild.js";
 
 function fixture(length, seed = 0x12345678) {
   const bytes = new Uint8Array(length); let state = seed >>> 0;
@@ -36,6 +37,14 @@ test("manifest trees are canonical, bounded, corruption-detecting, and lookup ex
     assert.ok(located.nodesRead <= 8);
   }
   assert.equal(lookupManifest(first.root, bytes.length, reader).entry, null);
+  const cursor = new ManifestSequentialCursor(first.root, 0, reader, first.rootHash, 8);
+  const sequential = [];
+  while (cursor.peek()) {
+    assert.ok(cursor.retainedNodeCount <= 8);
+    const current = cursor.next(); sequential.push([bytesToHex(current.entry.hash), current.entry.length, current.offset]);
+  }
+  let expectedOffset = 0;
+  assert.deepEqual(sequential, first.entries.map((entry) => { const value = [bytesToHex(entry.hash), entry.length, expectedOffset]; expectedOffset += entry.length; return value; }));
   const corruptRoot = first.root.slice(); corruptRoot[20] ^= 1;
   assert.throws(() => decodeManifestRoot(corruptRoot, first.rootHash), /digest mismatch/);
   const [nodeHash, encodedNode] = first.nodes.entries().next().value;
@@ -44,13 +53,57 @@ test("manifest trees are canonical, bounded, corruption-detecting, and lookup ex
   assert.throws(() => validateManifestTree(first.root, corruptReader, first.rootHash), /digest mismatch/);
 });
 
-test("small edits fully rebuild to the canonical root and reuse unchanged CAS", () => {
-  const original = fixture(4 * 1024 * 1024);
-  const before = buildManifest(original, defaults);
-  const edited = new Uint8Array(original.length + 3); edited.set(original.subarray(0, 700_000)); edited.set([1, 2, 3], 700_000); edited.set(original.subarray(700_000), 700_003);
-  const localCandidate = buildManifest(edited, defaults); const fullRebuild = buildManifest(edited.slice(), defaults);
-  assert.equal(localCandidate.id, fullRebuild.id);
-  const reused = [...localCandidate.objects.keys()].filter((key) => before.objects.has(key));
-  assert.ok(reused.length > 0, "content-defined chunking should reconnect to unchanged content");
+test("local CDC reconnection and manifest-spine rebuilding equal a canonical full scan", () => {
+  const parameters = { minimum: 64, average: 128, maximum: 512 };
+  const original = fixture(2 * 1024 * 1024 + 29);
+  const before = buildManifest(original, parameters);
+  assert.ok(before.nodes.size > 10, "fixture must exercise a multi-level manifest");
+  const edits = [
+    { name: "overwrite", offset: 700_000, deleteLength: 5, insertBytes: Uint8Array.of(9, 8, 7, 6, 5) },
+    { name: "insertion", offset: 900_000, deleteLength: 0, insertBytes: Uint8Array.of(1, 2, 3, 4, 5, 6, 7) },
+    { name: "deletion", offset: 1_100_000, deleteLength: 11, insertBytes: new Uint8Array() },
+    { name: "truncation", offset: 1_700_000, deleteLength: original.length - 1_700_000, insertBytes: new Uint8Array() },
+  ];
+  for (const edit of edits) {
+    let sourceBytesRead = 0; let largestRead = 0;
+    const local = rebuildManifestLocally({
+      size: original.length,
+      read(offset, length) { sourceBytesRead += length; largestRead = Math.max(largestRead, length); return original.slice(offset, offset + length); },
+    }, before, edit);
+    const edited = new Uint8Array(original.length - edit.deleteLength + edit.insertBytes.length);
+    edited.set(original.subarray(0, edit.offset));
+    edited.set(edit.insertBytes, edit.offset);
+    edited.set(original.subarray(edit.offset + edit.deleteLength), edit.offset + edit.insertBytes.length);
+    const canonical = buildManifest(edited, parameters);
+    assert.equal(bytesToHex(local.rootHash), canonical.id, `${edit.name} root`);
+    assert.deepEqual(applyEntrySplice(before.entries, local.entrySplice).map((entry) => [bytesToHex(entry.hash), entry.length]), canonical.entries.map((entry) => [bytesToHex(entry.hash), entry.length]), `${edit.name} entries`);
+    assert.equal(local.fileSize, edited.length);
+    assert.equal(local.metrics.sourceBytesRead, sourceBytesRead);
+    assert.ok(largestRead <= parameters.maximum, `${edit.name} reads one bounded window at a time`);
+    assert.ok(sourceBytesRead < 64 * 1024, `${edit.name} reconnects without scanning the complete source`);
+    assert.ok(local.metrics.bytesHashed < 64 * 1024, `${edit.name} hashes only the reconnection window`);
+    assert.ok(local.newNodes.size < canonical.nodes.size / 4, `${edit.name} rebuilds only affected manifest paths`);
+    const nodes = new Map([...before.nodes, ...local.newNodes]);
+    validateManifestTree(local.root, { get(hash) { return nodes.get(bytesToHex(hash))?.encoded; } }, local.rootHash, 8);
+  }
 });
 
+test("seeded local rebuild property cases match full rebuilds at boundaries and EOF", () => {
+  const parameters = { minimum: 64, average: 128, maximum: 512 };
+  const original = fixture(256 * 1024 + 17, 0x5eedc0de);
+  const before = buildManifest(original, parameters);
+  let state = 0x91e10da5;
+  const random = () => { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return state >>> 0; };
+  for (let iteration = 0; iteration < 24; iteration += 1) {
+    const offset = iteration < 3 ? [0, original.length, Math.floor(original.length / 2)][iteration] : random() % (original.length + 1);
+    const deleteLength = Math.min(random() % 33, original.length - offset);
+    const insert = fixture(random() % 33, random());
+    const local = rebuildManifestLocally({ size: original.length, read(start, length) { return original.slice(start, start + length); } }, before, { offset, deleteLength, insertBytes: insert });
+    const edited = new Uint8Array(original.length - deleteLength + insert.length);
+    edited.set(original.subarray(0, offset)); edited.set(insert, offset); edited.set(original.subarray(offset + deleteLength), offset + insert.length);
+    const canonical = buildManifest(edited, parameters);
+    assert.equal(bytesToHex(local.rootHash), canonical.id, `seed=0x91e10da5 iteration=${iteration}`);
+    assert.ok(local.metrics.scanWindowBytes === parameters.maximum);
+    assert.ok(local.metrics.sourceBytesRead < original.length / 2, `iteration ${iteration} remained local`);
+  }
+});

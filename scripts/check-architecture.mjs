@@ -36,10 +36,25 @@ for (const forbidden of ["node:", "cloudflare:", "@cloudflare/", "fuse", "rpc"])
   }
 }
 
+const pureBoundaries = new Map([
+  ["cas", ["sqlite", "filesystem", "branches", "node:", "cloudflare", "fuse", "rpc"]],
+  ["cdc", ["sqlite", "filesystem", "cow", "branches", "node:", "cloudflare", "fuse", "rpc"]],
+  ["cow", ["sqlite", "filesystem", "cdc", "branches", "node:", "cloudflare", "fuse", "rpc"]],
+  ["patches", ["sqlite", "filesystem", "branches", "node:", "cloudflare", "fuse", "rpc"]],
+  ["manifests", ["sqlite", "filesystem", "branches", "node:", "cloudflare", "fuse", "rpc"]],
+]);
+for (const [directory, forbidden] of pureBoundaries) {
+  const sourceRoot = path.join(packageRoot, "fs", "src", directory);
+  for (const filename of await readdir(sourceRoot)) {
+    if (!filename.endsWith(".ts")) continue;
+    const source = (await readFile(path.join(sourceRoot, filename), "utf8")).toLowerCase();
+    for (const term of forbidden) if (source.includes(`from \"../${term}`) || source.includes(`from '${term}`) || source.includes(`from \"${term}`)) violations.push(`${directory}/${filename} crosses pure algorithm boundary through ${term}`);
+  }
+}
+
 if (violations.length) {
   console.error(violations.join("\n"));
   process.exitCode = 1;
 } else {
   console.log("architecture: dependency direction and host boundary valid");
 }
-
