@@ -3,10 +3,12 @@ import { DEFAULT_FASTCDC, StreamingFastCdc } from "../cdc/fastcdc.js";
 import {
   encodeManifestNode,
   encodeManifestRoot,
+  validateSupportedManifestParameters,
   type ManifestChild,
   type ManifestEntry,
   type ManifestInternal,
   type ManifestLeaf,
+  type ManifestParameters,
 } from "../manifests/codec.js";
 import {
   advanceManifestGroupingState,
@@ -25,7 +27,12 @@ import type {
   StagingEntryRow as EntryRow,
   StagingLevelRow as LevelRow,
 } from "./storage-ports.js";
-import { bytesToHex } from "../cas/bytes.js";
+import {
+  bytesToHex,
+  copyBytes,
+  intrinsicByteLength,
+  intrinsicByteRange,
+} from "../cas/bytes.js";
 import { checkedAdd } from "../resources/safe-integers.js";
 interface PreparedNode {
   readonly hash: Uint8Array;
@@ -37,6 +44,13 @@ export interface StreamPreparedManifest {
   readonly hash: Uint8Array;
   readonly size: number;
   readonly certificate: ClosureCertificate;
+}
+
+export interface StagedManifestEntryInput {
+  readonly hash: Uint8Array;
+  readonly length: number;
+  /** Present only for newly chunked content. Existing CAS entries omit it. */
+  readonly bytes?: Uint8Array;
 }
 
 function randomNonce(): Uint8Array {
@@ -53,6 +67,8 @@ export async function prepareContentStreaming(
   cache?: ContentCache,
   clock: () => number = Date.now,
 ): Promise<StreamPreparedManifest> {
+  const bufferedInput = input instanceof Uint8Array ? copyBytes(input) : undefined;
+  const streamInput = bufferedInput ? undefined : (input as ReadableStream<Uint8Array>);
   const leaseId = globalThis.crypto.randomUUID();
   const ownerId = globalThis.crypto.randomUUID();
   const ownerNonce = randomNonce();
@@ -70,7 +86,7 @@ export async function prepareContentStreaming(
       Math.floor(storage.maxFinalTransactionBytes / 2),
     ),
   );
-  const inputBudget = input instanceof Uint8Array ? input.byteLength : 0;
+  const inputBudget = bufferedInput?.byteLength ?? 0;
   const builderBudget = Math.min(
     runtime.maxQueryBatchBytes + storage.maxManifestNodeBytes * 2,
     runtime.maxManagedResidentBytes -
@@ -119,6 +135,7 @@ export async function prepareContentStreaming(
     });
   };
   const acceptChunk = (chunk: Uint8Array): void => {
+    chunk = copyBytes(chunk);
     total = checkedAdd(total, chunk.byteLength);
     if (total > storage.maxFileBytes) throw new RangeError("file exceeds maxFileBytes");
     if (
@@ -130,13 +147,18 @@ export async function prepareContentStreaming(
     pendingBytes += chunk.byteLength;
   };
   const feed = (bytes: Uint8Array): void => {
+    bytes = intrinsicByteRange(bytes);
     for (
       let offset = 0;
       offset < bytes.byteLength;
       offset += runtime.maxWriteSessionBytes
     )
       chunker.drain(
-        bytes.subarray(offset, offset + runtime.maxWriteSessionBytes),
+        intrinsicByteRange(
+          bytes,
+          offset,
+          Math.min(bytes.byteLength, offset + runtime.maxWriteSessionBytes),
+        ),
         acceptChunk,
       );
   };
@@ -159,9 +181,9 @@ export async function prepareContentStreaming(
     releases.push(admission.reserve(builderBudget));
     if (inputBudget) releases.push(admission.reserve(inputBudget));
     chunker = new StreamingFastCdc(DEFAULT_FASTCDC);
-    if (input instanceof Uint8Array) feed(input);
+    if (bufferedInput) feed(bufferedInput);
     else {
-      const reader = input.getReader();
+      const reader = streamInput!.getReader();
       let completed = false;
       let streamError: unknown;
       try {
@@ -175,9 +197,10 @@ export async function prepareContentStreaming(
           }
           if (!(value instanceof Uint8Array))
             throw new TypeError("write stream chunks must be Uint8Array values");
-          const releaseInput = admission.reserve(value.byteLength);
+          const ownedValue = copyBytes(value);
+          const releaseInput = admission.reserve(ownedValue.byteLength);
           try {
-            feed(value);
+            feed(ownedValue);
           } finally {
             releaseInput();
           }
@@ -195,60 +218,17 @@ export async function prepareContentStreaming(
     }
     chunker.drain(new Uint8Array(), acceptChunk, true);
     flushObjects();
-    const rootNode = buildManifestLevels(
+    return finalizeStagedManifest(
       port,
       storage,
       runtime,
       leaseId,
       ownerNonce,
       workBudget,
+      DEFAULT_FASTCDC,
+      total,
+      entryIndex,
     );
-    const root = encodeManifestRoot({
-      parameters: DEFAULT_FASTCDC,
-      fileSize: total,
-      entryCount: entryIndex,
-      rootNodeHash: rootNode.hash,
-    });
-    const rootHash = sha256(root);
-    const certificate = port.transaction("write", workBudget, (tx) => {
-      const repository = tx.content(storage);
-      repository.putManifestRoot(rootHash, root);
-      const staging = tx.staging(storage);
-      staging.appendBatch(leaseId, ownerNonce, [
-        Object.freeze({ kind: "manifest-root", hash: rootHash, size: root.byteLength }),
-      ]);
-      staging.beginReconciliation(leaseId, ownerNonce, rootHash);
-      return Object.freeze({
-        ...staging.snapshot(leaseId, ownerNonce),
-        manifestHash: rootHash,
-      });
-    });
-    let complete = false;
-    while (!complete)
-      complete = port.transaction(
-        "write",
-        workBudget,
-        (tx) =>
-          tx
-            .staging(storage)
-            .reconcileBatch(
-              leaseId,
-              ownerNonce,
-              Math.max(
-                1,
-                Math.min(
-                  storage.maxQueryBatchSize,
-                  storage.maxFinalTransactionRows - 8,
-                ),
-              ),
-            ).complete,
-      );
-    port.transaction("write", workBudget, (tx) => {
-      const staging = tx.staging(storage);
-      staging.seal(certificate);
-      staging.bumpRoot(5, leaseId);
-    });
-    return Object.freeze({ hash: rootHash, size: total, certificate });
   } catch (error) {
     if (leaseBegun)
       try {
@@ -260,6 +240,244 @@ export async function prepareContentStreaming(
   } finally {
     for (let index = releases.length - 1; index >= 0; index -= 1) releases[index]!();
   }
+}
+
+/**
+ * Persists an authenticated entry stream without materializing the file. Entries
+ * without `bytes` reuse an existing CAS object; entries with `bytes` are verified
+ * and inserted before their durable staging reference is recorded.
+ */
+export async function prepareContentEntriesStreaming(
+  port: OperationsStorage,
+  entries: Iterable<StagedManifestEntryInput>,
+  parameters: ManifestParameters,
+  expectedSize: number,
+  storage: StorageLimits,
+  runtime: RuntimeLimits,
+  admission: AdmissionController,
+  cache?: ContentCache,
+  clock: () => number = Date.now,
+): Promise<StreamPreparedManifest> {
+  validateSupportedManifestParameters(parameters);
+  if (
+    !Number.isSafeInteger(expectedSize) ||
+    expectedSize < 0 ||
+    expectedSize > storage.maxFileBytes
+  )
+    throw new RangeError("staged manifest size exceeds configured limit");
+  const leaseId = globalThis.crypto.randomUUID();
+  const ownerId = globalThis.crypto.randomUUID();
+  const ownerNonce = randomNonce();
+  const now = clock();
+  if (!Number.isSafeInteger(now) || now < 0)
+    throw new Error("clock must return a nonnegative safe integer");
+  const workBudget = Object.freeze({
+    maxRows: storage.maxFinalTransactionRows,
+    maxBytes: storage.maxFinalTransactionBytes,
+    maxStatements: storage.maxFinalTransactionRows,
+    maxElapsedMs: 250,
+  });
+  const pendingLimit = Math.max(
+    parameters.maximum,
+    Math.min(
+      runtime.maxPendingWriteBytes,
+      Math.floor(storage.maxFinalTransactionBytes / 2),
+    ),
+  );
+  const builderBudget = Math.min(
+    runtime.maxQueryBatchBytes + storage.maxManifestNodeBytes * 2,
+    runtime.maxManagedResidentBytes - parameters.maximum - pendingLimit,
+  );
+  if (builderBudget <= 0)
+    throw new RangeError(
+      "managed resident memory limit cannot admit staged manifest construction",
+    );
+  const releases: Array<() => void> = [];
+  let leaseBegun = false;
+  let total = 0;
+  let entryIndex = 0;
+  let previousLength: number | undefined;
+  let pendingBytes = 0;
+  const pending: Array<{
+    readonly hash: Uint8Array;
+    readonly length: number;
+    readonly bytes?: Uint8Array;
+  }> = [];
+  const flush = (): void => {
+    if (!pending.length) return;
+    const batch = pending.splice(0);
+    pendingBytes = 0;
+    port.transaction("write", workBudget, (tx) => {
+      const objects = batch
+        .filter(
+          (item): item is typeof item & { readonly bytes: Uint8Array } =>
+            item.bytes !== undefined,
+        )
+        .map((item) => Object.freeze({ hash: item.hash, bytes: item.bytes }));
+      if (objects.length) tx.content(storage).putObjectsBatch(objects);
+      const staging = tx.staging(storage);
+      for (const item of batch)
+        staging.putEntry(leaseId, entryIndex++, item.hash, item.length);
+      const unique = [
+        ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
+      ];
+      staging.appendBatch(
+        leaseId,
+        ownerNonce,
+        unique.map((item) =>
+          Object.freeze({
+            kind: "object" as const,
+            hash: item.hash,
+            size: item.length,
+          }),
+        ),
+      );
+      staging.bumpRoot(5, leaseId);
+    });
+  };
+  try {
+    cache?.makeRoom(parameters.maximum + pendingLimit + builderBudget);
+    port.transaction("write", workBudget, (tx) => {
+      const staging = tx.staging(storage);
+      staging.begin({
+        leaseId,
+        ownerId,
+        ownerNonce,
+        now,
+        expiresAt: now + storage.stagingLeaseMs,
+      });
+      staging.bumpRoot(5, leaseId);
+    });
+    leaseBegun = true;
+    releases.push(admission.reserve(parameters.maximum));
+    releases.push(admission.reserve(pendingLimit));
+    releases.push(admission.reserve(builderBudget));
+    for (const borrowed of entries) {
+      const hash = copyBytes(borrowed.hash);
+      const length = borrowed.length;
+      if (
+        hash.byteLength !== 32 ||
+        !Number.isSafeInteger(length) ||
+        length <= 0 ||
+        length > parameters.maximum
+      )
+        throw new RangeError("invalid staged manifest entry");
+      if (previousLength !== undefined && previousLength < parameters.minimum)
+        throw new Error("ECORRUPT: non-final manifest entry is below FastCDC minimum");
+      previousLength = length;
+      const bytes =
+        borrowed.bytes === undefined ? undefined : copyBytes(borrowed.bytes);
+      if (bytes && intrinsicByteLength(bytes) !== length)
+        throw new Error("staged object length differs from its manifest entry");
+      total = checkedAdd(total, length);
+      if (total > expectedSize)
+        throw new Error("staged entry stream exceeds declared file size");
+      if (
+        pending.length >= storage.maxQueryBatchSize ||
+        (bytes !== undefined && pendingBytes + bytes.byteLength > pendingLimit)
+      )
+        flush();
+      pending.push(Object.freeze({ hash, length, ...(bytes ? { bytes } : {}) }));
+      pendingBytes += bytes?.byteLength ?? 0;
+      if (entryIndex + pending.length > storage.maxManifestEntries)
+        throw new RangeError("manifest entry count exceeds configured limit");
+    }
+    flush();
+    if (total !== expectedSize)
+      throw new Error("staged entry stream ended before declared file size");
+    if ((expectedSize === 0) !== (entryIndex === 0))
+      throw new Error("staged empty-file totals mismatch");
+    return finalizeStagedManifest(
+      port,
+      storage,
+      runtime,
+      leaseId,
+      ownerNonce,
+      workBudget,
+      parameters,
+      total,
+      entryIndex,
+    );
+  } catch (error) {
+    if (leaseBegun)
+      try {
+        port.transaction("write", workBudget, (tx) => {
+          tx.staging(storage).delete(leaseId, ownerNonce);
+        });
+      } catch {}
+    throw error;
+  } finally {
+    for (let index = releases.length - 1; index >= 0; index -= 1) releases[index]!();
+  }
+}
+
+function finalizeStagedManifest(
+  port: OperationsStorage,
+  storage: StorageLimits,
+  runtime: RuntimeLimits,
+  leaseId: string,
+  ownerNonce: Uint8Array,
+  workBudget: {
+    readonly maxRows: number;
+    readonly maxBytes: number;
+    readonly maxStatements?: number;
+    readonly maxElapsedMs?: number;
+  },
+  parameters: ManifestParameters,
+  total: number,
+  entryIndex: number,
+): StreamPreparedManifest {
+  const rootNode = buildManifestLevels(
+    port,
+    storage,
+    runtime,
+    leaseId,
+    ownerNonce,
+    workBudget,
+  );
+  const root = encodeManifestRoot({
+    parameters,
+    fileSize: total,
+    entryCount: entryIndex,
+    rootNodeHash: rootNode.hash,
+  });
+  const rootHash = sha256(root);
+  const certificate = port.transaction("write", workBudget, (tx) => {
+    const repository = tx.content(storage);
+    repository.putManifestRoot(rootHash, root);
+    const staging = tx.staging(storage);
+    staging.appendBatch(leaseId, ownerNonce, [
+      Object.freeze({ kind: "manifest-root", hash: rootHash, size: root.byteLength }),
+    ]);
+    staging.beginReconciliation(leaseId, ownerNonce, rootHash);
+    return Object.freeze({
+      ...staging.snapshot(leaseId, ownerNonce),
+      manifestHash: rootHash,
+    });
+  });
+  let complete = false;
+  while (!complete)
+    complete = port.transaction(
+      "write",
+      workBudget,
+      (tx) =>
+        tx
+          .staging(storage)
+          .reconcileBatch(
+            leaseId,
+            ownerNonce,
+            Math.max(
+              1,
+              Math.min(storage.maxQueryBatchSize, storage.maxFinalTransactionRows - 8),
+            ),
+          ).complete,
+    );
+  port.transaction("write", workBudget, (tx) => {
+    const staging = tx.staging(storage);
+    staging.seal(certificate);
+    staging.bumpRoot(5, leaseId);
+  });
+  return Object.freeze({ hash: rootHash, size: total, certificate });
 }
 
 function buildManifestLevels(

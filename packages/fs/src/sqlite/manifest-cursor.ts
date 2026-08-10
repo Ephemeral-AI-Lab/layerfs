@@ -6,6 +6,7 @@ import {
   validateSupportedManifestParameters,
 } from "../manifests/codec.js";
 import { checkedAdd } from "../resources/safe-integers.js";
+import type { AuthenticatedManifestEntry } from "../operations/storage-ports.js";
 
 export interface SQLiteManifestContentSource {
   getObject(hash: Uint8Array, expectedSize?: number): Uint8Array | undefined;
@@ -49,6 +50,28 @@ export class SQLiteAuthenticatedManifestCursor {
     return this.#position;
   }
 
+  peekEntry(): AuthenticatedManifestEntry | null {
+    const selected = this.#cursor.peek();
+    return selected
+      ? Object.freeze({
+          hash: copyBytes(selected.entry.hash),
+          length: selected.entry.length,
+          offset: selected.offset,
+        })
+      : null;
+  }
+
+  nextEntry(): AuthenticatedManifestEntry | null {
+    const selected = this.#cursor.next();
+    if (!selected) return null;
+    this.#position = checkedAdd(selected.offset, selected.entry.length);
+    return Object.freeze({
+      hash: copyBytes(selected.entry.hash),
+      length: selected.entry.length,
+      offset: selected.offset,
+    });
+  }
+
   readInto(destination: Uint8Array, destinationOffset: number, length: number): number {
     destination = intrinsicByteRange(destination);
     if (
@@ -85,7 +108,7 @@ export class SQLiteAuthenticatedManifestCursor {
       );
       written += take;
       this.#position = checkedAdd(this.#position, take);
-      if (this.#position === entryEnd) this.#cursor.next();
+      if (this.#position === entryEnd) this.nextEntry();
     }
     return written;
   }

@@ -839,7 +839,7 @@ export class StagingRepository {
       const existing = this.#tx.all<QueueRow>(
         "SELECT kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor FROM efs_staging_reconciliation_queue WHERE lease_id=? AND kind=? AND hash=?",
         [leaseId, kind, hash],
-        { maxRows: 1, maxBytes: 256 },
+        { maxRows: 1, maxBytes: 512 },
       )[0];
       if (
         !existing ||

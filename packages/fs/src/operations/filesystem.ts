@@ -20,6 +20,16 @@ import {
 import { checkedAdd, checkedInteger } from "../resources/safe-integers.js";
 import { encodeUtf8 } from "../namespace/utf8.js";
 import { prepareContent, readManifestRange } from "../operations/manifest-io.js";
+import { copyBytes, intrinsicByteLength, intrinsicByteRange } from "../cas/bytes.js";
+import {
+  decodeManifestRoot,
+  validateSupportedManifestParameters,
+} from "../manifests/codec.js";
+import {
+  prepareDurableEditedContent,
+  type DurableContentEdit,
+  type DurableEditSource,
+} from "./durable-edit-prepare.js";
 import {
   abortError,
   FilesystemError,
@@ -435,7 +445,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       typeof content === "string"
         ? new TextEncoder().encode(content)
         : content instanceof Uint8Array
-          ? content.slice()
+          ? content
           : content;
     return this.#operation("writeFile", path, options.signal, async () => {
       if (
@@ -450,7 +460,7 @@ export class EphemeralFS implements EphemeralFilesystem {
         );
       if (
         frozen instanceof Uint8Array &&
-        frozen.byteLength > this.#storageLimits.maxWriteBytes
+        intrinsicByteLength(frozen) > this.#storageLimits.maxWriteBytes
       )
         throw fsError(
           "EFBIG",
@@ -554,32 +564,39 @@ export class EphemeralFS implements EphemeralFilesystem {
   }
 
   writeRange(path: string, offset: number, content: Uint8Array): Promise<void> {
-    const frozen = content.slice();
+    const frozen = copyBytes(content);
     return this.#operation("writeRange", path, undefined, async () => {
       checkedInteger(offset, "offset");
       if (frozen.byteLength > this.#storageLimits.maxWriteBytes)
         throw fsError("EFBIG", "writeRange", path, "write exceeds maxWriteBytes");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "writeRange");
-      const selected = this.#readCompleteForMutation(canonical.value, "writeRange");
+      const selected = this.#selectMutationSource(canonical.value, "writeRange");
       if (!frozen.byteLength) return;
       const size = Math.max(
-        selected.bytes.byteLength,
+        selected.source.size,
         checkedAdd(offset, frozen.byteLength),
       );
-      if (
-        size > this.#storageLimits.maxFileBytes ||
-        size > this.#runtimeLimits.maxManagedResidentBytes
-      )
+      if (size > this.#storageLimits.maxFileBytes)
         throw fsError(
           "EFBIG",
           "writeRange",
           canonical.value,
-          "result is too large for bounded materialization",
+          "result exceeds maxFileBytes",
         );
-      const bytes = new Uint8Array(size);
-      bytes.set(selected.bytes);
-      bytes.set(frozen, offset);
-      await this.#replaceExisting(canonical.value, bytes, selected.token, "writeRange");
+      const editOffset = Math.min(offset, selected.source.size);
+      const gap = Math.max(0, offset - selected.source.size);
+      const deleteLength = Math.min(
+        frozen.byteLength,
+        selected.source.size - editOffset,
+      );
+      const edit = this.#bufferedInsertionEdit(editOffset, deleteLength, gap, frozen);
+      await this.#replaceExisting(
+        canonical.value,
+        selected.source,
+        edit,
+        selected.token,
+        "writeRange",
+      );
     });
   }
 
@@ -589,16 +606,15 @@ export class EphemeralFS implements EphemeralFilesystem {
     deleteLength: number,
     insertBytes: Uint8Array,
   ): Promise<void> {
-    const frozen = insertBytes.slice();
+    const frozen = copyBytes(insertBytes);
     return this.#operation("replaceRange", path, undefined, async () => {
       checkedInteger(offset, "offset");
       checkedInteger(deleteLength, "deleteLength");
+      if (frozen.byteLength > this.#storageLimits.maxWriteBytes)
+        throw fsError("EFBIG", "replaceRange", path, "insertion exceeds maxWriteBytes");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "replaceRange");
-      const selected = this.#readCompleteForMutation(canonical.value, "replaceRange");
-      if (
-        offset > selected.bytes.byteLength ||
-        deleteLength > selected.bytes.byteLength - offset
-      )
+      const selected = this.#selectMutationSource(canonical.value, "replaceRange");
+      if (offset > selected.source.size || deleteLength > selected.source.size - offset)
         throw fsError(
           "EINVAL",
           "replaceRange",
@@ -606,27 +622,18 @@ export class EphemeralFS implements EphemeralFilesystem {
           "replacement range is outside file",
         );
       if (!deleteLength && !frozen.byteLength) return;
-      const finalSize = selected.bytes.byteLength - deleteLength + frozen.byteLength;
-      if (
-        finalSize > this.#storageLimits.maxFileBytes ||
-        finalSize > this.#runtimeLimits.maxManagedResidentBytes
-      )
+      const finalSize = selected.source.size - deleteLength + frozen.byteLength;
+      if (finalSize > this.#storageLimits.maxFileBytes)
         throw fsError(
           "EFBIG",
           "replaceRange",
           canonical.value,
-          "result is too large for bounded materialization",
+          "result exceeds maxFileBytes",
         );
-      const bytes = new Uint8Array(finalSize);
-      bytes.set(selected.bytes.subarray(0, offset));
-      bytes.set(frozen, offset);
-      bytes.set(
-        selected.bytes.subarray(offset + deleteLength),
-        offset + frozen.byteLength,
-      );
       await this.#replaceExisting(
         canonical.value,
-        bytes,
+        selected.source,
+        this.#bufferedInsertionEdit(offset, deleteLength, 0, frozen),
         selected.token,
         "replaceRange",
       );
@@ -637,18 +644,29 @@ export class EphemeralFS implements EphemeralFilesystem {
     return this.#operation("truncate", path, undefined, async () => {
       checkedInteger(size, "size", this.#storageLimits.maxFileBytes);
       const canonical = canonicalizePath(path, this.#filesystemLimits, "truncate");
-      const selected = this.#readCompleteForMutation(canonical.value, "truncate");
-      if (size === selected.bytes.byteLength) return;
-      if (size > this.#runtimeLimits.maxManagedResidentBytes)
-        throw fsError(
-          "EFBIG",
-          "truncate",
-          canonical.value,
-          "result is too large for bounded materialization",
-        );
-      const bytes = new Uint8Array(size);
-      bytes.set(selected.bytes.subarray(0, size));
-      await this.#replaceExisting(canonical.value, bytes, selected.token, "truncate");
+      const selected = this.#selectMutationSource(canonical.value, "truncate");
+      if (size === selected.source.size) return;
+      const edit: DurableContentEdit =
+        size < selected.source.size
+          ? Object.freeze({
+              offset: size,
+              deleteLength: selected.source.size - size,
+              insertLength: 0,
+              readInsert: (_offset: number, length: number) => new Uint8Array(length),
+            })
+          : Object.freeze({
+              offset: selected.source.size,
+              deleteLength: 0,
+              insertLength: size - selected.source.size,
+              readInsert: (_offset: number, length: number) => new Uint8Array(length),
+            });
+      await this.#replaceExisting(
+        canonical.value,
+        selected.source,
+        edit,
+        selected.token,
+        "truncate",
+      );
     });
   }
 
@@ -1043,82 +1061,156 @@ export class EphemeralFS implements EphemeralFilesystem {
       });
     });
   }
-  #readCompleteForMutation(
+  #selectMutationSource(
     path: string,
     syscall: string,
-  ): { bytes: Uint8Array; token: number } {
-    return this.#transaction("read", (tx) => {
+  ): { source: DurableEditSource; token: number } {
+    const selected = this.#transaction("read", (tx) => {
       const selected = tx
         .namespace(this.#filesystemLimits, syscall)
         .resolve(path, true);
       const inode = this.#requireFile(selected, syscall);
-      if (inode.size! > this.#runtimeLimits.maxManagedResidentBytes)
-        throw fsError("EFBIG", syscall, path, "file exceeds bounded mutation memory");
+      const manifestHash = copyBytes(inode.manifest_hash!);
+      const rootBytes = tx
+        .content(this.#storageLimits, this.#cache)
+        .getManifestRoot(manifestHash);
+      if (!rootBytes) throw new Error("ECORRUPT: missing manifest root");
+      const root = decodeManifestRoot(rootBytes, manifestHash);
+      validateSupportedManifestParameters(root.parameters);
+      if (root.fileSize !== inode.size)
+        throw new Error("ECORRUPT: inode size disagrees with manifest root");
       return {
-        bytes: readManifestRange(
-          tx.content(this.#storageLimits, this.#cache),
-          inode.manifest_hash!,
-          0,
-          inode.size!,
-        ),
+        manifestHash,
+        size: inode.size!,
+        parameters: root.parameters,
         token: inode.token,
       };
+    });
+    const source: DurableEditSource = Object.freeze({
+      size: selected.size,
+      parameters: selected.parameters,
+      read: (offset: number, length: number): Uint8Array =>
+        this.#transaction("read", (tx) =>
+          readManifestRange(
+            tx.content(this.#storageLimits, this.#cache),
+            selected.manifestHash,
+            offset,
+            length,
+          ),
+        ),
+      entries: (offset: number, limit: number) =>
+        this.#transaction("read", (tx) => {
+          checkedInteger(offset, "authenticated entry offset", selected.size);
+          checkedInteger(limit, "authenticated entry batch size");
+          if (limit <= 0 || limit > this.#storageLimits.maxQueryBatchSize)
+            throw new RangeError("authenticated entry batch exceeds configured limit");
+          const cursor = tx
+            .content(this.#storageLimits, this.#cache)
+            .openManifestCursor(selected.manifestHash, offset);
+          if (cursor.fileSize !== selected.size)
+            throw new Error("ECORRUPT: manifest size changed across cursor opens");
+          const rows = [];
+          for (let index = 0; index < limit; index += 1) {
+            const row = cursor.nextEntry();
+            if (!row) break;
+            rows.push(row);
+          }
+          return Object.freeze(rows);
+        }),
+    });
+    return Object.freeze({ source, token: selected.token });
+  }
+  #bufferedInsertionEdit(
+    offset: number,
+    deleteLength: number,
+    zeroPrefixLength: number,
+    bytes: Uint8Array,
+  ): DurableContentEdit {
+    const insertLength = checkedAdd(zeroPrefixLength, bytes.byteLength);
+    return Object.freeze({
+      offset,
+      deleteLength,
+      insertLength,
+      retainedBytes: bytes.byteLength,
+      readInsert: (position: number, length: number): Uint8Array => {
+        checkedInteger(position, "insertion offset", insertLength);
+        checkedInteger(length, "insertion length", insertLength - position);
+        const output = new Uint8Array(length);
+        const dataStart = Math.max(position, zeroPrefixLength);
+        const dataEnd = Math.min(position + length, insertLength);
+        if (dataEnd > dataStart)
+          output.set(
+            intrinsicByteRange(
+              bytes,
+              dataStart - zeroPrefixLength,
+              dataEnd - zeroPrefixLength,
+            ),
+            dataStart - position,
+          );
+        return output;
+      },
     });
   }
   async #replaceExisting(
     path: string,
-    bytes: Uint8Array,
+    source: DurableEditSource,
+    edit: DurableContentEdit,
     expectedToken: number,
     syscall: string,
   ): Promise<void> {
-    const prepared = await prepareContent(
-      this.#storagePort,
-      bytes,
-      this.#storageLimits,
-      this.#runtimeLimits,
-      this.#admission,
-      undefined,
-      this.#cache,
-      this.#clock,
-    );
+    const releaseInsertion = this.#admission.reserve(edit.retainedBytes ?? 0);
     try {
-      this.#transaction("write", (tx) => {
-        const ns = tx.namespace(this.#filesystemLimits, syscall);
-        const selected = ns.resolve(path, true);
-        const inode = this.#requireFile(selected, syscall);
-        if (inode.token !== expectedToken)
-          throw fsError(
-            "EAGAIN",
-            syscall,
-            path,
-            "file changed while content was prepared",
-          );
-        const now = Math.max(this.#now(), inode.mtime_ms, inode.ctime_ms);
-        this.#validatePrepared(tx, prepared.certificate, now);
-        const revision = ns.nextRevision(now, 1);
-        if (
-          ns.setFileContent(
-            inode.id,
-            prepared.size,
-            prepared.hash,
-            now,
-            now,
-            revision,
-            expectedToken,
-          ) !== 1
-        )
-          throw fsError(
-            "EAGAIN",
-            syscall,
-            path,
-            "file changed while content was prepared",
-          );
-        ns.recordInode(revision, inode.id);
-        this.#releasePrepared(tx, prepared.certificate);
-      });
-    } catch (error) {
-      this.#abandonPrepared(prepared.certificate);
-      throw error;
+      const prepared = await prepareDurableEditedContent(
+        this.#storagePort,
+        source,
+        edit,
+        this.#storageLimits,
+        this.#runtimeLimits,
+        this.#admission,
+        this.#cache,
+        this.#clock,
+      );
+      try {
+        this.#transaction("write", (tx) => {
+          const ns = tx.namespace(this.#filesystemLimits, syscall);
+          const selected = ns.resolve(path, true);
+          const inode = this.#requireFile(selected, syscall);
+          if (inode.token !== expectedToken)
+            throw fsError(
+              "EAGAIN",
+              syscall,
+              path,
+              "file changed while content was prepared",
+            );
+          const now = Math.max(this.#now(), inode.mtime_ms, inode.ctime_ms);
+          this.#validatePrepared(tx, prepared.certificate, now);
+          const revision = ns.nextRevision(now, 1);
+          if (
+            ns.setFileContent(
+              inode.id,
+              prepared.size,
+              prepared.hash,
+              now,
+              now,
+              revision,
+              expectedToken,
+            ) !== 1
+          )
+            throw fsError(
+              "EAGAIN",
+              syscall,
+              path,
+              "file changed while content was prepared",
+            );
+          ns.recordInode(revision, inode.id);
+          this.#releasePrepared(tx, prepared.certificate);
+        });
+      } catch (error) {
+        this.#abandonPrepared(prepared.certificate);
+        throw error;
+      }
+    } finally {
+      releaseInsertion();
     }
   }
   #requireFile(selected: ResolvedPath, syscall: string): InodeRow {

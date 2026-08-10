@@ -61,7 +61,14 @@ export interface ContentBatchResult {
 export interface AuthenticatedManifestCursor {
   readonly fileSize: number;
   readonly position: number;
+  peekEntry(): AuthenticatedManifestEntry | null;
+  nextEntry(): AuthenticatedManifestEntry | null;
   readInto(destination: Uint8Array, destinationOffset: number, length: number): number;
+}
+export interface AuthenticatedManifestEntry {
+  readonly hash: Uint8Array;
+  readonly length: number;
+  readonly offset: number;
 }
 export interface ContentStore {
   putObject(hash: Uint8Array, bytes: Uint8Array): boolean;
