@@ -8,16 +8,7 @@ import {
   type ContentCacheKind,
   type ContentCacheReservation,
 } from "../cache/content-cache.js";
-
-interface UsageRow extends SqliteRow {
-  object_count: number;
-  object_bytes: number;
-  manifest_root_count: number;
-  manifest_root_bytes: number;
-  manifest_node_count: number;
-  manifest_node_bytes: number;
-  charged_metadata_bytes: number;
-}
+import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 interface ObjectRow extends SqliteRow {
   hash?: Uint8Array;
   size: number;
@@ -371,24 +362,13 @@ export class ContentRepository {
     countColumn: "object_count" | "manifest_root_count" | "manifest_node_count",
     count: number,
   ): void {
-    const usage = this.#tx.all<UsageRow>(
-      "SELECT object_count,object_bytes,manifest_root_count,manifest_root_bytes,manifest_node_count,manifest_node_bytes,charged_metadata_bytes FROM efs_usage WHERE singleton=1",
-      [],
-      { maxRows: 1, maxBytes: 2048 },
-    )[0];
-    if (!usage) throw new Error("ECORRUPT: missing usage singleton");
-    const managed =
-      usage.object_bytes + usage.manifest_root_bytes + usage.manifest_node_bytes;
-    const metadata = count * 96;
-    if (
-      managed + bytes >
-        this.#limits.maxManagedPayloadBytes - this.#limits.maintenanceReserveBytes ||
-      usage.charged_metadata_bytes + metadata > this.#limits.maxChargedMetadataBytes
-    )
-      throw new Error("ENOSPC: durable content quota exceeded");
-    this.#tx.run(
-      `UPDATE efs_usage SET ${byteColumn}=${byteColumn}+?,${countColumn}=${countColumn}+?,charged_metadata_bytes=charged_metadata_bytes+? WHERE singleton=1`,
-      [bytes, count, metadata],
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        [byteColumn]: bytes,
+        [countColumn]: count,
+        charged_metadata_bytes: count * CHARGED_ROW_BYTES,
+      },
+      "durable content",
     );
   }
 }

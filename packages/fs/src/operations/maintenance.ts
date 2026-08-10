@@ -74,13 +74,15 @@ export class MaintenanceManager implements FilesystemMaintenance {
       // The bounded batch is drained by the loop predicate.
     }
     this.#write((tx) => {
-      tx.maintenance().beginRun(runId, now);
+      tx.maintenance(this.#storage).beginRun(runId, now);
     });
     let batches = 0;
     try {
       while (batches < maxBatches) {
         if (options.signal?.aborted) throw abortError();
-        const state = this.#read((tx) => tx.maintenance().run(runId)?.state);
+        const state = this.#read(
+          (tx) => tx.maintenance(this.#storage).run(runId)?.state,
+        );
         if (state === undefined)
           throw fsError(
             "ENOENT",
@@ -96,12 +98,14 @@ export class MaintenanceManager implements FilesystemMaintenance {
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         try {
-          this.#write((tx) => tx.maintenance().abandonRun(runId, COMPLETE, ABANDONED));
+          this.#write((tx) =>
+            tx.maintenance(this.#storage).abandonRun(runId, COMPLETE, ABANDONED),
+          );
         } catch {}
       }
       throw error;
     }
-    const row = this.#read((tx) => tx.maintenance().run(runId));
+    const row = this.#read((tx) => tx.maintenance(this.#storage).run(runId));
     if (!row)
       throw fsError(
         "ENOENT",
@@ -134,10 +138,10 @@ export class MaintenanceManager implements FilesystemMaintenance {
   }
 
   async snapshotStorage(): Promise<StorageSnapshot> {
-    const row = this.#read((tx) => tx.maintenance().snapshot());
+    const row = this.#read((tx) => tx.maintenance(this.#storage).snapshot());
     if (!row) throw new Error("ECORRUPT: usage metadata is missing");
     const physical = this.#read((tx) => {
-      const value = tx.maintenance().physical();
+      const value = tx.maintenance(this.#storage).physical();
       return Object.freeze({
         mainFileBytes: value.pageCount * value.pageSize,
         freelistBytes: value.freePages * value.pageSize,
@@ -188,7 +192,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       : { phase: 0, last: "" };
     let checked = 0;
     const generation = this.#read((tx) => {
-      const maintenance = tx.maintenance();
+      const maintenance = tx.maintenance(this.#storage);
       const result = maintenance.generation();
       const repo = tx.content(this.#storage);
       while (checked < maximum && cursor.phase < phases.length) {
@@ -272,7 +276,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
 
   #markBatch(runId: string): void {
     this.#write((tx) => {
-      const maintenance = tx.maintenance();
+      const maintenance = tx.maintenance(this.#storage);
       const perMark = 129;
       const limit = Math.max(
         1,
@@ -320,7 +324,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
   }
   #sweepBatch(runId: string, state: number): void {
     this.#write((tx) => {
-      const maintenance = tx.maintenance();
+      const maintenance = tx.maintenance(this.#storage);
       const run = maintenance.run(runId)!;
       const rows = maintenance.sweepCandidates(
         runId,

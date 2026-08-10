@@ -1,4 +1,6 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
+import type { StorageLimits } from "../resources/limits.js";
+import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 
 export interface BranchRow extends SqliteRow {
   id: string;
@@ -32,8 +34,10 @@ export interface BranchResultRow extends SqliteRow {
 
 export class BranchRepository {
   readonly #tx: FilesystemSQLiteTransaction;
-  constructor(tx: FilesystemSQLiteTransaction) {
+  readonly #limits: StorageLimits;
+  constructor(tx: FilesystemSQLiteTransaction, limits: StorageLimits) {
     this.#tx = tx;
+    this.#limits = limits;
   }
   rootInodeId(): string {
     const value = this.#tx.all<{ root_inode: string } & SqliteRow>(
@@ -114,6 +118,13 @@ export class BranchRepository {
     );
   }
   create(id: string, baseRevision: number, now: number): BranchRow {
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        permanent_identifiers: 1,
+        charged_metadata_bytes: CHARGED_ROW_BYTES * 2,
+      },
+      "branch identifier",
+    );
     this.#tx.run("INSERT INTO efs_branch_ids(id,created_at_ms) VALUES(?,?)", [id, now]);
     this.#tx.run(
       "INSERT INTO efs_branches(id,base_revision,state,generation,created_at_ms,terminal_at_ms) VALUES(?,?,0,0,?,NULL)",
@@ -141,6 +152,13 @@ export class BranchRepository {
     generation: number,
     now: number,
   ): void {
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        permanent_identifiers: 1,
+        charged_metadata_bytes: CHARGED_ROW_BYTES,
+      },
+      "operation identifier",
+    );
     this.#tx.run(
       "INSERT INTO efs_operation_ids(id,branch_id,generation,created_at_ms) VALUES(?,?,?,?)",
       [operationId, branchId, generation, now],
@@ -214,6 +232,13 @@ export class BranchRepository {
     encoded: Uint8Array,
     expiresAt: number,
   ): void {
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        result_bytes: encoded.byteLength,
+        charged_metadata_bytes: CHARGED_ROW_BYTES,
+      },
+      "operation result",
+    );
     this.#tx.run(
       "INSERT INTO efs_operation_results(operation_id,outcome,encoded,expires_at_ms) VALUES(?,?,?,?)",
       [operationId, outcome, encoded, expiresAt],

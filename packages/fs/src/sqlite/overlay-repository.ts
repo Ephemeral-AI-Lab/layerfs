@@ -1,6 +1,7 @@
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
+import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 
 interface BranchRow extends SqliteRow {
   generation: number;
@@ -10,13 +11,6 @@ interface PageRow extends SqliteRow {
   page_index: number;
   generation: number;
   bytes: Uint8Array;
-}
-interface UsageRow extends SqliteRow {
-  page_count: number;
-  page_bytes: number;
-  patch_count: number;
-  patch_bytes: number;
-  charged_metadata_bytes: number;
 }
 interface CountRow extends SqliteRow {
   count: number;
@@ -286,22 +280,15 @@ export class OverlayRepository {
     patchCount: number,
     patchBytes: number,
   ): void {
-    const usage = this.#tx.all<UsageRow>(
-      "SELECT page_count,page_bytes,patch_count,patch_bytes,charged_metadata_bytes FROM efs_usage WHERE singleton=1",
-      [],
-      { maxRows: 1, maxBytes: 256 },
-    )[0];
-    if (!usage) throw new Error("ECORRUPT: missing usage singleton");
-    const metadata = (pageCount + patchCount) * 96;
-    if (
-      usage.page_bytes + usage.patch_bytes + pageBytes + patchBytes >
-        this.#limits.maxBranchOverlayBytes ||
-      usage.charged_metadata_bytes + metadata > this.#limits.maxChargedMetadataBytes
-    )
-      throw new Error("ENOSPC: branch overlay quota exceeded");
-    this.#tx.run(
-      "UPDATE efs_usage SET page_count=page_count+?,page_bytes=page_bytes+?,patch_count=patch_count+?,patch_bytes=patch_bytes+?,charged_metadata_bytes=charged_metadata_bytes+? WHERE singleton=1",
-      [pageCount, pageBytes, patchCount, patchBytes, metadata],
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        page_count: pageCount,
+        page_bytes: pageBytes,
+        patch_count: patchCount,
+        patch_bytes: patchBytes,
+        charged_metadata_bytes: (pageCount + patchCount) * CHARGED_ROW_BYTES,
+      },
+      "branch overlay",
     );
   }
   #integer(value: number, name: string): void {

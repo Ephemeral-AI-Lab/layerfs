@@ -169,8 +169,9 @@ class BranchView {
     tx: StorageTransactionPorts,
     branch: BranchRow,
     filesystem: FilesystemLimits,
+    storage: StorageLimits,
   ) {
-    this.#repository = tx.branches();
+    this.#repository = tx.branches(storage);
     this.#branch = branch;
     this.#filesystem = filesystem;
   }
@@ -392,7 +393,7 @@ export class BranchManager implements Branches {
     const id = options.id ?? globalThis.crypto.randomUUID();
     this.#validateId(id, "branch");
     const row = this.#transaction("write", (tx) => {
-      const repository = tx.branches();
+      const repository = tx.branches(this.#storage);
       if (repository.activeCount() >= this.#limits.maxActiveBranches)
         throw new BranchError("LimitExceeded", "active branch limit exceeded", {
           limit: "maxActiveBranches",
@@ -430,7 +431,7 @@ export class BranchManager implements Branches {
     this.#validateId(operationId, "operation");
     return this.#transaction("read", (tx) => {
       const row = tx
-        .branches()
+        .branches(this.#storage)
         .operationResult(operationId, this.#limits.maxConflictResultBytes + 1024);
       if (!row || !row.encoded)
         throw new BranchError("OperationNotFound", "operation result does not exist", {
@@ -465,7 +466,11 @@ export class BranchManager implements Branches {
   ): T {
     return this.#transaction("read", (tx) => {
       const branch = this.#active(tx, id);
-      return callback(new BranchView(tx, branch, this.#filesystem), tx, branch);
+      return callback(
+        new BranchView(tx, branch, this.#filesystem, this.#storage),
+        tx,
+        branch,
+      );
     });
   }
   mutate(
@@ -475,8 +480,8 @@ export class BranchManager implements Branches {
   ): void {
     this.#transaction("write", (tx) => {
       const branch = this.#active(tx, id);
-      const view = new BranchView(tx, branch, this.#filesystem);
-      const repository = tx.branches();
+      const view = new BranchView(tx, branch, this.#filesystem, this.#storage);
+      const repository = tx.branches(this.#storage);
       if (certificate)
         tx.staging(this.#storage).validateSealed(certificate, this.#now());
       for (const change of changes) {
@@ -521,7 +526,7 @@ export class BranchManager implements Branches {
     if (operationId) this.#validateId(operationId, "operation");
     return this.#transaction("write", (tx) => {
       const branch = this.#active(tx, id);
-      const repository = tx.branches();
+      const repository = tx.branches(this.#storage);
       if (operationId) {
         const prior = repository.operationResult(
           operationId,
@@ -543,7 +548,7 @@ export class BranchManager implements Branches {
         }
         repository.reserveOperation(operationId, id, branch.generation, this.#now());
       }
-      const view = new BranchView(tx, branch, this.#filesystem);
+      const view = new BranchView(tx, branch, this.#filesystem, this.#storage);
       const changes = view.allChanges();
       const ns = tx.namespace(this.#filesystem, "publish");
       const head = ns.meta().main_revision;
@@ -643,7 +648,7 @@ export class BranchManager implements Branches {
     return this.#transaction("write", (tx) => {
       const branch = this.#active(tx, id);
       const now = this.#now();
-      tx.branches().finish(id, 2, now);
+      tx.branches(this.#storage).finish(id, 2, now);
       return info({ ...branch, state: 2, terminal_at_ms: now });
     });
   }
@@ -688,7 +693,7 @@ export class BranchManager implements Branches {
     return new BranchHandle(this, row.id, this.#filesystem, this.#storage);
   }
   #row(tx: StorageTransactionPorts, id: string): BranchRow | undefined {
-    return tx.branches().row(id);
+    return tx.branches(this.#storage).row(id);
   }
   #active(tx: StorageTransactionPorts, id: string): BranchRow {
     const row = this.#row(tx, id);
@@ -751,7 +756,7 @@ export class BranchManager implements Branches {
         operationId,
         limit: "maxConflictResultBytes",
       });
-    tx.branches().storeResult(
+    tx.branches(this.#storage).storeResult(
       operationId,
       result.outcome === "merged" ? 1 : 0,
       bytes,

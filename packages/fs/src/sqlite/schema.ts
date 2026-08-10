@@ -6,9 +6,10 @@ import type {
 import type { CowPageBytes } from "../cow/pages.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
-export const EFS_SCHEMA_VERSION = 3;
+export const EFS_SCHEMA_VERSION = 4;
 
-const CREATE_STATEMENTS = [
+/** Frozen released schema-v3 DDL. Changes belong in a forward migration. */
+export const EFS_SCHEMA_V3_CREATE_STATEMENTS = Object.freeze([
   `CREATE TABLE efs_meta (singleton INTEGER PRIMARY KEY CHECK(singleton=1), schema_version INTEGER NOT NULL, filesystem_id TEXT NOT NULL UNIQUE, main_revision INTEGER NOT NULL, root_inode TEXT NOT NULL, root_mutation_generation INTEGER NOT NULL, next_allocation_sequence INTEGER NOT NULL, cow_page_bytes INTEGER NOT NULL CHECK(cow_page_bytes IN (4096,8192,16384)), created_at_ms INTEGER NOT NULL)`,
   `CREATE TABLE efs_usage (singleton INTEGER PRIMARY KEY CHECK(singleton=1), object_count INTEGER NOT NULL, object_bytes INTEGER NOT NULL, manifest_root_count INTEGER NOT NULL, manifest_root_bytes INTEGER NOT NULL, manifest_node_count INTEGER NOT NULL, manifest_node_bytes INTEGER NOT NULL, page_count INTEGER NOT NULL, page_bytes INTEGER NOT NULL, patch_count INTEGER NOT NULL, patch_bytes INTEGER NOT NULL, staging_bytes INTEGER NOT NULL, result_bytes INTEGER NOT NULL, maintenance_bytes INTEGER NOT NULL, permanent_identifiers INTEGER NOT NULL, charged_metadata_bytes INTEGER NOT NULL)`,
   `CREATE TABLE efs_cas_objects (hash BLOB PRIMARY KEY CHECK(length(hash)=32), size INTEGER NOT NULL CHECK(size>=0 AND size=length(bytes)), bytes BLOB NOT NULL, allocation_sequence INTEGER NOT NULL UNIQUE) WITHOUT ROWID`,
@@ -48,7 +49,16 @@ const CREATE_STATEMENTS = [
   `CREATE TABLE efs_gc_marks (run_id TEXT NOT NULL REFERENCES efs_gc_runs(id) ON DELETE CASCADE, kind INTEGER NOT NULL, hash BLOB NOT NULL, processed INTEGER NOT NULL DEFAULT 0 CHECK(processed IN (0,1)), PRIMARY KEY(run_id,kind,hash)) WITHOUT ROWID`,
   `CREATE TABLE efs_replication_sessions (id TEXT PRIMARY KEY, state INTEGER NOT NULL, nonce BLOB NOT NULL, cursor BLOB, expires_at_ms INTEGER NOT NULL, staged_bytes INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_replication_receipts (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, batch_index INTEGER NOT NULL, digest BLOB NOT NULL, encoded BLOB NOT NULL, PRIMARY KEY(session_id,batch_index)) WITHOUT ROWID`,
-] as const;
+] as const);
+
+const SCHEMA_V4_STATEMENTS = Object.freeze([
+  `ALTER TABLE efs_usage ADD COLUMN mutation_sequence INTEGER NOT NULL DEFAULT 0 CHECK(mutation_sequence>=0)`,
+  `CREATE TABLE efs_lease_cleanups (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, phase INTEGER NOT NULL CHECK(phase BETWEEN 0 AND 10), cursor_text TEXT, cursor_blob BLOB, released_staging_bytes INTEGER NOT NULL CHECK(released_staging_bytes>=0), tombstoned_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
+  `CREATE INDEX efs_lease_cleanups_phase ON efs_lease_cleanups(phase,lease_id)`,
+  `CREATE INDEX efs_leases_expiry ON efs_leases(expires_at_ms,id)`,
+  `CREATE TABLE efs_staging_workspaces (lease_id TEXT PRIMARY KEY REFERENCES efs_leases(id) ON DELETE CASCADE, owner_nonce BLOB NOT NULL, source_manifest_hash BLOB CHECK(source_manifest_hash IS NULL OR length(source_manifest_hash)=32), edit_offset INTEGER NOT NULL CHECK(edit_offset>=0), delete_length INTEGER NOT NULL CHECK(delete_length>=0), insert_length INTEGER NOT NULL CHECK(insert_length>=0), source_entry_cursor INTEGER NOT NULL DEFAULT -1 CHECK(source_entry_cursor>=-1), output_entry_index INTEGER NOT NULL DEFAULT 0 CHECK(output_entry_index>=0), phase INTEGER NOT NULL DEFAULT 0 CHECK(phase BETWEEN 0 AND 10), cdc_buffer BLOB NOT NULL DEFAULT X'', updated_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
+  `UPDATE efs_usage SET maintenance_bytes=(SELECT count(*)*96+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*96 FROM efs_gc_runs)+(SELECT count(*)*96 FROM efs_gc_marks) WHERE singleton=1`,
+] as const);
 
 interface MetaRow extends SqliteRow {
   schema_version: number;
@@ -213,6 +223,22 @@ function migrateV2ToV3(tx: FilesystemSQLiteTransaction): void {
   tx.run("PRAGMA user_version=3");
 }
 
+function migrateV3ToV4(tx: FilesystemSQLiteTransaction): void {
+  const state = inspect(tx);
+  if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 3)
+    throw new Error("ESCHEMA: schema v3 migration precondition failed");
+  const meta = tx.all<MetaRow>(
+    "SELECT schema_version,filesystem_id,main_revision,root_inode,cow_page_bytes FROM efs_meta WHERE singleton=1",
+    [],
+    { maxRows: 1, maxBytes: 4096 },
+  )[0];
+  if (!meta || meta.schema_version !== 3)
+    throw new Error("ECORRUPT: invalid schema v3 metadata");
+  for (const statement of SCHEMA_V4_STATEMENTS) tx.run(statement);
+  tx.run("UPDATE efs_meta SET schema_version=4 WHERE singleton=1");
+  tx.run("PRAGMA user_version=4");
+}
+
 export interface StorageMetadata {
   readonly filesystemId: string;
   readonly mainRevision: number;
@@ -233,13 +259,23 @@ export function initializeOrValidateSchema(
       driver.transaction("exclusive", (tx) => {
         migrateV1ToV2(tx);
         migrateV2ToV3(tx);
+        migrateV3ToV4(tx);
       });
     }
     const afterV1 = driver.transaction("read", (tx) => inspect(tx));
     if (afterV1.userVersion === 2) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v2 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV2ToV3(tx));
+      driver.transaction("exclusive", (tx) => {
+        migrateV2ToV3(tx);
+        migrateV3ToV4(tx);
+      });
+    }
+    const afterV2 = driver.transaction("read", (tx) => inspect(tx));
+    if (afterV2.userVersion === 3) {
+      if (driver.readOnly)
+        throw new Error("ESCHEMA: schema v3 requires a writable migration");
+      driver.transaction("exclusive", (tx) => migrateV3ToV4(tx));
     }
     const meta = driver.transaction("read", (tx) =>
       validateCurrent(tx, requestedPageBytes),
@@ -267,14 +303,14 @@ export function initializeOrValidateSchema(
     )
       throw new Error("ESCHEMA: database changed during initialization");
     tx.run(`PRAGMA application_id=${EFS_APPLICATION_ID}`);
-    for (const statement of CREATE_STATEMENTS) tx.run(statement);
+    for (const statement of EFS_SCHEMA_V3_CREATE_STATEMENTS) tx.run(statement);
     tx.run(
       "INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(0,NULL,?,'bootstrap',1)",
       [now],
     );
     tx.run(
       "INSERT INTO efs_meta(singleton,schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,next_allocation_sequence,cow_page_bytes,created_at_ms) VALUES(1,?,?,?,?,0,1,?,?)",
-      [EFS_SCHEMA_VERSION, filesystemId, 0, rootInode, pageBytes, now],
+      [3, filesystemId, 0, rootInode, pageBytes, now],
     );
     tx.run("INSERT INTO efs_usage VALUES(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,256)");
     tx.run(
@@ -300,7 +336,8 @@ export function initializeOrValidateSchema(
         }),
       ],
     );
-    tx.run(`PRAGMA user_version=${EFS_SCHEMA_VERSION}`);
+    tx.run("PRAGMA user_version=3");
+    migrateV3ToV4(tx);
     validateCurrent(tx, pageBytes);
   });
   return Object.freeze({

@@ -33,9 +33,9 @@ export function createSqliteOperationsStorage(
             new ContentRepository(tx, limits, cache),
           namespace: (limits: FilesystemLimits, syscall: string) =>
             new NamespaceRepository(tx, limits, syscall),
-          branches: () => new BranchRepository(tx),
+          branches: (limits: StorageLimits) => new BranchRepository(tx, limits),
           staging: (limits: StorageLimits) => new StagingRepository(tx, limits),
-          maintenance: () => new MaintenanceRepository(tx),
+          maintenance: (limits: StorageLimits) => new MaintenanceRepository(tx, limits),
           overlay: (limits: StorageLimits, pageBytes: CowPageBytes) =>
             new OverlayRepository(tx, limits, pageBytes),
         });

@@ -1,4 +1,6 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
+import type { StorageLimits } from "../resources/limits.js";
+import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 
 export interface GcRunRow extends SqliteRow {
   id: string;
@@ -52,8 +54,10 @@ export interface InodeVerifyRow extends SqliteRow {
 
 export class MaintenanceRepository {
   readonly #tx: FilesystemSQLiteTransaction;
-  constructor(tx: FilesystemSQLiteTransaction) {
+  readonly #limits: StorageLimits;
+  constructor(tx: FilesystemSQLiteTransaction, limits: StorageLimits) {
     this.#tx = tx;
+    this.#limits = limits;
   }
   beginRun(runId: string, now: number): void {
     if (this.run(runId)) return;
@@ -65,6 +69,10 @@ export class MaintenanceRepository {
       { maxRows: 1, maxBytes: 1024 },
     )[0];
     if (!meta) throw new Error("ECORRUPT: missing metadata");
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { maintenance_bytes: CHARGED_ROW_BYTES },
+      "garbage-collection run",
+    );
     this.#tx.run(
       "INSERT INTO efs_gc_runs(id,state,high_water,root_generation,cursor_kind,cursor_value,created_at_ms) VALUES(?,0,?,?,0,NULL,?)",
       [runId, meta.next_allocation_sequence - 1, meta.root_mutation_generation, now],
@@ -143,10 +151,15 @@ export class MaintenanceRepository {
     );
   }
   addMark(runId: string, kind: number, hash: Uint8Array): void {
-    this.#tx.run(
+    const result = this.#tx.run(
       "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) VALUES(?,?,?,0)",
       [runId, kind, hash],
     );
+    if (result.changes)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: CHARGED_ROW_BYTES },
+        "garbage-collection mark",
+      );
   }
   markProcessed(runId: string, kind: number, hash: Uint8Array): void {
     this.#tx.run(
@@ -227,9 +240,13 @@ export class MaintenanceRepository {
             : "deleted_objects";
       const reclaimedColumn =
         state === 3 ? "reclaimed_object_bytes" : "reclaimed_manifest_bytes";
-      this.#tx.run(
-        `UPDATE efs_usage SET ${countColumn}=${countColumn}-?,${byteColumn}=${byteColumn}-?,charged_metadata_bytes=max(0,charged_metadata_bytes-?) WHERE singleton=1`,
-        [rows.length, bytes, rows.length * 96],
+      new UsageRepository(this.#tx, this.#limits).apply(
+        {
+          [countColumn]: -rows.length,
+          [byteColumn]: -bytes,
+          charged_metadata_bytes: -rows.length * CHARGED_ROW_BYTES,
+        },
+        "garbage-collection sweep",
       );
       this.#tx.run(
         `UPDATE efs_gc_runs SET ${deletedColumn}=${deletedColumn}+?,${reclaimedColumn}=${reclaimedColumn}+? WHERE id=?`,
@@ -238,10 +255,28 @@ export class MaintenanceRepository {
     } else {
       const next = state === 3 ? completeState : state + 1;
       this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [next, runId]);
-      if (next === completeState)
-        this.#tx.run("DELETE FROM efs_root_journal WHERE generation<?", [
-          Math.max(0, this.generation() - 10_000),
-        ]);
+      if (next === completeState) {
+        const before = Math.max(0, this.generation() - 10_000);
+        const journal = this.#tx.all<{ count: number; bytes: number } & SqliteRow>(
+          "SELECT count(*) count,coalesce(sum(length(root_id)),0) bytes FROM efs_root_journal WHERE generation<?",
+          [before],
+          { maxRows: 1, maxBytes: 256 },
+        )[0];
+        const deleted = this.#tx.run(
+          "DELETE FROM efs_root_journal WHERE generation<?",
+          [before],
+        ).changes;
+        if (deleted) {
+          if (!journal || journal.count !== deleted)
+            throw new Error("ECORRUPT: root journal cleanup count changed");
+          new UsageRepository(this.#tx, this.#limits).apply(
+            {
+              maintenance_bytes: -(deleted * CHARGED_ROW_BYTES + journal.bytes),
+            },
+            "root journal cleanup",
+          );
+        }
+      }
     }
   }
   addRoots(runId: string): number {
@@ -252,8 +287,15 @@ export class MaintenanceRepository {
       "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,manifest_hash,0 FROM efs_branch_manifest_roots",
       "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,lm.manifest_hash,0 FROM efs_lease_manifests lm JOIN efs_leases l ON l.id=lm.lease_id WHERE l.state IN (0,1)",
       "INSERT OR IGNORE INTO efs_gc_marks(run_id,kind,hash,processed) SELECT ?,0,c.manifest_hash,0 FROM efs_staging_certificates c JOIN efs_leases l ON l.id=c.lease_id WHERE c.sealed=1 AND l.state=1",
-    ])
-      changes += this.#tx.run(sql, [runId]).changes;
+    ]) {
+      const inserted = this.#tx.run(sql, [runId]).changes;
+      changes += inserted;
+      if (inserted)
+        new UsageRepository(this.#tx, this.#limits).apply(
+          { maintenance_bytes: inserted * CHARGED_ROW_BYTES },
+          "garbage-collection roots",
+        );
+    }
     return changes;
   }
   #scalar(sql: string): number {

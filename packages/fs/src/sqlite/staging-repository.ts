@@ -5,6 +5,7 @@ import { decodeManifestNode, decodeManifestRoot } from "../manifests/codec.js";
 import { checkedAdd } from "../resources/safe-integers.js";
 import type { StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
+import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 
 export type StagingMemberKind = "object" | "manifest-root" | "manifest-node";
 export interface StagingMember {
@@ -83,16 +84,6 @@ interface LeaseChargeRow extends SqliteRow {
 }
 interface ExpiredLeaseRow extends LeaseChargeRow {
   id: string;
-}
-interface UsageRow extends SqliteRow {
-  object_bytes: number;
-  manifest_root_bytes: number;
-  manifest_node_bytes: number;
-  page_bytes: number;
-  patch_bytes: number;
-  staging_bytes: number;
-  result_bytes: number;
-  maintenance_bytes: number;
 }
 
 export interface ReconciliationProgress {
@@ -220,6 +211,11 @@ export class StagingRepository {
     );
   }
   bumpRoot(kind: number, id: string): void {
+    const rootId = encodeUtf8(id);
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { maintenance_bytes: CHARGED_ROW_BYTES + rootId.byteLength },
+      "root journal",
+    );
     this.#tx.run(
       "UPDATE efs_meta SET root_mutation_generation=root_mutation_generation+1 WHERE singleton=1",
     );
@@ -232,7 +228,7 @@ export class StagingRepository {
       throw new Error("ECORRUPT: invalid root mutation generation");
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
-      [generation!, kind, encodeUtf8(id)],
+      [generation!, kind, rootId],
     );
   }
   release(leaseId: string, ownerNonce: Uint8Array, requireSealed: boolean): boolean {
@@ -771,40 +767,18 @@ export class StagingRepository {
 
   #admitStagingBytes(bytes: number): void {
     if (bytes === 0) return;
-    const usage = this.#tx.all<UsageRow>(
-      "SELECT object_bytes,manifest_root_bytes,manifest_node_bytes,page_bytes,patch_bytes,staging_bytes,result_bytes,maintenance_bytes FROM efs_usage WHERE singleton=1",
-      [],
-      { maxRows: 1, maxBytes: 512 },
-    )[0];
-    if (!usage) throw new Error("ECORRUPT: missing usage singleton");
-    const normal =
-      usage.object_bytes +
-      usage.manifest_root_bytes +
-      usage.manifest_node_bytes +
-      usage.page_bytes +
-      usage.patch_bytes +
-      usage.staging_bytes +
-      usage.result_bytes;
-    if (
-      usage.staging_bytes + bytes > this.#limits.maxStagingPayloadBytes ||
-      normal + bytes >
-        this.#limits.maxManagedPayloadBytes - this.#limits.maintenanceReserveBytes
-    )
-      throw new Error("ENOSPC: staging payload quota exceeded");
-    this.#tx.run(
-      "UPDATE efs_usage SET staging_bytes=staging_bytes+? WHERE singleton=1",
-      [bytes],
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { staging_bytes: bytes },
+      "staging payload",
     );
   }
 
   #releaseStagingBytes(bytes: number): void {
     if (bytes === 0) return;
-    const result = this.#tx.run(
-      "UPDATE efs_usage SET staging_bytes=staging_bytes-? WHERE singleton=1 AND staging_bytes>=?",
-      [bytes, bytes],
+    new UsageRepository(this.#tx, this.#limits).apply(
+      { staging_bytes: -bytes },
+      "staging payload release",
     );
-    if (result.changes !== 1)
-      throw new Error("ECORRUPT: staging payload usage underflow");
   }
 
   #row(leaseId: string): CertificateRow {
