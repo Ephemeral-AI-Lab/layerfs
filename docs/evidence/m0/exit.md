@@ -1,40 +1,35 @@
 ### Milestone 0 repaired exit
 
-- Candidate commit: `786b418d002a0bf086386bd84d053a20054ec3fd`
+- Candidate commit: `937b72e84349d3371ca5d75399f5a30e0307d06c`
 - Validation date: 2026-08-10
-- Checklist complete: yes; M1 was reopened and is not accepted by this record
-- Primary environment: Windows 11 64-bit `10.0.26200`, Node `24.11.1`, pnpm `10.32.1`
-- Primary command: `pnpm validate:m0`
-- Primary result: pass in 40.572 seconds; 4 tests passed, 0 failed
+- Checklist complete: yes; this record accepts M0 only
+- Primary environment: Microsoft Windows NT `10.0.26200.0`, x64, Node `24.11.1`, pnpm
+  `10.32.1`
+- Primary command: `pnpm validate:m0:pre-evidence`
+- Primary result: pass in 40.895 seconds; foundation tests 5 passed, 0 failed
 - Correctness artifact: [`correctness.json`](./correctness.json)
 - Benchmark artifact: not applicable to the repository-foundation milestone
-- Hosted-CI deviation: no GitHub Actions run exists for this unpushed branch. The exact
-  candidate was instead validated locally across the workflow's complete OS/runtime
-  matrix: Windows and Linux, Node 22 and Node 24.
-- Approved next gate: M1 only. M2 remains paused and unaccepted.
+- Hosted-CI deviation: no GitHub Actions run exists for this unpushed branch
+- Validation scope: one actually executed Windows x64 / Node 24.11.1 cell; no Linux or
+  Node 22 result is claimed
+- Approved next gate: M1 evidence recording only. M2 remains paused and unaccepted.
 
-The exact candidate passed these four local matrix runs:
+The exact candidate verified the deterministic 1 MiB fixture with SHA-256
+`37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086`, linted 18 Markdown
+files and 158 source/config files, parsed 46 core source files, and passed 24 negative
+architecture/reflection/package bypass fixtures. The foundation runner executed five
+tests, all passing.
 
-| Operating system          |    Node | Validation                         | Result         |
-| ------------------------- | ------: | ---------------------------------- | -------------- |
-| Windows 11                | 24.11.1 | `pnpm validate:m0`                 | pass, 40.572 s |
-| Windows 11                | 22.23.2 | `pnpm validate:m0`                 | pass, 45.558 s |
-| Debian bookworm container |      22 | clean install + `pnpm validate:m0` | pass           |
-| Debian bookworm container |      24 | clean install + `pnpm validate:m0` | pass           |
+The package gate built six publishable packages into 204 clean `dist` files. Six
+isolated declared-dependency tarball closures containing 210 approved files passed
+runtime/type parity for all nine public entrypoints and 96 exported symbols, while
+forbidden internal deep imports and sentinel-only builds were rejected.
 
-Each run verified the deterministic 1 MiB fixture and its recorded SHA-256 digest,
-linted 18 Markdown files, ran Prettier and ESLint over the repository, checked 122
-source/config files, parsed 45 core files, and exercised eight negative import-bypass
-fixtures. The package gate built six publishable packages into 200 clean `dist` files,
-packed six tarballs containing 206 approved files, tested all nine public entrypoints
-and 96 exported symbols, type-checked clean consumers, and denied internal deep imports.
+This M0 candidate intentionally advances from the earlier foundation commit because the
+M1 repair updated M0-owned reachable API rollups. Its M0-owned tree digest is
+`5498e5c1f9c486ee2e44fca844b29724a2b037802d524aeb1de9e0a1eda851fb`.
 
-The architecture gate now includes static and dynamic imports, import types, TypeScript
-`ImportEquals`, direct and aliased `require`/`require.resolve`, triple-slash path
-references, bare host/external imports, and relative realpath escapes. It enforces the
-exact sixteen core areas, zero source/package cycles, SQL ownership, only-operations
-cross-composition, and a type-only SQLite-to-operations storage-port inversion.
-
-CI remains configured for Windows/Linux and Node 22/24 and invokes only
-`validate:accepted`, which is pinned to `validate:m0` at this repaired M0 exit. A hosted
-run requires pushing the branch and is deliberately not claimed here.
+The pre-evidence command was required because this refreshed evidence commit did not yet
+exist. After the directly parented M0 evidence commit and the M1 evidence record exist,
+the complete `pnpm validate:m1` command runs `check:evidence` and revalidates this M0
+gate. No hosted or unexecuted platform/runtime result is inferred.

@@ -1,31 +1,35 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "786b418d002a0bf086386bd84d053a20054ec3fd",
-  "adapter": "workspace-foundation-matrix",
+  "commit": "937b72e84349d3371ca5d75399f5a30e0307d06c",
+  "adapter": "workspace-foundation-local",
   "schemaVersion": 3,
   "formatVersion": "efs-merkle-manifest-v1",
   "seed": 1592639710,
   "fixtureDigest": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086",
   "faultPoint": null,
-  "passed": 16,
+  "passed": 5,
   "failed": 0,
-  "elapsedMs": 40572,
+  "elapsedMs": 40895,
+  "ownedTreeDigest": "5498e5c1f9c486ee2e44fca844b29724a2b037802d524aeb1de9e0a1eda851fb",
   "metrics": {
-    "operatingSystems": 2,
-    "nodeVersions": 2,
-    "matrixRuns": 4,
+    "operatingSystems": 1,
+    "nodeVersions": 1,
+    "matrixRuns": 1,
+    "architectureTestsPerCell": 5,
     "markdownFiles": 18,
-    "coreSourceFiles": 45,
-    "negativeArchitectureFixtures": 8,
-    "lintedFiles": 122,
+    "coreSourceFiles": 46,
+    "negativeArchitectureFixtures": 24,
+    "lintedFiles": 158,
     "publishablePackages": 6,
     "publicEntrypoints": 9,
     "exportedSymbols": 96,
-    "cleanDistFiles": 200,
+    "cleanDistFiles": 204,
     "packedTarballs": 6,
-    "packedFiles": 206
+    "packedFiles": 210
   },
   "deviations": [
-    "No hosted GitHub Actions run exists because the branch has not been pushed; the full Windows/Linux Node 22/24 matrix was run locally instead."
+    "No hosted GitHub Actions run exists because the branch has not been pushed.",
+    "This evidence records only the actually executed Windows x64, Node 24.11.1 local validation cell; no Linux or Node 22 result is claimed.",
+    "The candidate ran pnpm validate:m0:pre-evidence because the refreshed evidence commit did not yet exist; the complete sequential pnpm validate:m1 gate, including check:evidence, is run after both evidence commits."
   ]
 }
