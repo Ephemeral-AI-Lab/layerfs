@@ -1,21 +1,20 @@
 # Ephemeral AI FS implementation plan
 
-| Field | Value |
-| --- | --- |
-| Status | Planned |
-| Target | Version 0.1 integration candidate |
-| Delivery style | Milestone exits with objective acceptance evidence |
-| Database foundation | SQLite remains authoritative |
+| Field               | Value                                              |
+| ------------------- | -------------------------------------------------- |
+| Status              | Planned                                            |
+| Target              | Version 0.1 integration candidate                  |
+| Delivery style      | Milestone exits with objective acceptance evidence |
+| Database foundation | SQLite remains authoritative                       |
 
-Use the ready-to-paste
-[`implementation prompt`](./implementation-prompt.md) to start an execution
-task that follows this plan.
+Use the ready-to-paste [`implementation prompt`](./implementation-prompt.md) to start an
+execution task that follows this plan.
 
 ## 1. Execution rules
 
-Milestones are ordered by dependency. Work inside one milestone may proceed in
-parallel, but the next milestone does not become the integration baseline until
-the current milestone's acceptance criteria pass.
+Milestones are ordered by dependency. Work inside one milestone may proceed in parallel,
+but the next milestone does not become the integration baseline until the current
+milestone's acceptance criteria pass.
 
 Each milestone exit records:
 
@@ -24,15 +23,15 @@ Each milestone exit records:
 - commands and environments used;
 - machine-readable correctness and benchmark results;
 - known deviations with an owner and follow-up milestone; and
-- confirmation that the working tree and generated package artifacts are
-  reproducible from a clean checkout.
+- confirmation that the working tree and generated package artifacts are reproducible
+  from a clean checkout.
 
-Correctness, durability, integrity, and resource ceilings are hard gates.
-Latency cannot waive them. Tests are finite and iteration-based:
+Correctness, durability, integrity, and resource ceilings are hard gates. Latency cannot
+waive them. Tests are finite and iteration-based:
 
 - the mandatory smoke profile is capped at 60 seconds per target;
-- the default correctness and benchmark selection should finish within
-  10 minutes per target;
+- the default correctness and benchmark selection should finish within 10 minutes per
+  target;
 - an optional `load-10m` profile is hard-capped at 10 minutes; and
 - 10 GiB logical manifests and millions-of-rows jobs are extended, non-gating
   diagnostics.
@@ -59,16 +58,15 @@ Milestones 7 and 8 may proceed in parallel after milestones 0 through 6 pass.
 
 ### M0 objective
 
-Create a buildable monorepo whose package and dependency boundaries prevent
-later implementations from bypassing the architecture.
+Create a buildable monorepo whose package and dependency boundaries prevent later
+implementations from bypassing the architecture.
 
 ### M0 checklist
 
 - [x] Create the package workspace and lockfile.
 - [x] Add `packages/fs` as `@ephemeralai/fs`.
 - [x] Add `packages/sqlite-node` as `@ephemeralai/fs-sqlite-node`.
-- [x] Add `packages/sqlite-cloudflare` as
-      `@ephemeralai/fs-sqlite-cloudflare`.
+- [x] Add `packages/sqlite-cloudflare` as `@ephemeralai/fs-sqlite-cloudflare`.
 - [x] Add `packages/node-vfs` as `@ephemeralai/fs-node-vfs`.
 - [x] Add `packages/replication` as `@ephemeralai/fs-replication`.
 - [x] Add `packages/testkit` as `@ephemeralai/fs-testkit`.
@@ -76,26 +74,24 @@ later implementations from bypassing the architecture.
 - [x] Add clean-package and packed-tarball test fixtures.
 - [x] Add architecture checks for cycles and forbidden imports.
 - [x] Add API extraction or an equivalent export-snapshot check.
-- [x] Configure the `@ephemeralai/fs` export map with only the root,
-      `sqlite-driver`, and two integration bridge subpaths.
-- [x] Add deterministic fixture generation with recorded seeds and SHA-256
-      digests.
+- [x] Configure the `@ephemeralai/fs` export map with only the root, `sqlite-driver`,
+      and two integration bridge subpaths.
+- [x] Add deterministic fixture generation with recorded seeds and SHA-256 digests.
 - [x] Add Node and Durable Object testkit factory contracts.
 - [x] Add fault-controller, restart, read-only, and second-connection hooks.
 - [x] Add machine-readable correctness and benchmark result schemas.
-- [x] Add CI jobs for documentation, architecture, unit, package, and testkit
-      harness checks.
+- [x] Add CI jobs for documentation, architecture, unit, package, and testkit harness
+      checks.
 
 ### M0 acceptance criteria
 
-- [x] A clean install builds every empty package without unpublished local
-      state.
+- [x] A clean install builds every empty package without unpublished local state.
 - [x] The dependency graph has zero cycles and matches the allowed direction.
 - [x] Packed consumers can import only documented export paths.
-- [x] Deep imports of CAS, CDC, COW, manifests, repositories, schema, and
-      transactions fail.
-- [x] The testkit can create, label, seed, and dispose a driver fixture through
-      a recording implementation.
+- [x] Deep imports of CAS, CDC, COW, manifests, repositories, schema, and transactions
+      fail.
+- [x] The testkit can create, label, seed, and dispose a driver fixture through a
+      recording implementation.
 - [x] Fixture generation is byte-identical across two clean runs.
 - [x] Documentation lint, link validation, build, and architecture checks pass.
 
@@ -103,8 +99,8 @@ later implementations from bypassing the architecture.
 
 ### M1 objective
 
-Implement the pure, host-independent CAS, CDC, COW, patch, and segmented
-manifest algorithms before adding persistence.
+Implement the pure, host-independent CAS, CDC, COW, patch, and segmented manifest
+algorithms before adding persistence.
 
 ### M1 checklist
 
@@ -114,28 +110,27 @@ manifest algorithms before adding persistence.
 - [x] Implement the exact `fastcdc-v1` Gear table and boundary algorithm.
 - [x] Implement resumable streaming FastCDC state.
 - [x] Implement COW page-size, page-key, dirty-range, and page-overlay math.
-- [x] Implement ordered insertion, deletion, replacement, and truncation
-      patches.
+- [x] Implement ordered insertion, deletion, replacement, and truncation patches.
 - [x] Implement the manifest root-envelope codec.
 - [x] Implement leaf and internal manifest-node codecs.
 - [x] Implement deterministic content-defined manifest grouping.
 - [x] Implement bounded root-to-leaf lookup and sequential manifest cursors.
 - [x] Implement canonical manifest building from a CAS-entry stream.
 - [x] Implement local FastCDC and manifest-tree reconnection.
-- [x] Add golden vectors for CAS, FastCDC, root envelopes, leaves, internal
-      nodes, grouping, and complete manifest roots.
-- [x] Add property tests for byte coverage, determinism, overflow, malformed
-      encodings, and full-rebuild equivalence.
+- [x] Add golden vectors for CAS, FastCDC, root envelopes, leaves, internal nodes,
+      grouping, and complete manifest roots.
+- [x] Add property tests for byte coverage, determinism, overflow, malformed encodings,
+      and full-rebuild equivalence.
 
 ### M1 acceptance criteria
 
 - [x] All golden vectors match on supported Node and workerd runtimes.
 - [x] FastCDC results are independent of input buffer partitioning.
 - [x] Identical bytes and parameters produce identical manifest roots.
-- [x] Start, middle, end, and EOF lookup scan no more than one leaf after
-      traversing the bounded tree path.
-- [x] Corrupt root, node, span, count, or child data is rejected before affected
-      bytes are returned.
+- [x] Start, middle, end, and EOF lookup scan no more than one leaf after traversing the
+      bounded tree path.
+- [x] Corrupt root, node, span, count, or child data is rejected before affected bytes
+      are returned.
 - [x] Local insertion, deletion, truncation, and overwrite produce exactly the
       full-rebuild manifest root.
 - [x] Unchanged CAS objects and manifest subtrees are reused after deterministic
@@ -168,25 +163,25 @@ transaction-only SQLite contract and a production-capable Node driver.
 - [ ] Implement batched CAS insertion and collision verification.
 - [ ] Implement staged closure sealing and constant-row final validation.
 - [ ] Implement the file-backed Node SQLite driver.
-- [ ] Configure foreign keys, acknowledged durability, busy timeout, WAL,
-      checkpointing, 16 MiB cache target, and zero-byte mmap default.
+- [ ] Configure foreign keys, acknowledged durability, busy timeout, WAL, checkpointing,
+      16 MiB cache target, and zero-byte mmap default.
 - [ ] Enforce and report physical database and journal ceilings.
-- [ ] Add initialization, reopen, read-only, second-connection, migration,
-      corruption, and statement-fault tests.
+- [ ] Add initialization, reopen, read-only, second-connection, migration, corruption,
+      and statement-fault tests.
 
 ### M2 acceptance criteria
 
 - [ ] The driver exposes no connection-level SQL execution.
 - [ ] A transaction value used after its callback fails before issuing SQL.
-- [ ] Failure after every statement leaves the complete old or complete new
-      state after reopen.
+- [ ] Failure after every statement leaves the complete old or complete new state after
+      reopen.
 - [ ] Schema creation and every migration are deterministic and restart-safe.
 - [ ] CAS deduplication retains one verified payload and detects corruption.
 - [ ] Manifest roots and nodes round-trip and traverse in bounded batches.
 - [ ] A staged file with more than 100,000 CAS entries finalizes from one sealed
       certificate without rescanning every membership row.
-- [ ] Concurrent quota races cannot exceed payload, metadata, database, or
-      journal ceilings.
+- [ ] Concurrent quota races cannot exceed payload, metadata, database, or journal
+      ceilings.
 - [ ] `efs_usage` matches bounded direct recalculation after commit, rollback,
       replacement, expiry, and collection setup.
 - [ ] The Node driver passes the milestone's shared storage suite.
@@ -195,8 +190,8 @@ transaction-only SQLite contract and a production-capable Node driver.
 
 ### M3 objective
 
-Deliver the public filesystem facade with complete namespace semantics,
-revision commits, bounded range I/O, and snapshot streams on Node SQLite.
+Deliver the public filesystem facade with complete namespace semantics, revision
+commits, bounded range I/O, and snapshot streams on Node SQLite.
 
 ### M3 checklist
 
@@ -218,15 +213,13 @@ revision commits, bounded range I/O, and snapshot streams on Node SQLite.
 ### M3 acceptance criteria
 
 - [ ] All portable namespace and I/O conformance cases pass on Node SQLite.
-- [ ] Links, rename, timestamps, revision history, and UTF-8 ordering survive
-      reopen.
+- [ ] Links, rename, timestamps, revision history, and UTF-8 ordering survive reopen.
 - [ ] Every mutation is atomic under statement-level fault injection.
-- [ ] Reads return exact selected bytes and create no durable content state
-      except a required bounded lease.
+- [ ] Reads return exact selected bytes and create no durable content state except a
+      required bounded lease.
 - [ ] A cold range lookup does not enumerate the complete manifest.
-- [ ] Increasing a streamed fixture from 100 MiB to 1 GiB adds no more than one
-      output chunk, one maximum CAS object, and one manifest node to managed
-      memory high-water.
+- [ ] Increasing a streamed fixture from 100 MiB to 1 GiB adds no more than one output
+      chunk, one maximum CAS object, and one manifest node to managed memory high-water.
 - [ ] Cancellation, failure, and close release every lease and reservation.
 - [ ] The 60-second Node SQLite smoke profile passes.
 
@@ -234,8 +227,8 @@ revision commits, bounded range I/O, and snapshot streams on Node SQLite.
 
 ### M4 objective
 
-Deliver durable private branches, deterministic conflicts, atomic publication,
-and exact replay without copying whole workspaces.
+Deliver durable private branches, deterministic conflicts, atomic publication, and exact
+replay without copying whole workspaces.
 
 ### M4 checklist
 
@@ -261,28 +254,27 @@ and exact replay without copying whole workspaces.
 - [ ] A conflict changes neither main nor the active branch overlay.
 - [ ] Lost-response replay returns the original result after physical restart.
 - [ ] One operation ID can never publish another branch or generation.
-- [ ] Independent sibling publications succeed in either order with exact
-      parent timestamps.
+- [ ] Independent sibling publications succeed in either order with exact parent
+      timestamps.
 - [ ] Hard-link aliases preserve inode identity and conflict as one node.
-- [ ] A branch stream retains its original bytes across later edit,
-      materialization, publication or discard, collection, and restart.
-- [ ] Repeated same-page writes retain one current page plus only explicitly
-      leased predecessor versions.
+- [ ] A branch stream retains its original bytes across later edit, materialization,
+      publication or discard, collection, and restart.
+- [ ] Repeated same-page writes retain one current page plus only explicitly leased
+      predecessor versions.
 
 ## 8. Milestone 5: Maintenance, recovery, and bounded scale
 
 ### M5 objective
 
-Make long-lived databases self-verifying and reclaimable without unbounded
-transactions, memory, WAL retention, or process-local indexes.
+Make long-lived databases self-verifying and reclaimable without unbounded transactions,
+memory, WAL retention, or process-local indexes.
 
 ### M5 checklist
 
-- [ ] Implement bounded storage snapshots with high-water capture and
-      reconciliation.
+- [ ] Implement bounded storage snapshots with high-water capture and reconciliation.
 - [ ] Implement bounded integrity verification with resumable cursors.
-- [ ] Implement root enumeration for main, revisions, branches, results,
-      leases, staging, checkpoints, and holds.
+- [ ] Implement root enumeration for main, revisions, branches, results, leases,
+      staging, checkpoints, and holds.
 - [ ] Implement durable manifest-tree and CAS mark traversal.
 - [ ] Implement root-change reconciliation without restarting completed work.
 - [ ] Implement bounded sweep, overlay pruning, and revision pruning.
@@ -309,27 +301,27 @@ transactions, memory, WAL retention, or process-local indexes.
 
 ### M6 objective
 
-Run the same filesystem engine and portable conformance outcomes on Durable
-Object SQLite without importing DOFS or reimplementing filesystem logic.
+Run the same filesystem engine and portable conformance outcomes on Durable Object
+SQLite without importing DOFS or reimplementing filesystem logic.
 
 ### M6 checklist
 
 - [ ] Implement the Cloudflare SQLite driver over Durable Object SQLite.
 - [ ] Map callback-scoped transactions to the runtime transaction facility.
-- [ ] Normalize rows, BLOBs, safe integers, constraints, busy errors, and
-      corruption errors.
-- [ ] Report conservative BLOB, binding, physical quota, journal, durability,
-      and runtime-memory capabilities.
+- [ ] Normalize rows, BLOBs, safe integers, constraints, busy errors, and corruption
+      errors.
+- [ ] Report conservative BLOB, binding, physical quota, journal, durability, and
+      runtime-memory capabilities.
 - [ ] Implement runtime restart and eviction test hooks.
 - [ ] Add production-like preview deployment fixtures.
-- [ ] Run storage, filesystem, branch, maintenance, recovery, and resource
-      suites through the shared testkit.
+- [ ] Run storage, filesystem, branch, maintenance, recovery, and resource suites
+      through the shared testkit.
 - [ ] Add the 60-second Durable Object SQLite smoke profile.
 
 ### M6 acceptance criteria
 
-- [ ] Every mandatory portable test from milestones 1 through 5 passes on both
-      Node and Durable Object SQLite.
+- [ ] Every mandatory portable test from milestones 1 through 5 passes on both Node and
+      Durable Object SQLite.
 - [ ] Adapter-specific setup does not change public results or error codes.
 - [ ] Runtime restart reconstructs all state from committed SQLite data.
 - [ ] The driver never uses an in-memory SQLite mirror or filesystem index.
@@ -340,8 +332,8 @@ Object SQLite without importing DOFS or reimplementing filesystem logic.
 
 ### M7 objective
 
-Provide the synchronous Node filesystem surface needed by Computer while
-keeping FUSE and process ownership outside Ephemeral AI FS.
+Provide the synchronous Node filesystem surface needed by Computer while keeping FUSE
+and process ownership outside Ephemeral AI FS.
 
 ### M7 checklist
 
@@ -360,14 +352,13 @@ keeping FUSE and process ownership outside Ephemeral AI FS.
 
 ### M7 acceptance criteria
 
-- [ ] Repeated reads on one handle reuse a pinned selection and return exact
-      bytes.
+- [ ] Repeated reads on one handle reuse a pinned selection and return exact bytes.
 - [ ] Three sessions on one inode pass every commit order without lost updates.
 - [ ] Hidden staging never satisfies fsync or advances visible state.
 - [ ] Successful commit, close, restart, unmount, and remount preserve digest.
 - [ ] Large reads and writes allocate no whole-file buffer.
-- [ ] Sixty-four sessions remain inside pending-write and aggregate memory
-      limits with backpressure.
+- [ ] Sixty-four sessions remain inside pending-write and aggregate memory limits with
+      backpressure.
 - [ ] The real-FUSE smoke profile completes within 60 seconds.
 - [ ] Computer needs only handle forwarding and no filesystem semantics.
 
@@ -375,8 +366,8 @@ keeping FUSE and process ownership outside Ephemeral AI FS.
 
 ### M8 objective
 
-Replicate revisions, branches, manifests, CAS objects, and results through a
-bounded host-neutral protocol without exposing tables or raw content mutation.
+Replicate revisions, branches, manifests, CAS objects, and results through a bounded
+host-neutral protocol without exposing tables or raw content mutation.
 
 ### M8 checklist
 
@@ -396,23 +387,23 @@ bounded host-neutral protocol without exposing tables or raw content mutation.
 
 ### M8 acceptance criteria
 
-- [ ] A one-byte edit transfers only its root envelope, changed manifest nodes,
-      missing CAS objects, revision metadata, and protocol overhead.
+- [ ] A one-byte edit transfers only its root envelope, changed manifest nodes, missing
+      CAS objects, revision metadata, and protocol overhead.
 - [ ] Already-present content adds no duplicate CAS payload.
 - [ ] Dropping a response in every phase resumes without duplicate activation.
 - [ ] Peak buffers remain within the negotiated and shared runtime limits.
 - [ ] The receiver never retains the complete missing-object or manifest graph.
 - [ ] Retry exhaustion releases or expires all leases and reservations.
-- [ ] The bridge exposes no SQL, schema, repository, standalone CAS insertion,
-      or standalone COW mutation.
+- [ ] The bridge exposes no SQL, schema, repository, standalone CAS insertion, or
+      standalone COW mutation.
 - [ ] Replicated bytes pass digest verification through Node VFS.
 
 ## 12. Milestone 9: Version 0.1 integration candidate
 
 ### M9 objective
 
-Turn the implementation into reproducible packages with complete correctness,
-resource, performance, migration, and compatibility evidence.
+Turn the implementation into reproducible packages with complete correctness, resource,
+performance, migration, and compatibility evidence.
 
 ### M9 checklist
 
@@ -436,8 +427,8 @@ resource, performance, migration, and compatibility evidence.
 - [ ] There are zero digest mismatches, partial commits, lost updates, unsafe
       collections, leaked reservations, or usage-counter mismatches.
 - [ ] All mandatory gates complete without an elapsed-time soak.
-- [ ] Default correctness and benchmarks finish within the documented bounded
-      profile on the reference targets.
+- [ ] Default correctness and benchmarks finish within the documented bounded profile on
+      the reference targets.
 - [ ] Performance and resource result artifacts are checked in and reproducible.
 - [ ] Public exports match the approved API snapshot.
 - [ ] A clean consumer can open, use, close, reopen, and verify both drivers.
@@ -446,8 +437,8 @@ resource, performance, migration, and compatibility evidence.
 
 ### M10 objective
 
-Make Ephemeral AI FS the default Computer filesystem while retaining DOFS only
-as an explicitly selected, isolated benchmark comparison.
+Make Ephemeral AI FS the default Computer filesystem while retaining DOFS only as an
+explicitly selected, isolated benchmark comparison.
 
 ### M10 checklist
 
@@ -461,8 +452,7 @@ as an explicitly selected, isolated benchmark comparison.
       filesystem contract.
 - [ ] Make omitted engine configuration select Ephemeral AI FS.
 - [ ] Keep DOFS behind an explicit comparison selector and isolated database.
-- [ ] Replace table-inspecting tests with public behavior and maintenance
-      results.
+- [ ] Replace table-inspecting tests with public behavior and maintenance results.
 - [ ] Run the complete Computer integration path and smoke profile.
 - [ ] Document new-workspace, preview, rollback, and legacy-data policy.
 
@@ -482,17 +472,16 @@ as an explicitly selected, isolated benchmark comparison.
     -> collection and verification
   ```
 
-- [ ] Computer's default path contains transport, execution, workspace, and
-      user-facing integration logic but no filesystem persistence semantics.
-- [ ] The Ephemeral AI FS wiring remains within 100 net-new Computer production
-      lines, excluding tests, benchmark harnesses, generated code, and the
-      optional DOFS comparison adapter.
-- [ ] Omitted configuration selects Ephemeral AI FS; DOFS never becomes an
-      automatic fallback.
-- [ ] Ephemeral AI FS and DOFS schemas, diagnostics, and databases remain
-      isolated.
-- [ ] Durable Object restart, container restart, FUSE remount, branch reconnect,
-      and final integrity verification pass.
+- [ ] Computer's default path contains transport, execution, workspace, and user-facing
+      integration logic but no filesystem persistence semantics.
+- [ ] The Ephemeral AI FS wiring remains within 100 net-new Computer production lines,
+      excluding tests, benchmark harnesses, generated code, and the optional DOFS
+      comparison adapter.
+- [ ] Omitted configuration selects Ephemeral AI FS; DOFS never becomes an automatic
+      fallback.
+- [ ] Ephemeral AI FS and DOFS schemas, diagnostics, and databases remain isolated.
+- [ ] Durable Object restart, container restart, FUSE remount, branch reconnect, and
+      final integrity verification pass.
 - [ ] The 60-second end-to-end smoke profile passes.
 
 ## 14. Milestone status template

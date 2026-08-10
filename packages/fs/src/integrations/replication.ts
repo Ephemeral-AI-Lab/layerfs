@@ -1,4 +1,8 @@
-export interface ReplicationPlan { readonly pullMain?: boolean; readonly pushBranchId?: string; readonly pullBranchId?: string }
+export interface ReplicationPlan {
+  readonly pullMain?: boolean;
+  readonly pushBranchId?: string;
+  readonly pullBranchId?: string;
+}
 export interface ReplicationFilesystemBridge {
   readonly capabilities: Readonly<Record<string, unknown>>;
   captureExport(plan: ReplicationPlan): Promise<unknown>;
@@ -7,4 +11,3 @@ export interface ReplicationFilesystemBridge {
   finalizeImport(request: unknown): Promise<void>;
   abortSession(sessionId: string): Promise<void>;
 }
-

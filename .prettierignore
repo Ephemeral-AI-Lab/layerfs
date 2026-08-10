@@ -1,0 +1,4 @@
+**/node_modules/**
+**/dist/**
+**/api-snapshots/**
+pnpm-lock.yaml

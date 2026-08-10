@@ -2,12 +2,28 @@
   "name": "@ephemeralai/fs",
   "version": "0.1.0-rc.0",
   "type": "module",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./sqlite-driver": { "types": "./dist/sqlite/driver.d.ts", "import": "./dist/sqlite/driver.js" },
-    "./integrations/replication": { "types": "./dist/integrations/replication.d.ts", "import": "./dist/integrations/replication.js" },
-    "./integrations/node-vfs": { "types": "./dist/integrations/node-vfs.d.ts", "import": "./dist/integrations/node-vfs.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./sqlite-driver": {
+      "types": "./dist/sqlite/driver.d.ts",
+      "import": "./dist/sqlite/driver.js"
+    },
+    "./integrations/replication": {
+      "types": "./dist/integrations/replication.d.ts",
+      "import": "./dist/integrations/replication.js"
+    },
+    "./integrations/node-vfs": {
+      "types": "./dist/integrations/node-vfs.d.ts",
+      "import": "./dist/integrations/node-vfs.js"
+    }
   },
   "scripts": {
     "build": "pnpm clean && tsc -p tsconfig.json",

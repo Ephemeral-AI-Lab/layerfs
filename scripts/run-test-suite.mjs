@@ -3,10 +3,17 @@ import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const requested = process.argv.slice(2).filter((argument) => !argument.startsWith("--"));
-const excludeArgument = process.argv.find((argument) => argument.startsWith("--exclude="));
-const excluded = new Set((excludeArgument?.slice("--exclude=".length) ?? "").split(",").filter(Boolean));
-if (requested.length === 0) throw new Error("run-test-suite requires at least one file or directory");
+const requested = process.argv
+  .slice(2)
+  .filter((argument) => !argument.startsWith("--"));
+const excludeArgument = process.argv.find((argument) =>
+  argument.startsWith("--exclude="),
+);
+const excluded = new Set(
+  (excludeArgument?.slice("--exclude=".length) ?? "").split(",").filter(Boolean),
+);
+if (requested.length === 0)
+  throw new Error("run-test-suite requires at least one file or directory");
 
 const files = [];
 function collect(target) {
@@ -25,6 +32,10 @@ if (files.length === 0) {
   process.exit(2);
 }
 
-const result = spawnSync(process.execPath, ["--test", "--test-concurrency=1", ...files], { cwd: root, stdio: "inherit" });
+const result = spawnSync(
+  process.execPath,
+  ["--test", "--test-concurrency=1", ...files],
+  { cwd: root, stdio: "inherit" },
+);
 if (result.error) throw result.error;
 process.exit(result.status ?? 1);

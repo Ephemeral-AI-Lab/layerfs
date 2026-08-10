@@ -6,7 +6,8 @@ async function walk(directory) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const filename = path.join(directory, entry.name);
-    if (entry.isDirectory() && entry.name !== "node_modules") result.push(...await walk(filename));
+    if (entry.isDirectory() && entry.name !== "node_modules")
+      result.push(...(await walk(filename)));
     else if (entry.isFile() && entry.name.endsWith(".md")) result.push(filename);
   }
   return result;
@@ -25,6 +26,6 @@ for (const filename of await walk(root)) {
     }
   }
 }
-if (missing.length) throw new Error(`broken documentation links:\n${missing.join("\n")}`);
+if (missing.length)
+  throw new Error(`broken documentation links:\n${missing.join("\n")}`);
 console.log("docs: local links valid");
-

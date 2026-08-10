@@ -5,6 +5,9 @@ import type { EphemeralFilesystem, OpenFilesystemOptions } from "./types.js";
 /** Public composition root: injects the private SQLite storage-port adapter. */
 export class EphemeralFS {
   static open(options: OpenFilesystemOptions): Promise<EphemeralFilesystem> {
-    return FilesystemOperations.open(options, createSqliteOperationsStorage(options.database));
+    return FilesystemOperations.open(
+      options,
+      createSqliteOperationsStorage(options.database),
+    );
   }
 }

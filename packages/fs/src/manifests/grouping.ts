@@ -29,12 +29,24 @@ function recordBytes(record: ManifestEntry | ManifestChild): Uint8Array {
   return bytes;
 }
 
-export function advanceManifestGroupingState(state: bigint, record: ManifestEntry | ManifestChild): bigint {
+export function advanceManifestGroupingState(
+  state: bigint,
+  record: ManifestEntry | ManifestChild,
+): bigint {
   let next = state;
-  for (const byte of recordBytes(record)) next = ((next << 1n) + BigInt(MANIFEST_GROUPING_GEAR_V1[byte]!)) & 0xffff_ffff_ffff_ffffn;
+  for (const byte of recordBytes(record))
+    next =
+      ((next << 1n) + BigInt(MANIFEST_GROUPING_GEAR_V1[byte]!)) &
+      0xffff_ffff_ffff_ffffn;
   return next;
 }
 
-export function isManifestGroupBoundary(count: number, state: bigint, minimum: number, target: number, maximum: number): boolean {
+export function isManifestGroupBoundary(
+  count: number,
+  state: bigint,
+  minimum: number,
+  target: number,
+  maximum: number,
+): boolean {
   return count >= maximum || (count >= minimum && (state & BigInt(target - 1)) === 0n);
 }

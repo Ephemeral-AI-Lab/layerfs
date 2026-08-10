@@ -4,7 +4,11 @@ import {
   type NodeVfsFilesystemBridge,
   type SyncPreparedContent,
 } from "../operations/node-vfs-bridge.js";
-import type { FilesystemLimits, RuntimeLimits, StorageLimits } from "../resources/limits.js";
+import type {
+  FilesystemLimits,
+  RuntimeLimits,
+  StorageLimits,
+} from "../resources/limits.js";
 import type { FilesystemSQLiteDriver } from "../sqlite/driver.js";
 import { createSqliteOperationsStorage } from "../sqlite/operations-storage.js";
 
@@ -19,7 +23,9 @@ export interface CreateNodeVfsBridgeOptions {
 }
 
 /** Compose the public bridge with the private SQLite storage implementation. */
-export function createNodeVfsBridge(options: CreateNodeVfsBridgeOptions): NodeVfsFilesystemBridge {
+export function createNodeVfsBridge(
+  options: CreateNodeVfsBridgeOptions,
+): NodeVfsFilesystemBridge {
   const { database, ...operationOptions } = options;
   return createNodeVfsOperationsBridge({
     ...operationOptions,

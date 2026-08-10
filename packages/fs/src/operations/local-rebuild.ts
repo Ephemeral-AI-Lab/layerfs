@@ -1,11 +1,23 @@
 import { sha256 } from "../cas/sha256.js";
 import { findFastCdcBoundary, type FastCdcConfiguration } from "../cdc/fastcdc.js";
-import { decodeManifestRoot, encodeManifestNode, encodeManifestRoot, type ManifestChild, type ManifestEntry, type ManifestInternal, type ManifestLeaf, type ManifestNode } from "../manifests/codec.js";
+import {
+  decodeManifestRoot,
+  encodeManifestNode,
+  encodeManifestRoot,
+  type ManifestChild,
+  type ManifestEntry,
+  type ManifestInternal,
+  type ManifestLeaf,
+  type ManifestNode,
+} from "../manifests/codec.js";
 import type { EncodedManifestNode } from "../manifests/builder.js";
 import type { DiagnosticBuiltManifest } from "./full-rebuild.js";
 import { bytesToHex } from "../cas/bytes.js";
 import { checkedAdd } from "../resources/safe-integers.js";
-import { advanceManifestGroupingState, isManifestGroupBoundary } from "../manifests/grouping.js";
+import {
+  advanceManifestGroupingState,
+  isManifestGroupBoundary,
+} from "../manifests/grouping.js";
 
 export interface RandomAccessContentSource {
   readonly size: number;
@@ -19,10 +31,22 @@ export interface LocalContentEdit {
 }
 
 export interface LocalRebuildLimits {
-  readonly maxRetainedEntries: number; readonly maxRetainedNodes: number; readonly maxAffectedEntries: number; readonly maxAffectedBytes: number;
+  readonly maxRetainedEntries: number;
+  readonly maxRetainedNodes: number;
+  readonly maxAffectedEntries: number;
+  readonly maxAffectedBytes: number;
 }
-export const DEFAULT_LOCAL_REBUILD_LIMITS: Readonly<LocalRebuildLimits> = Object.freeze({ maxRetainedEntries: 16_384, maxRetainedNodes: 32_768, maxAffectedEntries: 4096, maxAffectedBytes: 16 * 1024 * 1024 });
-export class LocalRebuildLimitError extends RangeError { readonly name = "LocalRebuildLimitError"; }
+export const DEFAULT_LOCAL_REBUILD_LIMITS: Readonly<LocalRebuildLimits> = Object.freeze(
+  {
+    maxRetainedEntries: 16_384,
+    maxRetainedNodes: 32_768,
+    maxAffectedEntries: 4096,
+    maxAffectedBytes: 16 * 1024 * 1024,
+  },
+);
+export class LocalRebuildLimitError extends RangeError {
+  readonly name = "LocalRebuildLimitError";
+}
 
 export interface ManifestEntrySplice {
   readonly start: number;
@@ -75,16 +99,26 @@ interface RegroupedLevel {
 }
 
 function toChild(node: EncodedManifestNode): ManifestChild {
-  return Object.freeze({ hash: node.hash, span: node.node.span, entryCount: node.node.entryCount });
+  return Object.freeze({
+    hash: node.hash,
+    span: node.node.span,
+    entryCount: node.node.entryCount,
+  });
 }
 
 function nodeRecordCount(node: ManifestNode, leaf: boolean): number {
-  if (leaf && node.kind !== "leaf") throw new Error("old manifest level contains a non-leaf node");
-  if (!leaf && node.kind !== "internal") throw new Error("old manifest level contains a leaf node");
+  if (leaf && node.kind !== "leaf")
+    throw new Error("old manifest level contains a non-leaf node");
+  if (!leaf && node.kind !== "internal")
+    throw new Error("old manifest level contains a leaf node");
   return node.kind === "leaf" ? node.entries.length : node.children.length;
 }
 
-function groupBounds(nodes: readonly EncodedManifestNode[], leaf: boolean, recordCount: number): GroupBounds[] {
+function groupBounds(
+  nodes: readonly EncodedManifestNode[],
+  leaf: boolean,
+  recordCount: number,
+): GroupBounds[] {
   const result: GroupBounds[] = [];
   let cursor = 0;
   for (const node of nodes) {
@@ -92,34 +126,69 @@ function groupBounds(nodes: readonly EncodedManifestNode[], leaf: boolean, recor
     result.push(Object.freeze({ start: cursor, end: checkedAdd(cursor, count), node }));
     cursor += count;
   }
-  if (cursor !== recordCount) throw new Error("old manifest level record count mismatch");
+  if (cursor !== recordCount)
+    throw new Error("old manifest level record count mismatch");
   return result;
 }
 
-function startGroupFor(groups: readonly GroupBounds[], recordIndex: number, recordCount: number): number {
-  if (groups.length === 1 && groups[0]!.start === 0 && groups[0]!.end === 0 && recordIndex === 0) return 0;
+function startGroupFor(
+  groups: readonly GroupBounds[],
+  recordIndex: number,
+  recordCount: number,
+): number {
+  if (
+    groups.length === 1 &&
+    groups[0]!.start === 0 &&
+    groups[0]!.end === 0 &&
+    recordIndex === 0
+  )
+    return 0;
   for (let index = 0; index < groups.length; index += 1) {
     const group = groups[index]!;
-    if (recordIndex === group.start || (recordIndex > group.start && recordIndex < group.end)) return index;
+    if (
+      recordIndex === group.start ||
+      (recordIndex > group.start && recordIndex < group.end)
+    )
+      return index;
   }
   if (recordIndex === recordCount) return groups.length;
   throw new RangeError("manifest splice does not lie inside the old level");
 }
 
-function reconnectGroupFor(groups: readonly GroupBounds[], recordIndex: number, recordCount: number): number | undefined {
+function reconnectGroupFor(
+  groups: readonly GroupBounds[],
+  recordIndex: number,
+  recordCount: number,
+): number | undefined {
   if (recordIndex === recordCount) return groups.length;
-  for (let index = 0; index < groups.length; index += 1) if (groups[index]!.start === recordIndex) return index;
+  for (let index = 0; index < groups.length; index += 1)
+    if (groups[index]!.start === recordIndex) return index;
   return undefined;
 }
 
-function makeNode(level: number, records: readonly RecordValue[], old: DiagnosticBuiltManifest, newNodes: Map<string, EncodedManifestNode>): EncodedManifestNode {
+function makeNode(
+  level: number,
+  records: readonly RecordValue[],
+  old: DiagnosticBuiltManifest,
+  newNodes: Map<string, EncodedManifestNode>,
+): EncodedManifestNode {
   let node: ManifestNode;
   if (level === 0) {
     const entries = records as readonly ManifestEntry[];
-    node = Object.freeze({ kind: "leaf", span: entries.reduce((sum, entry) => checkedAdd(sum, entry.length), 0), entryCount: entries.length, entries: Object.freeze([...entries]) } satisfies ManifestLeaf);
+    node = Object.freeze({
+      kind: "leaf",
+      span: entries.reduce((sum, entry) => checkedAdd(sum, entry.length), 0),
+      entryCount: entries.length,
+      entries: Object.freeze([...entries]),
+    } satisfies ManifestLeaf);
   } else {
     const children = records as readonly ManifestChild[];
-    node = Object.freeze({ kind: "internal", span: children.reduce((sum, child) => checkedAdd(sum, child.span), 0), entryCount: children.reduce((sum, child) => checkedAdd(sum, child.entryCount), 0), children: Object.freeze([...children]) } satisfies ManifestInternal);
+    node = Object.freeze({
+      kind: "internal",
+      span: children.reduce((sum, child) => checkedAdd(sum, child.span), 0),
+      entryCount: children.reduce((sum, child) => checkedAdd(sum, child.entryCount), 0),
+      children: Object.freeze([...children]),
+    } satisfies ManifestInternal);
   }
   const encoded = encodeManifestNode(node);
   const hash = sha256(encoded);
@@ -141,11 +210,14 @@ function regroupLevel(
   old: DiagnosticBuiltManifest,
   newNodes: Map<string, EncodedManifestNode>,
 ): RegroupedLevel {
-  if (spliceStart < 0 || spliceEnd < spliceStart || spliceEnd > oldRecords.length) throw new RangeError("invalid manifest level splice");
+  if (spliceStart < 0 || spliceEnd < spliceStart || spliceEnd > oldRecords.length)
+    throw new RangeError("invalid manifest level splice");
   const bounds = groupBounds(oldNodes, level === 0, oldRecords.length);
   const startGroup = startGroupFor(bounds, spliceStart, oldRecords.length);
-  const groupStart = startGroup === bounds.length ? oldRecords.length : bounds[startGroup]!.start;
-  const minimumReconnect = bounds[startGroup]?.start === bounds[startGroup]?.end ? startGroup + 1 : startGroup;
+  const groupStart =
+    startGroup === bounds.length ? oldRecords.length : bounds[startGroup]!.start;
+  const minimumReconnect =
+    bounds[startGroup]?.start === bounds[startGroup]?.end ? startGroup + 1 : startGroup;
   let oldCursor = groupStart;
   let replacementCursor = 0;
   let group: RecordValue[] = [];
@@ -159,11 +231,18 @@ function regroupLevel(
   const emit = (): boolean => {
     if (group.length === 0) return false;
     segment.push(makeNode(level, group, old, newNodes));
-    group = []; state = 0n;
-    const logicalOldCursor = replacementCursor === replacement.length && oldCursor <= spliceEnd ? spliceEnd : oldCursor;
+    group = [];
+    state = 0n;
+    const logicalOldCursor =
+      replacementCursor === replacement.length && oldCursor <= spliceEnd
+        ? spliceEnd
+        : oldCursor;
     if (replacementCursor === replacement.length && logicalOldCursor >= spliceEnd) {
       const candidate = reconnectGroupFor(bounds, logicalOldCursor, oldRecords.length);
-      if (candidate !== undefined && candidate >= minimumReconnect) { reconnectGroup = candidate; return true; }
+      if (candidate !== undefined && candidate >= minimumReconnect) {
+        reconnectGroup = candidate;
+        return true;
+      }
     }
     return false;
   };
@@ -172,7 +251,8 @@ function regroupLevel(
   while (!stopped) {
     let record: RecordValue | undefined;
     if (oldCursor < spliceStart) record = oldRecords[oldCursor++];
-    else if (replacementCursor < replacement.length) record = replacement[replacementCursor++];
+    else if (replacementCursor < replacement.length)
+      record = replacement[replacementCursor++];
     else {
       if (oldCursor < spliceEnd) oldCursor = spliceEnd;
       if (oldCursor < oldRecords.length) record = oldRecords[oldCursor++];
@@ -180,19 +260,34 @@ function regroupLevel(
     if (!record) break;
     group.push(record);
     state = advanceManifestGroupingState(state, record);
-    if (isManifestGroupBoundary(group.length, state, minimum, target, maximum)) stopped = emit();
+    if (isManifestGroupBoundary(group.length, state, minimum, target, maximum))
+      stopped = emit();
   }
   if (!stopped && group.length > 0) emit();
-  if (level === 0 && startGroup === 0 && reconnectGroup === bounds.length && segment.length === 0) segment.push(makeNode(0, [], old, newNodes));
-  const totalGroupCount = startGroup + segment.length + (bounds.length - reconnectGroup);
-  return Object.freeze({ oldGroups: bounds, prefixGroupCount: startGroup, reconnectGroup, segment: Object.freeze(segment), totalGroupCount });
+  if (
+    level === 0 &&
+    startGroup === 0 &&
+    reconnectGroup === bounds.length &&
+    segment.length === 0
+  )
+    segment.push(makeNode(0, [], old, newNodes));
+  const totalGroupCount =
+    startGroup + segment.length + (bounds.length - reconnectGroup);
+  return Object.freeze({
+    oldGroups: bounds,
+    prefixGroupCount: startGroup,
+    reconnectGroup,
+    segment: Object.freeze(segment),
+    totalGroupCount,
+  });
 }
 
 function onlyNode(level: RegroupedLevel): EncodedManifestNode {
   if (level.totalGroupCount !== 1) throw new Error("manifest level is not singular");
   if (level.prefixGroupCount === 1) return level.oldGroups[0]!.node;
   if (level.segment.length === 1) return level.segment[0]!;
-  if (level.reconnectGroup < level.oldGroups.length) return level.oldGroups[level.reconnectGroup]!.node;
+  if (level.reconnectGroup < level.oldGroups.length)
+    return level.oldGroups[level.reconnectGroup]!.node;
   throw new Error("manifest level lost its root node");
 }
 
@@ -203,11 +298,15 @@ function orderedLevels(old: DiagnosticBuiltManifest): EncodedManifestNode[][] {
     if (depth > 32) throw new Error("manifest tree is too deep");
     const node = old.nodes.get(bytesToHex(hash));
     if (!node) throw new Error("old manifest is missing an authenticated node");
-    if (node.node.kind === "leaf") { (levels[0] ??= []).push(node); return 0; }
+    if (node.node.kind === "leaf") {
+      (levels[0] ??= []).push(node);
+      return 0;
+    }
     let height: number | undefined;
     for (const child of node.node.children) {
       const childHeight = visit(child.hash, depth + 1);
-      if (height !== undefined && height !== childHeight) throw new Error("manifest tree levels are unbalanced");
+      if (height !== undefined && height !== childHeight)
+        throw new Error("manifest tree levels are unbalanced");
       height = childHeight;
     }
     const actual = (height ?? -1) + 1;
@@ -218,37 +317,100 @@ function orderedLevels(old: DiagnosticBuiltManifest): EncodedManifestNode[][] {
   return levels;
 }
 
-function entryOffsets(entries: readonly ManifestEntry[]): { readonly offsets: readonly number[]; readonly boundary: ReadonlyMap<number, number>; readonly size: number } {
+function entryOffsets(entries: readonly ManifestEntry[]): {
+  readonly offsets: readonly number[];
+  readonly boundary: ReadonlyMap<number, number>;
+  readonly size: number;
+} {
   const offsets = [0];
   const boundary = new Map<number, number>([[0, 0]]);
   let size = 0;
   for (let index = 0; index < entries.length; index += 1) {
     size = checkedAdd(size, entries[index]!.length);
-    offsets.push(size); boundary.set(size, index + 1);
+    offsets.push(size);
+    boundary.set(size, index + 1);
   }
   return { offsets: Object.freeze(offsets), boundary, size };
 }
 
 function containingEntry(offsets: readonly number[], offset: number): number {
-  let low = 0; let high = offsets.length - 1;
-  while (low < high) { const middle = Math.floor((low + high) / 2); if (offsets[middle]! < offset) low = middle + 1; else high = middle; }
+  let low = 0;
+  let high = offsets.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (offsets[middle]! < offset) low = middle + 1;
+    else high = middle;
+  }
   if (offsets[low] === offset) return low;
   return Math.max(0, low - 1);
 }
 
-export function rebuildManifestLocally(source: RandomAccessContentSource, old: DiagnosticBuiltManifest, edit: LocalContentEdit, limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS): LocallyRebuiltManifest {
-  if (!Number.isSafeInteger(source.size) || source.size < 0) throw new RangeError("source size must be a nonnegative safe integer");
-  if (!Number.isSafeInteger(edit.offset) || edit.offset < 0 || !Number.isSafeInteger(edit.deleteLength) || edit.deleteLength < 0 || edit.offset > source.size || edit.deleteLength > source.size - edit.offset) throw new RangeError("local edit is outside the source");
-  for (const [name, value] of Object.entries(limits)) if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`);
-  if (old.entries.length > limits.maxRetainedEntries || old.nodes.size > limits.maxRetainedNodes) throw new LocalRebuildLimitError("diagnostic local-rebuild state exceeds its fixed retained-entry/node limit; use the streamed workspace fallback");
-  if (edit.insertBytes.byteLength > limits.maxAffectedBytes) throw new LocalRebuildLimitError("local edit insertion exceeds the affected-byte window; use the streamed workspace fallback");
+export function rebuildManifestLocally(
+  source: RandomAccessContentSource,
+  old: DiagnosticBuiltManifest,
+  edit: LocalContentEdit,
+  limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
+): LocallyRebuiltManifest {
+  if (!Number.isSafeInteger(source.size) || source.size < 0)
+    throw new RangeError("source size must be a nonnegative safe integer");
+  if (
+    !Number.isSafeInteger(edit.offset) ||
+    edit.offset < 0 ||
+    !Number.isSafeInteger(edit.deleteLength) ||
+    edit.deleteLength < 0 ||
+    edit.offset > source.size ||
+    edit.deleteLength > source.size - edit.offset
+  )
+    throw new RangeError("local edit is outside the source");
+  for (const [name, value] of Object.entries(limits))
+    if (!Number.isSafeInteger(value) || value <= 0)
+      throw new RangeError(`${name} must be a positive safe integer`);
+  if (
+    old.entries.length > limits.maxRetainedEntries ||
+    old.nodes.size > limits.maxRetainedNodes
+  )
+    throw new LocalRebuildLimitError(
+      "diagnostic local-rebuild state exceeds its fixed retained-entry/node limit; use the streamed workspace fallback",
+    );
+  if (edit.insertBytes.byteLength > limits.maxAffectedBytes)
+    throw new LocalRebuildLimitError(
+      "local edit insertion exceeds the affected-byte window; use the streamed workspace fallback",
+    );
   const insertBytes = edit.insertBytes.slice();
   const oldLayout = entryOffsets(old.entries);
-  if (oldLayout.size !== source.size) throw new Error("source size does not match old manifest entries");
+  if (oldLayout.size !== source.size)
+    throw new Error("source size does not match old manifest entries");
   const oldRoot = decodeManifestRoot(old.root, old.rootHash);
-  if (oldRoot.fileSize !== source.size || oldRoot.entryCount !== old.entries.length) throw new Error("old manifest totals do not match its entry stream");
+  if (oldRoot.fileSize !== source.size || oldRoot.entryCount !== old.entries.length)
+    throw new Error("old manifest totals do not match its entry stream");
   if (edit.deleteLength === 0 && insertBytes.byteLength === 0) {
-    return Object.freeze({ rootHash: old.rootHash, root: old.root, fileSize: source.size, entryCount: old.entries.length, entrySplice: Object.freeze({ start: 0, deleteCount: 0, entries: Object.freeze([]) }), affectedObjects: new Map(), newNodes: new Map(), metrics: Object.freeze({ sourceBytesRead: 0, bytesHashed: 0, scanWindowBytes: 0, reconnectOldOffset: edit.offset, reconnectNewOffset: edit.offset, reusedPrefixEntries: old.entries.length, reusedSuffixEntries: 0, affectedEntryCount: 0, newObjectCount: 0, newManifestNodeCount: 0, reusedManifestNodeCount: old.nodes.size, fellBackToEnd: false }) });
+    return Object.freeze({
+      rootHash: old.rootHash,
+      root: old.root,
+      fileSize: source.size,
+      entryCount: old.entries.length,
+      entrySplice: Object.freeze({
+        start: 0,
+        deleteCount: 0,
+        entries: Object.freeze([]),
+      }),
+      affectedObjects: new Map(),
+      newNodes: new Map(),
+      metrics: Object.freeze({
+        sourceBytesRead: 0,
+        bytesHashed: 0,
+        scanWindowBytes: 0,
+        reconnectOldOffset: edit.offset,
+        reconnectNewOffset: edit.offset,
+        reusedPrefixEntries: old.entries.length,
+        reusedSuffixEntries: 0,
+        affectedEntryCount: 0,
+        newObjectCount: 0,
+        newManifestNodeCount: 0,
+        reusedManifestNodeCount: old.nodes.size,
+        fellBackToEnd: false,
+      }),
+    });
   }
 
   const delta = insertBytes.byteLength - edit.deleteLength;
@@ -256,7 +418,10 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: D
   const locatedStart = containingEntry(oldLayout.offsets, edit.offset);
   // EOF is a forced FastCDC boundary. Appending must reopen the final chunk
   // because more bytes can move that boundary.
-  const startEntry = edit.offset === source.size && insertBytes.byteLength > 0 && old.entries.length > 0 ? old.entries.length - 1 : locatedStart;
+  const startEntry =
+    edit.offset === source.size && insertBytes.byteLength > 0 && old.entries.length > 0
+      ? old.entries.length - 1
+      : locatedStart;
   const scanStart = oldLayout.offsets[startEntry]!;
   const dirtyOldEnd = edit.offset + edit.deleteLength;
   const dirtyNewEnd = edit.offset + insertBytes.byteLength;
@@ -264,25 +429,39 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: D
   const readOld = (offset: number, length: number): Uint8Array => {
     if (length === 0) return new Uint8Array();
     const bytes = source.read(offset, length);
-    if (!(bytes instanceof Uint8Array) || bytes.byteLength !== length) throw new Error("random-access source returned a partial range");
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength !== length)
+      throw new Error("random-access source returned a partial range");
     sourceBytesRead = checkedAdd(sourceBytesRead, length);
     return bytes;
   };
   const readEdited = (position: number, length: number): Uint8Array => {
     const output = new Uint8Array(length);
-    let written = 0; let cursor = position;
+    let written = 0;
+    let cursor = position;
     while (written < length) {
       if (cursor < edit.offset) {
         const count = Math.min(length - written, edit.offset - cursor);
-        output.set(readOld(cursor, count), written); cursor += count; written += count;
+        output.set(readOld(cursor, count), written);
+        cursor += count;
+        written += count;
       } else if (cursor < dirtyNewEnd) {
         const insertionOffset = cursor - edit.offset;
-        const count = Math.min(length - written, insertBytes.byteLength - insertionOffset);
-        output.set(insertBytes.subarray(insertionOffset, insertionOffset + count), written); cursor += count; written += count;
+        const count = Math.min(
+          length - written,
+          insertBytes.byteLength - insertionOffset,
+        );
+        output.set(
+          insertBytes.subarray(insertionOffset, insertionOffset + count),
+          written,
+        );
+        cursor += count;
+        written += count;
       } else {
         const oldOffset = cursor - delta;
         const count = length - written;
-        output.set(readOld(oldOffset, count), written); cursor += count; written += count;
+        output.set(readOld(oldOffset, count), written);
+        cursor += count;
+        written += count;
       }
     }
     return output;
@@ -302,26 +481,43 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: D
     if (mappedOld < dirtyOldEnd) return false;
     const entry = oldLayout.boundary.get(mappedOld);
     if (entry === undefined) return false;
-    reconnectOldOffset = mappedOld; reconnectEntry = entry; return true;
+    reconnectOldOffset = mappedOld;
+    reconnectEntry = entry;
+    return true;
   };
   acceptReconnect();
   while (newCursor < newSize && reconnectEntry === undefined) {
-    const window = readEdited(newCursor, Math.min(oldRoot.parameters.maximum, newSize - newCursor));
+    const window = readEdited(
+      newCursor,
+      Math.min(oldRoot.parameters.maximum, newSize - newCursor),
+    );
     const boundary = findFastCdcBoundary(window, 0, oldRoot.parameters);
     const chunk = window.slice(0, boundary);
-    const hash = sha256(chunk); const key = bytesToHex(hash);
+    const hash = sha256(chunk);
+    const key = bytesToHex(hash);
     bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
     affectedEntries.push(Object.freeze({ hash, length: chunk.byteLength }));
-    if (affectedEntries.length > limits.maxAffectedEntries || bytesHashed > limits.maxAffectedBytes) throw new LocalRebuildLimitError("local reconnection exceeded its fixed affected window; use the streamed workspace fallback");
+    if (
+      affectedEntries.length > limits.maxAffectedEntries ||
+      bytesHashed > limits.maxAffectedBytes
+    )
+      throw new LocalRebuildLimitError(
+        "local reconnection exceeded its fixed affected window; use the streamed workspace fallback",
+      );
     const firstAffectedOccurrence = !affectedObjects.has(key);
     if (firstAffectedOccurrence) affectedObjects.set(key, chunk);
     if (firstAffectedOccurrence && !oldObjectIds.has(key)) newObjectCount += 1;
     newCursor += boundary;
     acceptReconnect();
   }
-  if (reconnectEntry === undefined || reconnectOldOffset === undefined) throw new Error("local FastCDC scan did not reconnect at end of file");
+  if (reconnectEntry === undefined || reconnectOldOffset === undefined)
+    throw new Error("local FastCDC scan did not reconnect at end of file");
 
-  const entrySplice = Object.freeze({ start: startEntry, deleteCount: reconnectEntry - startEntry, entries: Object.freeze(affectedEntries) });
+  const entrySplice = Object.freeze({
+    start: startEntry,
+    deleteCount: reconnectEntry - startEntry,
+    entries: Object.freeze(affectedEntries),
+  });
   const levels = orderedLevels(old);
   const newNodes = new Map<string, EncodedManifestNode>();
   let levelIndex = 0;
@@ -330,8 +526,20 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: D
   let spliceStart = entrySplice.start;
   let spliceEnd = entrySplice.start + entrySplice.deleteCount;
   let replacement: readonly RecordValue[] = entrySplice.entries;
-  let rebuilt = regroupLevel(levelIndex, oldRecords, oldNodes, spliceStart, spliceEnd, replacement, old, newNodes);
-  let reusedManifestNodeCount = rebuilt.prefixGroupCount + (rebuilt.oldGroups.length - rebuilt.reconnectGroup) + rebuilt.segment.filter((node) => old.nodes.has(bytesToHex(node.hash))).length;
+  let rebuilt = regroupLevel(
+    levelIndex,
+    oldRecords,
+    oldNodes,
+    spliceStart,
+    spliceEnd,
+    replacement,
+    old,
+    newNodes,
+  );
+  let reusedManifestNodeCount =
+    rebuilt.prefixGroupCount +
+    (rebuilt.oldGroups.length - rebuilt.reconnectGroup) +
+    rebuilt.segment.filter((node) => old.nodes.has(bytesToHex(node.hash))).length;
   while (rebuilt.totalGroupCount > 1) {
     levelIndex += 1;
     oldRecords = (levels[levelIndex - 1] ?? []).map(toChild);
@@ -340,16 +548,38 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: D
     spliceEnd = rebuilt.reconnectGroup;
     replacement = rebuilt.segment.map(toChild);
     if (oldNodes.length === 0) {
-      if (spliceStart !== 0 || spliceEnd !== oldRecords.length) throw new Error(`local manifest height growth retained an unexpected outer segment at level ${levelIndex}: ${spliceStart}:${spliceEnd}/${oldRecords.length}`);
+      if (spliceStart !== 0 || spliceEnd !== oldRecords.length)
+        throw new Error(
+          `local manifest height growth retained an unexpected outer segment at level ${levelIndex}: ${spliceStart}:${spliceEnd}/${oldRecords.length}`,
+        );
       oldRecords = [];
-      spliceStart = 0; spliceEnd = 0;
+      spliceStart = 0;
+      spliceEnd = 0;
     }
-    rebuilt = regroupLevel(levelIndex, oldRecords, oldNodes, spliceStart, spliceEnd, replacement, old, newNodes);
-    reusedManifestNodeCount += rebuilt.prefixGroupCount + (rebuilt.oldGroups.length - rebuilt.reconnectGroup) + rebuilt.segment.filter((node) => old.nodes.has(bytesToHex(node.hash))).length;
+    rebuilt = regroupLevel(
+      levelIndex,
+      oldRecords,
+      oldNodes,
+      spliceStart,
+      spliceEnd,
+      replacement,
+      old,
+      newNodes,
+    );
+    reusedManifestNodeCount +=
+      rebuilt.prefixGroupCount +
+      (rebuilt.oldGroups.length - rebuilt.reconnectGroup) +
+      rebuilt.segment.filter((node) => old.nodes.has(bytesToHex(node.hash))).length;
   }
   const rootNode = onlyNode(rebuilt);
-  const entryCount = old.entries.length - entrySplice.deleteCount + entrySplice.entries.length;
-  const root = encodeManifestRoot({ parameters: oldRoot.parameters, fileSize: newSize, entryCount, rootNodeHash: rootNode.hash });
+  const entryCount =
+    old.entries.length - entrySplice.deleteCount + entrySplice.entries.length;
+  const root = encodeManifestRoot({
+    parameters: oldRoot.parameters,
+    fileSize: newSize,
+    entryCount,
+    rootNodeHash: rootNode.hash,
+  });
   const rootHash = sha256(root);
   return Object.freeze({
     rootHash,
@@ -376,14 +606,43 @@ export function rebuildManifestLocally(source: RandomAccessContentSource, old: D
   });
 }
 
-export function applyEntrySplice(entries: readonly ManifestEntry[], splice: ManifestEntrySplice, maxEntries = DEFAULT_LOCAL_REBUILD_LIMITS.maxRetainedEntries): ManifestEntry[] {
-  if (!Number.isSafeInteger(splice.start) || splice.start < 0 || !Number.isSafeInteger(splice.deleteCount) || splice.deleteCount < 0 || splice.start + splice.deleteCount > entries.length) throw new RangeError("invalid manifest entry splice");
-  if (entries.length - splice.deleteCount + splice.entries.length > maxEntries) throw new LocalRebuildLimitError("entry splice exceeds its fixed in-memory limit; use a streamed workspace");
-  return [...entries.slice(0, splice.start), ...splice.entries, ...entries.slice(splice.start + splice.deleteCount)];
+export function applyEntrySplice(
+  entries: readonly ManifestEntry[],
+  splice: ManifestEntrySplice,
+  maxEntries = DEFAULT_LOCAL_REBUILD_LIMITS.maxRetainedEntries,
+): ManifestEntry[] {
+  if (
+    !Number.isSafeInteger(splice.start) ||
+    splice.start < 0 ||
+    !Number.isSafeInteger(splice.deleteCount) ||
+    splice.deleteCount < 0 ||
+    splice.start + splice.deleteCount > entries.length
+  )
+    throw new RangeError("invalid manifest entry splice");
+  if (entries.length - splice.deleteCount + splice.entries.length > maxEntries)
+    throw new LocalRebuildLimitError(
+      "entry splice exceeds its fixed in-memory limit; use a streamed workspace",
+    );
+  return [
+    ...entries.slice(0, splice.start),
+    ...splice.entries,
+    ...entries.slice(splice.start + splice.deleteCount),
+  ];
 }
 
-export function rebuildManifestLocallyWithParameters(source: RandomAccessContentSource, old: DiagnosticBuiltManifest, edit: LocalContentEdit, parameters: FastCdcConfiguration, limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS): LocallyRebuiltManifest {
+export function rebuildManifestLocallyWithParameters(
+  source: RandomAccessContentSource,
+  old: DiagnosticBuiltManifest,
+  edit: LocalContentEdit,
+  parameters: FastCdcConfiguration,
+  limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
+): LocallyRebuiltManifest {
   const root = decodeManifestRoot(old.root, old.rootHash);
-  if (root.parameters.minimum !== parameters.minimum || root.parameters.average !== parameters.average || root.parameters.maximum !== parameters.maximum) throw new Error("local rebuild parameters must match the old manifest");
+  if (
+    root.parameters.minimum !== parameters.minimum ||
+    root.parameters.average !== parameters.average ||
+    root.parameters.maximum !== parameters.maximum
+  )
+    throw new Error("local rebuild parameters must match the old manifest");
   return rebuildManifestLocally(source, old, edit, limits);
 }

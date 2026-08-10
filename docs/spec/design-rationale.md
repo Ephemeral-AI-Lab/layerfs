@@ -1,15 +1,15 @@
 # Design rationale
 
-| Field | Value |
-| --- | --- |
-| Status | Non-normative rationale |
-| Scope | Architecture, performance, and rejected alternatives |
-| Last updated | 2026-08-10 |
+| Field        | Value                                                |
+| ------------ | ---------------------------------------------------- |
+| Status       | Non-normative rationale                              |
+| Scope        | Architecture, performance, and rejected alternatives |
+| Last updated | 2026-08-10                                           |
 
 This document explains why the version 0.1 specifications choose their current
-boundaries. Normative behavior lives in the companion specifications. If this
-document conflicts with a normative requirement, the normative requirement
-wins and the contradiction must be corrected.
+boundaries. Normative behavior lives in the companion specifications. If this document
+conflicts with a normative requirement, the normative requirement wins and the
+contradiction must be corrected.
 
 ## 1. Workloads that shape the design
 
@@ -20,32 +20,30 @@ workspaces:
 2. a tool scans a large file without changing it; and
 3. a container materializes many sequential bytes through FUSE.
 
-A design that optimizes only one path is insufficient. Whole-file copy-on-write
-helps sequential code but makes tiny edits expensive. Very small fixed chunks
-reduce edit amplification but increase SQLite rows and transaction overhead.
-Unbounded write-behind improves one stream but fails under many open handles.
+A design that optimizes only one path is insufficient. Whole-file copy-on-write helps
+sequential code but makes tiny edits expensive. Very small fixed chunks reduce edit
+amplification but increase SQLite rows and transaction overhead. Unbounded write-behind
+improves one stream but fails under many open handles.
 
-The specifications therefore combine sparse page overlays, larger immutable
-FastCDC objects, lazy range reads, bounded sequential write sessions, and
-batched SQLite work.
+The specifications therefore combine sparse page overlays, larger immutable FastCDC
+objects, lazy range reads, bounded sequential write sessions, and batched SQLite work.
 
 ## 2. Evidence carried forward
 
-A prior AgentFS FUSE experiment isolated several useful workload-shaping
-changes. Its environment and storage format differ from this project, so the
-numbers are indicative evidence rather than Ephemeral AI FS release gates.
+A prior AgentFS FUSE experiment isolated several useful workload-shaping changes. Its
+environment and storage format differ from this project, so the numbers are indicative
+evidence rather than Ephemeral AI FS release gates.
 
-- Stopping read-only open from copying a base file reduced 100 one MiB first
-  reads from about 604 ms to 201 ms. Database growth fell from about
-  123.6 MiB to 0.21 MiB.
-- Sparse 4 KiB copy-on-write replaced whole-file copy-up. A one-byte edit in
-  a 100 MiB file fell from about 897 ms to about 3 ms.
-- Batching adjacent reads and aligned writes avoided one SQLite transaction
-  for every small host callback.
-- A bounded 16 MiB contiguous-write buffer reduced one 100 MiB
-  materialization from about 470 ms to 433 ms.
-- Sharing one SQLite commit across small writes improved one thousand edits
-  from about 162 ms to 140 ms in the compared paths.
+- Stopping read-only open from copying a base file reduced 100 one MiB first reads from
+  about 604 ms to 201 ms. Database growth fell from about 123.6 MiB to 0.21 MiB.
+- Sparse 4 KiB copy-on-write replaced whole-file copy-up. A one-byte edit in a 100 MiB
+  file fell from about 897 ms to about 3 ms.
+- Batching adjacent reads and aligned writes avoided one SQLite transaction for every
+  small host callback.
+- A bounded 16 MiB contiguous-write buffer reduced one 100 MiB materialization from
+  about 470 ms to 433 ms.
+- Sharing one SQLite commit across small writes improved one thousand edits from about
+  162 ms to 140 ms in the compared paths.
 
 The same experiment also established important cautions:
 
@@ -56,18 +54,18 @@ The same experiment also established important cautions:
 - duplicate-heavy fixtures overstated general storage savings; and
 - proposed BLAKE3 and adaptive chunk changes were not measured.
 
-Version 0.1 adopts the demonstrated access patterns, not the experiment's
-literal storage layout.
+Version 0.1 adopts the demonstrated access patterns, not the experiment's literal
+storage layout.
 
 ## 3. Why SQLite remains authoritative
 
-SQLite is a fixed architectural requirement, not a temporary implementation
-detail. Both the Node.js and Durable Object adapters need the same transaction,
-recovery, and integrity model.
+SQLite is a fixed architectural requirement, not a temporary implementation detail. Both
+the Node.js and Durable Object adapters need the same transaction, recovery, and
+integrity model.
 
-Version 0.1 stores namespace rows, objects, manifests, overlays, revisions,
-leases, cursors, results, and maintenance state through SQLite. Keeping content
-objects as SQLite BLOBs provides:
+Version 0.1 stores namespace rows, objects, manifests, overlays, revisions, leases,
+cursors, results, and maintenance state through SQLite. Keeping content objects as
+SQLite BLOBs provides:
 
 - one crash-recovery authority;
 - atomic constraints between content and metadata;
@@ -75,109 +73,105 @@ objects as SQLite BLOBs provides:
 - no external payload file to reconcile after failure; and
 - simpler backup, migration, verification, and fault injection.
 
-Implementation starts against ordinary local SQLite. The Node adapter binds a
-normal SQLite driver to the portable transaction contract. The Cloudflare
-adapter binds the same contract to the private embedded SQLite database that
-Cloudflare exposes through
+Implementation starts against ordinary local SQLite. The Node adapter binds a normal
+SQLite driver to the portable transaction contract. The Cloudflare adapter binds the
+same contract to the private embedded SQLite database that Cloudflare exposes through
 [`ctx.storage.sql`](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
-Neither adapter owns schema or filesystem behavior. The Cloudflare adapter is
-needed only when Computer's authoritative workspace runs in a Durable Object,
-where a native Node SQLite file handle is not the storage interface.
+Neither adapter owns schema or filesystem behavior. The Cloudflare adapter is needed
+only when Computer's authoritative workspace runs in a Durable Object, where a native
+Node SQLite file handle is not the storage interface.
 
-An external pack file may reduce some Node.js BLOB overhead, but it has no
-portable Durable Object equivalent and adds ordering, compaction, and orphan
-recovery protocols. It is therefore excluded from the version 0.1 required
-format. A future optional payload tier must keep SQLite as its authoritative
-index and recovery journal and requires a separate format specification.
+An external pack file may reduce some Node.js BLOB overhead, but it has no portable
+Durable Object equivalent and adds ordering, compaction, and orphan recovery protocols.
+It is therefore excluded from the version 0.1 required format. A future optional payload
+tier must keep SQLite as its authoritative index and recovery journal and requires a
+separate format specification.
 
 ## 4. Why copy-on-write pages and FastCDC are separate
 
-Copy-on-write pages answer: how much private state should one equal-length
-overwrite retain? FastCDC answers: how should an immutable complete file reuse
-content after structural shifts? They solve different problems and must not
-share one size setting.
+Copy-on-write pages answer: how much private state should one equal-length overwrite
+retain? FastCDC answers: how should an immutable complete file reuse content after
+structural shifts? They solve different problems and must not share one size setting.
 
 Version 0.1 accepts 4, 8, and 16 KiB copy-on-write pages and defaults to 8 KiB:
 
-| Page size | Primary advantage | Primary cost |
-| --- | --- | --- |
-| 4 KiB | Minimum isolated-edit payload | More rows and page operations |
-| 8 KiB | Balanced mixed-edit profile | Twice the isolated payload of 4 KiB |
-| 16 KiB | Fewer rows for clustered writes | Larger isolated-edit payload |
+| Page size | Primary advantage               | Primary cost                        |
+| --------- | ------------------------------- | ----------------------------------- |
+| 4 KiB     | Minimum isolated-edit payload   | More rows and page operations       |
+| 8 KiB     | Balanced mixed-edit profile     | Twice the isolated payload of 4 KiB |
+| 16 KiB    | Fewer rows for clustered writes | Larger isolated-edit payload        |
 
-The value is persisted because it interprets page indexes. It cannot change on
-reopen or by branch. Conformance runs at all three sizes, and benchmark reports
-must make the selected value visible.
+The value is persisted because it interprets page indexes. It cannot change on reopen or
+by branch. Conformance runs at all three sizes, and benchmark reports must make the
+selected value visible.
 
-FastCDC uses larger content objects to keep manifests and SQLite operations
-compact. Its parameters remain persisted with the content format. Small branch
-edits do not immediately rechunk a complete file; publication or bounded
-materialization converts the final view into canonical FastCDC objects.
+FastCDC uses larger content objects to keep manifests and SQLite operations compact. Its
+parameters remain persisted with the content format. Small branch edits do not
+immediately rechunk a complete file; publication or bounded materialization converts the
+final view into canonical FastCDC objects.
 
 ## 5. Why reads do not materialize
 
-Reading an immutable base manifest already identifies the selected bytes.
-Creating another file value, branch manifest, or object set during a read adds
-write amplification and first-byte latency without improving correctness.
+Reading an immutable base manifest already identifies the selected bytes. Creating
+another file value, branch manifest, or object set during a read adds write
+amplification and first-byte latency without improving correctness.
 
-Range reads therefore traverse only the authenticated root-to-leaf manifest
-path and fetch intersecting objects. Snapshot streams root their selected
-manifest and exact immutable branch-overlay versions, then verify nodes and
-objects lazily before emitting them. They do not enumerate one lease row per
-object and do not materialize a branch merely to open a stream.
+Range reads therefore traverse only the authenticated root-to-leaf manifest path and
+fetch intersecting objects. Snapshot streams root their selected manifest and exact
+immutable branch-overlay versions, then verify nodes and objects lazily before emitting
+them. They do not enumerate one lease row per object and do not materialize a branch
+merely to open a stream.
 
-This rule is structural rather than a timing promise: increasing a file from
-100 MiB to one GiB may increase total scan time, but it must not increase the
-managed-memory high-water mark beyond bounded stream and object windows.
+This rule is structural rather than a timing promise: increasing a file from 100 MiB to
+one GiB may increase total scan time, but it must not increase the managed-memory
+high-water mark beyond bounded stream and object windows.
 
 ## 6. Why write sessions are bounded twice
 
-FUSE may divide one sequential file creation into many callbacks. Running
-FastCDC, hashing, object insertion, and metadata transactions for every
-callback wastes work. The Node virtual filesystem provider may therefore
-coalesce contiguous writes.
+FUSE may divide one sequential file creation into many callbacks. Running FastCDC,
+hashing, object insertion, and metadata transactions for every callback wastes work. The
+Node virtual filesystem provider may therefore coalesce contiguous writes.
 
-A per-session limit alone is unsafe because many handles can each allocate the
-maximum. Sessions reserve from both a 16 MiB per-session limit and a 64 MiB
-aggregate pending-write limit, which is itself inside the core-wide resident
-budget. Pressure causes an early flush or backpressure before allocation.
+A per-session limit alone is unsafe because many handles can each allocate the maximum.
+Sessions reserve from both a 16 MiB per-session limit and a 64 MiB aggregate
+pending-write limit, which is itself inside the core-wide resident budget. Pressure
+causes an early flush or backpressure before allocation.
 
-The provider preserves write order, makes admitted bytes visible to its own
-handles, and reports flush failures. The core carries FastCDC state and stages
-SQLite objects in bounded transactions before one atomic visible update.
-Computer does not add another whole-file buffer above this layer.
+The provider preserves write order, makes admitted bytes visible to its own handles, and
+reports flush failures. The core carries FastCDC state and stages SQLite objects in
+bounded transactions before one atomic visible update. Computer does not add another
+whole-file buffer above this layer.
 
-The 128 MiB managed default is one shared ceiling, not a promise to every
-handle. A 256 MiB single-workspace host profile leaves separate bounded room
-for Node SQLite, transport, FUSE, and runtime-native overhead. Several mounted
-workspaces share the host ceiling. Node SQLite defaults to a 16 MiB cache
-target and zero-byte memory mapping so native storage memory cannot silently
-grow with database size.
+The 128 MiB managed default is one shared ceiling, not a promise to every handle. A 256
+MiB single-workspace host profile leaves separate bounded room for Node SQLite,
+transport, FUSE, and runtime-native overhead. Several mounted workspaces share the host
+ceiling. Node SQLite defaults to a 16 MiB cache target and zero-byte memory mapping so
+native storage memory cannot silently grow with database size.
 
 ## 7. Why manifests are segmented and authenticated
 
-A single compact manifest BLOB is memory-bounded but not work-bounded. After a
-restart, a one-byte range near the end of a large file would require reading,
-hashing, and prefix-scanning the complete BLOB before its offset could be
-trusted. A sparse side index cannot solve that integrity problem unless the
-manifest hash authenticates the indexed pieces.
+A single compact manifest BLOB is memory-bounded but not work-bounded. After a restart,
+a one-byte range near the end of a large file would require reading, hashing, and
+prefix-scanning the complete BLOB before its offset could be trusted. A sparse side
+index cannot solve that integrity problem unless the manifest hash authenticates the
+indexed pieces.
 
-Version 0.1 therefore uses a segmented Merkle manifest. A small root envelope
-commits FastCDC parameters, file size, entry count, and the root-node hash.
-Authenticated internal nodes commit child hashes and logical spans; leaves
-commit bounded ordered CAS entries. A cold range validates one path and one
-leaf, while a sequential cursor retains only bounded node and object windows.
+Version 0.1 therefore uses a segmented Merkle manifest. A small root envelope commits
+FastCDC parameters, file size, entry count, and the root-node hash. Authenticated
+internal nodes commit child hashes and logical spans; leaves commit bounded ordered CAS
+entries. A cold range validates one path and one leaf, while a sequential cursor retains
+only bounded node and object windows.
 
 Manifest records use deterministic content-defined grouping rather than fixed
-record-count blocks. This allows a local edit to reconnect to unchanged leaves
-and subtrees instead of shifting every later group. Each node remains far below
-the configured 16 KiB node limit. The additional node queries buy bounded cold
-random access, independently verifiable pieces, local metadata reuse, and
-time-to-first-byte that does not depend on complete-file entry count.
+record-count blocks. This allows a local edit to reconnect to unchanged leaves and
+subtrees instead of shifting every later group. Each node remains far below the
+configured 16 KiB node limit. The additional node queries buy bounded cold random
+access, independently verifiable pieces, local metadata reuse, and time-to-first-byte
+that does not depend on complete-file entry count.
 
-Derived offset indexes and verified-node caches remain optional, disposable,
-and byte-accounted. They are never authoritative and never replace SHA-256
-verification of the root, traversed nodes, and returned CAS objects.
+Derived offset indexes and verified-node caches remain optional, disposable, and
+byte-accounted. They are never authoritative and never replace SHA-256 verification of
+the root, traversed nodes, and returned CAS objects.
 
 ## 8. Package boundary justification
 
@@ -194,14 +188,14 @@ Ephemeral AI Computer
     -> maps FUSE handles to node-vfs sessions
 ```
 
-The core owns filesystem meaning and persisted state. SQLite adapters normalize
-driver behavior. Replication owns batching, cursors, retry, and validation but
-not transport. Node VFS owns handles and bounded write sessions but not FUSE.
-Computer owns routing, mounts, processes, and the optional DOFS comparison.
+The core owns filesystem meaning and persisted state. SQLite adapters normalize driver
+behavior. Replication owns batching, cursors, retry, and validation but not transport.
+Node VFS owns handles and bounded write sessions but not FUSE. Computer owns routing,
+mounts, processes, and the optional DOFS comparison.
 
-These entry points keep Computer integration to factories and forwarding. If
-Computer must interpret manifests, collect hashes, manage replication cursors,
-or buffer file contents, the package boundary is incomplete.
+These entry points keep Computer integration to factories and forwarding. If Computer
+must interpret manifests, collect hashes, manage replication cursors, or buffer file
+contents, the package boundary is incomplete.
 
 ## 9. Rejected version 0.1 alternatives
 
@@ -226,13 +220,12 @@ The performance and resource specification defines checked-in workloads for:
 - duplicate-heavy and deterministic incompressible content; and
 - replication of complete files and small changes.
 
-Every run records latency distributions, throughput, managed-memory high-water
-marks, process resident memory, SQLite queries and transactions, BLOB bytes,
-hashing and rechunking work, object reuse, overlay bytes, database bytes, and
-write-ahead-log bytes where observable.
+Every run records latency distributions, throughput, managed-memory high-water marks,
+process resident memory, SQLite queries and transactions, BLOB bytes, hashing and
+rechunking work, object reuse, overlay bytes, database bytes, and write-ahead-log bytes
+where observable.
 
-Correctness and hard resource bounds are absolute gates. Latency is compared
-with the last accepted result on the same pinned runner and, for common
-Computer workloads, with an explicitly selected isolated DOFS run. A
-performance regression cannot be hidden by changing fixtures, warming one
-engine with another, or replacing SQLite.
+Correctness and hard resource bounds are absolute gates. Latency is compared with the
+last accepted result on the same pinned runner and, for common Computer workloads, with
+an explicitly selected isolated DOFS run. A performance regression cannot be hidden by
+changing fixtures, warming one engine with another, or replacing SQLite.

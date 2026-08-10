@@ -3,6 +3,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-10",
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FilesystemObject"] }],
-  "durable_objects": { "bindings": [{ "name": "FILESYSTEM", "class_name": "FilesystemObject" }] }
+  "durable_objects": {
+    "bindings": [{ "name": "FILESYSTEM", "class_name": "FilesystemObject" }],
+  },
 }
-
