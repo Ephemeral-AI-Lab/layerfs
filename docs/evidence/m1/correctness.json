@@ -1,16 +1,23 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "5c1570411352065d8fa9207a9d679ae956830129",
-  "adapter": "node-and-workerd-pure-algorithms",
+  "commit": "88415105459431971974dc8fa421441a63f73e16",
+  "adapter": "node-and-workerd-pure-algorithms-matrix",
   "schemaVersion": 3,
   "formatVersion": "efs-merkle-manifest-v1",
   "seed": 2447445413,
   "fixtureDigest": "37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086",
   "faultPoint": null,
-  "passed": 16,
+  "passed": 22,
   "failed": 0,
-  "elapsedMs": 44010,
+  "elapsedMs": 54007,
   "metrics": {
+    "operatingSystems": 2,
+    "nodeVersions": 2,
+    "matrixRuns": 4,
+    "nodeAlgorithmTests": 13,
+    "workerdChecks": 9,
+    "manifestGoldenVectorKinds": 5,
+    "auditManifestRegressions": 4,
     "fastCdcBufferCapacityBytes": 524288,
     "workerdLocalSourceBytesRead": 524287,
     "workerdLocalBytesHashed": 155909,
@@ -20,5 +27,8 @@
     "streamedManifestPeakRetainedRecords": 273,
     "fallbackLargestSourceReadBytes": 257,
     "fallbackSourceBytesRead": 65554
-  }
+  },
+  "deviations": [
+    "No hosted GitHub Actions run exists because the branch has not been pushed; the full Windows/Linux Node 22/24 matrix was run locally instead."
+  ]
 }

@@ -59,7 +59,7 @@ test("milestone gates select only their owned suites and sequential predecessors
         new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `),
       );
   }
-  assert.equal(scripts["validate:accepted"], "pnpm validate:m0");
+  assert.equal(scripts["validate:accepted"], "pnpm validate:m1");
 });
 
 test("recording testkit fixtures preserve labels, seeds, restart hooks, and disposal", async () => {
