@@ -187,9 +187,35 @@ try {
 
 let totalDistFiles = 0;
 const packageArtifacts = new Map();
-for (const packageInfo of publishablePackages) {
-  const distDirectory = path.join(packageInfo.directory, "dist");
-  await rm(distDirectory, { recursive: true, force: true });
+for (const packageInfo of publishablePackages)
+  await rm(path.join(packageInfo.directory, "dist"), {
+    recursive: true,
+    force: true,
+  });
+
+const publishableByName = new Map(
+  publishablePackages.map((packageInfo) => [packageInfo.manifest.name, packageInfo]),
+);
+const buildOrder = [];
+const visiting = new Set();
+const visited = new Set();
+const visitBuild = (packageInfo) => {
+  const name = packageInfo.manifest.name;
+  if (visited.has(name)) return;
+  if (visiting.has(name))
+    throw new Error(`workspace build dependency cycle at ${name}`);
+  visiting.add(name);
+  for (const dependency of Object.keys(packageInfo.manifest.dependencies ?? {})) {
+    const local = publishableByName.get(dependency);
+    if (local) visitBuild(local);
+  }
+  visiting.delete(name);
+  visited.add(name);
+  buildOrder.push(packageInfo);
+};
+for (const packageInfo of publishablePackages) visitBuild(packageInfo);
+
+for (const packageInfo of buildOrder) {
   await execute(executable("pnpm"), ["--filter", packageInfo.manifest.name, "build"], {
     cwd: root,
     windowsHide: true,

@@ -8,6 +8,15 @@ const coreRoot = path.join(packageRoot, "fs", "src");
 const fixtureRoot = path.join(root, "tests", "fixtures", "architecture-bypasses");
 const violations = [];
 
+const baseTsconfig = JSON.parse(
+  await readFile(path.join(root, "tsconfig.base.json"), "utf8"),
+);
+if (
+  !Array.isArray(baseTsconfig.compilerOptions?.types) ||
+  baseTsconfig.compilerOptions.types.length !== 0
+)
+  violations.push("portable TypeScript base must set compilerOptions.types to []");
+
 const requiredCoreDirectories = new Set([
   "filesystem",
   "cas",
@@ -117,6 +126,16 @@ function globalIdentifierAccessReason(node, checker) {
   )
     return undefined;
   return `uses forbidden global-object identifier ${node.text} outside the globalThis.crypto allowlist`;
+}
+
+function portableHostAccessReason(node, checker) {
+  if (
+    !ts.isIdentifier(node) ||
+    node.text !== "process" ||
+    isLocallyBound(node, checker)
+  )
+    return undefined;
+  return "portable core uses the Node process global";
 }
 
 function reflectionContext(filename, source) {
@@ -681,7 +700,11 @@ for (const info of packages) {
     const parsed = parse(sourceInfo.logical, source);
     const reflection = reflectionContext(sourceInfo.logical, source);
     const inspectGlobalAccess = (node) => {
-      const reason = globalIdentifierAccessReason(node, reflection.checker);
+      const reason =
+        globalIdentifierAccessReason(node, reflection.checker) ??
+        (info.name === "@ephemeralai/fs"
+          ? portableHostAccessReason(node, reflection.checker)
+          : undefined);
       if (reason)
         violations.push(
           `${relative(sourceInfo.logical)}:${reflection.sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1} ${reason}`,
@@ -749,6 +772,7 @@ const globalReflectionFixtures = [
   "operations/aliased-global-eval.ts",
   "operations/destructured-global-eval.ts",
   "fs/adapter-computed-global.ts",
+  "fs/process-create-require.ts",
 ];
 for (const fixture of globalReflectionFixtures) {
   const filename = path.join(fixtureRoot, ...fixture.split("/"));
@@ -756,7 +780,11 @@ for (const fixture of globalReflectionFixtures) {
   const reflection = reflectionContext(filename, source);
   let rejected = false;
   const inspect = (node) => {
-    if (globalIdentifierAccessReason(node, reflection.checker)) rejected = true;
+    if (
+      globalIdentifierAccessReason(node, reflection.checker) ||
+      portableHostAccessReason(node, reflection.checker)
+    )
+      rejected = true;
     ts.forEachChild(node, inspect);
   };
   inspect(reflection.sourceFile);
