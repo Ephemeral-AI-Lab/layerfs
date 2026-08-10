@@ -45,7 +45,7 @@ Measured on the mini-bench matrix after the M2 improvement commit; storage behav
 | Small random read   | 2.85 ms/op                   | 1.19 ms/op (2.4x)              | ~1 ms/op with R7 cursor carry (M3)       |
 | Many small ops      | ~89 ms/edit (B4)             | ~46 ms/edit (B4)               | ~same with R7 (M3)                       |
 | Storage             | 7.19% overhead, exact quotas | same                           | dedup on changed windows                 |
-| Write statements    | 12,472 (A1)                  | 3,065 (A1, 4x fewer)           | ~same                                    |
+| Write statements    | 12,472 (A1)                  | 2,880 (A1, 4.3x fewer)         | ~same                                    |
 
 ## Safety constraints
 

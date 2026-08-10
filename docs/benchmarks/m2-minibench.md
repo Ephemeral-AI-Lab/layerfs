@@ -86,8 +86,9 @@ FastCDC copy reduction.
 | C1/C2 mixed           | 5.99 / 5.65 s                                          | 2.55 / 2.29 s                              |
 | Storage overhead      | 7.19% fresh data (A1); +4.7 MiB rewrite delta; B1 ~52% | unchanged (dedup and quotas preserved)     |
 
-Statement counts on the write path dropped ~4x (A1: 12,472 -> 3,065); the 100,001-entry
-closure test reports 4,655 reconciliation statements (0.0465 per manifest entry).
+Statement counts on the write path dropped ~4.3x (A1: 12,472 -> 2,880); the
+100,001-entry closure test reports 4,655 reconciliation statements (0.0465 per manifest
+entry).
 
 Deviations recorded by the harness:
 

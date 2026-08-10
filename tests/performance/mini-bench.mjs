@@ -136,7 +136,7 @@ async function openFilesystem(driver, observed, observer) {
 }
 
 function makeObserver() {
-  const state = { peakManagedBytes: 0, peakHeapBytes: 0, cacheHits: 0, cacheMisses: 0 };
+  const state = { peakManagedBytes: 0, peakHeapBytes: 0 };
   let sampling = false;
   const timer = setInterval(() => {
     if (!sampling) return;
@@ -149,8 +149,6 @@ function makeObserver() {
     begin() {
       state.peakManagedBytes = 0;
       state.peakHeapBytes = process.memoryUsage().heapUsed;
-      state.cacheHits = 0;
-      state.cacheMisses = 0;
       sampling = true;
     },
     end() {
@@ -162,8 +160,6 @@ function makeObserver() {
       if (event.type !== "operation") return;
       if (event.counters.peakManagedResidentBytes > state.peakManagedBytes)
         state.peakManagedBytes = event.counters.peakManagedResidentBytes;
-      state.cacheHits += event.counters.cacheHits;
-      state.cacheMisses += event.counters.cacheMisses;
     },
   };
 }
@@ -187,6 +183,8 @@ async function collectBytes(stream) {
 
 async function measureCell(cell, driver, observed, observer, run) {
   const physicalBefore = physicalBytes(driver);
+  const statementsBefore = observed.statements;
+  const transactionsBefore = observed.transactions;
   observer.begin();
   const started = performance.now();
   const runResult = await run();
@@ -197,12 +195,10 @@ async function measureCell(cell, driver, observed, observer, run) {
     wallMs: Math.round(wallMs * 1000) / 1000,
     ...(runResult?.counters ?? {}),
     dbGrowthBytes: physicalAfter - physicalBefore,
-    transactions: observed.transactions,
-    statements: observed.statements,
+    transactions: observed.transactions - transactionsBefore,
+    statements: observed.statements - statementsBefore,
     peakManagedResidentBytes: observer.state.peakManagedBytes,
     peakHarnessHeapBytes: observer.state.peakHeapBytes,
-    cacheHits: observer.state.cacheHits,
-    cacheMisses: observer.state.cacheMisses,
   };
   if (runResult?.fixtureBytes !== undefined)
     counters.overheadBasisPoints = Math.round(

@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "A3-cold-read",
-  "commit": "b93a90fefaa1d0c49f0553562694ac9bb79387cc",
+  "commit": "9875004dd57377b5604df88ce45e85507f91e144",
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
   "fixture": {
@@ -14,22 +14,20 @@
   },
   "trials": 1,
   "latencyMs": {
-    "p50": 825.371,
-    "p95": 825.371,
-    "p99": 825.371
+    "p50": 847.074,
+    "p95": 847.074,
+    "p99": 847.074
   },
   "counters": {
-    "wallMs": 825.371,
+    "wallMs": 847.074,
     "bytes": 104857600,
     "dbGrowthBytes": 53560,
-    "transactions": 435,
-    "statements": 4852,
+    "transactions": 402,
+    "statements": 1787,
     "peakManagedResidentBytes": 15245312,
-    "peakHarnessHeapBytes": 14614816,
-    "cacheHits": 18,
-    "cacheMisses": 9,
+    "peakHarnessHeapBytes": 19352416,
     "overheadBasisPoints": null,
-    "mibPerSec": 121.2
+    "mibPerSec": 118.1
   },
   "pass": true
 }
