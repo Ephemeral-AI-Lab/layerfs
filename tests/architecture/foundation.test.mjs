@@ -41,7 +41,7 @@ test("milestone gates select only their owned suites and sequential predecessors
     assert.doesNotMatch(scripts[`validate:m${milestone}`], /test:unit|test:smoke:built|test:fault:built|test:performance:built/);
     if (Number(milestone) > 0) assert.match(scripts[`validate:m${milestone}`], new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `));
   }
-  assert.equal(scripts["validate:accepted"], "pnpm validate:m0");
+  assert.equal(scripts["validate:accepted"], "pnpm validate:m1");
 });
 
 test("recording testkit fixtures preserve labels, seeds, restart hooks, and disposal", async () => {
