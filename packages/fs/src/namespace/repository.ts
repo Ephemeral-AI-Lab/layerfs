@@ -3,6 +3,7 @@ import type { FilesystemLimits } from "../resources/limits.js";
 import { canonicalizePath, type CanonicalPath } from "./paths.js";
 import { fsError } from "../filesystem/errors.js";
 import { utf8 } from "../utils/bytes.js";
+import { bytesToHex } from "../utils/bytes.js";
 
 export interface InodeRow extends SqliteRow { id: string; type: number; mode: number; birthtime_ms: number; mtime_ms: number; ctime_ms: number; nlink: number; size: number | null; manifest_hash: Uint8Array | null; symlink_target: string | null; token: number }
 export interface EntryRow extends SqliteRow { parent_inode: string; name_sort: Uint8Array; name: string | null; inode_id: string | null; token: number }
@@ -54,7 +55,7 @@ export class NamespaceRepository {
     this.#tx.run("INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,0,?)", [generation, utf8(String(revision))]);
     return revision;
   }
-  recordInode(revision: number, inodeId: string, tombstone = false): void { this.#tx.run("INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(?,?,?,NULL) ON CONFLICT(revision,inode_id) DO UPDATE SET tombstone=excluded.tombstone,encoded=NULL", [revision, inodeId, tombstone ? 1 : 0]); }
-  recordEntry(revision: number, parentInode: string, nameSort: Uint8Array, tombstone = false): void { this.#tx.run("INSERT INTO efs_entry_revisions(revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,?,NULL) ON CONFLICT(revision,parent_inode,name_sort) DO UPDATE SET tombstone=excluded.tombstone,encoded=NULL", [revision, parentInode, nameSort, tombstone ? 1 : 0]); }
+  recordInode(revision: number, inodeId: string, tombstone = false): void { const inode = tombstone ? undefined : this.inode(inodeId); const encoded = inode ? utf8(JSON.stringify({ ...inode, manifest_hash: inode.manifest_hash ? bytesToHex(inode.manifest_hash) : null })) : null; this.#tx.run("INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(?,?,?,?) ON CONFLICT(revision,inode_id) DO UPDATE SET tombstone=excluded.tombstone,encoded=excluded.encoded", [revision, inodeId, tombstone ? 1 : 0, encoded]); }
+  recordEntry(revision: number, parentInode: string, nameSort: Uint8Array, tombstone = false): void { const entry = tombstone ? undefined : this.entry(parentInode, nameSort); const encoded = entry ? utf8(JSON.stringify({ ...entry, name_sort: bytesToHex(entry.name_sort) })) : null; this.#tx.run("INSERT INTO efs_entry_revisions(revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,?,?) ON CONFLICT(revision,parent_inode,name_sort) DO UPDATE SET tombstone=excluded.tombstone,encoded=excluded.encoded", [revision, parentInode, nameSort, tombstone ? 1 : 0, encoded]); }
   putEntry(parentInode: string, nameSort: Uint8Array, name: string | null, inodeId: string | null, token: number): void { this.#tx.run("INSERT INTO efs_entries(parent_inode,name_sort,name,inode_id,token) VALUES(?,?,?,?,?) ON CONFLICT(parent_inode,name_sort) DO UPDATE SET name=excluded.name,inode_id=excluded.inode_id,token=excluded.token", [parentInode, nameSort, name, inodeId, token]); }
 }

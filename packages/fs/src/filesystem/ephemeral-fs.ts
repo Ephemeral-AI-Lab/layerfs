@@ -9,6 +9,8 @@ import { checkedAdd, checkedInteger, utf8 } from "../utils/bytes.js";
 import { prepareContent, readManifestRange } from "../operations/manifest-io.js";
 import { abortError, FilesystemError, fsError, mapStorageError } from "./errors.js";
 import type { DirectoryEntry, EphemeralFilesystem, FileContent, FileStat, FileType, FilesystemCapabilities, FilesystemObservation, FilesystemObserver, MkdirOptions, OpenFilesystemOptions, ReadRangeOptions, ReadStreamOptions, ReadTextOptions, ReaddirOptions, RmOptions, WriteFileOptions } from "./types.js";
+import { BranchManager } from "../branches/branch-engine.js";
+import type { Branches } from "../branches/types.js";
 
 interface ChildRow extends SqliteRow { name: string; name_sort: Uint8Array; type: number }
 interface CountRow extends SqliteRow { count: number }
@@ -25,6 +27,7 @@ function validatedMode(mode: number | undefined, fallback: number, syscall: stri
 
 export class EphemeralFS implements EphemeralFilesystem {
   readonly capabilities: FilesystemCapabilities;
+  readonly branches: Branches;
   readonly #database: FilesystemSQLiteDriver; readonly #clock: () => number; readonly #observer: FilesystemObserver | undefined; readonly #ownsDatabase: boolean;
   readonly #filesystemLimits: FilesystemLimits; readonly #storageLimits: StorageLimits; readonly #runtimeLimits: RuntimeLimits; readonly #branchLimits: BranchConfiguration;
   readonly #admission: AdmissionController; readonly #pending = new Set<Promise<unknown>>(); readonly #streams = new Map<string, { release: () => Promise<void>; error: () => void }>();
@@ -34,6 +37,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     this.#database = options.database; this.#clock = options.clock ?? Date.now; this.#observer = options.observer; this.#ownsDatabase = options.ownsDatabase ?? false;
     this.capabilities = capabilities; this.#filesystemLimits = capabilities.filesystem; this.#storageLimits = capabilities.storage; this.#runtimeLimits = capabilities.runtime; this.#branchLimits = capabilities.branch;
     this.#admission = new AdmissionController(this.#runtimeLimits.maxManagedResidentBytes);
+    this.branches = new BranchManager(this.#database, this.#filesystemLimits, this.#storageLimits, this.#runtimeLimits, this.#branchLimits, this.#clock, this.#admission);
   }
 
   static async open(options: OpenFilesystemOptions): Promise<EphemeralFS> {

@@ -19,6 +19,7 @@ const CREATE_STATEMENTS = [
   `CREATE TABLE efs_branches (id TEXT PRIMARY KEY, base_revision INTEGER NOT NULL REFERENCES efs_revisions(revision), state INTEGER NOT NULL CHECK(state IN (0,1,2)), generation INTEGER NOT NULL, created_at_ms INTEGER NOT NULL, terminal_at_ms INTEGER)`,
   `CREATE TABLE efs_branch_ids (id TEXT PRIMARY KEY, created_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_branch_changes (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, path BLOB NOT NULL, expected_token INTEGER, kind INTEGER NOT NULL, encoded BLOB, PRIMARY KEY(branch_id,path)) WITHOUT ROWID`,
+  `CREATE TABLE efs_branch_inode_expectations (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, expected_token INTEGER, PRIMARY KEY(branch_id,inode_id)) WITHOUT ROWID`,
   `CREATE TABLE efs_cow_pages (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, page_index INTEGER NOT NULL, generation INTEGER NOT NULL, bytes BLOB NOT NULL, PRIMARY KEY(branch_id,inode_id,page_index)) WITHOUT ROWID`,
   `CREATE TABLE efs_patches (branch_id TEXT NOT NULL REFERENCES efs_branches(id) ON DELETE CASCADE, inode_id TEXT NOT NULL, sequence INTEGER NOT NULL, offset INTEGER NOT NULL, delete_length INTEGER NOT NULL, insert_bytes BLOB NOT NULL, PRIMARY KEY(branch_id,inode_id,sequence)) WITHOUT ROWID`,
   `CREATE TABLE efs_leases (id TEXT PRIMARY KEY, kind INTEGER NOT NULL, owner_id TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, state INTEGER NOT NULL) WITHOUT ROWID`,
@@ -84,8 +85,11 @@ export function initializeOrValidateSchema(driver: FilesystemSQLiteDriver, optio
     tx.run("INSERT INTO efs_meta(singleton,schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,next_allocation_sequence,cow_page_bytes,created_at_ms) VALUES(1,?,?,?,?,0,1,?,?)", [EFS_SCHEMA_VERSION, filesystemId, 0, rootInode, pageBytes, now]);
     tx.run("INSERT INTO efs_usage VALUES(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,256)");
     tx.run("INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,1,493,?,?,?,?,NULL,NULL,NULL,0)", [rootInode, now, now, now, 1]);
+    tx.run("INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(0,?,0,?)", [rootInode, utf8Json({ id: rootInode, type: 1, mode: 493, birthtime_ms: now, mtime_ms: now, ctime_ms: now, nlink: 1, size: null, manifest_hash: null, symlink_target: null, token: 0 })]);
     tx.run(`PRAGMA user_version=${EFS_SCHEMA_VERSION}`);
     validateCurrent(tx, pageBytes);
   });
   return Object.freeze({ filesystemId, mainRevision: 0, rootInode, cowPageBytes: pageBytes });
 }
+
+function utf8Json(value: unknown): Uint8Array { return new TextEncoder().encode(JSON.stringify(value)); }
