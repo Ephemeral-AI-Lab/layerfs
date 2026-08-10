@@ -151,8 +151,9 @@ required:
 - The overlay MUST retain the expectation from the base revision, not from the
   main revision current when the path is first mutated.
 - Ordered structural edits MUST be replayed in their acknowledged order.
-- The default branch representation MUST use 4,096-byte logical copy-on-write
-  pages for small equal-length overwrites. A final page MAY be shorter.
+- The default branch representation MUST use the filesystem's persisted
+  4,096-, 8,192-, or 16,384-byte logical copy-on-write pages for small
+  equal-length overwrites. A final page MAY be shorter.
 - Repeated equal-length writes to one copy-on-write page MUST replace that
   branch-local page state instead of appending full file copies.
 - Renames and hard links MUST preserve node identity and MUST NOT copy file
@@ -578,7 +579,9 @@ interface BranchLimits {
   readonly maxOperationIdBytes: number;
   readonly maxActiveBranches: number;
   readonly maxChangedPathsPerBranch: number;
+  readonly maxChangedPathBytes: number;
   readonly maxConflictsPerPublication: number;
+  readonly maxConflictResultBytes: number;
 }
 
 interface BranchRetentionOptions {
@@ -705,6 +708,12 @@ methods fail with `BranchNotActive`. After terminal metadata expires,
 without a handle. Closing a branch handle MUST NOT close the owning filesystem
 or database.
 
+Creating or opening a handle MUST consume one
+`RuntimeLimits.maxOpenBranchHandles` slot and a bounded control-state
+reservation from the owning filesystem. Exhaustion fails with filesystem
+`EAGAIN` before returning a handle. Handle close or owner close MUST release
+the slot exactly once.
+
 On a terminal handle, `publish` MUST validate and look up a supplied operation
 identifier before rejecting the lifecycle state, so a matching retained result
 can replay. A different or unknown operation then rejects with
@@ -799,7 +808,9 @@ The resolved `BranchConfiguration` combines `BranchLimits` and
 | `maxOperationIdBytes` | 200 |
 | `maxActiveBranches` | 10,000 |
 | `maxChangedPathsPerBranch` | 100,000 |
+| `maxChangedPathBytes` | 16,777,216 |
 | `maxConflictsPerPublication` | 100,000 |
+| `maxConflictResultBytes` | 16,777,216 |
 | `terminalBranchRetentionMs` | 2,592,000,000 |
 | `publicationResultRetentionMs` | 2,592,000,000 |
 
@@ -815,22 +826,25 @@ Opening with incompatible persisted values MUST fail with `ESCHEMA`.
 `EphemeralFS.capabilities.branch` MUST expose an immutable copy of every
 effective field.
 
-Hosts MAY configure lower identifier, active-branch, changed-path, and conflict
-limits. Raising their version 0.1 defaults requires a format review. A branch
-identifier outside its configured bound uses `InvalidBranchId`, and an
-operation identifier outside its bound uses `InvalidOperationId`.
+Hosts MAY configure lower identifier, active-branch, changed-path, changed-byte,
+conflict, and conflict-result-byte limits. Raising their version 0.1 defaults
+requires a format review. A branch identifier outside its configured bound
+uses `InvalidBranchId`, and an operation identifier outside its bound uses
+`InvalidOperationId`.
 
 The exact expanded `changedPaths` list defines
 `maxChangedPathsPerBranch` accounting. A recursive mutation or directory rename
-that would exceed the bound MUST reject atomically with `LimitExceeded`.
-Creating a branch above `maxActiveBranches` uses the same error. Conflict
-results MUST never be truncated.
+that would exceed its count or canonical UTF-8 byte bound MUST reject
+atomically with `LimitExceeded`. Creating a branch above `maxActiveBranches`
+uses the same error. Conflict results MUST never be truncated. If the complete
+canonical conflict result would exceed either conflict bound, publication MUST
+fail with `LimitExceeded` before changing main or finalizing the branch.
 
 Implementations SHOULD process publication preparation and garbage collection
 in bounded batches. A limit error or resource error MUST NOT partially apply a
-branch mutation or publication. Storage optimizations such as a 4 KiB page,
-64 KiB fast path, or 512 KiB patch segment are not semantic API limits and MUST
-NOT change results.
+branch mutation or publication. Storage optimizations such as the configured
+copy-on-write page, a 64 KiB fast path, or a 512 KiB patch segment are not
+semantic API limits and MUST NOT change results.
 
 ## Required invariants
 

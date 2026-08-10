@@ -340,6 +340,8 @@ export interface OpenFilesystemOptions {
   readonly clock?: () => number;
   readonly filesystem?: Partial<FilesystemLimits>;
   readonly storage?: Partial<StorageLimits>;
+  readonly runtime?: Partial<RuntimeLimits>;
+  readonly format?: Partial<StorageFormatOptions>;
   /** Defined normatively by the branches and publication specification. */
   readonly branch?: Partial<BranchConfiguration>;
   readonly observer?: FilesystemObserver;
@@ -395,7 +397,7 @@ larger file.
 `readRange` reads at most `length` bytes beginning at `offset`. It MUST return
 an empty array when `length` is zero or `offset` is at or beyond end of file.
 It MUST return the available suffix without padding when the requested range
-crosses end of file. The returned array MUST not alias mutable internal
+crosses end of file. The returned array MUST NOT alias mutable internal
 storage.
 
 The filesystem MUST resolve and type-check the path even for a zero-length
@@ -413,20 +415,28 @@ The returned stream MUST represent a snapshot of the file selected while
 garbage-collection pass MUST NOT mix revisions or cause already selected
 content to disappear.
 
-Before `readStream` resolves, the implementation MUST identify one immutable
-manifest for the selected bytes and durably acquire the read-stream lease
-defined by the storage specification. Its collision-resistant identifier and
-secret owner nonce MUST bind the selected revision, inode identity, node token,
-manifest, and stream identifier.
+Before `readStream` resolves, the implementation MUST select a representation
+for the requested snapshot and durably acquire the read-stream lease defined
+by the storage specification. Its collision-resistant identifier and secret
+owner nonce MUST bind the selected revision, inode identity, node token,
+representation roots, and stream identifier.
 
-The first write transaction MUST atomically select the snapshot and create a
-`preparing` lease with manifest membership. A preparing lease is already a
-garbage-collection root. Exact object membership MAY then be added in bounded
-transactions. After validating the complete manifest and object set, one
-write transaction MUST revalidate the snapshot and change the lease to
-`active`. `readStream` MUST NOT resolve before activation. For branch pages or
-patches, the core MUST first create an immutable manifest and revalidate the
-branch generation during lease acquisition.
+For immutable content, the lease MUST root the selected manifest. The manifest
+transitively protects its objects, so opening a stream MUST NOT create one
+membership row per object or verify every object before resolving. Each
+selected object MUST instead be loaded and verified before its bytes are
+enqueued.
+
+For branch pages or patches, the lease or snapshot pin MUST protect the exact
+selected base manifest and overlay rows without materializing a new complete
+file. The acquisition transaction MUST revalidate the branch generation.
+Publication, discard, and garbage collection may detach those rows but MUST
+NOT reclaim them until the stream releases its lease.
+
+Lease selection and activation MUST perform bounded work independent of the
+logical file size. `readStream` MUST NOT resolve until the lease is active, but
+it MUST NOT scan, hash, copy, or materialize the complete file merely to open
+the stream.
 
 The initial TTL is the effective `readLeaseMs` storage limit. While a stream
 remains readable, the implementation MUST renew early. Renewal MUST match the
@@ -447,8 +457,10 @@ through one bounded `"read"` transaction. A future adapter capability MAY
 define an equally durable external lease store without changing stream
 snapshot semantics.
 
-Stream chunks MUST be non-empty `Uint8Array` values and SHOULD be bounded by
-`preferredStreamChunkBytes`. The implementation MUST honor backpressure. If
+Stream chunks MUST be non-empty `Uint8Array` values and MUST be no larger than
+`preferredStreamChunkBytes`. The implementation MUST honor backpressure and
+the aggregate runtime budget. It MUST NOT retain already emitted chunks merely
+because a scan is sequential. If
 the signal is already aborted, or becomes aborted while reading, the stream
 MUST error with an `AbortError` and release resources.
 
@@ -518,7 +530,7 @@ gap.
 The operation MUST atomically remove `deleteLength` bytes beginning at
 `offset`, then insert `insertBytes` at that same offset. It MUST preserve the
 prefix before `offset` and the suffix after the removed range. The final size
-MUST be computed with checked arithmetic and MUST not exceed the persisted
+MUST be computed with checked arithmetic and MUST NOT exceed the persisted
 `maxFileBytes` limit.
 
 The implementation MUST capture the input bytes before the returned promise
@@ -547,7 +559,7 @@ allocated.
 ### Directory creation and listing
 
 `mkdir` creates a directory with the requested or default mode. Without
-`recursive`, the parent MUST exist and the destination MUST not exist. With
+`recursive`, the parent MUST exist and the destination MUST NOT exist. With
 `recursive`, missing ancestor directories MUST be created using the same mode,
 and an existing destination directory is a successful no-op. An existing
 non-directory at any required component MUST fail with `ENOTDIR` for an
@@ -565,7 +577,7 @@ file or directory. Results MUST use the ordering specified above.
 `limit`, when present, MUST be a non-negative safe integer. A zero limit
 returns an empty list after resolving and type-checking the directory.
 `startAfter`, when present, is a single raw entry name, not a path; it MUST
-contain neither `/` nor NUL and MUST not be `.` or `..`. The result excludes
+contain neither `/` nor NUL and MUST NOT be `.` or `..`. The result excludes
 names less than or equal to `startAfter` in the required byte order. `limit`
 is applied after `startAfter` and MUST NOT exceed `maxReaddirEntries`.
 
@@ -583,7 +595,7 @@ stable view.
 ### Stat and chmod
 
 `stat` follows a final symbolic link. `lstat` does not. Both MUST return a
-snapshot value; later mutations MUST not modify a returned object.
+snapshot value; later mutations MUST NOT modify a returned object.
 `name` MUST be the last segment of the selected canonical path, even when
 `stat` follows that entry to a target with a different name.
 
@@ -630,7 +642,7 @@ inode.
 ### Unlink and recursive removal
 
 `unlink(path)` MUST remove one regular-file or symbolic-link directory entry.
-It MUST not follow a final symbolic link. It MUST fail with `EISDIR` for a
+It MUST NOT follow a final symbolic link. It MUST fail with `EISDIR` for a
 directory and `ENOENT` for a missing path.
 
 `rm(path)` removes one file, symbolic link, or empty directory. A non-empty
@@ -683,7 +695,7 @@ portable maintenance surface. These APIs MUST contain no Node.js, Durable
 Object, Computer, FUSE, or RPC types.
 
 ```ts
-export type LimitDomain = "filesystem" | "storage" | "branch";
+export type LimitDomain = "filesystem" | "storage" | "branch" | "runtime";
 export type LimitScope = "persisted" | "runtime";
 
 export interface EffectiveLimit {
@@ -699,6 +711,8 @@ export interface FilesystemCapabilities {
   readonly filesystem: Readonly<FilesystemLimits>;
   readonly storage: Readonly<StorageLimits>;
   readonly branch: Readonly<BranchConfiguration>;
+  readonly runtime: Readonly<RuntimeLimits>;
+  readonly format: Readonly<StorageFormat>;
   readonly effectiveLimits: readonly EffectiveLimit[];
   readonly readOnly: boolean;
 }
@@ -810,7 +824,7 @@ from payload counters. Hard-linked file bytes count once in logical set-based
 metrics. The two inclusion booleans MUST state the accounting boundary.
 
 One `verify` call MUST examine at most `maxEntities`, which defaults to
-`maxQueryBatchSize` and MUST not exceed it. `nextCursor` is opaque and bound to
+`maxQueryBatchSize` and MUST NOT exceed it. `nextCursor` is opaque and bound to
 the returned root mutation generation. Resuming after that generation changes
 MUST fail with `EBUSY`; it MUST NOT mix verification snapshots. Verification
 MUST be read-only, MUST NOT repair data, and MUST reject the first verified
@@ -844,6 +858,7 @@ export type FilesystemErrorCode =
   | "EPERM"
   | "EROFS"
   | "EBADF"
+  | "EAGAIN"
   | "EBUSY"
   | "EFBIG"
   | "ENOSPC"
@@ -875,6 +890,7 @@ Codes have these meanings:
 | `EPERM` | The operation is structurally forbidden. |
 | `EROFS` | The database or selected view is read-only. |
 | `EBADF` | The filesystem or adapter is closed. |
+| `EAGAIN` | Bounded synchronous backpressure could not admit work yet. |
 | `EBUSY` | Bounded SQLite contention retries were exhausted. |
 | `EFBIG` | A configured content or operation limit was exceeded. |
 | `ENOSPC` | SQLite reports that storage capacity is exhausted. |
@@ -954,11 +970,17 @@ export interface SqliteRunResult {
   readonly lastInsertRowid?: number;
 }
 
+export interface QueryBudget {
+  readonly maxRows: number;
+  readonly maxBytes: number;
+}
+
 export interface FilesystemSqlExecutor {
   run(sql: string, bindings?: SqliteBindings): SqliteRunResult;
   all<Row extends SqliteRow = SqliteRow>(
     sql: string,
-    bindings?: SqliteBindings,
+    bindings: SqliteBindings,
+    budget: QueryBudget,
   ): readonly Row[];
 }
 
@@ -969,6 +991,11 @@ export interface DatabaseAdapterCapabilities {
   readonly maxBlobBytes: number;
   /** Largest number of positional bindings in one statement. */
   readonly maxBindings: number;
+  readonly durability: "acknowledged" | "relaxed-test";
+  readonly journalMode: "wal" | "rollback" | "runtime-managed";
+  readonly memoryPolicy: "configured" | "runtime-managed";
+  readonly cacheTargetBytes?: number;
+  readonly mmapLimitBytes?: number;
 }
 
 export interface FilesystemDatabaseAdapter extends FilesystemSqlExecutor {
@@ -993,6 +1020,12 @@ safe-integer range.
 `all` MUST return rows in statement result order. Returned row objects MUST
 remain usable after the next statement. `run().changes` MUST describe the
 immediately executed statement, not the connection-wide cumulative count.
+
+Every multi-row statement MUST contain a row bound derived from
+`QueryBudget.maxRows`. The adapter MUST decode incrementally and stop before
+retained row capacity exceeds `QueryBudget.maxBytes`. A driver API that
+materializes the complete result before enforcing both bounds MUST NOT
+implement `all` directly; its adapter must use a bounded cursor or visitor.
 
 Adapter capability values MUST be positive safe integers. `maxBlobBytes` is
 the greatest BLOB byte length that can be bound and returned without loss.
@@ -1068,6 +1101,9 @@ export interface OpenNodeSqliteOptions {
   readonly readOnly?: boolean;
   readonly create?: boolean;
   readonly busyTimeoutMs?: number;
+  readonly durability?: "acknowledged" | "relaxed-test";
+  readonly cacheTargetBytes?: number;
+  readonly mmapLimitBytes?: number;
 }
 
 export declare function openNodeSqlite(
@@ -1079,9 +1115,24 @@ The package MAY select the concrete Node.js SQLite driver until its first
 stable release. It MUST document that driver and supported Node.js versions.
 It MUST enable foreign keys, configure a bounded busy timeout, normalize BLOBs
 to detached `Uint8Array` values, and implement the transaction guarantees
-above. It MUST report tested driver limits through `capabilities`. For file-
-backed writable databases it SHOULD use WAL mode unless the caller or
-environment explicitly selects a compatible alternative.
+above. It MUST report tested driver limits and its durability profile through
+`capabilities`.
+
+`durability` defaults to `"acknowledged"`. For a file-backed writable
+database, that profile MUST use WAL or an equivalently crash-safe rollback
+journal, production-safe synchronous commit, foreign keys, a bounded busy
+timeout, and a bounded checkpoint or journal-size policy. Returning from a
+write transaction means SQLite acknowledged that profile. A
+`"relaxed-test"` profile requires explicit opt-in and MUST NOT be used by the
+Computer production factory.
+
+`cacheTargetBytes` defaults to 16 MiB and `mmapLimitBytes` defaults to zero.
+The adapter MUST apply finite SQLite page-cache and memory-map settings before
+opening the filesystem, report the effective values through capabilities, and
+use a file-backed temporary-store policy for storage-scale sort or staging
+work. These adapter-managed allocations are measured separately from the
+core's exact managed-memory counter. Computer MUST include them in its
+process-wide memory configuration and resident-memory measurements.
 
 The Node adapter owns a database it opens and MUST close its connection when
 its `close()` resolves. `filename: ":memory:"` MUST be supported for tests.
@@ -1098,6 +1149,11 @@ such as `ArrayBuffer` to detached `Uint8Array` values and normalize cursor rows
 to ordinary JavaScript objects. It MUST preserve statement order and
 transaction serialization within the object. It MUST report conservative
 tested Durable Object BLOB and binding limits through `capabilities`.
+It MUST report `"acknowledged"` durability and `"runtime-managed"` journal
+mode when the runtime owns those policies. It MUST also report
+`"runtime-managed"` memory policy. The portable core MUST still use bounded
+queries and buffers; the runtime-owned cache is not permission to mirror
+SQLite state in JavaScript memory.
 
 Closing a Durable Object adapter MUST release adapter-local resources but MUST
 NOT close, delete, or invalidate runtime-owned Durable Object storage. The
@@ -1123,7 +1179,7 @@ the Node adapter.
 6. Return a usable filesystem only after every required transaction commits.
 
 Opening a read-only database that requires initialization or migration MUST
-fail with `EROFS`. A failed open MUST not return a partial instance and MUST
+fail with `EROFS`. A failed open MUST NOT return a partial instance and MUST
 close the adapter only when ownership was requested. Multiple instances MAY
 open the same current database; schema migration MUST be serialized so only
 one instance applies a version step.
@@ -1187,14 +1243,52 @@ export interface FilesystemLimits {
 
 export interface StorageLimits {
   readonly maxManifestEntries: number;
+  readonly maxManifestBytes: number;
   readonly maxFileBytes: number;
   readonly maxWriteBytes: number;
+  readonly maxManagedPayloadBytes: number;
+  readonly maxStagingPayloadBytes: number;
+  readonly maxBranchOverlayBytes: number;
+  readonly maxMaintenanceBytes: number;
+  readonly maintenanceReserveBytes: number;
+  readonly maxPermanentIdentifiers: number;
+  readonly maxFinalTransactionRows: number;
+  readonly maxFinalTransactionBytes: number;
+  readonly maxRevisionReplaySteps: number;
   readonly maxPatchesPerFile: number;
+  readonly maxPatchBytesPerFile: number;
   readonly maxQueryBatchSize: number;
   readonly maxGcBatchSize: number;
   readonly maxRetainedRevisions: number;
   readonly readLeaseMs: number;
   readonly stagingLeaseMs: number;
+}
+
+export interface RuntimeLimits {
+  readonly maxManagedResidentBytes: number;
+  readonly maxCacheBytes: number;
+  readonly maxPendingWriteBytes: number;
+  readonly maxWriteSessionBytes: number;
+  readonly maxPrefetchBytes: number;
+  readonly maxQueryBatchBytes: number;
+  readonly maxPreparedResultBytes: number;
+  readonly maxConcurrentStreams: number;
+  readonly maxConcurrentOperations: number;
+  readonly maxOpenBranchHandles: number;
+  readonly maxOpenNodeVfsSessions: number;
+}
+
+export type CowPageBytes = 4096 | 8192 | 16384;
+
+export interface StorageFormatOptions {
+  readonly cowPageBytes?: CowPageBytes;
+}
+
+export interface StorageFormat {
+  readonly cowPageBytes: CowPageBytes;
+  readonly hashAlgorithm: "sha256";
+  readonly chunkerAlgorithm: "fastcdc-v1";
+  readonly manifestFormat: "efs-manifest-v1";
 }
 ```
 
@@ -1204,6 +1298,42 @@ symlink-target bytes, 40 symlink traversals, 64 MiB of materialized result,
 directory entries per materialized listing. Storage defaults and valid ranges
 are normative in the storage specification. Branch defaults are normative in
 the branches and publication specification.
+
+Version 0.1 runtime defaults are 128 MiB `maxManagedResidentBytes`, 64 MiB
+`maxCacheBytes`, 64 MiB `maxPendingWriteBytes`, 16 MiB
+`maxWriteSessionBytes`, 1 MiB `maxPrefetchBytes`, 64 MiB
+`maxPreparedResultBytes`, 2 MiB `maxQueryBatchBytes`, and 64 concurrent
+streams. It also permits 256 admitted operations, 1,024 open branch handles,
+and 256 open Node VFS sessions. Sub-limits do not add to the aggregate
+allowance: all implementation-owned live bytes participate in
+`maxManagedResidentBytes`.
+
+Runtime accounting includes content and manifest caches, decoded manifests,
+prefetch, rechunking windows, pending write copies, prepared result arrays,
+and queued but not emitted stream bytes. Caller-owned input before admission,
+already emitted output, JavaScript runtime overhead, and SQLite's internal page
+cache are outside that exact counter and MUST be measured separately when the
+runtime exposes them.
+
+Before allocating accounted bytes, the implementation MUST reserve them under
+the aggregate and applicable sub-limit. On pressure it MUST evict derived
+cache entries, bypass cache admission, flush bounded staged writes, or apply
+backpressure. It MUST NOT multiply a per-handle allowance across concurrent
+handles beyond the aggregate limit. Cancellation, close, failure, and retry
+exhaustion MUST release every reservation.
+
+`FilesystemLimits.maxMaterializedBytes` MUST NOT exceed
+`RuntimeLimits.maxPreparedResultBytes`. Returned byte arrays, directory
+collections, changed-path arrays, conflict arrays, and other materialized
+results count as prepared results until ownership transfers to the caller.
+Each admitted operation and branch handle MUST consume its count slot and
+reserve bounded control state. Rejection, completion, cancellation, handle
+close, and filesystem close MUST release the corresponding slot.
+
+The format defaults to 8,192-byte copy-on-write pages. Creation may select
+4,096 or 16,384 instead. The effective value is persisted and exposed through
+`capabilities.format`. Supplying a conflicting value when reopening an
+existing filesystem MUST fail with `ESCHEMA`.
 
 Path, name, and symlink limits are measured after UTF-8 encoding. The complete
 canonical path includes `/` separators. A value equal to a limit is allowed.
