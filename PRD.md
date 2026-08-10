@@ -178,15 +178,22 @@ packages/
     fs/                  @ephemeralai/fs
     sqlite-node/         @ephemeralai/fs-sqlite-node
     sqlite-cloudflare/   @ephemeralai/fs-sqlite-cloudflare
+    replication/         @ephemeralai/fs-replication
+    node-vfs/            @ephemeralai/fs-node-vfs
     testkit/             shared conformance tests
 tests/
     conformance/
     node-integration/
     durable-object-integration/
+    replication/
+    node-vfs/
 benchmarks/
     storage/
     branching/
     multi-agent/
+    small-edits/
+    sequential-io/
+    fuse-materialization/
 examples/
     node-workspace/
     durable-object-workspace/
@@ -231,9 +238,11 @@ reconnection exists.
 ### FS-5: Copy-on-write branches
 
 A branch must reference an immutable base revision and store only private
-namespace changes, objects, manifests, and 4 KiB dirty pages. Repeated writes
-to the same page must replace branch-local state instead of appending another
-full copy.
+namespace changes, objects, manifests, and bounded dirty pages. The page size
+is selected when the filesystem is created from 4, 8, or 16 KiB, defaults to
+8 KiB, and is persisted as format metadata independently of FastCDC
+parameters. Repeated writes to the same page must replace branch-local state
+instead of appending another full copy.
 
 ### FS-6: Branch lifecycle
 
@@ -279,6 +288,35 @@ structured results. It must not require a specific logging or metrics system.
 Counters must distinguish logical bytes, retained content payload, branch-only
 payload, and reclaimable payload.
 
+### FS-12: Bounded runtime resources
+
+The core must account for its caches, decoded manifests, prefetch buffers,
+rechunking buffers, pending writes, and prepared results under aggregate byte
+budgets. A per-handle allowance must not multiply without bound across open
+files. Budget pressure must cause eviction, an early flush, cache bypass, or
+backpressure before another allocation is accepted.
+
+Every configured bound and observed high-water mark must be available through
+capabilities or metrics. Large reads and streamed writes must remain bounded
+by these budgets rather than by logical file size.
+
+The reference single-workspace profile uses a 128 MiB shared managed-memory
+ceiling and a 256 MiB Node or Computer process budget. The remaining process
+budget covers a finite 16 MiB SQLite cache target, bounded transport and FUSE
+buffers, and runtime/native headroom. These values are ceilings rather than
+preallocations; multiple workspaces in one process share one process budget.
+
+### FS-13: Host-neutral integration packages
+
+The replication package owns revision and object negotiation, durable cursors,
+bounded batches, retry, and import/export validation. It owns no network or
+remote procedure call transport.
+
+The Node virtual filesystem package owns Node-compatible handles, range I/O,
+bounded sequential write sessions, flush behavior, and error translation. It
+owns no FUSE mount or container lifecycle. These packages must keep the
+Computer integration to wiring and policy instead of filesystem algorithms.
+
 ## API direction
 
 The exact names may change before version 0.1, but the intended workflow is:
@@ -306,12 +344,35 @@ after the same workload passes on both compared engines.
 
 Version 0.1 must:
 
-- keep one small private overwrite proportional to copy-on-write page size;
-- avoid rewriting an unchanged manifest suffix after a reconnectable insertion;
+- keep one small private overwrite proportional to the selected 4, 8, or
+  16 KiB copy-on-write page size;
+- avoid rechunking, rehashing, or storing an unchanged content suffix after a
+  reconnectable insertion;
 - prevent database payload from growing with every repeated write to one page;
 - publish changes to independent paths without scanning unrelated file bytes;
 - complete garbage collection in bounded transactions for large object sets;
+- keep aggregate implementation-owned memory within configured byte budgets;
+- avoid process-memory mirrors of SQLite indexes, namespaces, revision graphs,
+  replication inventories, or garbage-collection marks;
+- read a large unchanged file without creating content or branch rows;
+- coalesce contiguous Node virtual filesystem writes within per-session and
+  global bounds rather than commit once per FUSE callback; and
 - report benchmark distributions rather than a single best run.
+
+The release workload must include a one-byte edit in a 100 MiB file, a cold
+and warm sequential read of a 100 MiB incompressible file, and FUSE
+materialization of both one 100 MiB file and 100 one MiB files. Reports must
+include p50, p95, throughput, time to first byte, peak accounted memory,
+process peak resident memory, SQLite cache policy, SQLite query and
+transaction counts, logical bytes, object bytes, main
+database bytes, write-ahead-log bytes when available, and retained overlay
+bytes.
+
+The small-edit path must not read, hash, or materialize the complete file. The
+large-read path must honor backpressure and must not perform durable mutation
+other than a bounded snapshot lease when required. The FUSE materialization
+path must not allocate a whole-file buffer and must stage content through
+bounded SQLite batches before one atomic namespace update.
 
 The Computer host will preserve its fixed 512 KiB DOFS engine as a benchmark
 control, not as a public production engine. Paired runs must use fresh,
@@ -325,6 +386,8 @@ workload. This repository does not package or depend on DOFS.
 - Validate manifest lengths, object hashes, and chunk ordering when loading
   untrusted persisted state.
 - Bound query batches and materialization sizes.
+- Bound aggregate caches, pending writes, prefetch, prepared results, and
+  transaction payloads.
 - Do not treat a content hash as proof that its stored bytes were verified.
 - Make database corruption and unsupported schema versions visible.
 - Keep adapter-specific native dependencies out of the core package.
@@ -348,6 +411,8 @@ workload. This repository does not package or depend on DOFS.
 ### Milestone 2: Filesystem conformance
 
 - Implement namespace and metadata operations.
+- Implement aggregate memory accounting and configurable 4, 8, and 16 KiB
+  copy-on-write pages.
 - Add crash, migration, link, rename, and range-write conformance tests.
 - Publish an unstable package for integration testing.
 
@@ -359,6 +424,7 @@ workload. This repository does not package or depend on DOFS.
 
 ### Milestone 4: Host integration
 
+- Publish the host-neutral replication and Node virtual filesystem packages.
 - Make EphemeralAI FS the default implementation for Computer's
   `WorkspaceFilesystem`, filesystem primitives, storage schema, and
   `SQLiteWorkspaceProvider` path.
@@ -378,6 +444,15 @@ workload. This repository does not package or depend on DOFS.
 - Idempotent publication returns the original durable result after restart.
 - Garbage collection preserves active branches and all retained revisions.
 - Benchmark results state the measured boundary and include reproducible inputs.
+- Resource tests prove that concurrent readers, writers, and slow streams stay
+  within configured aggregate memory budgets.
+- A millions-of-rows storage test proves that managed-memory high-water does
+  not grow with SQLite row count, and Node runs use finite reported SQLite
+  cache and memory-map settings.
+- Copy-on-write conformance passes with persisted 4, 8, and 16 KiB page sizes;
+  a new filesystem defaults to 8 KiB.
+- The small-edit, large-read, and FUSE-materialization release workloads meet
+  their recorded regression gates without replacing or bypassing SQLite.
 - EphemeralAI Computer defaults to EphemeralAI FS for its authoritative and
   local mirror filesystem paths without importing Computer-specific code into
   `@ephemeralai/fs`.
@@ -393,6 +468,8 @@ workload. This repository does not package or depend on DOFS.
   rewrites.
 - Local rechunking can degrade to a full scan for widely distributed changes.
 - SQLite adapters differ in transaction and binary-value APIs.
+- Unbounded caches or one write buffer per open handle can exhaust memory even
+  when every individual operation is bounded.
 - File-level conflicts are safe but may reject changes that a semantic merge
   could combine.
 - Retention and garbage collection bugs can either leak storage or delete live
@@ -401,11 +478,14 @@ workload. This repository does not package or depend on DOFS.
 ## Open decisions
 
 - Which Node.js SQLite library should the first adapter use?
-- Should the core expose streaming file reads in version 0.1 or add them after
-  byte-array conformance?
-- Which metadata fields must be stable across Computer and Node.js hosts?
-- How long should terminal branch records and publication results be retained?
-- Should chunking parameters be fixed per filesystem or versioned per manifest?
+- Which durable identifier representation should version 0.1 use for inodes
+  and filesystems?
+
+The technical specification resolves the other product-level choices:
+version 0.1 includes snapshot streaming reads; exposes type, size, mode,
+timestamps, link count, and stable inode identity; defaults terminal branches
+and publication results to 30-day retention; and persists or versions every
+chunking parameter needed to interpret stored content.
 
 ## Licensing and provenance
 
