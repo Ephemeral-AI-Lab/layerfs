@@ -16,9 +16,12 @@ then publish its changes to the durable main workspace in one transaction.
 Publication merges changes to independent files and returns explicit conflicts
 when another writer has changed the same path.
 
-The project is an independent library. Cloudflare Computer is its first major
-integration, but the core filesystem must also run in a regular Node.js process
-with a local SQLite database.
+The project is an independent library. In EphemeralAI Computer, it completely
+replaces the current `@cloudflare/dofs` filesystem implementation, including
+its filesystem facade, namespace and content engine, schema, and virtual
+filesystem provider. It does not replace Durable Object SQLite, which remains
+the authoritative database behind the Cloudflare adapter. The core filesystem
+must also run in a regular Node.js process with a local SQLite database.
 
 ## Current evidence
 
@@ -71,6 +74,13 @@ EphemeralAI FS does not own:
 - semantic source-code merges.
 
 Those concerns belong to hosts such as EphemeralAI Computer.
+
+EphemeralAI Computer owns the migration and compatibility bridges that replace
+its current `WorkspaceFilesystem` and `SQLiteWorkspaceProvider` consumers. The
+finished Computer filesystem path must not depend on `@cloudflare/dofs`.
+`workspace.fs` uses the EphemeralAI FS public contract; Computer-specific
+facades may transport or extend it but must not define different filesystem
+semantics.
 
 ## Target users
 
@@ -137,8 +147,10 @@ measured.
 ## Target architecture
 
 ```text
-Filesystem API
+EphemeralAI Computer workspace.fs or another host
     |
+EphemeralAI FS API
+    |  replaces @cloudflare/dofs in Computer
     +-- namespace and metadata
     +-- branch views and publication
     +-- content-addressed objects
@@ -148,8 +160,8 @@ Filesystem API
     |
 Transactional database contract
     |
-    +-- Node.js SQLite adapter
-    +-- Durable Object SQLite adapter
+    +-- Node.js SQLite adapter -> local SQLite
+    +-- Durable Object SQLite adapter -> Durable Object SQLite
 ```
 
 The first package layout is:
@@ -337,7 +349,11 @@ not as a public production engine.
 
 ### Milestone 4: Host integration
 
-- Integrate with EphemeralAI Computer through its adapter package.
+- Replace Computer's `WorkspaceFilesystem`, filesystem primitives, storage
+  schema, and `SQLiteWorkspaceProvider` path with EphemeralAI FS.
+- Keep Computer-owned compatibility bridges for `workspace.fs`, sync, and
+  FUSE without retaining `WorkspaceFilesystem` as a second semantic API or
+  `@cloudflare/dofs` as a filesystem engine.
 - Run the full Durable Object, sync, `computerd`, FUSE, shell, and pull path.
 - Document compatibility and migration behavior.
 
@@ -350,8 +366,9 @@ not as a public production engine.
 - Idempotent publication returns the original durable result after restart.
 - Garbage collection preserves active branches and all retained revisions.
 - Benchmark results state the measured boundary and include reproducible inputs.
-- EphemeralAI Computer can select the engine without importing adapter-specific
-  code into `@ephemeralai/fs`.
+- EphemeralAI Computer uses EphemeralAI FS for its authoritative and local
+  mirror filesystem paths without importing Computer-specific code into
+  `@ephemeralai/fs` or retaining `@cloudflare/dofs` at runtime.
 - Public documentation distinguishes implemented behavior from planned work.
 
 ## Risks

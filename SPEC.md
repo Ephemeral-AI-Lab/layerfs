@@ -48,36 +48,39 @@ core must not import host runtime, container, FUSE, or remote procedure call
 types.
 
 Ephemeral AI FS is therefore not a plugin to Cloudflare Computer. It is an
-independent library with a Cloudflare SQLite adapter. Ephemeral AI Computer is
-a host and integration consumer that may select this filesystem engine behind
-its own workspace, sync, mount, and process-execution boundaries.
+independent filesystem library. In Ephemeral AI Computer it replaces the
+current `@cloudflare/dofs` filesystem facade, namespace and content engine,
+schema, and virtual filesystem provider. Computer retains its workspace, sync,
+mount, FUSE, and process-execution boundaries as host-owned compatibility
+bridges.
+
+Durable Object SQLite is below that replacement boundary. The
+`@ephemeralai/fs-sqlite-cloudflare` package adapts it to the portable database
+contract; Ephemeral AI FS does not replace the database service.
 
 ## Architecture
 
 ```text
-Ephemeral AI Computer or another host
-                    |
-                    v
-       asynchronous filesystem API
-                    |
-      +-------------+-------------+
-      |             |             |
-  namespace     branch views   maintenance
-  and metadata  and publish    and metrics
-      |             |             |
-      +-------------+-------------+
-                    |
-       revisions and content engine
-                    |
-      +-------------+-------------+
-      |             |             |
- SHA-256 objects FastCDC v1   4 KiB COW pages
- and manifests   chunking     and patches
-      +-------------+-------------+
-                    |
-       portable SQLite contract
-            /                 \
-  Node.js SQLite       Durable Object SQLite
+Ephemeral AI Computer                      another host
+        |                                       |
+workspace.fs: EphemeralFilesystem     asynchronous filesystem API
+        |                                       |
+        +---------------+-----------------------+
+                        |
+                Ephemeral AI FS
+        replaces @cloudflare/dofs in Computer
+                        |
+       namespace + branches + publication
+                        |
+        revisions and content engine
+                        |
+   SHA-256 + FastCDC v1 + manifests + COW pages
+                        |
+             portable database contract
+                 /                 \
+     Cloudflare adapter          Node adapter
+              |                       |
+  Durable Object SQLite          local SQLite
 ```
 
 Main is one durable, linear revision history. A branch freezes a base revision
@@ -85,6 +88,11 @@ and records only its namespace changes, content objects, pages, and patches.
 Publication validates the branch write set against durable entry and inode
 tokens, then either commits one new main revision atomically or returns a
 deterministic conflict without changing main.
+
+In Computer, `workspace.fs` MUST use the `EphemeralFilesystem` contract rather
+than retain `WorkspaceFilesystem` as a second semantic API. Computer MAY add
+transport-safe facades and convenience helpers, but they MUST delegate to this
+contract and MUST NOT redefine filesystem behavior or storage.
 
 ## Repository and package layout
 
@@ -206,7 +214,8 @@ restart mechanisms, but may not weaken portable outcomes.
 4. Implement durable branches, conflict tokens, publication, replay, and
    retention.
 5. Implement verification, accounting, and bounded garbage collection.
-6. Validate benchmarks, then integrate the adapter into Ephemeral AI Computer.
+6. Replace Computer's `@cloudflare/dofs` runtime path with Ephemeral AI FS and
+   its Computer-owned compatibility bridges.
 
 ## Open implementation choices
 

@@ -24,9 +24,12 @@ It MAY use platform-neutral JavaScript types, including `Uint8Array`, WHATWG
 
 The core package MUST depend on the database contract in this document rather
 than a concrete SQLite driver. The Node.js and Durable Object integrations
-MUST live in their adapter packages. A host MAY wrap the core API to present a
-different compatibility surface, but that wrapper is not part of this
-contract.
+MUST live in their adapter packages. A host MAY transport the core API through
+remote calls or add convenience helpers built from its primitives, but it MUST
+NOT define different filesystem semantics. In Ephemeral AI Computer,
+`workspace.fs` MUST expose this contract and replace the current
+`WorkspaceFilesystem` contract. Transport wrappers remain host code and MUST
+mirror the portable methods, results, and errors one-for-one.
 
 Version 0.1 includes path-based operations. Persistent file descriptors,
 memory mapping, advisory locking, ownership, access-control enforcement,

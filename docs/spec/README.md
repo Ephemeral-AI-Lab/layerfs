@@ -11,3 +11,7 @@ The detailed technical specification is organized into three contracts:
 
 Start with the repository-level [`SPEC.md`](../../SPEC.md) for scope and
 normative language.
+
+For Ephemeral AI Computer, these contracts define the replacement for the
+current `@cloudflare/dofs` filesystem subsystem. Durable Object SQLite remains
+the database backend through `@ephemeralai/fs-sqlite-cloudflare`.
