@@ -23,19 +23,57 @@ one authoritative SQLite-backed workspace.
 
 The C3 storage pipeline described in
 [Part III of the Agent Infra Book](https://github.com/agent-infra-foundation/agent-infra-book/blob/main/cloudflare/computer/chapters/PART-III.md)
-is represented directly in this repository:
+is represented directly in this repository. The pipeline is easier to read as three
+small flows:
 
-```mermaid
-flowchart LR
-    A[Agent edit] --> B[EphemeralFS operation]
-    B --> C[FastCDC chunks]
-    C --> D[SHA-256 CAS objects]
-    D --> E[Authenticated Merkle manifest]
-    E --> F[SQLite transaction]
-    F --> G[Immutable revision or branch head]
-    G --> H{Publish}
-    H -->|base unchanged| I[Advance main]
-    H -->|base changed| J[Explicit conflict]
+### 1. Write and store
+
+```text
+Agent edit
+    |
+    v
+EphemeralFS operation
+    |
+    +--> FastCDC chunks -----> SHA-256 CAS objects
+    |
+    +--> Ordered entries ----> Authenticated Merkle manifest
+                                      |
+                                      v
+                              SQLite transaction
+                                      |
+                                      v
+                              Immutable revision
+```
+
+### 2. Read a workspace
+
+```text
+Main head or branch head
+          |
+          v
+Authenticated manifest
+          |
+          v
+Bounded manifest cursor
+          |
+          v
+Shared CAS objects
+          |
+          v
+Bounded file read or stream
+```
+
+### 3. Publish a branch
+
+```text
+Private branch
+      |
+      v
+Verify expected base revision
+      |
+      +---- base unchanged ----> Atomic publish to main
+      |
+      +---- base changed -------> Explicit conflict
 ```
 
 An edit follows this path:
