@@ -250,9 +250,10 @@ where
     if occupied.resident_memory_bound_bytes()? > occupied_resident {
         return Err(FsCasErrorV1::Core(CoreError::ResourceRefused));
     }
-    let mut private_pack = cas.begin_private_pack_borrowed_v1(storage_token)?;
+    let mut shared_control = SharedC3ControlV1::new(control);
+    let mut private_pack =
+        cas.begin_private_pack_borrowed_controlled_v1(storage_token, &mut shared_control)?;
     if private_pack.resident_memory_bound_bytes()? > private_pack_resident_bound {
-        let mut shared_control = SharedC3ControlV1::new(control);
         let cleanup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             private_pack.cleanup_controlled_v1(&mut shared_control)
         }));
@@ -318,7 +319,7 @@ where
         .map_err(FsClosureAdmissionErrorV1::FsCas)?;
     let mut closure = FsCasClosureSpoolV1::new(closure_objects, occupied);
     let mut closure_operation = cas
-        .begin_closure_operation_borrowed_v1(storage_token)
+        .begin_closure_operation_borrowed_controlled_v1(storage_token, control)
         .map_err(FsClosureAdmissionErrorV1::FsCas)?;
     let closure_terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let (admitted, mut capability) = cas.admit_complete_closure_borrowed_v1(
@@ -332,8 +333,12 @@ where
             algorithm,
             control,
         )?;
-        cas.consume_validated_closure_for_handoff(&mut closure_operation, &mut capability)
-            .map_err(FsClosureAdmissionErrorV1::FsCas)?;
+        cas.consume_validated_closure_for_handoff_controlled_v1(
+            &mut closure_operation,
+            &mut capability,
+            control,
+        )
+        .map_err(FsClosureAdmissionErrorV1::FsCas)?;
         Ok::<u64, FsClosureAdmissionErrorV1>(admitted.object_count())
     }));
     match closure_terminal {
@@ -671,6 +676,11 @@ impl FsCasControlV1 for CandidateSharedControlV1<'_, '_> {
         boundary: crate::cas::FsCasResidueAccountingBoundaryV1,
     ) -> bool {
         (**self.inner.borrow_mut()).inject_residue_accounting_failure(boundary)
+    }
+
+    #[cfg(test)]
+    fn before_carrier_no_replace_transition_for_test_v1(&mut self) {
+        (**self.inner.borrow_mut()).before_carrier_no_replace_transition_for_test_v1();
     }
 
     #[cfg(test)]

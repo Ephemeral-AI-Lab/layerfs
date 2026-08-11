@@ -2,6 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{mpsc, Arc, Condvar, Mutex};
+use std::time::Duration;
 
 use layerfs_storage::cas::{
     FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasFailureCauseV1,
@@ -174,6 +176,61 @@ fn boxed_tree_pages() -> Box<[Option<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES
 
 struct TestRoot(PathBuf);
 
+struct WatchdogGateV1 {
+    released: Mutex<bool>,
+    wake: Condvar,
+}
+
+impl WatchdogGateV1 {
+    fn new() -> Self {
+        Self {
+            released: Mutex::new(false),
+            wake: Condvar::new(),
+        }
+    }
+
+    fn wait(&self) {
+        let released = self.released.lock().expect("watchdog gate is healthy");
+        let (released, timeout) = self
+            .wake
+            .wait_timeout_while(released, Duration::from_secs(5), |released| !*released)
+            .expect("watchdog gate is healthy");
+        assert!(*released, "watchdog gate timed out: {timeout:?}");
+    }
+
+    fn release(&self) {
+        *self.released.lock().expect("watchdog gate is healthy") = true;
+        self.wake.notify_all();
+    }
+}
+
+struct WatchdogGateReleaseV1 {
+    gate: Arc<WatchdogGateV1>,
+    released: bool,
+}
+
+impl WatchdogGateReleaseV1 {
+    fn new(gate: Arc<WatchdogGateV1>) -> Self {
+        Self {
+            gate,
+            released: false,
+        }
+    }
+
+    fn release_v1(&mut self) {
+        self.gate.release();
+        self.released = true;
+    }
+}
+
+impl Drop for WatchdogGateReleaseV1 {
+    fn drop(&mut self) {
+        if !self.released {
+            self.gate.release();
+        }
+    }
+}
+
 impl TestRoot {
     fn new(label: &str) -> Self {
         let sequence = NEXT_ROOT.fetch_add(1, Ordering::Relaxed);
@@ -229,6 +286,7 @@ fn exact_operation_namespace_usage(root: &Path) -> ((u64, u64), (u64, u64)) {
 fn assert_operation_authority_baseline(cas: &FsCasV1, root: &Path) {
     assert_eq!(cas.operation_admitted_slots_v1(), 0);
     assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+    assert_eq!(cas.operation_admission_queue_for_test_v1(), (0, 0, 0));
     assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
     assert_eq!(fs::read_dir(root.join("preparation")).unwrap().count(), 0);
 }
@@ -307,6 +365,12 @@ impl ContentSourceV1 for CounterSource {
 
 struct CounterSupplier {
     len: u64,
+}
+
+struct BarrierCounterSupplier {
+    len: u64,
+    ready: mpsc::SyncSender<()>,
+    start: Arc<WatchdogGateV1>,
 }
 
 struct InvocationCheckedSupplier<'a> {
@@ -481,6 +545,25 @@ impl C3SourceSupplierV1 for CounterSupplier {
     }
 }
 
+impl C3SourceSupplierV1 for BarrierCounterSupplier {
+    type Source = CounterSource;
+
+    fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+        Ok(core::mem::size_of::<CounterSource>() as u64)
+    }
+
+    fn supply(self) -> CoreResult<Self::Source> {
+        self.ready
+            .send(())
+            .expect("counter supplier watchdog receiver remains live");
+        self.start.wait();
+        Ok(CounterSource {
+            len: self.len,
+            offset: 0,
+        })
+    }
+}
+
 impl ContentSourceV1 for SliceSource<'_> {
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
         Ok(core::mem::size_of::<Self>() as u64)
@@ -513,6 +596,55 @@ impl<'a> C3SourceSupplierV1 for CheckedSupplier<'a> {
     }
 }
 
+/// Test-only rendezvous immediately before source delivery.  Production
+/// remains synchronous on each caller thread; the barrier exists solely to
+/// make two independently reopened operations genuinely overlap.
+struct BarrierCheckedSupplier<'a> {
+    bytes: &'a [u8],
+    ready: mpsc::SyncSender<()>,
+    start: Arc<WatchdogGateV1>,
+}
+
+impl<'a> C3SourceSupplierV1 for BarrierCheckedSupplier<'a> {
+    type Source = SliceSource<'a>;
+
+    fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+        Ok(core::mem::size_of::<SliceSource<'_>>() as u64)
+    }
+
+    fn supply(self) -> CoreResult<Self::Source> {
+        self.ready
+            .send(())
+            .expect("barrier supplier watchdog receiver remains live");
+        self.start.wait();
+        Ok(SliceSource {
+            bytes: self.bytes,
+            offset: 0,
+        })
+    }
+}
+
+struct BarrierFailingSupplier {
+    ready: mpsc::SyncSender<()>,
+    start: Arc<WatchdogGateV1>,
+}
+
+impl C3SourceSupplierV1 for BarrierFailingSupplier {
+    type Source = SliceSource<'static>;
+
+    fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+        Ok(core::mem::size_of::<SliceSource<'static>>() as u64)
+    }
+
+    fn supply(self) -> CoreResult<Self::Source> {
+        self.ready
+            .send(())
+            .expect("failing supplier watchdog receiver remains live");
+        self.start.wait();
+        Err(CoreError::CountCap)
+    }
+}
+
 #[derive(Default)]
 struct ContinueControl;
 
@@ -533,6 +665,57 @@ impl FsCasControlV1 for ContinueControl {
 
     fn deadline_exceeded(&mut self) -> bool {
         false
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CandidateValidationStopV1 {
+    Cancelled,
+    Deadline,
+}
+
+struct StopBeforeCandidateValidationV1 {
+    stop: CandidateValidationStopV1,
+    armed: bool,
+}
+
+impl StopBeforeCandidateValidationV1 {
+    const fn new(stop: CandidateValidationStopV1) -> Self {
+        Self { stop, armed: false }
+    }
+
+    fn cancelled_v1(&self) -> bool {
+        self.armed && self.stop == CandidateValidationStopV1::Cancelled
+    }
+
+    fn deadline_v1(&self) -> bool {
+        self.armed && self.stop == CandidateValidationStopV1::Deadline
+    }
+}
+
+impl CdcControlV1 for StopBeforeCandidateValidationV1 {
+    fn cancellation_requested(&mut self) -> bool {
+        self.cancelled_v1()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        self.deadline_v1()
+    }
+}
+
+impl FsCasControlV1 for StopBeforeCandidateValidationV1 {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeCandidateValidation {
+            self.armed = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        self.cancelled_v1()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        self.deadline_v1()
     }
 }
 
@@ -942,6 +1125,70 @@ struct PanicClosureFenceAndPoisonTerminalV1 {
     preparation_cleanup_calls: usize,
     fail_invalidation: bool,
     root_invalidation_callbacks: usize,
+}
+
+struct ObserveClosureMarkerLockScopeV1 {
+    cas: FsCasV1,
+    observed: bool,
+    visibility_available: bool,
+    publication_available: bool,
+    closure_phase: bool,
+    visibility_acquisitions: u64,
+    visibility_releases: u64,
+    publication_acquisitions: u64,
+    publication_releases: u64,
+    closure_publication_acquisitions: u64,
+    closure_publication_releases: u64,
+}
+
+impl CdcControlV1 for ObserveClosureMarkerLockScopeV1 {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for ObserveClosureMarkerLockScopeV1 {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeClosureMarkerPublication {
+            self.observed = true;
+            self.closure_phase = true;
+            self.visibility_available = self.cas.visibility_lock_available_for_test_v1();
+            self.publication_available = self.cas.publication_lock_available_for_test_v1();
+        }
+        match boundary {
+            FsCasBoundaryV1::VisibilityLockAcquired => {
+                self.visibility_acquisitions += 1;
+            }
+            FsCasBoundaryV1::VisibilityLockReleased => {
+                self.visibility_releases += 1;
+            }
+            FsCasBoundaryV1::PublicationLockAcquired => {
+                self.publication_acquisitions += 1;
+                if self.closure_phase {
+                    self.closure_publication_acquisitions += 1;
+                }
+            }
+            FsCasBoundaryV1::PublicationLockReleased => {
+                self.publication_releases += 1;
+                if self.closure_phase {
+                    self.closure_publication_releases += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
 }
 
 impl CdcControlV1 for PanicClosureFenceAndPoisonTerminalV1 {
@@ -2029,6 +2276,74 @@ where
     )
 }
 
+#[test]
+fn closure_marker_preparation_holds_neither_root_fence() {
+    let fixture = TestRoot::new("closure-marker-lock-scope");
+    let cas = FsCasV1::create_new(fixture.path()).unwrap();
+    let mut control = ObserveClosureMarkerLockScopeV1 {
+        cas: cas.clone(),
+        observed: false,
+        visibility_available: false,
+        publication_available: false,
+        closure_phase: false,
+        visibility_acquisitions: 0,
+        visibility_releases: 0,
+        publication_acquisitions: 0,
+        publication_releases: 0,
+        closure_publication_acquisitions: 0,
+        closure_publication_releases: 0,
+    };
+    let (result, counters) = run_small_create_with_supplier(
+        &cas,
+        0x0011_5500,
+        &mut control,
+        CheckedSupplier { bytes: &[0x5a] },
+    );
+    result.unwrap();
+    assert!(control.observed);
+    assert!(control.visibility_available);
+    assert!(control.publication_available);
+    // The marker pair first proves that publication is acquirable without
+    // prematurely attributing any of its wait to visibility, releases that
+    // preflight acquisition, then acquires the final publication/visibility
+    // pair. Both physical acquisitions are direct observations.
+    assert_eq!(control.closure_publication_acquisitions, 2);
+    assert_eq!(control.closure_publication_releases, 2);
+    assert_eq!(
+        counters.visibility_lock_acquisitions,
+        control.visibility_acquisitions
+    );
+    assert_eq!(control.visibility_acquisitions, control.visibility_releases);
+    assert_eq!(
+        counters.publication_lock_acquisitions,
+        control.publication_acquisitions
+    );
+    assert_eq!(
+        control.publication_acquisitions,
+        control.publication_releases
+    );
+    assert_storage_equations(&counters);
+    assert!(counters.has_zero_forbidden_work());
+}
+
+#[test]
+fn writer_transfers_direct_visibility_and_publication_observations() {
+    let fixture = TestRoot::new("writer-direct-root-lock-observations");
+    let cas = FsCasV1::create_new(fixture.path()).unwrap();
+    let (result, counters) = run_small_create_with_supplier(
+        &cas,
+        0x0011_5501,
+        &mut ContinueControl,
+        CheckedSupplier { bytes: &[0x5b] },
+    );
+
+    result.unwrap();
+    assert!(counters.visibility_lock_acquisitions > 0);
+    assert!(counters.publication_lock_acquisitions > 0);
+    assert_storage_equations(&counters);
+    assert!(counters.has_zero_forbidden_work());
+}
+
 fn run_small_create_with_supplier<C, S>(
     cas: &FsCasV1,
     cancellation_key: u64,
@@ -2116,6 +2431,1387 @@ where
         control,
         counters,
     )
+}
+
+fn run_large_create_with_supplier_and_counters<C, S>(
+    cas: &FsCasV1,
+    cancellation_key: u64,
+    control: &mut C,
+    declared_len: u64,
+    supplier: S,
+    counters: &mut OperationCountersV1,
+) -> Result<layerfs_storage::lifecycle::C3HandoffV1, C3OperationErrorV1>
+where
+    C: CdcControlV1 + FsCasControlV1,
+    S: C3SourceSupplierV1,
+{
+    let mut source_window = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
+    let mut cdc_ring = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
+    let mut incoming = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+    let mut occupied = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+    let mut tree_object = boxed_zeroes::<MAX_TREE_OBJECT_BYTES>();
+    let mut tree_pages = boxed_tree_pages();
+    let mut traversal = vec![0_u8; 64 * 1024];
+    let grant =
+        request_c3_create_qualification_v1(cas, cancellation_key, counters, control).unwrap();
+    run_c3_create_v1(
+        grant,
+        C3CdcAlgorithmV1::FastCdc,
+        b"payload.bin",
+        0o644,
+        declared_len,
+        supplier,
+        C3OperationBuffersV1 {
+            source: &mut source_window,
+            cdc_ring: &mut cdc_ring,
+            incoming_comparison: &mut incoming,
+            occupied_comparison: &mut occupied,
+            tree_object: &mut tree_object,
+            tree_pages: &mut *tree_pages,
+            traversal_state: &mut traversal,
+        },
+        control,
+        counters,
+    )
+}
+
+struct BarrierPanicAtPackPublicationV1 {
+    target: FsCasBoundaryV1,
+    entered_signal: mpsc::SyncSender<()>,
+    release: Arc<WatchdogGateV1>,
+    injected: bool,
+}
+
+impl CdcControlV1 for BarrierPanicAtPackPublicationV1 {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for BarrierPanicAtPackPublicationV1 {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if !self.injected && boundary == self.target {
+            self.injected = true;
+            self.entered_signal
+                .send(())
+                .expect("publication barrier watchdog receiver remains live");
+            self.release.wait();
+            panic!("injected pre-catalog publication unwind at {boundary:?}")
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+struct SignalActivePackPublicationWaitV1 {
+    reached: Option<mpsc::SyncSender<()>>,
+}
+
+impl CdcControlV1 for SignalActivePackPublicationWaitV1 {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for SignalActivePackPublicationWaitV1 {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::ActivePackPublicationWait {
+            if let Some(reached) = self.reached.take() {
+                reached
+                    .send(())
+                    .expect("active-publication wait receiver remains live");
+            }
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CarrierAlreadyExistsTerminalV1 {
+    Success,
+    CallbackUnwind,
+    CleanupFailure,
+}
+
+struct CarrierAlreadyExistsRaceControlV1 {
+    restore_requested: Option<mpsc::SyncSender<()>>,
+    restore_completed: mpsc::Receiver<Result<(), String>>,
+    comparison_entered: Option<mpsc::SyncSender<()>>,
+    comparison_release: mpsc::Receiver<()>,
+    terminal: CarrierAlreadyExistsTerminalV1,
+    no_replace_injected: bool,
+    comparison_gated: bool,
+    cleanup_failed: bool,
+}
+
+impl CdcControlV1 for CarrierAlreadyExistsRaceControlV1 {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for CarrierAlreadyExistsRaceControlV1 {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary != FsCasBoundaryV1::BeforeIncumbentComparisonWindow || self.comparison_gated {
+            return;
+        }
+        self.comparison_gated = true;
+        self.comparison_entered
+            .take()
+            .expect("comparison entry signal is emitted exactly once")
+            .send(())
+            .expect("comparison entry watchdog remains live");
+        self.comparison_release
+            .recv_timeout(Duration::from_secs(5))
+            .expect("comparison release gate timed out");
+        if self.terminal == CarrierAlreadyExistsTerminalV1::CallbackUnwind {
+            panic!("injected incumbent-comparison callback unwind");
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+        if self.terminal == CarrierAlreadyExistsTerminalV1::CleanupFailure
+            && target == FsCasCleanupTargetV1::PrivatePack
+            && !self.cleanup_failed
+        {
+            self.cleanup_failed = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn before_carrier_no_replace_transition_for_test_v1(&mut self) {
+        assert!(!self.no_replace_injected);
+        self.restore_requested
+            .take()
+            .expect("carrier restore request is emitted exactly once")
+            .send(())
+            .expect("independent winner remains live");
+        self.restore_completed
+            .recv_timeout(Duration::from_secs(5))
+            .expect("independent winner timed out")
+            .unwrap_or_else(|error| panic!("independent winner failed: {error}"));
+        self.no_replace_injected = true;
+    }
+}
+
+#[test]
+fn carrier_already_exists_owner_blocks_same_pack_until_adoption_terminal() {
+    for (label, first_terminal) in [
+        (
+            "carrier-already-exists-success",
+            CarrierAlreadyExistsTerminalV1::Success,
+        ),
+        (
+            "carrier-already-exists-unwind",
+            CarrierAlreadyExistsTerminalV1::CallbackUnwind,
+        ),
+        (
+            "carrier-already-exists-cleanup-failure",
+            CarrierAlreadyExistsTerminalV1::CleanupFailure,
+        ),
+    ] {
+        let fixture = TestRoot::new(label);
+        let held = TestRoot::new(&format!("{label}-held"));
+        let seed = FsCasV1::create_new(fixture.path()).unwrap();
+        let mut seed_control = ContinueControl;
+        let mut seed_counters = OperationCountersV1::default();
+        run_small_create_with_supplier_and_counters(
+            &seed,
+            0x0011_5570,
+            &mut seed_control,
+            CheckedSupplier { bytes: &[0x5a] },
+            &mut seed_counters,
+        )
+        .unwrap();
+        assert_storage_equations(&seed_counters);
+
+        let first_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let contender_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let stale = FsCasV1::open_existing(fixture.path()).unwrap();
+        fs::create_dir_all(held.path()).unwrap();
+        let carrier = fs::read_dir(fixture.path().join("carriers"))
+            .unwrap()
+            .next()
+            .expect("seed carrier exists")
+            .unwrap()
+            .path();
+        let catalog = fs::read_dir(fixture.path().join("catalog"))
+            .unwrap()
+            .next()
+            .expect("seed catalog exists")
+            .unwrap()
+            .path();
+        let held_carrier = held.path().join("carrier");
+        let held_catalog = held.path().join("catalog");
+        fs::rename(&carrier, &held_carrier).unwrap();
+        fs::rename(&catalog, &held_catalog).unwrap();
+
+        let (restore_request_tx, restore_request_rx) = mpsc::sync_channel(0);
+        let (restore_complete_tx, restore_complete_rx) = mpsc::sync_channel(0);
+        let (comparison_entered_tx, comparison_entered_rx) = mpsc::sync_channel(1);
+        let (comparison_release_tx, comparison_release_rx) = mpsc::sync_channel(0);
+        let (wait_tx, wait_rx) = mpsc::sync_channel(1);
+        let (contender_done_tx, contender_done_rx) = mpsc::sync_channel(1);
+
+        std::thread::scope(|scope| {
+            let installer = scope.spawn(move || {
+                let result = restore_request_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .map_err(|error| format!("restore request: {error}"))
+                    .and_then(|()| {
+                        fs::rename(&held_carrier, &carrier)
+                            .map_err(|error| format!("carrier restore: {error}"))?;
+                        fs::rename(&held_catalog, &catalog)
+                            .map_err(|error| format!("catalog restore: {error}"))?;
+                        Ok(())
+                    });
+                let _ = restore_complete_tx.send(result.clone());
+                result
+            });
+
+            let first = scope.spawn(move || {
+                let mut control = CarrierAlreadyExistsRaceControlV1 {
+                    restore_requested: Some(restore_request_tx),
+                    restore_completed: restore_complete_rx,
+                    comparison_entered: Some(comparison_entered_tx),
+                    comparison_release: comparison_release_rx,
+                    terminal: first_terminal,
+                    no_replace_injected: false,
+                    comparison_gated: false,
+                    cleanup_failed: false,
+                };
+                let mut counters = OperationCountersV1::default();
+                let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_small_create_with_supplier_and_counters(
+                        &first_cas,
+                        0x0011_5571,
+                        &mut control,
+                        CheckedSupplier { bytes: &[0x5a] },
+                        &mut counters,
+                    )
+                }));
+                (terminal, counters, control)
+            });
+
+            comparison_entered_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|error| {
+                    panic!("{label}: incumbent comparison not reached: {error}")
+                });
+
+            let contender = scope.spawn(move || {
+                let mut control = SignalActivePackPublicationWaitV1 {
+                    reached: Some(wait_tx),
+                };
+                let mut counters = OperationCountersV1::default();
+                let terminal = run_small_create_with_supplier_and_counters(
+                    &contender_cas,
+                    0x0011_5572,
+                    &mut control,
+                    CheckedSupplier { bytes: &[0x5a] },
+                    &mut counters,
+                );
+                let _ = contender_done_tx.send(());
+                (terminal, counters)
+            });
+
+            let wait_observed = wait_rx.recv_timeout(Duration::from_secs(5));
+            let premature = contender_done_rx.recv_timeout(Duration::from_millis(100));
+            let _ = comparison_release_tx.send(());
+            wait_observed.unwrap_or_else(|error| {
+                panic!("{label}: contender missed the active owner: {error}")
+            });
+            assert!(
+                matches!(premature, Err(mpsc::RecvTimeoutError::Timeout)),
+                "{label}: contender completed before adoption terminal"
+            );
+
+            installer
+                .join()
+                .expect("independent winner thread did not panic")
+                .unwrap_or_else(|error| panic!("{label}: {error}"));
+            let (first_result, first_counters, control) =
+                first.join().expect("first writer thread did not panic");
+            let (contender_result, contender_counters) =
+                contender.join().expect("contender thread did not panic");
+
+            assert!(control.no_replace_injected, "{label}");
+            assert!(control.comparison_gated, "{label}");
+            assert_storage_equations(&first_counters);
+            assert_storage_equations(&contender_counters);
+            assert!(first_counters.has_zero_forbidden_work(), "{label}");
+            assert!(contender_counters.has_zero_forbidden_work(), "{label}");
+            assert!(
+                first_counters.publication_lock_wait_nanoseconds > 0,
+                "{label}"
+            );
+            assert!(
+                first_counters.publication_lock_hold_nanoseconds > 0,
+                "{label}"
+            );
+            assert!(
+                first_counters.visibility_lock_wait_nanoseconds > 0,
+                "{label}"
+            );
+            assert!(
+                first_counters.visibility_lock_hold_nanoseconds > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.active_pack_publication_wait_polls > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.active_pack_publication_wait_nanoseconds > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.publication_lock_acquisitions > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.publication_lock_hold_nanoseconds > 0,
+                "{label}"
+            );
+
+            match first_terminal {
+                CarrierAlreadyExistsTerminalV1::Success => {
+                    first_result.unwrap().unwrap();
+                    contender_result.unwrap();
+                    assert_eq!(first_counters.storage_bytes_committed, 0, "{label}");
+                    assert_eq!(first_counters.storage_inodes_committed, 0, "{label}");
+                    assert_eq!(first_counters.storage_bytes_retained, 0, "{label}");
+                    assert_eq!(first_counters.storage_inodes_retained, 0, "{label}");
+                    assert_eq!(contender_counters.storage_bytes_committed, 0, "{label}");
+                    assert_eq!(contender_counters.storage_inodes_committed, 0, "{label}");
+                    assert_operation_authority_baseline(&seed, fixture.path());
+                }
+                CarrierAlreadyExistsTerminalV1::CallbackUnwind => {
+                    assert!(first_result.is_err(), "{label}");
+                    contender_result.unwrap();
+                    assert_eq!(first_counters.storage_bytes_retained, 0, "{label}");
+                    assert_eq!(first_counters.storage_inodes_retained, 0, "{label}");
+                    assert_operation_authority_baseline(&seed, fixture.path());
+                }
+                CarrierAlreadyExistsTerminalV1::CleanupFailure => {
+                    assert!(
+                        matches!(
+                            first_result,
+                            Ok(Err(C3OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
+                                FsCasCleanupTargetV1::PrivatePack
+                            ))))
+                        ),
+                        "{label}: {first_result:?}"
+                    );
+                    assert!(
+                        matches!(
+                            contender_result,
+                            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::Invalidated))
+                        ),
+                        "{label}: {contender_result:?}"
+                    );
+                    assert!(first_counters.storage_bytes_retained > 0, "{label}");
+                    assert!(first_counters.storage_inodes_retained > 0, "{label}");
+                    assert!(control.cleanup_failed, "{label}");
+                    let ((preparation_bytes, preparation_inodes), _) =
+                        exact_operation_namespace_usage(fixture.path());
+                    assert_eq!(
+                        first_counters.storage_bytes_retained, preparation_bytes,
+                        "{label}: the failed private cleanup must retain exactly its remaining bytes"
+                    );
+                    assert_eq!(
+                        first_counters.storage_inodes_retained, preparation_inodes,
+                        "{label}: the failed private cleanup must retain exactly its remaining inode"
+                    );
+                    assert_eq!(
+                        first_counters.mutable_preparation_residue_bytes, preparation_bytes,
+                        "{label}"
+                    );
+                    assert_eq!(
+                        first_counters.mutable_preparation_residue_inodes, preparation_inodes,
+                        "{label}"
+                    );
+                    assert_eq!(
+                        first_counters.unreachable_installed_residue_bytes, 0,
+                        "{label}"
+                    );
+                    assert_eq!(seed.operation_admitted_slots_v1(), 0, "{label}");
+                    assert_eq!(seed.operation_admission_active_for_test_v1(), 0, "{label}");
+                    assert_eq!(
+                        seed.storage_admission_active_for_test_v1(),
+                        (0, 0, 0),
+                        "{label}"
+                    );
+                    assert_eq!(
+                        seed.operation_admission_queue_for_test_v1(),
+                        (0, 0, 0),
+                        "{label}"
+                    );
+                    assert!(matches!(seed.occupied(), Err(FsCasErrorV1::Invalidated)));
+                    assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+                    assert!(matches!(
+                        FsCasV1::open_existing(fixture.path()),
+                        Err(FsCasErrorV1::Busy | FsCasErrorV1::Invalidated)
+                    ));
+                }
+            }
+        });
+    }
+}
+
+#[test]
+fn same_pack_contender_waits_for_pre_catalog_unwind_terminal_custody() {
+    for (label, target) in [
+        (
+            "same-pack-carrier-visible-unwind",
+            FsCasBoundaryV1::AfterCarrierInstall,
+        ),
+        (
+            "same-pack-locator-visible-unwind",
+            FsCasBoundaryV1::AfterObjectLocatorPublication,
+        ),
+    ] {
+        let fixture = TestRoot::new(label);
+        let seed = FsCasV1::create_new(fixture.path()).unwrap();
+        let first_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let contender_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let stale = FsCasV1::open_existing(fixture.path()).unwrap();
+        let release = Arc::new(WatchdogGateV1::new());
+        let mut release_guard = WatchdogGateReleaseV1::new(Arc::clone(&release));
+        let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+        let (wait_tx, wait_rx) = mpsc::sync_channel(1);
+        let (contender_done_tx, contender_done_rx) = mpsc::sync_channel(1);
+
+        std::thread::scope(|scope| {
+            let first_release = Arc::clone(&release);
+            let first = scope.spawn(move || {
+                let mut control = BarrierPanicAtPackPublicationV1 {
+                    target,
+                    entered_signal: entered_tx,
+                    release: first_release,
+                    injected: false,
+                };
+                let mut counters = OperationCountersV1::default();
+                let input = [0x5b_u8];
+                let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_small_create_with_supplier_and_counters(
+                        &first_cas,
+                        0x0011_5580,
+                        &mut control,
+                        CheckedSupplier { bytes: &input },
+                        &mut counters,
+                    )
+                }));
+                (terminal, counters, control.injected)
+            });
+
+            entered_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|error| panic!("{label}: first caller missed target: {error}"));
+
+            let contender = scope.spawn(move || {
+                let mut control = SignalActivePackPublicationWaitV1 {
+                    reached: Some(wait_tx),
+                };
+                let mut counters = OperationCountersV1::default();
+                let input = [0x5b_u8];
+                let terminal = run_small_create_with_supplier_and_counters(
+                    &contender_cas,
+                    0x0011_5581,
+                    &mut control,
+                    CheckedSupplier { bytes: &input },
+                    &mut counters,
+                );
+                contender_done_tx.send(()).unwrap();
+                (terminal, counters)
+            });
+
+            let wait_observed = wait_rx.recv_timeout(Duration::from_secs(5));
+            let premature = contender_done_rx.recv_timeout(Duration::from_millis(100));
+            release_guard.release_v1();
+            wait_observed.unwrap_or_else(|error| {
+                panic!("{label}: contender never observed active publication: {error}")
+            });
+            assert!(
+                matches!(premature, Err(mpsc::RecvTimeoutError::Timeout)),
+                "{label}: contender completed before terminal custody stabilized"
+            );
+
+            let (first_terminal, first_counters, injected) = first.join().unwrap();
+            let (contender_terminal, contender_counters) = contender.join().unwrap();
+            assert!(injected, "{label}");
+            assert!(first_terminal.is_err(), "{label}");
+            assert_storage_equations(&first_counters);
+            assert_storage_equations(&contender_counters);
+            assert!(first_counters.has_zero_forbidden_work(), "{label}");
+            assert!(contender_counters.has_zero_forbidden_work(), "{label}");
+            assert!(first_counters.visibility_lock_acquisitions > 0, "{label}");
+            assert!(first_counters.publication_lock_acquisitions > 0, "{label}");
+            assert!(
+                contender_counters.active_pack_publication_wait_polls > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.active_pack_publication_wait_nanoseconds > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.publication_lock_acquisitions > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.publication_lock_wait_nanoseconds > 0,
+                "{label}"
+            );
+            assert!(
+                contender_counters.publication_lock_hold_nanoseconds > 0,
+                "{label}"
+            );
+            assert_eq!(
+                contender_counters.locator_owner_publication_wait_polls, 0,
+                "{label}"
+            );
+
+            match target {
+                FsCasBoundaryV1::AfterCarrierInstall => {
+                    contender_terminal.unwrap();
+                    assert_eq!(first_counters.storage_bytes_retained, 0, "{label}");
+                    assert_eq!(first_counters.storage_inodes_retained, 0, "{label}");
+                    assert_eq!(
+                        fs::read_dir(fixture.path().join("carriers"))
+                            .unwrap()
+                            .count(),
+                        1,
+                        "{label}"
+                    );
+                    assert_eq!(
+                        fs::read_dir(fixture.path().join("catalog"))
+                            .unwrap()
+                            .count(),
+                        1,
+                        "{label}"
+                    );
+                    assert!(seed.occupied().is_ok(), "{label}");
+                    assert!(stale.occupied().is_ok(), "{label}");
+                }
+                FsCasBoundaryV1::AfterObjectLocatorPublication => {
+                    assert!(
+                        matches!(
+                            contender_terminal,
+                            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::Invalidated))
+                        ),
+                        "{label}: {contender_terminal:?}"
+                    );
+                    assert!(first_counters.storage_bytes_retained > 0, "{label}");
+                    assert!(first_counters.storage_inodes_retained > 0, "{label}");
+                    assert_eq!(
+                        fs::read_dir(fixture.path().join("catalog"))
+                            .unwrap()
+                            .count(),
+                        0,
+                        "{label}"
+                    );
+                    assert!(matches!(seed.occupied(), Err(FsCasErrorV1::Invalidated)));
+                    assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+                    assert!(matches!(
+                        FsCasV1::open_existing(fixture.path()),
+                        Err(FsCasErrorV1::Busy | FsCasErrorV1::Invalidated)
+                    ));
+                }
+                _ => unreachable!("test covers only pre-catalog visibility boundaries"),
+            }
+            assert_operation_authority_baseline(&seed, fixture.path());
+        });
+    }
+}
+
+#[test]
+fn simultaneous_reopened_complete_writers_cover_equal_and_disjoint_identity_rows() {
+    for (label, left_byte, right_byte, equal) in [
+        ("equal-complete-writers", 0x61_u8, 0x61_u8, true),
+        ("disjoint-complete-writers", 0x62_u8, 0x63_u8, false),
+    ] {
+        let fixture = TestRoot::new(label);
+        let seed = FsCasV1::create_new(fixture.path()).unwrap();
+        let left_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let right_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let start = Arc::new(WatchdogGateV1::new());
+        let (ready_tx, ready_rx) = mpsc::sync_channel(2);
+
+        let ((left_terminal, left_counters), (right_terminal, right_counters)) =
+            std::thread::scope(|scope| {
+                let mut start_release = WatchdogGateReleaseV1::new(Arc::clone(&start));
+                let left_start = Arc::clone(&start);
+                let left_ready = ready_tx.clone();
+                let left = scope.spawn(move || {
+                    let input = [left_byte];
+                    let mut control = ContinueControl;
+                    let mut counters = OperationCountersV1::default();
+                    let terminal = run_small_create_with_supplier_and_counters(
+                        &left_cas,
+                        0x0011_5590,
+                        &mut control,
+                        BarrierCheckedSupplier {
+                            bytes: &input,
+                            ready: left_ready,
+                            start: left_start,
+                        },
+                        &mut counters,
+                    );
+                    (terminal, counters)
+                });
+                let right_start = Arc::clone(&start);
+                let right = scope.spawn(move || {
+                    let input = [right_byte];
+                    let mut control = ContinueControl;
+                    let mut counters = OperationCountersV1::default();
+                    let terminal = run_small_create_with_supplier_and_counters(
+                        &right_cas,
+                        0x0011_5591,
+                        &mut control,
+                        BarrierCheckedSupplier {
+                            bytes: &input,
+                            ready: ready_tx,
+                            start: right_start,
+                        },
+                        &mut counters,
+                    );
+                    (terminal, counters)
+                });
+
+                ready_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_else(|error| panic!("{label}: left rendezvous failed: {error}"));
+                ready_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_else(|error| panic!("{label}: right rendezvous failed: {error}"));
+                start_release.release_v1();
+                (left.join().unwrap(), right.join().unwrap())
+            });
+
+        let left = left_terminal.unwrap_or_else(|error| panic!("{label}: {error:?}"));
+        let right = right_terminal.unwrap_or_else(|error| panic!("{label}: {error:?}"));
+        for counters in [&left_counters, &right_counters] {
+            assert_storage_equations(counters);
+            assert!(counters.has_zero_forbidden_work(), "{label}");
+            assert!(counters.visibility_lock_acquisitions > 0, "{label}");
+            assert!(counters.visibility_lock_wait_nanoseconds > 0, "{label}");
+            assert!(counters.visibility_lock_hold_nanoseconds > 0, "{label}");
+            assert!(counters.publication_lock_acquisitions > 0, "{label}");
+            assert!(counters.publication_lock_wait_nanoseconds > 0, "{label}");
+            assert!(counters.publication_lock_hold_nanoseconds > 0, "{label}");
+            assert_eq!(
+                counters.storage_preparation_bytes_current_after_cleanup, 0,
+                "{label}"
+            );
+            assert_eq!(
+                counters.storage_preparation_inodes_current_after_cleanup, 0,
+                "{label}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0, "{label}");
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0, "{label}");
+            assert_eq!(counters.storage_bytes_retained, 0, "{label}");
+            assert_eq!(counters.storage_inodes_retained, 0, "{label}");
+        }
+
+        if equal {
+            assert_eq!(left.version_record(), right.version_record(), "{label}");
+            assert_eq!(left.root_tree(), right.root_tree(), "{label}");
+            assert_eq!(left.pack(), right.pack(), "{label}");
+            let outcomes = [left.pack_outcome(), right.pack_outcome()];
+            assert_eq!(
+                outcomes
+                    .into_iter()
+                    .filter(|outcome| *outcome == FsPackAdmissionOutcomeV1::Installed)
+                    .count(),
+                1,
+                "{label}"
+            );
+            assert_eq!(
+                outcomes
+                    .into_iter()
+                    .filter(|outcome| *outcome == FsPackAdmissionOutcomeV1::ExistingComplete)
+                    .count(),
+                1,
+                "{label}"
+            );
+            assert_eq!(left.carriers_installed() + right.carriers_installed(), 1);
+            assert_eq!(left.carriers_reused() + right.carriers_reused(), 1);
+            assert_eq!(
+                fs::read_dir(fixture.path().join("carriers"))
+                    .unwrap()
+                    .count(),
+                1,
+                "{label}"
+            );
+            let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+                exact_operation_namespace_usage(fixture.path());
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{label}");
+            assert_eq!(
+                left_counters.storage_bytes_committed + right_counters.storage_bytes_committed,
+                immutable_bytes,
+                "{label}: carrier and closure custody must be exact across both tokens"
+            );
+            assert_eq!(
+                left_counters.storage_inodes_committed + right_counters.storage_inodes_committed,
+                immutable_inodes,
+                "{label}: no canonical namespace entry may be double-counted"
+            );
+            let (installer_counters, adopter_counters) =
+                if left.pack_outcome() == FsPackAdmissionOutcomeV1::Installed {
+                    (&left_counters, &right_counters)
+                } else {
+                    (&right_counters, &left_counters)
+                };
+            let (pack_namespace_bytes, pack_namespace_inodes) = ["carriers", "objects", "catalog"]
+                .into_iter()
+                .map(|name| exact_directory_usage(&fixture.path().join(name)))
+                .fold(
+                    (0_u64, 0_u64),
+                    |(bytes, inodes), (next_bytes, next_inodes)| {
+                        (
+                            bytes.checked_add(next_bytes).unwrap(),
+                            inodes.checked_add(next_inodes).unwrap(),
+                        )
+                    },
+                );
+            let (closure_bytes, closure_inodes) =
+                exact_directory_usage(&fixture.path().join("closures"));
+            assert_eq!(
+                installer_counters
+                    .storage_bytes_committed
+                    .checked_sub(pack_namespace_bytes)
+                    .unwrap(),
+                closure_bytes
+                    .checked_sub(adopter_counters.storage_bytes_committed)
+                    .unwrap(),
+                "{label}: the pack installer owns the exact carrier/locator/catalog bytes; closure ownership may be split"
+            );
+            assert_eq!(
+                installer_counters
+                    .storage_inodes_committed
+                    .checked_sub(pack_namespace_inodes)
+                    .unwrap(),
+                closure_inodes
+                    .checked_sub(adopter_counters.storage_inodes_committed)
+                    .unwrap(),
+                "{label}: the pack installer owns the exact carrier/locator/catalog names; closure ownership may be split"
+            );
+            assert!(
+                adopter_counters.storage_bytes_committed <= closure_bytes,
+                "{label}: the pack adopter may commit only the independent canonical closure marker"
+            );
+            assert!(
+                adopter_counters.storage_inodes_committed <= closure_inodes,
+                "{label}: the pack adopter may commit only the independent canonical closure name"
+            );
+            assert_eq!(
+                adopter_counters.storage_bytes_reserved,
+                adopter_counters
+                    .storage_bytes_released
+                    .checked_add(adopter_counters.storage_bytes_committed)
+                    .unwrap(),
+                "{label}: the adopter releases every private byte except an independently won closure marker"
+            );
+            assert_eq!(
+                adopter_counters.storage_inodes_reserved,
+                adopter_counters
+                    .storage_inodes_released
+                    .checked_add(adopter_counters.storage_inodes_committed)
+                    .unwrap(),
+                "{label}: the adopter releases every private name except an independently won closure marker"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("catalog"))
+                    .unwrap()
+                    .count(),
+                1,
+                "{label}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("closures"))
+                    .unwrap()
+                    .count(),
+                1,
+                "{label}"
+            );
+        } else {
+            assert_ne!(left.version_record(), right.version_record(), "{label}");
+            assert_ne!(left.root_tree(), right.root_tree(), "{label}");
+            assert_ne!(left.pack(), right.pack(), "{label}");
+            assert_eq!(left.pack_outcome(), FsPackAdmissionOutcomeV1::Installed);
+            assert_eq!(right.pack_outcome(), FsPackAdmissionOutcomeV1::Installed);
+            assert_eq!(left.carriers_installed(), 1, "{label}");
+            assert_eq!(right.carriers_installed(), 1, "{label}");
+            assert_eq!(left.carriers_reused(), 0, "{label}");
+            assert_eq!(right.carriers_reused(), 0, "{label}");
+            assert!(left_counters.storage_bytes_committed > 0, "{label}");
+            assert!(right_counters.storage_bytes_committed > 0, "{label}");
+            assert_eq!(
+                fs::read_dir(fixture.path().join("carriers"))
+                    .unwrap()
+                    .count(),
+                2,
+                "{label}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("catalog"))
+                    .unwrap()
+                    .count(),
+                2,
+                "{label}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("closures"))
+                    .unwrap()
+                    .count(),
+                2,
+                "{label}"
+            );
+            let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+                exact_operation_namespace_usage(fixture.path());
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{label}");
+            assert_eq!(
+                left_counters.storage_bytes_committed + right_counters.storage_bytes_committed,
+                immutable_bytes,
+                "{label}"
+            );
+            assert_eq!(
+                left_counters.storage_inodes_committed + right_counters.storage_inodes_committed,
+                immutable_inodes,
+                "{label}"
+            );
+        }
+        assert_operation_authority_baseline(&seed, fixture.path());
+        assert_eq!(seed.operation_admission_queue_for_test_v1(), (0, 0, 0));
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ConcurrentFailureV1 {
+    Typed,
+    Cancelled,
+    Deadline,
+}
+
+#[test]
+fn simultaneous_reopened_success_crosses_typed_cancelled_and_deadline_terminals() {
+    for (label, failure) in [
+        ("success-crosses-typed-failure", ConcurrentFailureV1::Typed),
+        (
+            "success-crosses-cancellation",
+            ConcurrentFailureV1::Cancelled,
+        ),
+        ("success-crosses-deadline", ConcurrentFailureV1::Deadline),
+    ] {
+        let fixture = TestRoot::new(label);
+        let seed = FsCasV1::create_new(fixture.path()).unwrap();
+        let success_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let failure_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let start = Arc::new(WatchdogGateV1::new());
+        let (ready_tx, ready_rx) = mpsc::sync_channel(2);
+
+        let ((success_terminal, success_counters), (failure_terminal, failure_counters)) =
+            std::thread::scope(|scope| {
+                let mut start_release = WatchdogGateReleaseV1::new(Arc::clone(&start));
+                let success_start = Arc::clone(&start);
+                let success_ready = ready_tx.clone();
+                let success = scope.spawn(move || {
+                    let input = [0x71_u8];
+                    let mut control = ContinueControl;
+                    let mut counters = OperationCountersV1::default();
+                    let terminal = run_small_create_with_supplier_and_counters(
+                        &success_cas,
+                        0x0011_55a0,
+                        &mut control,
+                        BarrierCheckedSupplier {
+                            bytes: &input,
+                            ready: success_ready,
+                            start: success_start,
+                        },
+                        &mut counters,
+                    );
+                    (terminal, counters)
+                });
+
+                let failure_start = Arc::clone(&start);
+                let failed = scope.spawn(move || {
+                    let mut counters = OperationCountersV1::default();
+                    let terminal = match failure {
+                        ConcurrentFailureV1::Typed => {
+                            let mut control = ContinueControl;
+                            run_small_create_with_supplier_and_counters(
+                                &failure_cas,
+                                0x0011_55a1,
+                                &mut control,
+                                BarrierFailingSupplier {
+                                    ready: ready_tx,
+                                    start: failure_start,
+                                },
+                                &mut counters,
+                            )
+                        }
+                        ConcurrentFailureV1::Cancelled | ConcurrentFailureV1::Deadline => {
+                            let input = [0x72_u8];
+                            let stop = match failure {
+                                ConcurrentFailureV1::Cancelled => {
+                                    CandidateValidationStopV1::Cancelled
+                                }
+                                ConcurrentFailureV1::Deadline => {
+                                    CandidateValidationStopV1::Deadline
+                                }
+                                ConcurrentFailureV1::Typed => unreachable!(),
+                            };
+                            let mut control = StopBeforeCandidateValidationV1::new(stop);
+                            run_small_create_with_supplier_and_counters(
+                                &failure_cas,
+                                0x0011_55a2,
+                                &mut control,
+                                BarrierCheckedSupplier {
+                                    bytes: &input,
+                                    ready: ready_tx,
+                                    start: failure_start,
+                                },
+                                &mut counters,
+                            )
+                        }
+                    };
+                    (terminal, counters)
+                });
+
+                ready_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_else(|error| panic!("{label}: first rendezvous failed: {error}"));
+                ready_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_else(|error| panic!("{label}: second rendezvous failed: {error}"));
+                start_release.release_v1();
+                (success.join().unwrap(), failed.join().unwrap())
+            });
+
+        let success = success_terminal.unwrap_or_else(|error| panic!("{label}: {error:?}"));
+        let failure_error = failure_terminal.unwrap_err();
+        match failure {
+            ConcurrentFailureV1::Typed => {
+                assert_eq!(failure_error, C3OperationErrorV1::Core(CoreError::CountCap));
+            }
+            ConcurrentFailureV1::Cancelled => assert_eq!(
+                failure_error,
+                C3OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::Cancelled))
+            ),
+            ConcurrentFailureV1::Deadline => assert_eq!(
+                failure_error,
+                C3OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::Deadline))
+            ),
+        }
+
+        for counters in [&success_counters, &failure_counters] {
+            assert_storage_equations(counters);
+            assert!(counters.has_zero_forbidden_work(), "{label}");
+            assert_eq!(
+                counters.storage_preparation_bytes_current_after_cleanup, 0,
+                "{label}"
+            );
+            assert_eq!(
+                counters.storage_preparation_inodes_current_after_cleanup, 0,
+                "{label}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0, "{label}");
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0, "{label}");
+            assert_eq!(counters.storage_bytes_retained, 0, "{label}");
+            assert_eq!(counters.storage_inodes_retained, 0, "{label}");
+        }
+        assert!(success_counters.visibility_lock_acquisitions > 0, "{label}");
+        assert!(
+            success_counters.visibility_lock_wait_nanoseconds > 0,
+            "{label}"
+        );
+        assert!(
+            success_counters.visibility_lock_hold_nanoseconds > 0,
+            "{label}"
+        );
+        assert!(
+            success_counters.publication_lock_acquisitions > 0,
+            "{label}"
+        );
+        assert!(
+            success_counters.publication_lock_wait_nanoseconds > 0,
+            "{label}"
+        );
+        assert!(
+            success_counters.publication_lock_hold_nanoseconds > 0,
+            "{label}"
+        );
+        assert!(failure_counters.visibility_lock_acquisitions > 0, "{label}");
+        assert!(
+            failure_counters.visibility_lock_wait_nanoseconds > 0,
+            "{label}"
+        );
+        assert!(
+            failure_counters.visibility_lock_hold_nanoseconds > 0,
+            "{label}"
+        );
+        assert_eq!(failure_counters.storage_bytes_committed, 0, "{label}");
+        assert_eq!(failure_counters.storage_inodes_committed, 0, "{label}");
+        assert!(
+            success_counters.root_admission_active_slots_high_water >= 2
+                || failure_counters.root_admission_active_slots_high_water >= 2,
+            "{label}: barrier-overlapped operations must be directly reflected in root admission"
+        );
+        assert_eq!(success.pack_outcome(), FsPackAdmissionOutcomeV1::Installed);
+        let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+            exact_operation_namespace_usage(fixture.path());
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{label}");
+        assert_eq!(
+            success_counters.storage_bytes_committed, immutable_bytes,
+            "{label}"
+        );
+        assert_eq!(
+            success_counters.storage_inodes_committed, immutable_inodes,
+            "{label}"
+        );
+        assert_operation_authority_baseline(&seed, fixture.path());
+        assert!(seed.occupied().is_ok(), "{label}");
+        assert!(FsCasV1::open_existing(fixture.path())
+            .unwrap()
+            .occupied()
+            .is_ok());
+    }
+}
+
+#[test]
+fn reopened_complete_writer_admission_levels_balance_every_overlapped_token() {
+    for level in [1_usize, 2, 4, 8, 16] {
+        let label = format!("complete-writer-admission-level-{level}");
+        let fixture = TestRoot::new(&label);
+        let seed = FsCasV1::create_new(fixture.path()).unwrap();
+        let callers = (0..level)
+            .map(|_| FsCasV1::open_existing(fixture.path()).unwrap())
+            .collect::<Vec<_>>();
+        let start = Arc::new(WatchdogGateV1::new());
+        let (ready_tx, ready_rx) = mpsc::sync_channel(level);
+
+        let results = std::thread::scope(|scope| {
+            let mut start_release = WatchdogGateReleaseV1::new(Arc::clone(&start));
+            let joins = callers
+                .into_iter()
+                .enumerate()
+                .map(|(index, cas)| {
+                    let start = Arc::clone(&start);
+                    let ready = ready_tx.clone();
+                    scope.spawn(move || {
+                        let input = [0x90_u8.checked_add(index as u8).unwrap()];
+                        let mut control = ContinueControl;
+                        let mut counters = OperationCountersV1::default();
+                        let terminal = run_small_create_with_supplier_and_counters(
+                            &cas,
+                            0x0011_5600 + index as u64,
+                            &mut control,
+                            BarrierCheckedSupplier {
+                                bytes: &input,
+                                ready,
+                                start,
+                            },
+                            &mut counters,
+                        );
+                        (terminal, counters)
+                    })
+                })
+                .collect::<Vec<_>>();
+            for index in 0..level {
+                ready_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_else(|error| {
+                        panic!("{label}: rendezvous {index}/{level} failed: {error}")
+                    });
+            }
+            start_release.release_v1();
+            joins
+                .into_iter()
+                .map(|join| join.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+
+        let mut total_committed_bytes = 0_u64;
+        let mut total_committed_inodes = 0_u64;
+        let mut total_reserved_bytes = 0_u64;
+        let mut total_reserved_inodes = 0_u64;
+        let mut observed_admission_high_water = 0_u64;
+        let mut observed_root_bytes_high_water = 0_u64;
+        let mut observed_root_inodes_high_water = 0_u64;
+        for (terminal, counters) in results {
+            let handoff = terminal.unwrap_or_else(|error| panic!("{label}: {error:?}"));
+            assert_eq!(
+                handoff.pack_outcome(),
+                FsPackAdmissionOutcomeV1::Installed,
+                "{label}"
+            );
+            assert_eq!(handoff.carriers_installed(), 1, "{label}");
+            assert_eq!(handoff.carriers_reused(), 0, "{label}");
+            assert_storage_equations(&counters);
+            assert!(counters.has_zero_forbidden_work(), "{label}");
+            assert!(counters.visibility_lock_acquisitions > 0, "{label}");
+            assert!(counters.visibility_lock_wait_nanoseconds > 0, "{label}");
+            assert!(counters.visibility_lock_hold_nanoseconds > 0, "{label}");
+            assert!(counters.publication_lock_acquisitions > 0, "{label}");
+            assert!(counters.publication_lock_wait_nanoseconds > 0, "{label}");
+            assert!(counters.publication_lock_hold_nanoseconds > 0, "{label}");
+            assert!(counters.storage_preparation_bytes_high_water > 0, "{label}");
+            assert!(
+                counters.storage_preparation_inodes_high_water > 0,
+                "{label}"
+            );
+            assert!(counters.layerfs_open_file_handles_high_water > 0, "{label}");
+            assert!(counters.memory_high_water > 0, "{label}");
+            assert_eq!(
+                counters.storage_preparation_bytes_current_after_cleanup, 0,
+                "{label}"
+            );
+            assert_eq!(
+                counters.storage_preparation_inodes_current_after_cleanup, 0,
+                "{label}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0, "{label}");
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0, "{label}");
+            assert_eq!(counters.storage_bytes_retained, 0, "{label}");
+            assert_eq!(counters.storage_inodes_retained, 0, "{label}");
+            total_committed_bytes = total_committed_bytes
+                .checked_add(counters.storage_bytes_committed)
+                .unwrap();
+            total_committed_inodes = total_committed_inodes
+                .checked_add(counters.storage_inodes_committed)
+                .unwrap();
+            total_reserved_bytes = total_reserved_bytes
+                .checked_add(counters.storage_bytes_reserved)
+                .unwrap();
+            total_reserved_inodes = total_reserved_inodes
+                .checked_add(counters.storage_inodes_reserved)
+                .unwrap();
+            observed_admission_high_water =
+                observed_admission_high_water.max(counters.root_admission_active_slots_high_water);
+            observed_root_bytes_high_water = observed_root_bytes_high_water
+                .max(counters.root_storage_active_reserved_bytes_lifetime_high_water);
+            observed_root_inodes_high_water = observed_root_inodes_high_water
+                .max(counters.root_storage_active_reserved_inodes_lifetime_high_water);
+        }
+
+        assert_eq!(
+            observed_admission_high_water, level as u64,
+            "{label}: the source barrier is reached only after every root slot is granted"
+        );
+        assert!(
+            observed_root_bytes_high_water >= total_reserved_bytes,
+            "{label}: byte lifetime high-water must reflect simultaneous reservations"
+        );
+        assert!(
+            observed_root_inodes_high_water >= total_reserved_inodes,
+            "{label}: inode lifetime high-water must reflect simultaneous reservations"
+        );
+        let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+            exact_operation_namespace_usage(fixture.path());
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{label}");
+        assert_eq!(total_committed_bytes, immutable_bytes, "{label}");
+        assert_eq!(total_committed_inodes, immutable_inodes, "{label}");
+        assert_eq!(
+            fs::read_dir(fixture.path().join("carriers"))
+                .unwrap()
+                .count(),
+            level,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path().join("catalog"))
+                .unwrap()
+                .count(),
+            level,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path().join("closures"))
+                .unwrap()
+                .count(),
+            level,
+            "{label}"
+        );
+        assert_operation_authority_baseline(&seed, fixture.path());
+        assert!(seed.occupied().is_ok(), "{label}");
+    }
+}
+
+#[test]
+fn reopened_multi_pack_writer_overlaps_disjoint_complete_writer() {
+    const MULTI_PACK_BYTES: u64 = 65 * 1024 * 1024;
+
+    let fixture = TestRoot::new("overlapped-multi-pack-writer");
+    let seed = FsCasV1::create_new(fixture.path()).unwrap();
+    let multi_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+    let disjoint_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+    let start = Arc::new(WatchdogGateV1::new());
+    let (ready_tx, ready_rx) = mpsc::sync_channel(2);
+
+    let ((multi_terminal, multi_counters), (disjoint_terminal, disjoint_counters)) =
+        std::thread::scope(|scope| {
+            let mut start_release = WatchdogGateReleaseV1::new(Arc::clone(&start));
+            let multi_start = Arc::clone(&start);
+            let multi_ready = ready_tx.clone();
+            let multi = scope.spawn(move || {
+                let mut control = ContinueControl;
+                let mut counters = OperationCountersV1::default();
+                let terminal = run_large_create_with_supplier_and_counters(
+                    &multi_cas,
+                    0x0011_5700,
+                    &mut control,
+                    MULTI_PACK_BYTES,
+                    BarrierCounterSupplier {
+                        len: MULTI_PACK_BYTES,
+                        ready: multi_ready,
+                        start: multi_start,
+                    },
+                    &mut counters,
+                );
+                (terminal, counters)
+            });
+            let disjoint_start = Arc::clone(&start);
+            let disjoint = scope.spawn(move || {
+                let input = [0xd1_u8];
+                let mut control = ContinueControl;
+                let mut counters = OperationCountersV1::default();
+                let terminal = run_small_create_with_supplier_and_counters(
+                    &disjoint_cas,
+                    0x0011_5701,
+                    &mut control,
+                    BarrierCheckedSupplier {
+                        bytes: &input,
+                        ready: ready_tx,
+                        start: disjoint_start,
+                    },
+                    &mut counters,
+                );
+                (terminal, counters)
+            });
+
+            ready_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("multi-pack writer did not reach the post-reservation barrier");
+            ready_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("disjoint writer did not reach the post-reservation barrier");
+            start_release.release_v1();
+            (multi.join().unwrap(), disjoint.join().unwrap())
+        });
+
+    let multi = multi_terminal.unwrap_or_else(|error| panic!("{error:?}; {multi_counters:#?}"));
+    let disjoint = disjoint_terminal.unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(multi.carrier_count(), 2);
+    assert_eq!(multi.carrier_rollovers(), 1);
+    assert_eq!(multi.carriers_installed(), 2);
+    assert_eq!(multi.carriers_reused(), 0);
+    assert_eq!(disjoint.carrier_count(), 1);
+    assert_eq!(disjoint.carriers_installed(), 1);
+    assert_eq!(disjoint.carriers_reused(), 0);
+    for counters in [&multi_counters, &disjoint_counters] {
+        assert_storage_equations(counters);
+        assert!(counters.has_zero_forbidden_work());
+        assert!(counters.visibility_lock_acquisitions > 0);
+        assert!(counters.visibility_lock_wait_nanoseconds > 0);
+        assert!(counters.visibility_lock_hold_nanoseconds > 0);
+        assert!(counters.publication_lock_acquisitions > 0);
+        assert!(counters.publication_lock_wait_nanoseconds > 0);
+        assert!(counters.publication_lock_hold_nanoseconds > 0);
+        assert_eq!(counters.storage_preparation_bytes_current_after_cleanup, 0);
+        assert_eq!(counters.storage_preparation_inodes_current_after_cleanup, 0);
+        assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+        assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+    }
+    assert_eq!(multi_counters.source_bytes_read, MULTI_PACK_BYTES);
+    assert!(multi_counters.file_sort_control_polls > 0);
+    assert!(
+        multi_counters.root_admission_active_slots_high_water >= 2
+            || disjoint_counters.root_admission_active_slots_high_water >= 2
+    );
+    let total_reserved_bytes =
+        multi_counters.storage_bytes_reserved + disjoint_counters.storage_bytes_reserved;
+    let total_reserved_inodes =
+        multi_counters.storage_inodes_reserved + disjoint_counters.storage_inodes_reserved;
+    assert!(
+        multi_counters
+            .root_storage_active_reserved_bytes_lifetime_high_water
+            .max(disjoint_counters.root_storage_active_reserved_bytes_lifetime_high_water)
+            >= total_reserved_bytes
+    );
+    assert!(
+        multi_counters
+            .root_storage_active_reserved_inodes_lifetime_high_water
+            .max(disjoint_counters.root_storage_active_reserved_inodes_lifetime_high_water)
+            >= total_reserved_inodes
+    );
+    let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+        exact_operation_namespace_usage(fixture.path());
+    assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+    assert_eq!(
+        multi_counters.storage_bytes_committed + disjoint_counters.storage_bytes_committed,
+        immutable_bytes
+    );
+    assert_eq!(
+        multi_counters.storage_inodes_committed + disjoint_counters.storage_inodes_committed,
+        immutable_inodes
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path().join("carriers"))
+            .unwrap()
+            .count(),
+        3
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path().join("catalog"))
+            .unwrap()
+            .count(),
+        3
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path().join("closures"))
+            .unwrap()
+            .count(),
+        2
+    );
+    assert_operation_authority_baseline(&seed, fixture.path());
 }
 
 #[test]
@@ -7992,6 +9688,30 @@ enum AdmissionStopV1 {
     Deadline,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum QueuedTransitionV1 {
+    Grant,
+    Cancelled,
+    Deadline,
+}
+
+struct ArmableQueuedControlV1 {
+    transition: QueuedTransitionV1,
+    armed: Arc<AtomicBool>,
+    observed_polls: Arc<AtomicU64>,
+}
+
+impl FsCasControlV1 for ArmableQueuedControlV1 {
+    fn cancellation_requested(&mut self) -> bool {
+        self.observed_polls.fetch_add(1, Ordering::AcqRel);
+        self.transition == QueuedTransitionV1::Cancelled && self.armed.load(Ordering::Acquire)
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        self.transition == QueuedTransitionV1::Deadline && self.armed.load(Ordering::Acquire)
+    }
+}
+
 struct StopWhileQueuedControlV1(AdmissionStopV1);
 
 impl FsCasControlV1 for StopWhileQueuedControlV1 {
@@ -8074,12 +9794,14 @@ fn queued_control_unwind_cancels_its_ticket_without_poisoning_root_admission() {
     assert!(counters.has_zero_forbidden_work());
 }
 
-struct PanicAtRootLockAcquiredV1 {
+struct PanicAtRootLockBoundaryV1 {
     target: FsCasBoundaryV1,
+    target_occurrence: usize,
+    matching_boundaries: usize,
     panicked: bool,
 }
 
-impl CdcControlV1 for PanicAtRootLockAcquiredV1 {
+impl CdcControlV1 for PanicAtRootLockBoundaryV1 {
     fn cancellation_requested(&mut self) -> bool {
         false
     }
@@ -8089,11 +9811,15 @@ impl CdcControlV1 for PanicAtRootLockAcquiredV1 {
     }
 }
 
-impl FsCasControlV1 for PanicAtRootLockAcquiredV1 {
+impl FsCasControlV1 for PanicAtRootLockBoundaryV1 {
     fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
-        if !self.panicked && boundary == self.target {
+        if boundary != self.target {
+            return;
+        }
+        self.matching_boundaries += 1;
+        if !self.panicked && self.matching_boundaries == self.target_occurrence {
             self.panicked = true;
-            panic!("injected acquired root-lock unwind");
+            panic!("injected root-lock boundary unwind");
         }
     }
 
@@ -8107,7 +9833,7 @@ impl FsCasControlV1 for PanicAtRootLockAcquiredV1 {
 }
 
 #[test]
-fn acquired_root_lock_callback_unwind_does_not_poison_visibility_or_publication() {
+fn acquired_and_released_root_lock_callback_unwind_is_balanced_and_does_not_poison() {
     for (label, target) in [
         (
             "visibility-acquired-unwind",
@@ -8117,9 +9843,18 @@ fn acquired_root_lock_callback_unwind_does_not_poison_visibility_or_publication(
             "publication-acquired-unwind",
             FsCasBoundaryV1::PublicationLockAcquired,
         ),
+        (
+            "visibility-released-unwind",
+            FsCasBoundaryV1::VisibilityLockReleased,
+        ),
+        (
+            "publication-released-unwind",
+            FsCasBoundaryV1::PublicationLockReleased,
+        ),
     ] {
         let fixture = TestRoot::new(label);
         let cas = FsCasV1::create_new(fixture.path()).unwrap();
+        let stale = FsCasV1::open_existing(fixture.path()).unwrap();
         let input = [0x39_u8; 64 * 1024 + 17];
         let mut counters = OperationCountersV1::default();
         let mut source_window = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
@@ -8129,8 +9864,18 @@ fn acquired_root_lock_callback_unwind_does_not_poison_visibility_or_publication(
         let mut tree_object = boxed_zeroes::<MAX_TREE_OBJECT_BYTES>();
         let mut tree_pages = boxed_tree_pages();
         let mut traversal = [0_u8; 64];
-        let mut control = PanicAtRootLockAcquiredV1 {
+        let mut control = PanicAtRootLockBoundaryV1 {
             target,
+            // The first publication release closes the read-only carrier
+            // vacancy snapshot. Target the second release so this row crosses
+            // the authoritative carrier no-replace transition and exercises
+            // visible-custody invalidation rather than a prepublication exit.
+            target_occurrence: if target == FsCasBoundaryV1::PublicationLockReleased {
+                2
+            } else {
+                1
+            },
+            matching_boundaries: 0,
             panicked: false,
         };
         let grant =
@@ -8156,21 +9901,44 @@ fn acquired_root_lock_callback_unwind_does_not_poison_visibility_or_publication(
                 &mut counters,
             );
         }))
-        .expect_err("acquired root-lock callback must unwind");
+        .expect_err("root-lock boundary callback must unwind");
         assert_eq!(
             unwind.downcast_ref::<&'static str>().copied(),
-            Some("injected acquired root-lock unwind")
+            Some("injected root-lock boundary unwind")
         );
         assert!(control.panicked);
         assert_operation_authority_baseline(&cas, fixture.path());
         assert_storage_equations(&counters);
-        assert_eq!(counters.storage_bytes_committed, 0);
-        assert_eq!(counters.storage_inodes_committed, 0);
-        assert_eq!(counters.storage_bytes_retained, 0);
-        assert_eq!(counters.storage_inodes_retained, 0);
+        assert_eq!(counters.storage_bytes_committed, 0, "{label}");
+        assert_eq!(counters.storage_inodes_committed, 0, "{label}");
         assert!(counters.has_zero_forbidden_work());
         assert!(cas.visibility_lock_available_for_test_v1());
         assert!(cas.publication_lock_available_for_test_v1());
+
+        if target == FsCasBoundaryV1::PublicationLockReleased {
+            assert!(counters.storage_bytes_retained > 0, "{label}");
+            assert!(counters.storage_inodes_retained > 0, "{label}");
+            assert_eq!(
+                counters.storage_bytes_retained, counters.immutable_residue_bytes,
+                "{label}"
+            );
+            assert_eq!(
+                counters.storage_inodes_retained, counters.immutable_residue_inodes,
+                "{label}"
+            );
+            assert!(matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)));
+            assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+            assert!(matches!(
+                FsCasV1::open_existing(fixture.path()),
+                Err(FsCasErrorV1::Invalidated)
+            ));
+            continue;
+        }
+
+        assert_eq!(counters.storage_bytes_retained, 0, "{label}");
+        assert_eq!(counters.storage_inodes_retained, 0, "{label}");
+        cas.occupied().unwrap();
+        stale.occupied().unwrap();
 
         let mut followup_counters = OperationCountersV1::default();
         let mut followup_control = ContinueControl;
@@ -8206,6 +9974,132 @@ fn acquired_root_lock_callback_unwind_does_not_poison_visibility_or_publication(
         assert_eq!(followup_counters.storage_bytes_retained, 0);
         assert_eq!(followup_counters.storage_inodes_retained, 0);
         assert!(followup_counters.has_zero_forbidden_work());
+    }
+}
+
+#[test]
+fn seventeenth_operation_genuinely_queues_then_grants_cancels_or_exceeds_deadline() {
+    for transition in [
+        QueuedTransitionV1::Grant,
+        QueuedTransitionV1::Cancelled,
+        QueuedTransitionV1::Deadline,
+    ] {
+        let label = format!("true-c-plus-one-{transition:?}");
+        let fixture = TestRoot::new(&label);
+        let cas = FsCasV1::create_new(fixture.path()).unwrap();
+        let waiter_cas = FsCasV1::open_existing(fixture.path()).unwrap();
+        let armed = Arc::new(AtomicBool::new(false));
+        let observed_polls = Arc::new(AtomicU64::new(0));
+        let (terminal_tx, terminal_rx) = mpsc::sync_channel(1);
+
+        let (terminal, counters) = std::thread::scope(|scope| {
+            let mut setup_control = ContinueControl;
+            let mut setup_counters = OperationCountersV1::default();
+            let mut active = Vec::with_capacity(16);
+            for cancellation_key in 0..16_u64 {
+                active.push(
+                    request_c3_create_qualification_v1(
+                        &cas,
+                        0x20_000 + cancellation_key,
+                        &mut setup_counters,
+                        &mut setup_control,
+                    )
+                    .unwrap(),
+                );
+            }
+            assert_eq!(cas.operation_admission_active_for_test_v1(), 16);
+
+            let waiter_armed = Arc::clone(&armed);
+            let waiter_polls = Arc::clone(&observed_polls);
+            let waiter = scope.spawn(move || {
+                let mut control = ArmableQueuedControlV1 {
+                    transition,
+                    armed: waiter_armed,
+                    observed_polls: waiter_polls,
+                };
+                let mut counters = OperationCountersV1::default();
+                let terminal = request_c3_create_qualification_v1(
+                    &waiter_cas,
+                    0x20_100,
+                    &mut counters,
+                    &mut control,
+                )
+                .map(|capability| drop(capability));
+                terminal_tx
+                    .send((terminal, counters))
+                    .expect("C+1 terminal receiver remains live");
+            });
+
+            let queued_deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while cas.operation_admission_queue_for_test_v1() != (1, 1, 0)
+                || observed_polls.load(Ordering::Acquire) < 2
+            {
+                assert!(
+                    std::time::Instant::now() < queued_deadline,
+                    "{label}: seventeenth request did not remain genuinely queued: active={}, queue={:?}, polls={}",
+                    cas.operation_admission_active_for_test_v1(),
+                    cas.operation_admission_queue_for_test_v1(),
+                    observed_polls.load(Ordering::Acquire),
+                );
+                std::thread::yield_now();
+            }
+            assert_eq!(cas.operation_admission_active_for_test_v1(), 16);
+            assert!(
+                matches!(terminal_rx.try_recv(), Err(mpsc::TryRecvError::Empty)),
+                "{label}: the seventeenth request terminalized before capacity or a stop was released"
+            );
+
+            match transition {
+                QueuedTransitionV1::Grant => {
+                    drop(active.pop().expect("one saturated capability"));
+                }
+                QueuedTransitionV1::Cancelled | QueuedTransitionV1::Deadline => {
+                    armed.store(true, Ordering::Release);
+                }
+            }
+
+            let terminal = terminal_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|error| panic!("{label}: queued terminal timed out: {error}"));
+            waiter.join().expect("C+1 waiter remains healthy");
+            drop(active);
+            assert_storage_equations(&setup_counters);
+            assert!(setup_counters.has_zero_forbidden_work());
+            terminal
+        });
+
+        match transition {
+            QueuedTransitionV1::Grant => assert_eq!(terminal, Ok(()), "{label}"),
+            QueuedTransitionV1::Cancelled => assert_eq!(
+                terminal,
+                Err(FsCasErrorV1::Core(CoreError::Cancelled)),
+                "{label}"
+            ),
+            QueuedTransitionV1::Deadline => assert_eq!(
+                terminal,
+                Err(FsCasErrorV1::Core(CoreError::Deadline)),
+                "{label}"
+            ),
+        }
+        assert_eq!(counters.root_admission_queue_entries, 1, "{label}");
+        assert_eq!(counters.root_admission_queue_refusals, 0, "{label}");
+        assert_eq!(counters.root_admission_queue_depth_high_water, 1, "{label}");
+        assert_eq!(
+            counters.root_admission_active_slots_high_water,
+            if transition == QueuedTransitionV1::Grant {
+                16
+            } else {
+                0
+            },
+            "{label}"
+        );
+        assert!(counters.root_admission_wait_polls >= 2, "{label}");
+        assert!(counters.root_admission_wait_nanoseconds > 0, "{label}");
+        assert_eq!(counters.root_admission_release_failures, 0, "{label}");
+        assert_storage_equations(&counters);
+        assert!(counters.has_zero_forbidden_work(), "{label}");
+        assert_operation_authority_baseline(&cas, fixture.path());
+        assert_eq!(cas.operation_admission_queue_for_test_v1(), (0, 0, 0));
     }
 }
 

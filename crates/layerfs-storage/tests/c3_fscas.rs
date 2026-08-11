@@ -3,8 +3,10 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Barrier};
+use std::sync::{mpsc, Arc, Condvar, Mutex};
+use std::time::Duration;
 
+use crate::cas::FsOperationObservedControlV1;
 use layerfs_storage::cas::{
     AdmissionBuffersV1, CompleteImmutableClosureReadPortV1, ImmutablePortErrorV1,
     OccupiedImmutableReadPortV1,
@@ -31,6 +33,61 @@ use layerfs_storage::{CoreError, CoreResult};
 
 static NEXT_ROOT: AtomicU64 = AtomicU64::new(1);
 
+struct WatchdogGateV1 {
+    released: Mutex<bool>,
+    wake: Condvar,
+}
+
+impl WatchdogGateV1 {
+    fn new() -> Self {
+        Self {
+            released: Mutex::new(false),
+            wake: Condvar::new(),
+        }
+    }
+
+    fn wait(&self) {
+        let released = self.released.lock().expect("watchdog gate is healthy");
+        let (released, timeout) = self
+            .wake
+            .wait_timeout_while(released, Duration::from_secs(5), |released| !*released)
+            .expect("watchdog gate is healthy");
+        assert!(*released, "watchdog gate timed out: {timeout:?}");
+    }
+
+    fn release(&self) {
+        *self.released.lock().expect("watchdog gate is healthy") = true;
+        self.wake.notify_all();
+    }
+}
+
+struct WatchdogGateReleaseV1 {
+    gate: Arc<WatchdogGateV1>,
+    released: bool,
+}
+
+impl WatchdogGateReleaseV1 {
+    fn new(gate: Arc<WatchdogGateV1>) -> Self {
+        Self {
+            gate,
+            released: false,
+        }
+    }
+
+    fn release_v1(&mut self) {
+        self.gate.release();
+        self.released = true;
+    }
+}
+
+impl Drop for WatchdogGateReleaseV1 {
+    fn drop(&mut self) {
+        if !self.released {
+            self.gate.release();
+        }
+    }
+}
+
 fn assert_path_absent(path: &Path) {
     match fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -45,6 +102,29 @@ fn exact_fresh_pack_immutable_bytes(pack_len: u64, record_count: u32) -> u64 {
     pack_len
         + u64::from(record_count) * u64::try_from(PERSISTENT_LOCATOR_BYTES_V1).unwrap()
         + u64::try_from(CATALOG_MARKER_BYTES).unwrap()
+}
+
+fn assert_storage_equations(counters: &OperationCountersV1) {
+    assert_eq!(
+        counters.storage_bytes_requested,
+        counters.storage_bytes_reserved
+    );
+    assert_eq!(
+        counters.storage_inodes_requested,
+        counters.storage_inodes_reserved
+    );
+    assert_eq!(
+        counters.storage_bytes_reserved,
+        counters.storage_bytes_released
+            + counters.storage_bytes_committed
+            + counters.storage_bytes_retained
+    );
+    assert_eq!(
+        counters.storage_inodes_reserved,
+        counters.storage_inodes_released
+            + counters.storage_inodes_committed
+            + counters.storage_inodes_retained
+    );
 }
 
 fn make_owner_writable(path: &Path) -> fs::Permissions {
@@ -175,6 +255,13 @@ struct InstallMalformedLocatorAtPublication {
     injected: bool,
 }
 
+#[cfg(unix)]
+struct ReplaceLocatorAfterCompleteComparison {
+    locator: PathBuf,
+    displaced: PathBuf,
+    injected: bool,
+}
+
 struct InstallLocatorAndFailPreparationCleanup {
     locator: PathBuf,
     occupant_injected: bool,
@@ -201,20 +288,53 @@ struct CorruptCarrierBeforeRollback {
 struct ObserveIncumbentComparisonLock {
     cas: FsCasV1,
     observed: bool,
-    available: bool,
+    visibility_available: bool,
+    publication_available: bool,
 }
 
 struct ObserveFreshCarrierValidationLock {
     cas: FsCasV1,
     observed: bool,
-    available: bool,
+    visibility_available: bool,
+    publication_available: bool,
+}
+
+struct BlockCatalogMarkerWrite {
+    entered_signal: mpsc::SyncSender<()>,
+    release: mpsc::Receiver<()>,
+    catalog_phase: bool,
+    blocked: bool,
+}
+
+struct BlockPreparationCreate {
+    entered_signal: mpsc::SyncSender<()>,
+    release: mpsc::Receiver<()>,
+    blocked: bool,
+}
+
+struct BlockAfterObjectLocatorPublication {
+    release: Arc<WatchdogGateV1>,
+    entered_signal: mpsc::SyncSender<()>,
+    blocked: bool,
+}
+
+struct BlockAtIncumbentAuthorityV1 {
+    release: Arc<WatchdogGateV1>,
+    entered_signal: Option<mpsc::SyncSender<()>>,
+}
+
+struct ContinueControlV1;
+
+struct SignalLocatorOwnerPublicationWait {
+    entered_signal: Option<mpsc::SyncSender<()>>,
 }
 
 impl FsCasControlV1 for ObserveFreshCarrierValidationLock {
     fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
         if boundary == FsCasBoundaryV1::AfterCarrierInstall {
             self.observed = true;
-            self.available = self.cas.visibility_lock_available_for_test_v1();
+            self.visibility_available = self.cas.visibility_lock_available_for_test_v1();
+            self.publication_available = self.cas.publication_lock_available_for_test_v1();
         }
     }
 
@@ -229,9 +349,144 @@ impl FsCasControlV1 for ObserveFreshCarrierValidationLock {
 
 impl FsCasControlV1 for ObserveIncumbentComparisonLock {
     fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
-        if boundary == FsCasBoundaryV1::BeforeIncumbentComparisonWindow {
+        if matches!(
+            boundary,
+            FsCasBoundaryV1::BeforeIncumbentComparisonWindow
+                | FsCasBoundaryV1::BeforeObjectComparisonWindow
+        ) {
             self.observed = true;
-            self.available = self.cas.visibility_lock_available_for_test_v1();
+            self.visibility_available = self.cas.visibility_lock_available_for_test_v1();
+            self.publication_available = self.cas.publication_lock_available_for_test_v1();
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for BlockCatalogMarkerWrite {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeCatalogPublication {
+            self.catalog_phase = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn inject_filesystem_failure(
+        &mut self,
+        boundary: FsCasFilesystemBoundaryV1,
+    ) -> Option<FsCasErrorV1> {
+        if self.catalog_phase && !self.blocked && boundary == FsCasFilesystemBoundaryV1::MarkerWrite
+        {
+            self.blocked = true;
+            self.entered_signal
+                .send(())
+                .expect("catalog preparation watchdog receiver remains live");
+            self.release
+                .recv_timeout(Duration::from_secs(5))
+                .expect("catalog preparation release watchdog expired");
+        }
+        None
+    }
+}
+
+impl FsCasControlV1 for BlockPreparationCreate {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn inject_filesystem_failure(
+        &mut self,
+        boundary: FsCasFilesystemBoundaryV1,
+    ) -> Option<FsCasErrorV1> {
+        if !self.blocked && boundary == FsCasFilesystemBoundaryV1::PreparationCreate {
+            self.blocked = true;
+            self.entered_signal
+                .send(())
+                .expect("preparation-create watchdog receiver remains live");
+            self.release
+                .recv_timeout(Duration::from_secs(5))
+                .expect("preparation-create release watchdog expired");
+        }
+        None
+    }
+}
+
+impl FsCasControlV1 for BlockAfterObjectLocatorPublication {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if !self.blocked && boundary == FsCasBoundaryV1::AfterObjectLocatorPublication {
+            self.blocked = true;
+            self.entered_signal
+                .send(())
+                .expect("locator-publication watchdog receiver remains live");
+            self.release.wait();
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for BlockAtIncumbentAuthorityV1 {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeIncumbentMarkerRead {
+            if let Some(entered) = self.entered_signal.take() {
+                entered
+                    .send(())
+                    .expect("incumbent-authority watchdog receiver remains live");
+                self.release.wait();
+            }
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for ContinueControlV1 {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for SignalLocatorOwnerPublicationWait {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::LocatorOwnerPublicationWait {
+            if let Some(signal) = self.entered_signal.take() {
+                signal
+                    .send(())
+                    .expect("locator-owner watchdog receiver remains live");
+            }
         }
     }
 
@@ -266,6 +521,25 @@ impl FsCasControlV1 for InstallMalformedLocatorAtPublication {
     fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
         if boundary == FsCasBoundaryV1::BeforeObjectLocatorPublication && !self.injected {
             fs::write(&self.locator, [0_u8; 160]).unwrap();
+            self.injected = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+#[cfg(unix)]
+impl FsCasControlV1 for ReplaceLocatorAfterCompleteComparison {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::AfterObjectComparisonWindow && !self.injected {
+            fs::rename(&self.locator, &self.displaced).unwrap();
+            fs::write(&self.locator, [0_u8; PERSISTENT_LOCATOR_BYTES_V1]).unwrap();
             self.injected = true;
         }
     }
@@ -1349,6 +1623,65 @@ fn overlapping_packs_reuse_one_object_without_poisoning_lookup() {
 }
 
 #[test]
+fn overlapping_pack_incumbent_comparison_holds_neither_root_fence() {
+    let fixture = TestRoot::new("overlapping-pack-lock-scope");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let shared = object(5, &[0x4d; 16_384]);
+    let additional = object(5, &[0x9e; 16_384]);
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut scratch = [0_u8; 65_536];
+    let mut spool = Spool::default();
+
+    let mut incumbent_counters = OperationCountersV1::default();
+    let mut incumbent = build_private_pack(
+        &cas,
+        std::slice::from_ref(&shared),
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    );
+    cas.admit_pack(
+        &mut incumbent,
+        &mut spool,
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    )
+    .unwrap();
+
+    let mut candidate_counters = OperationCountersV1::default();
+    let mut candidate = build_private_pack(
+        &cas,
+        &[shared, additional],
+        &ledger,
+        &mut candidate_counters,
+        &mut scratch,
+    );
+    let mut control = ObserveIncumbentComparisonLock {
+        cas: cas.clone(),
+        observed: false,
+        visibility_available: false,
+        publication_available: false,
+    };
+    assert_eq!(
+        cas.admit_pack_controlled(
+            &mut candidate,
+            &mut spool,
+            &ledger,
+            &mut candidate_counters,
+            &mut scratch,
+            &mut control,
+        )
+        .unwrap()
+        .outcome(),
+        FsPackAdmissionOutcomeV1::Installed
+    );
+    assert!(control.observed);
+    assert!(control.visibility_available);
+    assert!(control.publication_available);
+}
+
+#[test]
 fn nonexistent_objects_cannot_mint_a_closure_capability() {
     let fixture = TestRoot::new("closure-spoof-regression");
     let cas = FsCasV1::create_new(&fixture.path).unwrap();
@@ -1801,6 +2134,93 @@ fn malformed_object_locator_fails_closed_without_publishing_the_loser() {
     assert!(loser_counters.has_zero_forbidden_work());
 }
 
+#[cfg(unix)]
+#[test]
+fn post_comparison_locator_path_replacement_fails_before_catalog_publication() {
+    let fixture = TestRoot::new("post-comparison-locator-replacement");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let stale = FsCasV1::open_existing(&fixture.path).unwrap();
+    let shared = object(5, b"shared-complete-object");
+    let winner_only = object(5, b"winner-only-object");
+    let candidate_only = object(5, b"candidate-only-object");
+    let shared_locator = locator_path(&fixture.path, typed_id(&shared));
+    let displaced = fixture.path.join("displaced-shared-locator");
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut scratch = [0_u8; 65_536];
+    let mut spool = Spool::default();
+
+    let mut winner_counters = OperationCountersV1::default();
+    let mut winner = build_private_pack(
+        &cas,
+        &[shared.clone(), winner_only],
+        &ledger,
+        &mut winner_counters,
+        &mut scratch,
+    );
+    cas.admit_pack(
+        &mut winner,
+        &mut spool,
+        &ledger,
+        &mut winner_counters,
+        &mut scratch,
+    )
+    .unwrap();
+
+    let mut candidate_counters = OperationCountersV1::default();
+    let mut candidate = build_private_pack(
+        &cas,
+        &[shared, candidate_only],
+        &ledger,
+        &mut candidate_counters,
+        &mut scratch,
+    );
+    let mut control = ReplaceLocatorAfterCompleteComparison {
+        locator: shared_locator.clone(),
+        displaced: displaced.clone(),
+        injected: false,
+    };
+    assert_eq!(
+        cas.admit_pack_controlled(
+            &mut candidate,
+            &mut spool,
+            &ledger,
+            &mut candidate_counters,
+            &mut scratch,
+            &mut control,
+        ),
+        Err(FsCasErrorV1::Integrity)
+    );
+    assert!(control.injected);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert_storage_equations(&candidate_counters);
+    assert_eq!(candidate_counters.storage_bytes_retained, 0);
+    assert_eq!(candidate_counters.storage_inodes_retained, 0);
+    assert!(candidate_counters.has_zero_forbidden_work());
+
+    fs::remove_file(&shared_locator).unwrap();
+    fs::rename(&displaced, &shared_locator).unwrap();
+    assert!(matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)));
+    assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+    assert!(matches!(
+        FsCasV1::open_existing(&fixture.path),
+        Err(FsCasErrorV1::Invalidated)
+    ));
+}
+
 #[test]
 fn atomic_locator_no_replace_authenticates_a_racing_malformed_occupant() {
     let fixture = TestRoot::new("atomic-locator-race");
@@ -2200,15 +2620,21 @@ fn simultaneous_reopened_pack_callers_publish_one_canonical_shared_locator() {
         &mut right_build,
         &mut build_scratch,
     );
-    let barrier = Arc::new(Barrier::new(3));
+    let start = Arc::new(WatchdogGateV1::new());
+    let (ready_tx, ready_rx) = mpsc::sync_channel(2);
 
     let (left_result, right_result) = std::thread::scope(|scope| {
-        let left_barrier = barrier.clone();
+        let mut start_release = WatchdogGateReleaseV1::new(Arc::clone(&start));
+        let left_start = Arc::clone(&start);
+        let left_ready = ready_tx.clone();
         let left_ledger = &ledger;
         let left_join = scope.spawn(move || {
             let mut spool = Spool::default();
             let mut scratch = [0_u8; 65_536];
-            left_barrier.wait();
+            left_ready
+                .send(())
+                .expect("left readiness receiver remains live");
+            left_start.wait();
             let admission = left_cas.admit_pack(
                 &mut left_pack,
                 &mut spool,
@@ -2218,12 +2644,15 @@ fn simultaneous_reopened_pack_callers_publish_one_canonical_shared_locator() {
             );
             (admission, left_build)
         });
-        let right_barrier = barrier.clone();
+        let right_start = Arc::clone(&start);
         let right_ledger = &ledger;
         let right_join = scope.spawn(move || {
             let mut spool = Spool::default();
             let mut scratch = [0_u8; 65_536];
-            right_barrier.wait();
+            ready_tx
+                .send(())
+                .expect("right readiness receiver remains live");
+            right_start.wait();
             let admission = right_cas.admit_pack(
                 &mut right_pack,
                 &mut spool,
@@ -2233,7 +2662,12 @@ fn simultaneous_reopened_pack_callers_publish_one_canonical_shared_locator() {
             );
             (admission, right_build)
         });
-        barrier.wait();
+        for caller in 0..2 {
+            ready_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|error| panic!("caller {caller} readiness failed: {error}"));
+        }
+        start_release.release_v1();
         (left_join.join().unwrap(), right_join.join().unwrap())
     });
 
@@ -2265,6 +2699,154 @@ fn simultaneous_reopened_pack_callers_publish_one_canonical_shared_locator() {
         );
     }
     assert_eq!(ledger.admitted_slots(), 0);
+}
+
+#[test]
+fn locator_owner_wait_is_direct_and_distinct_from_publication_mutex_wait() {
+    let fixture = TestRoot::new("locator-owner-publication-wait");
+    let seed = FsCasV1::create_new(&fixture.path).unwrap();
+    let first_cas = FsCasV1::open_existing(&fixture.path).unwrap();
+    let second_cas = FsCasV1::open_existing(&fixture.path).unwrap();
+    let shared = object(5, &[0x6e; 4_096]);
+    let second_only = object(5, b"second-pack-only");
+    let shared_id = typed_id(&shared);
+    let second_only_id = typed_id(&second_only);
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut build_scratch = [0_u8; 65_536];
+    let mut first_counters = OperationCountersV1::default();
+    let mut second_counters = OperationCountersV1::default();
+    let mut first_pack = build_private_pack(
+        &first_cas,
+        std::slice::from_ref(&shared),
+        &ledger,
+        &mut first_counters,
+        &mut build_scratch,
+    );
+    let mut second_pack = build_private_pack(
+        &second_cas,
+        &[shared.clone(), second_only.clone()],
+        &ledger,
+        &mut second_counters,
+        &mut build_scratch,
+    );
+    let release = Arc::new(WatchdogGateV1::new());
+    let (first_entered_tx, first_entered_rx) = mpsc::sync_channel(1);
+    let (locator_wait_tx, locator_wait_rx) = mpsc::sync_channel(1);
+    let (second_done_tx, second_done_rx) = mpsc::sync_channel(1);
+
+    let (first_result, second_result) = std::thread::scope(|scope| {
+        let mut release_guard = WatchdogGateReleaseV1::new(Arc::clone(&release));
+        let first_release = Arc::clone(&release);
+        let first = scope.spawn(|| {
+            let mut spool = Spool::default();
+            let mut scratch = [0_u8; 65_536];
+            let mut control = BlockAfterObjectLocatorPublication {
+                release: first_release,
+                entered_signal: first_entered_tx,
+                blocked: false,
+            };
+            let (admission, observation) = {
+                let mut observed = FsOperationObservedControlV1::new(&mut control);
+                let admission = first_cas.admit_pack_controlled(
+                    &mut first_pack,
+                    &mut spool,
+                    &ledger,
+                    &mut first_counters,
+                    &mut scratch,
+                    &mut observed,
+                );
+                let observation = observed.finish_v1(&mut first_counters);
+                (admission, observation)
+            };
+            (admission, observation, control.blocked, first_counters)
+        });
+
+        first_entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("first pack did not expose its shared locator before catalog visibility");
+
+        let second = scope.spawn(|| {
+            let mut spool = Spool::default();
+            let mut scratch = [0_u8; 65_536];
+            let mut control = SignalLocatorOwnerPublicationWait {
+                entered_signal: Some(locator_wait_tx),
+            };
+            let (admission, observation) = {
+                let mut observed = FsOperationObservedControlV1::new(&mut control);
+                let admission = second_cas.admit_pack_controlled(
+                    &mut second_pack,
+                    &mut spool,
+                    &ledger,
+                    &mut second_counters,
+                    &mut scratch,
+                    &mut observed,
+                );
+                let observation = observed.finish_v1(&mut second_counters);
+                (admission, observation)
+            };
+            second_done_tx
+                .send(())
+                .expect("locator-owner completion watchdog receiver remains live");
+            (admission, observation, second_counters)
+        });
+
+        let locator_wait_observed = locator_wait_rx.recv_timeout(Duration::from_secs(5));
+        let completed_before_owner = second_done_rx.recv_timeout(Duration::from_millis(100));
+        release_guard.release_v1();
+        let first_result = first.join().unwrap();
+        let second_result = second.join().unwrap();
+        assert!(
+            locator_wait_observed.is_ok(),
+            "second pack did not report direct locator-owner coordination wait"
+        );
+        assert!(
+            completed_before_owner.is_err(),
+            "second pack completed before the locator owner made its catalog visible"
+        );
+        (first_result, second_result)
+    });
+
+    let (first_admission, first_observation, first_blocked, first_counters) = first_result;
+    assert!(first_blocked);
+    assert_eq!(first_observation, Ok(()));
+    assert_eq!(
+        first_admission.unwrap().outcome(),
+        FsPackAdmissionOutcomeV1::Installed
+    );
+    let (second_admission, second_observation, second_counters) = second_result;
+    assert_eq!(second_observation, Ok(()));
+    assert_eq!(
+        second_admission.unwrap().outcome(),
+        FsPackAdmissionOutcomeV1::Installed
+    );
+    assert!(first_counters.publication_lock_acquisitions > 0);
+    assert!(second_counters.publication_lock_acquisitions > 0);
+    assert_eq!(second_counters.active_pack_publication_wait_polls, 0);
+    assert_eq!(second_counters.active_pack_publication_wait_nanoseconds, 0);
+    assert!(second_counters.locator_owner_publication_wait_polls > 0);
+    assert!(second_counters.locator_owner_publication_wait_nanoseconds > 0);
+    assert!(first_counters.has_zero_forbidden_work());
+    assert!(second_counters.has_zero_forbidden_work());
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        2
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        2
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+        2
+    );
+    let mut occupied = seed.occupied().unwrap();
+    for (id, expected) in [(shared_id, shared), (second_only_id, second_only)] {
+        assert_eq!(
+            occupied.occupied_len(id).unwrap(),
+            Some(expected.len() as u64)
+        );
+    }
 }
 
 #[test]
@@ -3065,7 +3647,8 @@ fn fresh_carrier_validation_does_not_hold_the_visibility_lock() {
     let mut control = ObserveFreshCarrierValidationLock {
         cas: cas.clone(),
         observed: false,
-        available: false,
+        visibility_available: false,
+        publication_available: false,
     };
 
     let admission = cas
@@ -3080,8 +3663,156 @@ fn fresh_carrier_validation_does_not_hold_the_visibility_lock() {
         .unwrap();
 
     assert!(control.observed);
-    assert!(control.available);
+    assert!(control.visibility_available);
+    assert!(control.publication_available);
     assert_eq!(admission.outcome(), FsPackAdmissionOutcomeV1::Installed);
+}
+
+#[test]
+fn preparation_spool_creation_does_not_hold_root_visibility_or_publication() {
+    let fixture = TestRoot::new("preparation-create-lock-scope");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let worker_cas = cas.clone();
+    let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::channel();
+
+    std::thread::scope(|scope| {
+        let worker = scope.spawn(move || {
+            let mut control = BlockPreparationCreate {
+                entered_signal: entered_tx,
+                release: release_rx,
+                blocked: false,
+            };
+            let spool = worker_cas.begin_operation_spool_v1("preparation-lock-scope", &mut control);
+            (spool, control)
+        });
+
+        entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("spool construction did not reach PreparationCreate");
+        assert!(cas.visibility_lock_available_for_test_v1());
+        assert!(cas.publication_lock_available_for_test_v1());
+        release_tx
+            .send(())
+            .expect("preparation-create worker remains live");
+
+        let (spool, control) = worker.join().unwrap();
+        let mut spool = spool.unwrap();
+        let mut control = control;
+        assert!(control.blocked);
+        spool.cleanup_controlled_v1(&mut control).unwrap();
+    });
+
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert!(cas.visibility_lock_available_for_test_v1());
+    assert!(cas.publication_lock_available_for_test_v1());
+}
+
+#[test]
+fn catalog_marker_preparation_does_not_serialize_disjoint_publication() {
+    let fixture = TestRoot::new("catalog-preparation-publication-lock");
+    let seed = FsCasV1::create_new(&fixture.path).unwrap();
+    let first_cas = FsCasV1::open_existing(&fixture.path).unwrap();
+    let second_cas = FsCasV1::open_existing(&fixture.path).unwrap();
+    let first_objects = [object(5, &[0x51; 8_192])];
+    let second_objects = [object(5, &[0x52; 8_192])];
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut build_scratch = [0_u8; 65_536];
+    let mut first_counters = OperationCountersV1::default();
+    let mut second_counters = OperationCountersV1::default();
+    let mut first_pack = build_private_pack(
+        &first_cas,
+        &first_objects,
+        &ledger,
+        &mut first_counters,
+        &mut build_scratch,
+    );
+    let mut second_pack = build_private_pack(
+        &second_cas,
+        &second_objects,
+        &ledger,
+        &mut second_counters,
+        &mut build_scratch,
+    );
+    let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::channel();
+    let (second_done_tx, second_done_rx) = mpsc::sync_channel(1);
+
+    std::thread::scope(|scope| {
+        let first = scope.spawn(|| {
+            let mut spool = Spool::default();
+            let mut scratch = [0_u8; 65_536];
+            let mut control = BlockCatalogMarkerWrite {
+                entered_signal: entered_tx,
+                release: release_rx,
+                catalog_phase: false,
+                blocked: false,
+            };
+            let result = first_cas.admit_pack_controlled(
+                &mut first_pack,
+                &mut spool,
+                &ledger,
+                &mut first_counters,
+                &mut scratch,
+                &mut control,
+            );
+            (result, control.blocked)
+        });
+
+        entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("first publication did not reach catalog marker preparation");
+        let second = scope.spawn(|| {
+            let mut spool = Spool::default();
+            let mut scratch = [0_u8; 65_536];
+            let result = second_cas.admit_pack(
+                &mut second_pack,
+                &mut spool,
+                &ledger,
+                &mut second_counters,
+                &mut scratch,
+            );
+            second_done_tx.send(result).unwrap();
+        });
+
+        let second_result = second_done_rx.recv_timeout(Duration::from_secs(5));
+        release_tx
+            .send(())
+            .expect("catalog preparation worker remains live");
+        let (first_result, first_blocked) = first.join().unwrap();
+        second.join().unwrap();
+
+        assert!(first_blocked);
+        assert_eq!(
+            first_result.unwrap().outcome(),
+            FsPackAdmissionOutcomeV1::Installed
+        );
+        assert_eq!(
+            second_result
+                .expect("disjoint publication was serialized by catalog preparation")
+                .unwrap()
+                .outcome(),
+            FsPackAdmissionOutcomeV1::Installed
+        );
+    });
+
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        2
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        2
+    );
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert!(first_counters.has_zero_forbidden_work());
+    assert!(second_counters.has_zero_forbidden_work());
+    drop(seed);
 }
 
 #[test]
@@ -3117,7 +3848,8 @@ fn same_pack_race_is_no_replace_and_compares_every_incumbent_byte() {
     let mut control = ObserveIncumbentComparisonLock {
         cas: cas.clone(),
         observed: false,
-        available: false,
+        visibility_available: false,
+        publication_available: false,
     };
     let reused = cas
         .admit_pack_controlled(
@@ -3130,7 +3862,8 @@ fn same_pack_race_is_no_replace_and_compares_every_incumbent_byte() {
         )
         .unwrap();
     assert!(control.observed);
-    assert!(control.available);
+    assert!(control.visibility_available);
+    assert!(control.publication_available);
     assert_eq!(reused.outcome(), FsPackAdmissionOutcomeV1::ExistingComplete);
     assert_eq!(
         second_counters.incumbent_comparison_bytes,
@@ -3596,6 +4329,246 @@ fn malformed_incumbent_fails_closed_without_overwrite_or_fallback() {
             .count(),
         0
     );
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ConcurrentIncumbentFailureV1 {
+    UnequalCompleteBytes,
+    Malformed,
+}
+
+#[test]
+fn simultaneous_reopened_disjoint_success_crosses_unequal_and_malformed_incumbents() {
+    for (label, failure) in [
+        (
+            "concurrent-unequal-incumbent",
+            ConcurrentIncumbentFailureV1::UnequalCompleteBytes,
+        ),
+        (
+            "concurrent-malformed-incumbent",
+            ConcurrentIncumbentFailureV1::Malformed,
+        ),
+    ] {
+        let fixture = TestRoot::new(label);
+        let seed = FsCasV1::create_new(&fixture.path).unwrap();
+        let failing_cas = FsCasV1::open_existing(&fixture.path).unwrap();
+        let success_cas = FsCasV1::open_existing(&fixture.path).unwrap();
+        let shared = object(5, &[0x81; 4_096]);
+        let shared_id = typed_id(&shared);
+        let disjoint = object(5, &[0x82; 4_097]);
+        let disjoint_id = typed_id(&disjoint);
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut build_scratch = [0_u8; 65_536];
+        let mut seed_counters = OperationCountersV1::default();
+        let mut seed_pack = build_private_pack(
+            &seed,
+            &[shared.clone()],
+            &ledger,
+            &mut seed_counters,
+            &mut build_scratch,
+        );
+        let mut seed_spool = Spool::default();
+        assert_eq!(
+            seed.admit_pack(
+                &mut seed_pack,
+                &mut seed_spool,
+                &ledger,
+                &mut seed_counters,
+                &mut build_scratch,
+            )
+            .unwrap()
+            .outcome(),
+            FsPackAdmissionOutcomeV1::Installed
+        );
+
+        let incumbent_locator_path = locator_path(&fixture.path, shared_id);
+        let incumbent_locator = fs::read(&incumbent_locator_path).unwrap();
+        let incumbent_carrier = only_entry(&fixture.path.join("carriers"));
+        let original_permissions = make_owner_writable(&incumbent_carrier);
+        let mut corrupted_carrier = fs::read(&incumbent_carrier).unwrap();
+        match failure {
+            ConcurrentIncumbentFailureV1::UnequalCompleteBytes => {
+                let object_offset =
+                    u64::from_be_bytes(incumbent_locator[104..112].try_into().unwrap()) + 4;
+                let object_len =
+                    u32::from_be_bytes(incumbent_locator[112..116].try_into().unwrap());
+                let corrupt_at =
+                    usize::try_from(object_offset + u64::from(object_len) - 1).unwrap();
+                corrupted_carrier[corrupt_at] ^= 0xff;
+            }
+            ConcurrentIncumbentFailureV1::Malformed => corrupted_carrier[0] ^= 0xff,
+        }
+        fs::write(&incumbent_carrier, &corrupted_carrier).unwrap();
+        fs::set_permissions(&incumbent_carrier, original_permissions).unwrap();
+        #[cfg(unix)]
+        let incumbent_inode = {
+            use std::os::unix::fs::MetadataExt;
+            fs::metadata(&incumbent_carrier).unwrap().ino()
+        };
+
+        let mut failure_counters = OperationCountersV1::default();
+        let mut failure_pack = build_private_pack(
+            &failing_cas,
+            &[shared.clone()],
+            &ledger,
+            &mut failure_counters,
+            &mut build_scratch,
+        );
+        let mut success_counters = OperationCountersV1::default();
+        let mut success_pack = build_private_pack(
+            &success_cas,
+            &[disjoint.clone()],
+            &ledger,
+            &mut success_counters,
+            &mut build_scratch,
+        );
+        let incumbent_gate = Arc::new(WatchdogGateV1::new());
+        let (incumbent_entered_tx, incumbent_entered_rx) = mpsc::sync_channel(1);
+        let (success_done_tx, success_done_rx) = mpsc::sync_channel(1);
+
+        let (
+            (failure_terminal, failure_observation, failure_counters),
+            (success_terminal, success_observation, success_counters),
+        ) = std::thread::scope(|scope| {
+            let mut incumbent_release = WatchdogGateReleaseV1::new(Arc::clone(&incumbent_gate));
+            let failure_gate = Arc::clone(&incumbent_gate);
+            let failure_ledger = &ledger;
+            let failure_thread = scope.spawn(move || {
+                let mut spool = Spool::default();
+                let mut scratch = [0_u8; 65_536];
+                let mut control = BlockAtIncumbentAuthorityV1 {
+                    release: failure_gate,
+                    entered_signal: Some(incumbent_entered_tx),
+                };
+                let (terminal, observation) = {
+                    let mut observed = FsOperationObservedControlV1::new(&mut control);
+                    let terminal = failing_cas.admit_pack_controlled(
+                        &mut failure_pack,
+                        &mut spool,
+                        failure_ledger,
+                        &mut failure_counters,
+                        &mut scratch,
+                        &mut observed,
+                    );
+                    let observation = observed.finish_v1(&mut failure_counters);
+                    (terminal, observation)
+                };
+                (terminal, observation, failure_counters)
+            });
+
+            incumbent_entered_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|error| {
+                    panic!("{label}: failing caller missed incumbent boundary: {error}")
+                });
+
+            let success_ledger = &ledger;
+            let success_thread = scope.spawn(move || {
+                let mut spool = Spool::default();
+                let mut scratch = [0_u8; 65_536];
+                let mut control = ContinueControlV1;
+                let (terminal, observation) = {
+                    let mut observed = FsOperationObservedControlV1::new(&mut control);
+                    let terminal = success_cas.admit_pack_controlled(
+                        &mut success_pack,
+                        &mut spool,
+                        success_ledger,
+                        &mut success_counters,
+                        &mut scratch,
+                        &mut observed,
+                    );
+                    let observation = observed.finish_v1(&mut success_counters);
+                    (terminal, observation)
+                };
+                success_done_tx
+                    .send(())
+                    .expect("disjoint-success watchdog receiver remains live");
+                (terminal, observation, success_counters)
+            });
+
+            success_done_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "{label}: disjoint publication did not cross incumbent validation: {error}"
+                    )
+                });
+            incumbent_release.release_v1();
+            (
+                failure_thread.join().unwrap(),
+                success_thread.join().unwrap(),
+            )
+        });
+
+        let expected = match failure {
+            ConcurrentIncumbentFailureV1::UnequalCompleteBytes => {
+                FsCasErrorV1::Core(CoreError::IdMismatch)
+            }
+            ConcurrentIncumbentFailureV1::Malformed => FsCasErrorV1::MalformedOccupant,
+        };
+        assert_eq!(failure_terminal, Err(expected), "{label}");
+        assert_eq!(failure_observation, Ok(()), "{label}");
+        assert_eq!(
+            success_terminal.unwrap().outcome(),
+            FsPackAdmissionOutcomeV1::Installed,
+            "{label}"
+        );
+        assert_eq!(success_observation, Ok(()), "{label}");
+        for counters in [&failure_counters, &success_counters] {
+            assert_storage_equations(counters);
+            assert!(counters.has_zero_forbidden_work(), "{label}");
+            assert_eq!(counters.unreachable_installed_residue_bytes, 0, "{label}");
+            assert!(counters.publication_lock_acquisitions > 0, "{label}");
+            assert!(counters.publication_lock_hold_nanoseconds > 0, "{label}");
+        }
+        assert!(success_counters.visibility_lock_acquisitions > 0, "{label}");
+        assert!(
+            success_counters.visibility_lock_hold_nanoseconds > 0,
+            "{label}"
+        );
+        assert_eq!(fs::read(&incumbent_carrier).unwrap(), corrupted_carrier);
+        assert_eq!(
+            fs::read(&incumbent_locator_path).unwrap(),
+            incumbent_locator
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(
+                fs::metadata(&incumbent_carrier).unwrap().ino(),
+                incumbent_inode
+            );
+        }
+        assert_eq!(
+            fs::read_dir(fixture.path.join("preparation"))
+                .unwrap()
+                .count(),
+            0,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+            2,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+            2,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+            2,
+            "{label}"
+        );
+        assert_eq!(ledger.admitted_slots(), 0, "{label}");
+        let mut occupied = seed.occupied().unwrap();
+        assert_eq!(
+            occupied.occupied_len(disjoint_id).unwrap(),
+            Some(disjoint.len() as u64),
+            "{label}"
+        );
+    }
 }
 
 #[test]

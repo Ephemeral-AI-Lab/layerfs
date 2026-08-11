@@ -342,12 +342,29 @@ pub(crate) fn locate_validated_pack_index_entry_v1<P>(
 where
     P: PackReadPortV1 + ?Sized,
 {
+    let mut control = NeverStopWorkControlV1;
+    locate_validated_pack_index_entry_controlled_v1(pack, sealed, expected, counters, &mut control)
+}
+
+pub(crate) fn locate_validated_pack_index_entry_controlled_v1<P, C>(
+    pack: &mut P,
+    sealed: SealedPackV1,
+    expected: TypedPhysicalObjectIdV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> CoreResult<Option<PackIndexEntryV1>>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    poll_work_control_v1(control)?;
     if pack.len().map_err(map_read_port)? != sealed.pack_len {
         return Err(CoreError::PackInvalid);
     }
     let mut low = 0_u32;
     let mut high = sealed.record_count;
     while low < high {
+        poll_work_control_v1(control)?;
         let middle = low + (high - low) / 2;
         let offset = sealed
             .index_offset
@@ -380,6 +397,22 @@ pub(crate) fn read_validated_pack_index_entry_v1<P>(
 where
     P: PackReadPortV1 + ?Sized,
 {
+    let mut control = NeverStopWorkControlV1;
+    read_validated_pack_index_entry_controlled_v1(pack, sealed, ordinal, counters, &mut control)
+}
+
+pub(crate) fn read_validated_pack_index_entry_controlled_v1<P, C>(
+    pack: &mut P,
+    sealed: SealedPackV1,
+    ordinal: u32,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> CoreResult<PackIndexEntryV1>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    poll_work_control_v1(control)?;
     if ordinal >= sealed.record_count || pack.len().map_err(map_read_port)? != sealed.pack_len {
         return Err(CoreError::PackInvalid);
     }
@@ -406,7 +439,29 @@ pub(crate) fn validate_validated_pack_object_v1<P>(
 where
     P: PackReadPortV1 + ?Sized,
 {
-    validate_record(pack, entry, ProfileSpecV1::frozen().id(), scratch, counters)?;
+    let mut control = NeverStopWorkControlV1;
+    validate_validated_pack_object_controlled_v1(pack, entry, scratch, counters, &mut control)
+}
+
+pub(crate) fn validate_validated_pack_object_controlled_v1<P, C>(
+    pack: &mut P,
+    entry: PackIndexEntryV1,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> CoreResult<PackObjectLocationV1>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    validate_record_controlled_v1(
+        pack,
+        entry,
+        ProfileSpecV1::frozen().id(),
+        scratch,
+        counters,
+        control,
+    )?;
     Ok(PackObjectLocationV1 {
         object_offset: entry
             .absolute_offset
@@ -759,7 +814,8 @@ where
         return Err(CoreError::Schema);
     }
     let checksum_len = pack_len.checked_sub(32).ok_or(CoreError::IntegerOverflow)?;
-    let digest = hash_port_range(pack, 0, checksum_len, TAG_PACK, scratch, counters)?;
+    let digest =
+        hash_port_range_controlled_v1(pack, 0, checksum_len, TAG_PACK, scratch, counters, control)?;
     if trailer[48..80] != digest {
         return Err(CoreError::IdMismatch);
     }
@@ -804,6 +860,7 @@ where
 {
     let mut previous: Option<PackIndexEntryV1> = None;
     for ordinal in 0..record_count {
+        poll_work_control_v1(control)?;
         let offset = index_offset
             .checked_add(
                 u64::from(ordinal)
@@ -826,10 +883,11 @@ where
     let mut expected_offset = PACK_HEADER_BYTES;
     let mut consumed = 0_u32;
     while let Some(entry) = metadata.next().map_err(map_spool_port)? {
+        poll_work_control_v1(control)?;
         if entry.absolute_offset != expected_offset {
             return Err(CoreError::PackInvalid);
         }
-        validate_record(pack, entry, profile, scratch, counters)?;
+        validate_record_controlled_v1(pack, entry, profile, scratch, counters, control)?;
         expected_offset = expected_offset
             .checked_add(record_len(u64::from(entry.object_len))?)
             .ok_or(CoreError::IntegerOverflow)?;
@@ -860,6 +918,23 @@ fn validate_record<P: PackReadPortV1 + ?Sized>(
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
+    let mut control = NeverStopWorkControlV1;
+    validate_record_controlled_v1(pack, entry, profile, scratch, counters, &mut control)
+}
+
+fn validate_record_controlled_v1<P, C>(
+    pack: &mut P,
+    entry: PackIndexEntryV1,
+    profile: ProfileId,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> CoreResult<()>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    poll_work_control_v1(control)?;
     let prefix = read_array::<4, _>(pack, entry.absolute_offset, counters)?;
     if be_u32(&prefix) != entry.object_len {
         return Err(CoreError::PackInvalid);
@@ -882,6 +957,7 @@ fn validate_record<P: PackReadPortV1 + ?Sized>(
             counters,
             checksum: &mut checksum_hasher,
             next_offset: 0,
+            control,
         };
         let decoded =
             decode_physical_object_from_port_v1(&mut object, &mut DiscardStrongEdgesV1, scratch)
@@ -914,21 +990,27 @@ fn validate_record<P: PackReadPortV1 + ?Sized>(
     Ok(())
 }
 
-struct PackObjectReadV1<'a, P: PackReadPortV1 + ?Sized> {
+struct PackObjectReadV1<'a, P: PackReadPortV1 + ?Sized, C: ?Sized> {
     pack: &'a mut P,
     start: u64,
     len: u64,
     counters: &'a mut OperationCountersV1,
     checksum: &'a mut FramedHasherV1,
     next_offset: u64,
+    control: &'a mut C,
 }
 
-impl<P: PackReadPortV1 + ?Sized> PhysicalObjectReadPortV1 for PackObjectReadV1<'_, P> {
+impl<P, C> PhysicalObjectReadPortV1 for PackObjectReadV1<'_, P, C>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
     fn len(&mut self) -> CoreResult<u64> {
         Ok(self.len)
     }
 
     fn read_exact_at(&mut self, offset: u64, destination: &mut [u8]) -> CoreResult<()> {
+        poll_work_control_v1(self.control)?;
         if offset != self.next_offset {
             return Err(CoreError::PackInvalid);
         }
@@ -1087,9 +1169,27 @@ pub(crate) fn hash_port_range<P: PackReadPortV1 + ?Sized>(
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     counters: &mut OperationCountersV1,
 ) -> CoreResult<[u8; 32]> {
+    let mut control = NeverStopWorkControlV1;
+    hash_port_range_controlled_v1(pack, start, len, tag, scratch, counters, &mut control)
+}
+
+pub(crate) fn hash_port_range_controlled_v1<P, C>(
+    pack: &mut P,
+    start: u64,
+    len: u64,
+    tag: u8,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> CoreResult<[u8; 32]>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
     let mut hasher = FramedHasherV1::new(tag, len);
     let mut consumed = 0_u64;
     while consumed < len {
+        poll_work_control_v1(control)?;
         let take = usize::try_from((len - consumed).min(COMPARISON_WINDOW_BYTES as u64))
             .map_err(|_| CoreError::IntegerOverflow)?;
         let offset = start
@@ -1103,7 +1203,21 @@ pub(crate) fn hash_port_range<P: PackReadPortV1 + ?Sized>(
             .checked_add(take as u64)
             .ok_or(CoreError::IntegerOverflow)?;
     }
+    poll_work_control_v1(control)?;
     hasher.finish()
+}
+
+fn poll_work_control_v1<C>(control: &mut C) -> CoreResult<()>
+where
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    if control.cancellation_requested_v1() {
+        Err(CoreError::Cancelled)
+    } else if control.deadline_exceeded_v1() {
+        Err(CoreError::Deadline)
+    } else {
+        Ok(())
+    }
 }
 
 fn read_array<const N: usize, P: PackReadPortV1 + ?Sized>(

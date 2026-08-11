@@ -34,10 +34,10 @@ use crate::profile::{ChunkerSpecV1, DigestSpecV1};
 use crate::{CoreError, CoreResult};
 
 use super::{
-    encode_header, encode_index_entry, encode_trailer_prefix, hash_port_range, record_padding,
-    CompletedPackSetV1, PackIndexEntryV1, PackIndexSpoolV1, PackPortErrorV1, PackReadPortV1,
-    PrivatePackPortV1, SealedPackV1, MAX_PACK_BYTES, MAX_PACK_RECORDS, PACK_INDEX_ENTRY_BYTES,
-    PACK_TRAILER_BYTES,
+    encode_header, encode_index_entry, encode_trailer_prefix, hash_port_range_controlled_v1,
+    record_padding, CompletedPackSetV1, PackIndexEntryV1, PackIndexSpoolV1, PackPortErrorV1,
+    PackReadPortV1, PrivatePackPortV1, SealedPackV1, MAX_PACK_BYTES, MAX_PACK_RECORDS,
+    PACK_INDEX_ENTRY_BYTES, PACK_TRAILER_BYTES,
 };
 
 const VERSION_OBJECT_BYTES: usize = 52 + VERSION_RECORD_PAYLOAD_BYTES as usize;
@@ -230,6 +230,17 @@ where
         map_fscas_operation(error)
     }
 
+    fn poll_control_v1(&mut self) -> CoreResult<()> {
+        let mut control = SharedC3ControlV1::new(self.control);
+        if crate::limits::OperationWorkControlV1::cancellation_requested_v1(&mut control) {
+            Err(CoreError::Cancelled)
+        } else if crate::limits::OperationWorkControlV1::deadline_exceeded_v1(&mut control) {
+            Err(CoreError::Deadline)
+        } else {
+            Ok(())
+        }
+    }
+
     fn lookup_global_seen_v1(
         &mut self,
         id: TypedPhysicalObjectIdV1,
@@ -270,7 +281,11 @@ where
     }
 
     fn start_next_carrier_v1(&mut self) -> CoreResult<()> {
-        let mut next_pack = match self.cas.begin_private_pack_borrowed_v1(self.storage_token) {
+        let mut shared_control = SharedC3ControlV1::new(self.control);
+        let mut next_pack = match self
+            .cas
+            .begin_private_pack_borrowed_controlled_v1(self.storage_token, &mut shared_control)
+        {
             Ok(pack) => pack,
             Err(error) => {
                 self.first_fscas_error.get_or_insert(error);
@@ -280,7 +295,6 @@ where
         let resident = match next_pack.resident_memory_bound_bytes() {
             Ok(resident) => resident,
             Err(error) => {
-                let mut shared_control = SharedC3ControlV1::new(self.control);
                 if let Err(cleanup_error) = next_pack.cleanup_controlled_v1(&mut shared_control) {
                     let terminal = next_private_pack_cleanup_terminal_v1(error, cleanup_error);
                     self.first_fscas_error.get_or_insert(terminal);
@@ -290,7 +304,6 @@ where
             }
         };
         if resident > self.private_pack_resident_bound {
-            let mut shared_control = SharedC3ControlV1::new(self.control);
             if let Err(cleanup_error) = next_pack.cleanup_controlled_v1(&mut shared_control) {
                 let terminal = next_private_pack_cleanup_terminal_v1(
                     CoreError::ResourceRefused,
@@ -327,12 +340,12 @@ where
             )
         }));
         let admission = match admission_terminal {
-            Ok(admission) => admission,
+            Ok(terminal) => terminal,
             Err(payload) => {
                 // Admission owns direct carrier write/read/residue events in
                 // this per-carrier accumulator. Preserve them before the
-                // callback panic leaves the sink; the ordinary line below is
-                // unreachable on unwind and must not silently discard them.
+                // callback panic leaves the sink; the complete lifecycle
+                // observer remains live through cleanup and terminalization.
                 match self.accumulate_carrier_counters_v1(carrier_counters) {
                     Ok(()) => std::panic::resume_unwind(payload),
                     Err(error) => return Err(error),
@@ -806,6 +819,7 @@ where
     fn compare_objects(&mut self, left: u64, right: u64, len: u64) -> CoreResult<bool> {
         let mut offset = 0_u64;
         while offset < len {
+            self.poll_control_v1()?;
             let take = usize::try_from((len - offset).min(COMPARISON_WINDOW_BYTES as u64))
                 .map_err(|_| CoreError::IntegerOverflow)?;
             self.pack
@@ -854,6 +868,7 @@ where
                 .checked_add(take as u64)
                 .ok_or(CoreError::IntegerOverflow)?;
         }
+        self.poll_control_v1()?;
         Ok(true)
     }
 
@@ -868,7 +883,11 @@ where
             Err(error) => return Err(self.map_occupied_fscas_error(error)),
         };
         let result = (|| {
-            let occupied_len = match self.occupied.occupied_len_typed_v1(id) {
+            let occupied_len = match {
+                let mut control = SharedC3ControlV1::new(self.control);
+                self.occupied
+                    .occupied_len_typed_controlled_v1(id, &mut control)
+            } {
                 Ok(Some(len)) => len,
                 Ok(None) => {
                     let error = FsCasErrorV1::Integrity;
@@ -881,13 +900,19 @@ where
             }
             let mut offset = 0_u64;
             while offset < len {
+                self.poll_control_v1()?;
                 let take = usize::try_from((len - offset).min(COMPARISON_WINDOW_BYTES as u64))
                     .map_err(|_| CoreError::IntegerOverflow)?;
-                if let Err(error) = self.occupied.read_occupied_exact_at_typed_v1(
-                    id,
-                    offset,
-                    &mut self.left[..take],
-                ) {
+                let occupied_read = {
+                    let mut control = SharedC3ControlV1::new(self.control);
+                    self.occupied.read_occupied_exact_at_typed_controlled_v1(
+                        id,
+                        offset,
+                        &mut self.left[..take],
+                        &mut control,
+                    )
+                };
+                if let Err(error) = occupied_read {
                     return Err(self.map_occupied_fscas_error(error));
                 }
                 self.pack
@@ -913,6 +938,7 @@ where
                     .checked_add(take as u64)
                     .ok_or(CoreError::IntegerOverflow)?;
             }
+            self.poll_control_v1()?;
             Ok(true)
         })();
         // The direct occupied-read delta is required even when the comparison
@@ -1094,6 +1120,7 @@ where
         let mut emitted = 0_u32;
         let mut previous = None;
         loop {
+            self.poll_control_v1()?;
             let entry = match self.metadata.next() {
                 Ok(Some(entry)) => entry,
                 Ok(None) => break,
@@ -1133,14 +1160,18 @@ where
             counted_pack.bytes_read = 71;
             counted_pack.read_calls = u64::MAX;
         }
-        let digest_result = hash_port_range(
-            &mut counted_pack,
-            0,
-            checksum_len,
-            TAG_PACK,
-            self.left,
-            counters,
-        );
+        let digest_result = {
+            let mut control = SharedC3ControlV1::new(self.control);
+            hash_port_range_controlled_v1(
+                &mut counted_pack,
+                0,
+                checksum_len,
+                TAG_PACK,
+                self.left,
+                counters,
+                &mut control,
+            )
+        };
         let next_direct_read_bytes = self
             .direct_read_bytes
             .checked_add(counted_pack.bytes_read)

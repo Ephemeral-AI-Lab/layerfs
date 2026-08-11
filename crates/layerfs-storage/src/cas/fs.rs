@@ -36,9 +36,10 @@ use crate::object::TypedPhysicalObjectIdV1;
 #[cfg(test)]
 use crate::pack::validate_pack_v1;
 use crate::pack::{
-    locate_validated_pack_index_entry_v1, read_validated_pack_index_entry_v1,
-    validate_validated_pack_object_v1, PackIndexEntryV1, PackIndexSpoolV1, PackObjectLocationV1,
-    PackPortErrorV1, PackReadPortV1, PrivatePackPortV1, SealedPackV1, MAX_PACK_BYTES,
+    locate_validated_pack_index_entry_controlled_v1, read_validated_pack_index_entry_v1,
+    validate_validated_pack_object_controlled_v1, PackIndexEntryV1, PackIndexSpoolV1,
+    PackObjectLocationV1, PackPortErrorV1, PackReadPortV1, PrivatePackPortV1, SealedPackV1,
+    MAX_PACK_BYTES,
 };
 use crate::{CoreError, CoreResult};
 
@@ -329,6 +330,43 @@ impl From<CoreError> for FsCasErrorV1 {
 /// fallback policy into the storage adapter.
 pub trait FsCasControlV1 {
     fn boundary_reached(&mut self, _boundary: FsCasBoundaryV1) {}
+    /// Report one physically completed root-lock acquisition. The mutex guard
+    /// has already been dropped when this method is invoked, so caller-owned
+    /// observation callbacks can neither extend the authoritative hold nor
+    /// poison a healthy coordination primitive. Direct wait/hold durations
+    /// are captured by the lock owner before releasing the guard.
+    fn root_lock_completed_v1(
+        &mut self,
+        acquired_boundary: FsCasBoundaryV1,
+        released_boundary: FsCasBoundaryV1,
+        _wait_nanoseconds: Option<u64>,
+        _hold_nanoseconds: Option<u64>,
+    ) {
+        let mut first_unwind = None;
+        for boundary in [acquired_boundary, released_boundary] {
+            if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.boundary_reached(boundary);
+            })) {
+                if first_unwind.is_none() {
+                    first_unwind = Some(payload);
+                }
+            }
+        }
+        if let Some(payload) = first_unwind {
+            std::panic::resume_unwind(payload);
+        }
+    }
+    /// Report an authoritative lock request that terminated without a physical
+    /// acquisition. The lock owner supplies the measured mutex-wait duration;
+    /// caller callback time and waits on a different coordination primitive
+    /// are therefore excluded from the direct observation.
+    fn root_lock_wait_terminated_v1(
+        &mut self,
+        terminated_boundary: FsCasBoundaryV1,
+        _wait_nanoseconds: Option<u64>,
+    ) {
+        self.boundary_reached(terminated_boundary);
+    }
     fn cancellation_requested(&mut self) -> bool;
     fn deadline_exceeded(&mut self) -> bool;
     fn inject_cleanup_failure(&mut self, _target: FsCasCleanupTargetV1) -> bool {
@@ -347,6 +385,12 @@ pub trait FsCasControlV1 {
     ) -> bool {
         false
     }
+    /// Test-only rendezvous at the carrier no-replace syscall. It exists to
+    /// reproduce an independent process winning after the in-process vacancy
+    /// snapshot but before this caller's hard link. Production builds contain
+    /// neither this callback nor any callback work inside the transition.
+    #[cfg(test)]
+    fn before_carrier_no_replace_transition_for_test_v1(&mut self) {}
     /// Test-only proof hook for the otherwise-unreachable case where an
     /// operation terminal callback unwinds after both owned capability halves
     /// have been released successfully. Production controls have no such
@@ -496,6 +540,16 @@ pub enum FsCasBoundaryV1 {
     PublicationLockWaitTerminated,
     /// The writer publication transaction mutex was explicitly released.
     PublicationLockReleased,
+    /// A same-pack caller found an active publication transaction after a
+    /// short publication-mutex snapshot and released that mutex. The bounded
+    /// coordination wait that follows is semantically distinct from mutex
+    /// contention and is observed separately by the operation owner.
+    ActivePackPublicationWait,
+    /// An object-locator incumbent names a carrier whose owning publication
+    /// transaction has not made its catalog visible yet. This semantic owner
+    /// wait is distinct from both same-pack candidate coordination and mutex
+    /// contention.
+    LocatorOwnerPublicationWait,
     BeforeCandidateValidation,
     AfterCandidateValidation,
     BeforeCarrierInstall,
@@ -546,6 +600,156 @@ impl FsCasControlV1 for ContinueFsCasControlV1 {
     fn deadline_exceeded(&mut self) -> bool {
         false
     }
+}
+
+/// Terminal root-lock bookkeeping must not be interrupted by a stop request
+/// that already selected the operation's primary result. It still forwards the
+/// exact lock boundaries so an enclosing operation observation remains paired.
+/// A secondary boundary callback unwind is contained because the active
+/// publication record is shared coordination state that must reach a stable
+/// terminal before the initiating payload can be resumed.
+struct TerminalRootLockControlV1<'control, C: ?Sized> {
+    inner: &'control mut C,
+}
+
+impl<'control, C: ?Sized> TerminalRootLockControlV1<'control, C> {
+    fn new(inner: &'control mut C) -> Self {
+        Self { inner }
+    }
+}
+
+impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for TerminalRootLockControlV1<'_, C> {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.inner.boundary_reached(boundary);
+        }));
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn root_lock_completed_v1(
+        &mut self,
+        acquired_boundary: FsCasBoundaryV1,
+        released_boundary: FsCasBoundaryV1,
+        wait_nanoseconds: Option<u64>,
+        hold_nanoseconds: Option<u64>,
+    ) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.inner.root_lock_completed_v1(
+                acquired_boundary,
+                released_boundary,
+                wait_nanoseconds,
+                hold_nanoseconds,
+            );
+        }));
+    }
+
+    fn root_lock_wait_terminated_v1(
+        &mut self,
+        terminated_boundary: FsCasBoundaryV1,
+        wait_nanoseconds: Option<u64>,
+    ) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.inner
+                .root_lock_wait_terminated_v1(terminated_boundary, wait_nanoseconds);
+        }));
+    }
+}
+
+struct ControlledRootMutexGuardV1<'owner, T> {
+    guard: Option<MutexGuard<'owner, T>>,
+    acquired_boundary: FsCasBoundaryV1,
+    released_boundary: FsCasBoundaryV1,
+    wait_nanoseconds: Option<u64>,
+    acquired_at: Instant,
+}
+
+struct CompletedRootLockV1 {
+    acquired_boundary: FsCasBoundaryV1,
+    released_boundary: FsCasBoundaryV1,
+    wait_nanoseconds: Option<u64>,
+    hold_nanoseconds: Option<u64>,
+}
+
+impl<T> std::ops::Deref for ControlledRootMutexGuardV1<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.guard
+            .as_deref()
+            .expect("controlled root mutex guard must be live")
+    }
+}
+
+impl<T> std::ops::DerefMut for ControlledRootMutexGuardV1<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.guard
+            .as_deref_mut()
+            .expect("controlled root mutex guard must be live")
+    }
+}
+
+impl<T> ControlledRootMutexGuardV1<'_, T> {
+    fn new_v1(
+        guard: MutexGuard<'_, T>,
+        acquired_boundary: FsCasBoundaryV1,
+        released_boundary: FsCasBoundaryV1,
+        requested_at: Instant,
+        acquired_at: Instant,
+    ) -> ControlledRootMutexGuardV1<'_, T> {
+        Self::new_with_wait_v1(
+            guard,
+            acquired_boundary,
+            released_boundary,
+            u64::try_from(acquired_at.duration_since(requested_at).as_nanos()).ok(),
+            acquired_at,
+        )
+    }
+
+    fn new_with_wait_v1(
+        guard: MutexGuard<'_, T>,
+        acquired_boundary: FsCasBoundaryV1,
+        released_boundary: FsCasBoundaryV1,
+        wait_nanoseconds: Option<u64>,
+        acquired_at: Instant,
+    ) -> ControlledRootMutexGuardV1<'_, T> {
+        ControlledRootMutexGuardV1 {
+            guard: Some(guard),
+            acquired_boundary,
+            released_boundary,
+            wait_nanoseconds,
+            acquired_at,
+        }
+    }
+
+    fn release_v1(mut self) -> CompletedRootLockV1 {
+        let hold_nanoseconds = u64::try_from(self.acquired_at.elapsed().as_nanos()).ok();
+        drop(self.guard.take());
+        CompletedRootLockV1 {
+            acquired_boundary: self.acquired_boundary,
+            released_boundary: self.released_boundary,
+            wait_nanoseconds: self.wait_nanoseconds,
+            hold_nanoseconds,
+        }
+    }
+}
+
+fn report_completed_root_lock_v1<C>(completion: CompletedRootLockV1, control: &mut C)
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    control.root_lock_completed_v1(
+        completion.acquired_boundary,
+        completion.released_boundary,
+        completion.wait_nanoseconds,
+        completion.hold_nanoseconds,
+    );
 }
 
 #[derive(Default)]
@@ -710,6 +914,73 @@ impl RootLockObservationV1 {
         }
     }
 
+    fn completed_v1(
+        &mut self,
+        acquired_boundary: FsCasBoundaryV1,
+        wait_nanoseconds: Option<u64>,
+        hold_nanoseconds: Option<u64>,
+    ) {
+        let (requested, acquired, acquisitions, accumulated_wait, accumulated_hold, maximum_hold) =
+            match acquired_boundary {
+                FsCasBoundaryV1::VisibilityLockAcquired => (
+                    &mut self.visibility_requested,
+                    &mut self.visibility_acquired,
+                    &mut self.visibility_acquisitions,
+                    &mut self.visibility_wait_nanoseconds,
+                    &mut self.visibility_hold_nanoseconds,
+                    &mut self.visibility_maximum_hold_nanoseconds,
+                ),
+                FsCasBoundaryV1::PublicationLockAcquired => (
+                    &mut self.publication_requested,
+                    &mut self.publication_acquired,
+                    &mut self.publication_acquisitions,
+                    &mut self.publication_wait_nanoseconds,
+                    &mut self.publication_hold_nanoseconds,
+                    &mut self.publication_maximum_hold_nanoseconds,
+                ),
+                _ => {
+                    self.invalid = true;
+                    return;
+                }
+            };
+        if requested.take().is_none() || acquired.is_some() {
+            self.invalid = true;
+        }
+        Self::increment_v1(acquisitions, &mut self.invalid);
+        Self::add_v1(accumulated_wait, wait_nanoseconds, &mut self.invalid);
+        Self::add_v1(accumulated_hold, hold_nanoseconds, &mut self.invalid);
+        if let Some(hold_nanoseconds) = hold_nanoseconds {
+            *maximum_hold = (*maximum_hold).max(hold_nanoseconds);
+        }
+    }
+
+    fn wait_terminated_v1(
+        &mut self,
+        terminated_boundary: FsCasBoundaryV1,
+        wait_nanoseconds: Option<u64>,
+    ) {
+        let (requested, acquired, accumulated_wait) = match terminated_boundary {
+            FsCasBoundaryV1::VisibilityLockWaitTerminated => (
+                &mut self.visibility_requested,
+                &mut self.visibility_acquired,
+                &mut self.visibility_wait_nanoseconds,
+            ),
+            FsCasBoundaryV1::PublicationLockWaitTerminated => (
+                &mut self.publication_requested,
+                &mut self.publication_acquired,
+                &mut self.publication_wait_nanoseconds,
+            ),
+            _ => {
+                self.invalid = true;
+                return;
+            }
+        };
+        if requested.take().is_none() || acquired.is_some() {
+            self.invalid = true;
+        }
+        Self::add_v1(accumulated_wait, wait_nanoseconds, &mut self.invalid);
+    }
+
     fn finish_v1(self, counters: &mut OperationCountersV1) -> CoreResult<()> {
         if self.invalid
             || self.visibility_requested.is_some()
@@ -780,6 +1051,34 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
         self.inner.deadline_exceeded()
     }
 
+    fn root_lock_completed_v1(
+        &mut self,
+        acquired_boundary: FsCasBoundaryV1,
+        released_boundary: FsCasBoundaryV1,
+        wait_nanoseconds: Option<u64>,
+        hold_nanoseconds: Option<u64>,
+    ) {
+        self.locks
+            .completed_v1(acquired_boundary, wait_nanoseconds, hold_nanoseconds);
+        self.inner.root_lock_completed_v1(
+            acquired_boundary,
+            released_boundary,
+            wait_nanoseconds,
+            hold_nanoseconds,
+        );
+    }
+
+    fn root_lock_wait_terminated_v1(
+        &mut self,
+        terminated_boundary: FsCasBoundaryV1,
+        wait_nanoseconds: Option<u64>,
+    ) {
+        self.locks
+            .wait_terminated_v1(terminated_boundary, wait_nanoseconds);
+        self.inner
+            .root_lock_wait_terminated_v1(terminated_boundary, wait_nanoseconds);
+    }
+
     fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
         self.inner.inject_cleanup_failure(target)
     }
@@ -800,6 +1099,12 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
     }
 
     #[cfg(test)]
+    fn before_carrier_no_replace_transition_for_test_v1(&mut self) {
+        self.inner
+            .before_carrier_no_replace_transition_for_test_v1();
+    }
+
+    #[cfg(test)]
     fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
         self.inner.inject_operation_terminal_unwind_after_release()
     }
@@ -807,6 +1112,44 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
     #[cfg(test)]
     fn inject_root_lock_observation_failure(&mut self) -> Option<CoreError> {
         self.inner.inject_root_lock_observation_failure()
+    }
+
+    #[cfg(test)]
+    fn inject_carrier_counter_accumulation_overflow(&mut self) -> bool {
+        self.inner.inject_carrier_counter_accumulation_overflow()
+    }
+
+    #[cfg(test)]
+    fn inject_post_admission_carrier_tally_overflow(&mut self) -> bool {
+        self.inner.inject_post_admission_carrier_tally_overflow()
+    }
+
+    #[cfg(test)]
+    fn inject_global_seen_counter_accumulation_overflow(&mut self) -> bool {
+        self.inner
+            .inject_global_seen_counter_accumulation_overflow()
+    }
+
+    #[cfg(test)]
+    fn inject_pack_object_disposition_overflow(&mut self, created: bool) -> bool {
+        self.inner.inject_pack_object_disposition_overflow(created)
+    }
+
+    #[cfg(test)]
+    fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
+        self.inner
+            .inject_operation_spool_write_observation_overflow()
+    }
+
+    #[cfg(test)]
+    fn inject_counted_pack_read_observation_overflow(&mut self) -> bool {
+        self.inner.inject_counted_pack_read_observation_overflow()
+    }
+
+    #[cfg(test)]
+    fn inject_same_carrier_comparison_observation_overflow(&mut self) -> bool {
+        self.inner
+            .inject_same_carrier_comparison_observation_overflow()
     }
 
     #[cfg(test)]
@@ -818,6 +1161,18 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
     fn inject_root_lock_post_acquire_validation_failure(&mut self) -> Option<FsCasErrorV1> {
         self.inner
             .inject_root_lock_post_acquire_validation_failure()
+    }
+}
+
+impl<C: crate::cdc::CdcControlV1 + ?Sized> crate::cdc::CdcControlV1
+    for FsOperationObservedControlV1<'_, C>
+{
+    fn cancellation_requested(&mut self) -> bool {
+        self.inner.cancellation_requested()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        self.inner.deadline_exceeded()
     }
 }
 
@@ -850,6 +1205,7 @@ enum CarrierPublicationCustodyV1 {
 struct LocatorPublicationCustodyV1 {
     live_unclassified: u64,
     retained_and_recorded: u64,
+    rollback_forbidden: bool,
 }
 
 impl LocatorPublicationCustodyV1 {
@@ -907,6 +1263,14 @@ impl LocatorPublicationCustodyV1 {
 
     const fn requires_carrier_retention_v1(&self) -> bool {
         self.has_retained_v1() || self.live_unclassified != 0
+    }
+
+    fn forbid_rollback_v1(&mut self) {
+        self.rollback_forbidden = true;
+    }
+
+    const fn rollback_forbidden_v1(&self) -> bool {
+        self.rollback_forbidden
     }
 
     fn take_live_bytes_v1(&mut self) -> Result<u64, FsCasErrorV1> {
@@ -1084,7 +1448,144 @@ struct FsCasInnerV1 {
     /// monopolized by validation or comparison work. Its scope is narrowed
     /// further as publication-state coordination becomes independently
     /// representable.
-    publication: Mutex<()>,
+    publication: Mutex<PublicationStateV1>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ActivePackPublicationV1 {
+    id: PackIdV1,
+    transaction: u64,
+    carrier: Option<ImmutableFileSnapshotV1>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ActivePackKeyV1 {
+    id: PackIdV1,
+    transaction: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ImmutableFileSnapshotV1 {
+    len: u64,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
+}
+
+impl ImmutableFileSnapshotV1 {
+    fn from_metadata_v1(metadata: &fs::Metadata) -> Self {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+
+        Self {
+            len: metadata.len(),
+            #[cfg(unix)]
+            device: metadata.dev(),
+            #[cfg(unix)]
+            inode: metadata.ino(),
+        }
+    }
+
+    fn matches_v1(self, metadata: &fs::Metadata) -> bool {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+
+        self.len == metadata.len() && {
+            #[cfg(unix)]
+            {
+                self.device == metadata.dev() && self.inode == metadata.ino()
+            }
+            #[cfg(not(unix))]
+            {
+                // V1 has no provider-neutral stable file identity yet.  A
+                // length-only comparison would falsely authenticate a path
+                // replacement, so the current filesystem implementation
+                // fails closed off Unix instead of claiming proof it cannot
+                // supply.  L1.5.6 owns any future provider identity seam.
+                false
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct PublicationStateV1 {
+    active_packs: [Option<ActivePackPublicationV1>; ROOT_STORAGE_OPERATION_SLOTS_V1],
+}
+
+impl PublicationStateV1 {
+    fn active_pack_v1(&self, id: PackIdV1) -> Option<ActivePackPublicationV1> {
+        self.active_packs
+            .iter()
+            .flatten()
+            .copied()
+            .find(|active| active.id == id)
+    }
+
+    fn begin_pack_v1(&mut self, id: PackIdV1, transaction: u64) -> Result<(), FsCasErrorV1> {
+        if self.active_pack_v1(id).is_some() {
+            return Err(FsCasErrorV1::Integrity);
+        }
+        let slot = self
+            .active_packs
+            .iter_mut()
+            .find(|slot| slot.is_none())
+            .ok_or(FsCasErrorV1::Integrity)?;
+        *slot = Some(ActivePackPublicationV1 {
+            id,
+            transaction,
+            carrier: None,
+        });
+        Ok(())
+    }
+
+    fn owns_pack_v1(&self, id: PackIdV1, transaction: u64) -> bool {
+        self.active_pack_v1(id)
+            .is_some_and(|active| active.transaction == transaction)
+    }
+
+    fn carrier_snapshot_v1(
+        &self,
+        id: PackIdV1,
+        transaction: u64,
+    ) -> Option<ImmutableFileSnapshotV1> {
+        self.active_pack_v1(id)
+            .filter(|active| active.transaction == transaction)
+            .and_then(|active| active.carrier)
+    }
+
+    fn authenticate_carrier_v1(
+        &mut self,
+        id: PackIdV1,
+        transaction: u64,
+        snapshot: ImmutableFileSnapshotV1,
+    ) -> Result<(), FsCasErrorV1> {
+        let active = self
+            .active_packs
+            .iter_mut()
+            .flatten()
+            .find(|active| active.id == id && active.transaction == transaction)
+            .ok_or(FsCasErrorV1::Integrity)?;
+        match active.carrier {
+            Some(expected) if expected != snapshot => Err(FsCasErrorV1::Integrity),
+            Some(_) => Ok(()),
+            None => {
+                active.carrier = Some(snapshot);
+                Ok(())
+            }
+        }
+    }
+
+    fn finish_pack_v1(&mut self, id: PackIdV1, transaction: u64) -> Result<(), FsCasErrorV1> {
+        let slot = self.active_packs.iter_mut().find(|slot| {
+            slot.as_ref()
+                .is_some_and(|active| active.id == id && active.transaction == transaction)
+        });
+        let slot = slot.ok_or(FsCasErrorV1::Integrity)?;
+        *slot = None;
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -3057,7 +3558,7 @@ where
         operation_admission,
         storage_admission,
         visibility: Mutex::new(()),
-        publication: Mutex::new(()),
+        publication: Mutex::new(PublicationStateV1::default()),
     });
     roots.insert(root.to_path_buf(), Arc::downgrade(&owner));
     Ok(owner)
@@ -3448,6 +3949,8 @@ impl FsCasV1 {
             None,
             None,
             None,
+            None,
+            true,
             control,
         )
         // This test-only helper has no semantic incumbent authenticator.  An
@@ -3585,61 +4088,97 @@ impl FsCasV1 {
         Ok(carrier)
     }
 
-    fn lock_root_mutex_controlled_v1<'owner, C>(
+    fn lock_root_mutex_controlled_v1<'owner, T, C>(
         &'owner self,
-        mutex: &'owner Mutex<()>,
+        mutex: &'owner Mutex<T>,
         requested_boundary: FsCasBoundaryV1,
         contended_boundary: FsCasBoundaryV1,
         acquired_boundary: FsCasBoundaryV1,
+        released_boundary: FsCasBoundaryV1,
         terminated_boundary: FsCasBoundaryV1,
+        require_valid_root: bool,
         control: &mut C,
-    ) -> Result<MutexGuard<'owner, ()>, FsCasErrorV1>
+    ) -> Result<ControlledRootMutexGuardV1<'owner, T>, FsCasErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
-        control.boundary_reached(requested_boundary);
+        let requested = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            control.boundary_reached(requested_boundary);
+        }));
+        if let Err(payload) = requested {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                control.root_lock_wait_terminated_v1(terminated_boundary, Some(0));
+            }));
+            std::panic::resume_unwind(payload);
+        }
+        let requested_at = Instant::now();
         loop {
-            if let Err(error) = self.ensure_valid() {
-                return Err(Self::retain_root_lock_wait_terminal_v1(
-                    terminated_boundary,
-                    error,
-                    control,
-                ));
+            if require_valid_root {
+                if let Err(error) = self.ensure_valid() {
+                    return Err(Self::retain_root_lock_wait_terminal_v1(
+                        terminated_boundary,
+                        requested_at,
+                        error,
+                        control,
+                    ));
+                }
             }
             match mutex.try_lock() {
                 Ok(guard) => {
+                    let acquired_at = Instant::now();
                     #[cfg(test)]
-                    let validation = control
-                        .inject_root_lock_post_acquire_validation_failure()
-                        .map_or_else(|| self.ensure_valid(), Err);
+                    let validation = if require_valid_root {
+                        control
+                            .inject_root_lock_post_acquire_validation_failure()
+                            .map_or_else(|| self.ensure_valid(), Err)
+                    } else {
+                        Ok(())
+                    };
                     #[cfg(not(test))]
-                    let validation = self.ensure_valid();
+                    let validation = if require_valid_root {
+                        self.ensure_valid()
+                    } else {
+                        Ok(())
+                    };
                     if let Err(error) = validation {
-                        drop(guard);
-                        return Err(Self::retain_root_lock_wait_terminal_v1(
-                            terminated_boundary,
-                            error,
-                            control,
-                        ));
+                        let completion = ControlledRootMutexGuardV1::new_v1(
+                            guard,
+                            acquired_boundary,
+                            released_boundary,
+                            requested_at,
+                            acquired_at,
+                        )
+                        .release_v1();
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            report_completed_root_lock_v1(completion, control);
+                        }));
+                        return Err(error);
                     }
-                    let acquired = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        control.boundary_reached(acquired_boundary);
-                    }));
-                    if let Err(payload) = acquired {
-                        // Retain ownership of the guard outside the caught
-                        // callback. Dropping it normally before resuming the
-                        // caller's payload prevents a control unwind from
-                        // manufacturing latent synchronization poison.
-                        drop(guard);
-                        std::panic::resume_unwind(payload);
-                    }
-                    return Ok(guard);
+                    return Ok(ControlledRootMutexGuardV1::new_v1(
+                        guard,
+                        acquired_boundary,
+                        released_boundary,
+                        requested_at,
+                        acquired_at,
+                    ));
                 }
                 Err(TryLockError::WouldBlock) => {
-                    control.boundary_reached(contended_boundary);
+                    let contended = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        control.boundary_reached(contended_boundary);
+                    }));
+                    if let Err(payload) = contended {
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            control.root_lock_wait_terminated_v1(
+                                terminated_boundary,
+                                u64::try_from(requested_at.elapsed().as_nanos()).ok(),
+                            );
+                        }));
+                        std::panic::resume_unwind(payload);
+                    }
                     if control.cancellation_requested() {
                         return Err(Self::retain_root_lock_wait_terminal_v1(
                             terminated_boundary,
+                            requested_at,
                             FsCasErrorV1::Core(CoreError::Cancelled),
                             control,
                         ));
@@ -3647,6 +4186,7 @@ impl FsCasV1 {
                     if control.deadline_exceeded() {
                         return Err(Self::retain_root_lock_wait_terminal_v1(
                             terminated_boundary,
+                            requested_at,
                             FsCasErrorV1::Core(CoreError::Deadline),
                             control,
                         ));
@@ -3667,6 +4207,7 @@ impl FsCasV1 {
                     };
                     return Err(Self::retain_root_lock_wait_terminal_v1(
                         terminated_boundary,
+                        requested_at,
                         terminal,
                         control,
                     ));
@@ -3681,14 +4222,16 @@ impl FsCasV1 {
     /// invalidation, synchronization poison, or invalidation dominance.
     fn retain_root_lock_wait_terminal_v1<C>(
         terminated_boundary: FsCasBoundaryV1,
+        requested_at: Instant,
         terminal: FsCasErrorV1,
         control: &mut C,
     ) -> FsCasErrorV1
     where
         C: FsCasControlV1 + ?Sized,
     {
+        let wait_nanoseconds = u64::try_from(requested_at.elapsed().as_nanos()).ok();
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            control.boundary_reached(terminated_boundary);
+            control.root_lock_wait_terminated_v1(terminated_boundary, wait_nanoseconds);
         }));
         terminal
     }
@@ -3696,7 +4239,7 @@ impl FsCasV1 {
     fn lock_visibility_controlled_v1<C>(
         &self,
         control: &mut C,
-    ) -> Result<MutexGuard<'_, ()>, FsCasErrorV1>
+    ) -> Result<ControlledRootMutexGuardV1<'_, ()>, FsCasErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -3705,12 +4248,14 @@ impl FsCasV1 {
             FsCasBoundaryV1::VisibilityLockRequested,
             FsCasBoundaryV1::VisibilityLockContended,
             FsCasBoundaryV1::VisibilityLockAcquired,
+            FsCasBoundaryV1::VisibilityLockReleased,
             FsCasBoundaryV1::VisibilityLockWaitTerminated,
+            true,
             control,
         )
     }
 
-    fn lock_visibility_v1(&self) -> Result<MutexGuard<'_, ()>, FsCasErrorV1> {
+    fn lock_visibility_v1(&self) -> Result<ControlledRootMutexGuardV1<'_, ()>, FsCasErrorV1> {
         let mut control = ContinueFsCasControlV1;
         self.lock_visibility_controlled_v1(&mut control)
     }
@@ -3718,7 +4263,7 @@ impl FsCasV1 {
     fn lock_publication_controlled_v1<C>(
         &self,
         control: &mut C,
-    ) -> Result<MutexGuard<'_, ()>, FsCasErrorV1>
+    ) -> Result<ControlledRootMutexGuardV1<'_, PublicationStateV1>, FsCasErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -3727,25 +4272,493 @@ impl FsCasV1 {
             FsCasBoundaryV1::PublicationLockRequested,
             FsCasBoundaryV1::PublicationLockContended,
             FsCasBoundaryV1::PublicationLockAcquired,
+            FsCasBoundaryV1::PublicationLockReleased,
             FsCasBoundaryV1::PublicationLockWaitTerminated,
+            true,
             control,
         )
     }
 
-    fn unlock_visibility_controlled_v1<C>(&self, guard: MutexGuard<'_, ()>, control: &mut C)
-    where
-        C: FsCasControlV1 + ?Sized,
-    {
-        drop(guard);
-        control.boundary_reached(FsCasBoundaryV1::VisibilityLockReleased);
+    fn marker_pair_accumulate_visibility_wait_v1(total: &mut Option<u64>, started: Instant) {
+        let elapsed = u64::try_from(started.elapsed().as_nanos()).ok();
+        *total = total.and_then(|total| elapsed.and_then(|elapsed| total.checked_add(elapsed)));
     }
 
-    fn unlock_publication_controlled_v1<C>(&self, guard: MutexGuard<'_, ()>, control: &mut C)
+    fn marker_pair_wait_terminal_v1<C>(
+        publication_requested_at: Option<Instant>,
+        visibility_pending: bool,
+        visibility_wait_nanoseconds: Option<u64>,
+        terminal: FsCasErrorV1,
+        control: &mut C,
+    ) -> FsCasErrorV1
     where
         C: FsCasControlV1 + ?Sized,
     {
-        drop(guard);
-        control.boundary_reached(FsCasBoundaryV1::PublicationLockReleased);
+        if let Some(requested_at) = publication_requested_at {
+            let wait_nanoseconds = u64::try_from(requested_at.elapsed().as_nanos()).ok();
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                control.root_lock_wait_terminated_v1(
+                    FsCasBoundaryV1::PublicationLockWaitTerminated,
+                    wait_nanoseconds,
+                );
+            }));
+        }
+        if visibility_pending {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                control.root_lock_wait_terminated_v1(
+                    FsCasBoundaryV1::VisibilityLockWaitTerminated,
+                    visibility_wait_nanoseconds,
+                );
+            }));
+        }
+        terminal
+    }
+
+    fn marker_pair_resume_after_wait_unwind_v1<C>(
+        publication_requested_at: Option<Instant>,
+        visibility_pending: bool,
+        visibility_wait_nanoseconds: Option<u64>,
+        payload: Box<dyn std::any::Any + Send>,
+        control: &mut C,
+    ) -> !
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let _ = Self::marker_pair_wait_terminal_v1(
+            publication_requested_at,
+            visibility_pending,
+            visibility_wait_nanoseconds,
+            FsCasErrorV1::Integrity,
+            control,
+        );
+        std::panic::resume_unwind(payload)
+    }
+
+    /// Acquire publication and visibility as one minimal transition fence
+    /// without waiting for either mutex while the other is held. Publication
+    /// is tried first to preserve the root-wide ordering. If visibility is
+    /// busy, publication is physically released and completely observed
+    /// before polling and retrying.
+    fn lock_marker_guards_controlled_v1<C>(
+        &self,
+        control: &mut C,
+    ) -> Result<
+        (
+            ControlledRootMutexGuardV1<'_, PublicationStateV1>,
+            ControlledRootMutexGuardV1<'_, ()>,
+        ),
+        FsCasErrorV1,
+    >
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let publication_requested = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            control.boundary_reached(FsCasBoundaryV1::PublicationLockRequested);
+        }));
+        if let Err(payload) = publication_requested {
+            Self::marker_pair_resume_after_wait_unwind_v1(
+                Some(Instant::now()),
+                false,
+                Some(0),
+                payload,
+                control,
+            );
+        }
+        let mut publication_requested_at = Instant::now();
+        let mut visibility_pending = false;
+        let mut visibility_wait_nanoseconds = Some(0_u64);
+
+        loop {
+            if let Err(error) = self.ensure_valid() {
+                return Err(Self::marker_pair_wait_terminal_v1(
+                    Some(publication_requested_at),
+                    visibility_pending,
+                    visibility_wait_nanoseconds,
+                    error,
+                    control,
+                ));
+            }
+            let publication = match self.inner.publication.try_lock() {
+                Ok(guard) => guard,
+                Err(TryLockError::WouldBlock) => {
+                    let contended = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        control.boundary_reached(FsCasBoundaryV1::PublicationLockContended);
+                    }));
+                    if let Err(payload) = contended {
+                        Self::marker_pair_resume_after_wait_unwind_v1(
+                            Some(publication_requested_at),
+                            visibility_pending,
+                            visibility_wait_nanoseconds,
+                            payload,
+                            control,
+                        );
+                    }
+                    if control.cancellation_requested() {
+                        return Err(Self::marker_pair_wait_terminal_v1(
+                            Some(publication_requested_at),
+                            visibility_pending,
+                            visibility_wait_nanoseconds,
+                            FsCasErrorV1::Core(CoreError::Cancelled),
+                            control,
+                        ));
+                    }
+                    if control.deadline_exceeded() {
+                        return Err(Self::marker_pair_wait_terminal_v1(
+                            Some(publication_requested_at),
+                            visibility_pending,
+                            visibility_wait_nanoseconds,
+                            FsCasErrorV1::Core(CoreError::Deadline),
+                            control,
+                        ));
+                    }
+                    std::thread::sleep(ADMISSION_CONTROL_POLL);
+                    continue;
+                }
+                Err(TryLockError::Poisoned(poisoned)) => {
+                    drop(poisoned.into_inner());
+                    let first = FsCasErrorV1::SynchronizationPoisoned;
+                    let invalidation = self.invalidate_root_controlled_v1(control);
+                    let terminal = invalidation
+                        .map_or_else(|dominant| first.dominated_by_v1(dominant), |()| first);
+                    return Err(Self::marker_pair_wait_terminal_v1(
+                        Some(publication_requested_at),
+                        visibility_pending,
+                        visibility_wait_nanoseconds,
+                        terminal,
+                        control,
+                    ));
+                }
+            };
+            let publication_acquired_at = Instant::now();
+
+            #[cfg(test)]
+            let publication_validation = control
+                .inject_root_lock_post_acquire_validation_failure()
+                .map_or_else(|| self.ensure_valid(), Err);
+            #[cfg(not(test))]
+            let publication_validation = self.ensure_valid();
+            if let Err(error) = publication_validation {
+                let completion = ControlledRootMutexGuardV1::new_v1(
+                    publication,
+                    FsCasBoundaryV1::PublicationLockAcquired,
+                    FsCasBoundaryV1::PublicationLockReleased,
+                    publication_requested_at,
+                    publication_acquired_at,
+                )
+                .release_v1();
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    report_completed_root_lock_v1(completion, control);
+                }));
+                if visibility_pending {
+                    return Err(Self::marker_pair_wait_terminal_v1(
+                        None,
+                        true,
+                        visibility_wait_nanoseconds,
+                        error,
+                        control,
+                    ));
+                }
+                return Err(error);
+            }
+
+            if !visibility_pending {
+                let completion = ControlledRootMutexGuardV1::new_v1(
+                    publication,
+                    FsCasBoundaryV1::PublicationLockAcquired,
+                    FsCasBoundaryV1::PublicationLockReleased,
+                    publication_requested_at,
+                    publication_acquired_at,
+                )
+                .release_v1();
+                report_completed_root_lock_v1(completion, control);
+
+                let visibility_requested =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        control.boundary_reached(FsCasBoundaryV1::VisibilityLockRequested);
+                    }));
+                if let Err(payload) = visibility_requested {
+                    Self::marker_pair_resume_after_wait_unwind_v1(
+                        None,
+                        true,
+                        Some(0),
+                        payload,
+                        control,
+                    );
+                }
+                visibility_pending = true;
+
+                let publication_requested =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        control.boundary_reached(FsCasBoundaryV1::PublicationLockRequested);
+                    }));
+                if let Err(payload) = publication_requested {
+                    Self::marker_pair_resume_after_wait_unwind_v1(
+                        Some(Instant::now()),
+                        true,
+                        visibility_wait_nanoseconds,
+                        payload,
+                        control,
+                    );
+                }
+                publication_requested_at = Instant::now();
+                continue;
+            }
+
+            match self.inner.visibility.try_lock() {
+                Ok(visibility) => {
+                    let visibility_acquired_at = Instant::now();
+                    #[cfg(test)]
+                    let visibility_validation = control
+                        .inject_root_lock_post_acquire_validation_failure()
+                        .map_or_else(|| self.ensure_valid(), Err);
+                    #[cfg(not(test))]
+                    let visibility_validation = self.ensure_valid();
+                    let publication = ControlledRootMutexGuardV1::new_v1(
+                        publication,
+                        FsCasBoundaryV1::PublicationLockAcquired,
+                        FsCasBoundaryV1::PublicationLockReleased,
+                        publication_requested_at,
+                        publication_acquired_at,
+                    );
+                    let visibility = ControlledRootMutexGuardV1::new_with_wait_v1(
+                        visibility,
+                        FsCasBoundaryV1::VisibilityLockAcquired,
+                        FsCasBoundaryV1::VisibilityLockReleased,
+                        visibility_wait_nanoseconds,
+                        visibility_acquired_at,
+                    );
+                    if let Err(error) = visibility_validation {
+                        let visibility_completion = visibility.release_v1();
+                        let publication_completion = publication.release_v1();
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            report_completed_root_lock_v1(visibility_completion, control);
+                        }));
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            report_completed_root_lock_v1(publication_completion, control);
+                        }));
+                        return Err(error);
+                    }
+                    return Ok((publication, visibility));
+                }
+                Err(TryLockError::WouldBlock) => {
+                    let publication_completion = ControlledRootMutexGuardV1::new_v1(
+                        publication,
+                        FsCasBoundaryV1::PublicationLockAcquired,
+                        FsCasBoundaryV1::PublicationLockReleased,
+                        publication_requested_at,
+                        publication_acquired_at,
+                    )
+                    .release_v1();
+                    let completed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        report_completed_root_lock_v1(publication_completion, control);
+                    }));
+                    if let Err(payload) = completed {
+                        Self::marker_pair_resume_after_wait_unwind_v1(
+                            None,
+                            true,
+                            visibility_wait_nanoseconds,
+                            payload,
+                            control,
+                        );
+                    }
+                    let visibility_wait_started = Instant::now();
+                    let contended = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        control.boundary_reached(FsCasBoundaryV1::VisibilityLockContended);
+                    }));
+                    if let Err(payload) = contended {
+                        Self::marker_pair_accumulate_visibility_wait_v1(
+                            &mut visibility_wait_nanoseconds,
+                            visibility_wait_started,
+                        );
+                        Self::marker_pair_resume_after_wait_unwind_v1(
+                            None,
+                            true,
+                            visibility_wait_nanoseconds,
+                            payload,
+                            control,
+                        );
+                    }
+                    if control.cancellation_requested() {
+                        Self::marker_pair_accumulate_visibility_wait_v1(
+                            &mut visibility_wait_nanoseconds,
+                            visibility_wait_started,
+                        );
+                        return Err(Self::marker_pair_wait_terminal_v1(
+                            None,
+                            true,
+                            visibility_wait_nanoseconds,
+                            FsCasErrorV1::Core(CoreError::Cancelled),
+                            control,
+                        ));
+                    }
+                    if control.deadline_exceeded() {
+                        Self::marker_pair_accumulate_visibility_wait_v1(
+                            &mut visibility_wait_nanoseconds,
+                            visibility_wait_started,
+                        );
+                        return Err(Self::marker_pair_wait_terminal_v1(
+                            None,
+                            true,
+                            visibility_wait_nanoseconds,
+                            FsCasErrorV1::Core(CoreError::Deadline),
+                            control,
+                        ));
+                    }
+                    std::thread::sleep(ADMISSION_CONTROL_POLL);
+                    Self::marker_pair_accumulate_visibility_wait_v1(
+                        &mut visibility_wait_nanoseconds,
+                        visibility_wait_started,
+                    );
+                    let requested = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        control.boundary_reached(FsCasBoundaryV1::PublicationLockRequested);
+                    }));
+                    if let Err(payload) = requested {
+                        Self::marker_pair_resume_after_wait_unwind_v1(
+                            Some(Instant::now()),
+                            true,
+                            visibility_wait_nanoseconds,
+                            payload,
+                            control,
+                        );
+                    }
+                    publication_requested_at = Instant::now();
+                }
+                Err(TryLockError::Poisoned(poisoned)) => {
+                    drop(poisoned.into_inner());
+                    let publication_completion = ControlledRootMutexGuardV1::new_v1(
+                        publication,
+                        FsCasBoundaryV1::PublicationLockAcquired,
+                        FsCasBoundaryV1::PublicationLockReleased,
+                        publication_requested_at,
+                        publication_acquired_at,
+                    )
+                    .release_v1();
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        report_completed_root_lock_v1(publication_completion, control);
+                    }));
+                    let first = FsCasErrorV1::SynchronizationPoisoned;
+                    let invalidation = self.invalidate_root_controlled_v1(control);
+                    let terminal = invalidation
+                        .map_or_else(|dominant| first.dominated_by_v1(dominant), |()| first);
+                    return Err(Self::marker_pair_wait_terminal_v1(
+                        None,
+                        true,
+                        visibility_wait_nanoseconds,
+                        terminal,
+                        control,
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Retire an active pack only after its catalog is stable, its rollback is
+    /// complete, or fail-closed invalidation has durably retained every visible
+    /// dependency. Root validity is deliberately not a prerequisite here: an
+    /// invalidated root still owns this in-memory coordination record.
+    fn finish_active_pack_publication_terminal_v1<C>(
+        &self,
+        id: PackIdV1,
+        transaction: u64,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let mut terminal_control = TerminalRootLockControlV1::new(control);
+        let mut guard = self.lock_root_mutex_controlled_v1(
+            &self.inner.publication,
+            FsCasBoundaryV1::PublicationLockRequested,
+            FsCasBoundaryV1::PublicationLockContended,
+            FsCasBoundaryV1::PublicationLockAcquired,
+            FsCasBoundaryV1::PublicationLockReleased,
+            FsCasBoundaryV1::PublicationLockWaitTerminated,
+            false,
+            &mut terminal_control,
+        )?;
+        let terminal = guard.finish_pack_v1(id, transaction);
+        self.unlock_publication_controlled_v1(guard, &mut terminal_control);
+        terminal
+    }
+
+    fn lock_active_pack_publication_controlled_v1<'owner, C>(
+        &'owner self,
+        id: PackIdV1,
+        transaction: u64,
+        carrier_path: &Path,
+        marker_path: &Path,
+        validated_file: Option<&File>,
+        control: &mut C,
+    ) -> Result<ControlledRootMutexGuardV1<'owner, PublicationStateV1>, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let mut guard = self.lock_publication_controlled_v1(control)?;
+        let revalidated = (|| -> Result<(), FsCasErrorV1> {
+            self.ensure_valid()?;
+            if !guard.owns_pack_v1(id, transaction) {
+                return Err(FsCasErrorV1::Integrity);
+            }
+            match open_regular_file_if_present(marker_path)? {
+                None => {}
+                Some(_) => return Err(FsCasErrorV1::Integrity),
+            }
+            let installed =
+                open_regular_file_if_present(carrier_path)?.ok_or(FsCasErrorV1::MissingOccupant)?;
+            let installed_metadata = installed
+                .metadata()
+                .map_err(|error| map_filesystem_read_error_v1(&error))?;
+            if let Some(validated_file) = validated_file {
+                let validated_metadata = validated_file
+                    .metadata()
+                    .map_err(|error| map_filesystem_read_error_v1(&error))?;
+                if !same_file_identity(&installed_metadata, &validated_metadata)
+                    || installed_metadata.len() != validated_metadata.len()
+                {
+                    return Err(FsCasErrorV1::Integrity);
+                }
+                guard.authenticate_carrier_v1(
+                    id,
+                    transaction,
+                    ImmutableFileSnapshotV1::from_metadata_v1(&validated_metadata),
+                )?;
+            } else {
+                let snapshot = guard
+                    .carrier_snapshot_v1(id, transaction)
+                    .ok_or(FsCasErrorV1::Integrity)?;
+                if !snapshot.matches_v1(&installed_metadata) {
+                    return Err(FsCasErrorV1::Integrity);
+                }
+            }
+            Ok(())
+        })();
+        match revalidated {
+            Ok(()) => Ok(guard),
+            Err(error) => {
+                self.unlock_publication_controlled_v1(guard, control);
+                Err(error)
+            }
+        }
+    }
+
+    fn unlock_visibility_controlled_v1<C>(
+        &self,
+        guard: ControlledRootMutexGuardV1<'_, ()>,
+        control: &mut C,
+    ) where
+        C: FsCasControlV1 + ?Sized,
+    {
+        report_completed_root_lock_v1(guard.release_v1(), control);
+    }
+
+    fn unlock_publication_controlled_v1<C>(
+        &self,
+        guard: ControlledRootMutexGuardV1<'_, PublicationStateV1>,
+        control: &mut C,
+    ) where
+        C: FsCasControlV1 + ?Sized,
+    {
+        report_completed_root_lock_v1(guard.release_v1(), control);
     }
 
     #[cfg(all(test, feature = "c3-polymorphism"))]
@@ -4065,7 +5078,8 @@ impl FsCasV1 {
 
     #[cfg(test)]
     pub fn begin_private_pack(&self) -> Result<FsPrivatePackV1, FsCasErrorV1> {
-        self.begin_private_pack_inner_v1(None)
+        let mut control = ContinueFsCasControlV1;
+        self.begin_private_pack_inner_v1(None, &mut control)
     }
 
     #[cfg(feature = "c3-polymorphism")]
@@ -4073,21 +5087,41 @@ impl FsCasV1 {
         &self,
         token: FsStorageOperationTokenV1,
     ) -> Result<FsPrivatePackV1, FsCasErrorV1> {
-        self.begin_private_pack_inner_v1(Some(token))
+        let mut control = ContinueFsCasControlV1;
+        self.begin_private_pack_inner_v1(Some(token), &mut control)
     }
 
-    fn begin_private_pack_inner_v1(
+    #[cfg(feature = "c3-polymorphism")]
+    pub(crate) fn begin_private_pack_borrowed_controlled_v1<C>(
+        &self,
+        token: FsStorageOperationTokenV1,
+        control: &mut C,
+    ) -> Result<FsPrivatePackV1, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        self.begin_private_pack_inner_v1(Some(token), control)
+    }
+
+    fn begin_private_pack_inner_v1<C>(
         &self,
         storage_token: Option<FsStorageOperationTokenV1>,
-    ) -> Result<FsPrivatePackV1, FsCasErrorV1> {
+        control: &mut C,
+    ) -> Result<FsPrivatePackV1, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
         if let Some(token) = storage_token {
             self.validate_storage_token_v1(token)?;
         }
         self.ensure_valid()?;
-        let _guard = self.lock_visibility_v1()?;
-        self.ensure_valid()?;
-        validate_required_root_directory(&self.inner.root.join("preparation"))?;
-        let path = unique_private_path(&self.inner.root.join("preparation"), "pack")?;
+        let preparation = self.inner.root.join("preparation");
+        validate_required_root_directory(&preparation)?;
+        let path = unique_private_path(&preparation, "pack")?;
+        let guard = self.lock_visibility_controlled_v1(control)?;
+        let revalidated = self.ensure_valid();
+        self.unlock_visibility_controlled_v1(guard, control);
+        revalidated?;
         Ok(FsPrivatePackV1 {
             owner: self.clone(),
             path,
@@ -4144,18 +5178,23 @@ impl FsCasV1 {
             self.validate_storage_token_v1(token)?;
         }
         self.ensure_valid()?;
+        // Directory validation and bounded collision probing are private
+        // preparation work. Keep them outside the root fence; `create_new`
+        // remains the authoritative no-replace operation for the nonce-derived
+        // name below. The short fence only refuses a stale root generation.
+        let preparation = self.inner.root.join("preparation");
+        validate_required_root_directory(&preparation)?;
+        let path = unique_private_path(&preparation, prefix)?;
         let guard = self.lock_visibility_controlled_v1(control)?;
-        let mut path = None;
+        let revalidated = self.ensure_valid();
+        self.unlock_visibility_controlled_v1(guard, control);
+        revalidated?;
+        let mut path = Some(path);
         let mut file = None;
         let mut preparation_accounted = false;
         let construction = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
             || -> Result<(), FsCasErrorV1> {
                 self.ensure_valid()?;
-                validate_required_root_directory(&self.inner.root.join("preparation"))?;
-                path = Some(unique_private_path(
-                    &self.inner.root.join("preparation"),
-                    prefix,
-                )?);
                 if let Some(token) = storage_token {
                     // Charge the private namespace name before invoking the
                     // creating filesystem operation. A poisoned or stale
@@ -4197,14 +5236,15 @@ impl FsCasV1 {
                     }
                 }
                 sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::PermissionChange)?;
-                set_private_file_permissions(prepared_path)
+                set_private_file_permissions(prepared_path)?;
+                // Revalidate every premise used after the unlocked private
+                // construction. A stale root never returns a usable spool;
+                // the normal terminal below removes the private inode and its
+                // exact operation charge.
+                self.ensure_valid()?;
+                validate_required_root_directory(&self.inner.root.join("preparation"))
             },
         ));
-        // No callback or cleanup may unwind a held root mutex. The partial
-        // path/file/accounting state above remains locally owned after this
-        // normal guard release and is then either transferred or explicitly
-        // cleaned below.
-        drop(guard);
 
         match construction {
             Ok(Ok(())) => {}
@@ -4457,6 +5497,8 @@ impl FsCasV1 {
         let mut carrier_custody = CarrierPublicationCustodyV1::Absent;
         let mut locator_custody = LocatorPublicationCustodyV1::default();
         let mut catalog_marker_custody = ImmutableMarkerCustodyV1::default();
+        let transaction = NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed);
+        let mut active_publication = false;
         // A root-owned immutable charge is acquired before the no-replace
         // carrier link. Keep that prepublication custody outside the unwind
         // boundary so a callback panic between the charge and the link cannot
@@ -4495,51 +5537,96 @@ impl FsCasV1 {
                 }
                 sample_control(control, FsCasBoundaryV1::AfterCandidateValidation)?;
 
-                // Candidate validation only reads an operation-private file. Take
-                // the shared-root visibility lock after that work, then recheck
-                // validity before observing or changing the common namespace.
-                publication_guard = Some(self.lock_publication_controlled_v1(control)?);
-                self.ensure_valid()?;
+                // The operation metadata is private and immutable at this point.
+                // Establish its canonical locator order before requesting root
+                // publication authority; the later locked pass only revalidates
+                // namespace snapshots and performs no file-backed sort.
+                let mut work_control = FsCasWorkControlBorrowV1(control);
+                if let Err(error) = metadata.sort_by_key_controlled(&mut work_control, counters) {
+                    return Err(restore_pack_spool_error_v1(
+                        metadata,
+                        map_pack_spool_error_v1(error),
+                    ));
+                }
 
                 let name = hex_id(validated.id().as_bytes());
                 let carrier_path = self.inner.root.join("carriers").join(&name);
                 let marker_path = self.inner.root.join("catalog").join(&name);
-                let transaction = NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed);
                 validate_required_root_directory(&self.inner.root.join("carriers"))?;
                 validate_required_root_directory(&self.inner.root.join("objects"))?;
                 validate_required_root_directory(&self.inner.root.join("catalog"))?;
 
-                let incumbent_marker =
-                    open_regular_file_if_present(&marker_path).map_err(|error| {
-                        if error == FsCasErrorV1::Integrity {
-                            FsCasErrorV1::MalformedOccupant
-                        } else {
-                            error
-                        }
-                    })?;
-                let incumbent_carrier =
-                    open_regular_file_if_present(&carrier_path).map_err(|error| {
-                        if error == FsCasErrorV1::Integrity {
-                            FsCasErrorV1::MalformedOccupant
-                        } else {
-                            error
-                        }
-                    })?;
-                if incumbent_marker.is_some() || incumbent_carrier.is_some() {
-                    drop(incumbent_marker);
-                    drop(incumbent_carrier);
-                    drop(publication_guard.take());
-                    return self.admit_against_incumbent(
-                        prepared,
-                        metadata,
-                        authority,
-                        counters,
-                        scratch,
-                        validated,
-                        &carrier_path,
-                        &marker_path,
+                // Candidate validation and file-backed ordering are complete.
+                // Serialize only the authoritative namespace snapshot. A
+                // same-pack caller that encounters an in-flight carrier waits
+                // for that exact transaction to reach either catalog visibility
+                // or rollback; unrelated pack IDs remain free to progress.
+                loop {
+                    publication_guard = Some(self.lock_publication_controlled_v1(control)?);
+                    self.ensure_valid()?;
+                    let same_pack_active = publication_guard
+                        .as_ref()
+                        .and_then(|state| state.active_pack_v1(validated.id()))
+                        .is_some();
+                    if same_pack_active {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
+                        wait_for_publication_owner_v1(
+                            FsCasBoundaryV1::ActivePackPublicationWait,
+                            PublicationOwnerWaitKindV1::ActivePack,
+                            counters,
+                            control,
+                        )?;
+                        continue;
+                    }
+                    // Namespace authentication is valid only after the active
+                    // owner is absent. Rollback removes an unpublished carrier
+                    // outside this root mutex, while keeping the active record
+                    // registered until removal completes. Opening the carrier
+                    // first could therefore race that unlink and misclassify a
+                    // legitimate waiter as `MissingOccupant`.
+                    let incumbent_marker =
+                        open_regular_file_if_present(&marker_path).map_err(|error| {
+                            if error == FsCasErrorV1::Integrity {
+                                FsCasErrorV1::MalformedOccupant
+                            } else {
+                                error
+                            }
+                        })?;
+                    let incumbent_carrier =
+                        open_regular_file_if_present(&carrier_path).map_err(|error| {
+                            if error == FsCasErrorV1::Integrity {
+                                FsCasErrorV1::MalformedOccupant
+                            } else {
+                                error
+                            }
+                        })?;
+                    if incumbent_marker.is_some() || incumbent_carrier.is_some() {
+                        drop(incumbent_marker);
+                        drop(incumbent_carrier);
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
+                        return self.admit_against_incumbent(
+                            prepared,
+                            metadata,
+                            authority,
+                            counters,
+                            scratch,
+                            validated,
+                            &carrier_path,
+                            &marker_path,
+                            control,
+                        );
+                    }
+                    self.unlock_publication_controlled_v1(
+                        publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
                         control,
                     );
+                    break;
                 }
 
                 // Every counter delta that can be known from the validated private
@@ -4601,12 +5688,105 @@ impl FsCasV1 {
                     prepublication_carrier_charge_held = false;
                     return Err(terminal);
                 }
-                match fs::hard_link(&prepared.path, &carrier_path) {
-                    Ok(()) => {
-                        prepublication_carrier_charge_held = false;
-                        carrier_custody = CarrierPublicationCustodyV1::InstalledUnreported;
+
+                // The prepublication charge and all injectable control work
+                // are established without root-wide publication ownership.
+                // Reacquire and revalidate the exact vacancy immediately
+                // before registering this transaction and performing the one
+                // no-replace carrier transition. Another same-pack publisher
+                // may have won during the unlocked span; wait for that owner
+                // without misattributing its semantic delay to mutex wait.
+                loop {
+                    publication_guard = match self.lock_publication_controlled_v1(control) {
+                        Ok(guard) => Some(guard),
+                        Err(original) => {
+                            let terminal = self
+                                .release_prepublication_carrier_charge_preserving_error_v1(
+                                    storage_token,
+                                    validated.pack_len(),
+                                    control,
+                                    original,
+                                );
+                            prepublication_carrier_charge_held = false;
+                            return Err(terminal);
+                        }
+                    };
+                    let revalidated = (|| -> Result<(bool, bool), FsCasErrorV1> {
+                        self.ensure_valid()?;
+                        let same_pack_active = publication_guard
+                            .as_ref()
+                            .and_then(|state| state.active_pack_v1(validated.id()))
+                            .is_some();
+                        if same_pack_active {
+                            return Ok((true, false));
+                        }
+                        let incumbent_marker =
+                            open_regular_file_if_present(&marker_path).map_err(|error| {
+                                if error == FsCasErrorV1::Integrity {
+                                    FsCasErrorV1::MalformedOccupant
+                                } else {
+                                    error
+                                }
+                            })?;
+                        let incumbent_carrier = open_regular_file_if_present(&carrier_path)
+                            .map_err(|error| {
+                                if error == FsCasErrorV1::Integrity {
+                                    FsCasErrorV1::MalformedOccupant
+                                } else {
+                                    error
+                                }
+                            })?;
+                        Ok((
+                            false,
+                            incumbent_marker.is_some() || incumbent_carrier.is_some(),
+                        ))
+                    })();
+                    let (same_pack_active, incumbent_present) = match revalidated {
+                        Ok(snapshot) => snapshot,
+                        Err(original) => {
+                            self.unlock_publication_controlled_v1(
+                                publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                                control,
+                            );
+                            let terminal = self
+                                .release_prepublication_carrier_charge_preserving_error_v1(
+                                    storage_token,
+                                    validated.pack_len(),
+                                    control,
+                                    original,
+                                );
+                            prepublication_carrier_charge_held = false;
+                            return Err(terminal);
+                        }
+                    };
+                    if same_pack_active {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
+                        if let Err(original) = wait_for_publication_owner_v1(
+                            FsCasBoundaryV1::ActivePackPublicationWait,
+                            PublicationOwnerWaitKindV1::ActivePack,
+                            counters,
+                            control,
+                        ) {
+                            let terminal = self
+                                .release_prepublication_carrier_charge_preserving_error_v1(
+                                    storage_token,
+                                    validated.pack_len(),
+                                    control,
+                                    original,
+                                );
+                            prepublication_carrier_charge_held = false;
+                            return Err(terminal);
+                        }
+                        continue;
                     }
-                    Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                    if incumbent_present {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
                         let released = self.release_prepublication_carrier_charge_v1(
                             storage_token,
                             validated.pack_len(),
@@ -4614,7 +5794,51 @@ impl FsCasV1 {
                         );
                         prepublication_carrier_charge_held = false;
                         released?;
-                        drop(publication_guard.take());
+                        return self.admit_against_incumbent(
+                            prepared,
+                            metadata,
+                            authority,
+                            counters,
+                            scratch,
+                            validated,
+                            &carrier_path,
+                            &marker_path,
+                            control,
+                        );
+                    }
+                    break;
+                }
+                publication_guard
+                    .as_mut()
+                    .ok_or(FsCasErrorV1::Integrity)?
+                    .begin_pack_v1(validated.id(), transaction)?;
+                active_publication = true;
+                #[cfg(test)]
+                control.before_carrier_no_replace_transition_for_test_v1();
+                match fs::hard_link(&prepared.path, &carrier_path) {
+                    Ok(()) => {
+                        prepublication_carrier_charge_held = false;
+                        carrier_custody = CarrierPublicationCustodyV1::InstalledUnreported;
+                    }
+                    Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
+                        let released = self.release_prepublication_carrier_charge_v1(
+                            storage_token,
+                            validated.pack_len(),
+                            control,
+                        );
+                        prepublication_carrier_charge_held = false;
+                        released?;
+                        // The filesystem winner may belong to another process,
+                        // but this operation still owns the same-pack admission
+                        // record. Keep that record live while the incumbent is
+                        // authenticated, compared, and its private alias is
+                        // reconciled. The outer terminal path retires it only
+                        // after success, completed rollback, or durable
+                        // fail-closed invalidation.
                         return self.admit_against_incumbent(
                             prepared,
                             metadata,
@@ -4628,6 +5852,10 @@ impl FsCasV1 {
                         );
                     }
                     Err(error) if is_unsupported_link_error(&error) => {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
                         let terminal = self
                             .release_prepublication_carrier_charge_preserving_error_v1(
                                 storage_token,
@@ -4639,6 +5867,10 @@ impl FsCasV1 {
                         return Err(terminal);
                     }
                     Err(error) => {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
                         let original = map_required_filesystem_write_error_v1(&error);
                         let terminal = self
                             .release_prepublication_carrier_charge_preserving_error_v1(
@@ -4652,17 +5884,152 @@ impl FsCasV1 {
                     }
                 }
 
-                // Once the carrier link exists, every validation, permission, and
-                // private-alias transition is one owned publication transaction.
-                // A callback panic cannot skip both carrier rollback and explicit
-                // private-pack cleanup and leave those names to Drop.
+                // Establish the exact installed-carrier namespace snapshot
+                // while no callback or bulk validation can run under the
+                // publication fence. The sealed private file handle is the
+                // transaction's exact pre-link identity authority; pathname
+                // metadata alone is not sufficient after an unlocked span.
+                let snapshot_authentication = (|| -> Result<(), FsCasErrorV1> {
+                    let private_metadata = prepared
+                        .sealed_file_v1()?
+                        .metadata()
+                        .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
+                    let carrier_metadata = fs::metadata(&carrier_path)
+                        .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
+                    if !same_file_identity(&private_metadata, &carrier_metadata)
+                        || private_metadata.len() != carrier_metadata.len()
+                    {
+                        return Err(FsCasErrorV1::Integrity);
+                    }
+                    publication_guard
+                        .as_mut()
+                        .ok_or(FsCasErrorV1::Integrity)?
+                        .authenticate_carrier_v1(
+                            validated.id(),
+                            transaction,
+                            ImmutableFileSnapshotV1::from_metadata_v1(&carrier_metadata),
+                        )
+                })();
+                if let Err(error) = snapshot_authentication {
+                    self.unlock_publication_controlled_v1(
+                        publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                        control,
+                    );
+                    return Err(self.rollback_unpublished_carrier_preserving_error_v1(
+                        &carrier_path,
+                        validated,
+                        storage_token,
+                        counters,
+                        &mut carrier_custody,
+                        control,
+                        error,
+                    ));
+                }
+                self.unlock_publication_controlled_v1(
+                    publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                    control,
+                );
+
+                // Permission transition is fallible filesystem work and is
+                // not part of namespace serialization. The active transaction
+                // remains registered while it runs, so a same-ID contender
+                // cannot adopt the carrier before the exact snapshot is
+                // reauthenticated below.
+                let immutable = sample_filesystem_fault_v1(
+                    control,
+                    FsCasFilesystemBoundaryV1::PermissionChange,
+                )
+                .and_then(|()| set_read_only(&carrier_path));
+                if let Err(original) = immutable {
+                    match self.lock_active_pack_publication_controlled_v1(
+                        validated.id(),
+                        transaction,
+                        &carrier_path,
+                        &marker_path,
+                        None,
+                        control,
+                    ) {
+                        Ok(guard) => {
+                            self.unlock_publication_controlled_v1(guard, control);
+                            return Err(self.rollback_unpublished_carrier_preserving_error_v1(
+                                &carrier_path,
+                                validated,
+                                storage_token,
+                                counters,
+                                &mut carrier_custody,
+                                control,
+                                original,
+                            ));
+                        }
+                        Err(revalidation) => {
+                            return Err(self
+                                .retain_visible_carrier_after_revalidation_terminal_v1(
+                                    retained_carrier_residue_bytes,
+                                    counters,
+                                    &mut carrier_custody,
+                                    control,
+                                    original.dominated_by_v1(revalidation),
+                                ));
+                        }
+                    }
+                }
+                match self.lock_active_pack_publication_controlled_v1(
+                    validated.id(),
+                    transaction,
+                    &carrier_path,
+                    &marker_path,
+                    None,
+                    control,
+                ) {
+                    Ok(guard) => self.unlock_publication_controlled_v1(guard, control),
+                    Err(revalidation) => {
+                        return Err(self.retain_visible_carrier_after_revalidation_terminal_v1(
+                            retained_carrier_residue_bytes,
+                            counters,
+                            &mut carrier_custody,
+                            control,
+                            revalidation,
+                        ));
+                    }
+                }
+
+                // Full installed-carrier validation is immutable read-only work.
+                // Keep it outside publication, then reacquire and authenticate
+                // the exact in-flight transaction, catalog vacancy, and carrier
+                // inode before any locator/catalog visibility transition.
                 let mut carrier_rollback_attempted = false;
-                let carrier_terminal =
-                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut validated_carrier_snapshot = None;
+                let carrier_terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    || {
                         (|| -> Result<(), FsCasErrorV1> {
                             if let Err(error) =
                                 sample_control(control, FsCasBoundaryV1::AfterCarrierInstall)
                             {
+                                publication_guard = match self
+                                    .lock_active_pack_publication_controlled_v1(
+                                        validated.id(),
+                                        transaction,
+                                        &carrier_path,
+                                        &marker_path,
+                                        None,
+                                        control,
+                                    ) {
+                                    Ok(guard) => Some(guard),
+                                    Err(later) => {
+                                        return Err(self
+                                            .retain_visible_carrier_after_revalidation_terminal_v1(
+                                                retained_carrier_residue_bytes,
+                                                counters,
+                                                &mut carrier_custody,
+                                                control,
+                                                error.dominated_by_v1(later),
+                                            ));
+                                    }
+                                };
+                                self.unlock_publication_controlled_v1(
+                                    publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                                    control,
+                                );
                                 carrier_rollback_attempted = true;
                                 return Err(self.rollback_unpublished_carrier_preserving_error_v1(
                                     &carrier_path,
@@ -4701,23 +6068,77 @@ impl FsCasV1 {
                                 if observed != validated {
                                     return Err(FsCasErrorV1::Integrity);
                                 }
-                                Ok(())
+                                Ok(installed)
                             })();
-                            if let Err(error) = installed_validation {
-                                carrier_rollback_attempted = true;
-                                return Err(self.rollback_unpublished_carrier_preserving_error_v1(
-                                    &carrier_path,
-                                    validated,
-                                    storage_token,
-                                    counters,
-                                    &mut carrier_custody,
-                                    control,
-                                    error,
-                                ));
-                            }
+                            let installed = match installed_validation {
+                                Ok(installed) => installed,
+                                Err(error) => {
+                                    publication_guard = match self
+                                        .lock_active_pack_publication_controlled_v1(
+                                            validated.id(),
+                                            transaction,
+                                            &carrier_path,
+                                            &marker_path,
+                                            None,
+                                            control,
+                                        ) {
+                                        Ok(guard) => Some(guard),
+                                        Err(later) => {
+                                            return Err(self
+                                                .retain_visible_carrier_after_revalidation_terminal_v1(
+                                                    retained_carrier_residue_bytes,
+                                                    counters,
+                                                    &mut carrier_custody,
+                                                    control,
+                                                    error.dominated_by_v1(later),
+                                                ));
+                                        }
+                                    };
+                                    self.unlock_publication_controlled_v1(
+                                        publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                                        control,
+                                    );
+                                    carrier_rollback_attempted = true;
+                                    return Err(self
+                                        .rollback_unpublished_carrier_preserving_error_v1(
+                                            &carrier_path,
+                                            validated,
+                                            storage_token,
+                                            counters,
+                                            &mut carrier_custody,
+                                            control,
+                                            error,
+                                        ));
+                                }
+                            };
                             if let Err(error) =
                                 sample_control(control, FsCasBoundaryV1::AfterCarrierValidation)
                             {
+                                publication_guard = match self
+                                    .lock_active_pack_publication_controlled_v1(
+                                        validated.id(),
+                                        transaction,
+                                        &carrier_path,
+                                        &marker_path,
+                                        Some(&installed.file),
+                                        control,
+                                    ) {
+                                    Ok(guard) => Some(guard),
+                                    Err(later) => {
+                                        return Err(self
+                                            .retain_visible_carrier_after_revalidation_terminal_v1(
+                                                retained_carrier_residue_bytes,
+                                                counters,
+                                                &mut carrier_custody,
+                                                control,
+                                                error.dominated_by_v1(later),
+                                            ));
+                                    }
+                                };
+                                self.unlock_publication_controlled_v1(
+                                    publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                                    control,
+                                );
                                 carrier_rollback_attempted = true;
                                 return Err(self.rollback_unpublished_carrier_preserving_error_v1(
                                     &carrier_path,
@@ -4729,24 +6150,49 @@ impl FsCasV1 {
                                     error,
                                 ));
                             }
-
-                            let immutable = sample_filesystem_fault_v1(
+                            publication_guard = match self
+                                .lock_active_pack_publication_controlled_v1(
+                                    validated.id(),
+                                    transaction,
+                                    &carrier_path,
+                                    &marker_path,
+                                    Some(&installed.file),
+                                    control,
+                                ) {
+                                Ok(guard) => Some(guard),
+                                Err(error) => {
+                                    return Err(self
+                                        .retain_visible_carrier_after_revalidation_terminal_v1(
+                                            retained_carrier_residue_bytes,
+                                            counters,
+                                            &mut carrier_custody,
+                                            control,
+                                            error,
+                                        ));
+                                }
+                            };
+                            validated_carrier_snapshot =
+                                publication_guard.as_ref().and_then(|guard| {
+                                    guard.carrier_snapshot_v1(validated.id(), transaction)
+                                });
+                            if validated_carrier_snapshot.is_none() {
+                                self.unlock_publication_controlled_v1(
+                                    publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                                    control,
+                                );
+                                return Err(self
+                                    .retain_visible_carrier_after_revalidation_terminal_v1(
+                                        retained_carrier_residue_bytes,
+                                        counters,
+                                        &mut carrier_custody,
+                                        control,
+                                        FsCasErrorV1::Integrity,
+                                    ));
+                            }
+                            self.unlock_publication_controlled_v1(
+                                publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
                                 control,
-                                FsCasFilesystemBoundaryV1::PermissionChange,
-                            )
-                            .and_then(|()| set_read_only(&carrier_path));
-                            if let Err(error) = immutable {
-                                carrier_rollback_attempted = true;
-                                return Err(self.rollback_unpublished_carrier_preserving_error_v1(
-                                    &carrier_path,
-                                    validated,
-                                    storage_token,
-                                    counters,
-                                    &mut carrier_custody,
-                                    control,
-                                    error,
-                                ));
-                            }
+                            );
                             if let Err(error) =
                                 sample_control(control, FsCasBoundaryV1::AfterCarrierMadeImmutable)
                             {
@@ -4825,7 +6271,8 @@ impl FsCasV1 {
                             prepared.state = PrivatePackStateV1::Transferred;
                             Ok(())
                         })()
-                    }));
+                    },
+                ));
                 match carrier_terminal {
                     Ok(Ok(())) => {}
                     Ok(Err(error)) => return Err(error),
@@ -4929,9 +6376,11 @@ impl FsCasV1 {
                     }
                 }
 
-                if let Err(error) = self.install_object_locators(
+                let carrier_snapshot = validated_carrier_snapshot.ok_or(FsCasErrorV1::Integrity)?;
+                let locator_terminal = self.install_object_locators(
                     &carrier_path,
                     validated,
+                    carrier_snapshot,
                     metadata,
                     counters,
                     scratch,
@@ -4939,17 +6388,13 @@ impl FsCasV1 {
                     storage_token,
                     &mut locator_custody,
                     control,
-                ) {
-                    if matches!(
-                        error.dominant_cause_v1(),
-                        FsCasFailureCauseV1::InvalidationFailed
-                            | FsCasFailureCauseV1::CleanupFailed(
-                                FsCasCleanupTargetV1::PublishedMarkerAlias
-                            )
-                    ) {
-                        // These states can follow a visible locator whose alias
-                        // cleanup failed. Never roll the carrier or earlier
-                        // locators back below that visibility transition.
+                );
+                if let Err(error) = locator_terminal {
+                    if locator_custody.rollback_forbidden_v1() {
+                        // A successful locator no-replace transition already
+                        // made the carrier a visible dependency. Its cleanup
+                        // or invalidation terminal cannot authorize rollback
+                        // below that name, even if root revalidation now fails.
                         return Err(self.retain_visible_locator_dependencies_after_terminal_v1(
                             validated,
                             counters,
@@ -4959,6 +6404,11 @@ impl FsCasV1 {
                             error,
                         ));
                     }
+                    // No locator became visible. This active transaction still
+                    // has exclusive cleanup authority for its carrier even if
+                    // cleanup of the private, unpublished marker invalidated
+                    // the root. Roll it back before attempting a root-validity
+                    // recheck that would otherwise strand an unreachable pack.
                     return Err(self.rollback_unpublished_admission_preserving_error_v1(
                         &carrier_path,
                         validated,
@@ -4969,6 +6419,46 @@ impl FsCasV1 {
                         &mut locator_custody,
                         control,
                         error,
+                    ));
+                }
+                match self.lock_active_pack_publication_controlled_v1(
+                    validated.id(),
+                    transaction,
+                    &carrier_path,
+                    &marker_path,
+                    None,
+                    control,
+                ) {
+                    Ok(guard) => publication_guard = Some(guard),
+                    Err(revalidation) => {
+                        return Err(self.retain_visible_locator_dependencies_after_terminal_v1(
+                            validated,
+                            counters,
+                            &mut carrier_custody,
+                            &mut locator_custody,
+                            control,
+                            revalidation,
+                        ));
+                    }
+                }
+
+                let revalidated_carrier_snapshot = publication_guard
+                    .as_ref()
+                    .and_then(|guard| guard.carrier_snapshot_v1(validated.id(), transaction));
+                let carrier_snapshot_matches =
+                    revalidated_carrier_snapshot == Some(carrier_snapshot);
+                self.unlock_publication_controlled_v1(
+                    publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                    control,
+                );
+                if !carrier_snapshot_matches {
+                    return Err(self.retain_visible_locator_dependencies_after_terminal_v1(
+                        validated,
+                        counters,
+                        &mut carrier_custody,
+                        &mut locator_custody,
+                        control,
+                        FsCasErrorV1::Integrity,
                     ));
                 }
 
@@ -5007,6 +6497,21 @@ impl FsCasV1 {
                     Some(FsCasBoundaryV1::AfterCatalogMarkerLink),
                     None,
                     Some(&mut catalog_marker_custody),
+                    Some(MarkerPublicationPrerequisiteV1 {
+                        active_pack: ActivePackKeyV1 {
+                            id: validated.id(),
+                            transaction,
+                        },
+                        carrier_path: &carrier_path,
+                        catalog_path: &marker_path,
+                        carrier: carrier_snapshot,
+                        // The catalog destination is itself the atomic
+                        // no-replace transition. An incumbent must reach the
+                        // normal exact-byte authentication path rather than be
+                        // rejected as a stale locator prerequisite.
+                        require_catalog_vacancy: false,
+                    }),
+                    true,
                     control,
                 );
                 match publication {
@@ -5023,8 +6528,11 @@ impl FsCasV1 {
                             error,
                         ));
                     }
-                    Ok(MarkerPublicationV1::IncumbentWithPreparationResidue(bytes, cleanup)) => {
-                        let authenticated = decode_catalog_marker(bytes)
+                    Ok(MarkerPublicationV1::IncumbentWithPreparationResidue(
+                        incumbent,
+                        cleanup,
+                    )) => {
+                        let authenticated = decode_catalog_marker(incumbent.bytes)
                             .map_err(|error| match error {
                                 FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
                                 other => other,
@@ -5032,7 +6540,21 @@ impl FsCasV1 {
                             .and_then(|incumbent| {
                                 classify_catalog_incumbent_v1(incumbent, validated)
                             });
-                        let terminal = match authenticated {
+                        let terminal = match authenticated.and_then(|()| {
+                            self.revalidate_active_pack_marker_incumbent_controlled_v1(
+                                &marker_path,
+                                incumbent.snapshot,
+                                ActivePackKeyV1 {
+                                    id: validated.id(),
+                                    transaction,
+                                },
+                                &carrier_path,
+                                carrier_snapshot,
+                                &marker_path,
+                                false,
+                                control,
+                            )
+                        }) {
                             Ok(()) => cleanup,
                             Err(error) => error.dominated_by_v1(cleanup),
                         };
@@ -5079,9 +6601,9 @@ impl FsCasV1 {
                         );
                         return Err(error);
                     }
-                    Ok(MarkerPublicationV1::VisibleClean) => {}
-                    Ok(MarkerPublicationV1::IncumbentClean(bytes)) => {
-                        let authenticated = decode_catalog_marker(bytes)
+                    Ok(MarkerPublicationV1::VisibleClean(_)) => {}
+                    Ok(MarkerPublicationV1::IncumbentClean(incumbent)) => {
+                        let authenticated = decode_catalog_marker(incumbent.bytes)
                             .map_err(|error| match error {
                                 FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
                                 other => other,
@@ -5089,6 +6611,21 @@ impl FsCasV1 {
                             .and_then(|incumbent| {
                                 classify_catalog_incumbent_v1(incumbent, validated)
                             });
+                        let authenticated = authenticated.and_then(|()| {
+                            self.revalidate_active_pack_marker_incumbent_controlled_v1(
+                                &marker_path,
+                                incumbent.snapshot,
+                                ActivePackKeyV1 {
+                                    id: validated.id(),
+                                    transaction,
+                                },
+                                &carrier_path,
+                                carrier_snapshot,
+                                &marker_path,
+                                false,
+                                control,
+                            )
+                        });
                         if let Err(error) = authenticated {
                             return Err(self.rollback_unpublished_admission_preserving_error_v1(
                                 &carrier_path,
@@ -5135,15 +6672,22 @@ impl FsCasV1 {
                 })
             })()
         }));
-        drop(publication_guard.take());
-        match terminal {
-            Ok(Ok(admission)) => Ok(admission),
+        // No main-body branch is allowed to retire the active transaction. The
+        // same-ID wait protocol relies on this record until the outer owner has
+        // completed private cleanup and, for escaped visible dependencies,
+        // durable fail-closed invalidation.
+        if let Some(guard) = publication_guard.take() {
+            self.unlock_publication_controlled_v1(guard, control);
+        }
+        let mut resume_payload = None;
+        let mut reconciled = match terminal {
+            Ok(Ok(admission)) => Some(Ok(admission)),
             Ok(Err(original)) => {
                 prepared.abort_private();
-                match prepared.cleanup_controlled_v1(control) {
+                Some(match prepared.cleanup_controlled_v1(control) {
                     Ok(()) => Err(original),
                     Err(cleanup) => Err(original.dominated_by_v1(cleanup)),
-                }
+                })
             }
             Err(payload) => {
                 // Once any carrier is visible, an admission callback unwind
@@ -5252,10 +6796,46 @@ impl FsCasV1 {
                     }
                 }
                 if let Some(terminal) = unwind_terminal {
-                    return Err(terminal);
+                    Some(Err(terminal))
+                } else {
+                    resume_payload = Some(payload);
+                    None
                 }
-                std::panic::resume_unwind(payload)
             }
+        };
+
+        let publication_finalization = if active_publication {
+            match declared_for_unwind {
+                Some(sealed) => self.finish_active_pack_publication_terminal_v1(
+                    sealed.id(),
+                    transaction,
+                    control,
+                ),
+                None => Err(FsCasErrorV1::Integrity),
+            }
+        } else {
+            Ok(())
+        };
+
+        if let Err(later) = publication_finalization {
+            reconciled = Some(match reconciled {
+                Some(Ok(_)) => Err(later),
+                Some(Err(original)) => Err(original.dominated_by_v1(later)),
+                None => {
+                    self.invalidate_root_backstop_v1();
+                    let payload = resume_payload
+                        .take()
+                        .expect("unwind payload exists without a reconciled terminal");
+                    std::panic::resume_unwind(payload)
+                }
+            });
+        }
+
+        match reconciled {
+            Some(result) => result,
+            None => std::panic::resume_unwind(
+                resume_payload.expect("unwind payload exists without a reconciled terminal"),
+            ),
         }
     }
 
@@ -5473,6 +7053,27 @@ impl FsCasV1 {
             Ok(()) => first,
             Err(invalidation) => first.dominated_by_v1(invalidation),
         }
+    }
+
+    /// A carrier is already visible but an unlocked validation span could not
+    /// reacquire and authenticate its active publication transaction. Rollback
+    /// is no longer authoritative in that state: retain the preflighted exact
+    /// carrier residue and invalidate the shared root without erasing the
+    /// chronological revalidation cause.
+    fn retain_visible_carrier_after_revalidation_terminal_v1<C>(
+        &self,
+        retained_bytes: u64,
+        counters: &mut OperationCountersV1,
+        custody: &mut CarrierPublicationCustodyV1,
+        control: &mut C,
+        terminal: FsCasErrorV1,
+    ) -> FsCasErrorV1
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        counters.unreachable_installed_residue_bytes = retained_bytes;
+        *custody = CarrierPublicationCustodyV1::RetainedAndRecorded;
+        self.fail_closed_preserving_error_controlled_v1(terminal, control)
     }
 
     /// Preserve the terminal that made one object locator non-rollbackable
@@ -5833,18 +7434,33 @@ impl FsCasV1 {
     where
         C: FsCasControlV1 + ?Sized,
     {
-        match self.record_storage_immutable_remove_v1(storage_token, marker_len, 1) {
+        match self.release_prepublication_marker_charge_v1(storage_token, marker_len, control) {
             Ok(()) => original,
+            Err(cleanup) => original.dominated_by_v1(cleanup),
+        }
+    }
+
+    fn release_prepublication_marker_charge_v1<C>(
+        &self,
+        storage_token: FsStorageOperationTokenV1,
+        marker_len: u64,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        match self.record_storage_immutable_remove_v1(storage_token, marker_len, 1) {
+            Ok(()) => Ok(()),
             Err(accounting) => {
                 // The destination was never visible, so this is not cleanup
                 // of a published marker alias. The transaction still owns
                 // its private marker and its pending root-ledger charge. A
                 // failed charge rollback therefore becomes an explicit
                 // prepublication cleanup terminal, while retaining the
-                // directional hard-link error as the chronological cause.
+                // directional accounting error as the chronological cause.
                 let cleanup = self
                     .cleanup_failure_controlled_v1(FsCasCleanupTargetV1::PreparationSpool, control);
-                original.dominated_by_v1(accounting.dominated_by_v1(cleanup))
+                Err(accounting.dominated_by_v1(cleanup))
             }
         }
     }
@@ -5880,6 +7496,14 @@ impl FsCasV1 {
         match FilePackReadV1::open_occupant(carrier) {
             Ok(mut installed) => {
                 for ordinal in 0..sealed.record_count() {
+                    // The initiating cancellation/deadline has already
+                    // selected the operation's primary terminal. Custody
+                    // rollback must still enumerate the bounded immutable
+                    // index to remove every locator owned by this
+                    // transaction; polling the same terminal control here
+                    // would abort cleanup before it begins and manufacture an
+                    // ObjectLocator cleanup failure. Actual unlink fault and
+                    // callback injection below continues to use `control`.
                     let entry = match read_validated_pack_index_entry_v1(
                         &mut installed,
                         sealed,
@@ -6293,23 +7917,98 @@ impl FsCasV1 {
         // manufacture synchronization poison while no filesystem read has
         // begun.
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ClosureMarkerRead)?;
+        let typed = TypedPhysicalObjectIdV1::VersionRecord(version_record);
+        let path = self.inner.root.join("closures").join(hex_typed_id(typed));
+        // Read and decode the immutable marker before taking the root fence.
+        // The fence below authenticates that the pathname still names the
+        // exact immutable file whose bytes were decoded.
+        let (bytes, marker_snapshot) = read_exact_regular_file_with_snapshot_v1::<
+            CLOSURE_MARKER_BYTES,
+        >(&path)
+        .map_err(|error| {
+            if error == FsCasErrorV1::Integrity {
+                FsCasErrorV1::MalformedOccupant
+            } else {
+                error
+            }
+        })?;
+        let accepted = decode_closure_marker_v1(bytes, version_record, self.inner.generation)?;
         let guard = self.lock_visibility_controlled_v1(control)?;
-        let result = (|| {
+        let revalidated = (|| {
             self.ensure_valid()?;
-            let typed = TypedPhysicalObjectIdV1::VersionRecord(version_record);
-            let path = self.inner.root.join("closures").join(hex_typed_id(typed));
-            let bytes =
-                read_exact_regular_file::<CLOSURE_MARKER_BYTES>(&path).map_err(|error| {
-                    if error == FsCasErrorV1::Integrity {
-                        FsCasErrorV1::MalformedOccupant
-                    } else {
-                        error
-                    }
-                })?;
-            decode_closure_marker_v1(bytes, version_record, self.inner.generation)
+            revalidate_immutable_file_snapshot_v1(&path, marker_snapshot)
         })();
         self.unlock_visibility_controlled_v1(guard, control);
-        result
+        revalidated?;
+        Ok(accepted)
+    }
+
+    /// Authenticate that an immutable marker pathname still names the exact
+    /// file opened by a preceding no-replace incumbent snapshot. The complete
+    /// decode/comparison remains outside the visibility fence; only root
+    /// validity and fixed identity are checked here.
+    fn revalidate_marker_incumbent_controlled_v1<C>(
+        &self,
+        path: &Path,
+        snapshot: ImmutableFileSnapshotV1,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let guard = self.lock_visibility_controlled_v1(control)?;
+        let revalidated = (|| {
+            self.ensure_valid()?;
+            revalidate_immutable_file_snapshot_v1(path, snapshot)
+        })();
+        self.unlock_visibility_controlled_v1(guard, control);
+        revalidated
+    }
+
+    /// Revalidate every active-pack premise used by an out-of-lock locator or
+    /// catalog incumbent comparison. No payload validation or comparison runs
+    /// under either root fence.
+    #[allow(clippy::too_many_arguments)]
+    fn revalidate_active_pack_marker_incumbent_controlled_v1<C>(
+        &self,
+        marker_path: &Path,
+        marker_snapshot: ImmutableFileSnapshotV1,
+        active_pack: ActivePackKeyV1,
+        carrier_path: &Path,
+        carrier_snapshot: ImmutableFileSnapshotV1,
+        catalog_path: &Path,
+        require_catalog_vacancy: bool,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let (publication_guard, visibility_guard) =
+            self.lock_marker_guards_controlled_v1(control)?;
+        let mut publication_guard = Some(publication_guard);
+        let mut visibility_guard = Some(visibility_guard);
+        let revalidated = (|| {
+            self.ensure_valid()?;
+            let publication = publication_guard.as_ref().ok_or(FsCasErrorV1::Integrity)?;
+            if !publication.owns_pack_v1(active_pack.id, active_pack.transaction)
+                || publication.carrier_snapshot_v1(active_pack.id, active_pack.transaction)
+                    != Some(carrier_snapshot)
+            {
+                return Err(FsCasErrorV1::Integrity);
+            }
+            revalidate_immutable_file_snapshot_v1(carrier_path, carrier_snapshot)?;
+            if require_catalog_vacancy && open_regular_file_if_present(catalog_path)?.is_some() {
+                return Err(FsCasErrorV1::Integrity);
+            }
+            revalidate_immutable_file_snapshot_v1(marker_path, marker_snapshot)
+        })();
+        unlock_marker_guards_v1(
+            Some(self),
+            &mut visibility_guard,
+            &mut publication_guard,
+            control,
+        );
+        revalidated
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -6317,6 +8016,7 @@ impl FsCasV1 {
         &self,
         candidate_path: &Path,
         sealed: SealedPackV1,
+        carrier_snapshot: ImmutableFileSnapshotV1,
         metadata: &mut M,
         counters: &mut OperationCountersV1,
         scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
@@ -6330,16 +8030,12 @@ impl FsCasV1 {
         C: FsCasControlV1 + ?Sized,
     {
         let objects = self.inner.root.join("objects");
+        let catalog_path = self
+            .inner
+            .root
+            .join("catalog")
+            .join(hex_id(sealed.id().as_bytes()));
         validate_required_root_directory(&objects)?;
-        {
-            let mut work_control = FsCasWorkControlBorrowV1(control);
-            if let Err(error) = metadata.sort_by_key_controlled(&mut work_control, counters) {
-                return Err(restore_pack_spool_error_v1(
-                    metadata,
-                    map_pack_spool_error_v1(error),
-                ));
-            }
-        }
         if let Err(error) = metadata.rewind() {
             return Err(restore_pack_spool_error_v1(
                 metadata,
@@ -6363,9 +8059,9 @@ impl FsCasV1 {
             let path = objects.join(hex_typed_id(entry.id()));
             sample_control(control, FsCasBoundaryV1::BeforeObjectLocatorRead)?;
             sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
-            let locator = read_object_locator_if_present(&path, entry.id())?;
+            let locator = read_object_locator_if_present_with_snapshot_v1(&path, entry.id())?;
             sample_control(control, FsCasBoundaryV1::AfterObjectLocatorRead)?;
-            if let Some(locator) = locator {
+            if let Some((locator, locator_snapshot)) = locator {
                 self.validate_and_compare_object_locator(
                     &mut candidate,
                     entry,
@@ -6374,6 +8070,20 @@ impl FsCasV1 {
                     scratch,
                     control,
                 )?;
+                self.revalidate_active_pack_marker_incumbent_controlled_v1(
+                    &path,
+                    locator_snapshot,
+                    ActivePackKeyV1 {
+                        id: sealed.id(),
+                        transaction,
+                    },
+                    candidate_path,
+                    carrier_snapshot,
+                    &catalog_path,
+                    true,
+                    control,
+                )?;
+                counters.record_locator_equal_incumbent_reuse()?;
             }
         }
 
@@ -6411,16 +8121,41 @@ impl FsCasV1 {
                 Some(FsCasBoundaryV1::AfterObjectLocatorMarkerLink),
                 Some(&mut *locator_custody),
                 None,
+                Some(MarkerPublicationPrerequisiteV1 {
+                    active_pack: ActivePackKeyV1 {
+                        id: sealed.id(),
+                        transaction,
+                    },
+                    carrier_path: candidate_path,
+                    catalog_path: &catalog_path,
+                    carrier: carrier_snapshot,
+                    require_catalog_vacancy: true,
+                }),
+                true,
                 control,
             )?;
             match publication {
-                MarkerPublicationV1::VisibleClean => {
+                MarkerPublicationV1::VisibleClean(locator_snapshot) => {
+                    self.revalidate_active_pack_marker_incumbent_controlled_v1(
+                        &path,
+                        locator_snapshot,
+                        ActivePackKeyV1 {
+                            id: sealed.id(),
+                            transaction,
+                        },
+                        candidate_path,
+                        carrier_snapshot,
+                        &catalog_path,
+                        true,
+                        control,
+                    )?;
                     counters.record_locator_install()?;
                 }
                 MarkerPublicationV1::VisibleWithPreparationResidue(first_error) => {
                     // The locator now names this carrier. Invalidate the root
                     // and retain both objects instead of invoking unpublished
                     // rollback beneath a visible locator.
+                    locator_custody.forbid_rollback_v1();
                     let cleanup = self.cleanup_failure_controlled_v1(
                         FsCasCleanupTargetV1::PublishedMarkerAlias,
                         control,
@@ -6431,19 +8166,19 @@ impl FsCasV1 {
                     // Locator custody was recorded at the successful link.
                     // The enclosing admission transaction retains the locator
                     // and carrier after this exact terminal is returned.
+                    locator_custody.forbid_rollback_v1();
                     return Err(error);
                 }
-                MarkerPublicationV1::IncumbentWithPreparationResidue(bytes, cleanup) => {
-                    let locator = decode_persistent_locator_v1(bytes, entry.id()).map_err(
-                        |error| match error {
+                MarkerPublicationV1::IncumbentWithPreparationResidue(incumbent, cleanup) => {
+                    let locator = decode_persistent_locator_v1(incumbent.bytes, entry.id())
+                        .map_err(|error| match error {
                             PersistentLocatorCodecErrorV1::Malformed => {
                                 FsCasErrorV1::MalformedOccupant
                             }
                             PersistentLocatorCodecErrorV1::BindingMismatch => {
                                 FsCasErrorV1::Integrity
                             }
-                        },
-                    );
+                        });
                     let locator = match locator {
                         Ok(locator) => locator,
                         Err(error) => return Err(error.dominated_by_v1(cleanup)),
@@ -6458,19 +8193,36 @@ impl FsCasV1 {
                     ) {
                         return Err(error.dominated_by_v1(cleanup));
                     }
+                    if let Err(error) = self.revalidate_active_pack_marker_incumbent_controlled_v1(
+                        &path,
+                        incumbent.snapshot,
+                        ActivePackKeyV1 {
+                            id: sealed.id(),
+                            transaction,
+                        },
+                        candidate_path,
+                        carrier_snapshot,
+                        &catalog_path,
+                        true,
+                        control,
+                    ) {
+                        return Err(error.dominated_by_v1(cleanup));
+                    }
+                    if let Err(error) = counters.record_locator_equal_incumbent_reuse() {
+                        return Err(FsCasErrorV1::Core(error).dominated_by_v1(cleanup));
+                    }
                     return Err(cleanup);
                 }
-                MarkerPublicationV1::IncumbentClean(bytes) => {
-                    let locator = decode_persistent_locator_v1(bytes, entry.id()).map_err(
-                        |error| match error {
+                MarkerPublicationV1::IncumbentClean(incumbent) => {
+                    let locator = decode_persistent_locator_v1(incumbent.bytes, entry.id())
+                        .map_err(|error| match error {
                             PersistentLocatorCodecErrorV1::Malformed => {
                                 FsCasErrorV1::MalformedOccupant
                             }
                             PersistentLocatorCodecErrorV1::BindingMismatch => {
                                 FsCasErrorV1::Integrity
                             }
-                        },
-                    )?;
+                        })?;
                     self.validate_and_compare_object_locator(
                         &mut candidate,
                         entry,
@@ -6479,6 +8231,20 @@ impl FsCasV1 {
                         scratch,
                         control,
                     )?;
+                    self.revalidate_active_pack_marker_incumbent_controlled_v1(
+                        &path,
+                        incumbent.snapshot,
+                        ActivePackKeyV1 {
+                            id: sealed.id(),
+                            transaction,
+                        },
+                        candidate_path,
+                        carrier_snapshot,
+                        &catalog_path,
+                        true,
+                        control,
+                    )?;
+                    counters.record_locator_equal_incumbent_reuse()?;
                 }
             }
             sample_control(control, FsCasBoundaryV1::AfterObjectLocatorPublication)?;
@@ -6500,7 +8266,41 @@ impl FsCasV1 {
     {
         let pack_name = hex_id(locator.sealed().id().as_bytes());
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
-        let catalog = read_catalog_marker(&self.inner.root.join("catalog").join(&pack_name))?;
+        let catalog_path = self.inner.root.join("catalog").join(&pack_name);
+        let (catalog, catalog_snapshot) = loop {
+            let guard = self.lock_publication_controlled_v1(control)?;
+            let snapshot: Result<(Option<(File, ImmutableFileSnapshotV1)>, bool), FsCasErrorV1> =
+                (|| {
+                    self.ensure_valid()?;
+                    let file = open_regular_file_if_present(&catalog_path)?
+                        .map(|file| {
+                            let metadata = file
+                                .metadata()
+                                .map_err(|error| map_filesystem_read_error_v1(&error))?;
+                            Ok::<_, FsCasErrorV1>((
+                                file,
+                                ImmutableFileSnapshotV1::from_metadata_v1(&metadata),
+                            ))
+                        })
+                        .transpose()?;
+                    let active = guard.active_pack_v1(locator.sealed().id()).is_some();
+                    Ok((file, active))
+                })();
+            self.unlock_publication_controlled_v1(guard, control);
+            let (file, active) = snapshot?;
+            if let Some((mut file, snapshot)) = file {
+                break (read_catalog_marker_from_open_v1(&mut file)?, snapshot);
+            }
+            if !active {
+                return Err(FsCasErrorV1::MissingOccupant);
+            }
+            wait_for_publication_owner_v1(
+                FsCasBoundaryV1::LocatorOwnerPublicationWait,
+                PublicationOwnerWaitKindV1::LocatorOwner,
+                counters,
+                control,
+            )?;
+        };
         if catalog != locator.sealed() {
             // Both records decoded completely. Their authenticated carrier
             // bindings disagree; this is an integrity failure, not malformed
@@ -6508,15 +8308,16 @@ impl FsCasV1 {
             return Err(FsCasErrorV1::Integrity);
         }
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierMetadataRead)?;
-        let mut incumbent =
-            FilePackReadV1::open_occupant(&self.inner.root.join("carriers").join(&pack_name))?;
+        let carrier_path = self.inner.root.join("carriers").join(&pack_name);
+        let mut incumbent = FilePackReadV1::open_occupant(&carrier_path)?;
         counters.observe_layerfs_open_file_handles(2);
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierIndexRead)?;
-        let indexed = match locate_validated_pack_index_entry_v1(
+        let indexed = match locate_validated_pack_index_entry_controlled_v1(
             &mut incumbent,
             locator.sealed(),
             candidate_entry.id(),
             counters,
+            control,
         ) {
             Ok(indexed) => indexed,
             Err(error) => {
@@ -6528,11 +8329,12 @@ impl FsCasV1 {
             return Err(FsCasErrorV1::Integrity);
         }
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierObjectRead)?;
-        let location = match validate_validated_pack_object_v1(
+        let location = match validate_validated_pack_object_controlled_v1(
             &mut incumbent,
             locator.entry(),
             scratch,
             counters,
+            control,
         ) {
             Ok(location) => location,
             Err(error) => {
@@ -6556,7 +8358,22 @@ impl FsCasV1 {
             counters,
             control,
         )?;
-        counters.record_locator_equal_incumbent_reuse()?;
+        let carrier_snapshot = incumbent.immutable_snapshot_v1()?;
+
+        // Catalog decode, carrier/index validation, and complete object-byte
+        // comparison are deliberately outside the visibility fence. Before
+        // their result becomes a premise of the caller's locator transition,
+        // authenticate that both immutable pathnames still name the exact
+        // files opened above. This is constant-size identity work; no payload
+        // traversal or comparison is moved under the root fence.
+        let guard = self.lock_visibility_controlled_v1(control)?;
+        let revalidated = (|| {
+            self.ensure_valid()?;
+            revalidate_immutable_file_snapshot_v1(&catalog_path, catalog_snapshot)?;
+            revalidate_immutable_file_snapshot_v1(&carrier_path, carrier_snapshot)
+        })();
+        self.unlock_visibility_controlled_v1(guard, control);
+        revalidated?;
         Ok(())
     }
 
@@ -6602,8 +8419,9 @@ impl FsCasV1 {
             let path = objects.join(hex_typed_id(entry.id()));
             sample_control(control, FsCasBoundaryV1::BeforeObjectLocatorRead)?;
             sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
-            let locator = read_object_locator_if_present(&path, entry.id())?
-                .ok_or(FsCasErrorV1::MissingOccupant)?;
+            let (locator, locator_snapshot) =
+                read_object_locator_if_present_with_snapshot_v1(&path, entry.id())?
+                    .ok_or(FsCasErrorV1::MissingOccupant)?;
             sample_control(control, FsCasBoundaryV1::AfterObjectLocatorRead)?;
             if !locator.matches_binding(sealed, entry) {
                 return Err(FsCasErrorV1::Integrity);
@@ -6612,6 +8430,7 @@ impl FsCasV1 {
             // compared immediately above. Matching the locator to that exact
             // seal and canonical entry therefore validates the incumbent
             // object without reopening or comparing the same bytes twice.
+            self.revalidate_marker_incumbent_controlled_v1(&path, locator_snapshot, control)?;
             sample_control(control, FsCasBoundaryV1::AfterObjectIncumbentValidation)?;
             counters.record_locator_equal_incumbent_reuse()?;
         }
@@ -6620,7 +8439,8 @@ impl FsCasV1 {
 
     #[cfg(test)]
     pub fn begin_closure_operation(&self) -> Result<FsClosureOperationV1, FsCasErrorV1> {
-        self.begin_closure_operation_inner_v1(None)
+        let mut control = ContinueFsCasControlV1;
+        self.begin_closure_operation_inner_v1(None, &mut control)
     }
 
     #[cfg(feature = "c3-polymorphism")]
@@ -6628,24 +8448,45 @@ impl FsCasV1 {
         &self,
         storage_token: FsStorageOperationTokenV1,
     ) -> Result<FsClosureOperationV1, FsCasErrorV1> {
-        self.begin_closure_operation_inner_v1(Some(storage_token))
+        let mut control = ContinueFsCasControlV1;
+        self.begin_closure_operation_inner_v1(Some(storage_token), &mut control)
     }
 
-    fn begin_closure_operation_inner_v1(
+    #[cfg(feature = "c3-polymorphism")]
+    pub(crate) fn begin_closure_operation_borrowed_controlled_v1<C>(
+        &self,
+        storage_token: FsStorageOperationTokenV1,
+        control: &mut C,
+    ) -> Result<FsClosureOperationV1, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        self.begin_closure_operation_inner_v1(Some(storage_token), control)
+    }
+
+    fn begin_closure_operation_inner_v1<C>(
         &self,
         storage_token: Option<FsStorageOperationTokenV1>,
-    ) -> Result<FsClosureOperationV1, FsCasErrorV1> {
+        control: &mut C,
+    ) -> Result<FsClosureOperationV1, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
         if let Some(token) = storage_token {
             self.validate_storage_token_v1(token)?;
         }
         self.ensure_valid()?;
-        let _guard = self.lock_visibility_v1()?;
-        self.ensure_valid()?;
-        let nonce = NEXT_CLOSURE_OPERATION
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-                current.checked_add(1)
-            })
-            .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+        let guard = self.lock_visibility_controlled_v1(control)?;
+        let nonce = (|| {
+            self.ensure_valid()?;
+            NEXT_CLOSURE_OPERATION
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                    current.checked_add(1)
+                })
+                .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))
+        })();
+        self.unlock_visibility_controlled_v1(guard, control);
+        let nonce = nonce?;
         Ok(FsClosureOperationV1 {
             owner: self.clone(),
             generation: self.inner.generation,
@@ -6841,11 +8682,27 @@ impl FsCasV1 {
         operation: &mut FsClosureOperationV1,
         capability: &mut CompleteValidatedClosureV1,
     ) -> Result<(), FsCasErrorV1> {
+        let mut control = ContinueFsCasControlV1;
+        self.consume_validated_closure_for_handoff_controlled_v1(
+            operation,
+            capability,
+            &mut control,
+        )
+    }
+
+    #[cfg(feature = "c3-polymorphism")]
+    pub(crate) fn consume_validated_closure_for_handoff_controlled_v1<C>(
+        &self,
+        operation: &mut FsClosureOperationV1,
+        capability: &mut CompleteValidatedClosureV1,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
         if let Some(token) = operation.storage_token {
             self.validate_storage_token_v1(token)?;
         }
-        self.ensure_valid()?;
-        let _guard = self.lock_visibility_v1()?;
         self.ensure_valid()?;
         if operation.generation != self.inner.generation
             || !Arc::ptr_eq(&operation.owner.inner, &self.inner)
@@ -6858,10 +8715,6 @@ impl FsCasV1 {
         {
             return Err(FsCasErrorV1::Integrity);
         }
-        // The pointer checks above establish that these are aliases of this
-        // owner. Preserve a same-owner invalidation that races the earlier
-        // validation as `Invalidated`; only mismatched authority is
-        // `Integrity`.
         operation.owner.ensure_valid()?;
         capability.owner.ensure_valid()?;
         let expected = encode_closure_marker(
@@ -6870,33 +8723,59 @@ impl FsCasV1 {
             capability.generation,
             capability.transcript,
         );
+        let expected_version = match capability.version_record {
+            TypedPhysicalObjectIdV1::VersionRecord(version_record) => version_record,
+            _ => return Err(FsCasErrorV1::Integrity),
+        };
         let path = self
             .inner
             .root
             .join("closures")
             .join(hex_typed_id(capability.version_record));
-        let incumbent =
-            read_exact_regular_file::<CLOSURE_MARKER_BYTES>(&path).map_err(|error| {
-                if error == FsCasErrorV1::Integrity {
-                    FsCasErrorV1::MalformedOccupant
-                } else {
-                    error
-                }
-            })?;
-        decode_closure_marker_v1(
-            incumbent,
-            match capability.version_record {
-                TypedPhysicalObjectIdV1::VersionRecord(version_record) => version_record,
-                _ => return Err(FsCasErrorV1::Integrity),
-            },
-            capability.generation,
-        )?;
+        // Immutable closure I/O and codec validation are operation work, not
+        // part of the one-shot state transition.  Revalidate the exact opened
+        // marker under visibility immediately before consuming either flag.
+        let (incumbent, marker_snapshot) = read_exact_regular_file_with_snapshot_v1::<
+            CLOSURE_MARKER_BYTES,
+        >(&path)
+        .map_err(|error| {
+            if error == FsCasErrorV1::Integrity {
+                FsCasErrorV1::MalformedOccupant
+            } else {
+                error
+            }
+        })?;
+        decode_closure_marker_v1(incumbent, expected_version, capability.generation)?;
         if incumbent != expected {
             return Err(FsCasErrorV1::Integrity);
         }
-        operation.consumed = true;
-        capability.consumed = true;
-        Ok(())
+        let guard = self.lock_visibility_controlled_v1(control)?;
+        let result = (|| {
+            self.ensure_valid()?;
+            if operation.generation != self.inner.generation
+                || !Arc::ptr_eq(&operation.owner.inner, &self.inner)
+                || !Arc::ptr_eq(&capability.owner.inner, &self.inner)
+                || capability.generation != self.inner.generation
+                || operation.nonce != capability.operation_nonce
+                || !operation.admitted
+                || operation.consumed
+                || capability.consumed
+            {
+                return Err(FsCasErrorV1::Integrity);
+            }
+            // The pointer checks above establish that these are aliases of this
+            // owner. Preserve a same-owner invalidation that races the earlier
+            // validation as `Invalidated`; only mismatched authority is
+            // `Integrity`.
+            operation.owner.ensure_valid()?;
+            capability.owner.ensure_valid()?;
+            revalidate_immutable_file_snapshot_v1(&path, marker_snapshot)?;
+            operation.consumed = true;
+            capability.consumed = true;
+            Ok(())
+        })();
+        self.unlock_visibility_controlled_v1(guard, control);
+        result
     }
 
     #[cfg(any(test, feature = "c3-polymorphism"))]
@@ -6923,7 +8802,7 @@ impl FsCasV1 {
         // a native syscall counter, so qualification can prove directional
         // read failures without changing publication or retry behavior.
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
-        let marker = read_catalog_marker(marker_path)?;
+        let (marker, marker_snapshot) = read_catalog_marker_with_snapshot_v1(marker_path)?;
         sample_control(control, FsCasBoundaryV1::AfterIncumbentMarkerRead)?;
         classify_catalog_incumbent_v1(marker, candidate)?;
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierMetadataRead)?;
@@ -6963,6 +8842,7 @@ impl FsCasV1 {
             control,
         )?;
         self.validate_existing_object_locators(candidate, metadata, counters, control)?;
+        let carrier_snapshot = incumbent.immutable_snapshot_v1()?;
         prepared.abort_private();
         prepared.cleanup_controlled_v1(control)?;
 
@@ -6970,14 +8850,23 @@ impl FsCasV1 {
         // without monopolizing the root visibility mutex. Re-enter the fence
         // before returning reuse and authenticate the immutable catalog
         // snapshot again so invalidation or namespace drift fails closed.
-        let _guard = self.lock_visibility_controlled_v1(control)?;
-        self.ensure_valid()?;
+        // The injectable read observation is operation work rather than part
+        // of the authoritative transition. Sample it before acquiring the
+        // fence so a callback unwind cannot poison a healthy visibility lock.
         sample_filesystem_fault_v1(
             control,
             FsCasFilesystemBoundaryV1::CatalogMarkerRevalidationRead,
         )?;
-        classify_catalog_incumbent_v1(read_catalog_marker(marker_path)?, candidate)?;
-        counters.record_fscas_catalog_operation()?;
+        let guard = self.lock_visibility_controlled_v1(control)?;
+        let revalidated: Result<(), FsCasErrorV1> = (|| {
+            self.ensure_valid()?;
+            revalidate_immutable_file_snapshot_v1(marker_path, marker_snapshot)?;
+            revalidate_immutable_file_snapshot_v1(carrier_path, carrier_snapshot)?;
+            counters.record_fscas_catalog_operation()?;
+            Ok(())
+        })();
+        self.unlock_visibility_controlled_v1(guard, control);
+        revalidated?;
         Ok(FsPackAdmissionV1 {
             outcome: FsPackAdmissionOutcomeV1::ExistingComplete,
             sealed: candidate,
@@ -7646,6 +9535,14 @@ impl FsPrivatePackV1 {
         })
     }
 
+    fn sealed_file_v1(&self) -> Result<&File, FsCasErrorV1> {
+        self.owner.ensure_valid()?;
+        match &self.state {
+            PrivatePackStateV1::Sealed { file, .. } => Ok(file),
+            _ => Err(FsCasErrorV1::Integrity),
+        }
+    }
+
     fn prepare_cleanup_v1(&mut self) {
         if matches!(
             self.state,
@@ -8308,6 +10205,17 @@ impl FilePackReadV1 {
         self.first_error.take()
     }
 
+    fn immutable_snapshot_v1(&self) -> Result<ImmutableFileSnapshotV1, FsCasErrorV1> {
+        let metadata = self
+            .file
+            .metadata()
+            .map_err(|error| map_filesystem_read_error_v1(&error))?;
+        if !metadata.file_type().is_file() || metadata.len() != self.len {
+            return Err(FsCasErrorV1::MalformedOccupant);
+        }
+        Ok(ImmutableFileSnapshotV1::from_metadata_v1(&metadata))
+    }
+
     fn restore_failure_v1(&mut self, fallback: FsCasErrorV1) -> FsCasErrorV1 {
         self.take_first_error_typed_v1().unwrap_or(fallback)
     }
@@ -8452,22 +10360,22 @@ impl FsCasOccupiedV1 {
         C: FsCasControlV1 + ?Sized,
     {
         self.cas.ensure_valid()?;
-        let (locator, mut pack) = {
-            // Snapshot the immutable locator/catalog/carrier relationship
-            // while publication is excluded. Complete pack-index and object
-            // validation deliberately runs after this guard is released.
+        // Cache selection is an in-memory visibility decision.  It requires
+        // no filesystem work while the fence is held.
+        let cached = {
             let guard = self.cas.lock_visibility_controlled_v1(control)?;
-            let snapshot = (|| {
+            let cached: Result<Option<Option<u64>>, FsCasErrorV1> = (|| {
                 self.cas.ensure_valid()?;
                 if self
                     .current
                     .as_ref()
                     .is_some_and(|current| current.id == id)
                 {
-                    return Ok(Err(self
-                        .current
-                        .as_ref()
-                        .map(|current| current.location.object_len)));
+                    return Ok(Some(
+                        self.current
+                            .as_ref()
+                            .map(|current| current.location.object_len),
+                    ));
                 }
                 if self
                     .previous
@@ -8475,41 +10383,86 @@ impl FsCasOccupiedV1 {
                     .is_some_and(|previous| previous.id == id)
                 {
                     core::mem::swap(&mut self.current, &mut self.previous);
-                    return Ok(Err(self
-                        .current
-                        .as_ref()
-                        .map(|current| current.location.object_len)));
+                    return Ok(Some(
+                        self.current
+                            .as_ref()
+                            .map(|current| current.location.object_len),
+                    ));
                 }
-                let objects = self.cas.inner.root.join("objects");
-                validate_required_root_directory(&objects)?;
-                let path = objects.join(hex_typed_id(id));
-                sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
-                let Some(locator) = read_object_locator_if_present(&path, id)? else {
-                    self.current = None;
-                    self.previous = None;
-                    return Ok(Err(None));
-                };
-                let pack_name = hex_id(locator.sealed().id().as_bytes());
-                sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
-                let catalog =
-                    read_catalog_marker(&self.cas.inner.root.join("catalog").join(&pack_name))?;
-                if catalog != locator.sealed() {
-                    return Err(FsCasErrorV1::Integrity);
-                }
-                let carrier = self.cas.inner.root.join("carriers").join(&pack_name);
-                sample_filesystem_fault_v1(
-                    control,
-                    FsCasFilesystemBoundaryV1::CarrierMetadataRead,
-                )?;
-                let pack = FilePackReadV1::open_occupant(&carrier)?;
-                Ok(Ok((locator, pack)))
+                Ok(None)
             })();
             self.cas.unlock_visibility_controlled_v1(guard, control);
-            match snapshot? {
-                Ok(snapshot) => snapshot,
-                Err(cached) => return Ok(cached),
+            cached?
+        };
+        if let Some(cached) = cached {
+            return Ok(cached);
+        }
+
+        // Open, read, and decode the fixed locator/catalog records without a
+        // root-wide fence.  Their exact immutable identities, plus the
+        // carrier identity, are revalidated under visibility only after all
+        // file-backed pack/object validation is complete.
+        let objects = self.cas.inner.root.join("objects");
+        validate_required_root_directory(&objects)?;
+        let locator_path = objects.join(hex_typed_id(id));
+        sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
+        let (locator_bytes, locator_snapshot) = loop {
+            match read_exact_regular_file_if_present_with_snapshot_v1::<
+                PERSISTENT_LOCATOR_BYTES_V1,
+            >(&locator_path)
+            .map_err(|error| match error {
+                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+                other => other,
+            })? {
+                Some(snapshot) => break snapshot,
+                None => {
+                    // Absence is authoritative only while visibility is held.
+                    // If a writer linked the locator between the unlocked open
+                    // and this check, retry the immutable snapshot.
+                    let guard = self.cas.lock_visibility_controlled_v1(control)?;
+                    let absent: Result<bool, FsCasErrorV1> = (|| {
+                        self.cas.ensure_valid()?;
+                        Ok(open_regular_file_if_present(&locator_path)?.is_none())
+                    })();
+                    self.cas.unlock_visibility_controlled_v1(guard, control);
+                    if absent? {
+                        self.current = None;
+                        self.previous = None;
+                        return Ok(None);
+                    }
+                    poll_control_v1(control)?;
+                }
             }
         };
+        let locator =
+            decode_persistent_locator_v1(locator_bytes, id).map_err(|error| match error {
+                PersistentLocatorCodecErrorV1::Malformed => FsCasErrorV1::MalformedOccupant,
+                PersistentLocatorCodecErrorV1::BindingMismatch => FsCasErrorV1::Integrity,
+            })?;
+        let pack_name = hex_id(locator.sealed().id().as_bytes());
+        let catalog_path = self.cas.inner.root.join("catalog").join(&pack_name);
+        sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
+        let (catalog_bytes, catalog_snapshot) =
+            read_exact_regular_file_with_snapshot_v1::<CATALOG_MARKER_BYTES>(&catalog_path)
+                .map_err(|error| match error {
+                    FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+                    other => other,
+                })?;
+        let catalog = decode_catalog_marker(catalog_bytes).map_err(|error| match error {
+            FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+            other => other,
+        })?;
+        if catalog != locator.sealed() {
+            return Err(FsCasErrorV1::Integrity);
+        }
+        let carrier_path = self.cas.inner.root.join("carriers").join(&pack_name);
+        sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierMetadataRead)?;
+        let mut pack = FilePackReadV1::open_occupant(&carrier_path)?;
+        let carrier_metadata = pack
+            .file
+            .metadata()
+            .map_err(|error| map_filesystem_read_error_v1(&error))?;
+        let carrier_snapshot = ImmutableFileSnapshotV1::from_metadata_v1(&carrier_metadata);
         // The locator and catalog reads above are one completed metadata
         // snapshot. Commit their direct observation as one transaction so a
         // late checked failure cannot expose only half of the real work.
@@ -8532,11 +10485,12 @@ impl FsCasOccupiedV1 {
         self.read_calls = read_calls;
         let mut local_counters = OperationCountersV1::default();
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierIndexRead)?;
-        let indexed = match locate_validated_pack_index_entry_v1(
+        let indexed = match locate_validated_pack_index_entry_controlled_v1(
             &mut pack,
             locator.sealed(),
             id,
             &mut local_counters,
+            control,
         ) {
             Ok(indexed) => indexed,
             Err(error) => return Err(restore_pack_occupant_failure_v1(&mut pack, error)),
@@ -8546,11 +10500,12 @@ impl FsCasOccupiedV1 {
             return Err(FsCasErrorV1::Integrity);
         }
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierObjectRead)?;
-        let location = match validate_validated_pack_object_v1(
+        let location = match validate_validated_pack_object_controlled_v1(
             &mut pack,
             indexed,
             &mut self.validation_scratch,
             &mut local_counters,
+            control,
         ) {
             Ok(location) => location,
             Err(error) => return Err(restore_pack_occupant_failure_v1(&mut pack, error)),
@@ -8570,7 +10525,12 @@ impl FsCasOccupiedV1 {
         // Re-enter the visibility fence before making the resolved carrier
         // usable by this reader.
         let guard = self.cas.lock_visibility_controlled_v1(control)?;
-        let commit = self.cas.ensure_valid();
+        let commit = (|| {
+            self.cas.ensure_valid()?;
+            revalidate_immutable_file_snapshot_v1(&locator_path, locator_snapshot)?;
+            revalidate_immutable_file_snapshot_v1(&catalog_path, catalog_snapshot)?;
+            revalidate_immutable_file_snapshot_v1(&carrier_path, carrier_snapshot)
+        })();
         if commit.is_ok() {
             self.previous = self.current.take();
             self.current = Some(ResolvedObjectV1 {
@@ -8606,6 +10566,7 @@ impl FsCasOccupiedV1 {
         C: FsCasControlV1 + ?Sized,
     {
         self.cas.ensure_valid()?;
+        poll_control_v1(control)?;
         let amount = u64::try_from(destination.len())
             .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
         {
@@ -8671,6 +10632,7 @@ impl FsCasOccupiedV1 {
                 }
             },
         )?;
+        poll_control_v1(control)?;
         let bytes_read = self
             .bytes_read
             .checked_add(amount)
@@ -8901,203 +10863,149 @@ where
             .take()
             .ok_or(ImmutablePortErrorV1::Failure)?
             .finish();
-        // Keep this guard outside the complete closure-publication unwind
-        // boundary. Every remaining control hook executes while publication is
-        // serialized, so any of them may unwind only after the guard has been
-        // caught and dropped normally.
-        let mut publication_guard = Some(
-            self.cas
-                .lock_publication_controlled_v1(self.control)
+        let marker = encode_closure_marker(
+            version_record,
+            self.observed_count,
+            self.cas.inner.generation,
+            transcript,
+        );
+        let destination = self
+            .cas
+            .inner
+            .root
+            .join("closures")
+            .join(hex_typed_id(version_record));
+        // Encoding, boundary observation, temporary marker creation, write,
+        // flush, readback, and permission changes are deliberately outside
+        // both root fences. `publish_small_marker_controlled` acquires
+        // publication then visibility only for the final root-validity check
+        // and atomic no-replace link, and releases both before reading or
+        // authenticating an incumbent.
+        sample_control(
+            self.control,
+            FsCasBoundaryV1::BeforeClosureMarkerPublication,
+        )
+        .map_err(|error| {
+            self.first_error.get_or_insert(error);
+            ImmutablePortErrorV1::Failure
+        })?;
+        let publication = publish_small_marker_controlled(
+            &self.cas.inner.root.join("preparation"),
+            "closure",
+            &destination,
+            &marker,
+            Some(&self.cas),
+            self.storage_token,
+            self.inject_marker_alias_cleanup
+                .then_some(FsCasBoundaryV1::AfterClosureMarkerLink),
+            None,
+            Some(&mut *self.marker_custody),
+            None,
+            true,
+            self.control,
+        );
+        match publication {
+            Err(error) => {
+                self.first_error.get_or_insert(error);
+                return Err(ImmutablePortErrorV1::Failure);
+            }
+            Ok(MarkerPublicationV1::VisibleWithPreparationResidue(first_error)) => {
+                // The complete-closure marker is already visible. Keep
+                // the admitted carrier/catalog/locator closure intact,
+                // invalidate the root, and refuse to mint a usable
+                // handoff capability.
+                let error = self.cas.cleanup_failure_controlled_v1(
+                    FsCasCleanupTargetV1::PublishedMarkerAlias,
+                    self.control,
+                );
+                let error = first_error.map_or(error, |first| first.dominated_by_v1(error));
+                self.first_error.get_or_insert(error);
+                return Err(ImmutablePortErrorV1::Failure);
+            }
+            Ok(MarkerPublicationV1::VisibleTerminal(error)) => {
+                // Marker custody is already visible. Preserve the
+                // post-link cleanup/invalidation terminal for the
+                // closure lifecycle to retain and terminalize.
+                self.first_error.get_or_insert(error);
+                return Err(ImmutablePortErrorV1::Failure);
+            }
+            Ok(MarkerPublicationV1::VisibleClean(_)) => {}
+            Ok(MarkerPublicationV1::IncumbentWithPreparationResidue(incumbent, cleanup)) => {
+                let TypedPhysicalObjectIdV1::VersionRecord(version_record_id) = version_record
+                else {
+                    self.first_error
+                        .get_or_insert(FsCasErrorV1::Integrity.dominated_by_v1(cleanup));
+                    return Err(ImmutablePortErrorV1::Failure);
+                };
+                let authenticated = decode_closure_marker_v1(
+                    incumbent.bytes,
+                    version_record_id,
+                    self.cas.inner.generation,
+                )
+                .map(|_| ())
+                .and_then(|()| {
+                    if incumbent.bytes == marker {
+                        Ok(())
+                    } else {
+                        Err(FsCasErrorV1::UnequalOccupant)
+                    }
+                })
+                .and_then(|()| {
+                    self.cas.revalidate_marker_incumbent_controlled_v1(
+                        &destination,
+                        incumbent.snapshot,
+                        self.control,
+                    )
+                });
+                let terminal = match authenticated {
+                    Ok(()) => cleanup,
+                    Err(error) => error.dominated_by_v1(cleanup),
+                };
+                self.first_error.get_or_insert(terminal);
+                return Err(ImmutablePortErrorV1::Failure);
+            }
+            Ok(MarkerPublicationV1::IncumbentClean(incumbent)) => {
+                let TypedPhysicalObjectIdV1::VersionRecord(version_record_id) = version_record
+                else {
+                    self.first_error.get_or_insert(FsCasErrorV1::Integrity);
+                    return Err(ImmutablePortErrorV1::Failure);
+                };
+                decode_closure_marker_v1(
+                    incumbent.bytes,
+                    version_record_id,
+                    self.cas.inner.generation,
+                )
+                .map(|_| ())
+                .and_then(|()| {
+                    if incumbent.bytes == marker {
+                        Ok(())
+                    } else {
+                        Err(FsCasErrorV1::UnequalOccupant)
+                    }
+                })
+                .and_then(|()| {
+                    self.cas.revalidate_marker_incumbent_controlled_v1(
+                        &destination,
+                        incumbent.snapshot,
+                        self.control,
+                    )
+                })
                 .map_err(|error| {
                     self.first_error.get_or_insert(error);
                     ImmutablePortErrorV1::Failure
-                })?,
-        );
-        let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            (|| -> Result<(), ImmutablePortErrorV1> {
-                self.cas.ensure_valid().map_err(|error| {
-                    self.first_error.get_or_insert(error);
-                    ImmutablePortErrorV1::Failure
                 })?;
-                let marker = encode_closure_marker(
-                    version_record,
-                    self.observed_count,
-                    self.cas.inner.generation,
-                    transcript,
-                );
-                let destination = self
-                    .cas
-                    .inner
-                    .root
-                    .join("closures")
-                    .join(hex_typed_id(version_record));
-                let incumbent = {
-                    let _visibility_guard = self
-                        .cas
-                        .lock_visibility_controlled_v1(self.control)
-                        .map_err(|error| {
-                            self.first_error.get_or_insert(error);
-                            ImmutablePortErrorV1::Failure
-                        })?;
-                    self.cas.ensure_valid().map_err(|error| {
-                        self.first_error.get_or_insert(error);
-                        ImmutablePortErrorV1::Failure
-                    })?;
-                    read_exact_regular_file_if_present::<CLOSURE_MARKER_BYTES>(&destination)
-                        .map_err(|error| {
-                            self.first_error
-                                .get_or_insert(if error == FsCasErrorV1::Integrity {
-                                    FsCasErrorV1::MalformedOccupant
-                                } else {
-                                    error
-                                });
-                            ImmutablePortErrorV1::Failure
-                        })?
-                };
-                if let Some(incumbent) = incumbent {
-                    let TypedPhysicalObjectIdV1::VersionRecord(version_record_id) = version_record
-                    else {
-                        self.first_error.get_or_insert(FsCasErrorV1::Integrity);
-                        return Err(ImmutablePortErrorV1::Failure);
-                    };
-                    decode_closure_marker_v1(
-                        incumbent,
-                        version_record_id,
-                        self.cas.inner.generation,
-                    )
-                    .map_err(|error| {
-                        self.first_error.get_or_insert(error);
-                        ImmutablePortErrorV1::Failure
-                    })?;
-                    if incumbent != marker {
-                        self.first_error
-                            .get_or_insert(FsCasErrorV1::UnequalOccupant);
-                        return Err(ImmutablePortErrorV1::Failure);
-                    }
-                } else {
-                    sample_control(
-                        self.control,
-                        FsCasBoundaryV1::BeforeClosureMarkerPublication,
-                    )
-                    .map_err(|error| {
-                        self.first_error.get_or_insert(error);
-                        ImmutablePortErrorV1::Failure
-                    })?;
-                    // This marker is only the local complete-closure fence. Publishing
-                    // it performs no authority dispatch and creates no private Version.
-                    let publication = publish_small_marker_controlled(
-                        &self.cas.inner.root.join("preparation"),
-                        "closure",
-                        &destination,
-                        &marker,
-                        Some(&self.cas),
-                        self.storage_token,
-                        self.inject_marker_alias_cleanup
-                            .then_some(FsCasBoundaryV1::AfterClosureMarkerLink),
-                        None,
-                        Some(&mut *self.marker_custody),
-                        self.control,
-                    );
-                    match publication {
-                        Err(error) => {
-                            self.first_error.get_or_insert(error);
-                            return Err(ImmutablePortErrorV1::Failure);
-                        }
-                        Ok(MarkerPublicationV1::VisibleWithPreparationResidue(first_error)) => {
-                            // The complete-closure marker is already visible. Keep
-                            // the admitted carrier/catalog/locator closure intact,
-                            // invalidate the root, and refuse to mint a usable
-                            // handoff capability.
-                            let error = self.cas.cleanup_failure_controlled_v1(
-                                FsCasCleanupTargetV1::PublishedMarkerAlias,
-                                self.control,
-                            );
-                            let error =
-                                first_error.map_or(error, |first| first.dominated_by_v1(error));
-                            self.first_error.get_or_insert(error);
-                            return Err(ImmutablePortErrorV1::Failure);
-                        }
-                        Ok(MarkerPublicationV1::VisibleTerminal(error)) => {
-                            // Marker custody is already visible. Preserve the
-                            // post-link cleanup/invalidation terminal for the
-                            // closure lifecycle to retain and terminalize.
-                            self.first_error.get_or_insert(error);
-                            return Err(ImmutablePortErrorV1::Failure);
-                        }
-                        Ok(MarkerPublicationV1::VisibleClean) => {}
-                        Ok(MarkerPublicationV1::IncumbentWithPreparationResidue(
-                            bytes,
-                            cleanup,
-                        )) => {
-                            let TypedPhysicalObjectIdV1::VersionRecord(version_record_id) =
-                                version_record
-                            else {
-                                self.first_error.get_or_insert(
-                                    FsCasErrorV1::Integrity.dominated_by_v1(cleanup),
-                                );
-                                return Err(ImmutablePortErrorV1::Failure);
-                            };
-                            let authenticated = decode_closure_marker_v1(
-                                bytes,
-                                version_record_id,
-                                self.cas.inner.generation,
-                            )
-                            .map(|_| ())
-                            .and_then(|()| {
-                                if bytes == marker {
-                                    Ok(())
-                                } else {
-                                    Err(FsCasErrorV1::UnequalOccupant)
-                                }
-                            });
-                            let terminal = match authenticated {
-                                Ok(()) => cleanup,
-                                Err(error) => error.dominated_by_v1(cleanup),
-                            };
-                            self.first_error.get_or_insert(terminal);
-                            return Err(ImmutablePortErrorV1::Failure);
-                        }
-                        Ok(MarkerPublicationV1::IncumbentClean(bytes)) => {
-                            let TypedPhysicalObjectIdV1::VersionRecord(version_record_id) =
-                                version_record
-                            else {
-                                self.first_error.get_or_insert(FsCasErrorV1::Integrity);
-                                return Err(ImmutablePortErrorV1::Failure);
-                            };
-                            decode_closure_marker_v1(
-                                bytes,
-                                version_record_id,
-                                self.cas.inner.generation,
-                            )
-                            .map_err(|error| {
-                                self.first_error.get_or_insert(error);
-                                ImmutablePortErrorV1::Failure
-                            })?;
-                            if bytes != marker {
-                                self.first_error
-                                    .get_or_insert(FsCasErrorV1::UnequalOccupant);
-                                return Err(ImmutablePortErrorV1::Failure);
-                            }
-                        }
-                    }
-                }
-                self.complete = Some(CompleteValidatedClosureV1 {
-                    owner: self.cas.clone(),
-                    generation: self.cas.inner.generation,
-                    operation_nonce: self.operation_nonce,
-                    version_record,
-                    object_count: self.observed_count,
-                    transcript,
-                    consumed: false,
-                });
-                Ok(())
-            })()
-        }));
-        drop(publication_guard.take());
-        match terminal {
-            Ok(result) => result,
-            Err(payload) => std::panic::resume_unwind(payload),
+            }
         }
+        self.complete = Some(CompleteValidatedClosureV1 {
+            owner: self.cas.clone(),
+            generation: self.cas.inner.generation,
+            operation_nonce: self.operation_nonce,
+            version_record,
+            object_count: self.observed_count,
+            transcript,
+            consumed: false,
+        });
+        Ok(())
     }
 
     fn abort_private_closure(&mut self) {
@@ -9218,6 +11126,55 @@ where
         Err(FsCasErrorV1::Core(CoreError::Deadline))
     } else {
         Ok(())
+    }
+}
+
+fn poll_control_v1<C>(control: &mut C) -> Result<(), FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    if control.cancellation_requested() {
+        Err(FsCasErrorV1::Core(CoreError::Cancelled))
+    } else if control.deadline_exceeded() {
+        Err(FsCasErrorV1::Core(CoreError::Deadline))
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+enum PublicationOwnerWaitKindV1 {
+    ActivePack,
+    LocatorOwner,
+}
+
+fn wait_for_publication_owner_v1<C>(
+    boundary: FsCasBoundaryV1,
+    kind: PublicationOwnerWaitKindV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<(), FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let started = Instant::now();
+    let terminal = sample_control(control, boundary);
+    if terminal.is_ok() {
+        std::thread::sleep(ADMISSION_CONTROL_POLL);
+    }
+    let nanoseconds = u64::try_from(started.elapsed().as_nanos())
+        .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+    let observation = match kind {
+        PublicationOwnerWaitKindV1::ActivePack => {
+            counters.record_active_pack_publication_wait_v1(nanoseconds)
+        }
+        PublicationOwnerWaitKindV1::LocatorOwner => {
+            counters.record_locator_owner_publication_wait_v1(nanoseconds)
+        }
+    };
+    match terminal {
+        Err(error) => Err(error),
+        Ok(()) => observation.map_err(FsCasErrorV1::Core),
     }
 }
 
@@ -9378,6 +11335,37 @@ fn read_catalog_marker(path: &Path) -> Result<SealedPackV1, FsCasErrorV1> {
     })
 }
 
+fn read_catalog_marker_with_snapshot_v1(
+    path: &Path,
+) -> Result<(SealedPackV1, ImmutableFileSnapshotV1), FsCasErrorV1> {
+    let (bytes, snapshot) =
+        read_exact_regular_file_if_present_with_snapshot_v1::<CATALOG_MARKER_BYTES>(path)
+            .map_err(|error| match error {
+                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+                other => other,
+            })?
+            .ok_or(FsCasErrorV1::MissingOccupant)?;
+    let marker = decode_catalog_marker(bytes).map_err(|error| match error {
+        FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+        other => other,
+    })?;
+    Ok((marker, snapshot))
+}
+
+fn read_catalog_marker_from_open_v1(file: &mut File) -> Result<SealedPackV1, FsCasErrorV1> {
+    let bytes =
+        read_exact_regular_file_from_open_v1::<CATALOG_MARKER_BYTES>(file).map_err(|error| {
+            match error {
+                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+                other => other,
+            }
+        })?;
+    decode_catalog_marker(bytes).map_err(|error| match error {
+        FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+        other => other,
+    })
+}
+
 fn classify_catalog_incumbent_v1(
     incumbent: SealedPackV1,
     expected: SealedPackV1,
@@ -9411,6 +11399,27 @@ fn read_object_locator_if_present(
     };
     decode_persistent_locator_v1(bytes, expected)
         .map(Some)
+        .map_err(|error| match error {
+            PersistentLocatorCodecErrorV1::Malformed => FsCasErrorV1::MalformedOccupant,
+            PersistentLocatorCodecErrorV1::BindingMismatch => FsCasErrorV1::Integrity,
+        })
+}
+
+fn read_object_locator_if_present_with_snapshot_v1(
+    path: &Path,
+    expected: TypedPhysicalObjectIdV1,
+) -> Result<Option<(PersistentObjectLocatorV1, ImmutableFileSnapshotV1)>, FsCasErrorV1> {
+    let Some((bytes, snapshot)) =
+        read_exact_regular_file_if_present_with_snapshot_v1::<PERSISTENT_LOCATOR_BYTES_V1>(path)
+            .map_err(|error| match error {
+                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+                other => other,
+            })?
+    else {
+        return Ok(None);
+    };
+    decode_persistent_locator_v1(bytes, expected)
+        .map(|locator| Some((locator, snapshot)))
         .map_err(|error| match error {
             PersistentLocatorCodecErrorV1::Malformed => FsCasErrorV1::MalformedOccupant,
             PersistentLocatorCodecErrorV1::BindingMismatch => FsCasErrorV1::Integrity,
@@ -9609,7 +11618,7 @@ fn decode_closure_marker_v1(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MarkerPublicationV1<const N: usize> {
-    VisibleClean,
+    VisibleClean(ImmutableFileSnapshotV1),
     /// The destination is authoritative, but its private preparation alias or
     /// logical preparation charge could not be released. `Some` retains the
     /// chronological filesystem/accounting cause; `None` denotes a synthetic
@@ -9622,22 +11631,42 @@ enum MarkerPublicationV1<const N: usize> {
     /// callers must retain every visible dependency, but must not retry either
     /// cleanup or invalidation or replace this chronological terminal.
     VisibleTerminal(FsCasErrorV1),
-    /// The atomic no-replace link reported `AlreadyExists`. These are the
-    /// exact incumbent bytes read while the root visibility lock was still
-    /// held; the semantic owner must authenticate them before continuing.
-    IncumbentClean([u8; N]),
+    /// The atomic no-replace link reported `AlreadyExists`. The incumbent was
+    /// opened while the namespace transition was serialized, then both root
+    /// fences were released before its exact fixed-size bytes were read. The
+    /// semantic owner must authenticate them before continuing.
+    IncumbentClean(MarkerIncumbentV1<N>),
     /// The no-replace transition found an incumbent, but cleanup of this
     /// operation's private marker failed before the semantic owner could
     /// authenticate those bytes.  The semantic owner must classify the
     /// incumbent first, then pair that primary error with this cleanup terminal
     /// (or return it unchanged when the incumbent is equal).
-    IncumbentWithPreparationResidue([u8; N], FsCasErrorV1),
+    IncumbentWithPreparationResidue(MarkerIncumbentV1<N>, FsCasErrorV1),
+}
+
+/// Exact immutable incumbent observed by an atomic no-replace transition.
+/// Bytes may be authenticated outside the root fences only while the identity
+/// of the already-open file is retained for the caller's final pathname
+/// revalidation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct MarkerIncumbentV1<const N: usize> {
+    bytes: [u8; N],
+    snapshot: ImmutableFileSnapshotV1,
+}
+
+#[derive(Clone, Copy)]
+struct MarkerPublicationPrerequisiteV1<'path> {
+    active_pack: ActivePackKeyV1,
+    carrier_path: &'path Path,
+    catalog_path: &'path Path,
+    carrier: ImmutableFileSnapshotV1,
+    require_catalog_vacancy: bool,
 }
 
 impl<const N: usize> MarkerPublicationV1<N> {
     fn require_clean(self) -> Result<(), FsCasErrorV1> {
         match self {
-            Self::VisibleClean => Ok(()),
+            Self::VisibleClean(_) => Ok(()),
             Self::VisibleTerminal(error) => Err(error),
             Self::VisibleWithPreparationResidue(Some(error)) => Err(error),
             Self::VisibleWithPreparationResidue(None) => Err(FsCasErrorV1::CleanupFailed(
@@ -9666,8 +11695,50 @@ fn publish_small_marker<const N: usize>(
         None,
         None,
         None,
+        None,
+        false,
         &mut control,
     )
+}
+
+fn unlock_marker_guards_v1<C>(
+    owner: Option<&FsCasV1>,
+    visibility_guard: &mut Option<ControlledRootMutexGuardV1<'_, ()>>,
+    publication_guard: &mut Option<ControlledRootMutexGuardV1<'_, PublicationStateV1>>,
+    control: &mut C,
+) where
+    C: FsCasControlV1 + ?Sized,
+{
+    // Drop both physical guards before invoking either caller-owned completion
+    // observation. In particular, a visibility callback must never run while
+    // publication is still held. Contain a callback unwind long enough to
+    // report the other completed lifecycle, then resume the first payload.
+    let visibility_completion = visibility_guard
+        .take()
+        .map(ControlledRootMutexGuardV1::release_v1);
+    let publication_completion = publication_guard
+        .take()
+        .map(ControlledRootMutexGuardV1::release_v1);
+    let mut first_unwind = None;
+    if let (Some(_owner), Some(completion)) = (owner, visibility_completion) {
+        if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            report_completed_root_lock_v1(completion, control);
+        })) {
+            first_unwind = Some(payload);
+        }
+    }
+    if let (Some(_owner), Some(completion)) = (owner, publication_completion) {
+        if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            report_completed_root_lock_v1(completion, control);
+        })) {
+            if first_unwind.is_none() {
+                first_unwind = Some(payload);
+            }
+        }
+    }
+    if let Some(payload) = first_unwind {
+        std::panic::resume_unwind(payload);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -9681,6 +11752,8 @@ fn publish_small_marker_controlled<const N: usize, C>(
     linked_boundary: Option<FsCasBoundaryV1>,
     mut locator_custody: Option<&mut LocatorPublicationCustodyV1>,
     mut marker_custody: Option<&mut ImmutableMarkerCustodyV1>,
+    prerequisite: Option<MarkerPublicationPrerequisiteV1<'_>>,
+    serialize_publication: bool,
     control: &mut C,
 ) -> Result<MarkerPublicationV1<N>, FsCasErrorV1>
 where
@@ -9726,13 +11799,25 @@ where
     // installed the destination; `Some` is a terminal incumbent result whose
     // private temporary still needs cleanup below.
     let mut destination_linked = false;
+    let mut candidate_snapshot = None;
     // As with the enclosing carrier publication lock, keep guard ownership
     // outside the unwind boundary. A controlled pre-link callback must not
     // poison a healthy visibility mutex merely because it unwinds while the
     // authoritative transition is serialized.
     let mut visibility_guard = None;
+    let mut publication_guard = None;
+    // Reserve immutable capacity before entering either root-wide fence. The
+    // charge remains operation-private until the no-replace link succeeds;
+    // every pre-link terminal releases it after the physical guards are gone.
+    // `None` after a successful link means the pending immutable charge has
+    // become visible marker custody and must be committed or retained by the
+    // semantic owner rather than rolled back here.
+    let mut prepublication_charge = None;
     let pre_link = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
         || -> Result<Option<MarkerPublicationV1<N>>, FsCasErrorV1> {
+            if prerequisite.is_some() && (!serialize_publication || visibility_owner.is_none()) {
+                return Err(FsCasErrorV1::Integrity);
+            }
             let prepare = (|| {
                 sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::PermissionChange)?;
                 set_private_file_permissions(&temporary)?;
@@ -9760,29 +11845,69 @@ where
                     return Err(FsCasErrorV1::Integrity);
                 }
                 sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::PermissionChange)?;
-                set_read_only(&temporary)
+                set_read_only(&temporary)?;
+                let metadata = fs::metadata(&temporary)
+                    .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
+                if metadata.len() != N as u64 {
+                    return Err(FsCasErrorV1::Integrity);
+                }
+                candidate_snapshot = Some(ImmutableFileSnapshotV1::from_metadata_v1(&metadata));
+                Ok(())
             })();
             prepare?;
 
-            visibility_guard = visibility_owner
-                .map(|owner| owner.lock_visibility_controlled_v1(control))
-                .transpose()?;
+            // Fault observation and fallible root-ledger arithmetic are not
+            // part of the namespace transition. Complete both before taking
+            // publication/visibility, then revalidate every namespace premise
+            // immediately before the one authoritative no-replace link.
+            sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::MarkerHardLink)?;
+            if let (Some(owner), Some(token)) = (visibility_owner, storage_token) {
+                let len = u64::try_from(N).map_err(|_| FsCasErrorV1::Integrity)?;
+                if let Err(error) = owner.record_storage_immutable_install_v1(token, len, 1) {
+                    return Err(owner.fail_closed_preserving_error_controlled_v1(error, control));
+                }
+                prepublication_charge = Some((owner, token, len));
+            }
+
+            if serialize_publication {
+                let owner = visibility_owner.ok_or(FsCasErrorV1::Integrity)?;
+                let (publication, visibility) = owner.lock_marker_guards_controlled_v1(control)?;
+                publication_guard = Some(publication);
+                visibility_guard = Some(visibility);
+            } else {
+                visibility_guard = visibility_owner
+                    .map(|owner| owner.lock_visibility_controlled_v1(control))
+                    .transpose()?;
+            }
             if let Some(owner) = visibility_owner {
                 owner.ensure_valid()?;
             }
-            sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::MarkerHardLink)?;
-            let immutable_len = match (visibility_owner, storage_token) {
-                (Some(owner), Some(token)) => {
-                    let len = u64::try_from(N).map_err(|_| FsCasErrorV1::Integrity)?;
-                    if let Err(error) = owner.record_storage_immutable_install_v1(token, len, 1) {
-                        return Err(
-                            owner.fail_closed_preserving_error_controlled_v1(error, control)
-                        );
-                    }
-                    Some((owner, token, len))
+            if let Some(prerequisite) = prerequisite {
+                let publication = publication_guard.as_ref().ok_or(FsCasErrorV1::Integrity)?;
+                if !publication.owns_pack_v1(
+                    prerequisite.active_pack.id,
+                    prerequisite.active_pack.transaction,
+                ) || publication.carrier_snapshot_v1(
+                    prerequisite.active_pack.id,
+                    prerequisite.active_pack.transaction,
+                ) != Some(prerequisite.carrier)
+                {
+                    return Err(FsCasErrorV1::Integrity);
                 }
-                _ => None,
-            };
+                let carrier = open_regular_file_if_present(prerequisite.carrier_path)?
+                    .ok_or(FsCasErrorV1::MissingOccupant)?;
+                let carrier_metadata = carrier
+                    .metadata()
+                    .map_err(|error| map_filesystem_read_error_v1(&error))?;
+                if !prerequisite.carrier.matches_v1(&carrier_metadata) {
+                    return Err(FsCasErrorV1::Integrity);
+                }
+                if prerequisite.require_catalog_vacancy
+                    && open_regular_file_if_present(prerequisite.catalog_path)?.is_some()
+                {
+                    return Err(FsCasErrorV1::Integrity);
+                }
+            }
             match fs::hard_link(&temporary, destination) {
                 Ok(()) => {
                     destination_linked = true;
@@ -9792,11 +11917,44 @@ where
                     if let Some(custody) = marker_custody.as_mut() {
                         custody.mark_visible_v1(N as u64);
                     }
-                    drop(visibility_guard.take());
+                    prepublication_charge = None;
+                    unlock_marker_guards_v1(
+                        visibility_owner,
+                        &mut visibility_guard,
+                        &mut publication_guard,
+                        control,
+                    );
                     Ok(None)
                 }
                 Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-                    if let Some((owner, token, len)) = immutable_len {
+                    // Open and authenticate the incumbent pathname while the
+                    // no-replace transition remains serialized. The complete
+                    // fixed-size read is performed only after both root
+                    // fences are released, but its exact file identity must
+                    // survive that unlocked work so the semantic caller can
+                    // revalidate the pathname before relying on the bytes.
+                    let incumbent = open_regular_file_if_present(destination).and_then(|file| {
+                        let Some(file) = file else {
+                            return Ok(None);
+                        };
+                        let metadata = file
+                            .metadata()
+                            .map_err(|error| map_filesystem_read_error_v1(&error))?;
+                        if metadata.len() != N as u64 {
+                            return Err(FsCasErrorV1::Integrity);
+                        }
+                        Ok(Some((
+                            file,
+                            ImmutableFileSnapshotV1::from_metadata_v1(&metadata),
+                        )))
+                    });
+                    unlock_marker_guards_v1(
+                        visibility_owner,
+                        &mut visibility_guard,
+                        &mut publication_guard,
+                        control,
+                    );
+                    if let Some((owner, token, len)) = prepublication_charge.take() {
                         if let Err(error) = owner.record_storage_immutable_remove_v1(token, len, 1)
                         {
                             return Err(
@@ -9804,14 +11962,20 @@ where
                             );
                         }
                     }
-                    let incumbent = match read_exact_regular_file_if_present::<N>(destination) {
-                        Ok(Some(bytes)) => Ok(bytes),
+                    let incumbent = match incumbent {
+                        Ok(Some((mut file, snapshot))) => {
+                            read_exact_regular_file_after_metadata_v1::<N>(&mut file)
+                                .map(|bytes| MarkerIncumbentV1 { bytes, snapshot })
+                        }
                         Ok(None) => Err(FsCasErrorV1::MissingOccupant),
+                        Err(error) => Err(error),
+                    };
+                    let incumbent = match incumbent {
+                        Ok(bytes) => Ok(bytes),
                         Err(FsCasErrorV1::Integrity) => Err(FsCasErrorV1::MalformedOccupant),
                         Err(other) => Err(other),
                     };
-                    drop(visibility_guard.take());
-                    incumbent.map(|bytes| Some(MarkerPublicationV1::IncumbentClean(bytes)))
+                    incumbent.map(|incumbent| Some(MarkerPublicationV1::IncumbentClean(incumbent)))
                 }
                 Err(error) => {
                     let original = if is_unsupported_link_error(&error) {
@@ -9819,21 +11983,53 @@ where
                     } else {
                         map_required_filesystem_write_error_v1(&error)
                     };
-                    if let Some((owner, token, len)) = immutable_len {
-                        let terminal = owner
-                            .release_prepublication_marker_charge_preserving_error_v1(
-                                token, len, control, original,
-                            );
-                        drop(visibility_guard.take());
-                        return Err(terminal);
-                    }
-                    drop(visibility_guard.take());
-                    Err(original)
+                    unlock_marker_guards_v1(
+                        visibility_owner,
+                        &mut visibility_guard,
+                        &mut publication_guard,
+                        control,
+                    );
+                    let terminal =
+                        prepublication_charge
+                            .take()
+                            .map_or(original, |(owner, token, len)| {
+                                owner.release_prepublication_marker_charge_preserving_error_v1(
+                                    token, len, control, original,
+                                )
+                            });
+                    Err(terminal)
                 }
             }
         },
     ));
-    drop(visibility_guard.take());
+    unlock_marker_guards_v1(
+        visibility_owner,
+        &mut visibility_guard,
+        &mut publication_guard,
+        control,
+    );
+    let pre_link = match pre_link {
+        Ok(terminal) => {
+            let release = prepublication_charge.take().map(|(owner, token, len)| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    owner.release_prepublication_marker_charge_v1(token, len, control)
+                }))
+                .unwrap_or_else(|_| {
+                    Err(owner.cleanup_failure_after_unwind_v1(
+                        FsCasCleanupTargetV1::PreparationSpool,
+                        control,
+                    ))
+                })
+            });
+            let terminal = match (terminal, release) {
+                (Err(original), Some(Err(cleanup))) => Err(original.dominated_by_v1(cleanup)),
+                (Ok(_), Some(Err(cleanup))) => Err(cleanup),
+                (terminal, Some(Ok(())) | None) => terminal,
+            };
+            Ok(terminal)
+        }
+        Err(payload) => Err(payload),
+    };
     match pre_link {
         Ok(Ok(None)) => {}
         Ok(terminal) => {
@@ -9886,6 +12082,21 @@ where
         }
         Err(payload) => {
             if !destination_linked {
+                let charge_terminal =
+                    prepublication_charge
+                        .take()
+                        .and_then(|(owner, token, len)| {
+                            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                owner.release_prepublication_marker_charge_v1(token, len, control)
+                            })) {
+                                Ok(Ok(())) => None,
+                                Ok(Err(error)) => Some(error),
+                                Err(_) => Some(owner.cleanup_failure_after_unwind_v1(
+                                    FsCasCleanupTargetV1::PreparationSpool,
+                                    control,
+                                )),
+                            }
+                        });
                 let cleanup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     cleanup_unpublished_marker_v1(
                         &temporary,
@@ -9896,28 +12107,62 @@ where
                         control,
                     )
                 }));
-                match cleanup {
-                    Ok(Ok(())) => std::panic::resume_unwind(payload),
-                    Ok(Err(terminal)) => return Err(terminal),
-                    Err(_) => {
-                        return Err(visibility_owner.map_or(
-                            FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool),
-                            |owner| {
-                                owner.cleanup_failure_after_unwind_v1(
-                                    FsCasCleanupTargetV1::PreparationSpool,
-                                    control,
-                                )
-                            },
-                        ));
+                let cleanup_terminal = match cleanup {
+                    Ok(Ok(())) => None,
+                    Ok(Err(terminal)) => Some(terminal),
+                    Err(_) => Some(visibility_owner.map_or(
+                        FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool),
+                        |owner| {
+                            owner.cleanup_failure_after_unwind_v1(
+                                FsCasCleanupTargetV1::PreparationSpool,
+                                control,
+                            )
+                        },
+                    )),
+                };
+                match (charge_terminal, cleanup_terminal) {
+                    (None, None) => std::panic::resume_unwind(payload),
+                    (Some(first), Some(later)) => {
+                        return Err(first.dominated_by_v1(later));
                     }
+                    (Some(error), None) | (None, Some(error)) => return Err(error),
                 }
             }
-            if destination_linked {
-                if let Some(owner) = visibility_owner {
-                    owner.invalidate_root_backstop_v1();
-                }
+            // A release observer can unwind after the destination link and
+            // immediate custody mark. This is a post-link terminal: remove the
+            // one owned private alias exactly once, reconcile its preparation
+            // charge, and durably invalidate before the initiating payload may
+            // leave. Never strand the alias merely because the unwind happened
+            // while reporting a lock release.
+            let cleanup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                cleanup_unpublished_marker_v1(
+                    &temporary,
+                    visibility_owner,
+                    storage_token,
+                    accounted_len,
+                    FsCasCleanupTargetV1::PublishedMarkerAlias,
+                    control,
+                )
+            }));
+            let terminal = match cleanup {
+                Ok(Ok(())) => visibility_owner
+                    .map(|owner| owner.invalidate_root_after_unwind_v1(control))
+                    .unwrap_or(Ok(())),
+                Ok(Err(error)) => Err(error),
+                Err(_) => Err(visibility_owner.map_or(
+                    FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PublishedMarkerAlias),
+                    |owner| {
+                        owner.cleanup_failure_after_unwind_v1(
+                            FsCasCleanupTargetV1::PublishedMarkerAlias,
+                            control,
+                        )
+                    },
+                )),
+            };
+            match terminal {
+                Ok(()) => std::panic::resume_unwind(payload),
+                Err(error) => return Ok(MarkerPublicationV1::VisibleTerminal(error)),
             }
-            std::panic::resume_unwind(payload)
         }
     }
 
@@ -9959,7 +12204,9 @@ where
                     )));
                 }
             }
-            Ok(MarkerPublicationV1::VisibleClean)
+            Ok(MarkerPublicationV1::VisibleClean(
+                candidate_snapshot.ok_or(FsCasErrorV1::Integrity)?,
+            ))
         }
     }));
     match post_link {
@@ -10101,6 +12348,58 @@ where
 fn read_exact_regular_file<const N: usize>(path: &Path) -> Result<[u8; N], FsCasErrorV1> {
     let mut file = open_regular_file(path)?;
     read_exact_regular_file_from_open_v1(&mut file)
+}
+
+/// Read one fixed immutable file outside a root-wide fence and retain the
+/// authenticated file identity needed to revalidate the pathname immediately
+/// before a later authoritative state transition.
+fn read_exact_regular_file_with_snapshot_v1<const N: usize>(
+    path: &Path,
+) -> Result<([u8; N], ImmutableFileSnapshotV1), FsCasErrorV1> {
+    let mut file = open_regular_file(path)?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| map_filesystem_read_error_v1(&error))?;
+    if metadata.len() != N as u64 {
+        return Err(FsCasErrorV1::Integrity);
+    }
+    let snapshot = ImmutableFileSnapshotV1::from_metadata_v1(&metadata);
+    let bytes = read_exact_regular_file_after_metadata_v1(&mut file)?;
+    Ok((bytes, snapshot))
+}
+
+fn read_exact_regular_file_if_present_with_snapshot_v1<const N: usize>(
+    path: &Path,
+) -> Result<Option<([u8; N], ImmutableFileSnapshotV1)>, FsCasErrorV1> {
+    let Some(mut file) = open_regular_file_if_present(path)? else {
+        return Ok(None);
+    };
+    let metadata = file
+        .metadata()
+        .map_err(|error| map_filesystem_read_error_v1(&error))?;
+    if metadata.len() != N as u64 {
+        return Err(FsCasErrorV1::Integrity);
+    }
+    let snapshot = ImmutableFileSnapshotV1::from_metadata_v1(&metadata);
+    let bytes = read_exact_regular_file_after_metadata_v1(&mut file)?;
+    Ok(Some((bytes, snapshot)))
+}
+
+/// Reopen an immutable namespace entry and prove that it is still the exact
+/// file observed outside the root-wide fence.  The current V1 implementation
+/// intentionally fails closed on platforms without a stable file identity.
+fn revalidate_immutable_file_snapshot_v1(
+    path: &Path,
+    expected: ImmutableFileSnapshotV1,
+) -> Result<(), FsCasErrorV1> {
+    let file = open_regular_file(path)?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| map_filesystem_read_error_v1(&error))?;
+    expected
+        .matches_v1(&metadata)
+        .then_some(())
+        .ok_or(FsCasErrorV1::Integrity)
 }
 
 fn read_exact_regular_file_if_present<const N: usize>(
@@ -11624,7 +13923,17 @@ mod admission_queue_tests {
             ))
         );
         assert_eq!(
-            MarkerPublicationV1::<8>::IncumbentClean([0_u8; 8]).require_clean(),
+            MarkerPublicationV1::<8>::IncumbentClean(MarkerIncumbentV1 {
+                bytes: [0_u8; 8],
+                snapshot: ImmutableFileSnapshotV1 {
+                    len: 8,
+                    #[cfg(unix)]
+                    device: 0,
+                    #[cfg(unix)]
+                    inode: 0,
+                },
+            })
+            .require_clean(),
             Err(FsCasErrorV1::Integrity)
         );
 
@@ -11901,22 +14210,34 @@ mod admission_queue_tests {
         cas: FsCasV1,
         target: Option<FsCasBoundaryV1>,
         triggered: bool,
+        post_acquire_validations: u64,
     }
 
     impl FsCasControlV1 for InvalidateAtClosureBoundaryV1 {
-        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
-            if self.target == Some(boundary) && !self.triggered {
-                self.triggered = true;
-                self.cas.invalidate_root_backstop_v1();
-            }
-        }
-
         fn cancellation_requested(&mut self) -> bool {
             false
         }
 
         fn deadline_exceeded(&mut self) -> bool {
             false
+        }
+
+        fn inject_root_lock_post_acquire_validation_failure(&mut self) -> Option<FsCasErrorV1> {
+            self.post_acquire_validations = self
+                .post_acquire_validations
+                .checked_add(1)
+                .expect("bounded closure publication validations");
+            let target_validation = match self.target {
+                Some(FsCasBoundaryV1::PublicationLockAcquired) => 1,
+                Some(FsCasBoundaryV1::VisibilityLockAcquired) => 2,
+                _ => return None,
+            };
+            if self.post_acquire_validations != target_validation || self.triggered {
+                return None;
+            }
+            self.triggered = true;
+            self.cas.invalidate_root_backstop_v1();
+            Some(FsCasErrorV1::Invalidated)
         }
     }
 
@@ -11938,6 +14259,7 @@ mod admission_queue_tests {
                 cas: cas.clone(),
                 target,
                 triggered: false,
+                post_acquire_validations: 0,
             };
             if target.is_none() {
                 control.cas.invalidate_root_backstop_v1();
@@ -13960,6 +16282,234 @@ mod admission_queue_tests {
         }
     }
 
+    struct RootLockReleasedPanicControlV1 {
+        released_boundary: FsCasBoundaryV1,
+        releases: u64,
+    }
+
+    impl FsCasControlV1 for RootLockReleasedPanicControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == self.released_boundary {
+                self.releases = self
+                    .releases
+                    .checked_add(1)
+                    .expect("root-lock release observation count");
+                std::panic::panic_any("root-lock released observation unwind");
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn root_lock_released_callback_unwind_balances_observer_and_releases_guard() {
+        let parent = std::env::temp_dir().canonicalize().unwrap();
+        for (case, publication) in [("visibility", false), ("publication", true)] {
+            let root = parent.join(format!(
+                "layerfs-root-lock-released-unwind-{case}-{}-{}",
+                std::process::id(),
+                NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed)
+            ));
+            let cas = FsCasV1::create_new(&root).unwrap();
+            let released_boundary = if publication {
+                FsCasBoundaryV1::PublicationLockReleased
+            } else {
+                FsCasBoundaryV1::VisibilityLockReleased
+            };
+            let mut control = RootLockReleasedPanicControlV1 {
+                released_boundary,
+                releases: 0,
+            };
+            let mut observed = FsOperationObservedControlV1::new(&mut control);
+            let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if publication {
+                    let guard = cas.lock_publication_controlled_v1(&mut observed).unwrap();
+                    cas.unlock_publication_controlled_v1(guard, &mut observed);
+                } else {
+                    let guard = cas.lock_visibility_controlled_v1(&mut observed).unwrap();
+                    cas.unlock_visibility_controlled_v1(guard, &mut observed);
+                }
+            }))
+            .expect_err("released callback must unwind");
+            assert_eq!(
+                unwind.downcast_ref::<&'static str>().copied(),
+                Some("root-lock released observation unwind"),
+                "{case}"
+            );
+
+            let mut counters = OperationCountersV1::default();
+            observed.finish_v1(&mut counters).unwrap();
+            assert_eq!(control.releases, 1, "{case}");
+            if publication {
+                assert_eq!(counters.publication_lock_acquisitions, 1, "{case}");
+                assert_eq!(counters.visibility_lock_acquisitions, 0, "{case}");
+                assert!(cas.inner.publication.try_lock().is_ok(), "{case}");
+            } else {
+                assert_eq!(counters.visibility_lock_acquisitions, 1, "{case}");
+                assert_eq!(counters.publication_lock_acquisitions, 0, "{case}");
+                assert!(cas.inner.visibility.try_lock().is_ok(), "{case}");
+            }
+            assert!(counters.has_zero_forbidden_work(), "{case}");
+            cas.ensure_valid().unwrap();
+            drop(cas);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    struct MarkerPairVisibilityWaitControlV1 {
+        publication_completion_entered: Option<std::sync::mpsc::Sender<()>>,
+        publication_completion_release: std::sync::mpsc::Receiver<()>,
+        visibility_contended: Option<std::sync::mpsc::Sender<()>>,
+    }
+
+    impl FsCasControlV1 for MarkerPairVisibilityWaitControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            match boundary {
+                FsCasBoundaryV1::PublicationLockAcquired => {
+                    let Some(entered) = self.publication_completion_entered.take() else {
+                        return;
+                    };
+                    entered
+                        .send(())
+                        .expect("publication completion observer rendezvous");
+                    self.publication_completion_release
+                        .recv_timeout(Duration::from_secs(2))
+                        .expect("publication completion observer release");
+                }
+                FsCasBoundaryV1::VisibilityLockContended => {
+                    if let Some(contended) = self.visibility_contended.take() {
+                        contended
+                            .send(())
+                            .expect("visibility contention rendezvous");
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn marker_pair_releases_publication_before_visibility_wait_and_completion_callbacks() {
+        let parent = std::env::temp_dir().canonicalize().unwrap();
+        let root = parent.join(format!(
+            "layerfs-marker-pair-unlocked-wait-{}-{}",
+            std::process::id(),
+            NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed)
+        ));
+        let cas = FsCasV1::create_new(&root).unwrap();
+        let held_visibility = cas.hold_visibility_lock_for_test_v1();
+        let (completion_entered_tx, completion_entered_rx) = std::sync::mpsc::channel();
+        let (completion_release_tx, completion_release_rx) = std::sync::mpsc::channel();
+        let (contended_tx, contended_rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let worker_cas = cas.clone();
+        let worker = std::thread::spawn(move || {
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut inner = MarkerPairVisibilityWaitControlV1 {
+                    publication_completion_entered: Some(completion_entered_tx),
+                    publication_completion_release: completion_release_rx,
+                    visibility_contended: Some(contended_tx),
+                };
+                let mut observed = FsOperationObservedControlV1::new(&mut inner);
+                let (publication, visibility) = worker_cas
+                    .lock_marker_guards_controlled_v1(&mut observed)
+                    .expect("paired marker locks after visibility release");
+                let mut visibility = Some(visibility);
+                let mut publication = Some(publication);
+                unlock_marker_guards_v1(
+                    Some(&worker_cas),
+                    &mut visibility,
+                    &mut publication,
+                    &mut observed,
+                );
+                let mut counters = OperationCountersV1::default();
+                observed.finish_v1(&mut counters).unwrap();
+                counters
+            }));
+            let _ = done_tx.send(outcome);
+        });
+
+        let completion_entered = completion_entered_rx.recv_timeout(Duration::from_secs(1));
+        let publication_free_during_completion = cas.publication_lock_available_for_test_v1();
+        let _ = completion_release_tx.send(());
+        let visibility_contended = contended_rx.recv_timeout(Duration::from_secs(1));
+        let publication_free_during_visibility_wait = cas.publication_lock_available_for_test_v1();
+        drop(held_visibility);
+        let outcome = done_rx.recv_timeout(Duration::from_secs(2));
+
+        completion_entered.expect("worker must reach publication completion callback");
+        visibility_contended.expect("worker must observe actual visibility contention");
+        assert!(publication_free_during_completion);
+        assert!(publication_free_during_visibility_wait);
+        let counters = outcome
+            .expect("paired marker worker must complete before watchdog")
+            .expect("paired marker worker must not unwind");
+        worker.join().unwrap();
+        assert!(counters.publication_lock_acquisitions >= 2);
+        assert_eq!(counters.visibility_lock_acquisitions, 1);
+        assert!(counters.publication_lock_hold_nanoseconds > 0);
+        assert!(counters.visibility_lock_wait_nanoseconds > 0);
+        assert!(counters.visibility_lock_hold_nanoseconds > 0);
+        assert!(counters.has_zero_forbidden_work());
+        assert!(cas.publication_lock_available_for_test_v1());
+        assert!(cas.visibility_lock_available_for_test_v1());
+        cas.ensure_valid().unwrap();
+        drop(cas);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn marker_pair_publication_terminal_does_not_charge_visibility_wait() {
+        let parent = std::env::temp_dir().canonicalize().unwrap();
+        let root = parent.join(format!(
+            "layerfs-marker-pair-publication-terminal-{}-{}",
+            std::process::id(),
+            NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed)
+        ));
+        let cas = FsCasV1::create_new(&root).unwrap();
+        let held_publication = cas.inner.publication.lock().unwrap();
+        let mut inner = CancelControlV1;
+        let mut observed = FsOperationObservedControlV1::new(&mut inner);
+
+        let error = cas
+            .lock_marker_guards_controlled_v1(&mut observed)
+            .map(drop)
+            .unwrap_err();
+        assert_eq!(error, FsCasErrorV1::Core(CoreError::Cancelled));
+        drop(held_publication);
+
+        let mut counters = OperationCountersV1::default();
+        observed.finish_v1(&mut counters).unwrap();
+        assert_eq!(counters.publication_lock_acquisitions, 0);
+        assert_eq!(counters.publication_lock_contended_polls, 1);
+        assert!(counters.publication_lock_wait_nanoseconds > 0);
+        assert_eq!(counters.publication_lock_hold_nanoseconds, 0);
+        assert_eq!(counters.visibility_lock_acquisitions, 0);
+        assert_eq!(counters.visibility_lock_contended_polls, 0);
+        assert_eq!(counters.visibility_lock_wait_nanoseconds, 0);
+        assert_eq!(counters.visibility_lock_hold_nanoseconds, 0);
+        assert!(counters.has_zero_forbidden_work());
+        assert!(cas.publication_lock_available_for_test_v1());
+        assert!(cas.visibility_lock_available_for_test_v1());
+        cas.ensure_valid().unwrap();
+        drop(cas);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn root_lock_wait_terminal_observation_unwind_preserves_cancel_and_deadline() {
         let parent = std::env::temp_dir().canonicalize().unwrap();
@@ -14001,11 +16551,8 @@ mod admission_queue_tests {
             } else {
                 FsCasBoundaryV1::VisibilityLockWaitTerminated
             };
-            let held = if publication {
-                cas.inner.publication.lock().unwrap()
-            } else {
-                cas.inner.visibility.lock().unwrap()
-            };
+            let publication_held = publication.then(|| cas.inner.publication.lock().unwrap());
+            let visibility_held = (!publication).then(|| cas.inner.visibility.lock().unwrap());
             let mut control = RootLockWaitTerminalPanicControlV1 {
                 terminated_boundary,
                 mode,
@@ -14024,7 +16571,8 @@ mod admission_queue_tests {
                     .map(drop)
                     .unwrap_err()
             };
-            drop(held);
+            drop(publication_held);
+            drop(visibility_held);
             assert_eq!(error, expected, "{case}");
             let mut counters = OperationCountersV1::default();
             observed.finish_v1(&mut counters).unwrap();
@@ -14089,9 +16637,38 @@ mod admission_queue_tests {
             assert_eq!(error, FsCasErrorV1::Invalidated, "{case}");
             let mut counters = OperationCountersV1::default();
             observed.finish_v1(&mut counters).unwrap();
-            assert_eq!(control.terminal_observations, 1, "{case}");
+            assert_eq!(
+                control.terminal_observations,
+                u64::from(!after_acquire),
+                "{case}"
+            );
             assert_eq!(control.invalidation_attempts, 0, "{case}");
             assert!(counters.has_zero_forbidden_work(), "{case}");
+            let (visibility_acquisitions, publication_acquisitions) = if publication {
+                (
+                    counters.visibility_lock_acquisitions,
+                    counters.publication_lock_acquisitions,
+                )
+            } else {
+                (
+                    counters.publication_lock_acquisitions,
+                    counters.visibility_lock_acquisitions,
+                )
+            };
+            assert_eq!(visibility_acquisitions, 0, "{case}: unrelated lock");
+            assert_eq!(
+                publication_acquisitions,
+                u64::from(after_acquire),
+                "{case}: physical acquisition"
+            );
+            if after_acquire {
+                let hold_nanoseconds = if publication {
+                    counters.publication_lock_hold_nanoseconds
+                } else {
+                    counters.visibility_lock_hold_nanoseconds
+                };
+                assert!(hold_nanoseconds > 0, "{case}: physical hold");
+            }
             assert_eq!(cas.ensure_valid(), Err(FsCasErrorV1::Invalidated), "{case}");
             assert_eq!(
                 stale.ensure_valid(),
@@ -14180,15 +16757,22 @@ mod admission_queue_tests {
                 assert!(counters.has_zero_forbidden_work());
                 assert_eq!(cas.ensure_valid(), Err(FsCasErrorV1::Invalidated));
                 assert_eq!(stale.ensure_valid(), Err(FsCasErrorV1::Invalidated));
-                let lock = if publication {
-                    &cas.inner.publication
+                if publication {
+                    match cas.inner.publication.try_lock() {
+                        Ok(guard) => drop(guard),
+                        Err(TryLockError::Poisoned(poisoned)) => drop(poisoned.into_inner()),
+                        Err(TryLockError::WouldBlock) => {
+                            panic!("{case}: poisoned lock remained held")
+                        }
+                    }
                 } else {
-                    &cas.inner.visibility
-                };
-                match lock.try_lock() {
-                    Ok(guard) => drop(guard),
-                    Err(TryLockError::Poisoned(poisoned)) => drop(poisoned.into_inner()),
-                    Err(TryLockError::WouldBlock) => panic!("{case}: poisoned lock remained held"),
+                    match cas.inner.visibility.try_lock() {
+                        Ok(guard) => drop(guard),
+                        Err(TryLockError::Poisoned(poisoned)) => drop(poisoned.into_inner()),
+                        Err(TryLockError::WouldBlock) => {
+                            panic!("{case}: poisoned lock remained held")
+                        }
+                    }
                 }
                 assert!(matches!(
                     FsCasV1::open_existing(&root),
@@ -15866,15 +18450,18 @@ mod admission_queue_tests {
                 Err(FsCasErrorV1::Invalidated),
                 "{case}"
             );
-            let lock = if publication {
-                &cas.inner.publication
+            if publication {
+                match cas.inner.publication.try_lock() {
+                    Ok(guard) => drop(guard),
+                    Err(TryLockError::Poisoned(poisoned)) => drop(poisoned.into_inner()),
+                    Err(TryLockError::WouldBlock) => panic!("{case}: root lock remained held"),
+                }
             } else {
-                &cas.inner.visibility
-            };
-            match lock.try_lock() {
-                Ok(guard) => drop(guard),
-                Err(TryLockError::Poisoned(poisoned)) => drop(poisoned.into_inner()),
-                Err(TryLockError::WouldBlock) => panic!("{case}: root lock remained held"),
+                match cas.inner.visibility.try_lock() {
+                    Ok(guard) => drop(guard),
+                    Err(TryLockError::Poisoned(poisoned)) => drop(poisoned.into_inner()),
+                    Err(TryLockError::WouldBlock) => panic!("{case}: root lock remained held"),
+                }
             }
             assert!(matches!(
                 FsCasV1::open_existing(&root),
@@ -15902,10 +18489,13 @@ mod admission_queue_tests {
         let incumbent = *b"MARKER01";
         fs::write(&destination, incumbent).unwrap();
 
-        assert_eq!(
-            publish_small_marker(&preparation, "test", &destination, b"CANDID01"),
-            Ok(MarkerPublicationV1::IncumbentClean(incumbent))
-        );
+        let publication =
+            publish_small_marker(&preparation, "test", &destination, b"CANDID01").unwrap();
+        let MarkerPublicationV1::IncumbentClean(observed) = publication else {
+            panic!("expected authenticated incumbent");
+        };
+        assert_eq!(observed.bytes, incumbent);
+        revalidate_immutable_file_snapshot_v1(&destination, observed.snapshot).unwrap();
         assert_eq!(fs::read(&destination).unwrap(), incumbent);
         assert_eq!(fs::read_dir(&preparation).unwrap().count(), 0);
 

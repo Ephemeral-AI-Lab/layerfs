@@ -21,9 +21,9 @@ use crate::cas::{
     authenticate_base_root_storage_v1, begin_storage_session_v1, complete_closure_fence_storage_v1,
     AdmissionBuffersV1, C3StorageSessionV1, ClosureFenceStorageOutcomeV1, FsCasBoundaryV1,
     FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasV1, FsClosureAdmissionErrorV1,
-    FsOperationCapabilityV1, FsOperationKindV1, FsPackAdmissionOutcomeV1, FsStorageEnvelopeV1,
-    FsStorageOperationTokenV1, CATALOG_MARKER_BYTES, CLOSURE_MARKER_BYTES,
-    GLOBAL_SEEN_RECORD_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
+    FsOperationCapabilityV1, FsOperationKindV1, FsOperationObservedControlV1,
+    FsPackAdmissionOutcomeV1, FsStorageEnvelopeV1, FsStorageOperationTokenV1, CATALOG_MARKER_BYTES,
+    CLOSURE_MARKER_BYTES, GLOBAL_SEEN_RECORD_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
 };
 use crate::cdc::{C3CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
 use crate::content::update::{
@@ -360,6 +360,11 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedC3ControlV1<'_, '_, C>
         boundary: crate::cas::FsCasResidueAccountingBoundaryV1,
     ) -> bool {
         (**self.inner.borrow_mut()).inject_residue_accounting_failure(boundary)
+    }
+
+    #[cfg(test)]
+    fn before_carrier_no_replace_transition_for_test_v1(&mut self) {
+        (**self.inner.borrow_mut()).before_carrier_no_replace_transition_for_test_v1();
     }
 
     #[cfg(test)]
@@ -2506,6 +2511,73 @@ where
 // same control is borrowed for fallible preparation cleanup below.
 #[allow(clippy::too_many_arguments, clippy::drop_non_drop)]
 pub(crate) fn run_c3_lifecycle_v1<C, B>(
+    operation: C3StorageOperationV1<'_>,
+    plan: C3LifecyclePlanV1,
+    buffers: C3OperationBuffersV1<'_>,
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+    build: B,
+) -> Result<C3HandoffV1, C3OperationErrorV1>
+where
+    C: CdcControlV1 + FsCasControlV1 + ?Sized,
+    B: FnOnce(
+        &mut dyn C3StorageSessionPortV1,
+        &RefCell<&mut FsOperationObservedControlV1<'_, C>>,
+        &OperationReservationV1<'_>,
+        &mut C3LifecycleBuildBuffersV1<'_>,
+        &mut OperationCountersV1,
+    ) -> Result<C3PreparedCandidateV1, C3OperationErrorV1>,
+{
+    let mut observed_control = FsOperationObservedControlV1::new(control);
+    let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_c3_lifecycle_observed_body_v1(
+            operation,
+            plan,
+            buffers,
+            &mut observed_control,
+            counters,
+            build,
+        )
+    }));
+    let observation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        observed_control.finish_v1(counters)
+    }));
+    let observation = match observation {
+        Ok(observation) => observation,
+        Err(observation_payload) => match terminal {
+            Ok(_) => std::panic::resume_unwind(observation_payload),
+            Err(initiating_payload) => {
+                drop(observation_payload);
+                std::panic::resume_unwind(initiating_payload);
+            }
+        },
+    };
+    match terminal {
+        Ok(result) => match observation {
+            Ok(()) => result,
+            Err(error) => Err(C3OperationErrorV1::retain_terminal_v1(
+                result.err(),
+                C3OperationErrorV1::Core(error),
+            )
+            .expect("direct lock observation failure")),
+        },
+        Err(payload) => match observation {
+            Ok(()) => std::panic::resume_unwind(payload),
+            Err(error) => {
+                // The initiating callback payload remains primary only when
+                // the complete operation-owned observation terminal is
+                // balanced. A typed observation failure is returned after
+                // lifecycle has already completed cleanup and capability
+                // terminalization inside the caught body.
+                drop(payload);
+                Err(C3OperationErrorV1::Core(error))
+            }
+        },
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::drop_non_drop)]
+fn run_c3_lifecycle_observed_body_v1<C, B>(
     mut operation: C3StorageOperationV1<'_>,
     plan: C3LifecyclePlanV1,
     buffers: C3OperationBuffersV1<'_>,

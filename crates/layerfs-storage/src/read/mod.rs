@@ -3,6 +3,6 @@
 //! Root traversal, file-range orchestration, and concrete occupied-object
 //! reading have separate owners. None is a public SDK.
 
-mod extraction;
+pub(crate) mod extraction;
 mod object_reader;
 mod range;

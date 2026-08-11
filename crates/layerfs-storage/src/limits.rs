@@ -670,6 +670,17 @@ pub struct OperationCountersV1 {
     pub publication_lock_wait_nanoseconds: u64,
     pub publication_lock_hold_nanoseconds: u64,
     pub publication_lock_hold_nanoseconds_high_water: u64,
+    /// Direct operation-local time spent waiting for another same-pack
+    /// publication transaction after the publication mutex has already been
+    /// released. This semantic owner wait is not mutex contention or queue
+    /// admission time.
+    pub active_pack_publication_wait_polls: u64,
+    pub active_pack_publication_wait_nanoseconds: u64,
+    /// A locator may authenticate an incumbent whose carrier owner has not
+    /// made its catalog visible yet. Keep that owner-coordination wait
+    /// distinct from both same-candidate waiting and publication-mutex wait.
+    pub locator_owner_publication_wait_polls: u64,
+    pub locator_owner_publication_wait_nanoseconds: u64,
     pub fscas_bytes_read: u64,
     pub fscas_read_calls: u64,
     pub fscas_bytes_written: u64,
@@ -862,6 +873,10 @@ impl OperationCountersV1 {
             publication_lock_contended_polls,
             publication_lock_wait_nanoseconds,
             publication_lock_hold_nanoseconds,
+            active_pack_publication_wait_polls,
+            active_pack_publication_wait_nanoseconds,
+            locator_owner_publication_wait_polls,
+            locator_owner_publication_wait_nanoseconds,
             fscas_bytes_read,
             fscas_read_calls,
             fscas_bytes_written,
@@ -1251,6 +1266,40 @@ impl OperationCountersV1 {
         checked.publication_lock_hold_nanoseconds_high_water = checked
             .publication_lock_hold_nanoseconds_high_water
             .max(publication_maximum_hold_nanoseconds);
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_active_pack_publication_wait_v1(
+        &mut self,
+        nanoseconds: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.active_pack_publication_wait_polls = checked
+            .active_pack_publication_wait_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.active_pack_publication_wait_nanoseconds = checked
+            .active_pack_publication_wait_nanoseconds
+            .checked_add(nanoseconds)
+            .ok_or(CoreError::IntegerOverflow)?;
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_locator_owner_publication_wait_v1(
+        &mut self,
+        nanoseconds: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.locator_owner_publication_wait_polls = checked
+            .locator_owner_publication_wait_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.locator_owner_publication_wait_nanoseconds = checked
+            .locator_owner_publication_wait_nanoseconds
+            .checked_add(nanoseconds)
+            .ok_or(CoreError::IntegerOverflow)?;
         *self = checked;
         Ok(())
     }

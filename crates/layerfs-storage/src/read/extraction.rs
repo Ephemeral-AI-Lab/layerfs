@@ -246,7 +246,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn read_c3_file_range_impl_v1<S, C>(
+pub(crate) fn read_c3_file_range_impl_v1<S, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -4483,6 +4483,8 @@ mod tests {
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new(256 * 1024);
+        let stopped = Rc::new(Cell::new(false));
+        sink.stop_after_begin = Some(Rc::clone(&stopped));
         let error = extract_c3_root_v1(
             &fixture.cas,
             106,
@@ -4494,11 +4496,7 @@ mod tests {
                 comparison: &mut comparison,
                 path: &mut path,
             },
-            &mut StopControl {
-                kind,
-                polls: 0,
-                stop_at: 12,
-            },
+            &mut StopAfterBeginControl { kind, stopped },
         )
         .expect_err("read must stop");
         assert_eq!(error, C3ReadOperationErrorV1::Core(expected));
