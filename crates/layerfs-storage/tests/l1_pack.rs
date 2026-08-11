@@ -619,7 +619,7 @@ fn hostile_index_record_seal_truncation_overlap_and_trailing_bytes_fail_closed()
     reseal(&mut bad_object_checksum.bytes);
     assert_eq!(
         independently_validate(&mut bad_object_checksum),
-        Err(CoreError::PackInvalid)
+        Err(CoreError::IdMismatch)
     );
 
     let mut bad_pack_checksum = VecPack {
@@ -630,7 +630,7 @@ fn hostile_index_record_seal_truncation_overlap_and_trailing_bytes_fail_closed()
     bad_pack_checksum.bytes[last] ^= 1;
     assert_eq!(
         independently_validate(&mut bad_pack_checksum),
-        Err(CoreError::PackInvalid)
+        Err(CoreError::IdMismatch)
     );
 
     let mut truncated = VecPack {
@@ -650,6 +650,103 @@ fn hostile_index_record_seal_truncation_overlap_and_trailing_bytes_fail_closed()
     assert_eq!(
         independently_validate(&mut trailing),
         Err(CoreError::PackInvalid)
+    );
+}
+
+#[test]
+fn pack_validation_distinguishes_structure_schema_domain_kind_and_authentication() {
+    let (valid, _, _, _) = build(&[object(5, &[0x5a])]).unwrap();
+    let index_offset = be_u64(&valid.bytes[56..64]) as usize;
+    let object_offset = 64 + 4;
+
+    let mut structural = VecPack {
+        bytes: valid.bytes.clone(),
+        ..VecPack::default()
+    };
+    structural.bytes[0] ^= 1;
+    reseal(&mut structural.bytes);
+    assert_eq!(
+        independently_validate(&mut structural),
+        Err(CoreError::PackInvalid)
+    );
+
+    let mut header_version = VecPack {
+        bytes: valid.bytes.clone(),
+        ..VecPack::default()
+    };
+    header_version.bytes[8..10].copy_from_slice(&2_u16.to_be_bytes());
+    reseal(&mut header_version.bytes);
+    assert_eq!(
+        independently_validate(&mut header_version),
+        Err(CoreError::Schema)
+    );
+
+    let mut trailer_version = VecPack {
+        bytes: valid.bytes.clone(),
+        ..VecPack::default()
+    };
+    let trailer_offset = trailer_version.bytes.len() - 80;
+    trailer_version.bytes[trailer_offset + 8..trailer_offset + 10]
+        .copy_from_slice(&2_u16.to_be_bytes());
+    reseal(&mut trailer_version.bytes);
+    assert_eq!(
+        independently_validate(&mut trailer_version),
+        Err(CoreError::Schema)
+    );
+
+    let mut header_profile = VecPack {
+        bytes: valid.bytes.clone(),
+        ..VecPack::default()
+    };
+    header_profile.bytes[16] ^= 1;
+    reseal(&mut header_profile.bytes);
+    assert_eq!(
+        independently_validate(&mut header_profile),
+        Err(CoreError::TypeDomain)
+    );
+
+    let mut object_profile = VecPack {
+        bytes: valid.bytes.clone(),
+        ..VecPack::default()
+    };
+    object_profile.bytes[object_offset + 12] ^= 1;
+    reseal(&mut object_profile.bytes);
+    assert_eq!(
+        independently_validate(&mut object_profile),
+        Err(CoreError::TypeDomain)
+    );
+
+    let mut object_kind = VecPack {
+        bytes: valid.bytes.clone(),
+        ..VecPack::default()
+    };
+    object_kind.bytes[object_offset + 10] = 0xff;
+    reseal(&mut object_kind.bytes);
+    assert_eq!(
+        independently_validate(&mut object_kind),
+        Err(CoreError::UnknownKind)
+    );
+
+    let mut index_kind = VecPack {
+        bytes: valid.bytes.clone(),
+        ..VecPack::default()
+    };
+    index_kind.bytes[index_offset] = 0xff;
+    reseal(&mut index_kind.bytes);
+    assert_eq!(
+        independently_validate(&mut index_kind),
+        Err(CoreError::UnknownKind)
+    );
+
+    let mut object_bytes = VecPack {
+        bytes: valid.bytes,
+        ..VecPack::default()
+    };
+    object_bytes.bytes[object_offset + 52] ^= 1;
+    reseal(&mut object_bytes.bytes);
+    assert_eq!(
+        independently_validate(&mut object_bytes),
+        Err(CoreError::IdMismatch)
     );
 }
 

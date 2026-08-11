@@ -12,6 +12,291 @@ pub const MEMORY_PROFILE_48_MIB: u64 = 48 * 1_024 * 1_024;
 pub const MEMORY_PROFILE_72_MIB: u64 = 72 * 1_024 * 1_024;
 const MEMORY_COMPONENT_COUNT: usize = 9;
 
+/// Availability state for one optional direct observation. An unavailable,
+/// inapplicable, or deferred observation never carries a fabricated numeric
+/// value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OptionalObservationStatusV1 {
+    Observed,
+    Unavailable,
+    NotApplicable,
+    Deferred,
+}
+
+/// Authority scope of one observation. This is deliberately independent of
+/// the storage-admission policy domains: process/host measurements are
+/// evidence only and can never authorize an operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObservationScopeV1 {
+    Operation,
+    Root,
+    Process,
+    Host,
+}
+
+/// Typed optional unsigned observation used at internal semantic ports.
+/// Private fields and constructors enforce `value.is_some()` if and only if
+/// the status is `Observed`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OptionalU64ObservationV1 {
+    status: OptionalObservationStatusV1,
+    value: Option<u64>,
+    method: &'static str,
+    scope: ObservationScopeV1,
+}
+
+impl OptionalU64ObservationV1 {
+    /// Evidence consumers must be able to distinguish a deliberate method or
+    /// unavailability reason from an omitted one.  Empty text would be a
+    /// non-reportable substitute just as misleading as an invented numeric
+    /// value, so reject it at the crate-private construction boundary.
+    const fn require_nonempty_description_v1(description: &'static str) {
+        if description.is_empty() {
+            panic!("optional observation method/reason must not be empty");
+        }
+    }
+
+    pub(crate) const fn observed(
+        value: u64,
+        method: &'static str,
+        scope: ObservationScopeV1,
+    ) -> Self {
+        Self::require_nonempty_description_v1(method);
+        Self {
+            status: OptionalObservationStatusV1::Observed,
+            value: Some(value),
+            method,
+            scope,
+        }
+    }
+
+    pub(crate) const fn unavailable(reason: &'static str, scope: ObservationScopeV1) -> Self {
+        Self::require_nonempty_description_v1(reason);
+        Self {
+            status: OptionalObservationStatusV1::Unavailable,
+            value: None,
+            method: reason,
+            scope,
+        }
+    }
+
+    pub(crate) const fn not_applicable(reason: &'static str, scope: ObservationScopeV1) -> Self {
+        Self::require_nonempty_description_v1(reason);
+        Self {
+            status: OptionalObservationStatusV1::NotApplicable,
+            value: None,
+            method: reason,
+            scope,
+        }
+    }
+
+    pub(crate) const fn deferred(reason: &'static str, scope: ObservationScopeV1) -> Self {
+        Self::require_nonempty_description_v1(reason);
+        Self {
+            status: OptionalObservationStatusV1::Deferred,
+            value: None,
+            method: reason,
+            scope,
+        }
+    }
+
+    pub const fn status(self) -> OptionalObservationStatusV1 {
+        self.status
+    }
+
+    pub const fn value(self) -> Option<u64> {
+        self.value
+    }
+
+    pub const fn method(self) -> &'static str {
+        self.method
+    }
+
+    pub const fn scope(self) -> ObservationScopeV1 {
+        self.scope
+    }
+
+    /// Accumulate homogeneous operation observations without inventing a
+    /// number when any constituent is unavailable. The first precise
+    /// non-observed status/reason is retained.
+    pub(crate) fn checked_add_operation_v1(
+        self,
+        other: Self,
+        observed_method: &'static str,
+    ) -> CoreResult<Self> {
+        if self.scope != ObservationScopeV1::Operation
+            || other.scope != ObservationScopeV1::Operation
+        {
+            return Err(CoreError::Schema);
+        }
+        match (self.value, other.value) {
+            (Some(left), Some(right)) => Ok(Self::observed(
+                left.checked_add(right).ok_or(CoreError::IntegerOverflow)?,
+                observed_method,
+                ObservationScopeV1::Operation,
+            )),
+            (None, _) => Ok(self),
+            (_, None) => Ok(other),
+        }
+    }
+}
+
+/// Host- and substrate-dependent terminal observations that are deliberately
+/// separate from LayerFS logical admission and accounting.  L1.5.5 has no
+/// portable direct provider for these values, so every field is explicitly
+/// unavailable with an absent numeric value.  Naming the fields here makes
+/// that absence reportable on every terminal path instead of hiding it in a
+/// prose disclaimer or encoding it as zero.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TerminalOptionalObservationsV1 {
+    process_cpu_nanoseconds: OptionalU64ObservationV1,
+    allocator_live_bytes: OptionalU64ObservationV1,
+    allocator_high_water_bytes: OptionalU64ObservationV1,
+    rss_bytes: OptionalU64ObservationV1,
+    pss_bytes: OptionalU64ObservationV1,
+    page_cache_bytes: OptionalU64ObservationV1,
+    process_open_descriptors: OptionalU64ObservationV1,
+    host_open_descriptors: OptionalU64ObservationV1,
+    filesystem_allocated_bytes: OptionalU64ObservationV1,
+    filesystem_allocated_blocks: OptionalU64ObservationV1,
+    filesystem_free_bytes: OptionalU64ObservationV1,
+    filesystem_quota_bytes: OptionalU64ObservationV1,
+    physical_inodes: OptionalU64ObservationV1,
+}
+
+impl TerminalOptionalObservationsV1 {
+    pub const fn portable_l155_unavailable() -> Self {
+        const PROCESS_REASON: &str = "portable direct process observation is unavailable in L1.5.5";
+        const HOST_REASON: &str = "portable direct host observation is unavailable in L1.5.5";
+        const FILESYSTEM_REASON: &str =
+            "portable direct filesystem observation is unavailable in L1.5.5";
+        Self {
+            process_cpu_nanoseconds: OptionalU64ObservationV1::unavailable(
+                PROCESS_REASON,
+                ObservationScopeV1::Process,
+            ),
+            allocator_live_bytes: OptionalU64ObservationV1::unavailable(
+                PROCESS_REASON,
+                ObservationScopeV1::Process,
+            ),
+            allocator_high_water_bytes: OptionalU64ObservationV1::unavailable(
+                PROCESS_REASON,
+                ObservationScopeV1::Process,
+            ),
+            rss_bytes: OptionalU64ObservationV1::unavailable(
+                PROCESS_REASON,
+                ObservationScopeV1::Process,
+            ),
+            pss_bytes: OptionalU64ObservationV1::unavailable(
+                PROCESS_REASON,
+                ObservationScopeV1::Process,
+            ),
+            page_cache_bytes: OptionalU64ObservationV1::unavailable(
+                PROCESS_REASON,
+                ObservationScopeV1::Process,
+            ),
+            process_open_descriptors: OptionalU64ObservationV1::unavailable(
+                PROCESS_REASON,
+                ObservationScopeV1::Process,
+            ),
+            host_open_descriptors: OptionalU64ObservationV1::unavailable(
+                HOST_REASON,
+                ObservationScopeV1::Host,
+            ),
+            filesystem_allocated_bytes: OptionalU64ObservationV1::unavailable(
+                FILESYSTEM_REASON,
+                ObservationScopeV1::Root,
+            ),
+            filesystem_allocated_blocks: OptionalU64ObservationV1::unavailable(
+                FILESYSTEM_REASON,
+                ObservationScopeV1::Root,
+            ),
+            filesystem_free_bytes: OptionalU64ObservationV1::unavailable(
+                FILESYSTEM_REASON,
+                ObservationScopeV1::Root,
+            ),
+            filesystem_quota_bytes: OptionalU64ObservationV1::unavailable(
+                FILESYSTEM_REASON,
+                ObservationScopeV1::Root,
+            ),
+            physical_inodes: OptionalU64ObservationV1::unavailable(
+                FILESYSTEM_REASON,
+                ObservationScopeV1::Root,
+            ),
+        }
+    }
+
+    pub const fn process_cpu_nanoseconds(self) -> OptionalU64ObservationV1 {
+        self.process_cpu_nanoseconds
+    }
+
+    pub const fn allocator_live_bytes(self) -> OptionalU64ObservationV1 {
+        self.allocator_live_bytes
+    }
+
+    pub const fn allocator_high_water_bytes(self) -> OptionalU64ObservationV1 {
+        self.allocator_high_water_bytes
+    }
+
+    pub const fn rss_bytes(self) -> OptionalU64ObservationV1 {
+        self.rss_bytes
+    }
+
+    pub const fn pss_bytes(self) -> OptionalU64ObservationV1 {
+        self.pss_bytes
+    }
+
+    pub const fn page_cache_bytes(self) -> OptionalU64ObservationV1 {
+        self.page_cache_bytes
+    }
+
+    pub const fn process_open_descriptors(self) -> OptionalU64ObservationV1 {
+        self.process_open_descriptors
+    }
+
+    pub const fn host_open_descriptors(self) -> OptionalU64ObservationV1 {
+        self.host_open_descriptors
+    }
+
+    pub const fn filesystem_allocated_bytes(self) -> OptionalU64ObservationV1 {
+        self.filesystem_allocated_bytes
+    }
+
+    pub const fn filesystem_allocated_blocks(self) -> OptionalU64ObservationV1 {
+        self.filesystem_allocated_blocks
+    }
+
+    pub const fn filesystem_free_bytes(self) -> OptionalU64ObservationV1 {
+        self.filesystem_free_bytes
+    }
+
+    pub const fn filesystem_quota_bytes(self) -> OptionalU64ObservationV1 {
+        self.filesystem_quota_bytes
+    }
+
+    pub const fn physical_inodes(self) -> OptionalU64ObservationV1 {
+        self.physical_inodes
+    }
+
+    pub const fn all(self) -> [OptionalU64ObservationV1; 13] {
+        [
+            self.process_cpu_nanoseconds,
+            self.allocator_live_bytes,
+            self.allocator_high_water_bytes,
+            self.rss_bytes,
+            self.pss_bytes,
+            self.page_cache_bytes,
+            self.process_open_descriptors,
+            self.host_open_descriptors,
+            self.filesystem_allocated_bytes,
+            self.filesystem_allocated_blocks,
+            self.filesystem_free_bytes,
+            self.filesystem_quota_bytes,
+            self.physical_inodes,
+        ]
+    }
+}
+
 pub const fn admitted_slots_for_budget(budget_bytes: u64) -> u64 {
     if budget_bytes < BASE_LEDGER_BYTES {
         0
@@ -59,10 +344,12 @@ impl ResourceLedgerV1 {
         BASE_LEDGER_BYTES + self.high_water_planned_bytes.load(Ordering::Acquire)
     }
 
+    #[cfg(test)]
     pub fn reserve_operation(&self) -> CoreResult<OperationReservationV1<'_>> {
         self.reserve_operation_with_plan(OperationMemoryPlanV1::empty())
     }
 
+    #[cfg(test)]
     pub fn reserve_operation_with_plan(
         &self,
         plan: OperationMemoryPlanV1,
@@ -361,6 +648,12 @@ pub struct OperationCountersV1 {
     pub root_admission_wait_nanoseconds: u64,
     pub root_admission_memory_refusals: u64,
     pub root_admission_release_failures: u64,
+    /// Exact-counter failure for `root_admission_release_failures`.  The
+    /// authority-release cause remains the operation's chronological
+    /// terminal; this bounded side channel records that the direct diagnostic
+    /// event could not be represented instead of substituting a number or
+    /// erasing the observation failure.
+    pub(crate) root_admission_release_failure_observation_error: Option<CoreError>,
     /// Direct operation-local observations of the narrow shared-root
     /// visibility fence. Wait and hold durations use the portable monotonic
     /// `Instant` clock; they are never derived from process wall time or a
@@ -455,9 +748,40 @@ pub struct OperationCountersV1 {
 }
 
 impl OperationCountersV1 {
+    /// Typed availability for host-dependent terminal evidence. This is
+    /// callable after success or failure and never changes logical counters.
+    pub const fn terminal_optional_observations_v1(&self) -> TerminalOptionalObservationsV1 {
+        TerminalOptionalObservationsV1::portable_l155_unavailable()
+    }
+
     /// Checked accumulation for independently borrowed lower-layer work.
     /// Scalar work adds; high-water observations take their maximum.
     pub(crate) fn accumulate(&mut self, other: Self) -> CoreResult<()> {
+        // A terminal observation is one indivisible record. A checked
+        // failure in a late scalar/current-state field must not expose the
+        // earlier half of this merge while leaving the remaining fields at
+        // their old values.
+        let mut checked = *self;
+        match checked.accumulate_in_place_v1(other) {
+            Ok(()) => {
+                *self = checked;
+                Ok(())
+            }
+            Err(error) => {
+                // The bounded release-observation side channel is evidence
+                // about why the otherwise-transactional record could not be
+                // represented. Preserve it without exposing any partially
+                // added scalar or high-water field.
+                self.root_admission_release_failure_observation_error = self
+                    .root_admission_release_failure_observation_error
+                    .or(other.root_admission_release_failure_observation_error)
+                    .or(checked.root_admission_release_failure_observation_error);
+                Err(error)
+            }
+        }
+    }
+
+    fn accumulate_in_place_v1(&mut self, other: Self) -> CoreResult<()> {
         macro_rules! add_fields {
             ($($field:ident),+ $(,)?) => {
                 $(self.$field = self.$field.checked_add(other.$field)
@@ -530,7 +854,6 @@ impl OperationCountersV1 {
             root_admission_wait_polls,
             root_admission_wait_nanoseconds,
             root_admission_memory_refusals,
-            root_admission_release_failures,
             visibility_lock_acquisitions,
             visibility_lock_contended_polls,
             visibility_lock_wait_nanoseconds,
@@ -592,6 +915,21 @@ impl OperationCountersV1 {
             source_sized_staging_allocations,
             workspace_sized_staging_allocations,
         );
+        let release_failure_observation_error = self
+            .root_admission_release_failure_observation_error
+            .or(other.root_admission_release_failure_observation_error);
+        self.root_admission_release_failures = match self
+            .root_admission_release_failures
+            .checked_add(other.root_admission_release_failures)
+        {
+            Some(total) => total,
+            None => {
+                self.root_admission_release_failure_observation_error =
+                    Some(CoreError::IntegerOverflow);
+                return Err(CoreError::IntegerOverflow);
+            }
+        };
+        self.root_admission_release_failure_observation_error = release_failure_observation_error;
         self.memory_high_water = self.memory_high_water.max(other.memory_high_water);
         self.final_carrier_bytes = self.final_carrier_bytes.max(other.final_carrier_bytes);
         self.maximum_active_carrier_bytes = self
@@ -660,28 +998,34 @@ impl OperationCountersV1 {
         &mut self,
         counters: crate::cdc::CdcStreamCountersV1,
     ) -> CoreResult<()> {
-        self.add(CounterFieldV1::RingFills, counters.ring_fills)?;
-        self.add(CounterFieldV1::RingWrapSpans, counters.ring_wrap_spans)?;
-        self.add(CounterFieldV1::CdcScanCalls, counters.scan_calls)?;
-        self.add(CounterFieldV1::CdcScanBytes, counters.scan_bytes)?;
-        self.add(
+        let mut checked = *self;
+        checked.add(CounterFieldV1::RingFills, counters.ring_fills)?;
+        checked.add(CounterFieldV1::RingWrapSpans, counters.ring_wrap_spans)?;
+        checked.add(CounterFieldV1::CdcScanCalls, counters.scan_calls)?;
+        checked.add(CounterFieldV1::CdcScanBytes, counters.scan_bytes)?;
+        checked.add(
             CounterFieldV1::BytesBoundaryInspected,
             counters.boundary_inspected_bytes,
-        )
+        )?;
+        *self = checked;
+        Ok(())
     }
 
     pub fn add_seqcdc(&mut self, counters: crate::cdc::SeqCdcCountersV1) -> CoreResult<()> {
-        self.add(CounterFieldV1::SeqCdcComparisons, counters.comparisons)?;
-        self.add(
+        let mut checked = *self;
+        checked.add(CounterFieldV1::SeqCdcComparisons, counters.comparisons)?;
+        checked.add(
             CounterFieldV1::SeqCdcEqualAbsorptions,
             counters.equal_absorptions,
         )?;
-        self.add(
+        checked.add(
             CounterFieldV1::SeqCdcOpposingSlopes,
             counters.opposing_slopes,
         )?;
-        self.add(CounterFieldV1::SeqCdcJumps, counters.jumps)?;
-        self.add(CounterFieldV1::SeqCdcJumpBytes, counters.jump_bytes)
+        checked.add(CounterFieldV1::SeqCdcJumps, counters.jumps)?;
+        checked.add(CounterFieldV1::SeqCdcJumpBytes, counters.jump_bytes)?;
+        *self = checked;
+        Ok(())
     }
 
     pub fn record_pack_storage(
@@ -689,20 +1033,25 @@ impl OperationCountersV1 {
         installed_carrier_logical_bytes: u64,
         temporary_bytes: u64,
     ) -> CoreResult<()> {
-        self.add(
+        let mut checked = *self;
+        checked.add(
             CounterFieldV1::InstalledCarrierLogicalBytes,
             installed_carrier_logical_bytes,
         )?;
-        self.add(CounterFieldV1::TemporaryPreparationBytes, temporary_bytes)
+        checked.add(CounterFieldV1::TemporaryPreparationBytes, temporary_bytes)?;
+        *self = checked;
+        Ok(())
     }
 
     pub(crate) fn record_carrier(&mut self, bytes: u64, rollover: bool) -> CoreResult<()> {
-        self.add(CounterFieldV1::CarrierBytesTotal, bytes)?;
+        let mut checked = *self;
+        checked.add(CounterFieldV1::CarrierBytesTotal, bytes)?;
         if rollover {
-            self.add(CounterFieldV1::CarrierRollovers, 1)?;
+            checked.add(CounterFieldV1::CarrierRollovers, 1)?;
         }
-        self.final_carrier_bytes = bytes;
-        self.maximum_active_carrier_bytes = self.maximum_active_carrier_bytes.max(bytes);
+        checked.final_carrier_bytes = bytes;
+        checked.maximum_active_carrier_bytes = checked.maximum_active_carrier_bytes.max(bytes);
+        *self = checked;
         Ok(())
     }
 
@@ -718,24 +1067,27 @@ impl OperationCountersV1 {
         metadata_read_calls: u64,
         metadata_bytes_written: u64,
     ) -> CoreResult<()> {
-        self.add(CounterFieldV1::GlobalSeenLookups, lookups)?;
-        self.add(CounterFieldV1::GlobalSeenProbes, probes)?;
-        self.add(
+        let mut checked = *self;
+        checked.add(CounterFieldV1::GlobalSeenLookups, lookups)?;
+        checked.add(CounterFieldV1::GlobalSeenProbes, probes)?;
+        checked.add(
             CounterFieldV1::GlobalSeenMetadataBytesRead,
             metadata_bytes_read,
         )?;
-        self.add(
+        checked.add(
             CounterFieldV1::GlobalSeenMetadataReadCalls,
             metadata_read_calls,
         )?;
-        self.add(
+        checked.add(
             CounterFieldV1::GlobalSeenMetadataBytesWritten,
             metadata_bytes_written,
         )?;
-        self.global_seen_maximum_probe =
-            self.global_seen_maximum_probe.max(u64::from(maximum_probe));
-        self.global_seen_entries = self.global_seen_entries.max(u64::from(entries));
-        self.global_seen_table_bytes = self.global_seen_table_bytes.max(table_bytes);
+        checked.global_seen_maximum_probe = checked
+            .global_seen_maximum_probe
+            .max(u64::from(maximum_probe));
+        checked.global_seen_entries = checked.global_seen_entries.max(u64::from(entries));
+        checked.global_seen_table_bytes = checked.global_seen_table_bytes.max(table_bytes);
+        *self = checked;
         Ok(())
     }
 
@@ -825,11 +1177,26 @@ impl OperationCountersV1 {
     }
 
     pub(crate) fn record_root_admission_release_failure_v1(&mut self) -> CoreResult<()> {
-        self.root_admission_release_failures = self
-            .root_admission_release_failures
-            .checked_add(1)
-            .ok_or(CoreError::IntegerOverflow)?;
+        self.root_admission_release_failures =
+            match self.root_admission_release_failures.checked_add(1) {
+                Some(total) => total,
+                None => {
+                    self.root_admission_release_failure_observation_error =
+                        Some(CoreError::IntegerOverflow);
+                    return Err(CoreError::IntegerOverflow);
+                }
+            };
         Ok(())
+    }
+
+    /// Typed evidence that the exact admission-release-failure counter could
+    /// not represent a required event.  `None` means the scalar remains exact;
+    /// `Some` never authorizes a numeric replacement and requires the owning
+    /// terminal path to fail closed.
+    pub(crate) const fn root_admission_release_failure_observation_error_v1(
+        &self,
+    ) -> Option<CoreError> {
+        self.root_admission_release_failure_observation_error
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -917,7 +1284,8 @@ impl OperationCountersV1 {
         kind: PhysicalObjectKindV1,
         created: bool,
     ) -> CoreResult<()> {
-        self.add(
+        let mut checked = *self;
+        checked.add(
             if created {
                 CounterFieldV1::PackLocalObjectsCreated
             } else {
@@ -926,8 +1294,31 @@ impl OperationCountersV1 {
             1,
         )?;
         if created {
-            self.add(CounterFieldV1::PhysicalCarrierObjectWrites, 1)?;
+            checked.add(CounterFieldV1::PhysicalCarrierObjectWrites, 1)?;
         }
+        let target = match (kind, created) {
+            (PhysicalObjectKindV1::VersionRecord, true) => &mut checked.version_objects_created,
+            (PhysicalObjectKindV1::VersionRecord, false) => &mut checked.version_objects_reused,
+            (PhysicalObjectKindV1::Tree, true) => &mut checked.tree_objects_created,
+            (PhysicalObjectKindV1::Tree, false) => &mut checked.tree_objects_reused,
+            (PhysicalObjectKindV1::File, true) => &mut checked.file_objects_created,
+            (PhysicalObjectKindV1::File, false) => &mut checked.file_objects_reused,
+            (PhysicalObjectKindV1::Symlink, true) => &mut checked.symlink_objects_created,
+            (PhysicalObjectKindV1::Symlink, false) => &mut checked.symlink_objects_reused,
+            (PhysicalObjectKindV1::Chunk, true) => &mut checked.chunk_objects_created,
+            (PhysicalObjectKindV1::Chunk, false) => &mut checked.chunk_objects_reused,
+        };
+        *target = target.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
+        *self = checked;
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn saturate_pack_object_disposition_for_test_v1(
+        &mut self,
+        kind: PhysicalObjectKindV1,
+        created: bool,
+    ) {
         let target = match (kind, created) {
             (PhysicalObjectKindV1::VersionRecord, true) => &mut self.version_objects_created,
             (PhysicalObjectKindV1::VersionRecord, false) => &mut self.version_objects_reused,
@@ -940,13 +1331,15 @@ impl OperationCountersV1 {
             (PhysicalObjectKindV1::Chunk, true) => &mut self.chunk_objects_created,
             (PhysicalObjectKindV1::Chunk, false) => &mut self.chunk_objects_reused,
         };
-        *target = target.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
-        Ok(())
+        *target = u64::MAX;
     }
 
     pub fn record_incumbent_comparison(&mut self, bytes: u64, windows: u64) -> CoreResult<()> {
-        self.add(CounterFieldV1::IncumbentComparisonBytes, bytes)?;
-        self.add(CounterFieldV1::IncumbentComparisonWindows, windows)
+        let mut checked = *self;
+        checked.add(CounterFieldV1::IncumbentComparisonBytes, bytes)?;
+        checked.add(CounterFieldV1::IncumbentComparisonWindows, windows)?;
+        *self = checked;
+        Ok(())
     }
 
     pub fn record_closure_fence(&mut self) -> CoreResult<()> {
@@ -981,9 +1374,10 @@ impl OperationCountersV1 {
         immutable_residue_bytes: u64,
         immutable_residue_inodes: u64,
     ) -> CoreResult<()> {
+        let mut checked = *self;
         macro_rules! checked_add {
             ($field:ident, $value:expr) => {
-                self.$field = self
+                checked.$field = checked
                     .$field
                     .checked_add($value)
                     .ok_or(CoreError::IntegerOverflow)?;
@@ -1017,18 +1411,55 @@ impl OperationCountersV1 {
             storage_preparation_inodes_current_after_cleanup,
             preparation_inodes_current_after_cleanup
         );
-        self.root_storage_active_reserved_bytes_lifetime_high_water = self
+        checked.root_storage_active_reserved_bytes_lifetime_high_water = checked
             .root_storage_active_reserved_bytes_lifetime_high_water
             .max(root_active_reserved_bytes_lifetime_high_water);
-        self.root_storage_active_reserved_inodes_lifetime_high_water = self
+        checked.root_storage_active_reserved_inodes_lifetime_high_water = checked
             .root_storage_active_reserved_inodes_lifetime_high_water
             .max(root_active_reserved_inodes_lifetime_high_water);
-        self.storage_preparation_bytes_high_water = self
+        checked.storage_preparation_bytes_high_water = checked
             .storage_preparation_bytes_high_water
             .max(preparation_bytes_high_water);
-        self.storage_preparation_inodes_high_water = self
+        checked.storage_preparation_inodes_high_water = checked
             .storage_preparation_inodes_high_water
             .max(preparation_inodes_high_water);
+        *self = checked;
+        Ok(())
+    }
+
+    /// A complete operation may finish its storage ledger successfully and
+    /// then discover that the outer root-admission capability cannot be
+    /// released. No handoff can cross that failed terminal boundary, so the
+    /// operation-relative immutable set is retained residue rather than a
+    /// committed success. Reclassify the already-checked terminal observation
+    /// atomically without changing the root's immutable byte ownership.
+    pub(crate) fn reclassify_storage_commit_as_retained_v1(&mut self) -> CoreResult<()> {
+        let mut checked = *self;
+        let bytes = checked.storage_bytes_committed;
+        let inodes = checked.storage_inodes_committed;
+        checked.storage_bytes_retained = checked
+            .storage_bytes_retained
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.storage_inodes_retained = checked
+            .storage_inodes_retained
+            .checked_add(inodes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.immutable_residue_bytes = checked
+            .immutable_residue_bytes
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.immutable_residue_inodes = checked
+            .immutable_residue_inodes
+            .checked_add(inodes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.unreachable_installed_residue_bytes = checked
+            .unreachable_installed_residue_bytes
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.storage_bytes_committed = 0;
+        checked.storage_inodes_committed = 0;
+        *self = checked;
         Ok(())
     }
 
@@ -1046,20 +1477,26 @@ impl OperationCountersV1 {
     }
 
     pub fn record_update_reference_metadata(&mut self, records: u64, bytes: u64) -> CoreResult<()> {
-        self.add(CounterFieldV1::UpdateReferenceMetadataRecords, records)?;
-        self.add(CounterFieldV1::UpdateReferenceMetadataBytes, bytes)
+        let mut checked = *self;
+        checked.add(CounterFieldV1::UpdateReferenceMetadataRecords, records)?;
+        checked.add(CounterFieldV1::UpdateReferenceMetadataBytes, bytes)?;
+        *self = checked;
+        Ok(())
     }
 
     pub fn record_exact_rejoin(&mut self, bytes: u64, equal: bool) -> CoreResult<()> {
-        self.add(CounterFieldV1::ExactRejoinBytes, bytes)?;
-        self.add(
+        let mut checked = *self;
+        checked.add(CounterFieldV1::ExactRejoinBytes, bytes)?;
+        checked.add(
             if equal {
                 CounterFieldV1::RejoinSuccesses
             } else {
                 CounterFieldV1::RejoinFailures
             },
             1,
-        )
+        )?;
+        *self = checked;
+        Ok(())
     }
 
     pub fn record_retry_attempt(&mut self) -> CoreResult<()> {
@@ -1346,10 +1783,8 @@ impl FileSortWorkV1 {
         counters.file_sort_maximum_work_budget = counters.file_sort_maximum_work_budget.max(budget);
         // The current implementations sort in place in the already charged
         // spool and create no auxiliary run or temporary file. This direct
-        // observed high-water is therefore a real zero, not unavailable
-        // physical memory or disk accounting.
-        counters.file_sort_temporary_bytes_high_water =
-            counters.file_sort_temporary_bytes_high_water.max(0);
+        // observed high-water therefore remains at its existing value (zero
+        // for a fresh operation), not an unavailable physical observation.
         let mut work = Self {
             budget,
             work_units: 0,
@@ -1496,4 +1931,342 @@ pub(crate) enum CounterFieldV1 {
     RayonWorkUnits,
     SourceSizedStagingAllocations,
     WorkspaceSizedStagingAllocations,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cdc::{CdcStreamCountersV1, SeqCdcCountersV1};
+    use crate::format::PhysicalObjectKindV1;
+
+    use super::{CoreError, ObservationScopeV1, OperationCountersV1, OptionalU64ObservationV1};
+
+    #[test]
+    fn optional_observations_reject_empty_method_or_reason() {
+        let operation = ObservationScopeV1::Operation;
+        assert!(std::panic::catch_unwind(|| {
+            OptionalU64ObservationV1::observed(1, "", operation)
+        })
+        .is_err());
+        assert!(std::panic::catch_unwind(|| {
+            OptionalU64ObservationV1::unavailable("", operation)
+        })
+        .is_err());
+        assert!(std::panic::catch_unwind(|| {
+            OptionalU64ObservationV1::not_applicable("", operation)
+        })
+        .is_err());
+        assert!(
+            std::panic::catch_unwind(|| { OptionalU64ObservationV1::deferred("", operation) })
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn cdc_stream_accumulation_is_transactional_on_late_overflow() {
+        let mut destination = OperationCountersV1 {
+            ring_fills: 7,
+            ring_wrap_spans: 11,
+            cdc_scan_calls: 13,
+            cdc_scan_bytes: 17,
+            bytes_boundary_inspected: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.add_cdc_stream(CdcStreamCountersV1 {
+                ring_fills: 1,
+                ring_wrap_spans: 2,
+                scan_calls: 3,
+                scan_bytes: 4,
+                boundary_inspected_bytes: 1,
+            }),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn seqcdc_accumulation_is_transactional_on_late_overflow() {
+        let mut destination = OperationCountersV1 {
+            seqcdc_comparisons: 7,
+            seqcdc_equal_absorptions: 11,
+            seqcdc_opposing_slopes: 13,
+            seqcdc_jumps: 17,
+            seqcdc_jump_bytes: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.add_seqcdc(SeqCdcCountersV1 {
+                comparisons: 1,
+                equal_absorptions: 2,
+                opposing_slopes: 3,
+                jumps: 4,
+                jump_bytes: 5,
+            }),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn pack_storage_accumulation_is_transactional_on_late_overflow() {
+        let mut destination = OperationCountersV1 {
+            installed_carrier_logical_bytes: 7,
+            temporary_preparation_bytes: u64::MAX,
+            pack_entries: 11,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_pack_storage(13, 17),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn carrier_accumulation_is_transactional_on_late_overflow() {
+        let mut destination = OperationCountersV1 {
+            carrier_bytes_total: 7,
+            final_carrier_bytes: 11,
+            maximum_active_carrier_bytes: 13,
+            carrier_rollovers: u64::MAX,
+            pack_entries: 17,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_carrier(19, true),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn carrier_accumulation_records_exact_totals_final_maximum_and_rollovers() {
+        let mut destination = OperationCountersV1::default();
+
+        destination.record_carrier(19, false).unwrap();
+        destination.record_carrier(7, true).unwrap();
+        destination.record_carrier(23, true).unwrap();
+
+        assert_eq!(destination.carrier_bytes_total, 49);
+        assert_eq!(destination.final_carrier_bytes, 23);
+        assert_eq!(destination.maximum_active_carrier_bytes, 23);
+        assert_eq!(destination.carrier_rollovers, 2);
+    }
+
+    #[test]
+    fn global_seen_accumulation_is_transactional_on_late_overflow() {
+        let mut destination = OperationCountersV1 {
+            global_seen_lookups: 7,
+            global_seen_probes: 11,
+            global_seen_metadata_bytes_read: 13,
+            global_seen_metadata_read_calls: 17,
+            global_seen_metadata_bytes_written: u64::MAX,
+            global_seen_maximum_probe: 19,
+            global_seen_entries: 23,
+            global_seen_table_bytes: 29,
+            pack_entries: 31,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_global_seen(37, 41, 43, 47, 53, 59, 61, 67),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn created_object_disposition_is_transactional_on_late_kind_overflow() {
+        let mut destination = OperationCountersV1 {
+            pack_local_objects_created: 7,
+            physical_carrier_object_writes: 11,
+            chunk_objects_created: u64::MAX,
+            pack_entries: 13,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_pack_object_disposition(PhysicalObjectKindV1::Chunk, true),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn reused_object_disposition_is_transactional_on_late_kind_overflow() {
+        let mut destination = OperationCountersV1 {
+            pack_local_objects_reused: 7,
+            file_objects_reused: u64::MAX,
+            pack_entries: 11,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_pack_object_disposition(PhysicalObjectKindV1::File, false),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn counter_accumulation_is_transactional_on_release_counter_overflow() {
+        let mut destination = OperationCountersV1 {
+            bytes_read: 7,
+            root_admission_release_failures: u64::MAX,
+            maximum_active_carrier_bytes: 11,
+            storage_preparation_bytes_current_after_cleanup: 13,
+            ..OperationCountersV1::default()
+        };
+        let source = OperationCountersV1 {
+            bytes_read: 1,
+            root_admission_release_failures: 1,
+            maximum_active_carrier_bytes: 99,
+            storage_preparation_bytes_current_after_cleanup: 17,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.accumulate(source),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(
+            destination.root_admission_release_failure_observation_error_v1(),
+            Some(CoreError::IntegerOverflow)
+        );
+        destination.root_admission_release_failure_observation_error =
+            before.root_admission_release_failure_observation_error;
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn counter_accumulation_is_transactional_on_preparation_current_overflow() {
+        let mut destination = OperationCountersV1 {
+            bytes_read: 7,
+            root_admission_release_failures: 3,
+            maximum_active_carrier_bytes: 11,
+            storage_preparation_bytes_current_after_cleanup: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let source = OperationCountersV1 {
+            bytes_read: 1,
+            root_admission_release_failures: 5,
+            maximum_active_carrier_bytes: 99,
+            storage_preparation_bytes_current_after_cleanup: 1,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.accumulate(source),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn incumbent_comparison_is_transactional_on_late_windows_overflow() {
+        let mut destination = OperationCountersV1 {
+            incumbent_comparison_bytes: 7,
+            incumbent_comparison_windows: u64::MAX,
+            fscas_bytes_read: 11,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_incumbent_comparison(13, 1),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn storage_admission_is_transactional_on_late_residue_overflow() {
+        let mut destination = OperationCountersV1 {
+            storage_bytes_requested: 7,
+            storage_bytes_reserved: 11,
+            storage_bytes_released: 13,
+            storage_bytes_committed: 17,
+            storage_bytes_retained: 19,
+            storage_inodes_requested: 23,
+            storage_preparation_bytes_high_water: 29,
+            immutable_residue_inodes: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_storage_admission_v1(
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 31, 37, 41, 43, 47, 53, 59, 61, 67, 1,
+            ),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn update_reference_metadata_is_transactional_on_late_byte_overflow() {
+        let mut destination = OperationCountersV1 {
+            update_reference_metadata_records: 7,
+            update_reference_metadata_bytes: u64::MAX,
+            update_base_payload_bytes: 11,
+            source_bytes_read: 13,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_update_reference_metadata(1, 36),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn exact_rejoin_success_is_transactional_on_late_outcome_overflow() {
+        let mut destination = OperationCountersV1 {
+            exact_rejoin_bytes: 7,
+            rejoin_successes: u64::MAX,
+            rejoin_failures: 11,
+            update_base_payload_bytes: 13,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_exact_rejoin(17, true),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn exact_rejoin_failure_is_transactional_on_late_outcome_overflow() {
+        let mut destination = OperationCountersV1 {
+            exact_rejoin_bytes: 7,
+            rejoin_successes: 11,
+            rejoin_failures: u64::MAX,
+            update_base_payload_bytes: 13,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_exact_rejoin(17, false),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
 }

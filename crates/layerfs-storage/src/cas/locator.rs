@@ -58,6 +58,7 @@ impl PersistentObjectLocatorV1 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum PersistentLocatorCodecErrorV1 {
     Malformed,
+    BindingMismatch,
 }
 
 pub(super) fn encode_persistent_locator_v1(
@@ -83,13 +84,15 @@ pub(super) fn decode_persistent_locator_v1(
     expected: TypedPhysicalObjectIdV1,
 ) -> Result<PersistentObjectLocatorV1, PersistentLocatorCodecErrorV1> {
     if &bytes[..8] != PERSISTENT_LOCATOR_MAGIC_V1
-        || bytes[8] != typed_kind_byte(expected)
+        || !(1..=5).contains(&bytes[8])
         || bytes[9..16] != [0_u8; 7]
-        || bytes[16..48] != *expected.as_bytes()
         || bytes[92..96] != [0_u8; 4]
         || bytes[116..120] != [0_u8; 4]
     {
         return Err(PersistentLocatorCodecErrorV1::Malformed);
+    }
+    if bytes[8] != typed_kind_byte(expected) || bytes[16..48] != *expected.as_bytes() {
+        return Err(PersistentLocatorCodecErrorV1::BindingMismatch);
     }
     let pack_id = <[u8; 32]>::try_from(&bytes[48..80])
         .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?;
@@ -200,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn persistent_locator_rejects_wrong_type_or_reserved_bytes() {
+    fn persistent_locator_distinguishes_structure_from_typed_binding() {
         let (locator, id) = fixture();
         let mut encoded = encode_persistent_locator_v1(locator);
         encoded[9] = 1;
@@ -215,6 +218,20 @@ mod tests {
         );
         assert_eq!(
             decode_persistent_locator_v1(encoded, wrong),
+            Err(PersistentLocatorCodecErrorV1::BindingMismatch)
+        );
+
+        let mut wrong_id = encode_persistent_locator_v1(locator);
+        wrong_id[16] ^= 0xff;
+        assert_eq!(
+            decode_persistent_locator_v1(wrong_id, id),
+            Err(PersistentLocatorCodecErrorV1::BindingMismatch)
+        );
+
+        let mut unknown_kind = encode_persistent_locator_v1(locator);
+        unknown_kind[8] = 0xff;
+        assert_eq!(
+            decode_persistent_locator_v1(unknown_kind, id),
             Err(PersistentLocatorCodecErrorV1::Malformed)
         );
     }

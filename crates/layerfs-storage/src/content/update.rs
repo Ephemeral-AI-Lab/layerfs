@@ -27,10 +27,11 @@ use crate::identity::{
     derive_logical_chunk_spans_v1, FramedHasherV1, LogicalChunkIdV1, LogicalFileHasherV1,
     PhysicalChunkIdV1, PhysicalFileIdV1, IDENTITY_HASHER_BYTES_V1, TAG_PHYSICAL_FILE,
 };
-#[cfg(feature = "c3-polymorphism")]
 use crate::limits::OperationReservationV1;
+#[cfg(test)]
+use crate::limits::ResourceLedgerV1;
 use crate::limits::{
-    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
+    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
 use crate::object::encode_physical_object_header_v1;
 use crate::profile::ChunkerSpecV1;
@@ -208,6 +209,7 @@ pub trait AuthenticatedBaseByteReaderV1 {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub fn update_file_v1<S, O, R, E, B, C>(
     path: &[u8],
     mode: u16,
@@ -307,8 +309,8 @@ where
 
 #[derive(Clone, Copy)]
 enum UpdateMemoryAdmissionV1<'a> {
+    #[cfg(test)]
     Independent(&'a ResourceLedgerV1),
-    #[cfg(feature = "c3-polymorphism")]
     Borrowed(&'a OperationReservationV1<'a>),
 }
 
@@ -387,13 +389,13 @@ where
         )?
         .charge(MemoryComponentV1::MetadataWindow, operation_metadata_bytes)
         .map_err(|_| CoreError::RangeResyncFailed)?;
-    let _independent_reservation = match admission {
+    let _independent_reservation: Option<OperationReservationV1<'_>> = match admission {
+        #[cfg(test)]
         UpdateMemoryAdmissionV1::Independent(ledger) => {
             let reservation = ledger.reserve_operation_with_plan(memory)?;
             counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
             Some(reservation)
         }
-        #[cfg(feature = "c3-polymorphism")]
         UpdateMemoryAdmissionV1::Borrowed(reservation) => {
             reservation.require(memory)?;
             None

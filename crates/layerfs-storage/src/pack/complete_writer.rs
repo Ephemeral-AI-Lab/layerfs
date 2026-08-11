@@ -24,7 +24,9 @@ use crate::identity::{
     TAG_PACK,
 };
 use crate::lifecycle::{SharedC3ControlV1, VersionSummaryInputV1};
-use crate::limits::{CounterFieldV1, OperationCountersV1, ResourceLedgerV1};
+use crate::limits::{
+    CounterFieldV1, ObservationScopeV1, OperationCountersV1, OptionalU64ObservationV1,
+};
 use crate::object::{
     encode_physical_object_header_v1, TypedPhysicalObjectIdV1, VERSION_RECORD_PAYLOAD_BYTES,
 };
@@ -48,13 +50,14 @@ struct CurrentObjectV1 {
     checksum: FramedHasherV1,
 }
 
-struct CountedPackReadV1<'pack> {
-    pack: &'pack mut FsPrivatePackV1,
+struct CountedPackReadV1<'pack, P: ?Sized> {
+    pack: &'pack mut P,
     bytes_read: u64,
     read_calls: u64,
+    first_core_error: Option<CoreError>,
 }
 
-impl PackReadPortV1 for CountedPackReadV1<'_> {
+impl<P: PackReadPortV1 + ?Sized> PackReadPortV1 for CountedPackReadV1<'_, P> {
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
         self.pack.resident_memory_bound_bytes()
     }
@@ -69,14 +72,32 @@ impl PackReadPortV1 for CountedPackReadV1<'_> {
         destination: &mut [u8],
     ) -> Result<(), PackPortErrorV1> {
         self.pack.read_exact_at(offset, destination)?;
-        self.bytes_read = self
-            .bytes_read
-            .checked_add(u64::try_from(destination.len()).map_err(|_| PackPortErrorV1::Failure)?)
-            .ok_or(PackPortErrorV1::Failure)?;
-        self.read_calls = self
-            .read_calls
-            .checked_add(1)
-            .ok_or(PackPortErrorV1::Failure)?;
+        let amount = match u64::try_from(destination.len()) {
+            Ok(amount) => amount,
+            Err(_) => {
+                self.first_core_error
+                    .get_or_insert(CoreError::IntegerOverflow);
+                return Err(PackPortErrorV1::Failure);
+            }
+        };
+        let next_bytes_read = match self.bytes_read.checked_add(amount) {
+            Some(next) => next,
+            None => {
+                self.first_core_error
+                    .get_or_insert(CoreError::IntegerOverflow);
+                return Err(PackPortErrorV1::Failure);
+            }
+        };
+        let next_read_calls = match self.read_calls.checked_add(1) {
+            Some(next) => next,
+            None => {
+                self.first_core_error
+                    .get_or_insert(CoreError::IntegerOverflow);
+                return Err(PackPortErrorV1::Failure);
+            }
+        };
+        self.bytes_read = next_bytes_read;
+        self.read_calls = next_read_calls;
         Ok(())
     }
 }
@@ -91,7 +112,6 @@ pub(crate) struct DirectPackSinkV1<'operation, 'ledger, 'control, M: ?Sized, C: 
     occupied: FsCasOccupiedV1,
     left: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
     right: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
-    ledger: &'operation ResourceLedgerV1,
     reservation: &'operation crate::limits::OperationReservationV1<'ledger>,
     control: &'operation RefCell<&'control mut C>,
     maximum_records: u32,
@@ -107,8 +127,15 @@ pub(crate) struct DirectPackSinkV1<'operation, 'ledger, 'control, M: ?Sized, C: 
     carriers_installed: u32,
     carriers_reused: u32,
     installed_residue_bytes: u64,
-    index_spool_bytes: Option<u64>,
+    /// Exact newly-installed immutable custody that could not yet join the
+    /// normal tally because its post-admission observation failed. There can
+    /// be at most one: a tally failure terminates this sink immediately. Keep
+    /// it distinct until `record_incomplete_residue` transfers both values as
+    /// one checked observation transaction.
+    pending_installed_residue_bytes: Option<u64>,
+    index_spool_bytes: OptionalU64ObservationV1,
     last_admission: Option<(SealedPackV1, FsPackAdmissionOutcomeV1)>,
+    first_core_error: Option<CoreError>,
     first_fscas_error: Option<FsCasErrorV1>,
 }
 
@@ -130,7 +157,6 @@ where
         right: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
         maximum_records: u32,
         private_pack_resident_bound: u64,
-        ledger: &'operation ResourceLedgerV1,
         reservation: &'operation crate::limits::OperationReservationV1<'ledger>,
         control: &'operation RefCell<&'control mut C>,
     ) -> Self {
@@ -144,7 +170,6 @@ where
             occupied,
             left,
             right,
-            ledger,
             reservation,
             control,
             maximum_records,
@@ -160,10 +185,26 @@ where
             carriers_installed: 0,
             carriers_reused: 0,
             installed_residue_bytes: 0,
-            index_spool_bytes: Some(0),
+            pending_installed_residue_bytes: None,
+            index_spool_bytes: OptionalU64ObservationV1::observed(
+                0,
+                "direct cumulative pack-index spool logical length",
+                ObservationScopeV1::Operation,
+            ),
             last_admission: None,
+            first_core_error: None,
             first_fscas_error: None,
         }
+    }
+
+    fn retain_prepared_sink_core_error_v1(&mut self, error: CoreError) -> PreparedSinkErrorV1 {
+        self.first_core_error.get_or_insert(error);
+        PreparedSinkErrorV1::Refused
+    }
+
+    fn retain_tree_sink_core_error_v1(&mut self, error: CoreError) -> TreeSinkErrorV1 {
+        self.first_core_error.get_or_insert(error);
+        TreeSinkErrorV1::Failure
     }
 
     fn closure_objects_mut(&mut self) -> CoreResult<&mut FileClosureObjectSpoolV1> {
@@ -217,9 +258,12 @@ where
         self.direct_read_calls = 0;
         let carrier_record_cap =
             u32::try_from(MAX_PACK_RECORDS).map_err(|_| CoreError::IntegerOverflow)?;
-        self.metadata
+        if let Err(error) = self
+            .metadata
             .reset(self.maximum_records.min(carrier_record_cap))
-            .map_err(map_spool)?;
+        {
+            return Err(self.promote_metadata_spool_error_v1(error));
+        }
         self.record_count = 0;
         self.active = true;
         Ok(())
@@ -238,17 +282,22 @@ where
             Err(error) => {
                 let mut shared_control = SharedC3ControlV1::new(self.control);
                 if let Err(cleanup_error) = next_pack.cleanup_controlled_v1(&mut shared_control) {
-                    self.first_fscas_error.get_or_insert(cleanup_error);
-                    return Err(map_fscas_operation(cleanup_error));
+                    let terminal = next_private_pack_cleanup_terminal_v1(error, cleanup_error);
+                    self.first_fscas_error.get_or_insert(terminal);
+                    return Err(map_fscas_operation(terminal));
                 }
                 return Err(error);
             }
         };
         if resident > self.private_pack_resident_bound {
             let mut shared_control = SharedC3ControlV1::new(self.control);
-            if let Err(error) = next_pack.cleanup_controlled_v1(&mut shared_control) {
-                self.first_fscas_error.get_or_insert(error);
-                return Err(map_fscas_operation(error));
+            if let Err(cleanup_error) = next_pack.cleanup_controlled_v1(&mut shared_control) {
+                let terminal = next_private_pack_cleanup_terminal_v1(
+                    CoreError::ResourceRefused,
+                    cleanup_error,
+                );
+                self.first_fscas_error.get_or_insert(terminal);
+                return Err(map_fscas_operation(terminal));
             }
             return Err(CoreError::ResourceRefused);
         }
@@ -261,26 +310,36 @@ where
         let sealed = self.finalize_v1(&mut carrier_counters)?;
         carrier_counters.record_carrier(sealed.pack_len(), self.carrier_count != 0)?;
         let observed_index = self.metadata.storage_bytes_observation()?;
-        self.index_spool_bytes = match (self.index_spool_bytes, observed_index) {
-            (Some(total), Some(bytes)) => {
-                Some(total.checked_add(bytes).ok_or(CoreError::IntegerOverflow)?)
-            }
-            _ => None,
-        };
-        let admission = {
+        self.index_spool_bytes = self.index_spool_bytes.checked_add_operation_v1(
+            observed_index,
+            "direct cumulative pack-index spool logical length",
+        )?;
+        let admission_terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut shared_control = SharedC3ControlV1::new(self.control);
             self.cas.admit_pack_borrowed_controlled_v1(
                 &mut self.pack,
                 self.metadata,
-                self.ledger,
                 self.reservation,
                 self.storage_token,
                 &mut carrier_counters,
                 self.left,
                 &mut shared_control,
             )
+        }));
+        let admission = match admission_terminal {
+            Ok(admission) => admission,
+            Err(payload) => {
+                // Admission owns direct carrier write/read/residue events in
+                // this per-carrier accumulator. Preserve them before the
+                // callback panic leaves the sink; the ordinary line below is
+                // unreachable on unwind and must not silently discard them.
+                match self.accumulate_carrier_counters_v1(carrier_counters) {
+                    Ok(()) => std::panic::resume_unwind(payload),
+                    Err(error) => return Err(error),
+                }
+            }
         };
-        self.storage_counters.accumulate(carrier_counters)?;
+        self.accumulate_carrier_counters_v1(carrier_counters)?;
         let admission = match admission {
             Ok(admission) => admission,
             Err(error) => {
@@ -291,29 +350,96 @@ where
         if admission.sealed() != sealed {
             return Err(CoreError::PackInvalid);
         }
-        self.carrier_count = self
-            .carrier_count
-            .checked_add(1)
-            .ok_or(CoreError::IntegerOverflow)?;
-        match admission.outcome() {
+        // Admission can make a carrier, its persistent locators, and its
+        // catalog marker visible before this sink updates its local result
+        // tally.  Stage *every* tally field first.  If any checked tally
+        // fails after an Installed result, retain that exact newly visible
+        // immutable set separately so the error terminal can transfer it to
+        // operation-relative unreachable-residue custody.  Never increment a
+        // carrier count without the matching installed/reused/residue state.
+        let tally_failure = |sink: &mut Self| {
+            if admission.outcome() == FsPackAdmissionOutcomeV1::Installed {
+                sink.retain_pending_installed_residue_v1(admission.installed_residue_bytes_v1())?;
+            }
+            Err(CoreError::IntegerOverflow)
+        };
+        #[cfg(test)]
+        if admission.outcome() == FsPackAdmissionOutcomeV1::Installed
+            && self
+                .control
+                .borrow_mut()
+                .inject_post_admission_carrier_tally_overflow()
+        {
+            return tally_failure(self);
+        }
+        let next_carrier_count = match self.carrier_count.checked_add(1) {
+            Some(next) => next,
+            None => return tally_failure(self),
+        };
+        let (next_installed, next_reused, next_residue) = match admission.outcome() {
             FsPackAdmissionOutcomeV1::Installed => {
-                self.carriers_installed = self
-                    .carriers_installed
-                    .checked_add(1)
-                    .ok_or(CoreError::IntegerOverflow)?;
-                self.installed_residue_bytes = self
+                let next_installed = match self.carriers_installed.checked_add(1) {
+                    Some(next) => next,
+                    None => return tally_failure(self),
+                };
+                let next_residue = match self
                     .installed_residue_bytes
-                    .checked_add(sealed.pack_len())
-                    .ok_or(CoreError::IntegerOverflow)?;
+                    .checked_add(admission.installed_residue_bytes_v1())
+                {
+                    Some(next) => next,
+                    None => return tally_failure(self),
+                };
+                (next_installed, self.carriers_reused, next_residue)
             }
             FsPackAdmissionOutcomeV1::ExistingComplete => {
-                self.carriers_reused = self
-                    .carriers_reused
-                    .checked_add(1)
-                    .ok_or(CoreError::IntegerOverflow)?;
+                let next_reused = match self.carriers_reused.checked_add(1) {
+                    Some(next) => next,
+                    None => return tally_failure(self),
+                };
+                (
+                    self.carriers_installed,
+                    next_reused,
+                    self.installed_residue_bytes,
+                )
             }
-        }
+        };
+        self.carrier_count = next_carrier_count;
+        self.carriers_installed = next_installed;
+        self.carriers_reused = next_reused;
+        self.installed_residue_bytes = next_residue;
         self.last_admission = Some((sealed, admission.outcome()));
+        Ok(())
+    }
+
+    fn retain_pending_installed_residue_v1(&mut self, residue_bytes: u64) -> CoreResult<()> {
+        // A terminal tally failure stops the sink before another admission can
+        // occur.  Treat a second pending value as an internal sequencing
+        // violation rather than overwriting the first exact custody record.
+        if self.pending_installed_residue_bytes.is_some() {
+            return Err(CoreError::PackInvalid);
+        }
+        self.pending_installed_residue_bytes = Some(residue_bytes);
+        Ok(())
+    }
+
+    fn accumulate_carrier_counters_v1(
+        &mut self,
+        carrier_counters: OperationCountersV1,
+    ) -> CoreResult<()> {
+        // The general counter accumulator performs checked field-by-field
+        // addition. Stage the merge so a late overflow cannot leave this
+        // operation with a partially transferred carrier observation.
+        let mut checked = self.storage_counters;
+        #[cfg(test)]
+        if self
+            .control
+            .borrow_mut()
+            .inject_carrier_counter_accumulation_overflow()
+        {
+            checked.carrier_bytes_total = u64::MAX;
+        }
+        checked.accumulate(carrier_counters)?;
+        self.storage_counters = checked;
         Ok(())
     }
 
@@ -386,10 +512,23 @@ where
     }
 
     pub(crate) fn record_incomplete_residue(&mut self) -> CoreResult<()> {
+        // Stage both the normally tallied and post-admission-pending values.
+        // If a late checked addition fails, neither source value is cleared
+        // and no partial direct-residue observation becomes visible.
+        let mut checked = self.storage_counters;
         if self.installed_residue_bytes != 0 {
-            self.storage_counters
-                .record_unreachable_installed_residue(self.installed_residue_bytes)?;
+            checked.record_unreachable_installed_residue(self.installed_residue_bytes)?;
         }
+        if let Some(residue_bytes) = self.pending_installed_residue_bytes {
+            checked.record_unreachable_installed_residue(residue_bytes)?;
+        }
+        self.storage_counters = checked;
+        // Transfer this direct observation exactly once. Keep each value live
+        // until the complete checked transaction succeeds, so terminal panic
+        // recovery may call this method again without double-counting or
+        // erasing any installed immutable custody.
+        self.installed_residue_bytes = 0;
+        self.pending_installed_residue_bytes = None;
         Ok(())
     }
 
@@ -399,6 +538,10 @@ where
 
     pub(crate) fn take_first_fscas_error(&mut self) -> Option<FsCasErrorV1> {
         self.first_fscas_error.take()
+    }
+
+    pub(crate) fn take_first_core_error(&mut self) -> Option<CoreError> {
+        self.first_core_error.take()
     }
 
     pub(crate) fn cleanup_private_pack_controlled_v1(&mut self) -> Result<(), FsCasErrorV1> {
@@ -415,6 +558,21 @@ where
         let (lookups, probes, maximum_probe, entries) = table.work_observation();
         let (metadata_bytes_read, metadata_read_calls, metadata_bytes_written) =
             table.direct_storage_observation();
+        #[cfg(test)]
+        if self
+            .control
+            .borrow_mut()
+            .inject_global_seen_counter_accumulation_overflow()
+        {
+            self.storage_counters.global_seen_lookups = 41;
+            self.storage_counters.global_seen_probes = 43;
+            self.storage_counters.global_seen_metadata_bytes_read = 47;
+            self.storage_counters.global_seen_metadata_read_calls = 53;
+            self.storage_counters.global_seen_metadata_bytes_written = u64::MAX;
+            self.storage_counters.global_seen_maximum_probe = 59;
+            self.storage_counters.global_seen_entries = 61;
+            self.storage_counters.global_seen_table_bytes = 67;
+        }
         self.storage_counters.record_global_seen(
             lookups,
             probes,
@@ -579,6 +737,15 @@ where
                 id: expected_id,
                 complete_len: current.complete_len,
             })?;
+            #[cfg(test)]
+            if self
+                .control
+                .borrow_mut()
+                .inject_pack_object_disposition_overflow(false)
+            {
+                self.storage_counters
+                    .saturate_pack_object_disposition_for_test_v1(current.kind, false);
+            }
             self.storage_counters
                 .record_pack_object_disposition(current.kind, false)?;
             return Ok(ObjectDispositionV1::Reused);
@@ -592,14 +759,14 @@ where
         if self.record_count >= self.maximum_records {
             return Err(CoreError::CountCap);
         }
-        self.metadata
-            .push(PackIndexEntryV1::from_validated_parts(
-                expected_id,
-                current.record_offset,
-                u32::try_from(current.complete_len).map_err(|_| CoreError::IntegerOverflow)?,
-                checksum,
-            ))
-            .map_err(map_spool)?;
+        if let Err(error) = self.metadata.push(PackIndexEntryV1::from_validated_parts(
+            expected_id,
+            current.record_offset,
+            u32::try_from(current.complete_len).map_err(|_| CoreError::IntegerOverflow)?,
+            checksum,
+        )) {
+            return Err(self.promote_metadata_spool_error_v1(error));
+        }
         let carrier_ordinal = self.carrier_count;
         let mut shared_control = SharedC3ControlV1::new(self.control);
         if let Err(error) = self.global_seen.insert_controlled_v1(
@@ -622,6 +789,15 @@ where
             id: expected_id,
             complete_len: current.complete_len,
         })?;
+        #[cfg(test)]
+        if self
+            .control
+            .borrow_mut()
+            .inject_pack_object_disposition_overflow(true)
+        {
+            self.storage_counters
+                .saturate_pack_object_disposition_for_test_v1(current.kind, true);
+        }
         self.storage_counters
             .record_pack_object_disposition(current.kind, true)?;
         Ok(ObjectDispositionV1::Created)
@@ -652,14 +828,25 @@ where
                         CoreError::SourceFailure,
                     )
                 })?;
-            self.direct_read_bytes = self
-                .direct_read_bytes
-                .checked_add((2 * take) as u64)
+            #[cfg(test)]
+            if self
+                .control
+                .borrow_mut()
+                .inject_same_carrier_comparison_observation_overflow()
+            {
+                self.direct_read_bytes = 71;
+                self.direct_read_calls = u64::MAX;
+            }
+            let read_bytes = u64::try_from(take)
+                .map_err(|_| CoreError::IntegerOverflow)?
+                .checked_mul(2)
                 .ok_or(CoreError::IntegerOverflow)?;
-            self.direct_read_calls = self
-                .direct_read_calls
-                .checked_add(2)
-                .ok_or(CoreError::IntegerOverflow)?;
+            accumulate_direct_read_observation_v1(
+                &mut self.direct_read_bytes,
+                &mut self.direct_read_calls,
+                read_bytes,
+                2,
+            )?;
             if self.left[..take] != self.right[..take] {
                 return Ok(false);
             }
@@ -713,14 +900,12 @@ where
                             CoreError::SourceFailure,
                         )
                     })?;
-                self.direct_read_bytes = self
-                    .direct_read_bytes
-                    .checked_add(take as u64)
-                    .ok_or(CoreError::IntegerOverflow)?;
-                self.direct_read_calls = self
-                    .direct_read_calls
-                    .checked_add(1)
-                    .ok_or(CoreError::IntegerOverflow)?;
+                accumulate_direct_read_observation_v1(
+                    &mut self.direct_read_bytes,
+                    &mut self.direct_read_calls,
+                    u64::try_from(take).map_err(|_| CoreError::IntegerOverflow)?,
+                    1,
+                )?;
                 if self.left[..take] != self.right[..take] {
                     return Ok(false);
                 }
@@ -730,21 +915,47 @@ where
             }
             Ok(true)
         })();
-        let after = match self.occupied.direct_storage_read_observation_typed_v1() {
-            Ok(observation) => observation,
-            Err(error) => return Err(self.map_occupied_fscas_error(error)),
-        };
-        self.storage_counters.record_fscas_read(
-            after
-                .0
-                .checked_sub(before.0)
-                .ok_or(CoreError::IntegerOverflow)?,
-            after
-                .1
-                .checked_sub(before.1)
-                .ok_or(CoreError::IntegerOverflow)?,
-        )?;
-        result
+        // The direct occupied-read delta is required even when the comparison
+        // body has already failed.  It is, however, post-body observation:
+        // a later read-observation or counter failure cannot replace the
+        // first comparison cause.  In particular, do not route such a later
+        // FsCas error through `map_occupied_fscas_error` before the ordered
+        // terminal decision below; doing so would make the lifecycle prefer
+        // it over the earlier Core error side channel.
+        let post_body_observation = (|| {
+            let after = self
+                .occupied
+                .direct_storage_read_observation_typed_v1()
+                .map_err(OccupiedComparisonTerminalV1::PostFsCas)?;
+            let bytes_read =
+                after
+                    .0
+                    .checked_sub(before.0)
+                    .ok_or(OccupiedComparisonTerminalV1::PostCore(
+                        CoreError::IntegerOverflow,
+                    ))?;
+            let read_calls =
+                after
+                    .1
+                    .checked_sub(before.1)
+                    .ok_or(OccupiedComparisonTerminalV1::PostCore(
+                        CoreError::IntegerOverflow,
+                    ))?;
+            self.storage_counters
+                .record_fscas_read(bytes_read, read_calls)
+                .map_err(OccupiedComparisonTerminalV1::PostCore)
+        })();
+        match finish_occupied_comparison_v1(result, post_body_observation) {
+            Ok(equal) => Ok(equal),
+            Err(OccupiedComparisonTerminalV1::Body(error)) => {
+                self.first_core_error.get_or_insert(error);
+                Err(error)
+            }
+            Err(OccupiedComparisonTerminalV1::PostFsCas(error)) => {
+                Err(self.map_occupied_fscas_error(error))
+            }
+            Err(OccupiedComparisonTerminalV1::PostCore(error)) => Err(error),
+        }
     }
 
     fn append_pack(&mut self, bytes: &[u8]) -> CoreResult<()> {
@@ -870,14 +1081,24 @@ where
             .ok_or(CoreError::IntegerOverflow)?;
         {
             let mut shared_control = SharedC3ControlV1::new(self.control);
-            self.metadata
+            if let Err(error) = self
+                .metadata
                 .sort_by_key_controlled(&mut shared_control, &mut self.storage_counters)
-                .map_err(map_spool)?;
+            {
+                return Err(self.promote_metadata_spool_error_v1(error));
+            }
         }
-        self.metadata.rewind().map_err(map_spool)?;
+        if let Err(error) = self.metadata.rewind() {
+            return Err(self.promote_metadata_spool_error_v1(error));
+        }
         let mut emitted = 0_u32;
         let mut previous = None;
-        while let Some(entry) = self.metadata.next().map_err(map_spool)? {
+        loop {
+            let entry = match self.metadata.next() {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(error) => return Err(self.promote_metadata_spool_error_v1(error)),
+            };
             if previous
                 .is_some_and(|left: PackIndexEntryV1| left.compare_key(&entry) != Ordering::Less)
             {
@@ -901,7 +1122,17 @@ where
             pack: &mut self.pack,
             bytes_read: 0,
             read_calls: 0,
+            first_core_error: None,
         };
+        #[cfg(test)]
+        if self
+            .control
+            .borrow_mut()
+            .inject_counted_pack_read_observation_overflow()
+        {
+            counted_pack.bytes_read = 71;
+            counted_pack.read_calls = u64::MAX;
+        }
         let digest_result = hash_port_range(
             &mut counted_pack,
             0,
@@ -910,20 +1141,29 @@ where
             self.left,
             counters,
         );
-        self.direct_read_bytes = self
+        let next_direct_read_bytes = self
             .direct_read_bytes
             .checked_add(counted_pack.bytes_read)
             .ok_or(CoreError::IntegerOverflow)?;
-        self.direct_read_calls = self
+        let next_direct_read_calls = self
             .direct_read_calls
             .checked_add(counted_pack.read_calls)
             .ok_or(CoreError::IntegerOverflow)?;
+        self.direct_read_bytes = next_direct_read_bytes;
+        self.direct_read_calls = next_direct_read_calls;
+        let counted_core_error = counted_pack.first_core_error;
+        if let Some(error) = counted_core_error {
+            self.first_core_error.get_or_insert(error);
+        }
         let digest = match digest_result {
             Ok(digest) => digest,
             Err(error) => {
                 if let Some(storage_error) = self.pack.take_first_error_typed_v1() {
                     self.first_fscas_error.get_or_insert(storage_error);
                     return Err(map_fscas_operation(storage_error));
+                }
+                if let Some(core_error) = counted_core_error {
+                    return Err(core_error);
                 }
                 return Err(error);
             }
@@ -955,6 +1195,15 @@ where
             index_offset,
         ))
     }
+
+    fn promote_metadata_spool_error_v1(&mut self, error: PackPortErrorV1) -> CoreError {
+        if let Some(storage_error) = self.metadata.take_storage_error_typed_v1() {
+            self.first_fscas_error.get_or_insert(storage_error);
+            map_fscas_operation(storage_error)
+        } else {
+            map_spool(error)
+        }
+    }
 }
 
 impl<M, C> PreparedObjectSinkV1 for DirectPackSinkV1<'_, '_, '_, M, C>
@@ -975,7 +1224,7 @@ where
             };
         }
         self.begin_current_carrier_v1()
-            .map_err(|_| PreparedSinkErrorV1::Refused)
+            .map_err(|error| self.retain_prepared_sink_core_error_v1(error))
     }
 
     fn begin_object(
@@ -984,12 +1233,12 @@ where
         complete_len: u64,
     ) -> Result<(), PreparedSinkErrorV1> {
         self.begin_object_inner(kind, complete_len)
-            .map_err(|_| PreparedSinkErrorV1::Refused)
+            .map_err(|error| self.retain_prepared_sink_core_error_v1(error))
     }
 
     fn write_private(&mut self, bytes: &[u8]) -> Result<(), PreparedSinkErrorV1> {
         self.write_inner(bytes)
-            .map_err(|_| PreparedSinkErrorV1::Refused)
+            .map_err(|error| self.retain_prepared_sink_core_error_v1(error))
     }
 
     fn finish_object(
@@ -997,7 +1246,7 @@ where
         expected_id: TypedPhysicalObjectIdV1,
     ) -> Result<ObjectDispositionV1, PreparedSinkErrorV1> {
         self.finish_object_inner(expected_id)
-            .map_err(|_| PreparedSinkErrorV1::Refused)
+            .map_err(|error| self.retain_prepared_sink_core_error_v1(error))
     }
 
     fn finish_closure(&mut self, _result: PreparedFileV1) -> Result<(), PreparedSinkErrorV1> {
@@ -1034,7 +1283,7 @@ where
             };
         }
         self.begin_current_carrier_v1()
-            .map_err(|_| TreeSinkErrorV1::Failure)
+            .map_err(|error| self.retain_tree_sink_core_error_v1(error))
     }
 
     fn admit_private_tree(
@@ -1049,7 +1298,7 @@ where
                 ObjectDispositionV1::Created => TreeObjectDispositionV1::Created,
                 ObjectDispositionV1::Reused => TreeObjectDispositionV1::Reused,
             })
-            .map_err(|_| TreeSinkErrorV1::Failure)
+            .map_err(|error| self.retain_tree_sink_core_error_v1(error))
     }
 
     fn finish_private_tree_set(&mut self, _root: PhysicalTreeIdV1) -> Result<(), TreeSinkErrorV1> {
@@ -1089,6 +1338,59 @@ fn map_private_pack_error_v1(
     }
 }
 
+fn accumulate_direct_read_observation_v1(
+    bytes_read: &mut u64,
+    read_calls: &mut u64,
+    additional_bytes: u64,
+    additional_calls: u64,
+) -> CoreResult<()> {
+    let next_bytes = bytes_read
+        .checked_add(additional_bytes)
+        .ok_or(CoreError::IntegerOverflow)?;
+    let next_calls = read_calls
+        .checked_add(additional_calls)
+        .ok_or(CoreError::IntegerOverflow)?;
+    *bytes_read = next_bytes;
+    *read_calls = next_calls;
+    Ok(())
+}
+
+/// Ordered terminal result for an occupied-object comparison.  The read
+/// observation after the comparison is mandatory direct attribution, but it
+/// occurs after the comparison body and therefore cannot replace its first
+/// typed outcome.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OccupiedComparisonTerminalV1 {
+    Body(CoreError),
+    PostFsCas(FsCasErrorV1),
+    PostCore(CoreError),
+}
+
+fn finish_occupied_comparison_v1(
+    body: CoreResult<bool>,
+    post_body_observation: Result<(), OccupiedComparisonTerminalV1>,
+) -> Result<bool, OccupiedComparisonTerminalV1> {
+    match body {
+        Ok(equal) => post_body_observation.map(|()| equal),
+        Err(error) => {
+            // The caller has already completed the post-body observation by
+            // the time it invokes this helper.  Deliberately discard a
+            // non-dominant later observation error while preserving the
+            // comparison's chronological first cause.
+            let _ = post_body_observation;
+            Err(OccupiedComparisonTerminalV1::Body(error))
+        }
+    }
+}
+
+/// Combines an error while starting a replacement carrier with the explicit
+/// cleanup of its newly opened private pack.  The caller must retain the
+/// result in its FsCas side channel because lifecycle terminalization gives
+/// that exact typed custody result precedence over the generic sink mapping.
+fn next_private_pack_cleanup_terminal_v1(first: CoreError, cleanup: FsCasErrorV1) -> FsCasErrorV1 {
+    FsCasErrorV1::Core(first).dominated_by_v1(cleanup)
+}
+
 const fn map_spool(error: PackPortErrorV1) -> CoreError {
     match error {
         PackPortErrorV1::Failure | PackPortErrorV1::WorkExhausted => CoreError::ResourceRefused,
@@ -1104,7 +1406,9 @@ fn map_fscas_operation(error: FsCasErrorV1) -> CoreError {
             CoreError::ResourceRefused
         }
         FsCasErrorV1::Invalidated
+        | FsCasErrorV1::SynchronizationPoisoned
         | FsCasErrorV1::CrossOwner
+        | FsCasErrorV1::WrongOperationKind
         | FsCasErrorV1::CleanupFailed(_)
         | FsCasErrorV1::InvalidationFailed
         | FsCasErrorV1::MalformedOccupant
@@ -1113,6 +1417,146 @@ fn map_fscas_operation(error: FsCasErrorV1) -> CoreError {
         | FsCasErrorV1::Filesystem(_)
         | FsCasErrorV1::Io
         | FsCasErrorV1::Integrity
-        | FsCasErrorV1::Collision => CoreError::SinkRefused,
+        | FsCasErrorV1::Collision
+        | FsCasErrorV1::TerminalFailure { .. } => CoreError::SinkRefused,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cas::{FsCasCleanupTargetV1, FsCasFailureCauseV1};
+
+    struct FillingReadPortV1 {
+        bytes: [u8; 4],
+        reads: u64,
+    }
+
+    impl PackReadPortV1 for FillingReadPortV1 {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn len(&mut self) -> Result<u64, PackPortErrorV1> {
+            Ok(self.bytes.len() as u64)
+        }
+
+        fn read_exact_at(
+            &mut self,
+            offset: u64,
+            destination: &mut [u8],
+        ) -> Result<(), PackPortErrorV1> {
+            let start = usize::try_from(offset).map_err(|_| PackPortErrorV1::Failure)?;
+            let end = start
+                .checked_add(destination.len())
+                .ok_or(PackPortErrorV1::Failure)?;
+            let source = self.bytes.get(start..end).ok_or(PackPortErrorV1::Failure)?;
+            destination.copy_from_slice(source);
+            self.reads += 1;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn counted_pack_read_late_overflow_keeps_the_observation_tuple_atomic() {
+        let mut port = FillingReadPortV1 {
+            bytes: [0x11, 0x22, 0x33, 0x44],
+            reads: 0,
+        };
+        let mut counted = CountedPackReadV1 {
+            pack: &mut port,
+            bytes_read: 71,
+            read_calls: u64::MAX,
+            first_core_error: None,
+        };
+        let mut destination = [0_u8; 4];
+
+        assert_eq!(
+            counted.read_exact_at(0, &mut destination),
+            Err(PackPortErrorV1::Failure)
+        );
+        assert_eq!(destination, [0x11, 0x22, 0x33, 0x44]);
+        assert_eq!((counted.bytes_read, counted.read_calls), (71, u64::MAX));
+        assert_eq!(counted.first_core_error, Some(CoreError::IntegerOverflow));
+        assert_eq!(port.reads, 1);
+    }
+
+    #[test]
+    fn direct_read_observation_commits_both_fields_or_neither() {
+        let mut bytes_read = 41;
+        let mut read_calls = 43;
+
+        accumulate_direct_read_observation_v1(&mut bytes_read, &mut read_calls, 47, 53).unwrap();
+        assert_eq!((bytes_read, read_calls), (88, 96));
+
+        bytes_read = 71;
+        read_calls = u64::MAX;
+        assert_eq!(
+            accumulate_direct_read_observation_v1(&mut bytes_read, &mut read_calls, 59, 1),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!((bytes_read, read_calls), (71, u64::MAX));
+    }
+
+    #[test]
+    fn occupied_comparison_keeps_a_body_error_when_post_body_attribution_fails() {
+        assert_eq!(
+            finish_occupied_comparison_v1(
+                Err(CoreError::IdMismatch),
+                Err(OccupiedComparisonTerminalV1::PostFsCas(
+                    FsCasErrorV1::Invalidated,
+                )),
+            ),
+            Err(OccupiedComparisonTerminalV1::Body(CoreError::IdMismatch))
+        );
+        assert_eq!(
+            finish_occupied_comparison_v1(
+                Err(CoreError::IdMismatch),
+                Err(OccupiedComparisonTerminalV1::PostCore(
+                    CoreError::IntegerOverflow,
+                )),
+            ),
+            Err(OccupiedComparisonTerminalV1::Body(CoreError::IdMismatch))
+        );
+    }
+
+    #[test]
+    fn occupied_comparison_returns_post_body_attribution_failure_after_a_successful_body() {
+        assert_eq!(
+            finish_occupied_comparison_v1(
+                Ok(true),
+                Err(OccupiedComparisonTerminalV1::PostFsCas(
+                    FsCasErrorV1::Invalidated,
+                )),
+            ),
+            Err(OccupiedComparisonTerminalV1::PostFsCas(
+                FsCasErrorV1::Invalidated,
+            ))
+        );
+        assert_eq!(finish_occupied_comparison_v1(Ok(false), Ok(())), Ok(false));
+    }
+
+    #[test]
+    fn next_private_pack_cleanup_preserves_the_start_failure() {
+        for (first, cleanup, dominant) in [
+            (
+                CoreError::ResourceRefused,
+                FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PrivatePack),
+                FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PrivatePack),
+            ),
+            (
+                CoreError::IntegerOverflow,
+                FsCasErrorV1::InvalidationFailed,
+                FsCasFailureCauseV1::InvalidationFailed,
+            ),
+        ] {
+            assert_eq!(
+                next_private_pack_cleanup_terminal_v1(first, cleanup),
+                FsCasErrorV1::TerminalFailure {
+                    first: FsCasFailureCauseV1::Core(first),
+                    dominant,
+                }
+            );
+        }
     }
 }

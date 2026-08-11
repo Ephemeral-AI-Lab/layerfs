@@ -16,9 +16,11 @@ use crate::identity::{
     PhysicalSymlinkIdV1, PhysicalTreeIdV1, PhysicalVersionRecordIdV1, ProfileId,
     COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1, TAG_OBJECT_CHECKSUM, TAG_PACK,
 };
+#[cfg(test)]
+use crate::limits::ResourceLedgerV1;
 use crate::limits::{
-    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
-    OperationReservationV1, ResourceLedgerV1,
+    CounterFieldV1, MemoryComponentV1, ObservationScopeV1, OperationCountersV1,
+    OperationMemoryPlanV1, OperationReservationV1, OptionalU64ObservationV1,
 };
 use crate::object::{
     decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectReadPortV1,
@@ -62,7 +64,7 @@ pub(crate) struct CompletedPackSetV1 {
     pub(crate) carriers_installed: u32,
     pub(crate) carriers_reused: u32,
     pub(crate) installed_residue_bytes: u64,
-    pub(crate) index_spool_bytes: Option<u64>,
+    pub(crate) index_spool_bytes: OptionalU64ObservationV1,
 }
 
 #[cfg(feature = "c3-polymorphism")]
@@ -91,7 +93,7 @@ impl CompletedPackSetV1 {
         self.installed_residue_bytes
     }
 
-    pub(crate) const fn index_spool_bytes(self) -> Option<u64> {
+    pub(crate) const fn index_spool_bytes(self) -> OptionalU64ObservationV1 {
         self.index_spool_bytes
     }
 }
@@ -211,10 +213,23 @@ pub trait PackIndexSpoolV1 {
     /// spill-file bytes themselves are not resident memory.
     fn resident_memory_bound_bytes(&self, maximum_entries: u32) -> CoreResult<u64>;
     /// Exact external spill bytes currently occupied when the implementation
-    /// can report them portably. `None` is unavailable, never an inferred
-    /// zero.
-    fn storage_bytes_observation(&self) -> CoreResult<Option<u64>> {
-        Ok(None)
+    /// can report them directly. Unavailable observations carry a reason and
+    /// no numeric value.
+    fn storage_bytes_observation(&self) -> CoreResult<OptionalU64ObservationV1> {
+        Ok(OptionalU64ObservationV1::unavailable(
+            "pack-index port exposes no direct spill-byte observation",
+            ObservationScopeV1::Operation,
+        ))
+    }
+    /// Promote the first concrete storage failure retained by a file-backed
+    /// adapter. Pure/synthetic pack spools have no storage cause and keep the
+    /// default. This is an internal transitional bridge: the semantic pack
+    /// port still returns its bounded portable error, while the FsCas owner
+    /// can preserve exact filesystem provenance at the adapter boundary.
+    #[cfg(any(test, feature = "c3-polymorphism"))]
+    #[doc(hidden)]
+    fn take_storage_error_typed_v1(&mut self) -> Option<crate::cas::FsCasErrorV1> {
+        None
     }
     fn reset(&mut self, maximum_entries: u32) -> Result<(), PackPortErrorV1>;
     fn push(&mut self, entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1>;
@@ -352,6 +367,33 @@ where
     Ok(None)
 }
 
+/// Read one canonical index entry by ordinal from an immutable carrier whose
+/// complete seal was already validated. This keeps carrier-internal offsets
+/// inside `pack` while allowing a publication owner to enumerate cleanup
+/// custody without depending on a mutable operation sort spool.
+pub(crate) fn read_validated_pack_index_entry_v1<P>(
+    pack: &mut P,
+    sealed: SealedPackV1,
+    ordinal: u32,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<PackIndexEntryV1>
+where
+    P: PackReadPortV1 + ?Sized,
+{
+    if ordinal >= sealed.record_count || pack.len().map_err(map_read_port)? != sealed.pack_len {
+        return Err(CoreError::PackInvalid);
+    }
+    let offset = sealed
+        .index_offset
+        .checked_add(
+            u64::from(ordinal)
+                .checked_mul(PACK_INDEX_ENTRY_BYTES)
+                .ok_or(CoreError::IntegerOverflow)?,
+        )
+        .ok_or(CoreError::IntegerOverflow)?;
+    decode_index_entry(&read_array::<80, _>(pack, offset, counters)?)
+}
+
 /// Revalidate every canonical byte named by one admitted index entry. This is
 /// used for object-level incumbent validation without trusting the locator as
 /// an identity oracle.
@@ -374,6 +416,7 @@ where
     })
 }
 
+#[cfg(test)]
 pub fn build_dense_pack_v1<O, P, M>(
     objects: &mut O,
     pack: &mut P,
@@ -569,6 +612,7 @@ where
     Ok(validated)
 }
 
+#[cfg(test)]
 pub fn validate_pack_v1<P, M>(
     pack: &mut P,
     metadata: &mut M,
@@ -610,7 +654,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(any(test, feature = "c3-polymorphism"))]
 pub(crate) fn validate_pack_borrowed_v1<P, M>(
     pack: &mut P,
     metadata: &mut M,
@@ -662,7 +706,6 @@ where
     }
     let header = read_array::<64, _>(pack, 0, counters)?;
     if &header[..8] != PACK_MAGIC
-        || be_u16(&header[8..10]) != 1
         || be_u16(&header[10..12]) != 64
         || be_u32(&header[12..16]) != 0
         || be_u16(&header[52..54]) != 80
@@ -670,9 +713,12 @@ where
     {
         return Err(CoreError::PackInvalid);
     }
+    if be_u16(&header[8..10]) != 1 {
+        return Err(CoreError::Schema);
+    }
     let profile = ProfileSpecV1::frozen().id();
     if &header[16..48] != profile.as_bytes() {
-        return Err(CoreError::PackInvalid);
+        return Err(CoreError::TypeDomain);
     }
     let record_count = be_u32(&header[48..52]);
     if record_count == 0
@@ -699,7 +745,6 @@ where
     }
     let trailer = read_array::<80, _>(pack, trailer_offset, counters)?;
     if &trailer[..8] != PACK_TRAILER_MAGIC
-        || be_u16(&trailer[8..10]) != 1
         || be_u16(&trailer[10..12]) != 80
         || be_u32(&trailer[12..16]) != 0
         || be_u64(&trailer[16..24]) != pack_len
@@ -710,10 +755,13 @@ where
     {
         return Err(CoreError::PackInvalid);
     }
+    if be_u16(&trailer[8..10]) != 1 {
+        return Err(CoreError::Schema);
+    }
     let checksum_len = pack_len.checked_sub(32).ok_or(CoreError::IntegerOverflow)?;
     let digest = hash_port_range(pack, 0, checksum_len, TAG_PACK, scratch, counters)?;
     if trailer[48..80] != digest {
-        return Err(CoreError::PackInvalid);
+        return Err(CoreError::IdMismatch);
     }
 
     metadata.reset(record_count).map_err(map_spool_port)?;
@@ -844,12 +892,11 @@ fn validate_record<P: PackReadPortV1 + ?Sized>(
         decoded
     };
     let checksum = ObjectChecksumV1::from_digest(checksum_hasher.finish()?);
-    if decoded.physical_id() != entry.id
-        || decoded.header().profile_id() != profile
-        || decoded.header().kind() != entry.id.kind()
-        || checksum != entry.object_checksum
-    {
-        return Err(CoreError::PackInvalid);
+    if decoded.header().profile_id() != profile || decoded.header().kind() != entry.id.kind() {
+        return Err(CoreError::TypeDomain);
+    }
+    if decoded.physical_id() != entry.id || checksum != entry.object_checksum {
+        return Err(CoreError::IdMismatch);
     }
     let pad = record_padding(object_len)?;
     if pad != 0 {
@@ -984,7 +1031,7 @@ pub(crate) fn decode_index_entry(bytes: &[u8; 80]) -> CoreResult<PackIndexEntryV
     if bytes[1] != 0 || be_u16(&bytes[2..4]) != 0 {
         return Err(CoreError::PackInvalid);
     }
-    let kind = PhysicalObjectKindV1::try_from(bytes[0]).map_err(|_| CoreError::PackInvalid)?;
+    let kind = PhysicalObjectKindV1::try_from(bytes[0]).map_err(|_| CoreError::UnknownKind)?;
     let digest = <[u8; 32]>::try_from(&bytes[4..36]).map_err(|_| CoreError::PackInvalid)?;
     let checksum = <[u8; 32]>::try_from(&bytes[48..80]).map_err(|_| CoreError::PackInvalid)?;
     Ok(PackIndexEntryV1 {
@@ -1119,12 +1166,22 @@ fn be_u64(bytes: &[u8]) -> u64 {
     u64::from_be_bytes(bytes.try_into().expect("fixed eight-byte field"))
 }
 
-const fn map_write_port(_: PackPortErrorV1) -> CoreError {
-    CoreError::SinkRefused
+const fn map_write_port(error: PackPortErrorV1) -> CoreError {
+    match error {
+        PackPortErrorV1::Failure => CoreError::SinkRefused,
+        PackPortErrorV1::Cancelled => CoreError::Cancelled,
+        PackPortErrorV1::Deadline => CoreError::Deadline,
+        PackPortErrorV1::WorkExhausted => CoreError::ResourceRefused,
+    }
 }
 
-const fn map_read_port(_: PackPortErrorV1) -> CoreError {
-    CoreError::SourceFailure
+const fn map_read_port(error: PackPortErrorV1) -> CoreError {
+    match error {
+        PackPortErrorV1::Failure => CoreError::SourceFailure,
+        PackPortErrorV1::Cancelled => CoreError::Cancelled,
+        PackPortErrorV1::Deadline => CoreError::Deadline,
+        PackPortErrorV1::WorkExhausted => CoreError::ResourceRefused,
+    }
 }
 
 const fn map_spool_port(error: PackPortErrorV1) -> CoreError {
@@ -1141,9 +1198,39 @@ const fn map_object_validation(error: CoreError) -> CoreError {
         | CoreError::SinkRefused
         | CoreError::ResourceRefused
         | CoreError::Cancelled
-        | CoreError::Deadline => error,
+        | CoreError::Deadline
+        | CoreError::Schema
+        | CoreError::TypeDomain
+        | CoreError::UnknownKind
+        | CoreError::IdMismatch => error,
         _ => CoreError::PackInvalid,
     }
 }
 
 const _: () = assert!(MAX_PHYSICAL_OBJECT_BYTES < u32::MAX as u64);
+
+#[cfg(test)]
+mod port_error_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn read_and_write_ports_preserve_control_and_resource_causes() {
+        assert_eq!(
+            map_read_port(PackPortErrorV1::Failure),
+            CoreError::SourceFailure
+        );
+        assert_eq!(
+            map_write_port(PackPortErrorV1::Failure),
+            CoreError::SinkRefused
+        );
+
+        for (port_error, expected) in [
+            (PackPortErrorV1::Cancelled, CoreError::Cancelled),
+            (PackPortErrorV1::Deadline, CoreError::Deadline),
+            (PackPortErrorV1::WorkExhausted, CoreError::ResourceRefused),
+        ] {
+            assert_eq!(map_read_port(port_error), expected);
+            assert_eq!(map_write_port(port_error), expected);
+        }
+    }
+}

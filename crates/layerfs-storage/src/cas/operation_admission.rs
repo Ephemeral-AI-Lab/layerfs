@@ -21,7 +21,7 @@ use crate::lifecycle::{
     C3StorageSessionPortV1, FileBuiltDirectorySpoolV1, FileBuiltFileSpoolV1,
     FileChunkReferenceSpoolV1, SharedC3ControlV1, VersionSummaryInputV1,
 };
-use crate::limits::{OperationCountersV1, OperationReservationV1, ResourceLedgerV1};
+use crate::limits::{OperationCountersV1, OperationReservationV1, OptionalU64ObservationV1};
 use crate::object::{
     decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1,
     PhysicalObjectReadPortV1, StrongEdgeV1, StrongEdgeVisitorV1, TreeRecordV1,
@@ -30,12 +30,80 @@ use crate::object::{
 use crate::pack::{CompletedPackSetV1, DirectPackSinkV1, FilePackIndexSpoolV1, PackReadPortV1};
 use crate::{CoreError, CoreResult};
 
+/// Exact storage custody transferred from the authenticated closure fence to
+/// the outer lifecycle. A fresh marker remains operation-relative until the
+/// synchronous handoff boundary returns; an equal incumbent contributes zero
+/// newly installed bytes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ClosureFenceStorageOutcomeV1 {
+    object_count: u64,
+    installed_residue_bytes: u64,
+}
+
+impl ClosureFenceStorageOutcomeV1 {
+    pub(crate) const fn object_count_v1(self) -> u64 {
+        self.object_count
+    }
+
+    pub(crate) const fn installed_residue_bytes_v1(self) -> u64 {
+        self.installed_residue_bytes
+    }
+}
+
+pub(crate) fn terminalize_failed_closure_marker_v1<C>(
+    operation: &mut crate::cas::fs::FsClosureOperationV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<(), FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let retention = FsCasV1::retain_closure_marker_residue_v1(operation, counters);
+    let requires_invalidation = !matches!(retention, Ok(false));
+    let invalidation = if requires_invalidation {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            FsCasV1::invalidate_closure_operation_controlled_v1(operation, control)
+        })) {
+            Ok(result) => result,
+            Err(_) => FsCasV1::invalidate_closure_operation_backstop_v1(operation),
+        }
+    } else {
+        Ok(())
+    };
+    match (retention, invalidation) {
+        (Ok(_), Ok(())) => Ok(()),
+        (Err(first), Ok(())) => Err(first),
+        (Ok(_), Err(dominant)) => Err(dominant),
+        (Err(first), Err(dominant)) => Err(first.dominated_by_v1(dominant)),
+    }
+}
+
+/// Preserve the initiating unwind only when every owned closure-marker
+/// terminal action completed successfully. A typed retention or invalidation
+/// failure is the operation terminal and must cross the storage boundary as a
+/// typed result instead of being replaced by a fabricated panic.
+pub(crate) fn terminalize_closure_unwind_v1<C>(
+    operation: &mut crate::cas::fs::FsClosureOperationV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+    payload: Box<dyn std::any::Any + Send>,
+) -> FsClosureAdmissionErrorV1
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    match terminalize_failed_closure_marker_v1(operation, counters, control) {
+        Ok(()) => std::panic::resume_unwind(payload),
+        Err(terminal) => FsClosureAdmissionErrorV1::FsCas(terminal),
+    }
+}
+
 /// Authenticate an accepted version/root pair through the real closure marker
 /// and occupied-object path while the caller retains the sole root operation
 /// capability. This performs no preparation and preserves the first typed
 /// FsCas failure instead of flattening it through a content adapter.
 pub(crate) fn authenticate_base_root_storage_v1<C>(
     cas: &FsCasV1,
+    storage_token: FsStorageOperationTokenV1,
     version_record: PhysicalVersionRecordIdV1,
     expected_root: PhysicalTreeIdV1,
     counters: &mut OperationCountersV1,
@@ -45,7 +113,11 @@ pub(crate) fn authenticate_base_root_storage_v1<C>(
 where
     C: FsCasControlV1 + ?Sized,
 {
-    let closure = cas.validate_closure_for_read_controlled_v1(version_record, control)?;
+    let closure = cas.validate_closure_for_read_controlled_borrowed_v1(
+        storage_token,
+        version_record,
+        control,
+    )?;
     if closure.version_record() != version_record {
         return Err(CoreError::IdMismatch.into());
     }
@@ -55,7 +127,7 @@ where
     )?;
     counters.record_fscas_read(CLOSURE_MARKER_BYTES as u64, 1)?;
 
-    let mut occupied = cas.occupied_private_controlled_v1(control)?;
+    let mut occupied = cas.occupied_private_controlled_borrowed_v1(storage_token, control)?;
     let typed = TypedPhysicalObjectIdV1::VersionRecord(version_record);
     let len = match occupied.occupied_len_typed_controlled_v1(typed, control) {
         Ok(Some(len)) => len,
@@ -162,7 +234,6 @@ pub(crate) fn begin_storage_session_v1<'operation, 'ledger, 'control, C>(
     right: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
     maximum_records: u32,
     private_pack_resident_bound: u64,
-    ledger: &'operation ResourceLedgerV1,
     reservation: &'operation OperationReservationV1<'ledger>,
     control: &'operation RefCell<&'control mut C>,
 ) -> Result<C3StorageSessionV1<'operation, 'ledger, 'control, C>, FsCasErrorV1>
@@ -175,14 +246,30 @@ where
         return Err(FsCasErrorV1::Core(CoreError::Schema));
     }
     let occupied_resident = cas.occupied_resident_memory_bound_v1()?;
-    let occupied = cas.occupied_private_v1()?;
+    let occupied = cas.occupied_private_borrowed_v1(storage_token)?;
     if occupied.resident_memory_bound_bytes()? > occupied_resident {
         return Err(FsCasErrorV1::Core(CoreError::ResourceRefused));
     }
     let mut private_pack = cas.begin_private_pack_borrowed_v1(storage_token)?;
     if private_pack.resident_memory_bound_bytes()? > private_pack_resident_bound {
         let mut shared_control = SharedC3ControlV1::new(control);
-        private_pack.cleanup_controlled_v1(&mut shared_control)?;
+        let cleanup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            private_pack.cleanup_controlled_v1(&mut shared_control)
+        }));
+        match cleanup {
+            Ok(result) => result?,
+            Err(_) => {
+                // FsPrivatePack retains the complete cleanup/invalidation
+                // terminal before rethrowing. At this construction boundary
+                // there is no session value to return to lifecycle, so surface
+                // that stable terminal instead of synthesizing a cleanup-only
+                // result or allowing the partial session to escape through
+                // Drop.
+                return Err(private_pack.retained_cleanup_terminal_v1().unwrap_or(
+                    FsCasErrorV1::CleanupFailed(crate::cas::FsCasCleanupTargetV1::PrivatePack),
+                ));
+            }
+        }
         return Err(FsCasErrorV1::Core(CoreError::ResourceRefused));
     }
     let sink = DirectPackSinkV1::new(
@@ -197,7 +284,6 @@ where
         right,
         maximum_records,
         private_pack_resident_bound,
-        ledger,
         reservation,
         control,
     );
@@ -222,41 +308,65 @@ pub(crate) fn complete_closure_fence_storage_v1<C>(
     buffers: AdmissionBuffersV1<'_>,
     algorithm: C3CdcAlgorithmV1,
     control: &mut C,
-) -> Result<u64, FsClosureAdmissionErrorV1>
+) -> Result<ClosureFenceStorageOutcomeV1, FsClosureAdmissionErrorV1>
 where
     C: FsCasControlV1 + ?Sized,
 {
     let closure_objects = preparation.closure_objects_for_fence_mut();
     let occupied = cas
-        .occupied_private_v1()
+        .occupied_private_borrowed_v1(storage_token)
         .map_err(FsClosureAdmissionErrorV1::FsCas)?;
     let mut closure = FsCasClosureSpoolV1::new(closure_objects, occupied);
     let mut closure_operation = cas
-        .begin_closure_operation()
+        .begin_closure_operation_borrowed_v1(storage_token)
         .map_err(FsClosureAdmissionErrorV1::FsCas)?;
-    let closure_result = cas.admit_complete_closure_borrowed_v1(
-        &mut closure_operation,
-        &mut closure,
-        storage_token,
-        root,
-        reservation,
-        counters,
-        buffers,
-        algorithm,
-        control,
-    );
-    let (admitted, mut capability) = match closure_result {
-        Ok(value) => value,
-        Err(error) => {
-            return Err(closure
-                .first_error_typed_v1()
+    let closure_terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let (admitted, mut capability) = cas.admit_complete_closure_borrowed_v1(
+            &mut closure_operation,
+            &mut closure,
+            storage_token,
+            root,
+            reservation,
+            counters,
+            buffers,
+            algorithm,
+            control,
+        )?;
+        cas.consume_validated_closure_for_handoff(&mut closure_operation, &mut capability)
+            .map_err(FsClosureAdmissionErrorV1::FsCas)?;
+        Ok::<u64, FsClosureAdmissionErrorV1>(admitted.object_count())
+    }));
+    match closure_terminal {
+        Ok(Ok(object_count)) => Ok(ClosureFenceStorageOutcomeV1 {
+            object_count,
+            installed_residue_bytes: FsCasV1::take_closure_marker_residue_bytes_v1(
+                &mut closure_operation,
+            ),
+        }),
+        Ok(Err(error)) => {
+            let original = closure
+                .take_first_error_typed_v1()
                 .map(FsClosureAdmissionErrorV1::FsCas)
-                .unwrap_or(error));
+                .unwrap_or(error);
+            let terminalization =
+                terminalize_failed_closure_marker_v1(&mut closure_operation, counters, control);
+            match terminalization {
+                Ok(()) => Err(original),
+                Err(terminal) => Err(FsClosureAdmissionErrorV1::FsCas(match original {
+                    FsClosureAdmissionErrorV1::Core(error) => {
+                        FsCasErrorV1::Core(error).dominated_by_v1(terminal)
+                    }
+                    FsClosureAdmissionErrorV1::FsCas(error) => error.dominated_by_v1(terminal),
+                })),
+            }
         }
-    };
-    cas.consume_validated_closure_for_handoff(&mut closure_operation, &mut capability)
-        .map_err(FsClosureAdmissionErrorV1::FsCas)?;
-    Ok(admitted.object_count())
+        Err(payload) => Err(terminalize_closure_unwind_v1(
+            &mut closure_operation,
+            counters,
+            control,
+            payload,
+        )),
+    }
 }
 
 pub(crate) struct C3StorageSessionV1<'operation, 'ledger, 'control, C: ?Sized> {
@@ -283,7 +393,7 @@ where
         &mut self.sink
     }
 
-    fn reference_storage_bytes_v1(&self) -> CoreResult<Option<u64>> {
+    fn reference_storage_bytes_v1(&self) -> CoreResult<OptionalU64ObservationV1> {
         self.references.storage_bytes_observation()
     }
 
@@ -370,6 +480,10 @@ where
 
     fn cleanup_private_pack_controlled_v1(&mut self) -> Result<(), FsCasErrorV1> {
         self.sink.cleanup_private_pack_controlled_v1()
+    }
+
+    fn take_first_core_error_v1(&mut self) -> Option<CoreError> {
+        self.sink.take_first_core_error()
     }
 
     fn take_first_fscas_error_v1(&mut self) -> Option<FsCasErrorV1> {
@@ -549,6 +663,24 @@ impl FsCasControlV1 for CandidateSharedControlV1<'_, '_> {
         boundary: crate::cas::FsCasFilesystemBoundaryV1,
     ) -> Option<crate::cas::FsCasErrorV1> {
         (**self.inner.borrow_mut()).inject_filesystem_failure(boundary)
+    }
+
+    #[cfg(test)]
+    fn inject_residue_accounting_failure(
+        &mut self,
+        boundary: crate::cas::FsCasResidueAccountingBoundaryV1,
+    ) -> bool {
+        (**self.inner.borrow_mut()).inject_residue_accounting_failure(boundary)
+    }
+
+    #[cfg(test)]
+    fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
+        (**self.inner.borrow_mut()).inject_operation_terminal_unwind_after_release()
+    }
+
+    #[cfg(test)]
+    fn inject_root_lock_observation_failure(&mut self) -> Option<CoreError> {
+        (**self.inner.borrow_mut()).inject_root_lock_observation_failure()
     }
 }
 

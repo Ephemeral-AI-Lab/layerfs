@@ -1,18 +1,22 @@
 //! Explicit whole-file Replace operation.
 
+#[cfg(test)]
+use super::prepare_file_v1;
 use super::{
-    prepare_file_v1, ChunkReferenceSpoolV1, ContentBuffersV1, ContentSourceV1, PreparedFileV1,
-    PreparedObjectSinkV1,
+    ChunkReferenceSpoolV1, ContentBuffersV1, ContentSourceV1, PreparedFileV1, PreparedObjectSinkV1,
 };
 use crate::cdc::CdcControlV1;
+use crate::limits::OperationCountersV1;
 #[cfg(feature = "c3-polymorphism")]
 use crate::limits::OperationReservationV1;
-use crate::limits::{OperationCountersV1, ResourceLedgerV1};
+#[cfg(test)]
+use crate::limits::ResourceLedgerV1;
 use crate::CoreResult;
 
 /// Explicit Replace entry point. It shares the bounded constructor but is not
 /// reachable from Update and records no fallback attempt.
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub fn replace_file_v1<S, O, R, C>(
     path: &[u8],
     mode: u16,

@@ -10,12 +10,15 @@ use super::tree::{
 };
 use super::view::CanonicalTreeMutationSourceV1;
 use crate::identity::COMPARISON_WINDOW_BYTES;
+use crate::limits::OperationCountersV1;
 #[cfg(feature = "c3-polymorphism")]
 use crate::limits::OperationReservationV1;
-use crate::limits::{OperationCountersV1, ResourceLedgerV1};
+#[cfg(test)]
+use crate::limits::ResourceLedgerV1;
 use crate::CoreResult;
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(crate) fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
@@ -67,6 +70,7 @@ pub(crate) fn replace_directory_entry_cow_borrowed_v1<S: PreparedTreeSinkV1 + ?S
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(crate) fn add_directory_entry_cow_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
@@ -134,6 +138,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(crate) fn remove_directory_entry_cow_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,

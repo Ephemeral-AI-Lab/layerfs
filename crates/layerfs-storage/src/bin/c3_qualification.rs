@@ -15,19 +15,20 @@ use std::process::{Child, Command, ExitCode, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use layerfs_storage::cas::{FsCasControlV1, FsCasV1};
-use layerfs_storage::cdc::C3CdcAlgorithmV1;
+use layerfs_storage::c3::{
+    run_c3_create_v1, C3OperationBuffersV1, C3SourceSupplierV1, FileChunkReferenceSpoolV1,
+    FilePackIndexSpoolV1,
+};
+use layerfs_storage::cdc::algorithms::C3CdcAlgorithmV1;
 use layerfs_storage::cdc::{
     BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1, ChunkBoundaryV1,
     MAXIMUM_CHUNK_BYTES,
 };
-use layerfs_storage::content::{
-    request_c3_create_qualification_v1, run_c3_create_v1, C3OperationBuffersV1, C3SourceSupplierV1,
-};
 use layerfs_storage::content::{ContentSourceErrorV1, ContentSourceV1};
-use layerfs_storage::cow::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
+use layerfs_storage::fscas::{FsCasControlV1, FsCasV1};
 use layerfs_storage::identity::COMPARISON_WINDOW_BYTES;
-use layerfs_storage::limits::OperationCountersV1;
+use layerfs_storage::limits::{OperationCountersV1, ResourceLedgerV1, MEMORY_PROFILE_32_MIB};
+use layerfs_storage::tree::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
 use layerfs_storage::CoreResult;
 
 const SCHEMA: &str = "layerfs-c3-qualification-v1";
@@ -572,6 +573,13 @@ fn run_complete_sample(
 ) -> Result<String, String> {
     let fixture = TemporaryRoot::new(candidate.name()).map_err(|error| error.to_string())?;
     let cas = FsCasV1::create_new(&fixture.0).map_err(|error| format!("{error:?}"))?;
+    let references_path = fixture.0.join("reference-spool");
+    let metadata_path = fixture.0.join("metadata-spool");
+    let mut references = FileChunkReferenceSpoolV1::create(&references_path)
+        .map_err(|error| format!("{error:?}"))?;
+    let mut metadata =
+        FilePackIndexSpoolV1::create(&metadata_path).map_err(|error| format!("{error:?}"))?;
+    let ledger = ResourceLedgerV1::new(MEMORY_PROFILE_32_MIB);
     let mut counters = OperationCountersV1::default();
     let mut source_window = vec![0_u8; MAXIMUM_CHUNK_BYTES];
     let mut cdc_ring = vec![0_u8; MAXIMUM_CHUNK_BYTES];
@@ -583,15 +591,8 @@ fn run_complete_sample(
     let mut control = ContinueControl;
     let before_cpu = ProcessCpu::now();
     let before_wall = Instant::now();
-    let grant = request_c3_create_qualification_v1(
-        &cas,
-        sample as u64,
-        &mut counters,
-        &mut control,
-    )
-    .map_err(|error| format!("{error:?}"))?;
     let handoff = run_c3_create_v1(
-        grant,
+        &cas,
         candidate.implementation(),
         b"payload.bin",
         0o644,
@@ -602,6 +603,8 @@ fn run_complete_sample(
             maximum_read: 4096,
             seed: 0x9e37_79b9_7f4a_7c15,
         },
+        &mut references,
+        &mut metadata,
         C3OperationBuffersV1 {
             source: source_window
                 .as_mut_slice()
@@ -627,6 +630,7 @@ fn run_complete_sample(
             traversal_state: &mut traversal,
         },
         &mut control,
+        &ledger,
         &mut counters,
     )
     .map_err(|error| format!("complete C3 failed: {error:?}; counters={counters:?}"))?;
@@ -635,16 +639,23 @@ fn run_complete_sample(
     let preparation_entries = fs::read_dir(fixture.0.join("preparation"))
         .map_err(|error| error.to_string())?
         .count();
-    let reference_after = 0_u64;
-    let metadata_after = 0_u64;
-    if preparation_entries != 0
+    let reference_after = fs::metadata(&references_path)
+        .map_err(|error| error.to_string())?
+        .len();
+    let metadata_after = fs::metadata(&metadata_path)
+        .map_err(|error| error.to_string())?
+        .len();
+    if ledger.admitted_slots() != 0
+        || preparation_entries != 0
+        || reference_after != 0
+        || metadata_after != 0
         || !counters.has_zero_forbidden_work()
         || counters.closure_fences != 1
     {
         return Err("post-return resource or forbidden-work invariant failed".into());
     }
     Ok(format!(
-        "{{\"schema\":\"{SCHEMA}\",\"status\":\"pass\",\"candidate\":\"{}\",\"pattern\":\"{}\",\"sample\":{},\"logical_bytes\":{},\"wall_ns\":{},\"cpu_ns\":{},\"pack_bytes\":{},\"object_count\":{},\"source_read_calls\":{},\"source_bytes_read\":{},\"fscas_read_calls\":{},\"fscas_read_bytes\":{},\"fscas_write_bytes\":{},\"physical_created\":{},\"physical_reused\":{},\"tree_created\":{},\"tree_reused\":{},\"reference_spool_peak\":{},\"index_spool_peak\":{},\"temporary_preparation_peak\":{},\"exact_one_slot_ledger_ceiling\":{},\"planned_logical_allocation_high_water\":null,\"ledger_slots_after\":null,\"preparation_entries_after\":{},\"reference_bytes_after\":{},\"index_bytes_after\":{},\"unreachable_residue_bytes\":{},\"automatic_fallbacks\":{},\"redispatches\":{},\"provider_switches\":{},\"cdc_switches\":{},\"publication_authority_dispatches\":{},\"file_sync_calls\":{},\"directory_sync_calls\":{},\"allocator_high_water\":null,\"rss_high_water\":null,\"open_descriptors_after\":null}}",
+        "{{\"schema\":\"{SCHEMA}\",\"status\":\"pass\",\"candidate\":\"{}\",\"pattern\":\"{}\",\"sample\":{},\"logical_bytes\":{},\"wall_ns\":{},\"cpu_ns\":{},\"pack_bytes\":{},\"object_count\":{},\"source_read_calls\":{},\"source_bytes_read\":{},\"fscas_read_calls\":{},\"fscas_read_bytes\":{},\"fscas_write_bytes\":{},\"physical_created\":{},\"physical_reused\":{},\"tree_created\":{},\"tree_reused\":{},\"reference_spool_peak\":{},\"index_spool_peak\":{},\"temporary_preparation_peak\":{},\"exact_one_slot_ledger_ceiling\":{},\"planned_logical_allocation_high_water\":{},\"ledger_slots_after\":{},\"preparation_entries_after\":{},\"reference_bytes_after\":{},\"index_bytes_after\":{},\"unreachable_residue_bytes\":{},\"fallback_attempts\":{},\"redispatches\":{},\"provider_switches\":{},\"cdc_switches\":{},\"publication_dispatches\":{},\"file_sync_calls\":{},\"directory_sync_calls\":{},\"allocator_high_water\":null,\"rss_high_water\":null,\"open_descriptors_after\":null}}",
         candidate.name(),
         pattern.name(),
         sample,
@@ -665,16 +676,18 @@ fn run_complete_sample(
         handoff.reference_spool_bytes().unwrap_or(0),
         handoff.index_spool_bytes().unwrap_or(0),
         counters.temporary_preparation_bytes,
-        counters.memory_high_water,
+        ledger.high_water_bytes(),
+        ledger.planned_high_water_bytes(),
+        ledger.admitted_slots(),
         preparation_entries,
         reference_after,
         metadata_after,
         counters.unreachable_installed_residue_bytes,
-        counters.automatic_fallbacks,
-        counters.redispatches,
+        counters.fallback_attempts,
+        counters.retries_or_redispatches,
         counters.provider_switches,
         counters.cdc_switches,
-        counters.publication_authority_dispatches,
+        counters.publication_dispatches,
         counters.file_sync_calls,
         counters.directory_sync_calls,
     ))

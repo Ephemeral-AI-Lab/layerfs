@@ -765,8 +765,14 @@ fn nonempty_closure_reconstructs_its_logical_root_before_visibility() {
     assert_eq!(sink.visible, Some(fixture.ids[0]));
     assert!(counters.bytes_read > 3 * (fixture.version.len() + fixture.root.len()) as u64);
     assert_eq!(counters.memory_high_water, 12_582_912);
+    // The authenticated logical-directory reconstruction owns one fixed
+    // inline frame for every allowed path component plus the Vec header.  The
+    // frame grew when page traversal state became inline and explicitly
+    // charged; retain the exact qualified aarch64 layout instead of the old
+    // pre-inline approximation.
+    let admission_traversal = 1_788_744;
     let planned =
-        2 * 65_536 + 2 * 32_768 + 2 + 1_028 * 512 + core::mem::size_of::<blake3::Hasher>();
+        2 * 65_536 + 2 * 32_768 + 2 + admission_traversal + core::mem::size_of::<blake3::Hasher>();
     assert_eq!(
         ledger.planned_high_water_bytes(),
         8_388_608 + planned as u64
@@ -1023,6 +1029,43 @@ fn collision_and_malformed_occupant_fail_without_visibility_or_overwrite() {
     assert_eq!(result, Err(CoreError::MalformedOccupant));
     assert_eq!(sink.visible, None);
     assert_eq!(sink.aborts, 1);
+
+    let mut wrong_version = root.clone();
+    wrong_version[8..10].copy_from_slice(&2_u16.to_be_bytes());
+    let mut wrong_profile = root.clone();
+    wrong_profile[12] ^= 1;
+    let mut unknown_kind = root.clone();
+    unknown_kind[10] = 0xff;
+    let wrong_typed_kind = object(5, &[0x44]);
+    for (label, occupied_bytes, expected) in [
+        ("schema", wrong_version, CoreError::Schema),
+        ("profile-domain", wrong_profile, CoreError::TypeDomain),
+        ("unknown-kind", unknown_kind, CoreError::UnknownKind),
+        ("typed-kind", wrong_typed_kind, CoreError::TypeDomain),
+    ] {
+        let mut sink = Sink::default();
+        let result = admit_complete_immutable_v1(
+            &mut ClosurePort::new(&closure),
+            version_id,
+            &mut Occupied {
+                entry: Some((root_id, occupied_bytes)),
+                ..Occupied::default()
+            },
+            &mut sink,
+            &ledger,
+            &mut OperationCountersV1::default(),
+            AdmissionBuffersV1::new(
+                &mut [0_u8; 65_536],
+                &mut [0_u8; 65_536],
+                &mut [0_u8; 32_768],
+                &mut [0_u8; 32_768],
+                &mut [0_u8; 2],
+            ),
+        );
+        assert_eq!(result, Err(expected), "{label}");
+        assert_eq!(sink.visible, None, "{label}");
+        assert_eq!(sink.aborts, 1, "{label}");
+    }
 }
 
 #[test]

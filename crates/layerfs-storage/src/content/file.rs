@@ -19,8 +19,11 @@ use crate::identity::{
 };
 #[cfg(feature = "c3-polymorphism")]
 use crate::limits::OperationReservationV1;
+#[cfg(test)]
+use crate::limits::ResourceLedgerV1;
 use crate::limits::{
-    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
+    CounterFieldV1, MemoryComponentV1, ObservationScopeV1, OperationCountersV1,
+    OperationMemoryPlanV1, OptionalU64ObservationV1,
 };
 use crate::object::{
     encode_physical_object_header_v1, TypedPhysicalObjectIdV1, OBJECT_HEADER_BYTES,
@@ -127,10 +130,13 @@ pub trait ChunkReferenceSpoolV1 {
     /// must be included here.
     fn resident_memory_bound_bytes(&self, maximum_refs: u64) -> CoreResult<u64>;
     /// Exact external spill bytes currently occupied when the implementation
-    /// can report them portably. `None` is unavailable, never an inferred
-    /// zero.
-    fn storage_bytes_observation(&self) -> CoreResult<Option<u64>> {
-        Ok(None)
+    /// can report them directly. Unavailable observations carry a reason and
+    /// no numeric value.
+    fn storage_bytes_observation(&self) -> CoreResult<OptionalU64ObservationV1> {
+        Ok(OptionalU64ObservationV1::unavailable(
+            "chunk-reference port exposes no direct spill-byte observation",
+            ObservationScopeV1::Operation,
+        ))
     }
     fn begin(&mut self, maximum_refs: u64) -> Result<(), PreparedSinkErrorV1>;
     fn push(&mut self, chunk: PreparedChunkRefV1) -> Result<(), PreparedSinkErrorV1>;
@@ -187,6 +193,7 @@ impl<'buffers> ContentBuffersV1<'buffers> {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub fn create_file_v1<S, O, R, C>(
     path: &[u8],
     mode: u16,
@@ -220,6 +227,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(super) fn prepare_file_v1<S, O, R, C>(
     path: &[u8],
     mode: u16,

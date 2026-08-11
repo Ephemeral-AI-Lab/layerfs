@@ -20,7 +20,7 @@ pub trait CompleteImmutableClosureReadPortV1 {
 
     /// Exact direct storage reads performed by the immutable closure carrier.
     /// Memory-backed and synthetic ports may retain the zero default.
-    fn direct_storage_read_observation(&self) -> Result<(u64, u64), ImmutablePortErrorV1> {
+    fn direct_storage_read_observation(&mut self) -> Result<(u64, u64), ImmutablePortErrorV1> {
         Ok((0, 0))
     }
 
@@ -54,8 +54,13 @@ impl<'objects> FsCasClosureSpoolV1<'objects> {
         Self { objects, occupied }
     }
 
-    pub(crate) fn first_error_typed_v1(&self) -> Option<FsCasErrorV1> {
-        self.occupied.first_error_typed_v1()
+    pub(crate) fn take_first_error_typed_v1(&mut self) -> Option<FsCasErrorV1> {
+        // The file-backed closure-index adapter is the first owner that can
+        // observe its exact read/write failure. Promote that cause before the
+        // generic immutable-port error; occupied payload I/O is the fallback.
+        self.objects
+            .take_first_error()
+            .or_else(|| self.occupied.first_error_typed_v1())
     }
 }
 
@@ -79,7 +84,7 @@ impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
             .ok_or(CoreError::IntegerOverflow)
     }
 
-    fn direct_storage_read_observation(&self) -> Result<(u64, u64), ImmutablePortErrorV1> {
+    fn direct_storage_read_observation(&mut self) -> Result<(u64, u64), ImmutablePortErrorV1> {
         self.occupied.direct_storage_read_observation()
     }
 
@@ -100,11 +105,17 @@ impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
             .objects
             .read(ordinal)
             .map_err(|_| ImmutablePortErrorV1::Failure)?;
-        let occupied = self
-            .occupied
-            .occupied_len(record.id)?
-            .ok_or(ImmutablePortErrorV1::Failure)?;
+        let occupied = match self.occupied.occupied_len(record.id)? {
+            Some(occupied) => occupied,
+            None => {
+                self.occupied
+                    .retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+                return Err(ImmutablePortErrorV1::Failure);
+            }
+        };
         if occupied != record.complete_len {
+            self.occupied
+                .retain_first_error_typed_v1(FsCasErrorV1::Integrity);
             return Err(ImmutablePortErrorV1::Failure);
         }
         Ok(occupied)
@@ -121,11 +132,17 @@ impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
             .objects
             .read(ordinal)
             .map_err(|_| ImmutablePortErrorV1::Failure)?;
-        let occupied = self
-            .occupied
-            .occupied_len(record.id)?
-            .ok_or(ImmutablePortErrorV1::Failure)?;
+        let occupied = match self.occupied.occupied_len(record.id)? {
+            Some(occupied) => occupied,
+            None => {
+                self.occupied
+                    .retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+                return Err(ImmutablePortErrorV1::Failure);
+            }
+        };
         if occupied != record.complete_len {
+            self.occupied
+                .retain_first_error_typed_v1(FsCasErrorV1::Integrity);
             return Err(ImmutablePortErrorV1::Failure);
         }
         self.occupied

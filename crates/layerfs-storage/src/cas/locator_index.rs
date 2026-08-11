@@ -134,6 +134,10 @@ impl FileGlobalSeenSpoolV1 {
         self.storage.cleanup_controlled_v1(control)
     }
 
+    pub(crate) fn retained_cleanup_terminal_v1(&self) -> Option<FsCasErrorV1> {
+        self.storage.retained_cleanup_terminal_v1()
+    }
+
     pub(crate) fn storage_bytes(&self) -> u64 {
         u64::from(self.capacity) * GLOBAL_SEEN_RECORD_BYTES
     }

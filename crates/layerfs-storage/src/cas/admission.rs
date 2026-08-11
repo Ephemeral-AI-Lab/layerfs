@@ -28,9 +28,11 @@ use crate::identity::{
     PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalSymlinkIdV1, PhysicalTreeIdV1,
     PhysicalVersionRecordIdV1, SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
+#[cfg(test)]
+use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
-    OperationReservationV1, ResourceLedgerV1,
+    OperationReservationV1,
 };
 use crate::object::require_canonical_traversal_depth_v1;
 use crate::object::{
@@ -130,6 +132,7 @@ impl<'a> AdmissionBuffersV1<'a> {
     }
 }
 
+#[cfg(test)]
 pub fn admit_complete_immutable_v1<C, O, S>(
     closure: &mut C,
     expected_version_record: TypedPhysicalObjectIdV1,
@@ -647,7 +650,7 @@ where
         )
         .map_err(map_occupant_validation)?;
         if decoded.header().kind() != expected_id.kind() {
-            return Err(CoreError::MalformedOccupant);
+            return Err(CoreError::TypeDomain);
         }
     }
 
@@ -747,7 +750,11 @@ const fn map_occupant_validation(error: CoreError) -> CoreError {
         CoreError::SourceFailure
         | CoreError::ResourceRefused
         | CoreError::Cancelled
-        | CoreError::Deadline => error,
+        | CoreError::Deadline
+        | CoreError::Schema
+        | CoreError::TypeDomain
+        | CoreError::UnknownKind
+        | CoreError::IdMismatch => error,
         _ => CoreError::MalformedOccupant,
     }
 }

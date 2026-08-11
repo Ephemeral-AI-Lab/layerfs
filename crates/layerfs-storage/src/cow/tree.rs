@@ -16,10 +16,11 @@ use crate::identity::{
     LogicalChildIdV1, LogicalDirectoryEntryV1, PhysicalFileIdV1, PhysicalSymlinkIdV1,
     PhysicalTreeIdV1, SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
-#[cfg(feature = "c3-polymorphism")]
 use crate::limits::OperationReservationV1;
+#[cfg(test)]
+use crate::limits::ResourceLedgerV1;
 use crate::limits::{
-    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
+    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
 use crate::object::{
     decode_physical_object_v1, encode_physical_object_header_v1, DiscardStrongEdgesV1,
@@ -545,6 +546,7 @@ impl CowTreeMutationV1 {
     }
 }
 
+#[cfg(test)]
 pub fn build_canonical_directory_v1<S: PreparedTreeSinkV1 + ?Sized>(
     mode: DirectoryBuildModeV1,
     entries: &[CanonicalTreeEntryV1<'_>],
@@ -729,6 +731,7 @@ fn build_directory_inner<S: PreparedTreeSinkV1 + ?Sized>(
     })
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn replace_directory_entry_cow_impl_v1<S: PreparedTreeSinkV1 + ?Sized>(
     base: CanonicalDirectoryTreeV1,
@@ -782,8 +785,8 @@ pub(super) fn replace_directory_entry_cow_borrowed_impl_v1<S: PreparedTreeSinkV1
 
 #[derive(Clone, Copy)]
 enum TreeMemoryAdmissionV1<'a> {
+    #[cfg(test)]
     Independent(&'a ResourceLedgerV1),
-    #[cfg(feature = "c3-polymorphism")]
     Borrowed(&'a OperationReservationV1<'a>),
 }
 
@@ -848,6 +851,7 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
             sink.resident_memory_bound_bytes()?,
         )?;
     match admission {
+        #[cfg(test)]
         TreeMemoryAdmissionV1::Independent(ledger) => {
             let _reservation = ledger.reserve_operation_with_plan(memory)?;
             counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
@@ -863,7 +867,6 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
                 logical_scratch,
             )
         }
-        #[cfg(feature = "c3-polymorphism")]
         TreeMemoryAdmissionV1::Borrowed(reservation) => {
             reservation.require(memory)?;
             replace_directory_entry_after_admission_v1(
@@ -1050,6 +1053,7 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
     })
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn add_directory_entry_cow_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -1117,6 +1121,7 @@ where
     )
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn remove_directory_entry_cow_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -1407,6 +1412,7 @@ where
         )?
         .charge(MemoryComponentV1::MetadataWindow, port_bytes)?;
     match admission {
+        #[cfg(test)]
         TreeMemoryAdmissionV1::Independent(ledger) => {
             let _reservation = ledger.reserve_operation_with_plan(memory)?;
             counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
@@ -1427,7 +1433,6 @@ where
                 result_plan,
             )
         }
-        #[cfg(feature = "c3-polymorphism")]
         TreeMemoryAdmissionV1::Borrowed(reservation) => {
             reservation.require(memory)?;
             mutate_directory_entries_after_admission_v1(

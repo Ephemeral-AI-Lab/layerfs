@@ -10,8 +10,9 @@ use layerfs_storage::cas::{
     OccupiedImmutableReadPortV1,
 };
 use layerfs_storage::cas::{
-    FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasV1,
-    FsPackAdmissionOutcomeV1, FsPrivatePackV1,
+    FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasFailureCauseV1,
+    FsCasFilesystemBoundaryV1, FsCasFilesystemFailureV1, FsCasV1, FsPackAdmissionOutcomeV1,
+    FsPrivatePackV1, CATALOG_MARKER_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
 };
 use layerfs_storage::identity::{
     derive_implicit_root_directory_v1, derive_physical_tree_id_v1,
@@ -29,6 +30,22 @@ use layerfs_storage::profile::{ChunkerSpecV1, DigestSpecV1, ProfileSpecV1};
 use layerfs_storage::{CoreError, CoreResult};
 
 static NEXT_ROOT: AtomicU64 = AtomicU64::new(1);
+
+fn assert_path_absent(path: &Path) {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Ok(metadata) => {
+            panic!("expected {path:?} to be absent, but metadata succeeded: {metadata:?}")
+        }
+        Err(error) => panic!("expected {path:?} to be absent, but lookup failed: {error}"),
+    }
+}
+
+fn exact_fresh_pack_immutable_bytes(pack_len: u64, record_count: u32) -> u64 {
+    pack_len
+        + u64::from(record_count) * u64::try_from(PERSISTENT_LOCATOR_BYTES_V1).unwrap()
+        + u64::try_from(CATALOG_MARKER_BYTES).unwrap()
+}
 
 fn make_owner_writable(path: &Path) -> fs::Permissions {
     let original = fs::metadata(path).unwrap().permissions();
@@ -118,6 +135,36 @@ impl FsCasControlV1 for StopWithCleanupFailure {
     }
 }
 
+/// A single semantic immutable-read fault. This exercises an authority read
+/// boundary, not an inferred native syscall count.
+struct ReadFaultAtBoundary {
+    boundary: FsCasFilesystemBoundaryV1,
+    error: FsCasErrorV1,
+    injected: bool,
+}
+
+impl FsCasControlV1 for ReadFaultAtBoundary {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn inject_filesystem_failure(
+        &mut self,
+        boundary: FsCasFilesystemBoundaryV1,
+    ) -> Option<FsCasErrorV1> {
+        if !self.injected && boundary == self.boundary {
+            self.injected = true;
+            Some(self.error)
+        } else {
+            None
+        }
+    }
+}
+
 struct BreakCatalogAtPublication {
     catalog: PathBuf,
     injected: bool,
@@ -135,6 +182,18 @@ struct InstallLocatorAndFailPreparationCleanup {
 }
 
 struct InstallMalformedCatalogAtPublication {
+    root: PathBuf,
+    injected: bool,
+}
+
+struct InstallUnequalCatalogAtPublication {
+    root: PathBuf,
+    bytes: Vec<u8>,
+    bind_candidate_id: bool,
+    injected: bool,
+}
+
+struct CorruptCarrierBeforeRollback {
     root: PathBuf,
     injected: bool,
 }
@@ -258,6 +317,58 @@ impl FsCasControlV1 for InstallMalformedCatalogAtPublication {
 
     fn cancellation_requested(&mut self) -> bool {
         false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for InstallUnequalCatalogAtPublication {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeCatalogPublication && !self.injected {
+            let carrier = only_entry(&self.root.join("carriers"));
+            let destination = self.root.join("catalog").join(carrier.file_name().unwrap());
+            if self.bind_candidate_id {
+                let name = carrier.file_name().unwrap().to_str().unwrap();
+                for (index, slot) in self.bytes[8..40].iter_mut().enumerate() {
+                    *slot = u8::from_str_radix(&name[index * 2..index * 2 + 2], 16).unwrap();
+                }
+            }
+            fs::write(destination, &self.bytes).unwrap();
+            self.injected = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for CorruptCarrierBeforeRollback {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::BeforeCatalogPublication && !self.injected {
+            let carrier = only_entry(&self.root.join("carriers"));
+            let original_permissions = make_owner_writable(&carrier);
+            let mut bytes = fs::read(&carrier).unwrap();
+            let index_offset =
+                usize::try_from(u64::from_be_bytes(bytes[56..64].try_into().unwrap())).unwrap();
+            // Preserve the carrier's exact length and every payload byte, but
+            // make the first index entry structurally invalid. Rollback owns
+            // this immutable index as its cleanup-enumeration authority.
+            bytes[index_offset + 1] = 1;
+            fs::write(&carrier, bytes).unwrap();
+            fs::set_permissions(&carrier, original_permissions).unwrap();
+            self.injected = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        self.injected
     }
 
     fn deadline_exceeded(&mut self) -> bool {
@@ -646,6 +757,240 @@ fn pack_is_transferred_once_then_reopened_through_committed_catalog() {
 }
 
 #[test]
+fn occupied_locator_catalog_observation_overflow_is_typed_and_transactional() {
+    let fixture = TestRoot::new("occupied-metadata-observation-overflow");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let shared = object(5, b"occupied-metadata-observation");
+    let shared_id = typed_id(&shared);
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut counters = OperationCountersV1::default();
+    let mut scratch = [0_u8; 65_536];
+    let mut pack = build_private_pack(
+        &cas,
+        std::slice::from_ref(&shared),
+        &ledger,
+        &mut counters,
+        &mut scratch,
+    );
+    let mut spool = Spool::default();
+    cas.admit_pack(&mut pack, &mut spool, &ledger, &mut counters, &mut scratch)
+        .unwrap();
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+
+    const SEEDED_BYTES: u64 = 37;
+    const SEEDED_CALLS: u64 = u64::MAX - 1;
+    cas.seed_next_occupied_read_observation_for_test_v1(SEEDED_BYTES, SEEDED_CALLS);
+    let mut occupied = cas.occupied_private_v1().unwrap();
+    assert_eq!(
+        occupied.occupied_len_typed_v1(shared_id),
+        Err(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+    );
+    assert_eq!(
+        occupied.direct_storage_read_observation_typed_v1(),
+        Ok((SEEDED_BYTES, SEEDED_CALLS))
+    );
+    assert!(!occupied.resolved_object_cached_for_test_v1(shared_id));
+
+    // Let the locator+catalog tuple commit, then overflow only when the real
+    // validated pack tuple is merged. Its bytes and calls are indivisible.
+    const PACK_SEEDED_BYTES: u64 = 53;
+    const PACK_SEEDED_CALLS: u64 = u64::MAX - 2;
+    cas.seed_next_occupied_read_observation_for_test_v1(PACK_SEEDED_BYTES, PACK_SEEDED_CALLS);
+    let mut pack_overflow = cas.occupied_private_v1().unwrap();
+    assert_eq!(
+        pack_overflow.occupied_len_typed_v1(shared_id),
+        Err(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+    );
+    assert_eq!(
+        pack_overflow.direct_storage_read_observation_typed_v1(),
+        Ok((
+            PACK_SEEDED_BYTES
+                + u64::try_from(PERSISTENT_LOCATOR_BYTES_V1).unwrap()
+                + u64::try_from(CATALOG_MARKER_BYTES).unwrap(),
+            u64::MAX,
+        ))
+    );
+    assert!(!pack_overflow.resolved_object_cached_for_test_v1(shared_id));
+
+    // Resolve the authenticated object normally, then saturate only the
+    // observation state immediately before a real payload read. The bytes
+    // reach the caller, but the payload bytes+call tuple is rejected whole.
+    const PAYLOAD_SEEDED_BYTES: u64 = 71;
+    cas.seed_next_occupied_payload_read_observation_for_test_v1(PAYLOAD_SEEDED_BYTES, u64::MAX);
+    let mut payload_overflow = cas.occupied_private_v1().unwrap();
+    assert_eq!(
+        payload_overflow.occupied_len_typed_v1(shared_id),
+        Ok(Some(shared.len() as u64))
+    );
+    assert!(payload_overflow.resolved_object_cached_for_test_v1(shared_id));
+    let mut payload_prefix = [0_u8; 11];
+    assert_eq!(
+        payload_overflow.read_occupied_exact_at_typed_v1(shared_id, 0, &mut payload_prefix,),
+        Err(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+    );
+    assert_eq!(payload_prefix, shared[..payload_prefix.len()]);
+    assert_eq!(
+        payload_overflow.direct_storage_read_observation_typed_v1(),
+        Ok((PAYLOAD_SEEDED_BYTES, u64::MAX))
+    );
+    assert!(payload_overflow.resolved_object_cached_for_test_v1(shared_id));
+
+    // The failed observation commit is not a storage-integrity failure. The
+    // current handle and an independently reopened handle remain usable.
+    assert!(cas.occupied_private_v1().is_ok());
+    assert!(FsCasV1::open_existing(&fixture.path).is_ok());
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn valid_locator_binding_mismatches_are_integrity_not_malformed_bytes() {
+    for catalog_binding in [true, false] {
+        let label = if catalog_binding {
+            "locator-catalog-binding"
+        } else {
+            "locator-entry-binding"
+        };
+        let fixture = TestRoot::new(label);
+        let cas = FsCasV1::create_new(&fixture.path).unwrap();
+        let shared = object(5, b"authenticated-locator-binding");
+        let shared_id = typed_id(&shared);
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut counters = OperationCountersV1::default();
+        let mut scratch = [0_u8; 65_536];
+        let mut spool = Spool::default();
+        let mut winner = build_private_pack(
+            &cas,
+            std::slice::from_ref(&shared),
+            &ledger,
+            &mut counters,
+            &mut scratch,
+        );
+        cas.admit_pack(
+            &mut winner,
+            &mut spool,
+            &ledger,
+            &mut counters,
+            &mut scratch,
+        )
+        .unwrap();
+
+        // Keep the locator structurally valid while changing one decoded
+        // authenticated binding. A catalog-shape mismatch and a canonical
+        // pack-entry mismatch are integrity failures, not malformed records.
+        let path = locator_path(&fixture.path, shared_id);
+        let original_permissions = make_owner_writable(&path);
+        let mut locator = fs::read(&path).unwrap();
+        if catalog_binding {
+            let pack_len = u64::from_be_bytes(locator[80..88].try_into().unwrap());
+            locator[80..88].copy_from_slice(&pack_len.checked_add(1).unwrap().to_be_bytes());
+        } else {
+            let object_len = u32::from_be_bytes(locator[112..116].try_into().unwrap());
+            locator[112..116].copy_from_slice(&object_len.checked_add(1).unwrap().to_be_bytes());
+        }
+        fs::write(&path, locator).unwrap();
+        fs::set_permissions(&path, original_permissions).unwrap();
+
+        let mut occupied = cas.occupied_private_v1().unwrap();
+        assert_eq!(
+            occupied.occupied_len_typed_v1(shared_id),
+            Err(FsCasErrorV1::Integrity),
+            "read path: {label}"
+        );
+
+        // A distinct candidate carrier containing the same object exercises
+        // incumbent locator authentication during publication as well.
+        let candidate_objects = [shared, object(5, b"new-candidate-object")];
+        let mut candidate_counters = OperationCountersV1::default();
+        let mut candidate = build_private_pack(
+            &cas,
+            &candidate_objects,
+            &ledger,
+            &mut candidate_counters,
+            &mut scratch,
+        );
+        assert_eq!(
+            cas.admit_pack(
+                &mut candidate,
+                &mut spool,
+                &ledger,
+                &mut candidate_counters,
+                &mut scratch,
+            ),
+            Err(FsCasErrorV1::Integrity),
+            "admission path: {label}"
+        );
+        assert_eq!(ledger.admitted_slots(), 0, "{label}");
+        assert!(candidate_counters.has_zero_forbidden_work(), "{label}");
+    }
+
+    // Equal-carrier reuse has a separate persistent-locator verification
+    // path; prove that it uses the same valid-record integrity taxonomy.
+    let fixture = TestRoot::new("locator-equal-carrier-binding");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let shared = object(5, b"equal-carrier-locator-binding");
+    let shared_id = typed_id(&shared);
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut counters = OperationCountersV1::default();
+    let mut scratch = [0_u8; 65_536];
+    let mut spool = Spool::default();
+    let mut winner = build_private_pack(
+        &cas,
+        std::slice::from_ref(&shared),
+        &ledger,
+        &mut counters,
+        &mut scratch,
+    );
+    cas.admit_pack(
+        &mut winner,
+        &mut spool,
+        &ledger,
+        &mut counters,
+        &mut scratch,
+    )
+    .unwrap();
+    let path = locator_path(&fixture.path, shared_id);
+    let original_permissions = make_owner_writable(&path);
+    let mut locator = fs::read(&path).unwrap();
+    let object_len = u32::from_be_bytes(locator[112..116].try_into().unwrap());
+    locator[112..116].copy_from_slice(&object_len.checked_add(1).unwrap().to_be_bytes());
+    fs::write(&path, locator).unwrap();
+    fs::set_permissions(&path, original_permissions).unwrap();
+
+    let mut reuse_counters = OperationCountersV1::default();
+    let mut candidate = build_private_pack(
+        &cas,
+        std::slice::from_ref(&shared),
+        &ledger,
+        &mut reuse_counters,
+        &mut scratch,
+    );
+    assert_eq!(
+        cas.admit_pack(
+            &mut candidate,
+            &mut spool,
+            &ledger,
+            &mut reuse_counters,
+            &mut scratch,
+        ),
+        Err(FsCasErrorV1::Integrity)
+    );
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert!(reuse_counters.has_zero_forbidden_work());
+}
+
+#[test]
 fn catalog_counter_overflow_precedes_every_visibility_transition() {
     let fixture = TestRoot::new("catalog-counter-overflow");
     let cas = FsCasV1::create_new(&fixture.path).unwrap();
@@ -719,7 +1064,10 @@ fn carrier_cleanup_failure_invalidates_owner_and_root() {
             &mut scratch,
             &mut control,
         ),
-        Err(FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::Carrier,))
+        Err(FsCasErrorV1::TerminalFailure {
+            first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
+            dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::Carrier,),
+        })
     );
     assert!(control.injected);
     assert_eq!(counters.unreachable_installed_residue_bytes, pack_len);
@@ -793,6 +1141,68 @@ fn carrier_cleanup_failure_invalidates_owner_and_root() {
 }
 
 #[test]
+fn rollback_carrier_authentication_failure_preserves_cleanup_dominance() {
+    let fixture = TestRoot::new("rollback-carrier-authentication");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let objects = [object(5, b"rollback carrier authentication")];
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut counters = OperationCountersV1::default();
+    let mut scratch = [0_u8; 65_536];
+    let mut pack = build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+    let pack_len = pack.len().unwrap();
+    let mut spool = Spool::default();
+    let mut control = CorruptCarrierBeforeRollback {
+        root: fixture.path.clone(),
+        injected: false,
+    };
+
+    assert_eq!(
+        cas.admit_pack_controlled(
+            &mut pack,
+            &mut spool,
+            &ledger,
+            &mut counters,
+            &mut scratch,
+            &mut control,
+        ),
+        Err(FsCasErrorV1::TerminalFailure {
+            first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
+            dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::ObjectLocator,),
+        })
+    );
+    assert!(control.injected);
+    assert_eq!(
+        counters.unreachable_installed_residue_bytes,
+        pack_len + u64::try_from(PERSISTENT_LOCATOR_BYTES_V1).unwrap(),
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        0
+    );
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert!(counters.has_zero_forbidden_work());
+    assert!(matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)));
+    assert!(matches!(
+        FsCasV1::open_existing(&fixture.path),
+        Err(FsCasErrorV1::Invalidated)
+    ));
+}
+
+#[test]
 fn locator_cleanup_failure_is_counted_and_cannot_poison_a_later_admission() {
     let fixture = TestRoot::new("locator-cleanup-failure");
     let cas = FsCasV1::create_new(&fixture.path).unwrap();
@@ -804,6 +1214,7 @@ fn locator_cleanup_failure_is_counted_and_cannot_poison_a_later_admission() {
     let mut counters = OperationCountersV1::default();
     let mut scratch = [0_u8; 65_536];
     let mut pack = build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+    let pack_len = pack.len().unwrap();
     let mut spool = Spool::default();
     let mut control = StopWithCleanupFailure::new(
         FsCasBoundaryV1::AfterObjectLocatorPublication,
@@ -819,12 +1230,16 @@ fn locator_cleanup_failure_is_counted_and_cannot_poison_a_later_admission() {
             &mut scratch,
             &mut control,
         ),
-        Err(FsCasErrorV1::CleanupFailed(
-            FsCasCleanupTargetV1::ObjectLocator,
-        ))
+        Err(FsCasErrorV1::TerminalFailure {
+            first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
+            dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::ObjectLocator,),
+        })
     );
     assert!(control.injected);
-    assert_eq!(counters.unreachable_installed_residue_bytes, 160);
+    assert_eq!(
+        counters.unreachable_installed_residue_bytes,
+        pack_len + u64::try_from(PERSISTENT_LOCATOR_BYTES_V1).unwrap(),
+    );
     assert_eq!(
         fs::read_dir(fixture.path.join("preparation"))
             .unwrap()
@@ -833,7 +1248,7 @@ fn locator_cleanup_failure_is_counted_and_cannot_poison_a_later_admission() {
     );
     assert_eq!(
         fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
-        0
+        1
     );
     assert_eq!(
         fs::read_dir(fixture.path.join("objects")).unwrap().count(),
@@ -1212,7 +1627,7 @@ fn forced_equal_typed_id_with_unequal_incumbent_bytes_fails_closed() {
             &mut loser_counters,
             &mut scratch,
         ),
-        Err(FsCasErrorV1::MalformedOccupant)
+        Err(FsCasErrorV1::Core(CoreError::IdMismatch))
     );
     assert_eq!(
         fs::read_dir(fixture.path.join("preparation"))
@@ -1232,7 +1647,7 @@ fn forced_equal_typed_id_with_unequal_incumbent_bytes_fails_closed() {
         fs::read_dir(fixture.path.join("objects")).unwrap().count(),
         2
     );
-    assert!(!locator_path(&fixture.path, loser_only_id).exists());
+    assert_path_absent(&locator_path(&fixture.path, loser_only_id));
     assert_eq!(loser_counters.unreachable_installed_residue_bytes, 0);
     assert_eq!(ledger.admitted_slots(), 0);
     assert!(loser_counters.has_zero_forbidden_work());
@@ -1470,9 +1885,10 @@ fn atomic_locator_incumbent_cleanup_failure_preserves_typed_lifecycle_error() {
             &mut scratch,
             &mut control,
         ),
-        Err(FsCasErrorV1::CleanupFailed(
-            FsCasCleanupTargetV1::PreparationSpool,
-        ))
+        Err(FsCasErrorV1::TerminalFailure {
+            first: FsCasFailureCauseV1::MalformedOccupant,
+            dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool,),
+        })
     );
     assert!(control.occupant_injected);
     assert!(control.cleanup_injected);
@@ -1556,6 +1972,200 @@ fn atomic_catalog_no_replace_authenticates_a_racing_malformed_occupant() {
     assert_eq!(counters.unreachable_installed_residue_bytes, 0);
     assert_eq!(ledger.admitted_slots(), 0);
     assert!(counters.has_zero_forbidden_work());
+}
+
+#[test]
+fn atomic_catalog_no_replace_classifies_valid_binding_and_unequal_incumbents() {
+    let donor_fixture = TestRoot::new("catalog-unequal-donor");
+    let donor = FsCasV1::create_new(&donor_fixture.path).unwrap();
+    let donor_objects = [object(5, b"canonical unequal catalog donor")];
+    let donor_ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut donor_counters = OperationCountersV1::default();
+    let mut donor_scratch = [0_u8; 65_536];
+    let mut donor_pack = build_private_pack(
+        &donor,
+        &donor_objects,
+        &donor_ledger,
+        &mut donor_counters,
+        &mut donor_scratch,
+    );
+    let mut donor_spool = Spool::default();
+    assert_eq!(
+        donor
+            .admit_pack(
+                &mut donor_pack,
+                &mut donor_spool,
+                &donor_ledger,
+                &mut donor_counters,
+                &mut donor_scratch,
+            )
+            .unwrap()
+            .outcome(),
+        FsPackAdmissionOutcomeV1::Installed
+    );
+    let unequal_catalog = fs::read(only_entry(&donor_fixture.path.join("catalog"))).unwrap();
+    assert_eq!(unequal_catalog.len(), CATALOG_MARKER_BYTES);
+
+    for (label, bind_candidate_id, expected) in [
+        ("binding", false, FsCasErrorV1::Integrity),
+        ("same-id-unequal", true, FsCasErrorV1::UnequalOccupant),
+    ] {
+        let fixture = TestRoot::new(&format!("atomic-catalog-{label}"));
+        let cas = FsCasV1::create_new(&fixture.path).unwrap();
+        let objects = [object(5, b"candidate with a distinct sealed pack")];
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut counters = OperationCountersV1::default();
+        let mut scratch = [0_u8; 65_536];
+        let mut pack = build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+        assert_ne!(
+            u64::from_be_bytes(unequal_catalog[40..48].try_into().unwrap()),
+            pack.len().unwrap(),
+        );
+        let mut spool = Spool::default();
+        let mut control = InstallUnequalCatalogAtPublication {
+            root: fixture.path.clone(),
+            bytes: unequal_catalog.clone(),
+            bind_candidate_id,
+            injected: false,
+        };
+
+        assert_eq!(
+            cas.admit_pack_controlled(
+                &mut pack,
+                &mut spool,
+                &ledger,
+                &mut counters,
+                &mut scratch,
+                &mut control,
+            ),
+            Err(expected),
+            "{label}"
+        );
+        assert!(control.injected, "{label}");
+        assert_eq!(
+            fs::read_dir(fixture.path.join("preparation"))
+                .unwrap()
+                .count(),
+            0,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+            0,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+            0,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+            1,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read(only_entry(&fixture.path.join("catalog"))).unwrap(),
+            control.bytes,
+            "{label}"
+        );
+        assert_eq!(counters.unreachable_installed_residue_bytes, 0, "{label}");
+        assert_eq!(ledger.admitted_slots(), 0, "{label}");
+        assert!(counters.has_zero_forbidden_work(), "{label}");
+    }
+}
+
+#[test]
+fn existing_catalog_classifies_valid_binding_and_unequal_incumbents() {
+    for (label, mutate_id, expected) in [
+        ("binding", true, FsCasErrorV1::Integrity),
+        ("same-id-unequal", false, FsCasErrorV1::UnequalOccupant),
+    ] {
+        let fixture = TestRoot::new(&format!("existing-catalog-{label}"));
+        let cas = FsCasV1::create_new(&fixture.path).unwrap();
+        let objects = [object(5, b"existing canonical catalog candidate")];
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut scratch = [0_u8; 65_536];
+        let mut installed_counters = OperationCountersV1::default();
+        let mut installed = build_private_pack(
+            &cas,
+            &objects,
+            &ledger,
+            &mut installed_counters,
+            &mut scratch,
+        );
+        let mut spool = Spool::default();
+        assert_eq!(
+            cas.admit_pack(
+                &mut installed,
+                &mut spool,
+                &ledger,
+                &mut installed_counters,
+                &mut scratch,
+            )
+            .unwrap()
+            .outcome(),
+            FsPackAdmissionOutcomeV1::Installed
+        );
+
+        let marker_path = only_entry(&fixture.path.join("catalog"));
+        let original_permissions = make_owner_writable(&marker_path);
+        let mut marker = fs::read(&marker_path).unwrap();
+        if mutate_id {
+            marker[8] ^= 1;
+        } else {
+            let pack_len = u64::from_be_bytes(marker[40..48].try_into().unwrap());
+            marker[40..48].copy_from_slice(&pack_len.checked_add(1).unwrap().to_be_bytes());
+        }
+        fs::write(&marker_path, &marker).unwrap();
+        fs::set_permissions(&marker_path, original_permissions).unwrap();
+
+        let mut candidate_counters = OperationCountersV1::default();
+        let mut candidate = build_private_pack(
+            &cas,
+            &objects,
+            &ledger,
+            &mut candidate_counters,
+            &mut scratch,
+        );
+        assert_eq!(
+            cas.admit_pack(
+                &mut candidate,
+                &mut spool,
+                &ledger,
+                &mut candidate_counters,
+                &mut scratch,
+            ),
+            Err(expected),
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("preparation"))
+                .unwrap()
+                .count(),
+            0,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+            1,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+            1,
+            "{label}"
+        );
+        assert_eq!(
+            fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+            1,
+            "{label}"
+        );
+        assert_eq!(fs::read(&marker_path).unwrap(), marker, "{label}");
+        assert_eq!(candidate_counters.unreachable_installed_residue_bytes, 0);
+        assert_eq!(ledger.admitted_slots(), 0, "{label}");
+        assert!(candidate_counters.has_zero_forbidden_work(), "{label}");
+    }
 }
 
 #[test]
@@ -1721,7 +2331,10 @@ fn every_fresh_admission_boundary_cleans_or_counts_exact_residue() {
                 fs::read_dir(fixture.path.join("objects")).unwrap().count(),
                 1
             );
-            assert_eq!(counters.unreachable_installed_residue_bytes, pack_len);
+            assert_eq!(
+                counters.unreachable_installed_residue_bytes,
+                exact_fresh_pack_immutable_bytes(pack_len, objects.len() as u32),
+            );
             assert_eq!(counters.fscas_bytes_written, 0);
         } else {
             assert_eq!(
@@ -1899,7 +2512,9 @@ fn catalog_publication_io_fault_removes_validated_unpublished_carrier() {
             &mut scratch,
             &mut control,
         ),
-        Err(FsCasErrorV1::Io)
+        Err(FsCasErrorV1::Filesystem(
+            FsCasFilesystemFailureV1::WriteFailure,
+        ))
     );
     assert!(control.injected);
     assert_eq!(ledger.admitted_slots(), 0);
@@ -1920,8 +2535,8 @@ fn catalog_publication_io_fault_removes_validated_unpublished_carrier() {
 }
 
 #[test]
-fn lost_hard_link_containment_capability_returns_unsupported_without_fallback() {
-    let fixture = TestRoot::new("unsupported-link-capability");
+fn malformed_root_owned_carrier_directory_fails_closed_without_fallback() {
+    let fixture = TestRoot::new("malformed-carrier-directory");
     let cas = FsCasV1::create_new(&fixture.path).unwrap();
     let objects = [object(5, b"unsupported")];
     let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
@@ -1933,7 +2548,7 @@ fn lost_hard_link_containment_capability_returns_unsupported_without_fallback() 
     let mut spool = Spool::default();
     assert_eq!(
         cas.admit_pack(&mut pack, &mut spool, &ledger, &mut counters, &mut scratch),
-        Err(FsCasErrorV1::Unsupported)
+        Err(FsCasErrorV1::MalformedOccupant)
     );
     assert_eq!(ledger.admitted_slots(), 0);
     assert_eq!(
@@ -2281,7 +2896,10 @@ fn closure_capability_rejects_cross_fscas_cross_operation_and_replay() {
             &mut pack_scratch,
             &mut cleanup_failure,
         ),
-        Err(FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::Carrier,))
+        Err(FsCasErrorV1::TerminalFailure {
+            first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
+            dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::Carrier,),
+        })
     );
     assert_eq!(
         capability_b.version_record(),
@@ -2356,7 +2974,10 @@ fn closure_validation_failure_returns_no_closure_and_counts_installed_residue() 
         .unwrap();
     assert_eq!(
         counters.unreachable_installed_residue_bytes,
-        admission.sealed().pack_len()
+        exact_fresh_pack_immutable_bytes(
+            admission.sealed().pack_len(),
+            admission.sealed().record_count(),
+        )
     );
     assert_eq!(ledger.admitted_slots(), 0);
     assert!(counters.has_zero_forbidden_work());
@@ -2422,7 +3043,10 @@ fn closure_fence_io_failure_returns_no_closure_or_publication() {
         .unwrap();
     assert_eq!(
         counters.unreachable_installed_residue_bytes,
-        admission.sealed().pack_len()
+        exact_fresh_pack_immutable_bytes(
+            admission.sealed().pack_len(),
+            admission.sealed().record_count(),
+        )
     );
     assert_eq!(ledger.admitted_slots(), 0);
     assert!(counters.has_zero_forbidden_work());
@@ -2533,6 +3157,373 @@ fn same_pack_race_is_no_replace_and_compares_every_incumbent_byte() {
         assert_eq!(fs::metadata(&carrier).unwrap().ino(), original_inode);
     }
     assert!(second_counters.has_zero_forbidden_work());
+}
+
+#[test]
+fn same_carrier_incumbent_read_failures_are_typed_and_cleanup_the_candidate() {
+    let fixture = TestRoot::new("same-carrier-incumbent-read-failures");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let objects = [object(5, &[0x5b; 32_768])];
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut scratch = [0_u8; 65_536];
+    let mut spool = Spool::default();
+    let mut incumbent_counters = OperationCountersV1::default();
+    let mut incumbent = build_private_pack(
+        &cas,
+        &objects,
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    );
+    cas.admit_pack(
+        &mut incumbent,
+        &mut spool,
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    )
+    .unwrap();
+
+    for boundary in [
+        FsCasFilesystemBoundaryV1::CatalogMarkerRead,
+        FsCasFilesystemBoundaryV1::CatalogMarkerRevalidationRead,
+        FsCasFilesystemBoundaryV1::CarrierMetadataRead,
+        FsCasFilesystemBoundaryV1::IncumbentComparisonRead,
+    ] {
+        for error in [
+            FsCasErrorV1::MissingOccupant,
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied),
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ReadFailure),
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortRead),
+        ] {
+            let mut counters = OperationCountersV1::default();
+            let mut candidate =
+                build_private_pack(&cas, &objects, &ledger, &mut counters, &mut scratch);
+            let mut control = ReadFaultAtBoundary {
+                boundary,
+                error,
+                injected: false,
+            };
+
+            assert_eq!(
+                cas.admit_pack_controlled(
+                    &mut candidate,
+                    &mut spool,
+                    &ledger,
+                    &mut counters,
+                    &mut scratch,
+                    &mut control,
+                ),
+                Err(error)
+            );
+            assert!(control.injected, "{boundary:?} did not inject");
+            assert_eq!(ledger.admitted_slots(), 0);
+            assert_eq!(
+                fs::read_dir(fixture.path.join("preparation"))
+                    .unwrap()
+                    .count(),
+                0
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+                1
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+                1
+            );
+            assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+            assert!(counters.has_zero_forbidden_work());
+            assert!(cas.occupied().is_ok());
+        }
+    }
+}
+
+#[test]
+fn cross_carrier_object_validation_read_failures_are_typed_and_cleanup_the_candidate() {
+    let fixture = TestRoot::new("cross-carrier-object-validation-read-failures");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let shared = object(5, &[0x4d; 16_384]);
+    let additional = object(5, &[0x9e; 16_384]);
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut scratch = [0_u8; 65_536];
+    let mut spool = Spool::default();
+    let mut incumbent_counters = OperationCountersV1::default();
+    let mut incumbent = build_private_pack(
+        &cas,
+        std::slice::from_ref(&shared),
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    );
+    cas.admit_pack(
+        &mut incumbent,
+        &mut spool,
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    )
+    .unwrap();
+
+    for boundary in [
+        FsCasFilesystemBoundaryV1::ObjectLocatorRead,
+        FsCasFilesystemBoundaryV1::CatalogMarkerRead,
+        FsCasFilesystemBoundaryV1::CarrierMetadataRead,
+        FsCasFilesystemBoundaryV1::CarrierIndexRead,
+        FsCasFilesystemBoundaryV1::CarrierObjectRead,
+        FsCasFilesystemBoundaryV1::IncumbentComparisonRead,
+    ] {
+        for error in [
+            FsCasErrorV1::MissingOccupant,
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied),
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ReadFailure),
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortRead),
+        ] {
+            let mut counters = OperationCountersV1::default();
+            let mut candidate = build_private_pack(
+                &cas,
+                &[shared.clone(), additional.clone()],
+                &ledger,
+                &mut counters,
+                &mut scratch,
+            );
+            let mut control = ReadFaultAtBoundary {
+                boundary,
+                error,
+                injected: false,
+            };
+
+            assert_eq!(
+                cas.admit_pack_controlled(
+                    &mut candidate,
+                    &mut spool,
+                    &ledger,
+                    &mut counters,
+                    &mut scratch,
+                    &mut control,
+                ),
+                Err(error),
+                "{boundary:?} / {error:?}"
+            );
+            assert!(control.injected, "{boundary:?} did not inject");
+            assert_eq!(ledger.admitted_slots(), 0);
+            assert_eq!(
+                fs::read_dir(fixture.path.join("preparation"))
+                    .unwrap()
+                    .count(),
+                0
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+                1
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+                1
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path.join("objects")).unwrap().count(),
+                1
+            );
+            assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+            assert!(counters.has_zero_forbidden_work());
+            assert!(cas.occupied().is_ok());
+        }
+    }
+}
+
+#[test]
+fn equal_incumbent_comparison_overflow_is_transactional_and_keeps_read_observation() {
+    let fixture = TestRoot::new("equal-incumbent-comparison-overflow");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let stale = FsCasV1::open_existing(&fixture.path).unwrap();
+    let objects = [object(5, &[0x6a; 32_768])];
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut scratch = [0_u8; 65_536];
+    let mut spool = Spool::default();
+    let mut incumbent_counters = OperationCountersV1::default();
+    let mut incumbent = build_private_pack(
+        &cas,
+        &objects,
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    );
+    let installed = cas
+        .admit_pack(
+            &mut incumbent,
+            &mut spool,
+            &ledger,
+            &mut incumbent_counters,
+            &mut scratch,
+        )
+        .unwrap();
+    let carrier = only_entry(&fixture.path.join("carriers"));
+    #[cfg(unix)]
+    let incumbent_inode = {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(&carrier).unwrap().ino()
+    };
+
+    let mut candidate_counters = OperationCountersV1::default();
+    let mut candidate = build_private_pack(
+        &cas,
+        &objects,
+        &ledger,
+        &mut candidate_counters,
+        &mut scratch,
+    );
+    candidate_counters.incumbent_comparison_bytes = 7;
+    candidate_counters.incumbent_comparison_windows = u64::MAX;
+    let comparison_before = candidate_counters.incumbent_comparison_bytes;
+    let read_bytes_before = candidate_counters.fscas_bytes_read;
+    let read_calls_before = candidate_counters.fscas_read_calls;
+
+    assert_eq!(
+        cas.admit_pack(
+            &mut candidate,
+            &mut spool,
+            &ledger,
+            &mut candidate_counters,
+            &mut scratch,
+        ),
+        Err(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+    );
+    assert_eq!(
+        candidate_counters.incumbent_comparison_bytes,
+        comparison_before
+    );
+    assert_eq!(candidate_counters.incumbent_comparison_windows, u64::MAX);
+    assert_eq!(
+        candidate_counters.fscas_bytes_read - read_bytes_before,
+        98_832
+    );
+    assert_eq!(candidate_counters.fscas_read_calls - read_calls_before, 8);
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        1
+    );
+    assert_eq!(candidate_counters.storage_bytes_requested, 0);
+    assert_eq!(candidate_counters.storage_bytes_reserved, 0);
+    assert_eq!(candidate_counters.storage_bytes_released, 0);
+    assert_eq!(candidate_counters.storage_bytes_committed, 0);
+    assert_eq!(candidate_counters.storage_bytes_retained, 0);
+    assert_eq!(candidate_counters.storage_inodes_requested, 0);
+    assert_eq!(candidate_counters.storage_inodes_reserved, 0);
+    assert_eq!(candidate_counters.storage_inodes_released, 0);
+    assert_eq!(candidate_counters.storage_inodes_committed, 0);
+    assert_eq!(candidate_counters.storage_inodes_retained, 0);
+    assert_eq!(candidate_counters.unreachable_installed_residue_bytes, 0);
+    assert_eq!(installed.sealed().pack_len(), 33_048);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(fs::metadata(&carrier).unwrap().ino(), incumbent_inode);
+    }
+    assert!(candidate_counters.has_zero_forbidden_work());
+    assert!(cas.occupied().is_ok());
+    assert!(stale.occupied().is_ok());
+}
+
+#[test]
+fn incumbent_pack_read_observation_overflow_retains_typed_cause() {
+    let fixture = TestRoot::new("incumbent-pack-read-observation-overflow");
+    let cas = FsCasV1::create_new(&fixture.path).unwrap();
+    let stale = FsCasV1::open_existing(&fixture.path).unwrap();
+    let objects = [object(5, &[0x7b; 32_768])];
+    let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+    let mut scratch = [0_u8; 65_536];
+    let mut spool = Spool::default();
+    let mut incumbent_counters = OperationCountersV1::default();
+    let mut incumbent = build_private_pack(
+        &cas,
+        &objects,
+        &ledger,
+        &mut incumbent_counters,
+        &mut scratch,
+    );
+    let installed = cas
+        .admit_pack(
+            &mut incumbent,
+            &mut spool,
+            &ledger,
+            &mut incumbent_counters,
+            &mut scratch,
+        )
+        .unwrap();
+    let carrier = only_entry(&fixture.path.join("carriers"));
+    #[cfg(unix)]
+    let incumbent_inode = {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(&carrier).unwrap().ino()
+    };
+
+    let mut candidate_counters = OperationCountersV1::default();
+    let mut candidate = build_private_pack(
+        &cas,
+        &objects,
+        &ledger,
+        &mut candidate_counters,
+        &mut scratch,
+    );
+    cas.saturate_next_occupant_pack_read_calls_for_test_v1();
+
+    assert_eq!(
+        cas.admit_pack(
+            &mut candidate,
+            &mut spool,
+            &ledger,
+            &mut candidate_counters,
+            &mut scratch,
+        ),
+        Err(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+    );
+    assert_eq!(ledger.admitted_slots(), 0);
+    assert_eq!(
+        fs::read_dir(fixture.path.join("preparation"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("carriers")).unwrap().count(),
+        1
+    );
+    assert_eq!(
+        fs::read_dir(fixture.path.join("catalog")).unwrap().count(),
+        1
+    );
+    assert_eq!(candidate_counters.storage_bytes_requested, 0);
+    assert_eq!(candidate_counters.storage_bytes_reserved, 0);
+    assert_eq!(candidate_counters.storage_bytes_released, 0);
+    assert_eq!(candidate_counters.storage_bytes_committed, 0);
+    assert_eq!(candidate_counters.storage_bytes_retained, 0);
+    assert_eq!(candidate_counters.storage_inodes_requested, 0);
+    assert_eq!(candidate_counters.storage_inodes_reserved, 0);
+    assert_eq!(candidate_counters.storage_inodes_released, 0);
+    assert_eq!(candidate_counters.storage_inodes_committed, 0);
+    assert_eq!(candidate_counters.storage_inodes_retained, 0);
+    assert_eq!(candidate_counters.unreachable_installed_residue_bytes, 0);
+    assert_eq!(installed.sealed().pack_len(), 33_048);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(fs::metadata(&carrier).unwrap().ino(), incumbent_inode);
+    }
+    assert!(candidate_counters.has_zero_forbidden_work());
+    assert!(cas.occupied().is_ok());
+    assert!(stale.occupied().is_ok());
 }
 
 #[test]
@@ -2818,7 +3809,10 @@ fn later_closure_failure_is_counted_residue_not_a_private_version() {
         .unwrap();
     assert_eq!(
         counters.unreachable_installed_residue_bytes,
-        admission.sealed().pack_len()
+        exact_fresh_pack_immutable_bytes(
+            admission.sealed().pack_len(),
+            admission.sealed().record_count(),
+        )
     );
     assert_eq!(
         fs::read_dir(fixture.path.join("closures")).unwrap().count(),
@@ -2843,5 +3837,5 @@ fn symlinked_parent_is_typed_unsupported_before_namespace_creation() {
         FsCasV1::create_new(&linked.join("cas")),
         Err(FsCasErrorV1::Unsupported)
     ));
-    assert!(!actual.join("cas").exists());
+    assert_path_absent(&actual.join("cas"));
 }

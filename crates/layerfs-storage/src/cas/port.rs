@@ -5,14 +5,15 @@
 //! spool. `ClosureObjectV1` remains only as the direct dense-pack builder's
 //! borrowed input record; it is deliberately not accepted by admission.
 
-use crate::identity::{COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1};
-use crate::limits::{
-    CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1, ResourceLedgerV1,
-};
-use crate::object::{
-    decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectReadPortV1,
-    TypedPhysicalObjectIdV1,
-};
+use crate::identity::COMPARISON_WINDOW_BYTES;
+#[cfg(test)]
+use crate::identity::IDENTITY_HASHER_BYTES_V1;
+use crate::limits::{CounterFieldV1, OperationCountersV1};
+#[cfg(test)]
+use crate::limits::{MemoryComponentV1, OperationMemoryPlanV1, ResourceLedgerV1};
+#[cfg(test)]
+use crate::object::{decode_physical_object_from_port_v1, DiscardStrongEdgesV1};
+use crate::object::{PhysicalObjectReadPortV1, TypedPhysicalObjectIdV1};
 use crate::{CoreError, CoreResult};
 
 /// Borrowed input record for direct dense-pack construction. This type is not
@@ -58,7 +59,7 @@ pub trait OccupiedImmutableReadPortV1 {
     /// created. This is a side-effect-free accounting observation; the
     /// filesystem implementation uses it to preflight raw FsCas counters
     /// before closure visibility.
-    fn direct_storage_read_observation(&self) -> Result<(u64, u64), ImmutablePortErrorV1> {
+    fn direct_storage_read_observation(&mut self) -> Result<(u64, u64), ImmutablePortErrorV1> {
         Ok((0, 0))
     }
     fn occupied_len(
@@ -177,6 +178,7 @@ impl CompleteImmutableReadV1 {
 
 /// Validate an occupied object completely, then copy it to a bounded sink.
 /// The immutable source is read twice: authentication first, delivery second.
+#[cfg(test)]
 pub fn read_complete_immutable_v1<O, S>(
     expected_id: TypedPhysicalObjectIdV1,
     occupied: &mut O,

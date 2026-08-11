@@ -8,7 +8,8 @@ use core::cmp::Ordering;
 
 use crate::cas::{
     FileClosureObjectSpoolV1, FileGlobalSeenSpoolV1, FsCasControlV1, FsCasErrorV1, FsCasV1,
-    FsOperationSpoolV1, FsStorageOperationTokenV1, GlobalSeenErrorV1,
+    FsOperationSpoolConstructionUnwindV1, FsOperationSpoolV1, FsStorageOperationTokenV1,
+    GlobalSeenErrorV1,
 };
 use crate::content::{ChunkReferenceSpoolV1, PreparedChunkRefV1, PreparedSinkErrorV1};
 use crate::format::{
@@ -19,7 +20,10 @@ use crate::identity::{
     FileNodeIdV1, LogicalChunkIdV1, PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalTreeIdV1,
 };
 use crate::lifecycle::{BuiltDirectoryRecordV1, BuiltFileRecordV1, C3PreparationResidentBoundsV1};
-use crate::limits::{FileSortEventV1, FileSortWorkV1, OperationCountersV1, OperationWorkControlV1};
+use crate::limits::{
+    FileSortEventV1, FileSortWorkV1, ObservationScopeV1, OperationCountersV1,
+    OperationWorkControlV1, OptionalU64ObservationV1,
+};
 use crate::pack::{FilePackIndexSpoolV1, PackIndexSpoolV1};
 use crate::{CoreError, CoreResult};
 
@@ -57,6 +61,65 @@ pub(crate) struct C3OperationPreparationV1 {
     built_directories: Option<FileBuiltDirectorySpoolV1>,
 }
 
+/// Aggregate terminal state for the six independently owned preparation
+/// files. Cleanup must attempt every present target even when one target
+/// returns an error or unwinds. The outer lifecycle consumes this state only
+/// after root storage and the operation capability have been terminalized.
+pub(crate) struct C3PreparationTerminalV1 {
+    first_error: Option<FsCasErrorV1>,
+    first_unwind: Option<Box<dyn core::any::Any + Send>>,
+}
+
+impl C3PreparationTerminalV1 {
+    fn clean_v1() -> Self {
+        Self {
+            first_error: None,
+            first_unwind: None,
+        }
+    }
+
+    fn after_unwind_v1(payload: Box<dyn core::any::Any + Send>) -> Self {
+        Self {
+            first_error: None,
+            first_unwind: Some(payload),
+        }
+    }
+
+    fn retain_error_v1(&mut self, error: FsCasErrorV1) {
+        match self.first_error {
+            None => self.first_error = Some(error),
+            Some(first) if error.has_invalidation_dominance_v1() => {
+                self.first_error = Some(first.dominated_by_v1(error));
+            }
+            Some(first)
+                if !first.has_cleanup_or_invalidation_dominance_v1()
+                    && error.has_cleanup_or_invalidation_dominance_v1() =>
+            {
+                self.first_error = Some(first.dominated_by_v1(error));
+            }
+            Some(_) => {}
+        }
+    }
+
+    fn retain_unwind_v1(&mut self, payload: Box<dyn core::any::Any + Send>) {
+        if self.first_unwind.is_none() {
+            self.first_unwind = Some(payload);
+        }
+    }
+
+    pub(crate) const fn first_error_v1(&self) -> Option<FsCasErrorV1> {
+        self.first_error
+    }
+
+    pub(crate) const fn has_unwind_v1(&self) -> bool {
+        self.first_unwind.is_some()
+    }
+
+    pub(crate) fn take_unwind_v1(&mut self) -> Option<Box<dyn core::any::Any + Send>> {
+        self.first_unwind.take()
+    }
+}
+
 impl C3OperationPreparationV1 {
     pub(crate) fn begin<C>(
         cas: &FsCasV1,
@@ -79,89 +142,153 @@ impl C3OperationPreparationV1 {
             built_files: None,
             built_directories: None,
         };
-        let opened = (|| -> Result<(), C3PreparationErrorV1> {
-            preparation.references = Some(FileChunkReferenceSpoolV1::new(
-                cas.begin_operation_spool_borrowed_v1("chunk-references", storage_token, control)?,
-            ));
-            if preparation
-                .references_mut()
-                .resident_memory_bound_bytes(0)?
-                > bounds.references
-            {
-                return Err(CoreError::ResourceRefused.into());
-            }
-
-            preparation.metadata = Some(FilePackIndexSpoolV1::new(
-                cas.begin_operation_spool_borrowed_v1("pack-index", storage_token, control)?,
-            ));
-            if preparation.metadata_mut().resident_memory_bound_bytes(0)? > bounds.metadata {
-                return Err(CoreError::ResourceRefused.into());
-            }
-
-            preparation.closure_objects = Some(FileClosureObjectSpoolV1::new(
-                cas.begin_operation_spool_borrowed_v1("closure-objects", storage_token, control)?,
-            ));
-            if preparation
-                .closure_objects_mut()
-                .resident_memory_bound_bytes()?
-                > bounds.closure_objects
-            {
-                return Err(CoreError::ResourceRefused.into());
-            }
-
-            preparation.global_seen = Some(FileGlobalSeenSpoolV1::new(
-                cas.begin_operation_spool_borrowed_v1("global-seen", storage_token, control)?,
-            ));
-            if preparation
-                .global_seen_mut()
-                .resident_memory_bound_bytes()?
-                > bounds.global_seen
-            {
-                return Err(CoreError::ResourceRefused.into());
-            }
-            preparation
-                .global_seen_mut()
-                .initialize_controlled_v1(global_seen_capacity, control)
-                .map_err(|error| match error {
-                    GlobalSeenErrorV1::Core(error) => C3PreparationErrorV1::Core(error),
-                    GlobalSeenErrorV1::FsCas(error) => C3PreparationErrorV1::FsCas(error),
-                })?;
-
-            if let Some(bound) = bounds.built_files {
-                preparation.built_files = Some(FileBuiltFileSpoolV1::new(
-                    cas.begin_operation_spool_borrowed_v1("built-files", storage_token, control)?,
-                ));
-                if preparation
-                    .built_files_mut()
-                    .resident_memory_bound_bytes()?
-                    > bound
-                {
-                    return Err(CoreError::ResourceRefused.into());
-                }
-            }
-            if let Some(bound) = bounds.built_directories {
-                preparation.built_directories = Some(FileBuiltDirectorySpoolV1::new(
+        let opened = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+            || -> Result<(), C3PreparationErrorV1> {
+                preparation.references = Some(FileChunkReferenceSpoolV1::new(
                     cas.begin_operation_spool_borrowed_v1(
-                        "built-directories",
+                        "chunk-references",
                         storage_token,
                         control,
                     )?,
                 ));
                 if preparation
-                    .built_directories_mut()
-                    .resident_memory_bound_bytes()?
-                    > bound
+                    .references_mut()
+                    .resident_memory_bound_bytes(0)?
+                    > bounds.references
                 {
                     return Err(CoreError::ResourceRefused.into());
                 }
+
+                preparation.metadata = Some(FilePackIndexSpoolV1::new(
+                    cas.begin_operation_spool_borrowed_v1("pack-index", storage_token, control)?,
+                ));
+                if preparation.metadata_mut().resident_memory_bound_bytes(0)? > bounds.metadata {
+                    return Err(CoreError::ResourceRefused.into());
+                }
+
+                preparation.closure_objects = Some(FileClosureObjectSpoolV1::new(
+                    cas.begin_operation_spool_borrowed_v1(
+                        "closure-objects",
+                        storage_token,
+                        control,
+                    )?,
+                ));
+                if preparation
+                    .closure_objects_mut()
+                    .resident_memory_bound_bytes()?
+                    > bounds.closure_objects
+                {
+                    return Err(CoreError::ResourceRefused.into());
+                }
+
+                preparation.global_seen = Some(FileGlobalSeenSpoolV1::new(
+                    cas.begin_operation_spool_borrowed_v1("global-seen", storage_token, control)?,
+                ));
+                if preparation
+                    .global_seen_mut()
+                    .resident_memory_bound_bytes()?
+                    > bounds.global_seen
+                {
+                    return Err(CoreError::ResourceRefused.into());
+                }
+                preparation
+                    .global_seen_mut()
+                    .initialize_controlled_v1(global_seen_capacity, control)
+                    .map_err(|error| match error {
+                        GlobalSeenErrorV1::Core(error) => C3PreparationErrorV1::Core(error),
+                        GlobalSeenErrorV1::FsCas(error) => C3PreparationErrorV1::FsCas(error),
+                    })?;
+
+                if let Some(bound) = bounds.built_files {
+                    preparation.built_files = Some(FileBuiltFileSpoolV1::new(
+                        cas.begin_operation_spool_borrowed_v1(
+                            "built-files",
+                            storage_token,
+                            control,
+                        )?,
+                    ));
+                    if preparation
+                        .built_files_mut()
+                        .resident_memory_bound_bytes()?
+                        > bound
+                    {
+                        return Err(CoreError::ResourceRefused.into());
+                    }
+                }
+                if let Some(bound) = bounds.built_directories {
+                    preparation.built_directories = Some(FileBuiltDirectorySpoolV1::new(
+                        cas.begin_operation_spool_borrowed_v1(
+                            "built-directories",
+                            storage_token,
+                            control,
+                        )?,
+                    ));
+                    if preparation
+                        .built_directories_mut()
+                        .resident_memory_bound_bytes()?
+                        > bound
+                    {
+                        return Err(CoreError::ResourceRefused.into());
+                    }
+                }
+                Ok(())
+            },
+        ));
+        match opened {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                let mut terminal = preparation.finish(control);
+                if let Some(cleanup) = terminal.first_error_v1() {
+                    let first = match error {
+                        C3PreparationErrorV1::Core(error) => FsCasErrorV1::Core(error),
+                        C3PreparationErrorV1::FsCas(error) => error,
+                    };
+                    return Err(C3PreparationErrorV1::FsCas(first.dominated_by_v1(cleanup)));
+                }
+                if let Some(payload) = terminal.take_unwind_v1() {
+                    std::panic::resume_unwind(payload);
+                }
+                return Err(error);
             }
-            Ok(())
-        })();
-        if let Err(error) = opened {
-            return Err(match preparation.finish(control) {
-                Ok(()) => error,
-                Err(cleanup) => C3PreparationErrorV1::FsCas(cleanup),
-            });
+            Err(payload) => match payload.downcast::<FsOperationSpoolConstructionUnwindV1>() {
+                Ok(classified) => {
+                    let (error, primary_payload, secondary_payload) = classified.into_parts_v1();
+                    // The partial spool already attempted cleanup exactly
+                    // once and retained its typed construction + cleanup
+                    // terminal. Keep both bounded unwind payloads owned while
+                    // every previously returned spool is explicitly finished,
+                    // then consume them only after the operation has a bounded
+                    // typed result. Never retry the partial spool through Drop.
+                    let mut terminal = C3PreparationTerminalV1 {
+                        first_error: Some(error),
+                        first_unwind: Some(primary_payload),
+                    };
+                    preparation.finish_into_v1(control, &mut terminal);
+                    let error = terminal
+                        .first_error_v1()
+                        .expect("classified construction unwind retained a typed terminal");
+                    drop(terminal.take_unwind_v1());
+                    drop(secondary_payload);
+                    return Err(C3PreparationErrorV1::FsCas(error));
+                }
+                Err(payload) => {
+                    let mut terminal = preparation.finish_after_unwind_v1(control, payload);
+                    if let Some(cleanup) = terminal.first_error_v1() {
+                        // Once explicit cleanup has a typed terminal, that
+                        // terminal is the operation's machine-readable
+                        // outcome. The initiating callback payload remains
+                        // bounded here and must not replace cleanup or
+                        // invalidation dominance with a fabricated panic.
+                        drop(terminal.take_unwind_v1());
+                        return Err(C3PreparationErrorV1::FsCas(cleanup));
+                    }
+                    std::panic::resume_unwind(
+                        terminal
+                            .take_unwind_v1()
+                            .expect("construction unwind retained by preparation terminal"),
+                    );
+                }
+            },
         }
         Ok(preparation)
     }
@@ -220,7 +347,29 @@ impl C3OperationPreparationV1 {
 
     /// Attempt every fallible cleanup before the operation capability can be
     /// released. Drop remains only the lower adapter's unwind backstop.
-    pub(crate) fn finish<C>(&mut self, control: &mut C) -> Result<(), FsCasErrorV1>
+    pub(crate) fn finish<C>(&mut self, control: &mut C) -> C3PreparationTerminalV1
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let mut terminal = C3PreparationTerminalV1::clean_v1();
+        self.finish_into_v1(control, &mut terminal);
+        terminal
+    }
+
+    pub(crate) fn finish_after_unwind_v1<C>(
+        &mut self,
+        control: &mut C,
+        payload: Box<dyn core::any::Any + Send>,
+    ) -> C3PreparationTerminalV1
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let mut terminal = C3PreparationTerminalV1::after_unwind_v1(payload);
+        self.finish_into_v1(control, &mut terminal);
+        terminal
+    }
+
+    fn finish_into_v1<C>(&mut self, control: &mut C, terminal: &mut C3PreparationTerminalV1)
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -253,39 +402,43 @@ impl C3OperationPreparationV1 {
                     .as_mut()
                     .and_then(FileBuiltDirectorySpoolV1::take_first_error)
             });
-        let cleanup_directories = self
-            .built_directories
-            .as_mut()
-            .map(|spool| spool.cleanup_controlled_v1(control));
-        let cleanup_files = self
-            .built_files
-            .as_mut()
-            .map(|spool| spool.cleanup_controlled_v1(control));
-        let cleanup_seen = self
-            .global_seen
-            .as_mut()
-            .map(|spool| spool.cleanup_controlled_v1(control));
-        let cleanup_closure = self
-            .closure_objects
-            .as_mut()
-            .map(|spool| spool.cleanup_controlled_v1(control));
-        let cleanup_metadata = self
-            .metadata
-            .as_mut()
-            .map(|spool| spool.cleanup_controlled_v1(control));
-        let cleanup_references = self
-            .references
-            .as_mut()
-            .map(|spool| spool.cleanup_controlled_v1(control));
-        cleanup_directories
-            .and_then(Result::err)
-            .or_else(|| cleanup_files.and_then(Result::err))
-            .or_else(|| cleanup_seen.and_then(Result::err))
-            .or_else(|| cleanup_closure.and_then(Result::err))
-            .or_else(|| cleanup_metadata.and_then(Result::err))
-            .or_else(|| cleanup_references.and_then(Result::err))
-            .or(first_io_error)
-            .map_or(Ok(()), Err)
+        if let Some(error) = first_io_error {
+            // Preserve the first actual spool-I/O cause before cleanup begins;
+            // a later cleanup/invalidation fault may dominate it, but must not
+            // replace it.
+            terminal.retain_error_v1(error);
+        }
+        macro_rules! attempt_cleanup {
+            ($spool:expr) => {
+                if let Some(spool) = $spool.as_mut() {
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        spool.cleanup_controlled_v1(control)
+                    })) {
+                        Ok(Ok(())) => {}
+                        Ok(Err(error)) => terminal.retain_error_v1(error),
+                        Err(payload) => {
+                            // The concrete spool has already retained the
+                            // fail-closed cleanup state before rethrowing.
+                            terminal.retain_error_v1(
+                                spool.retained_cleanup_terminal_v1().unwrap_or(
+                                    FsCasErrorV1::CleanupFailed(
+                                        crate::cas::FsCasCleanupTargetV1::PreparationSpool,
+                                    ),
+                                ),
+                            );
+                            terminal.retain_unwind_v1(payload);
+                        }
+                    }
+                }
+            };
+        }
+
+        attempt_cleanup!(self.built_directories);
+        attempt_cleanup!(self.built_files);
+        attempt_cleanup!(self.global_seen);
+        attempt_cleanup!(self.closure_objects);
+        attempt_cleanup!(self.metadata);
+        attempt_cleanup!(self.references);
     }
 }
 
@@ -327,6 +480,10 @@ impl FileChunkReferenceSpoolV1 {
     {
         self.storage.cleanup_controlled_v1(control)
     }
+
+    fn retained_cleanup_terminal_v1(&self) -> Option<FsCasErrorV1> {
+        self.storage.retained_cleanup_terminal_v1()
+    }
 }
 
 impl ChunkReferenceSpoolV1 for FileChunkReferenceSpoolV1 {
@@ -334,8 +491,12 @@ impl ChunkReferenceSpoolV1 for FileChunkReferenceSpoolV1 {
         self.storage.resident_memory_bound_bytes()
     }
 
-    fn storage_bytes_observation(&self) -> CoreResult<Option<u64>> {
-        Ok(Some(self.storage_bytes()))
+    fn storage_bytes_observation(&self) -> CoreResult<OptionalU64ObservationV1> {
+        Ok(OptionalU64ObservationV1::observed(
+            self.storage_bytes(),
+            "direct chunk-reference spool logical length",
+            ObservationScopeV1::Operation,
+        ))
     }
 
     fn begin(&mut self, maximum_refs: u64) -> Result<(), PreparedSinkErrorV1> {
@@ -440,6 +601,10 @@ impl FileBuiltFileSpoolV1 {
         C: FsCasControlV1 + ?Sized,
     {
         self.storage.cleanup_controlled_v1(control)
+    }
+
+    fn retained_cleanup_terminal_v1(&self) -> Option<FsCasErrorV1> {
+        self.storage.retained_cleanup_terminal_v1()
     }
 
     pub(crate) fn push(&mut self, record: BuiltFileRecordV1) -> CoreResult<()> {
@@ -694,6 +859,10 @@ impl FileBuiltDirectorySpoolV1 {
         C: FsCasControlV1 + ?Sized,
     {
         self.storage.cleanup_controlled_v1(control)
+    }
+
+    fn retained_cleanup_terminal_v1(&self) -> Option<FsCasErrorV1> {
+        self.storage.retained_cleanup_terminal_v1()
     }
 
     pub(crate) fn push(&mut self, record: BuiltDirectoryRecordV1) -> CoreResult<()> {

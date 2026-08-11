@@ -1,3 +1,15 @@
+mod support;
+
+fn assert_path_absent(path: &std::path::Path) {
+    match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Ok(metadata) => {
+            panic!("expected {path:?} to be absent, but metadata succeeded: {metadata:?}")
+        }
+        Err(error) => panic!("expected {path:?} to be absent, but lookup failed: {error}"),
+    }
+}
+
 fn section<'a>(manifest: &'a str, name: &str) -> &'a str {
     let header = format!("[{name}]");
     let Some(header_start) = manifest.find(&header) else {
@@ -183,10 +195,7 @@ fn storage_source_follows_the_domain_responsibility_map() {
 
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     for prohibited in ["object.rs", "traversal.rs", "pack.rs", "lifecycle.rs", "c3"] {
-        assert!(
-            !source_root.join(prohibited).exists(),
-            "prohibited hybrid/catch-all source path remains: {prohibited}"
-        );
+        assert_path_absent(&source_root.join(prohibited));
     }
 }
 
@@ -425,17 +434,27 @@ fn storage_mechanics_follow_semantic_module_ownership() {
 }
 
 #[test]
-fn cargo_targets_do_not_reactivate_the_historical_c3_sdk() {
+fn historical_c3_source_is_immutable_and_not_a_current_target() {
     let manifest = include_str!("../Cargo.toml");
     let lib = include_str!("../src/lib.rs");
     let content = include_str!("../src/content/mod.rs");
     let cas = include_str!("../src/cas/mod.rs");
     let cow = include_str!("../src/cow/mod.rs");
     let create = include_str!("../src/content/create.rs");
+    let historical_source = include_bytes!("../src/bin/c3_qualification.rs");
 
     assert!(manifest.contains("autobins = false"));
     assert!(manifest.contains("autotests = false"));
     assert!(!manifest.contains("name = \"c3-qualification\""));
+    assert_eq!(historical_source.len(), 49_821);
+    let digest = support::sha256(historical_source)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    assert_eq!(
+        digest,
+        "0f6f731e366a4802cac801ceacf8cb75d75296494f49c036ac368fcf31ca7da6"
+    );
     for module in ["cas", "content", "cow", "limits", "pack"] {
         assert!(lib.contains(&format!("pub(crate) mod {module};")));
         assert!(!lib.contains(&format!("pub mod {module};")));

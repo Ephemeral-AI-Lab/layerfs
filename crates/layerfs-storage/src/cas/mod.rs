@@ -15,7 +15,9 @@ mod port;
 
 #[cfg(feature = "c3-polymorphism")]
 pub(crate) use admission::admission_traversal_resident_bytes_v1;
-pub(crate) use admission::{admit_complete_immutable_v1, AdmissionBuffersV1};
+#[cfg(test)]
+pub(crate) use admission::admit_complete_immutable_v1;
+pub(crate) use admission::AdmissionBuffersV1;
 pub(crate) use catalog::CATALOG_MARKER_BYTES;
 #[cfg(feature = "c3-polymorphism")]
 pub(crate) use closure::FsCasClosureSpoolV1;
@@ -24,6 +26,8 @@ pub(crate) use closure::{
 };
 #[cfg(feature = "c3-polymorphism")]
 pub(crate) use closure_storage::{ClosureObjectRecordV1, FileClosureObjectSpoolV1};
+#[cfg(test)]
+pub(crate) use fs::FsCasFailureCauseV1;
 pub(crate) use fs::FsCasOccupiedV1;
 pub(crate) use fs::{
     FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasFilesystemBoundaryV1,
@@ -32,13 +36,14 @@ pub(crate) use fs::{
 };
 #[cfg(all(test, feature = "c3-polymorphism"))]
 pub(crate) use fs::{
-    FsCasFilesystemFailureV1, FsCasResourceV1, ROOT_LOGICAL_STORAGE_BUDGET_V1,
-    ROOT_NAMESPACE_ENTRY_BUDGET_V1,
+    FsCasFilesystemFailureV1, FsCasResidueAccountingBoundaryV1, FsCasResourceV1,
+    ROOT_LOGICAL_STORAGE_BUDGET_V1, ROOT_NAMESPACE_ENTRY_BUDGET_V1,
 };
 #[cfg(feature = "c3-polymorphism")]
 pub(crate) use fs::{
-    FsClosureAdmissionErrorV1, FsOperationCapabilityV1, FsOperationKindV1, FsOperationSpoolV1,
-    FsStorageEnvelopeV1, FsStorageOperationTokenV1,
+    FsClosureAdmissionErrorV1, FsOperationCapabilityV1, FsOperationKindV1,
+    FsOperationSpoolConstructionUnwindV1, FsOperationSpoolV1, FsStorageEnvelopeV1,
+    FsStorageOperationTokenV1,
 };
 pub(crate) use locator::PERSISTENT_LOCATOR_BYTES_V1;
 #[cfg(all(test, feature = "c3-polymorphism"))]
@@ -51,7 +56,7 @@ pub(crate) use locator_index::{
 #[cfg(feature = "c3-polymorphism")]
 pub(crate) use operation_admission::{
     authenticate_base_root_storage_v1, begin_storage_session_v1, complete_closure_fence_storage_v1,
-    C3StorageSessionV1,
+    C3StorageSessionV1, ClosureFenceStorageOutcomeV1,
 };
 #[cfg(test)]
 pub(crate) use port::{read_complete_immutable_v1, BoundedImmutableReadSinkV1, ClosureObjectV1};

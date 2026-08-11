@@ -6,7 +6,10 @@
 use core::cmp::Ordering;
 
 use crate::cas::{FsCasControlV1, FsCasErrorV1, FsOperationSpoolV1};
-use crate::limits::{FileSortEventV1, FileSortWorkV1, OperationCountersV1, OperationWorkControlV1};
+use crate::limits::{
+    FileSortEventV1, FileSortWorkV1, ObservationScopeV1, OperationCountersV1,
+    OperationWorkControlV1, OptionalU64ObservationV1,
+};
 use crate::CoreResult;
 
 use super::{
@@ -50,6 +53,10 @@ impl FilePackIndexSpoolV1 {
         C: FsCasControlV1 + ?Sized,
     {
         self.storage.cleanup_controlled_v1(control)
+    }
+
+    pub(crate) fn retained_cleanup_terminal_v1(&self) -> Option<FsCasErrorV1> {
+        self.storage.retained_cleanup_terminal_v1()
     }
 
     fn read_entry(&mut self, ordinal: u32) -> Result<PackIndexEntryV1, PackPortErrorV1> {
@@ -263,8 +270,16 @@ impl PackIndexSpoolV1 for FilePackIndexSpoolV1 {
         self.storage.resident_memory_bound_bytes()
     }
 
-    fn storage_bytes_observation(&self) -> CoreResult<Option<u64>> {
-        Ok(Some(self.storage_bytes()))
+    fn storage_bytes_observation(&self) -> CoreResult<OptionalU64ObservationV1> {
+        Ok(OptionalU64ObservationV1::observed(
+            self.storage_bytes(),
+            "direct pack-index spool logical length",
+            ObservationScopeV1::Operation,
+        ))
+    }
+
+    fn take_storage_error_typed_v1(&mut self) -> Option<FsCasErrorV1> {
+        self.take_first_error()
     }
 
     fn reset(&mut self, maximum_entries: u32) -> Result<(), PackPortErrorV1> {
@@ -448,8 +463,7 @@ mod tests {
         assert_eq!(counters.file_sort_control_polls, 2);
         assert!(counters.file_sort_work_units > 0);
         assert!(
-            counters.file_sort_work_units
-                <= crate::limits::FILE_SORT_CONTROL_POLL_WORK_UNITS_V1 - 1
+            counters.file_sort_work_units < crate::limits::FILE_SORT_CONTROL_POLL_WORK_UNITS_V1
         );
         assert_eq!(
             counters.file_sort_work_units,

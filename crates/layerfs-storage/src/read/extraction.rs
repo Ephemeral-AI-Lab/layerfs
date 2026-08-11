@@ -10,7 +10,12 @@ use core::cmp::Ordering;
 
 use crate::cas::{
     FsCasBoundaryV1, FsCasControlV1, FsCasErrorV1, FsCasOccupiedV1, FsCasV1, FsOperationKindV1,
-    FsOperationObservedControlV1, ImmutablePortErrorV1,
+    FsOperationObservedControlV1, FsStorageEnvelopeV1, ImmutablePortErrorV1,
+};
+#[cfg(test)]
+use crate::cas::{
+    FsCasCleanupTargetV1, FsCasFailureCauseV1, FsCasFilesystemBoundaryV1, FsCasFilesystemFailureV1,
+    CATALOG_MARKER_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
 };
 use crate::content::{
     stream_verified_file_range_v1, VerifiedFileBytesConsumerV1, VerifiedFileRangePortV1,
@@ -60,6 +65,32 @@ pub(crate) enum C3ReadOperationErrorV1 {
     Core(CoreError),
     FsCas(FsCasErrorV1),
     Sink(C3ReadSinkErrorV1),
+}
+
+impl C3ReadOperationErrorV1 {
+    const fn into_fscas_v1(self) -> FsCasErrorV1 {
+        match self {
+            Self::Core(error) => FsCasErrorV1::Core(error),
+            Self::FsCas(error) => error,
+            Self::Sink(C3ReadSinkErrorV1::Refused) => FsCasErrorV1::Core(CoreError::SinkRefused),
+        }
+    }
+
+    fn dominated_by_fscas_v1(self, dominant: FsCasErrorV1) -> Self {
+        Self::FsCas(self.into_fscas_v1().dominated_by_v1(dominant))
+    }
+
+    fn retain_terminal_v1(current: Option<Self>, candidate: Self) -> Option<Self> {
+        match (current, candidate) {
+            (None, candidate) => Some(candidate),
+            (Some(first), Self::FsCas(dominant))
+                if dominant.has_cleanup_or_invalidation_dominance_v1() =>
+            {
+                Some(first.dominated_by_fscas_v1(dominant))
+            }
+            (Some(first), _) => Some(first),
+        }
+    }
 }
 
 impl From<CoreError> for C3ReadOperationErrorV1 {
@@ -256,6 +287,14 @@ enum ReadRequestV1<'a> {
     },
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ReadSinkTransactionStateV1 {
+    NotStarted,
+    Active,
+    Finished,
+    AbortAttempted,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_read_v1<S, C>(
     cas: &FsCasV1,
@@ -284,210 +323,303 @@ where
         .map_err(C3ReadOperationErrorV1::FsCas)?;
     let mut observed_control = FsOperationObservedControlV1::new(control);
     let control = &mut observed_control;
-    let terminal = (|| -> Result<C3ReadResultV1, C3ReadOperationErrorV1> {
-        check_control(control).map_err(C3ReadOperationErrorV1::Core)?;
+    let mut sink_transaction = ReadSinkTransactionStateV1::NotStarted;
+    let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+        || -> Result<C3ReadResultV1, C3ReadOperationErrorV1> {
+            // Reads reserve a directly observed zero-write storage equation
+            // before request/path/sink inspection. The resulting token binds
+            // every occupied-object and closure read to this exact root
+            // operation without granting mutation or publication authority.
+            operation
+                .declare_storage_envelope_v1(
+                    FsStorageEnvelopeV1::new(0, 0, 0, 0).map_err(C3ReadOperationErrorV1::Core)?,
+                )
+                .map_err(C3ReadOperationErrorV1::FsCas)?;
+            check_control(control).map_err(C3ReadOperationErrorV1::Core)?;
 
-        let request = match request {
-            ReadRequestV1::Full => ReadRequestV1::Full,
-            ReadRequestV1::Range { path, offset, len } => {
-                let path = ValidatedPath::new(path).map_err(C3ReadOperationErrorV1::Core)?;
-                if len == 0 {
-                    return Err(C3ReadOperationErrorV1::Core(CoreError::LogicalLength));
-                }
-                ReadRequestV1::Range {
-                    path: path.as_bytes(),
-                    offset,
-                    len,
-                }
-            }
-        };
-        let metadata_resident = cas
-            .occupied_resident_memory_bound_v1()
-            .map_err(C3ReadOperationErrorV1::Core)?
-            .checked_add(
-                sink.resident_memory_bound_bytes()
-                    .map_err(C3ReadOperationErrorV1::Core)?,
-            )
-            .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
-        let plan = OperationMemoryPlanV1::empty()
-            .charge(
-                MemoryComponentV1::ComparisonWindow,
-                buffers.comparison.len() as u64,
-            )
-            .map_err(C3ReadOperationErrorV1::Core)?
-            .charge(
-                MemoryComponentV1::TraversalState,
-                u64::try_from(core::mem::size_of::<BoundedFullTraversalStackV1>())
-                    .map_err(|_| C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?
-                    .checked_add(buffers.path.len() as u64)
-                    .ok_or(CoreError::IntegerOverflow)?,
-            )
-            .map_err(C3ReadOperationErrorV1::Core)?
-            .charge(MemoryComponentV1::MetadataWindow, metadata_resident)
-            .map_err(C3ReadOperationErrorV1::Core)?
-            .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)
-            .map_err(C3ReadOperationErrorV1::Core)?;
-        operation
-            .declare_plan_v1(plan)
-            .map_err(C3ReadOperationErrorV1::Core)?;
-        counters.memory_high_water = counters
-            .memory_high_water
-            .max(operation.ledger_v1().high_water_bytes());
-        check_control(control).map_err(C3ReadOperationErrorV1::Core)?;
-
-        // Opening an occupied reader is private storage participation and must
-        // occur only after the one orchestrator-owned operation slot is held.
-        let mut occupied = cas
-            .occupied_private_controlled_v1(control)
-            .map_err(C3ReadOperationErrorV1::FsCas)?;
-
-        let closure = cas
-            .validate_closure_for_read_controlled_v1(version_record, control)
-            .map_err(C3ReadOperationErrorV1::FsCas)?;
-        if closure.version_record() != version_record {
-            return Err(C3ReadOperationErrorV1::Core(CoreError::IdMismatch));
-        }
-        counters
-            .add(CounterFieldV1::BytesRead, CLOSURE_MARKER_BYTES)
-            .map_err(C3ReadOperationErrorV1::Core)?;
-        counters
-            .record_fscas_read(CLOSURE_MARKER_BYTES, 1)
-            .map_err(C3ReadOperationErrorV1::Core)?;
-
-        let result = (|| {
-            let mut reader = C3ReaderV1 {
-                occupied: &mut occupied,
-                sink,
-                counters,
-                comparison: buffers.comparison,
-                path: buffers.path,
-                path_len: 0,
-                path_depth: 0,
-                control,
-                payload_bytes: 0,
-                files: 0,
-                directories: 0,
-                symlinks: 0,
-                objects_traversed: 0,
-                payload_direct_bytes: 0,
-                payload_direct_calls: 0,
-            };
-            let version =
-                reader.validate_object(TypedPhysicalObjectIdV1::VersionRecord(version_record))?;
-            let PhysicalObjectPayloadV1::VersionRecord(version) = version.payload else {
-                return Err(CoreError::TypeDomain);
-            };
-            if version.root_tree_id != requested_root
-                || u64::from(version.total_object_count) != closure.object_count()
-            {
-                return Err(CoreError::IdMismatch);
-            }
-            check_control(reader.control)?;
-
-            let (kind, digest, ranges) = match request {
-                ReadRequestV1::Full => {
-                    reader
-                        .sink
-                        .begin_read(C3ReadKindV1::FullExtraction)
-                        .map_err(map_sink)?;
-                    let mut hasher =
-                        begin_digest(FULL_DIGEST_DOMAIN, version_record, requested_root);
-                    let operation = reader.walk_root_full(requested_root, &mut hasher);
-                    let digest = match operation {
-                        Ok(()) => finish_digest(hasher),
-                        Err(error) => {
-                            reader.sink.abort_read();
-                            return Err(error);
-                        }
-                    };
-                    if let Err(error) = reader.sink.finish_read(digest) {
-                        reader.sink.abort_read();
-                        return Err(map_sink(error));
-                    }
-                    (C3ReadKindV1::FullExtraction, digest, 0)
-                }
+            let request = match request {
+                ReadRequestV1::Full => ReadRequestV1::Full,
                 ReadRequestV1::Range { path, offset, len } => {
-                    let end = offset.checked_add(len).ok_or(CoreError::IntegerOverflow)?;
-                    reader
-                        .sink
-                        .begin_read(C3ReadKindV1::ExactRange)
-                        .map_err(map_sink)?;
-                    let mut hasher =
-                        begin_digest(RANGE_DIGEST_DOMAIN, version_record, requested_root);
-                    digest_frame(&mut hasher, 0x21, path);
-                    digest_frame(&mut hasher, 0x22, &offset.to_be_bytes());
-                    digest_frame(&mut hasher, 0x23, &len.to_be_bytes());
-                    let operation =
-                        reader.read_exact_range(requested_root, path, offset, end, &mut hasher);
-                    let digest = match operation {
-                        Ok(()) => finish_digest(hasher),
-                        Err(error) => {
-                            reader.sink.abort_read();
-                            return Err(error);
-                        }
-                    };
-                    if let Err(error) = reader.sink.finish_read(digest) {
-                        reader.sink.abort_read();
-                        return Err(map_sink(error));
+                    let path = ValidatedPath::new(path).map_err(C3ReadOperationErrorV1::Core)?;
+                    if len == 0 {
+                        return Err(C3ReadOperationErrorV1::Core(CoreError::LogicalLength));
                     }
-                    (C3ReadKindV1::ExactRange, digest, 1)
+                    ReadRequestV1::Range {
+                        path: path.as_bytes(),
+                        offset,
+                        len,
+                    }
                 }
             };
-            Ok(C3ReadResultV1 {
-                kind,
-                verification_digest: digest,
-                payload_bytes: reader.payload_bytes,
-                files: reader.files,
-                directories: reader.directories,
-                symlinks: reader.symlinks,
-                ranges,
-                objects_traversed: reader.objects_traversed,
-                closure_direct_bytes: CLOSURE_MARKER_BYTES,
-                closure_direct_calls: 1,
-                metadata_direct_bytes: 0,
-                metadata_direct_calls: 0,
-                payload_direct_bytes: reader.payload_direct_bytes,
-                payload_direct_calls: reader.payload_direct_calls,
-            })
-        })();
+            let metadata_resident = cas
+                .occupied_resident_memory_bound_v1()
+                .map_err(C3ReadOperationErrorV1::Core)?
+                .checked_add(
+                    sink.resident_memory_bound_bytes()
+                        .map_err(C3ReadOperationErrorV1::Core)?,
+                )
+                .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
+            let plan = OperationMemoryPlanV1::empty()
+                .charge(
+                    MemoryComponentV1::ComparisonWindow,
+                    buffers.comparison.len() as u64,
+                )
+                .map_err(C3ReadOperationErrorV1::Core)?
+                .charge(
+                    MemoryComponentV1::TraversalState,
+                    u64::try_from(core::mem::size_of::<BoundedFullTraversalStackV1>())
+                        .map_err(|_| C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?
+                        .checked_add(buffers.path.len() as u64)
+                        .ok_or(CoreError::IntegerOverflow)?,
+                )
+                .map_err(C3ReadOperationErrorV1::Core)?
+                .charge(MemoryComponentV1::MetadataWindow, metadata_resident)
+                .map_err(C3ReadOperationErrorV1::Core)?
+                .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)
+                .map_err(C3ReadOperationErrorV1::Core)?;
+            operation
+                .declare_plan_v1(plan)
+                .map_err(C3ReadOperationErrorV1::Core)?;
+            counters.memory_high_water = counters
+                .memory_high_water
+                .max(operation.memory_high_water_bytes_v1());
+            let storage_token = operation
+                .storage_token_v1()
+                .map_err(C3ReadOperationErrorV1::FsCas)?;
+            check_control(control).map_err(C3ReadOperationErrorV1::Core)?;
 
-        let first_fscas_error = occupied.first_error_typed_v1();
-        let (direct_bytes, direct_calls) = occupied
-            .direct_storage_read_observation_typed_v1()
-            .map_err(C3ReadOperationErrorV1::FsCas)?;
-        counters
-            .record_fscas_read(direct_bytes, direct_calls)
-            .map_err(C3ReadOperationErrorV1::Core)?;
-        let terminal = match result {
-            Ok(mut value) => {
-                value.metadata_direct_bytes = direct_bytes
-                    .checked_sub(value.payload_direct_bytes)
-                    .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
-                value.metadata_direct_calls = direct_calls
-                    .checked_sub(value.payload_direct_calls)
-                    .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
-                Ok(value)
+            // Opening an occupied reader is private storage participation and must
+            // occur only after the one orchestrator-owned operation slot is held.
+            let mut occupied = cas
+                .occupied_private_controlled_borrowed_v1(storage_token, control)
+                .map_err(C3ReadOperationErrorV1::FsCas)?;
+
+            let closure = cas
+                .validate_closure_for_read_controlled_borrowed_v1(
+                    storage_token,
+                    version_record,
+                    control,
+                )
+                .map_err(C3ReadOperationErrorV1::FsCas)?;
+            if closure.version_record() != version_record {
+                return Err(C3ReadOperationErrorV1::Core(CoreError::IdMismatch));
             }
-            Err(error) => Err(first_fscas_error.map_or_else(
-                || {
-                    if error == CoreError::SinkRefused {
-                        C3ReadOperationErrorV1::Sink(C3ReadSinkErrorV1::Refused)
-                    } else {
-                        C3ReadOperationErrorV1::Core(error)
+            counters
+                .add(CounterFieldV1::BytesRead, CLOSURE_MARKER_BYTES)
+                .map_err(C3ReadOperationErrorV1::Core)?;
+            counters
+                .record_fscas_read(CLOSURE_MARKER_BYTES, 1)
+                .map_err(C3ReadOperationErrorV1::Core)?;
+
+            let result = (|| {
+                let mut reader = C3ReaderV1 {
+                    occupied: &mut occupied,
+                    sink,
+                    counters,
+                    comparison: buffers.comparison,
+                    path: buffers.path,
+                    path_len: 0,
+                    path_depth: 0,
+                    control,
+                    payload_bytes: 0,
+                    files: 0,
+                    directories: 0,
+                    symlinks: 0,
+                    objects_traversed: 0,
+                    payload_direct_bytes: 0,
+                    payload_direct_calls: 0,
+                };
+                let version = reader
+                    .validate_object(TypedPhysicalObjectIdV1::VersionRecord(version_record))?;
+                let PhysicalObjectPayloadV1::VersionRecord(version) = version.payload else {
+                    return Err(CoreError::TypeDomain);
+                };
+                if version.root_tree_id != requested_root
+                    || u64::from(version.total_object_count) != closure.object_count()
+                {
+                    return Err(CoreError::IdMismatch);
+                }
+                check_control(reader.control)?;
+
+                let (kind, digest, ranges) = match request {
+                    ReadRequestV1::Full => {
+                        reader
+                            .sink
+                            .begin_read(C3ReadKindV1::FullExtraction)
+                            .map_err(map_sink)?;
+                        sink_transaction = ReadSinkTransactionStateV1::Active;
+                        let mut hasher =
+                            begin_digest(FULL_DIGEST_DOMAIN, version_record, requested_root);
+                        let operation = reader.walk_root_full(requested_root, &mut hasher);
+                        let digest = match operation {
+                            Ok(()) => finish_digest(hasher),
+                            Err(error) => return Err(error),
+                        };
+                        (C3ReadKindV1::FullExtraction, digest, 0)
                     }
-                },
-                C3ReadOperationErrorV1::FsCas,
-            )),
-        };
-        terminal
-    })();
-    let admission_terminal = operation.finish_operation_admission_v1(counters, control);
+                    ReadRequestV1::Range { path, offset, len } => {
+                        let end = offset.checked_add(len).ok_or(CoreError::IntegerOverflow)?;
+                        reader
+                            .sink
+                            .begin_read(C3ReadKindV1::ExactRange)
+                            .map_err(map_sink)?;
+                        sink_transaction = ReadSinkTransactionStateV1::Active;
+                        let mut hasher =
+                            begin_digest(RANGE_DIGEST_DOMAIN, version_record, requested_root);
+                        digest_frame(&mut hasher, 0x21, path);
+                        digest_frame(&mut hasher, 0x22, &offset.to_be_bytes());
+                        digest_frame(&mut hasher, 0x23, &len.to_be_bytes());
+                        let operation =
+                            reader.read_exact_range(requested_root, path, offset, end, &mut hasher);
+                        let digest = match operation {
+                            Ok(()) => finish_digest(hasher),
+                            Err(error) => return Err(error),
+                        };
+                        (C3ReadKindV1::ExactRange, digest, 1)
+                    }
+                };
+                Ok(C3ReadResultV1 {
+                    kind,
+                    verification_digest: digest,
+                    payload_bytes: reader.payload_bytes,
+                    files: reader.files,
+                    directories: reader.directories,
+                    symlinks: reader.symlinks,
+                    ranges,
+                    objects_traversed: reader.objects_traversed,
+                    closure_direct_bytes: CLOSURE_MARKER_BYTES,
+                    closure_direct_calls: 1,
+                    metadata_direct_bytes: 0,
+                    metadata_direct_calls: 0,
+                    payload_direct_bytes: reader.payload_direct_bytes,
+                    payload_direct_calls: reader.payload_direct_calls,
+                })
+            })();
+
+            let first_fscas_error = occupied.first_error_typed_v1();
+            let terminal = result.map_err(|error| {
+                first_fscas_error.map_or_else(
+                    || {
+                        if error == CoreError::SinkRefused {
+                            C3ReadOperationErrorV1::Sink(C3ReadSinkErrorV1::Refused)
+                        } else {
+                            C3ReadOperationErrorV1::Core(error)
+                        }
+                    },
+                    C3ReadOperationErrorV1::FsCas,
+                )
+            });
+            let (direct_bytes, direct_calls) =
+                match occupied.direct_storage_read_observation_typed_v1() {
+                    Ok(observation) => observation,
+                    Err(error) => {
+                        return Err(C3ReadOperationErrorV1::retain_terminal_v1(
+                            terminal.err(),
+                            C3ReadOperationErrorV1::FsCas(error),
+                        )
+                        .expect("direct observation retains a terminal failure"));
+                    }
+                };
+            if let Err(error) = counters.record_fscas_read(direct_bytes, direct_calls) {
+                return Err(C3ReadOperationErrorV1::retain_terminal_v1(
+                    terminal.err(),
+                    C3ReadOperationErrorV1::Core(error),
+                )
+                .expect("direct counter transfer retains a terminal failure"));
+            }
+            let terminal = match terminal {
+                Ok(mut value) => {
+                    value.metadata_direct_bytes = direct_bytes
+                        .checked_sub(value.payload_direct_bytes)
+                        .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
+                    value.metadata_direct_calls = direct_calls
+                        .checked_sub(value.payload_direct_calls)
+                        .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
+                    Ok(value)
+                }
+                Err(error) => Err(error),
+            }?;
+
+            // `finish_read` is the caller-owned transaction's only success
+            // boundary. All fallible LayerFS validation and direct read
+            // attribution above must complete first, so a later internal
+            // failure can still be paired with exactly one explicit abort.
+            sink.finish_read(terminal.verification_digest)
+                .map_err(C3ReadOperationErrorV1::Sink)?;
+            sink_transaction = ReadSinkTransactionStateV1::Finished;
+            Ok(terminal)
+        },
+    ));
+    let sink_abort = if sink_transaction == ReadSinkTransactionStateV1::Active {
+        sink_transaction = ReadSinkTransactionStateV1::AbortAttempted;
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| sink.abort_read()))
+    } else {
+        Ok(())
+    };
+    let commit = matches!(terminal, Ok(Ok(_)))
+        && sink_transaction == ReadSinkTransactionStateV1::Finished
+        && sink_abort.is_ok();
+    // Read terminalization uses the same one-capability boundary as complete
+    // mutation. A controlled invalidation callback may unwind while storage
+    // is being terminalized; contain that payload so queue/memory authority
+    // is still released explicitly before `Drop` becomes only a backstop.
+    let operation_terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        operation.finish_terminal_v1(commit, counters, control)
+    }));
     let observation_terminal = observed_control.finish_v1(counters);
-    if let Err(error) = admission_terminal {
-        return Err(C3ReadOperationErrorV1::FsCas(error));
+    let (operation_terminal, operation_unwind) = match operation_terminal {
+        Ok(terminal) => (terminal, None),
+        Err(payload) => (Ok(()), Some(payload)),
+    };
+    // Preserve the chronological body cause first. Only the existing typed
+    // cleanup/invalidation representation may replace the dominant half;
+    // observation and other later terminals remain secondary.
+    let mut terminal_failure = match &terminal {
+        Ok(Err(error)) => Some(*error),
+        Ok(Ok(_)) | Err(_) => None,
+    };
+    if let Err(error) = operation_terminal {
+        terminal_failure = C3ReadOperationErrorV1::retain_terminal_v1(
+            terminal_failure,
+            C3ReadOperationErrorV1::FsCas(error),
+        );
     }
-    observation_terminal.map_err(C3ReadOperationErrorV1::Core)?;
-    terminal
+    if let Err(error) = observation_terminal {
+        terminal_failure = C3ReadOperationErrorV1::retain_terminal_v1(
+            terminal_failure,
+            C3ReadOperationErrorV1::Core(error),
+        );
+    }
+    if let Some(failure) = terminal_failure {
+        if let Err(payload) = terminal {
+            drop(payload);
+        }
+        if let Err(payload) = sink_abort {
+            drop(payload);
+        }
+        drop(operation_unwind);
+        return Err(failure);
+    }
+
+    // With no typed terminal, preserve the established caller-abort unwind
+    // behavior, then the body unwind, then operation terminalization.
+    if let Err(payload) = sink_abort {
+        drop(terminal.err());
+        drop(operation_unwind);
+        std::panic::resume_unwind(payload);
+    }
+    let value = match terminal {
+        Ok(Ok(value)) => value,
+        Ok(Err(_)) => unreachable!("typed read failure was returned above"),
+        Err(payload) => {
+            drop(operation_unwind);
+            std::panic::resume_unwind(payload)
+        }
+    };
+    if let Some(payload) = operation_unwind {
+        std::panic::resume_unwind(payload);
+    }
+    Ok(value)
 }
 
 struct ValidatedObjectV1 {
@@ -1686,6 +1818,7 @@ mod tests {
     use std::fs::{self, OpenOptions};
     use std::io::Write;
     use std::path::{Path, PathBuf};
+    use std::rc::Rc;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use crate::cdc::{C3CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
@@ -1788,6 +1921,56 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct PanicDuringReadTerminalInvalidation {
+        panicked: bool,
+    }
+
+    impl FsCasControlV1 for PanicDuringReadTerminalInvalidation {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if !self.panicked && target == FsCasCleanupTargetV1::RootInvalidation {
+                self.panicked = true;
+                panic!("injected read-terminal invalidation unwind")
+            }
+            false
+        }
+    }
+
+    struct PanicAfterReadTerminalRelease {
+        terminal_unwind_pending: bool,
+        observation_failure: Option<CoreError>,
+        terminal_hook_calls: u64,
+        observation_hook_calls: u64,
+    }
+
+    impl FsCasControlV1 for PanicAfterReadTerminalRelease {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
+            self.terminal_hook_calls += 1;
+            core::mem::take(&mut self.terminal_unwind_pending)
+        }
+
+        fn inject_root_lock_observation_failure(&mut self) -> Option<CoreError> {
+            self.observation_hook_calls += 1;
+            self.observation_failure.take()
+        }
+    }
+
     #[derive(Clone, Copy)]
     enum StopKind {
         Cancel,
@@ -1808,6 +1991,151 @@ mod tests {
 
         fn deadline_exceeded(&mut self) -> bool {
             matches!(self.kind, StopKind::Deadline) && self.polls >= self.stop_at
+        }
+    }
+
+    struct StopAfterBeginControl {
+        kind: StopKind,
+        stopped: Rc<Cell<bool>>,
+    }
+
+    impl FsCasControlV1 for StopAfterBeginControl {
+        fn cancellation_requested(&mut self) -> bool {
+            matches!(self.kind, StopKind::Cancel) && self.stopped.get()
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            matches!(self.kind, StopKind::Deadline) && self.stopped.get()
+        }
+    }
+
+    struct FilesystemFaultAfterBeginControl {
+        activated: Rc<Cell<bool>>,
+        boundary: FsCasFilesystemBoundaryV1,
+        fault: FsCasErrorV1,
+        injected: bool,
+    }
+
+    struct FilesystemFaultControl {
+        boundary: FsCasFilesystemBoundaryV1,
+        fault: FsCasErrorV1,
+        injected: bool,
+    }
+
+    impl FsCasControlV1 for FilesystemFaultControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.injected && boundary == self.boundary {
+                self.injected = true;
+                return Some(self.fault);
+            }
+            None
+        }
+    }
+
+    impl FsCasControlV1 for FilesystemFaultAfterBeginControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if self.activated.get() && !self.injected && boundary == self.boundary {
+                self.injected = true;
+                return Some(self.fault);
+            }
+            None
+        }
+    }
+
+    struct FilesystemFaultAfterBeginInvalidationControl {
+        activated: Rc<Cell<bool>>,
+        boundary: FsCasFilesystemBoundaryV1,
+        fault: FsCasErrorV1,
+        injected: bool,
+        invalidation_attempts: u64,
+    }
+
+    impl FsCasControlV1 for FilesystemFaultAfterBeginInvalidationControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return true;
+            }
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if self.activated.get() && !self.injected && boundary == self.boundary {
+                self.injected = true;
+                return Some(self.fault);
+            }
+            None
+        }
+    }
+
+    struct FilesystemFaultBeforeSinkInvalidationControl {
+        cas: FsCasV1,
+        boundary: FsCasFilesystemBoundaryV1,
+        fault: FsCasErrorV1,
+        injected: bool,
+        invalidation_attempts: u64,
+    }
+
+    impl FsCasControlV1 for FilesystemFaultBeforeSinkInvalidationControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return true;
+            }
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.injected && boundary == self.boundary {
+                self.injected = true;
+                self.cas.poison_storage_admission_for_test_v1();
+                return Some(self.fault);
+            }
+            None
         }
     }
 
@@ -1846,6 +2174,12 @@ mod tests {
         declared_bound: u64,
         bound_calls: Cell<u64>,
         panic_on_bound: bool,
+        panic_on_write: bool,
+        panic_on_abort: bool,
+        remove_objects_on_begin: Option<PathBuf>,
+        stop_after_begin: Option<Rc<Cell<bool>>>,
+        poison_storage_on_finish: Option<FsCasV1>,
+        poison_storage_on_abort: Option<FsCasV1>,
         began: u64,
         finished: u64,
         aborted: u64,
@@ -1859,6 +2193,12 @@ mod tests {
                 declared_bound,
                 bound_calls: Cell::new(0),
                 panic_on_bound: false,
+                panic_on_write: false,
+                panic_on_abort: false,
+                remove_objects_on_begin: None,
+                stop_after_begin: None,
+                poison_storage_on_finish: None,
+                poison_storage_on_abort: None,
                 began: 0,
                 finished: 0,
                 aborted: 0,
@@ -1877,6 +2217,15 @@ mod tests {
 
         fn begin_read(&mut self, _kind: C3ReadKindV1) -> Result<(), C3ReadSinkErrorV1> {
             self.began += 1;
+            if let Some(objects) = self.remove_objects_on_begin.take() {
+                for entry in fs::read_dir(objects).expect("read test object locator directory") {
+                    fs::remove_file(entry.expect("test object locator entry").path())
+                        .expect("remove test object locator after read begin");
+                }
+            }
+            if let Some(stopped) = self.stop_after_begin.take() {
+                stopped.set(true);
+            }
             Ok(())
         }
 
@@ -1903,6 +2252,10 @@ mod tests {
         }
 
         fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), C3ReadSinkErrorV1> {
+            if self.panic_on_write {
+                self.panic_on_write = false;
+                panic!("injected post-begin sink write unwind");
+            }
             self.current
                 .as_mut()
                 .ok_or(C3ReadSinkErrorV1::Refused)?
@@ -1924,6 +2277,9 @@ mod tests {
             if self.current.is_some() {
                 return Err(C3ReadSinkErrorV1::Refused);
             }
+            if let Some(cas) = self.poison_storage_on_finish.take() {
+                cas.poison_storage_admission_for_test_v1();
+            }
             self.finished += 1;
             Ok(())
         }
@@ -1931,6 +2287,13 @@ mod tests {
         fn abort_read(&mut self) {
             self.aborted += 1;
             self.current = None;
+            if let Some(cas) = self.poison_storage_on_abort.take() {
+                cas.poison_storage_admission_for_test_v1();
+            }
+            if self.panic_on_abort {
+                self.panic_on_abort = false;
+                panic!("injected sink abort unwind");
+            }
         }
     }
 
@@ -2256,6 +2619,165 @@ mod tests {
     }
 
     #[test]
+    fn full_read_occupied_observation_overflow_is_exact_and_transactional() {
+        const SEEDED_BYTES: u64 = 79;
+        let metadata_bytes = u64::try_from(PERSISTENT_LOCATOR_BYTES_V1).unwrap()
+            + u64::try_from(CATALOG_MARKER_BYTES).unwrap();
+        for (
+            case_index,
+            case,
+            occupied_seeded_calls,
+            payload_seeded_calls,
+            expected_bytes,
+            expected_calls,
+        ) in [
+            (
+                0_u64,
+                "metadata",
+                Some(u64::MAX - 1),
+                None,
+                CLOSURE_MARKER_BYTES + SEEDED_BYTES,
+                u64::MAX,
+            ),
+            (
+                1_u64,
+                "pack",
+                Some(u64::MAX - 3),
+                None,
+                CLOSURE_MARKER_BYTES + SEEDED_BYTES + metadata_bytes,
+                u64::MAX,
+            ),
+            (
+                2_u64,
+                "payload",
+                None,
+                Some(u64::MAX),
+                CLOSURE_MARKER_BYTES,
+                1,
+            ),
+        ] {
+            let fixture = create_fixture(&format!(
+                "occupied-{case}-observation-overflow-{case_index}"
+            ));
+            let stale = FsCasV1::open_existing(fixture._root.path()).expect("open stale handle");
+            let preparation_before = preparation_entry_count(&fixture);
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(256 * 1024);
+            if let Some(seeded_calls) = occupied_seeded_calls {
+                fixture
+                    .cas
+                    .seed_next_occupied_read_observation_for_test_v1(SEEDED_BYTES, seeded_calls);
+            }
+            if let Some(seeded_calls) = payload_seeded_calls {
+                fixture
+                    .cas
+                    .seed_next_occupied_payload_read_observation_for_test_v1(
+                        SEEDED_BYTES,
+                        seeded_calls,
+                    );
+            }
+
+            assert_eq!(
+                extract_c3_root_v1(
+                    &fixture.cas,
+                    0x3_900 + case_index,
+                    fixture.version,
+                    fixture.root_tree,
+                    &mut sink,
+                    &mut counters,
+                    C3ReadBuffersV1 {
+                        comparison: &mut comparison,
+                        path: &mut path,
+                    },
+                    &mut ContinueControl,
+                ),
+                Err(C3ReadOperationErrorV1::FsCas(FsCasErrorV1::Core(
+                    CoreError::IntegerOverflow
+                ))),
+                "{case}"
+            );
+
+            // The closure read completes first. The first two rows reject the
+            // metadata and pack observation pairs independently. The payload
+            // row completes a real file read, rejects its bytes+call pair, and
+            // then rejects the saturated occupied tuple as a whole when the
+            // operation attempts to merge it with the closure observation.
+            assert_eq!(counters.fscas_bytes_read, expected_bytes, "{case}");
+            assert_eq!(counters.fscas_read_calls, expected_calls, "{case}");
+            assert_eq!(sink.began, 0, "{case}");
+            assert_eq!(sink.finished, 0, "{case}");
+            assert_eq!(sink.aborted, 0, "{case}");
+            assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0, "{case}");
+            assert_eq!(
+                fixture.cas.operation_admission_active_for_test_v1(),
+                0,
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                preparation_entry_count(&fixture),
+                preparation_before,
+                "{case}"
+            );
+            assert_eq!(counters.storage_bytes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_requested, counters.storage_bytes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained,
+                "{case}"
+            );
+            assert_eq!(counters.storage_inodes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_inodes_requested, counters.storage_inodes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_preparation_bytes_current_after_cleanup, 0,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_preparation_inodes_current_after_cleanup, 0,
+                "{case}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0, "{case}");
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_bytes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_inodes, 0, "{case}");
+            assert!(counters.has_zero_forbidden_work(), "{case}");
+
+            // Direct-observation arithmetic exhaustion is not storage damage.
+            assert!(fixture.cas.occupied_private_v1().is_ok(), "{case}");
+            assert!(stale.occupied_private_v1().is_ok(), "{case}");
+            assert!(
+                FsCasV1::open_existing(fixture._root.path()).is_ok(),
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
     fn root_read_admission_precedes_request_sink_and_storage_work_and_releases_on_all_prework_stops(
     ) {
         let fixture = create_fixture("root-read-admission");
@@ -2381,8 +2903,8 @@ mod tests {
         assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
 
         // A panic in the first post-grant sink observation exercises the
-        // capability's unwind backstop. No occupied reader or preparation
-        // artifact has been opened at this point.
+        // read operation's explicit unwind terminalizer. No occupied reader
+        // or preparation artifact has been opened at this point.
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new(1);
@@ -2409,8 +2931,1418 @@ mod tests {
         assert_eq!(counters.fscas_bytes_read, 0);
         assert_eq!(counters.root_admission_queue_entries, 1);
         assert_eq!(counters.root_admission_active_slots_high_water, 1);
+        assert_eq!(counters.storage_bytes_requested, 0);
+        assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters.storage_bytes_released
+                + counters.storage_bytes_committed
+                + counters.storage_bytes_retained
+        );
+        assert_eq!(counters.storage_inodes_requested, 0);
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
+        assert_eq!(counters.storage_preparation_bytes_high_water, 0);
+        assert_eq!(counters.storage_preparation_inodes_high_water, 0);
+        assert_eq!(counters.storage_preparation_bytes_current_after_cleanup, 0);
+        assert_eq!(counters.storage_preparation_inodes_current_after_cleanup, 0);
+        assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+        assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+        assert_eq!(counters.immutable_residue_bytes, 0);
+        assert_eq!(counters.immutable_residue_inodes, 0);
         assert_eq!(preparation_entry_count(&fixture), preparation_before);
         assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
+    }
+
+    #[test]
+    fn read_storage_terminal_invalidation_unwind_releases_authority_and_finishes_observation() {
+        let fixture = create_fixture("read-terminal-invalidation-unwind");
+        let stale = FsCasV1::open_existing(fixture._root.path()).expect("open stale read handle");
+        let preparation_before = preparation_entry_count(&fixture);
+        let (mut comparison, mut path) = read_buffers();
+        let mut counters = OperationCountersV1::default();
+        let mut sink = CaptureSink::new(256 * 1024);
+        sink.poison_storage_on_finish = Some(fixture.cas.clone());
+        let mut control = PanicDuringReadTerminalInvalidation::default();
+
+        assert_eq!(
+            extract_c3_root_v1(
+                &fixture.cas,
+                0x4_100,
+                fixture.version,
+                fixture.root_tree,
+                &mut sink,
+                &mut counters,
+                C3ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut control,
+            ),
+            Err(C3ReadOperationErrorV1::FsCas(
+                FsCasErrorV1::SynchronizationPoisoned
+            ))
+        );
+        assert!(control.panicked);
+        assert_eq!(sink.finished, 1);
+        assert_eq!(sink.aborted, 0);
+        assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
+        assert_eq!(fixture.cas.operation_admission_active_for_test_v1(), 0);
+        assert_eq!(
+            fixture.cas.operation_admission_queue_for_test_v1(),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            fixture.cas.storage_admission_active_for_test_v1(),
+            (0, 0, 0)
+        );
+        assert_eq!(preparation_entry_count(&fixture), preparation_before);
+        assert_eq!(counters.storage_bytes_requested, 0);
+        assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(counters.storage_inodes_requested, 0);
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters.storage_bytes_released
+                + counters.storage_bytes_committed
+                + counters.storage_bytes_retained
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
+        assert_eq!(counters.storage_preparation_bytes_current_after_cleanup, 0);
+        assert_eq!(counters.storage_preparation_inodes_current_after_cleanup, 0);
+        assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+        assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+        assert_eq!(counters.immutable_residue_bytes, 0);
+        assert_eq!(counters.immutable_residue_inodes, 0);
+        assert!(counters.visibility_lock_acquisitions > 0);
+        assert_eq!(counters.publication_lock_acquisitions, 0);
+        assert!(counters.has_zero_forbidden_work());
+        assert!(matches!(
+            fixture.cas.occupied(),
+            Err(FsCasErrorV1::Invalidated)
+        ));
+        assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+        assert!(matches!(
+            FsCasV1::open_existing(fixture._root.path()),
+            Err(FsCasErrorV1::Invalidated)
+        ));
+    }
+
+    #[test]
+    fn read_terminal_unwind_preserves_typed_observation_failure_after_explicit_release() {
+        for (case_index, case, injected_observation) in [
+            (0_u64, "clean-observation", None),
+            (
+                1_u64,
+                "invalid-observation-state",
+                Some(CoreError::PackInvalid),
+            ),
+            (2_u64, "observation-counter-overflow", None),
+        ] {
+            let fixture = create_fixture(&format!(
+                "read-terminal-unwind-observation-{case_index}-{case}"
+            ));
+            let stale =
+                FsCasV1::open_existing(fixture._root.path()).expect("open stale read handle");
+            let preparation_before = preparation_entry_count(&fixture);
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            if case == "observation-counter-overflow" {
+                counters.visibility_lock_acquisitions = u64::MAX;
+            }
+            let mut sink = CaptureSink::new(256 * 1024);
+            let mut control = PanicAfterReadTerminalRelease {
+                terminal_unwind_pending: true,
+                observation_failure: injected_observation,
+                terminal_hook_calls: 0,
+                observation_hook_calls: 0,
+            };
+
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                extract_c3_root_v1(
+                    &fixture.cas,
+                    0x4_180 + case_index,
+                    fixture.version,
+                    fixture.root_tree,
+                    &mut sink,
+                    &mut counters,
+                    C3ReadBuffersV1 {
+                        comparison: &mut comparison,
+                        path: &mut path,
+                    },
+                    &mut control,
+                )
+            }));
+
+            match case {
+                "clean-observation" => {
+                    let payload = outcome.expect_err(
+                        "a terminal unwind with a valid observation must remain an unwind",
+                    );
+                    assert_eq!(
+                        payload.downcast_ref::<&'static str>().copied(),
+                        Some("injected operation-terminal unwind after explicit release")
+                    );
+                }
+                "invalid-observation-state" => assert_eq!(
+                    outcome.expect("a typed observation failure must consume the unwind"),
+                    Err(C3ReadOperationErrorV1::Core(CoreError::PackInvalid))
+                ),
+                "observation-counter-overflow" => assert_eq!(
+                    outcome.expect("a typed observation failure must consume the unwind"),
+                    Err(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))
+                ),
+                _ => unreachable!(),
+            }
+
+            assert_eq!(control.terminal_hook_calls, 1, "{case}");
+            assert_eq!(control.observation_hook_calls, 1, "{case}");
+            assert_eq!(sink.began, 1, "{case}");
+            assert_eq!(sink.finished, 1, "{case}");
+            assert_eq!(sink.aborted, 0, "{case}");
+            assert!(sink.current.is_none(), "{case}");
+            assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0, "{case}");
+            assert_eq!(
+                fixture.cas.operation_admission_active_for_test_v1(),
+                0,
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                preparation_entry_count(&fixture),
+                preparation_before,
+                "{case}"
+            );
+            assert_eq!(counters.storage_bytes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_requested, counters.storage_bytes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained,
+                "{case}"
+            );
+            assert_eq!(counters.storage_inodes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_inodes_requested, counters.storage_inodes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained,
+                "{case}"
+            );
+            assert_eq!(counters.storage_preparation_bytes_high_water, 0, "{case}");
+            assert_eq!(counters.storage_preparation_inodes_high_water, 0, "{case}");
+            assert_eq!(
+                counters.storage_preparation_bytes_current_after_cleanup, 0,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_preparation_inodes_current_after_cleanup, 0,
+                "{case}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0, "{case}");
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_bytes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_inodes, 0, "{case}");
+            assert!(counters.has_zero_forbidden_work(), "{case}");
+            assert!(
+                fixture.cas.visibility_lock_available_for_test_v1(),
+                "{case}"
+            );
+            assert!(
+                fixture.cas.publication_lock_available_for_test_v1(),
+                "{case}"
+            );
+            assert!(fixture.cas.occupied().is_ok(), "{case}");
+            assert!(stale.occupied().is_ok(), "{case}");
+            assert!(
+                FsCasV1::open_existing(fixture._root.path()).is_ok(),
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
+    fn typed_read_failure_survives_operation_terminal_unwind_and_later_observation() {
+        for (case_index, operation_name, range, observation_failure) in [
+            (0_u64, "full-clean-observation", false, None),
+            (
+                1_u64,
+                "full-failed-observation",
+                false,
+                Some(CoreError::PackInvalid),
+            ),
+            (2_u64, "exact-range-clean-observation", true, None),
+            (
+                3_u64,
+                "exact-range-failed-observation",
+                true,
+                Some(CoreError::PackInvalid),
+            ),
+        ] {
+            let fixture = create_fixture(&format!(
+                "typed-read-failure-terminal-unwind-{operation_name}"
+            ));
+            let stale =
+                FsCasV1::open_existing(fixture._root.path()).expect("open stale read handle");
+            let preparation_before = preparation_entry_count(&fixture);
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(256 * 1024);
+            sink.remove_objects_on_begin = Some(fixture._root.path().join("objects"));
+            let mut control = PanicAfterReadTerminalRelease {
+                terminal_unwind_pending: true,
+                observation_failure,
+                terminal_hook_calls: 0,
+                observation_hook_calls: 0,
+            };
+
+            let result = if range {
+                read_c3_file_range_v1(
+                    &fixture.cas,
+                    0x4_190 + case_index,
+                    fixture.version,
+                    fixture.root_tree,
+                    b"d/b.bin",
+                    817,
+                    17_777,
+                    &mut sink,
+                    &mut counters,
+                    C3ReadBuffersV1 {
+                        comparison: &mut comparison,
+                        path: &mut path,
+                    },
+                    &mut control,
+                )
+            } else {
+                extract_c3_root_v1(
+                    &fixture.cas,
+                    0x4_190 + case_index,
+                    fixture.version,
+                    fixture.root_tree,
+                    &mut sink,
+                    &mut counters,
+                    C3ReadBuffersV1 {
+                        comparison: &mut comparison,
+                        path: &mut path,
+                    },
+                    &mut control,
+                )
+            };
+
+            assert_eq!(
+                result,
+                Err(C3ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)),
+                "{operation_name}"
+            );
+            assert_eq!(control.terminal_hook_calls, 1, "{operation_name}");
+            assert_eq!(control.observation_hook_calls, 1, "{operation_name}");
+            assert_eq!(sink.began, 1, "{operation_name}");
+            assert_eq!(sink.finished, 0, "{operation_name}");
+            assert_eq!(sink.aborted, 1, "{operation_name}");
+            assert!(sink.current.is_none(), "{operation_name}");
+            assert_eq!(
+                fixture.cas.operation_admitted_slots_v1(),
+                0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_active_for_test_v1(),
+                0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0),
+                "{operation_name}"
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0),
+                "{operation_name}"
+            );
+            assert_eq!(
+                preparation_entry_count(&fixture),
+                preparation_before,
+                "{operation_name}"
+            );
+            assert_eq!(counters.storage_bytes_requested, 0, "{operation_name}");
+            assert_eq!(
+                counters.storage_bytes_requested, counters.storage_bytes_reserved,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained,
+                "{operation_name}"
+            );
+            assert_eq!(counters.storage_inodes_requested, 0, "{operation_name}");
+            assert_eq!(
+                counters.storage_inodes_requested, counters.storage_inodes_reserved,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_preparation_bytes_current_after_cleanup, 0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_preparation_inodes_current_after_cleanup, 0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes, 0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes, 0,
+                "{operation_name}"
+            );
+            assert_eq!(counters.immutable_residue_bytes, 0, "{operation_name}");
+            assert_eq!(counters.immutable_residue_inodes, 0, "{operation_name}");
+            assert!(counters.has_zero_forbidden_work(), "{operation_name}");
+            assert!(
+                fixture.cas.visibility_lock_available_for_test_v1(),
+                "{operation_name}"
+            );
+            assert!(
+                fixture.cas.publication_lock_available_for_test_v1(),
+                "{operation_name}"
+            );
+            assert!(fixture.cas.occupied().is_ok(), "{operation_name}");
+            assert!(stale.occupied().is_ok(), "{operation_name}");
+            assert!(
+                FsCasV1::open_existing(fixture._root.path()).is_ok(),
+                "{operation_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn typed_post_begin_read_failure_survives_sink_abort_unwind() {
+        let fixture = create_fixture("typed-post-begin-read-failure-abort-unwind");
+        let preparation_before = preparation_entry_count(&fixture);
+        let (mut comparison, mut path) = read_buffers();
+        let mut counters = OperationCountersV1::default();
+        let mut sink = CaptureSink::new(256 * 1024);
+        sink.remove_objects_on_begin = Some(fixture._root.path().join("objects"));
+        sink.panic_on_abort = true;
+
+        let error = extract_c3_root_v1(
+            &fixture.cas,
+            0x4_180,
+            fixture.version,
+            fixture.root_tree,
+            &mut sink,
+            &mut counters,
+            C3ReadBuffersV1 {
+                comparison: &mut comparison,
+                path: &mut path,
+            },
+            &mut ContinueControl,
+        )
+        .expect_err("the typed read failure must survive the abort unwind");
+
+        assert_eq!(
+            error,
+            C3ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)
+        );
+        assert_eq!(sink.began, 1);
+        assert_eq!(sink.finished, 0);
+        assert_eq!(sink.aborted, 1);
+        assert!(sink.current.is_none());
+        assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
+        assert_eq!(fixture.cas.operation_admission_active_for_test_v1(), 0);
+        assert_eq!(
+            fixture.cas.operation_admission_queue_for_test_v1(),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            fixture.cas.storage_admission_active_for_test_v1(),
+            (0, 0, 0)
+        );
+        assert_eq!(preparation_entry_count(&fixture), preparation_before);
+        assert_eq!(counters.storage_bytes_requested, 0);
+        assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters.storage_bytes_released
+                + counters.storage_bytes_committed
+                + counters.storage_bytes_retained
+        );
+        assert_eq!(counters.storage_inodes_requested, 0);
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
+        assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+        assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+        assert_eq!(counters.immutable_residue_bytes, 0);
+        assert_eq!(counters.immutable_residue_inodes, 0);
+        assert!(counters.has_zero_forbidden_work());
+        assert!(fixture.cas.visibility_lock_available_for_test_v1());
+        assert!(fixture.cas.publication_lock_available_for_test_v1());
+    }
+
+    #[test]
+    fn typed_post_begin_stop_survives_sink_abort_unwind() {
+        for (case, kind, expected) in [
+            ("cancel", StopKind::Cancel, CoreError::Cancelled),
+            ("deadline", StopKind::Deadline, CoreError::Deadline),
+        ] {
+            let fixture = create_fixture(&format!("typed-post-begin-{case}-abort-unwind"));
+            let preparation_before = preparation_entry_count(&fixture);
+            let stopped = Rc::new(Cell::new(false));
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(256 * 1024);
+            sink.stop_after_begin = Some(Rc::clone(&stopped));
+            sink.panic_on_abort = true;
+            let mut control = StopAfterBeginControl { kind, stopped };
+
+            let error = extract_c3_root_v1(
+                &fixture.cas,
+                0x4_200,
+                fixture.version,
+                fixture.root_tree,
+                &mut sink,
+                &mut counters,
+                C3ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut control,
+            )
+            .expect_err("the typed stop must survive the abort unwind");
+
+            assert_eq!(error, C3ReadOperationErrorV1::Core(expected), "{case}");
+            assert_eq!(sink.began, 1, "{case}");
+            assert_eq!(sink.finished, 0, "{case}");
+            assert_eq!(sink.aborted, 1, "{case}");
+            assert!(sink.current.is_none(), "{case}");
+            assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0, "{case}");
+            assert_eq!(
+                fixture.cas.operation_admission_active_for_test_v1(),
+                0,
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                preparation_entry_count(&fixture),
+                preparation_before,
+                "{case}"
+            );
+            assert_eq!(counters.storage_bytes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_requested, counters.storage_bytes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained,
+                "{case}"
+            );
+            assert_eq!(counters.storage_inodes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_inodes_requested, counters.storage_inodes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained,
+                "{case}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0, "{case}");
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_bytes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_inodes, 0, "{case}");
+            assert!(counters.has_zero_forbidden_work(), "{case}");
+            assert!(
+                fixture.cas.visibility_lock_available_for_test_v1(),
+                "{case}"
+            );
+            assert!(
+                fixture.cas.publication_lock_available_for_test_v1(),
+                "{case}"
+            );
+            assert!(fixture.cas.occupied().is_ok(), "{case}");
+            assert!(
+                FsCasV1::open_existing(fixture._root.path()).is_ok(),
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
+    fn typed_post_begin_filesystem_failure_survives_sink_abort_unwind() {
+        for (case, fault) in [
+            (
+                "permission-denied",
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied),
+            ),
+            (
+                "read-failure",
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ReadFailure),
+            ),
+            (
+                "short-read",
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortRead),
+            ),
+        ] {
+            let fixture = create_fixture(&format!("typed-post-begin-{case}-abort-unwind"));
+            let preparation_before = preparation_entry_count(&fixture);
+            let activated = Rc::new(Cell::new(false));
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(256 * 1024);
+            sink.stop_after_begin = Some(Rc::clone(&activated));
+            sink.panic_on_abort = true;
+            let mut control = FilesystemFaultAfterBeginControl {
+                activated,
+                boundary: FsCasFilesystemBoundaryV1::ObjectLocatorRead,
+                fault,
+                injected: false,
+            };
+
+            let error = extract_c3_root_v1(
+                &fixture.cas,
+                0x4_300,
+                fixture.version,
+                fixture.root_tree,
+                &mut sink,
+                &mut counters,
+                C3ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut control,
+            )
+            .expect_err("the typed filesystem read failure must survive the abort unwind");
+
+            assert_eq!(error, C3ReadOperationErrorV1::FsCas(fault), "{case}");
+            assert!(control.injected, "{case}");
+            assert_eq!(sink.began, 1, "{case}");
+            assert_eq!(sink.finished, 0, "{case}");
+            assert_eq!(sink.aborted, 1, "{case}");
+            assert!(sink.current.is_none(), "{case}");
+            assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0, "{case}");
+            assert_eq!(
+                fixture.cas.operation_admission_active_for_test_v1(),
+                0,
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                preparation_entry_count(&fixture),
+                preparation_before,
+                "{case}"
+            );
+            assert_eq!(counters.storage_bytes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_requested, counters.storage_bytes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained,
+                "{case}"
+            );
+            assert_eq!(counters.storage_inodes_requested, 0, "{case}");
+            assert_eq!(
+                counters.storage_inodes_requested, counters.storage_inodes_reserved,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained,
+                "{case}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0, "{case}");
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_bytes, 0, "{case}");
+            assert_eq!(counters.immutable_residue_inodes, 0, "{case}");
+            assert!(counters.has_zero_forbidden_work(), "{case}");
+            assert!(
+                fixture.cas.visibility_lock_available_for_test_v1(),
+                "{case}"
+            );
+            assert!(
+                fixture.cas.publication_lock_available_for_test_v1(),
+                "{case}"
+            );
+            assert!(fixture.cas.occupied().is_ok(), "{case}");
+            assert!(
+                FsCasV1::open_existing(fixture._root.path()).is_ok(),
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
+    fn occupied_read_failures_are_exact_for_full_and_range_reads() {
+        for (boundary_name, boundary) in [
+            ("locator", FsCasFilesystemBoundaryV1::ObjectLocatorRead),
+            ("catalog", FsCasFilesystemBoundaryV1::CatalogMarkerRead),
+            (
+                "carrier-metadata",
+                FsCasFilesystemBoundaryV1::CarrierMetadataRead,
+            ),
+            ("carrier-index", FsCasFilesystemBoundaryV1::CarrierIndexRead),
+            (
+                "carrier-object",
+                FsCasFilesystemBoundaryV1::CarrierObjectRead,
+            ),
+            (
+                "carrier-payload",
+                FsCasFilesystemBoundaryV1::CarrierPayloadRead,
+            ),
+        ] {
+            for (fault_name, fault) in [
+                ("missing-occupant", FsCasErrorV1::MissingOccupant),
+                (
+                    "permission-denied",
+                    FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied),
+                ),
+                (
+                    "read-failure",
+                    FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ReadFailure),
+                ),
+                (
+                    "short-read",
+                    FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortRead),
+                ),
+            ] {
+                for range in [false, true] {
+                    let operation_name = if range { "range" } else { "full" };
+                    let fixture = create_fixture(&format!(
+                        "occupied-{boundary_name}-{fault_name}-{operation_name}"
+                    ));
+                    let preparation_before = preparation_entry_count(&fixture);
+                    let activated = Rc::new(Cell::new(false));
+                    let (mut comparison, mut path) = read_buffers();
+                    let mut counters = OperationCountersV1::default();
+                    let mut sink = CaptureSink::new(256 * 1024);
+                    sink.stop_after_begin = Some(Rc::clone(&activated));
+                    let mut control = FilesystemFaultAfterBeginControl {
+                        activated,
+                        boundary,
+                        fault,
+                        injected: false,
+                    };
+
+                    let result = if range {
+                        read_c3_file_range_v1(
+                            &fixture.cas,
+                            0x4_340,
+                            fixture.version,
+                            fixture.root_tree,
+                            b"d/b.bin",
+                            817,
+                            17_777,
+                            &mut sink,
+                            &mut counters,
+                            C3ReadBuffersV1 {
+                                comparison: &mut comparison,
+                                path: &mut path,
+                            },
+                            &mut control,
+                        )
+                    } else {
+                        extract_c3_root_v1(
+                            &fixture.cas,
+                            0x4_341,
+                            fixture.version,
+                            fixture.root_tree,
+                            &mut sink,
+                            &mut counters,
+                            C3ReadBuffersV1 {
+                                comparison: &mut comparison,
+                                path: &mut path,
+                            },
+                            &mut control,
+                        )
+                    };
+                    let error = result.expect_err(
+                        "the semantic occupied-read failure must terminate the authenticated read",
+                    );
+
+                    assert_eq!(error, C3ReadOperationErrorV1::FsCas(fault));
+                    assert!(control.injected, "{fault_name}/{operation_name}");
+                    assert_eq!(sink.began, 1, "{fault_name}/{operation_name}");
+                    assert_eq!(sink.finished, 0, "{fault_name}/{operation_name}");
+                    assert_eq!(sink.aborted, 1, "{fault_name}/{operation_name}");
+                    assert!(sink.current.is_none(), "{fault_name}/{operation_name}");
+                    assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
+                    assert_eq!(fixture.cas.operation_admission_active_for_test_v1(), 0);
+                    assert_eq!(
+                        fixture.cas.operation_admission_queue_for_test_v1(),
+                        (0, 0, 0)
+                    );
+                    assert_eq!(
+                        fixture.cas.storage_admission_active_for_test_v1(),
+                        (0, 0, 0)
+                    );
+                    assert_eq!(preparation_entry_count(&fixture), preparation_before);
+                    assert_eq!(
+                        counters.storage_bytes_requested,
+                        counters.storage_bytes_reserved
+                    );
+                    assert_eq!(
+                        counters.storage_bytes_reserved,
+                        counters.storage_bytes_released
+                            + counters.storage_bytes_committed
+                            + counters.storage_bytes_retained
+                    );
+                    assert_eq!(
+                        counters.storage_inodes_requested,
+                        counters.storage_inodes_reserved
+                    );
+                    assert_eq!(
+                        counters.storage_inodes_reserved,
+                        counters.storage_inodes_released
+                            + counters.storage_inodes_committed
+                            + counters.storage_inodes_retained
+                    );
+                    assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+                    assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+                    assert_eq!(counters.immutable_residue_bytes, 0);
+                    assert_eq!(counters.immutable_residue_inodes, 0);
+                    assert!(fixture.cas.visibility_lock_available_for_test_v1());
+                    assert!(fixture.cas.publication_lock_available_for_test_v1());
+                    assert!(fixture.cas.occupied().is_ok());
+                    assert!(FsCasV1::open_existing(fixture._root.path()).is_ok());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn closure_marker_read_failures_are_exact_for_full_and_range_reads() {
+        for (fault_name, fault) in [
+            ("missing-occupant", FsCasErrorV1::MissingOccupant),
+            (
+                "permission-denied",
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied),
+            ),
+            (
+                "read-failure",
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ReadFailure),
+            ),
+            (
+                "short-read",
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortRead),
+            ),
+        ] {
+            for range in [false, true] {
+                let operation_name = if range { "range" } else { "full" };
+                let fixture =
+                    create_fixture(&format!("closure-marker-{fault_name}-{operation_name}"));
+                let preparation_before = preparation_entry_count(&fixture);
+                let (mut comparison, mut path) = read_buffers();
+                let mut counters = OperationCountersV1::default();
+                let mut sink = CaptureSink::new(256 * 1024);
+                let mut control = FilesystemFaultControl {
+                    boundary: FsCasFilesystemBoundaryV1::ClosureMarkerRead,
+                    fault,
+                    injected: false,
+                };
+
+                let result = if range {
+                    read_c3_file_range_v1(
+                        &fixture.cas,
+                        0x4_350,
+                        fixture.version,
+                        fixture.root_tree,
+                        b"d/b.bin",
+                        817,
+                        17_777,
+                        &mut sink,
+                        &mut counters,
+                        C3ReadBuffersV1 {
+                            comparison: &mut comparison,
+                            path: &mut path,
+                        },
+                        &mut control,
+                    )
+                } else {
+                    extract_c3_root_v1(
+                        &fixture.cas,
+                        0x4_351,
+                        fixture.version,
+                        fixture.root_tree,
+                        &mut sink,
+                        &mut counters,
+                        C3ReadBuffersV1 {
+                            comparison: &mut comparison,
+                            path: &mut path,
+                        },
+                        &mut control,
+                    )
+                };
+                let error = result.expect_err(
+                    "the semantic closure-marker failure must terminate before the sink begins",
+                );
+
+                assert_eq!(error, C3ReadOperationErrorV1::FsCas(fault));
+                assert!(control.injected, "{fault_name}/{operation_name}");
+                assert_eq!(sink.began, 0, "{fault_name}/{operation_name}");
+                assert_eq!(sink.finished, 0, "{fault_name}/{operation_name}");
+                assert_eq!(sink.aborted, 0, "{fault_name}/{operation_name}");
+                assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
+                assert_eq!(fixture.cas.operation_admission_active_for_test_v1(), 0);
+                assert_eq!(
+                    fixture.cas.operation_admission_queue_for_test_v1(),
+                    (0, 0, 0)
+                );
+                assert_eq!(
+                    fixture.cas.storage_admission_active_for_test_v1(),
+                    (0, 0, 0)
+                );
+                assert_eq!(preparation_entry_count(&fixture), preparation_before);
+                assert_eq!(counters.storage_bytes_requested, 0);
+                assert_eq!(counters.storage_inodes_requested, 0);
+                assert!(counters.has_zero_forbidden_work());
+                assert!(fixture.cas.visibility_lock_available_for_test_v1());
+                assert!(fixture.cas.publication_lock_available_for_test_v1());
+                assert!(fixture.cas.occupied().is_ok());
+                assert!(FsCasV1::open_existing(fixture._root.path()).is_ok());
+            }
+        }
+    }
+
+    #[test]
+    fn closure_marker_read_failure_retains_invalidation_dominance_before_sink_begin() {
+        for (operation_name, range) in [("full", false), ("exact-range", true)] {
+            let fixture = create_fixture(&format!(
+                "typed-closure-marker-read-failure-invalidation-{operation_name}"
+            ));
+            let stale = fixture.cas.clone();
+            let preparation_before = preparation_entry_count(&fixture);
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(256 * 1024);
+            let primary = FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied);
+            let mut control = FilesystemFaultBeforeSinkInvalidationControl {
+                cas: fixture.cas.clone(),
+                boundary: FsCasFilesystemBoundaryV1::ClosureMarkerRead,
+                fault: primary,
+                injected: false,
+                invalidation_attempts: 0,
+            };
+
+            let error = if range {
+                read_c3_file_range_v1(
+                    &fixture.cas,
+                    0x4_370,
+                    fixture.version,
+                    fixture.root_tree,
+                    b"d/b.bin",
+                    817,
+                    17_777,
+                    &mut sink,
+                    &mut counters,
+                    C3ReadBuffersV1 {
+                        comparison: &mut comparison,
+                        path: &mut path,
+                    },
+                    &mut control,
+                )
+            } else {
+                extract_c3_root_v1(
+                    &fixture.cas,
+                    0x4_370,
+                    fixture.version,
+                    fixture.root_tree,
+                    &mut sink,
+                    &mut counters,
+                    C3ReadBuffersV1 {
+                        comparison: &mut comparison,
+                        path: &mut path,
+                    },
+                    &mut control,
+                )
+            }
+            .expect_err("the pre-sink closure-marker error must survive terminal invalidation");
+
+            assert_eq!(
+                error,
+                C3ReadOperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                    first: FsCasFailureCauseV1::Filesystem(
+                        FsCasFilesystemFailureV1::PermissionDenied
+                    ),
+                    dominant: FsCasFailureCauseV1::InvalidationFailed,
+                }),
+                "{operation_name}"
+            );
+            assert!(control.injected, "{operation_name}");
+            assert_eq!(control.invalidation_attempts, 1, "{operation_name}");
+            assert_eq!(sink.began, 0, "{operation_name}");
+            assert_eq!(sink.finished, 0, "{operation_name}");
+            assert_eq!(sink.aborted, 0, "{operation_name}");
+            assert!(sink.current.is_none(), "{operation_name}");
+            assert_eq!(
+                fixture.cas.operation_admitted_slots_v1(),
+                0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_active_for_test_v1(),
+                0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0),
+                "{operation_name}"
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0),
+                "{operation_name}"
+            );
+            assert_eq!(
+                preparation_entry_count(&fixture),
+                preparation_before,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_bytes_requested, counters.storage_bytes_reserved,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_inodes_requested, counters.storage_inodes_reserved,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes, 0,
+                "{operation_name}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes, 0,
+                "{operation_name}"
+            );
+            assert_eq!(counters.immutable_residue_bytes, 0, "{operation_name}");
+            assert_eq!(counters.immutable_residue_inodes, 0, "{operation_name}");
+            assert!(counters.has_zero_forbidden_work(), "{operation_name}");
+            assert!(
+                fixture.cas.visibility_lock_available_for_test_v1(),
+                "{operation_name}"
+            );
+            assert!(
+                fixture.cas.publication_lock_available_for_test_v1(),
+                "{operation_name}"
+            );
+            assert!(
+                matches!(fixture.cas.occupied(), Err(FsCasErrorV1::Invalidated)),
+                "{operation_name}"
+            );
+            assert!(
+                matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
+                "{operation_name}"
+            );
+            assert!(
+                matches!(
+                    FsCasV1::open_existing(fixture._root.path()),
+                    Err(FsCasErrorV1::Busy | FsCasErrorV1::Invalidated)
+                ),
+                "{operation_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn typed_post_begin_read_failure_retains_invalidation_dominance_after_abort_unwind() {
+        for (boundary_name, boundary) in [
+            ("locator", FsCasFilesystemBoundaryV1::ObjectLocatorRead),
+            ("catalog", FsCasFilesystemBoundaryV1::CatalogMarkerRead),
+            (
+                "carrier-metadata",
+                FsCasFilesystemBoundaryV1::CarrierMetadataRead,
+            ),
+            ("carrier-index", FsCasFilesystemBoundaryV1::CarrierIndexRead),
+            (
+                "carrier-object",
+                FsCasFilesystemBoundaryV1::CarrierObjectRead,
+            ),
+            (
+                "carrier-payload",
+                FsCasFilesystemBoundaryV1::CarrierPayloadRead,
+            ),
+        ] {
+            for (operation_name, range) in [("full", false), ("exact-range", true)] {
+                let fixture = create_fixture(&format!(
+                    "typed-{boundary_name}-read-failure-invalidation-abort-unwind-{operation_name}"
+                ));
+                let stale = fixture.cas.clone();
+                let preparation_before = preparation_entry_count(&fixture);
+                let activated = Rc::new(Cell::new(false));
+                let (mut comparison, mut path) = read_buffers();
+                let mut counters = OperationCountersV1::default();
+                let mut sink = CaptureSink::new(256 * 1024);
+                sink.stop_after_begin = Some(Rc::clone(&activated));
+                sink.poison_storage_on_abort = Some(fixture.cas.clone());
+                sink.panic_on_abort = true;
+                let primary = FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied);
+                let mut control = FilesystemFaultAfterBeginInvalidationControl {
+                    activated,
+                    boundary,
+                    fault: primary,
+                    injected: false,
+                    invalidation_attempts: 0,
+                };
+
+                let error = if range {
+                    read_c3_file_range_v1(
+                        &fixture.cas,
+                        0x4_380,
+                        fixture.version,
+                        fixture.root_tree,
+                        b"d/b.bin",
+                        817,
+                        17_777,
+                        &mut sink,
+                        &mut counters,
+                        C3ReadBuffersV1 {
+                            comparison: &mut comparison,
+                            path: &mut path,
+                        },
+                        &mut control,
+                    )
+                } else {
+                    extract_c3_root_v1(
+                        &fixture.cas,
+                        0x4_380,
+                        fixture.version,
+                        fixture.root_tree,
+                        &mut sink,
+                        &mut counters,
+                        C3ReadBuffersV1 {
+                            comparison: &mut comparison,
+                            path: &mut path,
+                        },
+                        &mut control,
+                    )
+                }
+                .expect_err(
+                    "the typed read failure must survive the abort and terminal double fault",
+                );
+
+                assert_eq!(
+                    error,
+                    C3ReadOperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                        first: FsCasFailureCauseV1::Filesystem(
+                            FsCasFilesystemFailureV1::PermissionDenied
+                        ),
+                        dominant: FsCasFailureCauseV1::InvalidationFailed,
+                    }),
+                    "{operation_name}"
+                );
+                assert!(control.injected, "{operation_name}");
+                assert_eq!(control.invalidation_attempts, 1, "{operation_name}");
+                assert_eq!(sink.began, 1, "{operation_name}");
+                assert_eq!(sink.finished, 0, "{operation_name}");
+                assert_eq!(sink.aborted, 1, "{operation_name}");
+                assert!(sink.current.is_none(), "{operation_name}");
+                assert_eq!(
+                    fixture.cas.operation_admitted_slots_v1(),
+                    0,
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    fixture.cas.operation_admission_active_for_test_v1(),
+                    0,
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    fixture.cas.operation_admission_queue_for_test_v1(),
+                    (0, 0, 0),
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    fixture.cas.storage_admission_active_for_test_v1(),
+                    (0, 0, 0),
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    preparation_entry_count(&fixture),
+                    preparation_before,
+                    "{operation_name}"
+                );
+                assert_eq!(counters.storage_bytes_requested, 0, "{operation_name}");
+                assert_eq!(
+                    counters.storage_bytes_requested, counters.storage_bytes_reserved,
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    counters.storage_bytes_reserved,
+                    counters.storage_bytes_released
+                        + counters.storage_bytes_committed
+                        + counters.storage_bytes_retained,
+                    "{operation_name}"
+                );
+                assert_eq!(counters.storage_inodes_requested, 0, "{operation_name}");
+                assert_eq!(
+                    counters.storage_inodes_requested, counters.storage_inodes_reserved,
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    counters.storage_inodes_reserved,
+                    counters.storage_inodes_released
+                        + counters.storage_inodes_committed
+                        + counters.storage_inodes_retained,
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    counters.mutable_preparation_residue_bytes, 0,
+                    "{operation_name}"
+                );
+                assert_eq!(
+                    counters.mutable_preparation_residue_inodes, 0,
+                    "{operation_name}"
+                );
+                assert_eq!(counters.immutable_residue_bytes, 0, "{operation_name}");
+                assert_eq!(counters.immutable_residue_inodes, 0, "{operation_name}");
+                assert!(counters.has_zero_forbidden_work(), "{operation_name}");
+                assert!(
+                    matches!(fixture.cas.occupied(), Err(FsCasErrorV1::Invalidated)),
+                    "{operation_name}"
+                );
+                assert!(
+                    matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
+                    "{operation_name}"
+                );
+                assert!(
+                    matches!(
+                        FsCasV1::open_existing(fixture._root.path()),
+                        Err(FsCasErrorV1::Busy | FsCasErrorV1::Invalidated)
+                    ),
+                    "{operation_name}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn post_begin_sink_unwind_aborts_once_and_contains_abort_double_unwind() {
+        for (case_index, panic_on_abort, expected_payload) in [
+            (0_u64, false, "injected post-begin sink write unwind"),
+            (1_u64, true, "injected sink abort unwind"),
+        ] {
+            let fixture = create_fixture(&format!("post-begin-sink-unwind-{case_index}"));
+            let stale =
+                FsCasV1::open_existing(fixture._root.path()).expect("open stale read handle");
+            let preparation_before = preparation_entry_count(&fixture);
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(256 * 1024);
+            sink.panic_on_write = true;
+            sink.panic_on_abort = panic_on_abort;
+
+            let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _ = extract_c3_root_v1(
+                    &fixture.cas,
+                    0x4_200 + case_index,
+                    fixture.version,
+                    fixture.root_tree,
+                    &mut sink,
+                    &mut counters,
+                    C3ReadBuffersV1 {
+                        comparison: &mut comparison,
+                        path: &mut path,
+                    },
+                    &mut ContinueControl,
+                );
+            }))
+            .expect_err("the post-begin sink callback must unwind");
+
+            assert_eq!(
+                unwind.downcast_ref::<&'static str>().copied(),
+                Some(expected_payload)
+            );
+            assert_eq!(sink.began, 1);
+            assert_eq!(sink.finished, 0);
+            assert_eq!(sink.aborted, 1);
+            assert!(sink.current.is_none());
+            assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
+            assert_eq!(fixture.cas.operation_admission_active_for_test_v1(), 0);
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0)
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0)
+            );
+            assert_eq!(preparation_entry_count(&fixture), preparation_before);
+            assert_eq!(counters.storage_bytes_requested, 0);
+            assert_eq!(
+                counters.storage_bytes_requested,
+                counters.storage_bytes_reserved
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained
+            );
+            assert_eq!(counters.storage_inodes_requested, 0);
+            assert_eq!(
+                counters.storage_inodes_requested,
+                counters.storage_inodes_reserved
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained
+            );
+            assert_eq!(counters.storage_preparation_bytes_high_water, 0);
+            assert_eq!(counters.storage_preparation_inodes_high_water, 0);
+            assert_eq!(counters.storage_preparation_bytes_current_after_cleanup, 0);
+            assert_eq!(counters.storage_preparation_inodes_current_after_cleanup, 0);
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+            assert_eq!(counters.immutable_residue_bytes, 0);
+            assert_eq!(counters.immutable_residue_inodes, 0);
+            assert!(counters.visibility_lock_acquisitions > 0);
+            assert_eq!(counters.publication_lock_acquisitions, 0);
+            assert!(counters.has_zero_forbidden_work());
+            assert!(fixture.cas.visibility_lock_available_for_test_v1());
+            assert!(fixture.cas.publication_lock_available_for_test_v1());
+            assert!(fixture.cas.occupied().is_ok());
+            assert!(stale.occupied().is_ok());
+            assert!(FsCasV1::open_existing(fixture._root.path()).is_ok());
+
+            // Both injected panics are one-shot. Reusing the same sink proves
+            // that the explicit abort left no active caller transaction and
+            // that the root has no latent poisoned coordination state.
+            let (mut comparison, mut path) = read_buffers();
+            let mut followup_counters = OperationCountersV1::default();
+            extract_c3_root_v1(
+                &stale,
+                0x4_300 + case_index,
+                fixture.version,
+                fixture.root_tree,
+                &mut sink,
+                &mut followup_counters,
+                C3ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut ContinueControl,
+            )
+            .expect("a read after explicit sink abort must succeed");
+            assert_eq!(sink.began, 2);
+            assert_eq!(sink.finished, 1);
+            assert_eq!(sink.aborted, 1);
+            assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
+            assert_eq!(fixture.cas.operation_admission_active_for_test_v1(), 0);
+            assert_eq!(
+                fixture.cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0)
+            );
+            assert_eq!(
+                fixture.cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0)
+            );
+            assert_eq!(preparation_entry_count(&fixture), preparation_before);
+            assert!(followup_counters.has_zero_forbidden_work());
+        }
     }
 
     #[test]

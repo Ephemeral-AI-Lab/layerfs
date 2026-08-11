@@ -21,7 +21,10 @@ use crate::format::{
 use crate::identity::{
     derive_file_node_v1, derive_version_v1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
-use crate::limits::{MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1};
+use crate::limits::{
+    MemoryComponentV1, ObservationScopeV1, OperationCountersV1, OperationMemoryPlanV1,
+    OptionalU64ObservationV1,
+};
 use crate::{CoreError, CoreResult};
 
 use crate::lifecycle::{
@@ -101,82 +104,98 @@ where
     C: C3LifecycleControlV1 + ?Sized,
 {
     let mut operation = grant.into_operation();
-    let component = ValidatedComponent::new(name)?;
-    let maximum_refs = declared_len
-        .checked_add(8_191)
-        .ok_or(CoreError::IntegerOverflow)?
-        / 8_192;
-    validate_chunk_refs_per_file(maximum_refs)?;
-    let maximum_records = maximum_refs
-        .checked_add(4)
-        .ok_or(CoreError::IntegerOverflow)?;
-    if maximum_records > C3_MAX_STORAGE_RECORDS_V1 {
-        return Err(CoreError::CountCap.into());
-    }
-    let maximum_records_u32 =
-        u32::try_from(maximum_records).map_err(|_| CoreError::IntegerOverflow)?;
-    let global_seen_capacity = global_seen_capacity_v1(maximum_records)?;
-    let root_shape = preflight_canonical_tree_v1(1)?;
-    let required_traversal_bytes = closure_traversal_bytes_v1(maximum_records)?;
-    if buffers.traversal_state.len() < required_traversal_bytes
-        || buffers.tree_pages.len()
-            < usize::try_from(root_shape.page_summary_count())
-                .map_err(|_| CoreError::IntegerOverflow)?
-    {
-        return Err(CoreError::ResourceRefused.into());
-    }
+    let (component, maximum_records_u32, global_seen_capacity, supplier_resident, storage_resident) =
+        operation.run_preparation_free_stage_v1(
+            counters,
+            control,
+            |operation, counters, _control| {
+                operation.require_complete_file_kind_v1()?;
+                operation.declare_empty_storage_envelope_v1()?;
 
-    operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
-        maximum_records,
-        maximum_records,
-        maximum_refs,
-        1,
-        u64::from(root_shape.tree_object_count()),
-        declared_len,
-        global_seen_capacity,
-        false,
-    )?)?;
+                let component = ValidatedComponent::new(name)?;
+                let maximum_refs = declared_len
+                    .checked_add(8_191)
+                    .ok_or(CoreError::IntegerOverflow)?
+                    / 8_192;
+                validate_chunk_refs_per_file(maximum_refs)?;
+                let maximum_records = maximum_refs
+                    .checked_add(4)
+                    .ok_or(CoreError::IntegerOverflow)?;
+                if maximum_records > C3_MAX_STORAGE_RECORDS_V1 {
+                    return Err(CoreError::CountCap.into());
+                }
+                let maximum_records_u32 =
+                    u32::try_from(maximum_records).map_err(|_| CoreError::IntegerOverflow)?;
+                let global_seen_capacity = global_seen_capacity_v1(maximum_records)?;
+                let root_shape = preflight_canonical_tree_v1(1)?;
+                let required_traversal_bytes = closure_traversal_bytes_v1(maximum_records)?;
+                if buffers.traversal_state.len() < required_traversal_bytes
+                    || buffers.tree_pages.len()
+                        < usize::try_from(root_shape.page_summary_count())
+                            .map_err(|_| CoreError::IntegerOverflow)?
+                {
+                    return Err(CoreError::ResourceRefused.into());
+                }
 
-    // These are side-effect-free declarations. The sole orchestrator-owned
-    // slot is requested before any private preparation path/file is created
-    // and remains borrowed through explicit cleanup.
-    let supplier_resident = supplier.resident_memory_bound_bytes()?;
-    let storage_resident = operation.storage_resident_plan_v1(false)?;
-    let port_resident = supplier_resident
-        .checked_add(storage_resident.total_resident_bytes_v1())
-        .ok_or(CoreError::IntegerOverflow)?;
-    let metadata_reservation = port_resident.max(DEFAULT_METADATA_RESERVATION_BYTES);
-    let plan = OperationMemoryPlanV1::empty()
-        .charge(MemoryComponentV1::SourceWindow, buffers.source.len() as u64)?
-        .charge(MemoryComponentV1::CdcRing, buffers.cdc_ring.len() as u64)?
-        .charge(
-            MemoryComponentV1::ComparisonWindow,
-            (2 * COMPARISON_WINDOW_BYTES) as u64,
-        )?
-        .charge(
-            MemoryComponentV1::ObjectScratch,
-            buffers.tree_object.len() as u64,
-        )?
-        .charge(
-            MemoryComponentV1::PageSummaries,
-            c3_admission_traversal_resident_bytes_v1()?
-                .max(core::mem::size_of_val(buffers.tree_pages) as u64),
-        )?
-        .charge(
-            MemoryComponentV1::TraversalState,
-            buffers.traversal_state.len() as u64,
-        )?
-        .charge(MemoryComponentV1::MetadataWindow, metadata_reservation)?
-        .charge(
-            MemoryComponentV1::HashState,
-            IDENTITY_HASHER_BYTES_V1
-                .checked_mul(2)
-                .ok_or(CoreError::IntegerOverflow)?,
+                operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+                    maximum_records,
+                    maximum_records,
+                    maximum_refs,
+                    1,
+                    u64::from(root_shape.tree_object_count()),
+                    declared_len,
+                    global_seen_capacity,
+                    false,
+                )?)?;
+
+                // The final conservative envelope is live before the first
+                // supplier callback. No preparation path exists in this stage.
+                let supplier_resident = supplier.resident_memory_bound_bytes()?;
+                let storage_resident = operation.storage_resident_plan_v1(false)?;
+                let port_resident = supplier_resident
+                    .checked_add(storage_resident.total_resident_bytes_v1())
+                    .ok_or(CoreError::IntegerOverflow)?;
+                let metadata_reservation = port_resident.max(DEFAULT_METADATA_RESERVATION_BYTES);
+                let plan = OperationMemoryPlanV1::empty()
+                    .charge(MemoryComponentV1::SourceWindow, buffers.source.len() as u64)?
+                    .charge(MemoryComponentV1::CdcRing, buffers.cdc_ring.len() as u64)?
+                    .charge(
+                        MemoryComponentV1::ComparisonWindow,
+                        (2 * COMPARISON_WINDOW_BYTES) as u64,
+                    )?
+                    .charge(
+                        MemoryComponentV1::ObjectScratch,
+                        buffers.tree_object.len() as u64,
+                    )?
+                    .charge(
+                        MemoryComponentV1::PageSummaries,
+                        c3_admission_traversal_resident_bytes_v1()?
+                            .max(core::mem::size_of_val(buffers.tree_pages) as u64),
+                    )?
+                    .charge(
+                        MemoryComponentV1::TraversalState,
+                        buffers.traversal_state.len() as u64,
+                    )?
+                    .charge(MemoryComponentV1::MetadataWindow, metadata_reservation)?
+                    .charge(
+                        MemoryComponentV1::HashState,
+                        IDENTITY_HASHER_BYTES_V1
+                            .checked_mul(2)
+                            .ok_or(CoreError::IntegerOverflow)?,
+                    )?;
+                operation.declare_plan_v1(plan)?;
+                counters.memory_high_water = counters
+                    .memory_high_water
+                    .max(operation.memory_high_water_bytes_v1());
+                Ok((
+                    component,
+                    maximum_records_u32,
+                    global_seen_capacity,
+                    supplier_resident,
+                    storage_resident,
+                ))
+            },
         )?;
-    operation.declare_plan_v1(plan)?;
-    counters.memory_high_water = counters
-        .memory_high_water
-        .max(operation.ledger_v1().high_water_bytes());
 
     run_c3_lifecycle_v1(
         operation,
@@ -634,123 +653,160 @@ where
     S: C3SourceSupplierV1,
     C: C3LifecycleControlV1 + ?Sized,
 {
-    validate_entry_count(files.len() as u64)?;
-    validate_file_mode(DEFAULT_EXPLICIT_DIRECTORY_MODE)?;
-    let mut canonical_len = 0_u64;
-    let mut maximum_refs_per_file = 0_u64;
-    let mut maximum_refs_per_version = 0_u64;
-    let mut maximum_source_resident = 0_u64;
-    let mut previous = None;
-    for file in files.iter() {
-        let path = ValidatedPath::new(file.path)?;
-        if let Some(left) = previous {
-            require_strictly_increasing_paths(left, path)?;
-            if file.path.len() > left.as_bytes().len()
-                && file.path.starts_with(left.as_bytes())
-                && file.path[left.as_bytes().len()] == b'/'
-            {
-                return Err(CoreError::Path.into());
-            }
-        }
-        previous = Some(path);
-        validate_file_mode(file.mode)?;
-        validate_logical_length(file.declared_len)?;
-        canonical_len = canonical_len
-            .checked_add(file.declared_len)
-            .ok_or(CoreError::IntegerOverflow)?;
-        validate_logical_length(canonical_len)?;
-        let refs = file
-            .declared_len
-            .checked_add(8_191)
-            .ok_or(CoreError::IntegerOverflow)?
-            / 8_192;
-        validate_chunk_refs_per_file(refs)?;
-        maximum_refs_per_file = maximum_refs_per_file.max(refs);
-        maximum_refs_per_version = maximum_refs_per_version
-            .checked_add(refs)
-            .ok_or(CoreError::IntegerOverflow)?;
-        validate_chunk_refs_per_version(maximum_refs_per_version)?;
-        let supplier = file.supplier.as_ref().ok_or(CoreError::SourceFailure)?;
-        maximum_source_resident =
-            maximum_source_resident.max(supplier.resident_memory_bound_bytes()?);
-    }
-    let tree_preflight = preflight_manifest_directory_v1(files, 0, files.len(), 0)?;
-    validate_entry_count(tree_preflight.directory_entry_count)?;
-    validate_tree_object_count(tree_preflight.tree_object_count)?;
-    let maximum_objects = maximum_refs_per_version
-        .checked_add(files.len() as u64)
-        .and_then(|count| count.checked_add(tree_preflight.tree_object_count))
-        .and_then(|count| count.checked_add(1))
-        .ok_or(CoreError::IntegerOverflow)?;
-    validate_total_object_count(maximum_objects)?;
-    let global_seen_capacity = global_seen_capacity_v1(maximum_objects)?;
-    let maximum_records = maximum_objects.min(C3_MAX_STORAGE_RECORDS_V1);
-    let maximum_records_u32 =
-        u32::try_from(maximum_records).map_err(|_| CoreError::IntegerOverflow)?;
-    let required_traversal_bytes = closure_traversal_bytes_v1(maximum_objects)?;
-    if buffers.traversal_state.len() < required_traversal_bytes
-        || buffers.tree_pages.len()
-            < usize::try_from(tree_preflight.maximum_page_summary_count)
-                .map_err(|_| CoreError::IntegerOverflow)?
-    {
-        return Err(CoreError::ResourceRefused.into());
-    }
-
-    operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
-        maximum_objects,
-        maximum_objects,
-        maximum_refs_per_version,
-        files.len() as u64,
-        tree_preflight.tree_object_count,
+    let (
         canonical_len,
         global_seen_capacity,
-        true,
-    )?)?;
+        maximum_records_u32,
+        maximum_source_resident,
+        storage_resident,
+    ) = operation.run_preparation_free_stage_v1(
+        counters,
+        control,
+        |operation, counters, _control| {
+            // The split request/run API must not let an in-crate caller
+            // replay a live grant for another kind. The zero-write lease
+            // gives every later terminal path a directly observed
+            // storage equation before request/manifest inspection.
+            operation.require_complete_tree_kind_v1()?;
+            operation.declare_empty_storage_envelope_v1()?;
+            validate_entry_count(files.len() as u64)?;
+            validate_file_mode(DEFAULT_EXPLICIT_DIRECTORY_MODE)?;
+            let mut canonical_len = 0_u64;
+            let mut maximum_refs_per_version = 0_u64;
+            let mut previous = None;
+            for file in files.iter() {
+                let path = ValidatedPath::new(file.path)?;
+                if let Some(left) = previous {
+                    require_strictly_increasing_paths(left, path)?;
+                    if file.path.len() > left.as_bytes().len()
+                        && file.path.starts_with(left.as_bytes())
+                        && file.path[left.as_bytes().len()] == b'/'
+                    {
+                        return Err(CoreError::Path.into());
+                    }
+                }
+                previous = Some(path);
+                validate_file_mode(file.mode)?;
+                validate_logical_length(file.declared_len)?;
+                canonical_len = canonical_len
+                    .checked_add(file.declared_len)
+                    .ok_or(CoreError::IntegerOverflow)?;
+                validate_logical_length(canonical_len)?;
+                let refs = file
+                    .declared_len
+                    .checked_add(8_191)
+                    .ok_or(CoreError::IntegerOverflow)?
+                    / 8_192;
+                validate_chunk_refs_per_file(refs)?;
+                maximum_refs_per_version = maximum_refs_per_version
+                    .checked_add(refs)
+                    .ok_or(CoreError::IntegerOverflow)?;
+                validate_chunk_refs_per_version(maximum_refs_per_version)?;
+            }
+            let tree_preflight = preflight_manifest_directory_v1(files, 0, files.len(), 0)?;
+            validate_entry_count(tree_preflight.directory_entry_count)?;
+            validate_tree_object_count(tree_preflight.tree_object_count)?;
+            let maximum_objects = maximum_refs_per_version
+                .checked_add(files.len() as u64)
+                .and_then(|count| count.checked_add(tree_preflight.tree_object_count))
+                .and_then(|count| count.checked_add(1))
+                .ok_or(CoreError::IntegerOverflow)?;
+            validate_total_object_count(maximum_objects)?;
+            let global_seen_capacity = global_seen_capacity_v1(maximum_objects)?;
+            let maximum_records = maximum_objects.min(C3_MAX_STORAGE_RECORDS_V1);
+            let maximum_records_u32 =
+                u32::try_from(maximum_records).map_err(|_| CoreError::IntegerOverflow)?;
+            let required_traversal_bytes = closure_traversal_bytes_v1(maximum_objects)?;
+            if buffers.traversal_state.len() < required_traversal_bytes
+                || buffers.tree_pages.len()
+                    < usize::try_from(tree_preflight.maximum_page_summary_count)
+                        .map_err(|_| CoreError::IntegerOverflow)?
+            {
+                return Err(CoreError::ResourceRefused.into());
+            }
 
-    let storage_resident = operation.storage_resident_plan_v1(true)?;
-    // `files` and its path bytes are caller-owned immutable manifest input,
-    // prepared outside the C3 boundary. Charge every LayerFS-created entry
-    // view and every borrowed lower-layer port, but do not relabel the
-    // external manifest itself as operation-slot allocation.
-    let port_resident = maximum_source_resident
-        .checked_add(storage_resident.total_resident_bytes_v1())
-        .and_then(|bytes| bytes.checked_add(tree_preflight.peak_entry_memory))
-        .and_then(|bytes| bytes.checked_add(manifest_build_stack_resident_bytes_v1().ok()?))
-        .ok_or(CoreError::IntegerOverflow)?;
-    let plan = OperationMemoryPlanV1::empty()
-        .charge(MemoryComponentV1::SourceWindow, buffers.source.len() as u64)?
-        .charge(MemoryComponentV1::CdcRing, buffers.cdc_ring.len() as u64)?
-        .charge(
-            MemoryComponentV1::ComparisonWindow,
-            (2 * COMPARISON_WINDOW_BYTES) as u64,
-        )?
-        .charge(
-            MemoryComponentV1::ObjectScratch,
-            buffers.tree_object.len() as u64,
-        )?
-        .charge(
-            MemoryComponentV1::PageSummaries,
-            c3_admission_traversal_resident_bytes_v1()?
-                .max(core::mem::size_of_val(buffers.tree_pages) as u64),
-        )?
-        .charge(
-            MemoryComponentV1::TraversalState,
-            buffers.traversal_state.len() as u64,
-        )?
-        .charge(
-            MemoryComponentV1::MetadataWindow,
-            port_resident.max(DEFAULT_METADATA_RESERVATION_BYTES),
-        )?
-        .charge(
-            MemoryComponentV1::HashState,
-            IDENTITY_HASHER_BYTES_V1
-                .checked_mul(2)
-                .ok_or(CoreError::IntegerOverflow)?,
-        )?;
-    operation.declare_plan_v1(plan)?;
-    counters.memory_high_water = counters
-        .memory_high_water
-        .max(operation.ledger_v1().high_water_bytes());
+            operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+                maximum_objects,
+                maximum_objects,
+                maximum_refs_per_version,
+                files.len() as u64,
+                tree_preflight.tree_object_count,
+                canonical_len,
+                global_seen_capacity,
+                true,
+            )?)?;
+
+            // Query suppliers only after the final conservative envelope
+            // is admitted. These callbacks create no preparation state.
+            let mut maximum_source_resident = 0_u64;
+            for file in files.iter() {
+                let supplier = file.supplier.as_ref().ok_or(CoreError::SourceFailure)?;
+                maximum_source_resident =
+                    maximum_source_resident.max(supplier.resident_memory_bound_bytes()?);
+            }
+            let storage_resident = operation.storage_resident_plan_v1(true)?;
+            // `files` and its path bytes are caller-owned immutable
+            // manifest input. Charge LayerFS-created views and borrowed
+            // ports without relabelling caller storage as slot allocation.
+            let port_resident = maximum_source_resident
+                .checked_add(storage_resident.total_resident_bytes_v1())
+                .ok_or(CoreError::IntegerOverflow)?;
+            // Manifest entry construction and authenticated closure
+            // reconstruction are sequential phases. The manifest vectors,
+            // their bounded directory stack, and the page-summary buffer are
+            // all gone from active tree-building work before the closure
+            // admission stack is created. Charge the exact larger phase peak
+            // in their shared traversal component instead of adding both
+            // mutually exclusive peaks. Persistent storage adapters remain in
+            // `port_resident` and are therefore still charged across phases.
+            let tree_build_resident = tree_preflight
+                .peak_entry_memory
+                .checked_add(manifest_build_stack_resident_bytes_v1()?)
+                .and_then(|bytes| {
+                    bytes.checked_add(core::mem::size_of_val(buffers.tree_pages) as u64)
+                })
+                .ok_or(CoreError::IntegerOverflow)?;
+            let traversal_phase_resident =
+                c3_admission_traversal_resident_bytes_v1()?.max(tree_build_resident);
+            let plan = OperationMemoryPlanV1::empty()
+                .charge(MemoryComponentV1::SourceWindow, buffers.source.len() as u64)?
+                .charge(MemoryComponentV1::CdcRing, buffers.cdc_ring.len() as u64)?
+                .charge(
+                    MemoryComponentV1::ComparisonWindow,
+                    (2 * COMPARISON_WINDOW_BYTES) as u64,
+                )?
+                .charge(
+                    MemoryComponentV1::ObjectScratch,
+                    buffers.tree_object.len() as u64,
+                )?
+                .charge(MemoryComponentV1::PageSummaries, traversal_phase_resident)?
+                .charge(
+                    MemoryComponentV1::TraversalState,
+                    buffers.traversal_state.len() as u64,
+                )?
+                .charge(
+                    MemoryComponentV1::MetadataWindow,
+                    port_resident.max(DEFAULT_METADATA_RESERVATION_BYTES),
+                )?
+                .charge(
+                    MemoryComponentV1::HashState,
+                    IDENTITY_HASHER_BYTES_V1
+                        .checked_mul(2)
+                        .ok_or(CoreError::IntegerOverflow)?,
+                )?;
+            operation.declare_plan_v1(plan)?;
+            counters.memory_high_water = counters
+                .memory_high_water
+                .max(operation.memory_high_water_bytes_v1());
+            Ok((
+                canonical_len,
+                global_seen_capacity,
+                maximum_records_u32,
+                maximum_source_resident,
+                storage_resident,
+            ))
+        },
+    )?;
 
     run_c3_lifecycle_v1(
         operation,
@@ -765,7 +821,11 @@ where
         control,
         counters,
         move |storage, control_cell, reservation, buffers, counters| {
-            let mut reference_spool_bytes = Some(0_u64);
+            let mut reference_spool_bytes = OptionalU64ObservationV1::observed(
+                0,
+                "direct cumulative chunk-reference spool logical length",
+                ObservationScopeV1::Operation,
+            );
             let (_, sink) = storage.content_parts_v1();
             sink.begin_closure().map_err(|_| CoreError::SinkRefused)?;
             for file in files.iter_mut() {
@@ -792,13 +852,10 @@ where
                     algorithm,
                     counters,
                 )?;
-                reference_spool_bytes =
-                    match (reference_spool_bytes, storage.reference_storage_bytes_v1()?) {
-                        (Some(total), Some(bytes)) => {
-                            Some(total.checked_add(bytes).ok_or(CoreError::IntegerOverflow)?)
-                        }
-                        _ => None,
-                    };
+                reference_spool_bytes = reference_spool_bytes.checked_add_operation_v1(
+                    storage.reference_storage_bytes_v1()?,
+                    "direct cumulative chunk-reference spool logical length",
+                )?;
                 storage.push_built_file_v1(BuiltFileRecordV1 {
                     logical: derive_file_node_v1(file.mode, prepared.logical_file())?,
                     physical: prepared.physical_file(),

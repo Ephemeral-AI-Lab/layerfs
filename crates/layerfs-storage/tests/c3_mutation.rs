@@ -2,7 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use layerfs_storage::cas::{FsCasBoundaryV1, FsCasControlV1, FsCasV1};
+use layerfs_storage::cas::{
+    FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasV1,
+};
 use layerfs_storage::cdc::{C3CdcAlgorithmV1, CdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES};
 use layerfs_storage::content::update::{
     AuthenticatedBaseByteReaderV1, BaseChunkEvidenceSourceV1, BaseChunkEvidenceV1, BaseReadErrorV1,
@@ -84,6 +86,64 @@ impl FsCasControlV1 for ContinueControl {
     }
 
     fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+#[derive(Default)]
+struct PanicPrivatePackCleanupAfterInstalledCarrier {
+    after_catalog_publication: bool,
+    publication_poll_passed: bool,
+    cleanup_panicked: bool,
+}
+
+impl PanicPrivatePackCleanupAfterInstalledCarrier {
+    fn cancellation_requested_v1(&mut self) -> bool {
+        if !self.after_catalog_publication {
+            return false;
+        }
+        if !self.publication_poll_passed {
+            // The AfterCatalogPublication sample belongs to the completed
+            // carrier admission. Let that exact poll return so the writer
+            // owns the installed-carrier observation, then cancel the next
+            // bounded mutation step while its successor private pack lives.
+            self.publication_poll_passed = true;
+            return false;
+        }
+        true
+    }
+}
+
+impl CdcControlV1 for PanicPrivatePackCleanupAfterInstalledCarrier {
+    fn cancellation_requested(&mut self) -> bool {
+        self.cancellation_requested_v1()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for PanicPrivatePackCleanupAfterInstalledCarrier {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        if boundary == FsCasBoundaryV1::AfterCatalogPublication {
+            self.after_catalog_publication = true;
+        }
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        self.cancellation_requested_v1()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+        if target == FsCasCleanupTargetV1::PrivatePack && !self.cleanup_panicked {
+            self.cleanup_panicked = true;
+            panic!("injected post-install private-pack cleanup unwind")
+        }
         false
     }
 }
@@ -408,6 +468,8 @@ fn accept_files(
 
 fn assert_clean_terminal(cas: &FsCasV1, root: &Path) {
     assert_eq!(cas.operation_admitted_slots_v1(), 0);
+    assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+    assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
     assert_eq!(
         fs::read_dir(root.join("preparation"))
             .expect("preparation directory")
@@ -420,12 +482,20 @@ fn assert_storage_terminal(counters: &OperationCountersV1) {
     assert!(counters.storage_bytes_requested > 0);
     assert_eq!(
         counters.storage_bytes_requested,
+        counters.storage_bytes_reserved
+    );
+    assert_eq!(
+        counters.storage_bytes_reserved,
         counters.storage_bytes_released
             + counters.storage_bytes_committed
             + counters.storage_bytes_retained
     );
     assert_eq!(
         counters.storage_inodes_requested,
+        counters.storage_inodes_reserved
+    );
+    assert_eq!(
+        counters.storage_inodes_reserved,
         counters.storage_inodes_released
             + counters.storage_inodes_committed
             + counters.storage_inodes_retained
@@ -444,6 +514,227 @@ fn assert_storage_terminal(counters: &OperationCountersV1) {
     assert_eq!(counters.storage_inodes_retained, 0);
     assert_eq!(counters.mutable_preparation_residue_bytes, 0);
     assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+    assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+    assert!(counters.has_zero_forbidden_work());
+}
+
+fn exact_directory_usage(path: &Path) -> (u64, u64) {
+    fs::read_dir(path)
+        .expect("operation namespace directory")
+        .map(|entry| {
+            let entry = entry.expect("operation namespace entry");
+            let metadata =
+                fs::symlink_metadata(entry.path()).expect("operation namespace metadata");
+            assert!(metadata.file_type().is_file());
+            (metadata.len(), 1_u64)
+        })
+        .fold((0_u64, 0_u64), |(bytes, inodes), (len, one)| {
+            (
+                bytes.checked_add(len).expect("bounded namespace bytes"),
+                inodes + one,
+            )
+        })
+}
+
+fn exact_operation_namespace_usage(root: &Path) -> ((u64, u64), (u64, u64)) {
+    let preparation = exact_directory_usage(&root.join("preparation"));
+    let immutable = ["carriers", "objects", "catalog", "closures"]
+        .into_iter()
+        .map(|name| exact_directory_usage(&root.join(name)))
+        .fold(
+            (0_u64, 0_u64),
+            |(bytes, inodes), (next_bytes, next_inodes)| {
+                (
+                    bytes
+                        .checked_add(next_bytes)
+                        .expect("bounded immutable bytes"),
+                    inodes
+                        .checked_add(next_inodes)
+                        .expect("bounded immutable inodes"),
+                )
+            },
+        );
+    (preparation, immutable)
+}
+
+#[test]
+fn post_install_cleanup_unwind_records_immutable_residue_exactly_once() {
+    let fixture = TestRoot::new("post-install-cleanup-unwind");
+    let cas = FsCasV1::create_new(fixture.path()).expect("create FsCas");
+    let stale = FsCasV1::open_existing(fixture.path()).expect("reopen shared owner");
+    let base_data: Vec<u8> = (0..8_123).map(|index| (index * 37) as u8).collect();
+    let replacement_data: Vec<u8> = (0..9_321).map(|index| (index * 19 + 7) as u8).collect();
+    let name = b"b.bin";
+    let base_file = expected_file(&base_data, 0o644);
+    let base_entries = [entry(name, &base_file, 0o644)];
+    let base_tree = build(DirectoryBuildModeV1::ImplicitRoot, &base_entries).expect("base tree");
+    let (base_version, accepted_root) = accept_files(&cas, 0x515, &[(name, 0o644, &base_data)]);
+    assert_eq!(accepted_root, base_tree.directory.physical());
+    let before = exact_operation_namespace_usage(fixture.path());
+    let before_objects = exact_directory_usage(&fixture.path().join("objects"));
+    let before_catalog = exact_directory_usage(&fixture.path().join("catalog"));
+    let before_closures = exact_directory_usage(&fixture.path().join("closures"));
+    let before_carriers: Vec<_> = fs::read_dir(fixture.path().join("carriers"))
+        .expect("base carriers")
+        .map(|entry| entry.expect("base carrier").file_name())
+        .collect();
+
+    let replacement_proof = replacement_fixture(
+        DirectoryBuildModeV1::ImplicitRoot,
+        &base_entries,
+        &base_tree,
+        0,
+    );
+    let mut source = SliceSource::new(&replacement_data);
+    let mut scratch = OperationScratch::new();
+    let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+    let mut control = PanicPrivatePackCleanupAfterInstalledCarrier::default();
+    let mut counters = OperationCountersV1::default();
+    let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_c3_complete_replace_v1(
+            &cas,
+            0x516,
+            C3CdcAlgorithmV1::FastCdc,
+            base_version,
+            base_tree.directory,
+            replacement_proof.evidence(base_tree.directory),
+            0,
+            name,
+            0o600,
+            replacement_data.len() as u64,
+            &mut source,
+            scratch.borrow(),
+            &mut cow_logical,
+            &mut control,
+            &mut counters,
+        )
+    }));
+
+    let error = match terminal {
+        Ok(Err(error)) => error,
+        Ok(Ok(_)) => panic!("cleanup-unwind terminal must not complete"),
+        Err(payload) => std::panic::resume_unwind(payload),
+    };
+    assert_eq!(
+        error,
+        layerfs_storage::lifecycle::C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+            first: layerfs_storage::cas::FsCasFailureCauseV1::Core(CoreError::Cancelled),
+            dominant: layerfs_storage::cas::FsCasFailureCauseV1::CleanupFailed(
+                FsCasCleanupTargetV1::PrivatePack
+            ),
+        })
+    );
+    assert!(control.after_catalog_publication);
+    assert!(control.publication_poll_passed);
+    assert!(control.cleanup_panicked);
+    assert_eq!(cas.operation_admitted_slots_v1(), 0);
+    assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+    assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
+
+    let new_carriers: Vec<_> = fs::read_dir(fixture.path().join("carriers"))
+        .expect("terminal carriers")
+        .map(|entry| entry.expect("terminal carrier"))
+        .filter(|entry| !before_carriers.contains(&entry.file_name()))
+        .collect();
+    assert_eq!(new_carriers.len(), 1);
+    let exact_unreachable_carrier_bytes = new_carriers[0]
+        .metadata()
+        .expect("unreachable carrier metadata")
+        .len();
+    assert!(exact_unreachable_carrier_bytes > 0);
+
+    let after = exact_operation_namespace_usage(fixture.path());
+    let after_objects = exact_directory_usage(&fixture.path().join("objects"));
+    let after_catalog = exact_directory_usage(&fixture.path().join("catalog"));
+    let after_closures = exact_directory_usage(&fixture.path().join("closures"));
+    let locator_delta_bytes = after_objects
+        .0
+        .checked_sub(before_objects.0)
+        .expect("locator byte delta");
+    let locator_delta_inodes = after_objects
+        .1
+        .checked_sub(before_objects.1)
+        .expect("locator inode delta");
+    let catalog_delta_bytes = after_catalog
+        .0
+        .checked_sub(before_catalog.0)
+        .expect("catalog byte delta");
+    let catalog_delta_inodes = after_catalog
+        .1
+        .checked_sub(before_catalog.1)
+        .expect("catalog inode delta");
+    let closure_delta_bytes = after_closures
+        .0
+        .checked_sub(before_closures.0)
+        .expect("closure byte delta");
+    let closure_delta_inodes = after_closures
+        .1
+        .checked_sub(before_closures.1)
+        .expect("closure inode delta");
+    let immutable_delta_bytes = after
+        .1
+         .0
+        .checked_sub(before.1 .0)
+        .expect("immutable byte delta");
+    let immutable_delta_inodes = after
+        .1
+         .1
+        .checked_sub(before.1 .1)
+        .expect("immutable inode delta");
+    assert_eq!(after.0 .1, 1);
+    assert!(locator_delta_inodes > 0);
+    assert_eq!(catalog_delta_inodes, 1);
+    assert_eq!((closure_delta_bytes, closure_delta_inodes), (0, 0));
+    assert_eq!(
+        immutable_delta_bytes,
+        exact_unreachable_carrier_bytes + locator_delta_bytes + catalog_delta_bytes,
+    );
+    assert_eq!(
+        immutable_delta_inodes,
+        1 + locator_delta_inodes + catalog_delta_inodes,
+    );
+    assert_eq!(
+        counters.unreachable_installed_residue_bytes,
+        immutable_delta_bytes,
+    );
+    assert_eq!(
+        counters.storage_bytes_requested,
+        counters.storage_bytes_reserved
+    );
+    assert_eq!(
+        counters.storage_bytes_reserved,
+        counters.storage_bytes_released
+            + counters.storage_bytes_committed
+            + counters.storage_bytes_retained,
+    );
+    assert_eq!(
+        counters.storage_inodes_requested,
+        counters.storage_inodes_reserved
+    );
+    assert_eq!(
+        counters.storage_inodes_reserved,
+        counters.storage_inodes_released
+            + counters.storage_inodes_committed
+            + counters.storage_inodes_retained,
+    );
+    assert_eq!(counters.storage_bytes_committed, 0);
+    assert_eq!(counters.storage_inodes_committed, 0);
+    assert_eq!(
+        counters.storage_bytes_retained,
+        after.0 .0 + immutable_delta_bytes,
+    );
+    assert_eq!(
+        counters.storage_inodes_retained,
+        after.0 .1 + immutable_delta_inodes,
+    );
+    assert!(counters.has_zero_forbidden_work());
+    assert!(fixture.path().join("invalidated").is_dir());
+    assert!(matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)));
+    assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+    assert!(matches!(
+        FsCasV1::open_existing(fixture.path()),
+        Err(FsCasErrorV1::Invalidated)
+    ));
 }
 
 #[test]
@@ -862,6 +1153,229 @@ fn complete_update_authenticates_and_rejoins_without_replace_fallback() {
     assert_eq!(updated.root_tree(), result_tree.directory.physical());
     assert_storage_terminal(&counters);
     assert_clean_terminal(&cas, fixture.path());
+}
+
+#[test]
+fn complete_update_reference_metadata_overflow_is_transactional_and_terminal() {
+    let fixture = TestRoot::new("update-reference-metadata-overflow");
+    let cas = FsCasV1::create_new(fixture.path()).expect("create FsCas");
+    let base_data = crate::test_support::fastcdc_golden_input(300_000);
+    let inserted = b"changed";
+    let range = UpdateRangeV1::new(120_000, 120_010, base_data.len() as u64).expect("range");
+    let name = b"b.bin";
+    let base_file = expected_file(&base_data, 0o644);
+    let base_entries = [entry(name, &base_file, 0o644)];
+    let base_tree = build(DirectoryBuildModeV1::ImplicitRoot, &base_entries).expect("base tree");
+    let (base_version, accepted_root) = accept_files(&cas, 0x532, &[(name, 0o644, &base_data)]);
+    assert_eq!(accepted_root, base_tree.directory.physical());
+    let replacement_proof = replacement_fixture(
+        DirectoryBuildModeV1::ImplicitRoot,
+        &base_entries,
+        &base_tree,
+        0,
+    );
+    let stale = FsCasV1::open_existing(fixture.path()).expect("reopened base root");
+    let namespace_before = exact_operation_namespace_usage(fixture.path());
+
+    let mut inserted_source = SliceSource::new(inserted);
+    let mut base_reader = BaseBytes { bytes: &base_data };
+    let mut evidence = base_file.evidence();
+    let mut scratch = OperationScratch::new();
+    let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+    let mut control = ContinueControl::default();
+    let mut counters = OperationCountersV1 {
+        update_reference_metadata_records: 7,
+        update_reference_metadata_bytes: u64::MAX,
+        ..OperationCountersV1::default()
+    };
+
+    let terminal = run_c3_complete_update_v1(
+        &cas,
+        0x533,
+        base_version,
+        base_tree.directory,
+        replacement_proof.evidence(base_tree.directory),
+        0,
+        name,
+        0o644,
+        base_file.authenticated(0o644),
+        range,
+        inserted.len() as u64,
+        &mut inserted_source,
+        &mut base_reader,
+        &mut evidence,
+        scratch.borrow(),
+        &mut cow_logical,
+        &mut control,
+        &mut counters,
+    );
+
+    assert_eq!(
+        terminal.unwrap_err(),
+        layerfs_storage::lifecycle::C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+    );
+    assert_eq!(counters.update_reference_metadata_records, 7);
+    assert_eq!(counters.update_reference_metadata_bytes, u64::MAX);
+    assert_eq!(counters.update_base_payload_bytes, 0);
+    assert_eq!(counters.update_inserted_bytes, 0);
+    assert_eq!(counters.update_resynchronization_bytes, 0);
+    assert_eq!(counters.exact_rejoin_bytes, 0);
+    assert_eq!(counters.anchor_attempts, 0);
+    assert_eq!(counters.source_read_calls, 0);
+    assert_eq!(counters.source_bytes_read, 0);
+    assert_eq!(inserted_source.offset, 0);
+    assert_eq!(counters.fscas_bytes_read, 356);
+    assert_eq!(counters.fscas_read_calls, 17);
+    assert_eq!(
+        counters.storage_bytes_requested,
+        counters.storage_bytes_reserved
+    );
+    assert_eq!(
+        counters.storage_bytes_reserved,
+        counters.storage_bytes_released
+            + counters.storage_bytes_committed
+            + counters.storage_bytes_retained
+    );
+    assert_eq!(
+        counters.storage_inodes_requested,
+        counters.storage_inodes_reserved
+    );
+    assert_eq!(
+        counters.storage_inodes_reserved,
+        counters.storage_inodes_released
+            + counters.storage_inodes_committed
+            + counters.storage_inodes_retained
+    );
+    assert_eq!(counters.storage_bytes_committed, 0);
+    assert_eq!(counters.storage_inodes_committed, 0);
+    assert_eq!(counters.storage_bytes_retained, 0);
+    assert_eq!(counters.storage_inodes_retained, 0);
+    assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+    assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+    assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+    assert_eq!(
+        exact_operation_namespace_usage(fixture.path()),
+        namespace_before
+    );
+    assert!(counters.has_zero_forbidden_work());
+    assert_clean_terminal(&cas, fixture.path());
+    assert!(cas.occupied().is_ok());
+    assert!(stale.occupied().is_ok());
+}
+
+#[test]
+fn complete_update_exact_rejoin_overflow_is_transactional_and_terminal() {
+    let fixture = TestRoot::new("update-exact-rejoin-overflow");
+    let cas = FsCasV1::create_new(fixture.path()).expect("create FsCas");
+    let base_data = crate::test_support::fastcdc_golden_input(300_000);
+    let inserted = b"changed";
+    let range = UpdateRangeV1::new(120_000, 120_010, base_data.len() as u64).expect("range");
+    let name = b"b.bin";
+    let base_file = expected_file(&base_data, 0o644);
+    let base_entries = [entry(name, &base_file, 0o644)];
+    let base_tree = build(DirectoryBuildModeV1::ImplicitRoot, &base_entries).expect("base tree");
+    let (base_version, accepted_root) = accept_files(&cas, 0x534, &[(name, 0o644, &base_data)]);
+    assert_eq!(accepted_root, base_tree.directory.physical());
+    let replacement_proof = replacement_fixture(
+        DirectoryBuildModeV1::ImplicitRoot,
+        &base_entries,
+        &base_tree,
+        0,
+    );
+    let stale = FsCasV1::open_existing(fixture.path()).expect("reopened base root");
+    let namespace_before = exact_operation_namespace_usage(fixture.path());
+
+    let mut inserted_source = SliceSource::new(inserted);
+    let mut base_reader = BaseBytes { bytes: &base_data };
+    let mut evidence = base_file.evidence();
+    let mut scratch = OperationScratch::new();
+    let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+    let mut control = ContinueControl::default();
+    let mut counters = OperationCountersV1 {
+        exact_rejoin_bytes: 7,
+        rejoin_successes: u64::MAX,
+        rejoin_failures: 11,
+        ..OperationCountersV1::default()
+    };
+
+    let terminal = run_c3_complete_update_v1(
+        &cas,
+        0x535,
+        base_version,
+        base_tree.directory,
+        replacement_proof.evidence(base_tree.directory),
+        0,
+        name,
+        0o644,
+        base_file.authenticated(0o644),
+        range,
+        inserted.len() as u64,
+        &mut inserted_source,
+        &mut base_reader,
+        &mut evidence,
+        scratch.borrow(),
+        &mut cow_logical,
+        &mut control,
+        &mut counters,
+    );
+
+    assert_eq!(
+        terminal.unwrap_err(),
+        layerfs_storage::lifecycle::C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+    );
+    assert_eq!(counters.exact_rejoin_bytes, 7);
+    assert_eq!(counters.rejoin_successes, u64::MAX);
+    assert_eq!(counters.rejoin_failures, 11);
+    assert_eq!(counters.bytes_read, 74_342);
+    assert_eq!(counters.source_read_calls, 2);
+    assert_eq!(counters.source_bytes_read, inserted.len() as u64);
+    assert_eq!(inserted_source.offset, inserted.len());
+    assert_eq!(counters.update_base_payload_bytes, 73_979);
+    assert_eq!(counters.update_inserted_bytes, inserted.len() as u64);
+    assert_eq!(counters.update_reference_metadata_records, 28);
+    assert_eq!(counters.update_reference_metadata_bytes, 1_008);
+    assert_eq!(counters.update_resynchronization_bytes, 67_808);
+    assert_eq!(counters.anchor_attempts, 1);
+    assert_eq!(counters.fscas_bytes_read, 356);
+    assert_eq!(counters.fscas_read_calls, 17);
+    assert_eq!(counters.update_failures, 1);
+    assert_eq!(
+        counters.storage_bytes_requested,
+        counters.storage_bytes_reserved
+    );
+    assert_eq!(
+        counters.storage_bytes_reserved,
+        counters.storage_bytes_released
+            + counters.storage_bytes_committed
+            + counters.storage_bytes_retained
+    );
+    assert_eq!(
+        counters.storage_inodes_requested,
+        counters.storage_inodes_reserved
+    );
+    assert_eq!(
+        counters.storage_inodes_reserved,
+        counters.storage_inodes_released
+            + counters.storage_inodes_committed
+            + counters.storage_inodes_retained
+    );
+    assert_eq!(counters.storage_bytes_committed, 0);
+    assert_eq!(counters.storage_inodes_committed, 0);
+    assert_eq!(counters.storage_bytes_retained, 0);
+    assert_eq!(counters.storage_inodes_retained, 0);
+    assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+    assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+    assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+    assert_eq!(counters.storage_preparation_bytes_current_after_cleanup, 0);
+    assert_eq!(counters.storage_preparation_inodes_current_after_cleanup, 0);
+    assert_eq!(
+        exact_operation_namespace_usage(fixture.path()),
+        namespace_before
+    );
+    assert!(counters.has_zero_forbidden_work());
+    assert_clean_terminal(&cas, fixture.path());
+    assert!(cas.occupied().is_ok());
+    assert!(stale.occupied().is_ok());
 }
 
 #[test]
