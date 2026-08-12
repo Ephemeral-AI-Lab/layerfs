@@ -1,6 +1,6 @@
 //! Immutable closure snapshots and completed admission observations.
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 use super::{FileClosureObjectSpoolV1, FsCasErrorV1, FsCasOccupiedV1};
 use super::{ImmutablePortErrorV1, OccupiedImmutableReadPortV1};
 use crate::object::TypedPhysicalObjectIdV1;
@@ -39,13 +39,13 @@ pub trait CompleteImmutableClosureReadPortV1 {
 
 /// CAS-owned closure-fence adapter. Operation-metadata reads remain separate
 /// from the occupied FsCas payload observation exposed by this port.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) struct FsCasClosureSpoolV1<'objects> {
     objects: &'objects mut FileClosureObjectSpoolV1,
     occupied: FsCasOccupiedV1,
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl<'objects> FsCasClosureSpoolV1<'objects> {
     pub(crate) fn new(
         objects: &'objects mut FileClosureObjectSpoolV1,
@@ -64,7 +64,7 @@ impl<'objects> FsCasClosureSpoolV1<'objects> {
     }
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
     fn object_count(&mut self) -> Result<u64, ImmutablePortErrorV1> {
         Ok(u64::from(self.objects.count))

@@ -8,13 +8,13 @@ use layerfs_storage::cas::{
     FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasFilesystemBoundaryV1,
     FsCasFilesystemFailureV1, FsCasV1,
 };
-use layerfs_storage::cdc::{C3CdcAlgorithmV1, CdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES};
+use layerfs_storage::cdc::{CdcAlgorithmV1, CdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES};
 use layerfs_storage::content::update::{
     AuthenticatedBaseByteReaderV1, BaseChunkEvidenceSourceV1, BaseChunkEvidenceV1, BaseReadErrorV1,
 };
 use layerfs_storage::content::{
-    request_c3_tree_operation_v1, run_c3_create_tree_v1, C3OperationBuffersV1, C3SourceSupplierV1,
-    C3TreeFileV1, ContentSourceErrorV1, ContentSourceV1, PreparedSinkErrorV1,
+    request_tree_operation_v1, run_create_tree_v1, ContentSourceErrorV1, ContentSourceV1,
+    OperationBuffersV1, PreparedSinkErrorV1, SourceSupplierV1, TreeFileV1,
 };
 use layerfs_storage::cow::file::{AuthenticatedBaseFileV1, UpdateRangeV1};
 use layerfs_storage::cow::{
@@ -29,15 +29,14 @@ use layerfs_storage::identity::{
     COMPARISON_WINDOW_BYTES,
 };
 use layerfs_storage::lifecycle::{
-    complete_cross_directory_move_operation_v1, run_c3_complete_add_v1,
-    run_c3_complete_metadata_v1, run_c3_complete_move_v1, run_c3_complete_remove_v1,
-    run_c3_complete_replace_v1, run_c3_complete_update_v1,
+    complete_cross_directory_move_operation_v1, run_complete_add_v1, run_complete_metadata_v1,
+    run_complete_move_v1, run_complete_remove_v1, run_complete_replace_v1, run_complete_update_v1,
 };
 use layerfs_storage::limits::OperationCountersV1;
 use layerfs_storage::profile::ProfileSpecV1;
 use layerfs_storage::read::extraction::{
-    extract_c3_root_v1, read_c3_file_range_impl_v1, C3ReadBuffersV1, C3ReadKindV1,
-    C3ReadSinkErrorV1, C3ReadSinkV1,
+    extract_root_v1, read_file_range_impl_v1, ReadBuffersV1, ReadKindV1, ReadSinkErrorV1,
+    ReadSinkV1,
 };
 use layerfs_storage::{CoreError, CoreResult};
 
@@ -261,7 +260,7 @@ struct SliceSupplier<'a> {
     bytes: &'a [u8],
 }
 
-impl<'a> C3SourceSupplierV1 for SliceSupplier<'a> {
+impl<'a> SourceSupplierV1 for SliceSupplier<'a> {
     type Source = SliceSource<'a>;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -303,13 +302,13 @@ impl GatedReadSink {
     }
 }
 
-impl C3ReadSinkV1 for GatedReadSink {
+impl ReadSinkV1 for GatedReadSink {
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
         u64::try_from(core::mem::size_of::<Self>() + self.bytes.capacity())
             .map_err(|_| CoreError::IntegerOverflow)
     }
 
-    fn begin_read(&mut self, _kind: C3ReadKindV1) -> Result<(), C3ReadSinkErrorV1> {
+    fn begin_read(&mut self, _kind: ReadKindV1) -> Result<(), ReadSinkErrorV1> {
         Ok(())
     }
 
@@ -320,24 +319,24 @@ impl C3ReadSinkV1 for GatedReadSink {
         _logical_len: u64,
         _selected_offset: u64,
         _selected_len: u64,
-    ) -> Result<(), C3ReadSinkErrorV1> {
+    ) -> Result<(), ReadSinkErrorV1> {
         Ok(())
     }
 
-    fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), C3ReadSinkErrorV1> {
+    fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), ReadSinkErrorV1> {
         if let Some(entered) = self.entered.take() {
-            entered.send(()).map_err(|_| C3ReadSinkErrorV1::Refused)?;
+            entered.send(()).map_err(|_| ReadSinkErrorV1::Refused)?;
             self.gate.wait();
         }
         self.bytes.extend_from_slice(bytes);
         Ok(())
     }
 
-    fn finish_file(&mut self) -> Result<(), C3ReadSinkErrorV1> {
+    fn finish_file(&mut self) -> Result<(), ReadSinkErrorV1> {
         Ok(())
     }
 
-    fn finish_read(&mut self, _verification_digest: [u8; 32]) -> Result<(), C3ReadSinkErrorV1> {
+    fn finish_read(&mut self, _verification_digest: [u8; 32]) -> Result<(), ReadSinkErrorV1> {
         self.finished = true;
         Ok(())
     }
@@ -545,13 +544,13 @@ impl BarrierReadSink {
     }
 }
 
-impl C3ReadSinkV1 for BarrierReadSink {
+impl ReadSinkV1 for BarrierReadSink {
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
         u64::try_from(core::mem::size_of::<Self>() + self.bytes.capacity())
             .map_err(|_| CoreError::IntegerOverflow)
     }
 
-    fn begin_read(&mut self, _kind: C3ReadKindV1) -> Result<(), C3ReadSinkErrorV1> {
+    fn begin_read(&mut self, _kind: ReadKindV1) -> Result<(), ReadSinkErrorV1> {
         Ok(())
     }
 
@@ -562,13 +561,13 @@ impl C3ReadSinkV1 for BarrierReadSink {
         _logical_len: u64,
         selected_offset: u64,
         selected_len: u64,
-    ) -> Result<(), C3ReadSinkErrorV1> {
+    ) -> Result<(), ReadSinkErrorV1> {
         self.selected_offset = selected_offset;
         self.selected_len = selected_len;
         Ok(())
     }
 
-    fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), C3ReadSinkErrorV1> {
+    fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), ReadSinkErrorV1> {
         if let Some(ready) = self.ready.take() {
             ready
                 .send(())
@@ -579,11 +578,11 @@ impl C3ReadSinkV1 for BarrierReadSink {
         Ok(())
     }
 
-    fn finish_file(&mut self) -> Result<(), C3ReadSinkErrorV1> {
+    fn finish_file(&mut self) -> Result<(), ReadSinkErrorV1> {
         Ok(())
     }
 
-    fn finish_read(&mut self, _verification_digest: [u8; 32]) -> Result<(), C3ReadSinkErrorV1> {
+    fn finish_read(&mut self, _verification_digest: [u8; 32]) -> Result<(), ReadSinkErrorV1> {
         self.finished = true;
         Ok(())
     }
@@ -620,8 +619,8 @@ impl OperationScratch {
         }
     }
 
-    fn borrow(&mut self) -> C3OperationBuffersV1<'_> {
-        C3OperationBuffersV1 {
+    fn borrow(&mut self) -> OperationBuffersV1<'_> {
+        OperationBuffersV1 {
             source: &mut self.source,
             cdc_ring: &mut self.cdc_ring,
             incoming_comparison: &mut self.incoming,
@@ -852,17 +851,17 @@ fn accept_files(
     let mut manifest: Vec<_> = files
         .iter()
         .map(|(path, mode, bytes)| {
-            C3TreeFileV1::new(path, *mode, bytes.len() as u64, SliceSupplier { bytes })
+            TreeFileV1::new(path, *mode, bytes.len() as u64, SliceSupplier { bytes })
         })
         .collect();
     let mut scratch = OperationScratch::new();
     let mut control = ContinueControl::default();
     let mut counters = OperationCountersV1::default();
     let operation =
-        request_c3_tree_operation_v1(cas, key, &mut counters, &mut control).expect("root grant");
-    let handoff = run_c3_create_tree_v1(
+        request_tree_operation_v1(cas, key, &mut counters, &mut control).expect("root grant");
+    let handoff = run_create_tree_v1(
         operation,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         &mut manifest,
         scratch.borrow(),
         &mut control,
@@ -1033,7 +1032,7 @@ fn mutation_crosses_reopened_full_and_exact_range_reads_without_serializing_payl
                     read_release,
                 );
                 let result = if range {
-                    read_c3_file_range_impl_v1(
+                    read_file_range_impl_v1(
                         &reader_cas,
                         0x521,
                         base_version,
@@ -1043,21 +1042,21 @@ fn mutation_crosses_reopened_full_and_exact_range_reads_without_serializing_payl
                         selected_len,
                         &mut sink,
                         &mut counters,
-                        C3ReadBuffersV1 {
+                        ReadBuffersV1 {
                             comparison: &mut comparison,
                             path: &mut path,
                         },
                         &mut control,
                     )
                 } else {
-                    extract_c3_root_v1(
+                    extract_root_v1(
                         &reader_cas,
                         0x521,
                         base_version,
                         base_tree.directory.physical(),
                         &mut sink,
                         &mut counters,
-                        C3ReadBuffersV1 {
+                        ReadBuffersV1 {
                             comparison: &mut comparison,
                             path: &mut path,
                         },
@@ -1079,10 +1078,10 @@ fn mutation_crosses_reopened_full_and_exact_range_reads_without_serializing_payl
                 let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
                 let mut control = ContinueControl::default();
                 let mut counters = OperationCountersV1::default();
-                let result = run_c3_complete_replace_v1(
+                let result = run_complete_replace_v1(
                     &mutation_cas,
                     0x522,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     base_version,
                     base_tree.directory,
                     replacement_proof.evidence(base_tree.directory),
@@ -1118,9 +1117,9 @@ fn mutation_crosses_reopened_full_and_exact_range_reads_without_serializing_payl
         assert_eq!(
             read_result.kind(),
             if range {
-                C3ReadKindV1::ExactRange
+                ReadKindV1::ExactRange
             } else {
-                C3ReadKindV1::FullExtraction
+                ReadKindV1::FullExtraction
             }
         );
         assert_eq!(read_result.payload_bytes(), selected_len);
@@ -1278,14 +1277,14 @@ fn thirty_two_reopened_readers_and_eight_equal_writers_balance_under_slow_io() {
                     };
                     let mut sink =
                         GatedReadSink::new(base_data.len(), delivery_entered, delivery_gate);
-                    let terminal = extract_c3_root_v1(
+                    let terminal = extract_root_v1(
                         &cas,
                         0x581 + index as u64,
                         base_version,
                         accepted_root,
                         &mut sink,
                         &mut counters,
-                        C3ReadBuffersV1 {
+                        ReadBuffersV1 {
                             comparison: &mut comparison,
                             path: &mut path,
                         },
@@ -1423,10 +1422,10 @@ fn thirty_two_reopened_readers_and_eight_equal_writers_balance_under_slow_io() {
                         catalog_phase: false,
                         catalog_commit_failed: false,
                     };
-                    let terminal = run_c3_complete_replace_v1(
+                    let terminal = run_complete_replace_v1(
                         &cas,
                         0x5a1 + index as u64,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         base_version,
                         base_tree.directory,
                         replacement_proof.evidence(base_tree.directory),
@@ -1569,7 +1568,7 @@ fn thirty_two_reopened_readers_and_eight_equal_writers_balance_under_slow_io() {
                 assert_eq!(
                     terminal,
                     Err(
-                        layerfs_storage::read::extraction::C3ReadOperationErrorV1::FsCas(
+                        layerfs_storage::read::extraction::ReadOperationErrorV1::FsCas(
                             FsCasErrorV1::Core(expected),
                         ),
                     ),
@@ -1610,7 +1609,7 @@ fn thirty_two_reopened_readers_and_eight_equal_writers_balance_under_slow_io() {
             _ => {
                 let result =
                     terminal.unwrap_or_else(|error| panic!("reader {index} terminal: {error:?}"));
-                assert_eq!(result.kind(), C3ReadKindV1::FullExtraction);
+                assert_eq!(result.kind(), ReadKindV1::FullExtraction);
                 assert_eq!(result.payload_bytes(), base_data.len() as u64);
                 assert_eq!(sink.bytes, base_data);
                 assert!(sink.finished);
@@ -1681,7 +1680,7 @@ fn thirty_two_reopened_readers_and_eight_equal_writers_balance_under_slow_io() {
             assert!(catalog_phase);
             assert_eq!(
                 terminal,
-                Err(layerfs_storage::lifecycle::C3OperationErrorV1::FsCas(
+                Err(layerfs_storage::lifecycle::OperationErrorV1::FsCas(
                     FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
                 ),),
                 "the actual carrier winner must retain the injected catalog-write failure"
@@ -1962,10 +1961,10 @@ fn post_install_cleanup_unwind_records_immutable_residue_exactly_once() {
     let mut control = PanicPrivatePackCleanupAfterInstalledCarrier::default();
     let mut counters = OperationCountersV1::default();
     let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        run_c3_complete_replace_v1(
+        run_complete_replace_v1(
             &cas,
             0x516,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             base_version,
             base_tree.directory,
             replacement_proof.evidence(base_tree.directory),
@@ -1988,7 +1987,7 @@ fn post_install_cleanup_unwind_records_immutable_residue_exactly_once() {
     };
     assert_eq!(
         error,
-        layerfs_storage::lifecycle::C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        layerfs_storage::lifecycle::OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: layerfs_storage::cas::FsCasFailureCauseV1::Core(CoreError::Cancelled),
             dominant: layerfs_storage::cas::FsCasFailureCauseV1::CleanupFailed(
                 FsCasCleanupTargetV1::PrivatePack
@@ -2136,10 +2135,10 @@ fn complete_replace_and_metadata_reach_independently_derived_handoffs() {
     let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
     let mut control = ContinueControl::default();
     let mut counters = OperationCountersV1::default();
-    let replaced = run_c3_complete_replace_v1(
+    let replaced = run_complete_replace_v1(
         &cas,
         0x511,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         base_version,
         base_tree.directory,
         replacement_proof.evidence(base_tree.directory),
@@ -2177,7 +2176,7 @@ fn complete_replace_and_metadata_reach_independently_derived_handoffs() {
     let mut evidence = replacement_file.evidence();
     let mut scratch = OperationScratch::new();
     let mut counters = OperationCountersV1::default();
-    let metadata = run_c3_complete_metadata_v1(
+    let metadata = run_complete_metadata_v1(
         &cas,
         0x512,
         replaced.version_record(),
@@ -2230,7 +2229,7 @@ fn complete_add_move_and_remove_use_one_candidate_graph_each() {
     let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
     let mut control = ContinueControl::default();
     let mut counters = OperationCountersV1::default();
-    let added = run_c3_complete_add_v1(
+    let added = run_complete_add_v1(
         &cas,
         0x521,
         base_version,
@@ -2267,7 +2266,7 @@ fn complete_add_move_and_remove_use_one_candidate_graph_each() {
     let mut tree_source = MutationSource::new(&added_entries, &moved_entries);
     let mut scratch = OperationScratch::new();
     let mut counters = OperationCountersV1::default();
-    let moved = run_c3_complete_move_v1(
+    let moved = run_complete_move_v1(
         &cas,
         0x522,
         added.version_record(),
@@ -2304,7 +2303,7 @@ fn complete_add_move_and_remove_use_one_candidate_graph_each() {
     let mut tree_source = MutationSource::new(&moved_entries, &removed_entries);
     let mut scratch = OperationScratch::new();
     let mut counters = OperationCountersV1::default();
-    let removed = run_c3_complete_remove_v1(
+    let removed = run_complete_remove_v1(
         &cas,
         0x523,
         moved.version_record(),
@@ -2494,7 +2493,7 @@ fn complete_update_authenticates_and_rejoins_without_replace_fallback() {
     let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
     let mut control = ContinueControl::default();
     let mut counters = OperationCountersV1::default();
-    let updated = run_c3_complete_update_v1(
+    let updated = run_complete_update_v1(
         &cas,
         0x531,
         base_version,
@@ -2520,7 +2519,7 @@ fn complete_update_authenticates_and_rejoins_without_replace_fallback() {
             control.boundaries
         )
     });
-    assert_eq!(updated.algorithm(), C3CdcAlgorithmV1::FastCdc);
+    assert_eq!(updated.algorithm(), CdcAlgorithmV1::FastCdc);
     assert_eq!(updated.root_tree(), result_tree.directory.physical());
     assert_storage_terminal(&counters);
     assert_clean_terminal(&cas, fixture.path());
@@ -2560,7 +2559,7 @@ fn complete_update_reference_metadata_overflow_is_transactional_and_terminal() {
         ..OperationCountersV1::default()
     };
 
-    let terminal = run_c3_complete_update_v1(
+    let terminal = run_complete_update_v1(
         &cas,
         0x533,
         base_version,
@@ -2583,7 +2582,7 @@ fn complete_update_reference_metadata_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        layerfs_storage::lifecycle::C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        layerfs_storage::lifecycle::OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert_eq!(counters.update_reference_metadata_records, 7);
     assert_eq!(counters.update_reference_metadata_bytes, u64::MAX);
@@ -2669,7 +2668,7 @@ fn complete_update_exact_rejoin_overflow_is_transactional_and_terminal() {
         ..OperationCountersV1::default()
     };
 
-    let terminal = run_c3_complete_update_v1(
+    let terminal = run_complete_update_v1(
         &cas,
         0x535,
         base_version,
@@ -2692,7 +2691,7 @@ fn complete_update_exact_rejoin_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        layerfs_storage::lifecycle::C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        layerfs_storage::lifecycle::OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert_eq!(counters.exact_rejoin_bytes, 7);
     assert_eq!(counters.rejoin_successes, u64::MAX);
@@ -2766,10 +2765,10 @@ fn complete_mutation_rejects_an_unauthenticated_base_without_preparation() {
     let mut control = ContinueControl::default();
     let mut counters = OperationCountersV1::default();
     let wrong_version = PhysicalVersionRecordIdV1::from_digest([0x5a; 32]);
-    let error = run_c3_complete_replace_v1(
+    let error = run_complete_replace_v1(
         &cas,
         0x541,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         wrong_version,
         tree.directory,
         proof.evidence(tree.directory),
@@ -2786,8 +2785,8 @@ fn complete_mutation_rejects_an_unauthenticated_base_without_preparation() {
     .expect_err("unaccepted version must fail closed");
     assert!(matches!(
         error,
-        layerfs_storage::lifecycle::C3OperationErrorV1::FsCas(_)
-            | layerfs_storage::lifecycle::C3OperationErrorV1::Core(CoreError::IdMismatch)
+        layerfs_storage::lifecycle::OperationErrorV1::FsCas(_)
+            | layerfs_storage::lifecycle::OperationErrorV1::Core(CoreError::IdMismatch)
     ));
     assert_eq!(source.offset, 0);
     assert_clean_terminal(&cas, fixture.path());

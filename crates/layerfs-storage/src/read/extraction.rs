@@ -22,8 +22,8 @@ use crate::content::{
     VerifiedFileSegmentV1,
 };
 use crate::format::{
-    ExtentTagV1, PhysicalTreeChildKindV1, ValidatedComponent, ValidatedPath, MAX_PATH_BYTES,
-    MAX_PATH_DEPTH, MAX_TREE_PAGE_DEPTH,
+    ExtentTagV1, PhysicalTreeChildKindV1, ValidatedComponent, MAX_PATH_BYTES, MAX_PATH_DEPTH,
+    MAX_TREE_PAGE_DEPTH,
 };
 use crate::identity::{
     PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalSymlinkIdV1, PhysicalTreeIdV1,
@@ -32,28 +32,30 @@ use crate::identity::{
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
-use crate::object::MAX_CANONICAL_TRAVERSAL_FRAMES_V1;
 use crate::object::{
-    decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1,
-    TreeRecordV1, TypedPhysicalObjectIdV1,
+    decode_physical_object_from_port_v1, CanonicalTraversalBudgetV1, DiscardStrongEdgesV1,
+    PhysicalObjectPayloadV1, TreeRecordV1, TypedPhysicalObjectIdV1,
 };
 use crate::{CoreError, CoreResult};
 
 use super::object_reader::OccupiedObjectReaderV1;
 #[cfg(test)]
-use super::range::read_c3_file_range_v1;
+use super::range::read_file_range_v1;
+use super::range::{
+    begin_exact_range_digest_v1, execute_exact_range_v1, ExactRangeExecutorV1, ExactRangePlanV1,
+    ExactRangeRequestV1,
+};
 
 const FULL_DIGEST_DOMAIN: &[u8; 8] = b"L155EXT1";
-const RANGE_DIGEST_DOMAIN: &[u8; 8] = b"L155RNG1";
 const CLOSURE_MARKER_BYTES: u64 = 120;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum C3ReadSinkErrorV1 {
+pub(crate) enum ReadSinkErrorV1 {
     Refused,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum C3ReadKindV1 {
+pub(crate) enum ReadKindV1 {
     FullExtraction,
     ExactRange,
 }
@@ -61,18 +63,18 @@ pub(crate) enum C3ReadKindV1 {
 /// Exact private read/extraction failure. FsCas failures are never flattened
 /// into a generic source or sink error at this operation boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum C3ReadOperationErrorV1 {
+pub(crate) enum ReadOperationErrorV1 {
     Core(CoreError),
     FsCas(FsCasErrorV1),
-    Sink(C3ReadSinkErrorV1),
+    Sink(ReadSinkErrorV1),
 }
 
-impl C3ReadOperationErrorV1 {
+impl ReadOperationErrorV1 {
     const fn into_fscas_v1(self) -> FsCasErrorV1 {
         match self {
             Self::Core(error) => FsCasErrorV1::Core(error),
             Self::FsCas(error) => error,
-            Self::Sink(C3ReadSinkErrorV1::Refused) => FsCasErrorV1::Core(CoreError::SinkRefused),
+            Self::Sink(ReadSinkErrorV1::Refused) => FsCasErrorV1::Core(CoreError::SinkRefused),
         }
     }
 
@@ -93,13 +95,13 @@ impl C3ReadOperationErrorV1 {
     }
 }
 
-impl From<CoreError> for C3ReadOperationErrorV1 {
+impl From<CoreError> for ReadOperationErrorV1 {
     fn from(error: CoreError) -> Self {
         Self::Core(error)
     }
 }
 
-impl From<FsCasErrorV1> for C3ReadOperationErrorV1 {
+impl From<FsCasErrorV1> for ReadOperationErrorV1 {
     fn from(error: FsCasErrorV1) -> Self {
         Self::FsCas(error)
     }
@@ -110,9 +112,9 @@ impl From<FsCasErrorV1> for C3ReadOperationErrorV1 {
 /// `finish_read` is the only success boundary. A sink that exposes data
 /// before that boundary owns the consequences of its own non-transactional
 /// behavior; LayerFS always invokes `abort_read` after a later failure.
-pub(crate) trait C3ReadSinkV1 {
+pub(crate) trait ReadSinkV1 {
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64>;
-    fn begin_read(&mut self, kind: C3ReadKindV1) -> Result<(), C3ReadSinkErrorV1>;
+    fn begin_read(&mut self, kind: ReadKindV1) -> Result<(), ReadSinkErrorV1>;
     fn begin_file(
         &mut self,
         path: &[u8],
@@ -120,21 +122,21 @@ pub(crate) trait C3ReadSinkV1 {
         logical_len: u64,
         selected_offset: u64,
         selected_len: u64,
-    ) -> Result<(), C3ReadSinkErrorV1>;
-    fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), C3ReadSinkErrorV1>;
-    fn finish_file(&mut self) -> Result<(), C3ReadSinkErrorV1>;
-    fn finish_read(&mut self, verification_digest: [u8; 32]) -> Result<(), C3ReadSinkErrorV1>;
+    ) -> Result<(), ReadSinkErrorV1>;
+    fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), ReadSinkErrorV1>;
+    fn finish_file(&mut self) -> Result<(), ReadSinkErrorV1>;
+    fn finish_read(&mut self, verification_digest: [u8; 32]) -> Result<(), ReadSinkErrorV1>;
     fn abort_read(&mut self);
 }
 
-pub(crate) struct C3ReadBuffersV1<'a> {
+pub(crate) struct ReadBuffersV1<'a> {
     pub(crate) comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
     pub(crate) path: &'a mut [u8; MAX_PATH_BYTES],
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct C3ReadResultV1 {
-    kind: C3ReadKindV1,
+pub(crate) struct ReadResultV1 {
+    kind: ReadKindV1,
     verification_digest: [u8; 32],
     payload_bytes: u64,
     files: u64,
@@ -150,8 +152,8 @@ pub(crate) struct C3ReadResultV1 {
     payload_direct_calls: u64,
 }
 
-impl C3ReadResultV1 {
-    pub(crate) const fn kind(self) -> C3ReadKindV1 {
+impl ReadResultV1 {
+    pub(crate) const fn kind(self) -> ReadKindV1 {
         self.kind
     }
 
@@ -217,18 +219,18 @@ impl C3ReadResultV1 {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn extract_c3_root_v1<S, C>(
+pub(crate) fn extract_root_v1<S, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
     requested_root: PhysicalTreeIdV1,
     sink: &mut S,
     counters: &mut OperationCountersV1,
-    buffers: C3ReadBuffersV1<'_>,
+    buffers: ReadBuffersV1<'_>,
     control: &mut C,
-) -> Result<C3ReadResultV1, C3ReadOperationErrorV1>
+) -> Result<ReadResultV1, ReadOperationErrorV1>
 where
-    S: C3ReadSinkV1 + ?Sized,
+    S: ReadSinkV1 + ?Sized,
     C: FsCasControlV1 + ?Sized,
 {
     run_read_v1(
@@ -246,7 +248,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn read_c3_file_range_impl_v1<S, C>(
+pub(crate) fn read_file_range_impl_v1<S, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -256,11 +258,11 @@ pub(crate) fn read_c3_file_range_impl_v1<S, C>(
     len: u64,
     sink: &mut S,
     counters: &mut OperationCountersV1,
-    buffers: C3ReadBuffersV1<'_>,
+    buffers: ReadBuffersV1<'_>,
     control: &mut C,
-) -> Result<C3ReadResultV1, C3ReadOperationErrorV1>
+) -> Result<ReadResultV1, ReadOperationErrorV1>
 where
-    S: C3ReadSinkV1 + ?Sized,
+    S: ReadSinkV1 + ?Sized,
     C: FsCasControlV1 + ?Sized,
 {
     run_read_v1(
@@ -269,7 +271,7 @@ where
         cancellation_key,
         version_record,
         requested_root,
-        ReadRequestV1::Range { path, offset, len },
+        ReadRequestV1::RangeInput(ExactRangeRequestV1::new(path, offset, len)),
         sink,
         counters,
         buffers,
@@ -280,11 +282,14 @@ where
 #[derive(Clone, Copy)]
 enum ReadRequestV1<'a> {
     Full,
-    Range {
-        path: &'a [u8],
-        offset: u64,
-        len: u64,
-    },
+    RangeInput(ExactRangeRequestV1<'a>),
+    Range(ExactRangePlanV1<'a>),
+}
+
+#[derive(Clone, Copy)]
+enum ValidatedReadRequestV1<'a> {
+    Full,
+    Range(ExactRangePlanV1<'a>),
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -305,11 +310,11 @@ fn run_read_v1<S, C>(
     request: ReadRequestV1<'_>,
     sink: &mut S,
     counters: &mut OperationCountersV1,
-    buffers: C3ReadBuffersV1<'_>,
+    buffers: ReadBuffersV1<'_>,
     control: &mut C,
-) -> Result<C3ReadResultV1, C3ReadOperationErrorV1>
+) -> Result<ReadResultV1, ReadOperationErrorV1>
 where
-    S: C3ReadSinkV1 + ?Sized,
+    S: ReadSinkV1 + ?Sized,
     C: FsCasControlV1 + ?Sized,
 {
     // Root admission is the first operation action. In particular, do not
@@ -320,79 +325,72 @@ where
     control.boundary_reached(FsCasBoundaryV1::BeforeOperationSlotReservationRequest);
     let mut operation = cas
         .begin_operation_capability_v1(operation_kind, cancellation_key, counters, control)
-        .map_err(C3ReadOperationErrorV1::FsCas)?;
+        .map_err(ReadOperationErrorV1::FsCas)?;
     let mut observed_control = FsOperationObservedControlV1::new(control);
     let control = &mut observed_control;
     let mut sink_transaction = ReadSinkTransactionStateV1::NotStarted;
     let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-        || -> Result<C3ReadResultV1, C3ReadOperationErrorV1> {
+        || -> Result<ReadResultV1, ReadOperationErrorV1> {
             // Reads reserve a directly observed zero-write storage equation
             // before request/path/sink inspection. The resulting token binds
             // every occupied-object and closure read to this exact root
             // operation without granting mutation or publication authority.
             operation
                 .declare_storage_envelope_v1(
-                    FsStorageEnvelopeV1::new(0, 0, 0, 0).map_err(C3ReadOperationErrorV1::Core)?,
+                    FsStorageEnvelopeV1::new(0, 0, 0, 0).map_err(ReadOperationErrorV1::Core)?,
                 )
-                .map_err(C3ReadOperationErrorV1::FsCas)?;
-            check_control(control).map_err(C3ReadOperationErrorV1::Core)?;
+                .map_err(ReadOperationErrorV1::FsCas)?;
+            check_control(control).map_err(ReadOperationErrorV1::Core)?;
 
             let request = match request {
-                ReadRequestV1::Full => ReadRequestV1::Full,
-                ReadRequestV1::Range { path, offset, len } => {
-                    let path = ValidatedPath::new(path).map_err(C3ReadOperationErrorV1::Core)?;
-                    if len == 0 {
-                        return Err(C3ReadOperationErrorV1::Core(CoreError::LogicalLength));
-                    }
-                    ReadRequestV1::Range {
-                        path: path.as_bytes(),
-                        offset,
-                        len,
-                    }
-                }
+                ReadRequestV1::Full => ValidatedReadRequestV1::Full,
+                ReadRequestV1::RangeInput(request) => ValidatedReadRequestV1::Range(
+                    request.validate().map_err(ReadOperationErrorV1::Core)?,
+                ),
+                ReadRequestV1::Range(plan) => ValidatedReadRequestV1::Range(plan),
             };
             let metadata_resident = cas
                 .occupied_resident_memory_bound_v1()
-                .map_err(C3ReadOperationErrorV1::Core)?
+                .map_err(ReadOperationErrorV1::Core)?
                 .checked_add(
                     sink.resident_memory_bound_bytes()
-                        .map_err(C3ReadOperationErrorV1::Core)?,
+                        .map_err(ReadOperationErrorV1::Core)?,
                 )
-                .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
+                .ok_or(ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
             let plan = OperationMemoryPlanV1::empty()
                 .charge(
                     MemoryComponentV1::ComparisonWindow,
                     buffers.comparison.len() as u64,
                 )
-                .map_err(C3ReadOperationErrorV1::Core)?
+                .map_err(ReadOperationErrorV1::Core)?
                 .charge(
                     MemoryComponentV1::TraversalState,
                     u64::try_from(core::mem::size_of::<BoundedFullTraversalStackV1>())
-                        .map_err(|_| C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?
+                        .map_err(|_| ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?
                         .checked_add(buffers.path.len() as u64)
                         .ok_or(CoreError::IntegerOverflow)?,
                 )
-                .map_err(C3ReadOperationErrorV1::Core)?
+                .map_err(ReadOperationErrorV1::Core)?
                 .charge(MemoryComponentV1::MetadataWindow, metadata_resident)
-                .map_err(C3ReadOperationErrorV1::Core)?
+                .map_err(ReadOperationErrorV1::Core)?
                 .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)
-                .map_err(C3ReadOperationErrorV1::Core)?;
+                .map_err(ReadOperationErrorV1::Core)?;
             operation
                 .declare_plan_v1(plan)
-                .map_err(C3ReadOperationErrorV1::Core)?;
+                .map_err(ReadOperationErrorV1::Core)?;
             counters.memory_high_water = counters
                 .memory_high_water
                 .max(operation.memory_high_water_bytes_v1());
             let storage_token = operation
                 .storage_token_v1()
-                .map_err(C3ReadOperationErrorV1::FsCas)?;
-            check_control(control).map_err(C3ReadOperationErrorV1::Core)?;
+                .map_err(ReadOperationErrorV1::FsCas)?;
+            check_control(control).map_err(ReadOperationErrorV1::Core)?;
 
             // Opening an occupied reader is private storage participation and must
             // occur only after the one orchestrator-owned operation slot is held.
             let mut occupied = cas
                 .occupied_private_controlled_borrowed_v1(storage_token, control)
-                .map_err(C3ReadOperationErrorV1::FsCas)?;
+                .map_err(ReadOperationErrorV1::FsCas)?;
 
             let closure = cas
                 .validate_closure_for_read_controlled_borrowed_v1(
@@ -400,19 +398,19 @@ where
                     version_record,
                     control,
                 )
-                .map_err(C3ReadOperationErrorV1::FsCas)?;
+                .map_err(ReadOperationErrorV1::FsCas)?;
             if closure.version_record() != version_record {
-                return Err(C3ReadOperationErrorV1::Core(CoreError::IdMismatch));
+                return Err(ReadOperationErrorV1::Core(CoreError::IdMismatch));
             }
             counters
                 .add(CounterFieldV1::BytesRead, CLOSURE_MARKER_BYTES)
-                .map_err(C3ReadOperationErrorV1::Core)?;
+                .map_err(ReadOperationErrorV1::Core)?;
             counters
                 .record_fscas_read(CLOSURE_MARKER_BYTES, 1)
-                .map_err(C3ReadOperationErrorV1::Core)?;
+                .map_err(ReadOperationErrorV1::Core)?;
 
             let result = (|| {
-                let mut reader = C3ReaderV1 {
+                let mut reader = ReaderV1 {
                     occupied: &mut occupied,
                     sink,
                     counters,
@@ -442,10 +440,10 @@ where
                 check_control(reader.control)?;
 
                 let (kind, digest, ranges) = match request {
-                    ReadRequestV1::Full => {
+                    ValidatedReadRequestV1::Full => {
                         reader
                             .sink
-                            .begin_read(C3ReadKindV1::FullExtraction)
+                            .begin_read(ReadKindV1::FullExtraction)
                             .map_err(map_sink)?;
                         sink_transaction = ReadSinkTransactionStateV1::Active;
                         let mut hasher =
@@ -455,30 +453,26 @@ where
                             Ok(()) => finish_digest(hasher),
                             Err(error) => return Err(error),
                         };
-                        (C3ReadKindV1::FullExtraction, digest, 0)
+                        (ReadKindV1::FullExtraction, digest, 0)
                     }
-                    ReadRequestV1::Range { path, offset, len } => {
-                        let end = offset.checked_add(len).ok_or(CoreError::IntegerOverflow)?;
+                    ValidatedReadRequestV1::Range(plan) => {
                         reader
                             .sink
-                            .begin_read(C3ReadKindV1::ExactRange)
+                            .begin_read(ReadKindV1::ExactRange)
                             .map_err(map_sink)?;
                         sink_transaction = ReadSinkTransactionStateV1::Active;
                         let mut hasher =
-                            begin_digest(RANGE_DIGEST_DOMAIN, version_record, requested_root);
-                        digest_frame(&mut hasher, 0x21, path);
-                        digest_frame(&mut hasher, 0x22, &offset.to_be_bytes());
-                        digest_frame(&mut hasher, 0x23, &len.to_be_bytes());
+                            begin_exact_range_digest_v1(version_record, requested_root, plan);
                         let operation =
-                            reader.read_exact_range(requested_root, path, offset, end, &mut hasher);
+                            execute_exact_range_v1(&mut reader, requested_root, plan, &mut hasher);
                         let digest = match operation {
                             Ok(()) => finish_digest(hasher),
                             Err(error) => return Err(error),
                         };
-                        (C3ReadKindV1::ExactRange, digest, 1)
+                        (ReadKindV1::ExactRange, digest, 1)
                     }
                 };
-                Ok(C3ReadResultV1 {
+                Ok(ReadResultV1 {
                     kind,
                     verification_digest: digest,
                     payload_bytes: reader.payload_bytes,
@@ -501,29 +495,29 @@ where
                 first_fscas_error.map_or_else(
                     || {
                         if error == CoreError::SinkRefused {
-                            C3ReadOperationErrorV1::Sink(C3ReadSinkErrorV1::Refused)
+                            ReadOperationErrorV1::Sink(ReadSinkErrorV1::Refused)
                         } else {
-                            C3ReadOperationErrorV1::Core(error)
+                            ReadOperationErrorV1::Core(error)
                         }
                     },
-                    C3ReadOperationErrorV1::FsCas,
+                    ReadOperationErrorV1::FsCas,
                 )
             });
             let (direct_bytes, direct_calls) =
                 match occupied.direct_storage_read_observation_typed_v1() {
                     Ok(observation) => observation,
                     Err(error) => {
-                        return Err(C3ReadOperationErrorV1::retain_terminal_v1(
+                        return Err(ReadOperationErrorV1::retain_terminal_v1(
                             terminal.err(),
-                            C3ReadOperationErrorV1::FsCas(error),
+                            ReadOperationErrorV1::FsCas(error),
                         )
                         .expect("direct observation retains a terminal failure"));
                     }
                 };
             if let Err(error) = counters.record_fscas_read(direct_bytes, direct_calls) {
-                return Err(C3ReadOperationErrorV1::retain_terminal_v1(
+                return Err(ReadOperationErrorV1::retain_terminal_v1(
                     terminal.err(),
-                    C3ReadOperationErrorV1::Core(error),
+                    ReadOperationErrorV1::Core(error),
                 )
                 .expect("direct counter transfer retains a terminal failure"));
             }
@@ -531,10 +525,10 @@ where
                 Ok(mut value) => {
                     value.metadata_direct_bytes = direct_bytes
                         .checked_sub(value.payload_direct_bytes)
-                        .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
+                        .ok_or(ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
                     value.metadata_direct_calls = direct_calls
                         .checked_sub(value.payload_direct_calls)
-                        .ok_or(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
+                        .ok_or(ReadOperationErrorV1::Core(CoreError::IntegerOverflow))?;
                     Ok(value)
                 }
                 Err(error) => Err(error),
@@ -545,7 +539,7 @@ where
             // attribution above must complete first, so a later internal
             // failure can still be paired with exactly one explicit abort.
             sink.finish_read(terminal.verification_digest)
-                .map_err(C3ReadOperationErrorV1::Sink)?;
+                .map_err(ReadOperationErrorV1::Sink)?;
             sink_transaction = ReadSinkTransactionStateV1::Finished;
             Ok(terminal)
         },
@@ -579,15 +573,15 @@ where
         Ok(Ok(_)) | Err(_) => None,
     };
     if let Err(error) = operation_terminal {
-        terminal_failure = C3ReadOperationErrorV1::retain_terminal_v1(
+        terminal_failure = ReadOperationErrorV1::retain_terminal_v1(
             terminal_failure,
-            C3ReadOperationErrorV1::FsCas(error),
+            ReadOperationErrorV1::FsCas(error),
         );
     }
     if let Err(error) = observation_terminal {
-        terminal_failure = C3ReadOperationErrorV1::retain_terminal_v1(
+        terminal_failure = ReadOperationErrorV1::retain_terminal_v1(
             terminal_failure,
-            C3ReadOperationErrorV1::Core(error),
+            ReadOperationErrorV1::Core(error),
         );
     }
     if let Some(failure) = terminal_failure {
@@ -666,37 +660,34 @@ enum FullTraversalFrameV1 {
 }
 
 struct BoundedFullTraversalStackV1 {
-    frames: [Option<FullTraversalFrameV1>; MAX_CANONICAL_TRAVERSAL_FRAMES_V1],
-    len: usize,
+    frames: [Option<FullTraversalFrameV1>; crate::object::MAX_CANONICAL_TRAVERSAL_FRAMES_V1],
+    budget: CanonicalTraversalBudgetV1,
 }
 
 impl BoundedFullTraversalStackV1 {
     fn new() -> Self {
         Self {
-            frames: [None; MAX_CANONICAL_TRAVERSAL_FRAMES_V1],
-            len: 0,
+            frames: [None; crate::object::MAX_CANONICAL_TRAVERSAL_FRAMES_V1],
+            budget: CanonicalTraversalBudgetV1::new(),
         }
     }
 
     fn push(&mut self, frame: FullTraversalFrameV1) -> CoreResult<()> {
-        if self.len == self.frames.len() {
-            return Err(CoreError::CountCap);
-        }
-        self.frames[self.len] = Some(frame);
-        self.len += 1;
+        self.budget.push()?;
+        let index = self.budget.len() - 1;
+        self.frames[index] = Some(frame);
         Ok(())
     }
 
     fn pop(&mut self) -> Option<FullTraversalFrameV1> {
-        if self.len == 0 {
-            return None;
-        }
-        self.len -= 1;
-        self.frames[self.len].take()
+        let index = self.budget.len().checked_sub(1)?;
+        let frame = self.frames[index].take();
+        let _ = self.budget.pop();
+        frame
     }
 }
 
-struct C3ReaderV1<'a, S: C3ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> {
+struct ReaderV1<'a, S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> {
     occupied: &'a mut FsCasOccupiedV1,
     sink: &'a mut S,
     counters: &'a mut OperationCountersV1,
@@ -714,7 +705,7 @@ struct C3ReaderV1<'a, S: C3ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> {
     payload_direct_calls: u64,
 }
 
-impl<S: C3ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> C3ReaderV1<'_, S, C> {
+impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
     fn required_occupied_len(&mut self, id: TypedPhysicalObjectIdV1) -> CoreResult<u64> {
         match self
             .occupied
@@ -1346,6 +1337,19 @@ impl<S: C3ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> C3ReaderV1<'_, S, C> 
     }
 }
 
+impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ExactRangeExecutorV1
+    for ReaderV1<'_, S, C>
+{
+    fn execute_exact_range_v1(
+        &mut self,
+        root: PhysicalTreeIdV1,
+        plan: ExactRangePlanV1<'_>,
+        hasher: &mut blake3::Hasher,
+    ) -> CoreResult<()> {
+        self.read_exact_range(root, plan.path(), plan.offset(), plan.end(), hasher)
+    }
+}
+
 fn read_occupied_exact_accounted_v1<C>(
     occupied: &mut FsCasOccupiedV1,
     counters: &mut OperationCountersV1,
@@ -1389,12 +1393,12 @@ where
     counters.add(CounterFieldV1::BytesRead, destination.len() as u64)
 }
 
-struct ExtractionFileConsumerV1<'a, S: C3ReadSinkV1 + ?Sized> {
+struct ExtractionFileConsumerV1<'a, S: ReadSinkV1 + ?Sized> {
     sink: &'a mut S,
     hasher: &'a mut blake3::Hasher,
 }
 
-impl<S: C3ReadSinkV1 + ?Sized> VerifiedFileBytesConsumerV1 for ExtractionFileConsumerV1<'_, S> {
+impl<S: ReadSinkV1 + ?Sized> VerifiedFileBytesConsumerV1 for ExtractionFileConsumerV1<'_, S> {
     fn write_verified_bytes(&mut self, bytes: &[u8]) -> CoreResult<()> {
         self.hasher.update(bytes);
         self.sink.write_file_bytes(bytes).map_err(map_sink)
@@ -1807,7 +1811,7 @@ fn map_immutable(ImmutablePortErrorV1::Failure: ImmutablePortErrorV1) -> CoreErr
     CoreError::SourceFailure
 }
 
-fn map_sink(C3ReadSinkErrorV1::Refused: C3ReadSinkErrorV1) -> CoreError {
+fn map_sink(ReadSinkErrorV1::Refused: ReadSinkErrorV1) -> CoreError {
     CoreError::SinkRefused
 }
 
@@ -1821,10 +1825,10 @@ mod tests {
     use std::rc::Rc;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use crate::cdc::{C3CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
+    use crate::cdc::{CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
     use crate::content::{
-        request_c3_tree_operation_v1, run_c3_create_tree_v1, C3OperationBuffersV1,
-        C3SourceSupplierV1, C3TreeFileV1, ContentSourceErrorV1, ContentSourceV1,
+        request_tree_operation_v1, run_create_tree_v1, ContentSourceErrorV1, ContentSourceV1,
+        OperationBuffersV1, SourceSupplierV1, TreeFileV1,
     };
     use crate::cow::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
 
@@ -1881,7 +1885,7 @@ mod tests {
         cas: &'a FsCasV1,
     }
 
-    impl<'a> C3SourceSupplierV1 for SliceSupplier<'a> {
+    impl<'a> SourceSupplierV1 for SliceSupplier<'a> {
         type Source = SliceSource<'a>;
 
         fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -2208,14 +2212,14 @@ mod tests {
         }
     }
 
-    impl C3ReadSinkV1 for CaptureSink {
+    impl ReadSinkV1 for CaptureSink {
         fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
             self.bound_calls.set(self.bound_calls.get() + 1);
             assert!(!self.panic_on_bound, "injected sink-bound unwind");
             Ok(self.declared_bound)
         }
 
-        fn begin_read(&mut self, _kind: C3ReadKindV1) -> Result<(), C3ReadSinkErrorV1> {
+        fn begin_read(&mut self, _kind: ReadKindV1) -> Result<(), ReadSinkErrorV1> {
             self.began += 1;
             if let Some(objects) = self.remove_objects_on_begin.take() {
                 for entry in fs::read_dir(objects).expect("read test object locator directory") {
@@ -2236,9 +2240,9 @@ mod tests {
             logical_len: u64,
             selected_offset: u64,
             selected_len: u64,
-        ) -> Result<(), C3ReadSinkErrorV1> {
+        ) -> Result<(), ReadSinkErrorV1> {
             if self.current.is_some() {
-                return Err(C3ReadSinkErrorV1::Refused);
+                return Err(ReadSinkErrorV1::Refused);
             }
             self.current = Some(CapturedFile {
                 path: path.to_vec(),
@@ -2251,31 +2255,31 @@ mod tests {
             Ok(())
         }
 
-        fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), C3ReadSinkErrorV1> {
+        fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), ReadSinkErrorV1> {
             if self.panic_on_write {
                 self.panic_on_write = false;
                 panic!("injected post-begin sink write unwind");
             }
             self.current
                 .as_mut()
-                .ok_or(C3ReadSinkErrorV1::Refused)?
+                .ok_or(ReadSinkErrorV1::Refused)?
                 .bytes
                 .extend_from_slice(bytes);
             Ok(())
         }
 
-        fn finish_file(&mut self) -> Result<(), C3ReadSinkErrorV1> {
-            let file = self.current.take().ok_or(C3ReadSinkErrorV1::Refused)?;
+        fn finish_file(&mut self) -> Result<(), ReadSinkErrorV1> {
+            let file = self.current.take().ok_or(ReadSinkErrorV1::Refused)?;
             if file.bytes.len() as u64 != file.selected_len {
-                return Err(C3ReadSinkErrorV1::Refused);
+                return Err(ReadSinkErrorV1::Refused);
             }
             self.files.push(file);
             Ok(())
         }
 
-        fn finish_read(&mut self, _digest: [u8; 32]) -> Result<(), C3ReadSinkErrorV1> {
+        fn finish_read(&mut self, _digest: [u8; 32]) -> Result<(), ReadSinkErrorV1> {
             if self.current.is_some() {
-                return Err(C3ReadSinkErrorV1::Refused);
+                return Err(ReadSinkErrorV1::Refused);
             }
             if let Some(cas) = self.poison_storage_on_finish.take() {
                 cas.poison_storage_admission_for_test_v1();
@@ -2325,7 +2329,7 @@ mod tests {
         let mut files = expected
             .iter()
             .map(|entry| {
-                C3TreeFileV1::new(
+                TreeFileV1::new(
                     &entry.0,
                     entry.1,
                     entry.2.len() as u64,
@@ -2362,12 +2366,12 @@ mod tests {
         let mut traversal = vec![0_u8; 64 * 1024];
         let mut create_control = ContinueControl;
         let operation =
-            request_c3_tree_operation_v1(&cas, 5, &mut counters, &mut create_control).unwrap();
-        let handoff = run_c3_create_tree_v1(
+            request_tree_operation_v1(&cas, 5, &mut counters, &mut create_control).unwrap();
+        let handoff = run_create_tree_v1(
             operation,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             &mut files,
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source,
                 cdc_ring: &mut ring,
                 incoming_comparison: &mut incoming,
@@ -2448,14 +2452,14 @@ mod tests {
         let (mut comparison, mut path_buffer) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new((path.len() + 1) as u64);
-        let result = extract_c3_root_v1(
+        let result = extract_root_v1(
             &fixture.cas,
             101,
             fixture.version,
             fixture.root_tree,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path_buffer,
             },
@@ -2487,12 +2491,12 @@ mod tests {
         }
     }
 
-    impl C3ReadSinkV1 for CountSink {
+    impl ReadSinkV1 for CountSink {
         fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
             Ok((core::mem::size_of::<Self>() + self.previous_path.capacity()) as u64)
         }
 
-        fn begin_read(&mut self, _kind: C3ReadKindV1) -> Result<(), C3ReadSinkErrorV1> {
+        fn begin_read(&mut self, _kind: ReadKindV1) -> Result<(), ReadSinkErrorV1> {
             self.began = true;
             Ok(())
         }
@@ -2504,9 +2508,9 @@ mod tests {
             _logical_len: u64,
             _selected_offset: u64,
             _selected_len: u64,
-        ) -> Result<(), C3ReadSinkErrorV1> {
+        ) -> Result<(), ReadSinkErrorV1> {
             if !self.previous_path.is_empty() && self.previous_path.as_slice() >= path {
-                return Err(C3ReadSinkErrorV1::Refused);
+                return Err(ReadSinkErrorV1::Refused);
             }
             self.previous_path.clear();
             self.previous_path.extend_from_slice(path);
@@ -2514,19 +2518,19 @@ mod tests {
             Ok(())
         }
 
-        fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), C3ReadSinkErrorV1> {
+        fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), ReadSinkErrorV1> {
             if bytes.is_empty() {
                 Ok(())
             } else {
-                Err(C3ReadSinkErrorV1::Refused)
+                Err(ReadSinkErrorV1::Refused)
             }
         }
 
-        fn finish_file(&mut self) -> Result<(), C3ReadSinkErrorV1> {
+        fn finish_file(&mut self) -> Result<(), ReadSinkErrorV1> {
             Ok(())
         }
 
-        fn finish_read(&mut self, _digest: [u8; 32]) -> Result<(), C3ReadSinkErrorV1> {
+        fn finish_read(&mut self, _digest: [u8; 32]) -> Result<(), ReadSinkErrorV1> {
             self.finished = true;
             Ok(())
         }
@@ -2548,14 +2552,14 @@ mod tests {
             .map(|entry| entry.2.len() as u64)
             .sum();
         let mut sink = CaptureSink::new(expected_bytes + 4 * 1024);
-        let result = extract_c3_root_v1(
+        let result = extract_root_v1(
             &reopened,
             102,
             fixture.version,
             fixture.root_tree,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
@@ -2563,7 +2567,7 @@ mod tests {
         )
         .expect("full extraction");
         assert_eq!(reopened.operation_admitted_slots_v1(), 0);
-        assert_eq!(result.kind(), C3ReadKindV1::FullExtraction);
+        assert_eq!(result.kind(), ReadKindV1::FullExtraction);
         assert_eq!(result.files(), 3);
         assert_eq!(result.direct_fscas_bytes(), counters.fscas_bytes_read);
         assert_eq!(result.direct_fscas_calls(), counters.fscas_read_calls);
@@ -2584,7 +2588,7 @@ mod tests {
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new(selected_len + 1024);
-        let result = read_c3_file_range_v1(
+        let result = read_file_range_v1(
             &fixture.cas,
             103,
             fixture.version,
@@ -2594,7 +2598,7 @@ mod tests {
             selected_len,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
@@ -2602,7 +2606,7 @@ mod tests {
         )
         .expect("exact range");
         assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
-        assert_eq!(result.kind(), C3ReadKindV1::ExactRange);
+        assert_eq!(result.kind(), ReadKindV1::ExactRange);
         assert_eq!(result.ranges(), 1);
         assert_eq!(result.payload_bytes(), selected_len);
         assert_eq!(result.direct_fscas_bytes(), counters.fscas_bytes_read);
@@ -2679,20 +2683,20 @@ mod tests {
             }
 
             assert_eq!(
-                extract_c3_root_v1(
+                extract_root_v1(
                     &fixture.cas,
                     0x3_900 + case_index,
                     fixture.version,
                     fixture.root_tree,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
                     &mut ContinueControl,
                 ),
-                Err(C3ReadOperationErrorV1::FsCas(FsCasErrorV1::Core(
+                Err(ReadOperationErrorV1::FsCas(FsCasErrorV1::Core(
                     CoreError::IntegerOverflow
                 ))),
                 "{case}"
@@ -2799,7 +2803,7 @@ mod tests {
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new(1);
-        let error = read_c3_file_range_v1(
+        let error = read_file_range_v1(
             &fixture.cas,
             0x1_025,
             fixture.version,
@@ -2809,7 +2813,7 @@ mod tests {
             1,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
@@ -2818,7 +2822,7 @@ mod tests {
         .expect_err("the 1,025th root ticket must be refused");
         assert!(matches!(
             error,
-            C3ReadOperationErrorV1::FsCas(FsCasErrorV1::ResourceExhausted(_))
+            ReadOperationErrorV1::FsCas(FsCasErrorV1::ResourceExhausted(_))
         ));
         assert_eq!(sink.bound_calls.get(), 0);
         assert_eq!(sink.began, 0);
@@ -2862,7 +2866,7 @@ mod tests {
             let (mut comparison, mut path) = read_buffers();
             let mut counters = OperationCountersV1::default();
             let mut sink = CaptureSink::new(1);
-            let error = read_c3_file_range_v1(
+            let error = read_file_range_v1(
                 &fixture.cas,
                 0x3_000 + expected as u64,
                 fixture.version,
@@ -2872,7 +2876,7 @@ mod tests {
                 1,
                 &mut sink,
                 &mut counters,
-                C3ReadBuffersV1 {
+                ReadBuffersV1 {
                     comparison: &mut comparison,
                     path: &mut path,
                 },
@@ -2885,7 +2889,7 @@ mod tests {
             .expect_err("waiting root read must stop");
             assert_eq!(
                 error,
-                C3ReadOperationErrorV1::FsCas(FsCasErrorV1::Core(expected))
+                ReadOperationErrorV1::FsCas(FsCasErrorV1::Core(expected))
             );
             assert_eq!(sink.bound_calls.get(), 0);
             assert_eq!(sink.began, 0);
@@ -2910,14 +2914,14 @@ mod tests {
         let mut sink = CaptureSink::new(1);
         sink.panic_on_bound = true;
         let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _ = extract_c3_root_v1(
+            let _ = extract_root_v1(
                 &fixture.cas,
                 0x4_000,
                 fixture.version,
                 fixture.root_tree,
                 &mut sink,
                 &mut counters,
-                C3ReadBuffersV1 {
+                ReadBuffersV1 {
                     comparison: &mut comparison,
                     path: &mut path,
                 },
@@ -2977,20 +2981,20 @@ mod tests {
         let mut control = PanicDuringReadTerminalInvalidation::default();
 
         assert_eq!(
-            extract_c3_root_v1(
+            extract_root_v1(
                 &fixture.cas,
                 0x4_100,
                 fixture.version,
                 fixture.root_tree,
                 &mut sink,
                 &mut counters,
-                C3ReadBuffersV1 {
+                ReadBuffersV1 {
                     comparison: &mut comparison,
                     path: &mut path,
                 },
                 &mut control,
             ),
-            Err(C3ReadOperationErrorV1::FsCas(
+            Err(ReadOperationErrorV1::FsCas(
                 FsCasErrorV1::SynchronizationPoisoned
             ))
         );
@@ -3081,14 +3085,14 @@ mod tests {
             };
 
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                extract_c3_root_v1(
+                extract_root_v1(
                     &fixture.cas,
                     0x4_180 + case_index,
                     fixture.version,
                     fixture.root_tree,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
@@ -3108,11 +3112,11 @@ mod tests {
                 }
                 "invalid-observation-state" => assert_eq!(
                     outcome.expect("a typed observation failure must consume the unwind"),
-                    Err(C3ReadOperationErrorV1::Core(CoreError::PackInvalid))
+                    Err(ReadOperationErrorV1::Core(CoreError::PackInvalid))
                 ),
                 "observation-counter-overflow" => assert_eq!(
                     outcome.expect("a typed observation failure must consume the unwind"),
-                    Err(C3ReadOperationErrorV1::Core(CoreError::IntegerOverflow))
+                    Err(ReadOperationErrorV1::Core(CoreError::IntegerOverflow))
                 ),
                 _ => unreachable!(),
             }
@@ -3236,7 +3240,7 @@ mod tests {
             };
 
             let result = if range {
-                read_c3_file_range_v1(
+                read_file_range_v1(
                     &fixture.cas,
                     0x4_190 + case_index,
                     fixture.version,
@@ -3246,21 +3250,21 @@ mod tests {
                     17_777,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
                     &mut control,
                 )
             } else {
-                extract_c3_root_v1(
+                extract_root_v1(
                     &fixture.cas,
                     0x4_190 + case_index,
                     fixture.version,
                     fixture.root_tree,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
@@ -3270,7 +3274,7 @@ mod tests {
 
             assert_eq!(
                 result,
-                Err(C3ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)),
+                Err(ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)),
                 "{operation_name}"
             );
             assert_eq!(control.terminal_hook_calls, 1, "{operation_name}");
@@ -3374,14 +3378,14 @@ mod tests {
         sink.remove_objects_on_begin = Some(fixture._root.path().join("objects"));
         sink.panic_on_abort = true;
 
-        let error = extract_c3_root_v1(
+        let error = extract_root_v1(
             &fixture.cas,
             0x4_180,
             fixture.version,
             fixture.root_tree,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
@@ -3391,7 +3395,7 @@ mod tests {
 
         assert_eq!(
             error,
-            C3ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)
+            ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)
         );
         assert_eq!(sink.began, 1);
         assert_eq!(sink.finished, 0);
@@ -3455,14 +3459,14 @@ mod tests {
             sink.panic_on_abort = true;
             let mut control = StopAfterBeginControl { kind, stopped };
 
-            let error = extract_c3_root_v1(
+            let error = extract_root_v1(
                 &fixture.cas,
                 0x4_200,
                 fixture.version,
                 fixture.root_tree,
                 &mut sink,
                 &mut counters,
-                C3ReadBuffersV1 {
+                ReadBuffersV1 {
                     comparison: &mut comparison,
                     path: &mut path,
                 },
@@ -3470,7 +3474,7 @@ mod tests {
             )
             .expect_err("the typed stop must survive the abort unwind");
 
-            assert_eq!(error, C3ReadOperationErrorV1::Core(expected), "{case}");
+            assert_eq!(error, ReadOperationErrorV1::Core(expected), "{case}");
             assert_eq!(sink.began, 1, "{case}");
             assert_eq!(sink.finished, 0, "{case}");
             assert_eq!(sink.aborted, 1, "{case}");
@@ -3572,14 +3576,14 @@ mod tests {
                 injected: false,
             };
 
-            let error = extract_c3_root_v1(
+            let error = extract_root_v1(
                 &fixture.cas,
                 0x4_300,
                 fixture.version,
                 fixture.root_tree,
                 &mut sink,
                 &mut counters,
-                C3ReadBuffersV1 {
+                ReadBuffersV1 {
                     comparison: &mut comparison,
                     path: &mut path,
                 },
@@ -3587,7 +3591,7 @@ mod tests {
             )
             .expect_err("the typed filesystem read failure must survive the abort unwind");
 
-            assert_eq!(error, C3ReadOperationErrorV1::FsCas(fault), "{case}");
+            assert_eq!(error, ReadOperationErrorV1::FsCas(fault), "{case}");
             assert!(control.injected, "{case}");
             assert_eq!(sink.began, 1, "{case}");
             assert_eq!(sink.finished, 0, "{case}");
@@ -3712,7 +3716,7 @@ mod tests {
                     };
 
                     let result = if range {
-                        read_c3_file_range_v1(
+                        read_file_range_v1(
                             &fixture.cas,
                             0x4_340,
                             fixture.version,
@@ -3722,21 +3726,21 @@ mod tests {
                             17_777,
                             &mut sink,
                             &mut counters,
-                            C3ReadBuffersV1 {
+                            ReadBuffersV1 {
                                 comparison: &mut comparison,
                                 path: &mut path,
                             },
                             &mut control,
                         )
                     } else {
-                        extract_c3_root_v1(
+                        extract_root_v1(
                             &fixture.cas,
                             0x4_341,
                             fixture.version,
                             fixture.root_tree,
                             &mut sink,
                             &mut counters,
-                            C3ReadBuffersV1 {
+                            ReadBuffersV1 {
                                 comparison: &mut comparison,
                                 path: &mut path,
                             },
@@ -3747,7 +3751,7 @@ mod tests {
                         "the semantic occupied-read failure must terminate the authenticated read",
                     );
 
-                    assert_eq!(error, C3ReadOperationErrorV1::FsCas(fault));
+                    assert_eq!(error, ReadOperationErrorV1::FsCas(fault));
                     assert!(control.injected, "{fault_name}/{operation_name}");
                     assert_eq!(sink.began, 1, "{fault_name}/{operation_name}");
                     assert_eq!(sink.finished, 0, "{fault_name}/{operation_name}");
@@ -3829,7 +3833,7 @@ mod tests {
                 };
 
                 let result = if range {
-                    read_c3_file_range_v1(
+                    read_file_range_v1(
                         &fixture.cas,
                         0x4_350,
                         fixture.version,
@@ -3839,21 +3843,21 @@ mod tests {
                         17_777,
                         &mut sink,
                         &mut counters,
-                        C3ReadBuffersV1 {
+                        ReadBuffersV1 {
                             comparison: &mut comparison,
                             path: &mut path,
                         },
                         &mut control,
                     )
                 } else {
-                    extract_c3_root_v1(
+                    extract_root_v1(
                         &fixture.cas,
                         0x4_351,
                         fixture.version,
                         fixture.root_tree,
                         &mut sink,
                         &mut counters,
-                        C3ReadBuffersV1 {
+                        ReadBuffersV1 {
                             comparison: &mut comparison,
                             path: &mut path,
                         },
@@ -3864,7 +3868,7 @@ mod tests {
                     "the semantic closure-marker failure must terminate before the sink begins",
                 );
 
-                assert_eq!(error, C3ReadOperationErrorV1::FsCas(fault));
+                assert_eq!(error, ReadOperationErrorV1::FsCas(fault));
                 assert!(control.injected, "{fault_name}/{operation_name}");
                 assert_eq!(sink.began, 0, "{fault_name}/{operation_name}");
                 assert_eq!(sink.finished, 0, "{fault_name}/{operation_name}");
@@ -3912,7 +3916,7 @@ mod tests {
             };
 
             let error = if range {
-                read_c3_file_range_v1(
+                read_file_range_v1(
                     &fixture.cas,
                     0x4_370,
                     fixture.version,
@@ -3922,21 +3926,21 @@ mod tests {
                     17_777,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
                     &mut control,
                 )
             } else {
-                extract_c3_root_v1(
+                extract_root_v1(
                     &fixture.cas,
                     0x4_370,
                     fixture.version,
                     fixture.root_tree,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
@@ -3947,7 +3951,7 @@ mod tests {
 
             assert_eq!(
                 error,
-                C3ReadOperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                ReadOperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                     first: FsCasFailureCauseV1::Filesystem(
                         FsCasFilesystemFailureV1::PermissionDenied
                     ),
@@ -4087,7 +4091,7 @@ mod tests {
                 };
 
                 let error = if range {
-                    read_c3_file_range_v1(
+                    read_file_range_v1(
                         &fixture.cas,
                         0x4_380,
                         fixture.version,
@@ -4097,21 +4101,21 @@ mod tests {
                         17_777,
                         &mut sink,
                         &mut counters,
-                        C3ReadBuffersV1 {
+                        ReadBuffersV1 {
                             comparison: &mut comparison,
                             path: &mut path,
                         },
                         &mut control,
                     )
                 } else {
-                    extract_c3_root_v1(
+                    extract_root_v1(
                         &fixture.cas,
                         0x4_380,
                         fixture.version,
                         fixture.root_tree,
                         &mut sink,
                         &mut counters,
-                        C3ReadBuffersV1 {
+                        ReadBuffersV1 {
                             comparison: &mut comparison,
                             path: &mut path,
                         },
@@ -4124,7 +4128,7 @@ mod tests {
 
                 assert_eq!(
                     error,
-                    C3ReadOperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                    ReadOperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                         first: FsCasFailureCauseV1::Filesystem(
                             FsCasFilesystemFailureV1::PermissionDenied
                         ),
@@ -4234,14 +4238,14 @@ mod tests {
             sink.panic_on_abort = panic_on_abort;
 
             let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let _ = extract_c3_root_v1(
+                let _ = extract_root_v1(
                     &fixture.cas,
                     0x4_200 + case_index,
                     fixture.version,
                     fixture.root_tree,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
@@ -4313,14 +4317,14 @@ mod tests {
             // that the root has no latent poisoned coordination state.
             let (mut comparison, mut path) = read_buffers();
             let mut followup_counters = OperationCountersV1::default();
-            extract_c3_root_v1(
+            extract_root_v1(
                 &stale,
                 0x4_300 + case_index,
                 fixture.version,
                 fixture.root_tree,
                 &mut sink,
                 &mut followup_counters,
-                C3ReadBuffersV1 {
+                ReadBuffersV1 {
                     comparison: &mut comparison,
                     path: &mut path,
                 },
@@ -4358,14 +4362,14 @@ mod tests {
             let (mut comparison, mut path) = read_buffers();
             let mut counters = OperationCountersV1::default();
             let mut sink = CaptureSink::new(1);
-            let error = extract_c3_root_v1(
+            let error = extract_root_v1(
                 &fixture.cas,
                 0x5_000 + expected as u64,
                 fixture.version,
                 fixture.root_tree,
                 &mut sink,
                 &mut counters,
-                C3ReadBuffersV1 {
+                ReadBuffersV1 {
                     comparison: &mut comparison,
                     path: &mut path,
                 },
@@ -4378,7 +4382,7 @@ mod tests {
 
             assert_eq!(
                 error,
-                C3ReadOperationErrorV1::FsCas(FsCasErrorV1::Core(expected))
+                ReadOperationErrorV1::FsCas(FsCasErrorV1::Core(expected))
             );
             assert_eq!(sink.bound_calls.get(), 1);
             assert_eq!(sink.began, 0);
@@ -4414,7 +4418,7 @@ mod tests {
             let mut counters = OperationCountersV1::default();
             let mut sink = CaptureSink::new(1);
             assert_eq!(
-                read_c3_file_range_v1(
+                read_file_range_v1(
                     &fixture.cas,
                     104,
                     fixture.version,
@@ -4424,13 +4428,13 @@ mod tests {
                     1,
                     &mut sink,
                     &mut counters,
-                    C3ReadBuffersV1 {
+                    ReadBuffersV1 {
                         comparison: &mut comparison,
                         path: &mut path,
                     },
                     &mut ContinueControl,
                 ),
-                Err(C3ReadOperationErrorV1::Core(CoreError::Path))
+                Err(ReadOperationErrorV1::Core(CoreError::Path))
             );
             assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
             assert_eq!(sink.began, 0);
@@ -4442,7 +4446,7 @@ mod tests {
             path_len: 0,
             path_depth: 0,
         };
-        for _ in 0..MAX_CANONICAL_TRAVERSAL_FRAMES_V1 {
+        for _ in 0..crate::object::MAX_CANONICAL_TRAVERSAL_FRAMES_V1 {
             stack.push(frame).expect("exact bounded stack capacity");
         }
         assert_eq!(stack.push(frame), Err(CoreError::CountCap));
@@ -4458,14 +4462,14 @@ mod tests {
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CountSink::new();
-        let result = extract_c3_root_v1(
+        let result = extract_root_v1(
             &fixture.cas,
             105,
             fixture.version,
             fixture.root_tree,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
@@ -4485,21 +4489,21 @@ mod tests {
         let mut sink = CaptureSink::new(256 * 1024);
         let stopped = Rc::new(Cell::new(false));
         sink.stop_after_begin = Some(Rc::clone(&stopped));
-        let error = extract_c3_root_v1(
+        let error = extract_root_v1(
             &fixture.cas,
             106,
             fixture.version,
             fixture.root_tree,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
             &mut StopAfterBeginControl { kind, stopped },
         )
         .expect_err("read must stop");
-        assert_eq!(error, C3ReadOperationErrorV1::Core(expected));
+        assert_eq!(error, ReadOperationErrorV1::Core(expected));
         assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
         assert_eq!(sink.began, 1);
         assert_eq!(sink.finished, 0);
@@ -4537,14 +4541,14 @@ mod tests {
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new(256 * 1024);
-        let error = extract_c3_root_v1(
+        let error = extract_root_v1(
             &fixture.cas,
             107,
             fixture.version,
             fixture.root_tree,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
@@ -4553,7 +4557,7 @@ mod tests {
         .expect_err("corrupt occupant must fail");
         assert_eq!(
             error,
-            C3ReadOperationErrorV1::FsCas(FsCasErrorV1::MalformedOccupant)
+            ReadOperationErrorV1::FsCas(FsCasErrorV1::MalformedOccupant)
         );
         assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
         assert_eq!(sink.began, 0);
@@ -4571,14 +4575,14 @@ mod tests {
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new(256 * 1024);
-        let error = extract_c3_root_v1(
+        let error = extract_root_v1(
             &fixture.cas,
             108,
             fixture.version,
             fixture.root_tree,
             &mut sink,
             &mut counters,
-            C3ReadBuffersV1 {
+            ReadBuffersV1 {
                 comparison: &mut comparison,
                 path: &mut path,
             },
@@ -4587,7 +4591,7 @@ mod tests {
         .expect_err("missing required occupant must fail");
         assert_eq!(
             error,
-            C3ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)
+            ReadOperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant)
         );
         assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
         assert_eq!(sink.began, 0);

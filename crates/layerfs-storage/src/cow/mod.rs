@@ -7,7 +7,7 @@ mod mutate;
 mod tree;
 mod view;
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) use mutate::{
     add_directory_entry_cow_borrowed_v1, move_directory_entry_cow_borrowed_v1,
     remove_directory_entry_cow_borrowed_v1, replace_directory_entry_cow_borrowed_v1,
@@ -17,11 +17,11 @@ pub(crate) use mutate::{
 pub(crate) use mutate::{
     add_directory_entry_cow_v1, remove_directory_entry_cow_v1, replace_directory_entry_cow_v1,
 };
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) use tree::build_canonical_directory_borrowed_v1;
 #[cfg(test)]
 pub(crate) use tree::build_canonical_directory_v1;
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) use tree::{
     mutation_evidence_resident_bytes_v1, mutation_hash_state_bytes_v1,
     replacement_evidence_resident_bytes_v1,

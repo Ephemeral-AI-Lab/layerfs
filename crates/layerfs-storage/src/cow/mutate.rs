@@ -11,7 +11,7 @@ use super::tree::{
 use super::view::CanonicalTreeMutationSourceV1;
 use crate::identity::COMPARISON_WINDOW_BYTES;
 use crate::limits::OperationCountersV1;
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 use crate::limits::OperationReservationV1;
 #[cfg(test)]
 use crate::limits::ResourceLedgerV1;
@@ -43,7 +43,7 @@ pub(crate) fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn replace_directory_entry_cow_borrowed_v1<S: PreparedTreeSinkV1 + ?Sized>(
     base: CanonicalDirectoryTreeV1,
@@ -103,7 +103,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn add_directory_entry_cow_borrowed_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -171,7 +171,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn remove_directory_entry_cow_borrowed_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -205,7 +205,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn move_directory_entry_cow_borrowed_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -243,7 +243,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn replace_two_directory_entries_cow_borrowed_v1<T, S>(
     base: CanonicalDirectoryTreeV1,

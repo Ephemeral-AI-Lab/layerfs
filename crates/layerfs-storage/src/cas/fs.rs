@@ -17,7 +17,16 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::catalog::{decode_catalog_marker, encode_catalog_marker, CATALOG_MARKER_BYTES};
 use super::locator::{
-    decode_persistent_locator_v1, encode_persistent_locator_v1, PersistentLocatorCodecErrorV1,
+    decide_persistent_catalog_incumbent_v1, decide_persistent_locator_binding_v1,
+    decide_persistent_locator_catalog_binding_v1, decide_persistent_locator_install_v1,
+    decide_persistent_locator_publication_v1, decide_persistent_locator_rollback_v1,
+    decode_persistent_locator_for_install_v1, decode_persistent_locator_self_describing_v1,
+    encode_persistent_locator_v1, locator_transaction_tag_v1, PersistentCatalogIncumbentDecisionV1,
+    PersistentLocatorBindingDecisionV1, PersistentLocatorBindingEvidenceV1,
+    PersistentLocatorCatalogBindingDecisionV1, PersistentLocatorIncumbentEvidenceV1,
+    PersistentLocatorInstallDecisionV1, PersistentLocatorInstallObservationV1,
+    PersistentLocatorPublicationDecisionV1, PersistentLocatorPublicationEvidenceV1,
+    PersistentLocatorRollbackDecisionV1, PersistentLocatorRollbackEvidenceV1,
     PersistentObjectLocatorV1, PERSISTENT_LOCATOR_BYTES_V1,
 };
 #[cfg(test)]
@@ -28,18 +37,20 @@ use crate::cas::{
     ValidatedOccupiedObjectV1,
 };
 use crate::identity::{PackIdV1, PhysicalVersionRecordIdV1, COMPARISON_WINDOW_BYTES};
+#[cfg(test)]
+use crate::limits::MemoryComponentV1;
 use crate::limits::{
     admitted_slots_for_budget, OperationCountersV1, OperationMemoryPlanV1, OperationReservationV1,
-    ResourceLedgerV1, BASE_LEDGER_BYTES, MEMORY_PROFILE_72_MIB,
+    ResourceLedgerV1, BASE_LEDGER_BYTES, MEMORY_PROFILE_72_MIB, OPERATION_SLOT_BYTES,
 };
 use crate::object::TypedPhysicalObjectIdV1;
 #[cfg(test)]
 use crate::pack::validate_pack_v1;
 use crate::pack::{
-    locate_validated_pack_index_entry_controlled_v1, read_validated_pack_index_entry_v1,
-    validate_validated_pack_object_controlled_v1, PackIndexEntryV1, PackIndexSpoolV1,
-    PackObjectLocationV1, PackPortErrorV1, PackReadPortV1, PrivatePackPortV1, SealedPackV1,
-    MAX_PACK_BYTES,
+    locate_validated_pack_index_entry_controlled_v1, read_sealed_pack_shape_v1,
+    read_validated_pack_index_entry_v1, validate_validated_pack_object_controlled_v1,
+    PackIndexEntryV1, PackIndexSpoolV1, PackObjectLocationV1, PackPortErrorV1, PackReadPortV1,
+    PrivatePackPortV1, SealedPackV1, MAX_PACK_BYTES,
 };
 use crate::{CoreError, CoreResult};
 
@@ -63,6 +74,18 @@ pub(crate) const ROOT_LOGICAL_STORAGE_BUDGET_V1: u64 = 512 * 1_024 * 1_024 * 1_0
 pub(crate) const ROOT_NAMESPACE_ENTRY_BUDGET_V1: u64 = 256 * 1_024 * 1_024;
 const ROOT_STORAGE_OPERATION_SLOTS_V1: usize = 16;
 const PERSISTENT_LOCATOR_BYTES_U64_V1: u64 = PERSISTENT_LOCATOR_BYTES_V1 as u64;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CatalogRollbackDispositionV1 {
+    RollbackAllowed,
+    Adopted,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ActivePackCatalogPolicyV1 {
+    RequireVacancy,
+    AllowForeign { expected: SealedPackV1 },
+}
 
 static NEXT_PRIVATE_NAME: AtomicU64 = AtomicU64::new(1);
 static NEXT_CLOSURE_OPERATION: AtomicU64 = AtomicU64::new(1);
@@ -122,6 +145,1595 @@ pub enum FsCasErrorV1 {
         first: FsCasFailureCauseV1,
         dominant: FsCasFailureCauseV1,
     },
+}
+
+#[cfg(all(test, feature = "operation-polymorphism"))]
+mod locator_custody_regression_tests {
+    use super::{
+        encode_catalog_marker, CarrierReceiptTransitionCheckV1, FsCasBoundaryV1, FsCasControlV1,
+        FsCasErrorV1, FsCasFilesystemBoundaryV1, FsCasV1, PERSISTENT_LOCATOR_BYTES_V1,
+    };
+    use crate::cdc::{CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
+    use crate::content::{
+        request_create_operation_v1, run_create_v1, ContentSourceErrorV1, ContentSourceV1,
+        OperationBuffersV1, OperationErrorV1, SourceSupplierV1,
+    };
+    use crate::cow::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
+    use crate::identity::{PackIdV1, COMPARISON_WINDOW_BYTES};
+    use crate::limits::OperationCountersV1;
+    use crate::pack::SealedPackV1;
+    use crate::{CoreError, CoreResult};
+    use std::collections::BTreeMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Stdio};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    const WORKER_MODE_ENV: &str = "LAYERFS_LOCATOR_CUSTODY_WORKER";
+    const WORKER_ROOT_ENV: &str = "LAYERFS_LOCATOR_CUSTODY_ROOT";
+    const TEST_INCARNATION_ENV: &str = "LAYERFS_TEST_LOCATOR_INCARNATION";
+    const TEST_NONCE_ENV: &str = "LAYERFS_TEST_LOCATOR_OPERATION_NONCE";
+    const FORCED_INCARNATION: u64 = 0x51c0_7e11_4d09_a321;
+    const FORCED_NONCE: u64 = 0x0000_0000_0000_0042;
+    const WORKER_TEST_NAME: &str =
+        "cas::fs::locator_custody_regression_tests::locator_custody_worker";
+
+    struct SliceSource<'a> {
+        bytes: &'a [u8],
+        offset: usize,
+    }
+
+    impl ContentSourceV1 for SliceSource<'_> {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(core::mem::size_of::<Self>() as u64)
+        }
+
+        fn read(&mut self, destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
+            let remaining = self.bytes.len().saturating_sub(self.offset);
+            let take = destination.len().min(remaining);
+            destination[..take].copy_from_slice(&self.bytes[self.offset..self.offset + take]);
+            self.offset += take;
+            Ok(take)
+        }
+    }
+
+    struct CheckedSupplier<'a> {
+        bytes: &'a [u8],
+    }
+
+    impl<'a> SourceSupplierV1 for CheckedSupplier<'a> {
+        type Source = SliceSource<'a>;
+
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(core::mem::size_of::<SliceSource<'_>>() as u64)
+        }
+
+        fn supply(self) -> CoreResult<Self::Source> {
+            Ok(SliceSource {
+                bytes: self.bytes,
+                offset: 0,
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct ContinueControl;
+
+    impl CdcControlV1 for ContinueControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for ContinueControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    struct CancelAfterLocatorPublicationV1 {
+        publications: u32,
+        cancel_after: u32,
+        cancelled: bool,
+    }
+
+    impl CancelAfterLocatorPublicationV1 {
+        const fn new(cancel_after: u32) -> Self {
+            Self {
+                publications: 0,
+                cancel_after,
+                cancelled: false,
+            }
+        }
+    }
+
+    impl CdcControlV1 for CancelAfterLocatorPublicationV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for CancelAfterLocatorPublicationV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::AfterObjectLocatorPublication {
+                self.publications += 1;
+                if self.publications == self.cancel_after {
+                    self.cancelled = true;
+                }
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum LocatorReceiptCorruptionV1 {
+        Malformed,
+        Truncated,
+        ExtraComplete,
+        MissingComplete,
+        Duplicate,
+        Reordered,
+        Substituted,
+        WrongOperation,
+    }
+
+    struct CorruptLocatorReceiptSpoolControlV1 {
+        root: PathBuf,
+        corruption: LocatorReceiptCorruptionV1,
+        publications: u32,
+        corrupt_after: u32,
+        cancelled: bool,
+        corrupted: bool,
+        immutable_before: Option<BTreeMap<String, Vec<u8>>>,
+        immutable_usage_before: Option<(u64, u64)>,
+    }
+
+    impl CorruptLocatorReceiptSpoolControlV1 {
+        fn new(root: &Path, corruption: LocatorReceiptCorruptionV1) -> Self {
+            Self {
+                root: root.to_path_buf(),
+                corruption,
+                publications: 0,
+                corrupt_after: 3,
+                cancelled: false,
+                corrupted: false,
+                immutable_before: None,
+                immutable_usage_before: None,
+            }
+        }
+
+        fn locator_receipt_spool_path(&self) -> PathBuf {
+            let mut paths = fs::read_dir(self.root.join("preparation"))
+                .unwrap()
+                .filter_map(|entry| {
+                    let path = entry.ok()?.path();
+                    let name = path.file_name()?.to_str()?;
+                    name.starts_with("locator-receipts-").then_some(path)
+                });
+            let path = paths.next().expect("locator receipt spool exists");
+            assert!(
+                paths.next().is_none(),
+                "one operation owns the locator receipt spool"
+            );
+            path
+        }
+
+        fn corrupt_receipt_spool_v1(&mut self) {
+            const RECORD_BYTES: usize = PERSISTENT_LOCATOR_BYTES_V1 + 24;
+            let path = self.locator_receipt_spool_path();
+            let mut bytes = fs::read(&path).unwrap();
+            assert!(
+                bytes.len() >= RECORD_BYTES * self.corrupt_after as usize,
+                "the deterministic crossing must expose three committed receipts"
+            );
+            match self.corruption {
+                LocatorReceiptCorruptionV1::Malformed => {
+                    bytes[0] ^= 0xff;
+                    fs::write(&path, bytes).unwrap();
+                }
+                LocatorReceiptCorruptionV1::Truncated => {
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .open(&path)
+                        .unwrap()
+                        .set_len(u64::try_from(bytes.len() - 1).unwrap())
+                        .unwrap();
+                }
+                LocatorReceiptCorruptionV1::ExtraComplete => {
+                    let first = bytes[..RECORD_BYTES].to_vec();
+                    bytes.extend_from_slice(&first);
+                    fs::write(&path, bytes).unwrap();
+                }
+                LocatorReceiptCorruptionV1::MissingComplete => {
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .open(&path)
+                        .unwrap()
+                        .set_len(u64::try_from(bytes.len() - RECORD_BYTES).unwrap())
+                        .unwrap();
+                }
+                LocatorReceiptCorruptionV1::Duplicate => {
+                    let first = bytes[..RECORD_BYTES].to_vec();
+                    bytes[RECORD_BYTES..RECORD_BYTES * 2].copy_from_slice(&first);
+                    fs::write(&path, bytes).unwrap();
+                }
+                LocatorReceiptCorruptionV1::Reordered => {
+                    let first = bytes[..RECORD_BYTES].to_vec();
+                    let second = bytes[RECORD_BYTES..RECORD_BYTES * 2].to_vec();
+                    bytes[..RECORD_BYTES].copy_from_slice(&second);
+                    bytes[RECORD_BYTES..RECORD_BYTES * 2].copy_from_slice(&first);
+                    fs::write(&path, bytes).unwrap();
+                }
+                LocatorReceiptCorruptionV1::Substituted => {
+                    let third = bytes[RECORD_BYTES * 2..RECORD_BYTES * 3].to_vec();
+                    bytes[RECORD_BYTES..RECORD_BYTES * 2].copy_from_slice(&third);
+                    fs::write(&path, bytes).unwrap();
+                }
+                LocatorReceiptCorruptionV1::WrongOperation => {
+                    let transaction = u64::from_be_bytes(
+                        bytes[152..160]
+                            .try_into()
+                            .expect("transaction occupies the locator tail"),
+                    );
+                    bytes[152..160].copy_from_slice(&(transaction ^ 1).to_be_bytes());
+                    fs::write(&path, bytes).unwrap();
+                }
+            }
+            self.corrupted = true;
+            self.immutable_before = Some(snapshot_immutable_namespace(&self.root));
+            self.immutable_usage_before = Some(exact_namespace_usage(&self.root).1);
+            self.cancelled = true;
+        }
+    }
+
+    impl CdcControlV1 for CorruptLocatorReceiptSpoolControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for CorruptLocatorReceiptSpoolControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::AfterObjectLocatorPublication {
+                self.publications += 1;
+                if self.publications == self.corrupt_after && !self.corrupted {
+                    self.corrupt_receipt_spool_v1();
+                }
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum ReceiptPrelinkFailureV1 {
+        ShortWrite,
+        WriteFailure,
+        Precharge,
+        Cancellation,
+        Deadline,
+        CallbackUnwind,
+        ObservationOverflow,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum ReceiptCleanupFailureV1 {
+        None,
+        Cleanup,
+        Invalidation,
+    }
+
+    struct ReceiptPrelinkFailureControlV1 {
+        failure: ReceiptPrelinkFailureV1,
+        cleanup: ReceiptCleanupFailureV1,
+        armed: bool,
+        injected: bool,
+        cancellation_polls: u32,
+        deadline_polls: u32,
+        cleanup_injected: bool,
+        invalidation_injected: bool,
+    }
+
+    impl ReceiptPrelinkFailureControlV1 {
+        const fn new(failure: ReceiptPrelinkFailureV1, cleanup: ReceiptCleanupFailureV1) -> Self {
+            Self {
+                failure,
+                cleanup,
+                armed: false,
+                injected: false,
+                cancellation_polls: 0,
+                deadline_polls: 0,
+                cleanup_injected: false,
+                invalidation_injected: false,
+            }
+        }
+    }
+
+    struct FailCarrierReceiptTransitionControlV1 {
+        check: CarrierReceiptTransitionCheckV1,
+        injected: bool,
+    }
+
+    struct PanicRollbackPostUnlinkReleaseControlV1 {
+        target: super::FsCasCleanupTargetV1,
+        publications: u32,
+        cancelled: bool,
+        armed: bool,
+        panicked: bool,
+        unlink_attempts: u32,
+        post_unlink_callbacks: u32,
+    }
+
+    impl PanicRollbackPostUnlinkReleaseControlV1 {
+        const fn new(target: super::FsCasCleanupTargetV1) -> Self {
+            Self {
+                target,
+                publications: 0,
+                cancelled: false,
+                armed: false,
+                panicked: false,
+                unlink_attempts: 0,
+                post_unlink_callbacks: 0,
+            }
+        }
+
+        fn unlink_boundary_v1(&self) -> FsCasFilesystemBoundaryV1 {
+            match self.target {
+                super::FsCasCleanupTargetV1::Carrier => FsCasFilesystemBoundaryV1::CarrierUnlink,
+                super::FsCasCleanupTargetV1::ObjectLocator => {
+                    FsCasFilesystemBoundaryV1::LocatorUnlink
+                }
+                _ => unreachable!("the regression covers carrier and locator rollback"),
+            }
+        }
+    }
+
+    impl CdcControlV1 for PanicRollbackPostUnlinkReleaseControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PanicRollbackPostUnlinkReleaseControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::AfterObjectLocatorPublication {
+                self.publications += 1;
+                self.cancelled = true;
+            }
+            if self.armed && !self.panicked && boundary == FsCasBoundaryV1::PublicationLockReleased
+            {
+                self.panicked = true;
+                self.post_unlink_callbacks += 1;
+                panic!("inject post-unlink publication release unwind");
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == self.unlink_boundary_v1() {
+                self.unlink_attempts += 1;
+                self.armed = true;
+            }
+            None
+        }
+    }
+
+    impl CdcControlV1 for FailCarrierReceiptTransitionControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for FailCarrierReceiptTransitionControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_carrier_receipt_transition_failure_v1(
+            &mut self,
+            check: CarrierReceiptTransitionCheckV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.injected && check == self.check {
+                self.injected = true;
+                Some(FsCasErrorV1::Core(CoreError::Cancelled))
+            } else {
+                None
+            }
+        }
+    }
+
+    impl CdcControlV1 for ReceiptPrelinkFailureControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            FsCasControlV1::cancellation_requested(self)
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            FsCasControlV1::deadline_exceeded(self)
+        }
+    }
+
+    impl FsCasControlV1 for ReceiptPrelinkFailureControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::BeforeObjectLocatorPublication {
+                self.armed = true;
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            if !self.armed || self.failure != ReceiptPrelinkFailureV1::Cancellation {
+                return false;
+            }
+            self.cancellation_polls += 1;
+            if self.cancellation_polls == 2 {
+                self.injected = true;
+                true
+            } else {
+                false
+            }
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            if !self.armed || self.failure != ReceiptPrelinkFailureV1::Deadline {
+                return false;
+            }
+            self.deadline_polls += 1;
+            if self.deadline_polls == 2 {
+                self.injected = true;
+                true
+            } else {
+                false
+            }
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.armed
+                || self.injected
+                || boundary != FsCasFilesystemBoundaryV1::PreparationWrite
+            {
+                None
+            } else {
+                match self.failure {
+                    ReceiptPrelinkFailureV1::ShortWrite => {
+                        self.injected = true;
+                        Some(FsCasErrorV1::Filesystem(
+                            super::FsCasFilesystemFailureV1::ShortWrite,
+                        ))
+                    }
+                    ReceiptPrelinkFailureV1::WriteFailure => {
+                        self.injected = true;
+                        Some(FsCasErrorV1::Filesystem(
+                            super::FsCasFilesystemFailureV1::WriteFailure,
+                        ))
+                    }
+                    _ => None,
+                }
+            }
+        }
+
+        fn inject_cleanup_failure(&mut self, target: super::FsCasCleanupTargetV1) -> bool {
+            if target == super::FsCasCleanupTargetV1::PreparationSpool
+                && self.cleanup != ReceiptCleanupFailureV1::None
+                && !self.cleanup_injected
+            {
+                self.cleanup_injected = true;
+                true
+            } else if target == super::FsCasCleanupTargetV1::RootInvalidation
+                && self.cleanup == ReceiptCleanupFailureV1::Invalidation
+                && !self.invalidation_injected
+            {
+                self.invalidation_injected = true;
+                true
+            } else {
+                false
+            }
+        }
+
+        fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<FsCasErrorV1> {
+            if !self.armed || self.injected {
+                return None;
+            }
+            match self.failure {
+                ReceiptPrelinkFailureV1::Precharge => {
+                    self.injected = true;
+                    Some(FsCasErrorV1::ResourceExhausted(
+                        super::FsCasResourceV1::StorageBytes,
+                    ))
+                }
+                ReceiptPrelinkFailureV1::CallbackUnwind => {
+                    self.injected = true;
+                    panic!("inject locator receipt precharge callback unwind");
+                }
+                _ => None,
+            }
+        }
+
+        fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
+            if self.armed
+                && !self.injected
+                && self.failure == ReceiptPrelinkFailureV1::ObservationOverflow
+            {
+                self.injected = true;
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    struct ReplaceLocatorAfterValidationControlV1 {
+        root: PathBuf,
+        publications: u32,
+        cancel_after: u32,
+        cancelled: bool,
+        replaced: bool,
+        replaced_path: Option<PathBuf>,
+        replaced_bytes: Option<Vec<u8>>,
+    }
+
+    impl ReplaceLocatorAfterValidationControlV1 {
+        fn new(root: &Path, cancel_after: u32) -> Self {
+            Self {
+                root: root.to_path_buf(),
+                publications: 0,
+                cancel_after,
+                cancelled: false,
+                replaced: false,
+                replaced_path: None,
+                replaced_bytes: None,
+            }
+        }
+    }
+
+    impl CdcControlV1 for ReplaceLocatorAfterValidationControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for ReplaceLocatorAfterValidationControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::AfterObjectLocatorPublication {
+                self.publications += 1;
+                if self.publications == self.cancel_after {
+                    self.cancelled = true;
+                }
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: super::FsCasCleanupTargetV1) -> bool {
+            if target != super::FsCasCleanupTargetV1::ObjectLocator || self.replaced {
+                return false;
+            }
+
+            let path = fs::read_dir(self.root.join("objects"))
+                .unwrap()
+                .next()
+                .expect("the cancelled operation published one locator")
+                .unwrap()
+                .path();
+            let bytes = fs::read(&path).unwrap();
+            let held = self.root.join("held-locator-during-rollback");
+
+            // Preserve the authenticated file elsewhere and replace its
+            // pathname with a new inode carrying identical bytes. The
+            // rollback code must reject the new inode after this callback.
+            fs::rename(&path, &held).unwrap();
+            fs::write(&path, &bytes).unwrap();
+            self.replaced = true;
+            self.replaced_path = Some(path);
+            self.replaced_bytes = Some(bytes);
+            false
+        }
+    }
+
+    struct AdoptCatalogBeforeRollbackControlV1 {
+        root: PathBuf,
+        adopted: bool,
+        cancelled: bool,
+        adopted_marker: Option<Vec<u8>>,
+    }
+
+    impl AdoptCatalogBeforeRollbackControlV1 {
+        fn new(root: &Path) -> Self {
+            Self {
+                root: root.to_path_buf(),
+                adopted: false,
+                cancelled: false,
+                adopted_marker: None,
+            }
+        }
+
+        fn adopt_catalog_v1(&mut self) {
+            let path = fs::read_dir(self.root.join("objects"))
+                .unwrap()
+                .next()
+                .expect("the cancelled operation published one locator")
+                .unwrap()
+                .path();
+            let bytes: [u8; PERSISTENT_LOCATOR_BYTES_V1] = fs::read(&path)
+                .unwrap()
+                .try_into()
+                .expect("the locator has the frozen length");
+            let pack_id = PackIdV1::from_digest(bytes[48..80].try_into().unwrap());
+            let sealed = SealedPackV1::from_validated_parts(
+                pack_id,
+                u64::from_be_bytes(bytes[80..88].try_into().unwrap()),
+                u32::from_be_bytes(bytes[88..92].try_into().unwrap()),
+                u64::from_be_bytes(bytes[96..104].try_into().unwrap()),
+            );
+            let marker = encode_catalog_marker(sealed).to_vec();
+            let catalog_path = self
+                .root
+                .join("catalog")
+                .join(super::hex_id(sealed.id().as_bytes()));
+            fs::write(&catalog_path, &marker).unwrap();
+            self.adopted = true;
+            self.adopted_marker = Some(marker);
+            self.cancelled = true;
+        }
+    }
+
+    impl CdcControlV1 for AdoptCatalogBeforeRollbackControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for AdoptCatalogBeforeRollbackControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::BeforeCatalogPublication && !self.adopted {
+                self.adopt_catalog_v1();
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    fn boxed_zeroes<const N: usize>() -> Box<[u8; N]> {
+        vec![0_u8; N]
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("boxed slice was created at the exact array length"))
+    }
+
+    fn boxed_tree_pages() -> Box<[Option<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES]> {
+        vec![None; MAX_TREE_PAGE_SUMMARIES]
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("boxed slice was created at the exact array length"))
+    }
+
+    fn run_small_create<C>(
+        cas: &FsCasV1,
+        path: &[u8],
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+    ) -> Result<crate::lifecycle::OperationHandoffV1, OperationErrorV1>
+    where
+        C: CdcControlV1 + FsCasControlV1,
+    {
+        let mut source_window = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
+        let mut cdc_ring = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
+        let mut incoming = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+        let mut occupied = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+        let mut tree_object = boxed_zeroes::<MAX_TREE_OBJECT_BYTES>();
+        let mut tree_pages = boxed_tree_pages();
+        let mut traversal = [0_u8; 64];
+        let grant = request_create_operation_v1(cas, 0x0011_550b, counters, control)?;
+        run_create_v1(
+            grant,
+            CdcAlgorithmV1::FastCdc,
+            path,
+            0o644,
+            1,
+            CheckedSupplier { bytes: &[0x5a] },
+            OperationBuffersV1 {
+                source: &mut source_window,
+                cdc_ring: &mut cdc_ring,
+                incoming_comparison: &mut incoming,
+                occupied_comparison: &mut occupied,
+                tree_object: &mut tree_object,
+                tree_pages: &mut *tree_pages,
+                traversal_state: &mut traversal,
+            },
+            control,
+            counters,
+        )
+    }
+
+    fn assert_storage_equations(counters: &OperationCountersV1) {
+        assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters.storage_bytes_released
+                + counters.storage_bytes_committed
+                + counters.storage_bytes_retained,
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained,
+        );
+    }
+
+    fn assert_operation_authority_baseline(cas: &FsCasV1, root: &Path) {
+        assert_eq!(cas.operation_admitted_slots_v1(), 0);
+        assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+        assert_eq!(cas.operation_admission_queue_for_test_v1(), (0, 0, 0));
+        assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
+        assert_eq!(fs::read_dir(root.join("preparation")).unwrap().count(), 0);
+    }
+
+    fn exact_directory_usage(path: &Path) -> (u64, u64) {
+        fs::read_dir(path)
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                let metadata = fs::symlink_metadata(entry.path()).unwrap();
+                assert!(metadata.file_type().is_file());
+                (metadata.len(), 1_u64)
+            })
+            .fold((0_u64, 0_u64), |(bytes, inodes), (len, one)| {
+                (bytes.checked_add(len).unwrap(), inodes + one)
+            })
+    }
+
+    fn exact_namespace_usage(root: &Path) -> ((u64, u64), (u64, u64)) {
+        let preparation = exact_directory_usage(&root.join("preparation"));
+        let immutable = ["carriers", "objects", "catalog", "closures"]
+            .into_iter()
+            .map(|name| exact_directory_usage(&root.join(name)))
+            .fold(
+                (0_u64, 0_u64),
+                |(bytes, inodes), (next_bytes, next_inodes)| {
+                    (
+                        bytes.checked_add(next_bytes).unwrap(),
+                        inodes.checked_add(next_inodes).unwrap(),
+                    )
+                },
+            );
+        (preparation, immutable)
+    }
+
+    fn snapshot_immutable_namespace(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut snapshot = BTreeMap::new();
+        for directory in ["carriers", "objects", "catalog", "closures"] {
+            for entry in fs::read_dir(root.join(directory)).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                let metadata = fs::symlink_metadata(&path).unwrap();
+                assert!(
+                    metadata.file_type().is_file(),
+                    "unexpected namespace entry {path:?}"
+                );
+                snapshot.insert(
+                    format!("{directory}/{}", entry.file_name().to_string_lossy()),
+                    fs::read(path).unwrap(),
+                );
+            }
+        }
+        snapshot
+    }
+
+    fn unique_regression_root(prefix: &str) -> PathBuf {
+        let parent = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        parent.join(format!("{prefix}-{}-{timestamp}", std::process::id()))
+    }
+
+    fn run_seed_worker(root: &Path) {
+        let cas = FsCasV1::open_existing(root).unwrap();
+        let mut counters = OperationCountersV1::default();
+        let mut control = ContinueControl;
+        let _handoff = run_small_create(&cas, b"payload.bin", &mut control, &mut counters).unwrap();
+        assert_operation_authority_baseline(&cas, root);
+        assert_storage_equations(&counters);
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+        assert!(counters.storage_bytes_committed > 0);
+        assert!(counters.storage_inodes_committed > 0);
+        assert!(counters.has_zero_forbidden_work());
+        assert_eq!(
+            first_locator_transaction_tag(root),
+            super::locator_transaction_tag_v1(
+                cas.inner.generation,
+                cas.inner.locator_incarnation,
+                FORCED_NONCE,
+            )
+        );
+        let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+            exact_namespace_usage(root);
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+        assert_eq!(counters.storage_bytes_committed, immutable_bytes);
+        assert_eq!(counters.storage_inodes_committed, immutable_inodes);
+        assert!(cas.occupied().is_ok());
+    }
+
+    fn run_reuse_and_cancel_worker(root: &Path) {
+        let reopened = FsCasV1::open_existing(root).unwrap();
+        let stale = FsCasV1::open_existing(root).unwrap();
+        let mut counters = OperationCountersV1::default();
+        let mut control = CancelAfterLocatorPublicationV1::new(3);
+        let terminal = run_small_create(&reopened, b"payload-alt.bin", &mut control, &mut counters);
+
+        assert_eq!(control.publications, 3);
+        assert!(control.cancelled);
+        assert_eq!(
+            terminal,
+            Err(OperationErrorV1::FsCas(super::FsCasErrorV1::Core(
+                CoreError::Cancelled,
+            )))
+        );
+        assert_operation_authority_baseline(&reopened, root);
+        assert_storage_equations(&counters);
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+        assert_eq!(counters.root_admission_release_failures, 0);
+        assert!(counters.has_zero_forbidden_work());
+        assert_eq!(
+            first_locator_transaction_tag(root),
+            super::locator_transaction_tag_v1(
+                reopened.inner.generation,
+                reopened.inner.locator_incarnation,
+                FORCED_NONCE,
+            )
+        );
+        assert!(reopened.occupied().is_ok());
+        assert!(stale.occupied().is_ok());
+        drop(stale);
+        drop(reopened);
+    }
+
+    fn first_locator_transaction_tag(root: &Path) -> u64 {
+        let path = fs::read_dir(root.join("objects"))
+            .unwrap()
+            .next()
+            .expect("seeded operation publishes an object locator")
+            .unwrap()
+            .path();
+        let bytes = fs::read(path).unwrap();
+        assert_eq!(bytes.len(), PERSISTENT_LOCATOR_BYTES_V1);
+        u64::from_be_bytes(bytes[152..160].try_into().unwrap())
+    }
+
+    fn spawn_worker(root: &Path, mode: &str) {
+        let status = Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg(WORKER_TEST_NAME)
+            .arg("--nocapture")
+            .env(WORKER_MODE_ENV, mode)
+            .env(WORKER_ROOT_ENV, root)
+            .env(TEST_INCARNATION_ENV, FORCED_INCARNATION.to_string())
+            .env(TEST_NONCE_ENV, FORCED_NONCE.to_string())
+            .stdin(Stdio::null())
+            .status()
+            .unwrap_or_else(|error| panic!("spawn {mode} locator-custody worker: {error}"));
+        assert!(
+            status.success(),
+            "{mode} locator-custody worker failed: {status}"
+        );
+    }
+
+    fn run_expect_invalidated_worker(root: &Path) {
+        assert!(matches!(
+            FsCasV1::open_existing(root),
+            Err(FsCasErrorV1::Invalidated)
+        ));
+    }
+
+    #[test]
+    fn locator_custody_worker() {
+        let Some(mode) = std::env::var_os(WORKER_MODE_ENV) else {
+            return;
+        };
+        let root = PathBuf::from(std::env::var_os(WORKER_ROOT_ENV).unwrap());
+        match mode.to_string_lossy().as_ref() {
+            "seed" => run_seed_worker(&root),
+            "reuse-and-cancel" => run_reuse_and_cancel_worker(&root),
+            "expect-invalidated" => run_expect_invalidated_worker(&root),
+            other => panic!("unknown locator-custody worker mode {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reopened_incarnation_reusing_numeric_nonce_cannot_rollback_earlier_locator() {
+        let parent = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = parent.join(format!(
+            "layerfs-locator-custody-{}-{timestamp}",
+            std::process::id()
+        ));
+
+        let cas = FsCasV1::create_new(&root).unwrap();
+        drop(cas);
+
+        // Both children are fresh processes and are deliberately forced to
+        // reuse the same serialized tag components. This is the deterministic
+        // collision case: the second process reuses an equal incumbent, then
+        // fails after later publication, and its receipt set must contain no
+        // incumbent alias to delete.
+        spawn_worker(&root, "seed");
+        let before = snapshot_immutable_namespace(&root);
+        let before_usage = exact_namespace_usage(&root);
+        assert!(!before.is_empty());
+
+        spawn_worker(&root, "reuse-and-cancel");
+        let after = snapshot_immutable_namespace(&root);
+        let after_usage = exact_namespace_usage(&root);
+
+        assert_eq!(after, before);
+        assert_eq!(after_usage, before_usage);
+        assert_eq!(after_usage.0, (0, 0));
+
+        let reopened = FsCasV1::open_existing(&root).unwrap();
+        let stale = FsCasV1::open_existing(&root).unwrap();
+        assert!(reopened.occupied().is_ok());
+        assert!(stale.occupied().is_ok());
+        drop(stale);
+        drop(reopened);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn locator_rollback_rejects_foreign_replacement_after_final_validation() {
+        let parent = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = parent.join(format!(
+            "layerfs-locator-post-validation-replacement-{}-{timestamp}",
+            std::process::id()
+        ));
+        let cas = FsCasV1::create_new(&root).unwrap();
+        let mut counters = OperationCountersV1::default();
+        let mut control = ReplaceLocatorAfterValidationControlV1::new(&root, 1);
+
+        let terminal = run_small_create(&cas, b"payload.bin", &mut control, &mut counters);
+
+        assert!(terminal.is_err());
+        assert!(control.cancelled);
+        assert!(control.replaced);
+        let path = control
+            .replaced_path
+            .as_ref()
+            .expect("replacement path recorded");
+        let bytes = control
+            .replaced_bytes
+            .as_ref()
+            .expect("replacement bytes recorded");
+        assert_eq!(fs::read(path).unwrap(), *bytes);
+        assert!(path.exists(), "foreign replacement was deleted");
+        assert!(root.join("held-locator-during-rollback").exists());
+
+        drop(cas);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn catalog_adoption_before_rollback_retains_the_complete_dependency_chain() {
+        let parent = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = parent.join(format!(
+            "layerfs-catalog-adoption-before-rollback-{}-{timestamp}",
+            std::process::id()
+        ));
+        let cas = FsCasV1::create_new(&root).unwrap();
+        let mut counters = OperationCountersV1::default();
+        let mut control = AdoptCatalogBeforeRollbackControlV1::new(&root);
+
+        let terminal = run_small_create(&cas, b"payload.bin", &mut control, &mut counters);
+
+        assert!(terminal.is_err());
+        assert!(control.adopted);
+        assert!(control.cancelled);
+        let marker = control.adopted_marker.as_ref().unwrap();
+        let catalog_entries: Vec<_> = fs::read_dir(root.join("catalog"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(catalog_entries.len(), 1);
+        assert_eq!(fs::read(&catalog_entries[0]).unwrap(), *marker);
+        assert_eq!(
+            super::decode_catalog_marker(marker.clone().try_into().unwrap()).is_ok(),
+            true
+        );
+
+        // The catalog became visible before rollback began.  Its carrier and
+        // every locator remain present as one adopted dependency chain; only
+        // the private preparation namespace is empty.  This is the exact
+        // namespace equation for the crossing, independent of the initiating
+        // cancellation result.
+        assert_eq!(fs::read_dir(root.join("carriers")).unwrap().count(), 1);
+        assert!(fs::read_dir(root.join("objects")).unwrap().count() > 0);
+        assert_eq!(exact_namespace_usage(&root).0, (0, 0));
+        assert!(exact_namespace_usage(&root).1 .0 > 0);
+        assert_storage_equations(&counters);
+        assert!(matches!(
+            cas.ensure_valid(),
+            Err(super::FsCasErrorV1::Invalidated)
+        ));
+
+        drop(cas);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn carrier_receipt_authority_covers_every_former_post_link_check() {
+        for check in [
+            CarrierReceiptTransitionCheckV1::PrivateHandle,
+            CarrierReceiptTransitionCheckV1::PrivateMetadata,
+            CarrierReceiptTransitionCheckV1::ActivePublicationAuthority,
+            CarrierReceiptTransitionCheckV1::CarrierMetadata,
+            CarrierReceiptTransitionCheckV1::CarrierIdentity,
+            CarrierReceiptTransitionCheckV1::ActivePublicationValidation,
+        ] {
+            let root = unique_regression_root(&format!("layerfs-carrier-receipt-{check:?}"));
+            let cas = FsCasV1::create_new(&root).unwrap();
+            let stale = FsCasV1::open_existing(&root).unwrap();
+            let mut counters = OperationCountersV1::default();
+            let mut control = FailCarrierReceiptTransitionControlV1 {
+                check,
+                injected: false,
+            };
+
+            let terminal = run_small_create(&cas, b"payload.bin", &mut control, &mut counters);
+
+            assert_eq!(
+                terminal,
+                Err(OperationErrorV1::FsCas(FsCasErrorV1::Core(
+                    CoreError::Cancelled
+                ))),
+                "{check:?}"
+            );
+            assert!(control.injected, "{check:?} was not reached");
+            assert_eq!(snapshot_immutable_namespace(&root), BTreeMap::new());
+            assert_eq!(exact_namespace_usage(&root), ((0, 0), (0, 0)));
+            assert_storage_equations(&counters);
+            assert_operation_authority_baseline(&cas, &root);
+            assert!(cas.occupied().is_ok(), "{check:?}");
+            assert!(stale.occupied().is_ok(), "{check:?}");
+            let reopened = FsCasV1::open_existing(&root).unwrap();
+            assert!(reopened.occupied().is_ok(), "{check:?}");
+
+            drop(reopened);
+            drop(stale);
+            drop(cas);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn rollback_post_unlink_release_unwind_commits_absence_before_callback() {
+        for target in [
+            super::FsCasCleanupTargetV1::ObjectLocator,
+            super::FsCasCleanupTargetV1::Carrier,
+        ] {
+            let root = unique_regression_root(&format!("layerfs-post-unlink-{target:?}"));
+            let cas = FsCasV1::create_new(&root).unwrap();
+            let mut counters = OperationCountersV1::default();
+            let mut control = PanicRollbackPostUnlinkReleaseControlV1::new(target);
+
+            let terminal = run_small_create(&cas, b"payload.bin", &mut control, &mut counters);
+
+            assert_eq!(
+                terminal,
+                Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                    first: super::FsCasFailureCauseV1::Core(CoreError::Cancelled),
+                    dominant: super::FsCasFailureCauseV1::CleanupFailed(target),
+                })),
+                "{target:?}"
+            );
+            assert_eq!(control.publications, 1, "{target:?}");
+            assert_eq!(control.unlink_attempts, 1, "{target:?}");
+            assert_eq!(control.post_unlink_callbacks, 1, "{target:?}");
+            assert!(control.panicked, "{target:?}");
+            assert_eq!(snapshot_immutable_namespace(&root), BTreeMap::new());
+            assert_eq!(exact_namespace_usage(&root), ((0, 0), (0, 0)));
+            assert_storage_equations(&counters);
+            assert_operation_authority_baseline(&cas, &root);
+            assert_eq!(cas.ensure_valid(), Err(FsCasErrorV1::Invalidated));
+
+            drop(cas);
+            assert_eq!(control.unlink_attempts, 1, "drop retried {target:?}");
+            assert_eq!(snapshot_immutable_namespace(&root), BTreeMap::new());
+            assert!(matches!(
+                FsCasV1::open_existing(&root),
+                Err(FsCasErrorV1::Invalidated)
+            ));
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn locator_receipt_spool_corruption_is_fail_closed_for_every_ordering_case() {
+        for corruption in [
+            LocatorReceiptCorruptionV1::Malformed,
+            LocatorReceiptCorruptionV1::Truncated,
+            LocatorReceiptCorruptionV1::ExtraComplete,
+            LocatorReceiptCorruptionV1::MissingComplete,
+            LocatorReceiptCorruptionV1::Duplicate,
+            LocatorReceiptCorruptionV1::Reordered,
+            LocatorReceiptCorruptionV1::Substituted,
+            LocatorReceiptCorruptionV1::WrongOperation,
+        ] {
+            let root = unique_regression_root(&format!("layerfs-locator-receipt-{corruption:?}"));
+            let cas = FsCasV1::create_new(&root).unwrap();
+            let mut counters = OperationCountersV1::default();
+            let mut control = CorruptLocatorReceiptSpoolControlV1::new(&root, corruption);
+
+            let terminal = run_small_create(&cas, b"payload.bin", &mut control, &mut counters);
+
+            assert_eq!(
+                terminal,
+                Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                    first: super::FsCasFailureCauseV1::Core(CoreError::Cancelled),
+                    dominant: super::FsCasFailureCauseV1::CleanupFailed(
+                        super::FsCasCleanupTargetV1::ObjectLocator,
+                    ),
+                })),
+                "corruption {corruption:?} had the wrong terminal"
+            );
+            assert_eq!(control.publications, 3);
+            assert!(
+                control.corrupted,
+                "corruption {corruption:?} was not applied"
+            );
+            let immutable_before = control
+                .immutable_before
+                .take()
+                .expect("the corruption crossing captured immutable bytes");
+            let immutable_usage_before = control
+                .immutable_usage_before
+                .expect("the corruption crossing captured immutable usage");
+
+            assert_eq!(snapshot_immutable_namespace(&root), immutable_before);
+            assert_eq!(exact_namespace_usage(&root).1, immutable_usage_before);
+            assert_eq!(exact_namespace_usage(&root).0, (0, 0));
+            assert_storage_equations(&counters);
+            assert_operation_authority_baseline(&cas, &root);
+            assert!(matches!(
+                cas.ensure_valid(),
+                Err(super::FsCasErrorV1::Invalidated)
+            ));
+            assert!(matches!(
+                FsCasV1::open_existing(&root),
+                Err(FsCasErrorV1::Invalidated)
+            ));
+
+            drop(cas);
+            spawn_worker(&root, "expect-invalidated");
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn locator_receipt_prelink_terminal_matrix_has_no_visible_locator_or_unowned_tail() {
+        for failure in [
+            ReceiptPrelinkFailureV1::ShortWrite,
+            ReceiptPrelinkFailureV1::WriteFailure,
+            ReceiptPrelinkFailureV1::Precharge,
+            ReceiptPrelinkFailureV1::Cancellation,
+            ReceiptPrelinkFailureV1::Deadline,
+            ReceiptPrelinkFailureV1::ObservationOverflow,
+        ] {
+            let first = match failure {
+                ReceiptPrelinkFailureV1::ShortWrite => super::FsCasFailureCauseV1::Filesystem(
+                    super::FsCasFilesystemFailureV1::ShortWrite,
+                ),
+                ReceiptPrelinkFailureV1::WriteFailure => super::FsCasFailureCauseV1::Filesystem(
+                    super::FsCasFilesystemFailureV1::WriteFailure,
+                ),
+                ReceiptPrelinkFailureV1::Precharge => {
+                    super::FsCasFailureCauseV1::ResourceExhausted(
+                        super::FsCasResourceV1::StorageBytes,
+                    )
+                }
+                ReceiptPrelinkFailureV1::Cancellation => {
+                    super::FsCasFailureCauseV1::Core(CoreError::Cancelled)
+                }
+                ReceiptPrelinkFailureV1::Deadline => {
+                    super::FsCasFailureCauseV1::Core(CoreError::Deadline)
+                }
+                ReceiptPrelinkFailureV1::ObservationOverflow => {
+                    super::FsCasFailureCauseV1::Core(CoreError::IntegerOverflow)
+                }
+                ReceiptPrelinkFailureV1::CallbackUnwind => unreachable!(),
+            };
+            for cleanup in [
+                ReceiptCleanupFailureV1::None,
+                ReceiptCleanupFailureV1::Cleanup,
+                ReceiptCleanupFailureV1::Invalidation,
+            ] {
+                let case = format!("{failure:?}/{cleanup:?}");
+                let root = unique_regression_root(&format!(
+                    "layerfs-receipt-prelink-{failure:?}-{cleanup:?}"
+                ));
+                let cas = FsCasV1::create_new(&root).unwrap();
+                let stale = FsCasV1::open_existing(&root).unwrap();
+                let mut counters = OperationCountersV1::default();
+                let mut control = ReceiptPrelinkFailureControlV1::new(failure, cleanup);
+
+                let terminal = run_small_create(&cas, b"payload.bin", &mut control, &mut counters);
+                let dominant = match cleanup {
+                    ReceiptCleanupFailureV1::None => first,
+                    ReceiptCleanupFailureV1::Cleanup => super::FsCasFailureCauseV1::CleanupFailed(
+                        super::FsCasCleanupTargetV1::PreparationSpool,
+                    ),
+                    ReceiptCleanupFailureV1::Invalidation => {
+                        super::FsCasFailureCauseV1::InvalidationFailed
+                    }
+                };
+
+                let terminal = match terminal.expect_err(&case) {
+                    OperationErrorV1::Core(error) => FsCasErrorV1::Core(error),
+                    OperationErrorV1::FsCas(error) => error,
+                };
+                assert_eq!(terminal.failure_causes_v1(), (first, dominant), "{case}");
+                assert!(control.armed, "{case}");
+                assert!(control.injected, "{case}");
+                assert_eq!(
+                    control.cleanup_injected,
+                    cleanup != ReceiptCleanupFailureV1::None
+                );
+                assert_eq!(
+                    control.invalidation_injected,
+                    cleanup == ReceiptCleanupFailureV1::Invalidation
+                );
+                assert_eq!(
+                    snapshot_immutable_namespace(&root),
+                    BTreeMap::new(),
+                    "{case}"
+                );
+                assert_eq!(
+                    fs::read_dir(root.join("objects")).unwrap().count(),
+                    0,
+                    "{case}"
+                );
+                assert_eq!(
+                    exact_namespace_usage(&root),
+                    if cleanup == ReceiptCleanupFailureV1::None {
+                        ((0, 0), (0, 0))
+                    } else {
+                        ((PERSISTENT_LOCATOR_BYTES_V1 as u64, 1), (0, 0))
+                    },
+                    "{case}"
+                );
+                assert_storage_equations(&counters);
+                assert_eq!(cas.operation_admitted_slots_v1(), 0, "{case}");
+                assert_eq!(cas.operation_admission_active_for_test_v1(), 0, "{case}");
+                assert_eq!(
+                    cas.operation_admission_queue_for_test_v1(),
+                    (0, 0, 0),
+                    "{case}"
+                );
+                assert_eq!(
+                    cas.storage_admission_active_for_test_v1(),
+                    (0, 0, 0),
+                    "{case}"
+                );
+                if cleanup == ReceiptCleanupFailureV1::None {
+                    assert!(cas.occupied().is_ok(), "{case}");
+                    assert!(stale.occupied().is_ok(), "{case}");
+                    assert!(FsCasV1::open_existing(&root).is_ok(), "{case}");
+                } else {
+                    assert_eq!(cas.ensure_valid(), Err(FsCasErrorV1::Invalidated), "{case}");
+                    assert_eq!(
+                        stale.ensure_valid(),
+                        Err(FsCasErrorV1::Invalidated),
+                        "{case}"
+                    );
+                    assert!(matches!(
+                        FsCasV1::open_existing(&root),
+                        Err(FsCasErrorV1::Invalidated)
+                    ));
+                }
+
+                drop(stale);
+                drop(cas);
+                fs::remove_dir_all(root).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn locator_receipt_prelink_callback_unwind_cleans_or_returns_exact_cleanup_terminal() {
+        for cleanup in [
+            ReceiptCleanupFailureV1::None,
+            ReceiptCleanupFailureV1::Cleanup,
+            ReceiptCleanupFailureV1::Invalidation,
+        ] {
+            let case = format!("CallbackUnwind/{cleanup:?}");
+            let root =
+                unique_regression_root(&format!("layerfs-receipt-prelink-callback-{cleanup:?}"));
+            let cas = FsCasV1::create_new(&root).unwrap();
+            let stale = FsCasV1::open_existing(&root).unwrap();
+            let mut counters = OperationCountersV1::default();
+            let mut control = ReceiptPrelinkFailureControlV1::new(
+                ReceiptPrelinkFailureV1::CallbackUnwind,
+                cleanup,
+            );
+
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                run_small_create(&cas, b"payload.bin", &mut control, &mut counters)
+            }));
+            if cleanup == ReceiptCleanupFailureV1::None {
+                assert!(outcome.is_err(), "{case}");
+            } else {
+                let terminal = match outcome
+                    .expect("cleanup failure converts the callback unwind")
+                    .expect_err(&case)
+                {
+                    OperationErrorV1::Core(error) => FsCasErrorV1::Core(error),
+                    OperationErrorV1::FsCas(error) => error,
+                };
+                assert_eq!(
+                    terminal.failure_causes_v1(),
+                    (
+                        super::FsCasFailureCauseV1::CleanupFailed(
+                            super::FsCasCleanupTargetV1::PreparationSpool,
+                        ),
+                        if cleanup == ReceiptCleanupFailureV1::Invalidation {
+                            super::FsCasFailureCauseV1::InvalidationFailed
+                        } else {
+                            super::FsCasFailureCauseV1::CleanupFailed(
+                                super::FsCasCleanupTargetV1::PreparationSpool,
+                            )
+                        },
+                    ),
+                    "{case}"
+                );
+            }
+
+            assert!(control.armed, "{case}");
+            assert!(control.injected, "{case}");
+            assert_eq!(
+                control.cleanup_injected,
+                cleanup != ReceiptCleanupFailureV1::None
+            );
+            assert_eq!(
+                control.invalidation_injected,
+                cleanup == ReceiptCleanupFailureV1::Invalidation
+            );
+            assert_eq!(
+                snapshot_immutable_namespace(&root),
+                BTreeMap::new(),
+                "{case}"
+            );
+            assert_eq!(
+                exact_namespace_usage(&root),
+                if cleanup == ReceiptCleanupFailureV1::None {
+                    ((0, 0), (0, 0))
+                } else {
+                    ((PERSISTENT_LOCATOR_BYTES_V1 as u64, 1), (0, 0))
+                },
+                "{case}"
+            );
+            assert_storage_equations(&counters);
+            assert_eq!(cas.operation_admitted_slots_v1(), 0, "{case}");
+            assert_eq!(cas.operation_admission_active_for_test_v1(), 0, "{case}");
+            assert_eq!(
+                cas.operation_admission_queue_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                cas.storage_admission_active_for_test_v1(),
+                (0, 0, 0),
+                "{case}"
+            );
+            if cleanup == ReceiptCleanupFailureV1::None {
+                assert!(cas.occupied().is_ok(), "{case}");
+                assert!(stale.occupied().is_ok(), "{case}");
+                assert!(FsCasV1::open_existing(&root).is_ok(), "{case}");
+            } else {
+                assert_eq!(cas.ensure_valid(), Err(FsCasErrorV1::Invalidated), "{case}");
+                assert_eq!(
+                    stale.ensure_valid(),
+                    Err(FsCasErrorV1::Invalidated),
+                    "{case}"
+                );
+                assert!(matches!(
+                    FsCasV1::open_existing(&root),
+                    Err(FsCasErrorV1::Invalidated)
+                ));
+            }
+
+            drop(stale);
+            drop(cas);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn locator_receipt_private_staging_has_no_flush_boundary_by_contract() {
+        let source = include_str!("fs.rs");
+        let prepare = source
+            .split_once("fn prepare_v1<C>")
+            .unwrap()
+            .1
+            .split_once("fn commit_visible_v1")
+            .unwrap()
+            .0;
+        assert!(!prepare.contains("flush_controlled_v1"));
+        assert!(!prepare.contains("PreparationFlush"));
+    }
+}
+
+#[cfg(test)]
+mod locator_receipt_memory_tests {
+    use super::*;
+    use crate::limits::MEMORY_PROFILE_32_MIB;
+
+    #[test]
+    fn receipt_memory_bound_covers_each_required_population_size() {
+        let receipt_bytes = core::mem::size_of::<LocatorPublicationReceiptV1>() as u64;
+        let custody_bytes = core::mem::size_of::<LocatorPublicationCustodyV1>() as u64;
+        let fixed = custody_bytes + receipt_bytes;
+        for count in [1_u64, 25_600, crate::pack::MAX_PACK_RECORDS as u64] {
+            assert_eq!(
+                locator_publication_receipt_resident_memory_bound_v1(count),
+                Ok(fixed)
+            );
+        }
+        assert_eq!(
+            locator_publication_receipt_resident_memory_bound_v1(u64::MAX),
+            Err(CoreError::IntegerOverflow)
+        );
+    }
+
+    #[test]
+    fn receipt_memory_is_charged_once_and_maximum_population_is_refused_before_visibility() {
+        let receipt_bytes = core::mem::size_of::<LocatorPublicationReceiptV1>() as u64;
+        let custody_bytes = core::mem::size_of::<LocatorPublicationCustodyV1>() as u64;
+        let one = locator_publication_receipt_resident_memory_bound_v1(1).unwrap();
+        let sentinel = locator_publication_receipt_resident_memory_bound_v1(25_600).unwrap();
+        let legal_max = locator_publication_receipt_resident_memory_bound_v1(
+            crate::pack::MAX_PACK_RECORDS as u64,
+        )
+        .unwrap();
+
+        let fixed = custody_bytes + receipt_bytes;
+        assert_eq!(one, fixed);
+        assert_eq!(sentinel, fixed);
+        assert_eq!(legal_max, fixed);
+        assert!(sentinel <= legal_max);
+        assert!(legal_max <= OPERATION_SLOT_BYTES);
+
+        let one_plan = OperationMemoryPlanV1::empty()
+            .charge(MemoryComponentV1::MetadataWindow, one)
+            .unwrap();
+        assert_eq!(one_plan.total_bytes(), one);
+        let sentinel_plan =
+            OperationMemoryPlanV1::empty().charge(MemoryComponentV1::MetadataWindow, sentinel);
+        assert!(sentinel_plan.is_ok());
+        assert!(OperationMemoryPlanV1::empty()
+            .charge(MemoryComponentV1::MetadataWindow, legal_max)
+            .is_ok());
+
+        let ledger = ResourceLedgerV1::new(MEMORY_PROFILE_32_MIB);
+        let reservation = ledger.reserve_operation_with_plan(one_plan).unwrap();
+        assert_eq!(ledger.admitted_slots(), 1);
+        assert_eq!(ledger.planned_high_water_bytes(), BASE_LEDGER_BYTES + one);
+        drop(reservation);
+        assert_eq!(ledger.admitted_slots(), 0);
+
+        let mut custody = LocatorPublicationCustodyV1::default();
+        assert_eq!(
+            custody.reserve_v1(crate::pack::MAX_PACK_RECORDS as u32),
+            Err(FsCasErrorV1::ResourceExhausted(FsCasResourceV1::Memory))
+        );
+        assert!(custody.receipts.is_empty());
+        assert_eq!(custody.live_unclassified, 0);
+        assert_eq!(custody.retained_and_recorded, 0);
+    }
+
+    #[test]
+    fn receipt_allocator_failure_is_typed_before_any_receipt_is_visible() {
+        let mut custody = LocatorPublicationCustodyV1::default();
+        assert_eq!(
+            custody.reserve_v1(u32::MAX),
+            Err(FsCasErrorV1::ResourceExhausted(FsCasResourceV1::Memory))
+        );
+        assert!(custody.receipts.is_empty());
+        assert_eq!(custody.live_unclassified, 0);
+        assert_eq!(custody.retained_and_recorded, 0);
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -209,12 +1821,15 @@ impl FsCasErrorV1 {
         // cause. Counter/observation, I/O, integrity, and resource failures
         // that happen later remain secondary diagnostics and cannot be
         // promoted into the dominant slot by a careless caller.
+        let current = self.dominant_cause_v1();
+        let later = dominant.dominant_cause_v1();
         if dominant.has_cleanup_or_invalidation_dominance_v1()
-            && self.dominant_cause_v1() != dominant.dominant_cause_v1()
+            && current != later
+            && !matches!(current, FsCasFailureCauseV1::InvalidationFailed)
         {
             Self::TerminalFailure {
                 first: self.first_cause_v1(),
-                dominant: dominant.dominant_cause_v1(),
+                dominant: later,
             }
         } else {
             self
@@ -318,6 +1933,17 @@ pub(crate) enum FsCasResidueAccountingBoundaryV1 {
     Carrier,
 }
 
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CarrierReceiptTransitionCheckV1 {
+    PrivateHandle,
+    PrivateMetadata,
+    ActivePublicationAuthority,
+    CarrierMetadata,
+    CarrierIdentity,
+    ActivePublicationValidation,
+}
+
 impl From<CoreError> for FsCasErrorV1 {
     fn from(error: CoreError) -> Self {
         Self::Core(error)
@@ -391,6 +2017,13 @@ pub trait FsCasControlV1 {
     /// neither this callback nor any callback work inside the transition.
     #[cfg(test)]
     fn before_carrier_no_replace_transition_for_test_v1(&mut self) {}
+    #[cfg(test)]
+    fn inject_carrier_receipt_transition_failure_v1(
+        &mut self,
+        _check: CarrierReceiptTransitionCheckV1,
+    ) -> Option<FsCasErrorV1> {
+        None
+    }
     /// Test-only proof hook for the otherwise-unreachable case where an
     /// operation terminal callback unwinds after both owned capability halves
     /// have been released successfully. Production controls have no such
@@ -443,6 +2076,13 @@ pub trait FsCasControlV1 {
     #[cfg(test)]
     fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
         false
+    }
+    /// Test-only failure at the checked preparation-byte precharge immediately
+    /// before an operation spool write. Production controls cannot refuse the
+    /// root ledger transition and compile without this method.
+    #[cfg(test)]
+    fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<FsCasErrorV1> {
+        None
     }
     /// Test-only proof hook for the checksum reader wrapped around a private
     /// pack. The hook fires immediately before the real checksum read, so a
@@ -1105,6 +2745,15 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
     }
 
     #[cfg(test)]
+    fn inject_carrier_receipt_transition_failure_v1(
+        &mut self,
+        check: CarrierReceiptTransitionCheckV1,
+    ) -> Option<FsCasErrorV1> {
+        self.inner
+            .inject_carrier_receipt_transition_failure_v1(check)
+    }
+
+    #[cfg(test)]
     fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
         self.inner.inject_operation_terminal_unwind_after_release()
     }
@@ -1139,6 +2788,11 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
     fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
         self.inner
             .inject_operation_spool_write_observation_overflow()
+    }
+
+    #[cfg(test)]
+    fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<FsCasErrorV1> {
+        self.inner.inject_operation_spool_precharge_failure_v1()
     }
 
     #[cfg(test)]
@@ -1197,23 +2851,355 @@ enum CarrierPublicationCustodyV1 {
     ReturnedInstalled,
 }
 
+/// Exact operation-local evidence for a carrier that this admission linked.
+/// The receipt binds the immutable carrier identity to the pack, operation,
+/// root generation, and root incarnation. A carrier that was merely observed
+/// as an incumbent never receives this receipt and therefore cannot be
+/// removed by unpublished-transaction rollback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CarrierPublicationReceiptV1 {
+    sealed: SealedPackV1,
+    transaction: u64,
+    root_generation: [u8; 32],
+    root_incarnation: u64,
+    snapshot: ImmutableFileSnapshotV1,
+}
+
+/// The exact operation-local evidence recorded at the successful no-replace
+/// link. The locator name is represented by its typed object id (the durable
+/// basename is deterministic), while the frozen bytes, decoded binding, and
+/// immutable inode snapshot authenticate the exact alias this operation
+/// installed. A later operation that merely reuses an equal incumbent never
+/// receives one of these receipts and therefore cannot authorize its unlink.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct LocatorPublicationReceiptInputV1 {
+    locator: PersistentObjectLocatorV1,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct LocatorPublicationReceiptV1 {
+    locator: PersistentObjectLocatorV1,
+    snapshot: ImmutableFileSnapshotV1,
+}
+
+/// The locator receipt keeps only the typed locator and immutable inode
+/// snapshot.  The object id is already part of the locator entry and the
+/// frozen bytes are a deterministic encoding of that locator; retaining both
+/// copies would charge duplicated storage to neither the operation slot nor
+/// the custody equation.
+pub(crate) fn locator_publication_receipt_resident_memory_bound_v1(
+    maximum_records: u64,
+) -> CoreResult<u64> {
+    // Keep the validated population conversion as an explicit arithmetic
+    // boundary even though production receipt bytes are file-backed and are
+    // therefore no longer multiplied into the resident operation-slot charge.
+    let _ = u32::try_from(maximum_records).map_err(|_| CoreError::IntegerOverflow)?;
+    let custody_bytes = u64::try_from(core::mem::size_of::<LocatorPublicationCustodyV1>())
+        .map_err(|_| CoreError::IntegerOverflow)?;
+    // Production admissions keep the exact receipts in the already-accounted
+    // preparation spool.  The custody object retains only counters, one
+    // optional spool handle, and bounded control state; its resident charge is
+    // therefore independent of the number of published locators.
+    custody_bytes
+        .checked_add(
+            u64::try_from(core::mem::size_of::<LocatorPublicationReceiptV1>())
+                .map_err(|_| CoreError::IntegerOverflow)?,
+        )
+        .ok_or(CoreError::IntegerOverflow)
+}
+
+const LOCATOR_RECEIPT_RECORD_BYTES_V1: usize = PERSISTENT_LOCATOR_BYTES_V1 + 24;
+const LOCATOR_RECEIPT_RECORD_BYTES_U64_V1: u64 = LOCATOR_RECEIPT_RECORD_BYTES_V1 as u64;
+
+pub(crate) fn locator_publication_receipt_preparation_bytes_bound_v1(
+    maximum_records: u64,
+) -> CoreResult<u64> {
+    maximum_records
+        .checked_mul(LOCATOR_RECEIPT_RECORD_BYTES_U64_V1)
+        .ok_or(CoreError::IntegerOverflow)
+}
+
 /// Exact custody for object-locator names made visible by one carrier
 /// publication transaction. Visibility is recorded at the successful
 /// no-replace link, before any fallible observation counter or callback can
 /// return control to the semantic owner.
-#[derive(Default)]
-struct LocatorPublicationCustodyV1 {
+struct LocatorPublicationCustodyV1<'spool> {
     live_unclassified: u64,
     retained_and_recorded: u64,
     rollback_forbidden: bool,
+    receipts: Vec<LocatorPublicationReceiptV1>,
+    pending_receipt: Option<LocatorPublicationReceiptV1>,
+    receipt_prelink_unwound: bool,
+    #[cfg(feature = "operation-polymorphism")]
+    receipt_spool: Option<&'spool mut FsOperationSpoolV1>,
+    #[cfg(feature = "operation-polymorphism")]
+    receipt_count: u64,
 }
 
-impl LocatorPublicationCustodyV1 {
-    fn mark_visible_v1(&mut self) {
-        // A pack contains at most `u32::MAX` records and each publication loop
-        // visits an ordinal once, so this `u64` increment is preflighted by the
-        // validated pack shape and cannot overflow.
+impl<'spool> Default for LocatorPublicationCustodyV1<'spool> {
+    fn default() -> Self {
+        Self {
+            live_unclassified: 0,
+            retained_and_recorded: 0,
+            rollback_forbidden: false,
+            receipts: Vec::new(),
+            pending_receipt: None,
+            receipt_prelink_unwound: false,
+            #[cfg(feature = "operation-polymorphism")]
+            receipt_spool: None,
+            #[cfg(feature = "operation-polymorphism")]
+            receipt_count: 0,
+        }
+    }
+}
+
+impl<'spool> LocatorPublicationCustodyV1<'spool> {
+    #[cfg(feature = "operation-polymorphism")]
+    fn file_backed(spool: &'spool mut FsOperationSpoolV1) -> Self {
+        Self {
+            receipt_spool: Some(spool),
+            ..Self::default()
+        }
+    }
+
+    #[cfg(feature = "operation-polymorphism")]
+    fn reset_file_backed_spool_v1<C>(&mut self, control: &mut C) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        self.receipt_spool
+            .as_deref_mut()
+            .ok_or(FsCasErrorV1::Integrity)?
+            .set_len_controlled_v1(0, control)
+    }
+
+    fn in_memory_receipt_bound_v1(maximum_records: u64) -> Result<u64, FsCasErrorV1> {
+        let receipt_bytes = u64::try_from(core::mem::size_of::<LocatorPublicationReceiptV1>())
+            .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+        let custody_bytes = u64::try_from(core::mem::size_of::<Self>())
+            .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+        custody_bytes
+            .checked_add(
+                maximum_records
+                    .checked_mul(receipt_bytes)
+                    .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?,
+            )
+            .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+    }
+
+    fn reserve_v1(&mut self, count: u32) -> Result<(), FsCasErrorV1> {
+        #[cfg(feature = "operation-polymorphism")]
+        if self.receipt_spool.is_some() {
+            // The complete receipt population is file-backed and charged by
+            // FsOperationSpoolV1's preparation ledger.  This check is only a
+            // fixed-record arithmetic/capacity proof; it deliberately does
+            // not reserve a userspace vector proportional to `count`.
+            self.receipt_count
+                .checked_add(u64::from(count))
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?
+                .checked_mul(LOCATOR_RECEIPT_RECORD_BYTES_U64_V1)
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+            return Ok(());
+        }
+        if Self::in_memory_receipt_bound_v1(u64::from(count))? > OPERATION_SLOT_BYTES {
+            return Err(FsCasErrorV1::ResourceExhausted(FsCasResourceV1::Memory));
+        }
+        self.receipts
+            .try_reserve_exact(
+                usize::try_from(count)
+                    .map_err(|_| FsCasErrorV1::ResourceExhausted(FsCasResourceV1::Memory))?,
+            )
+            .map_err(|_| FsCasErrorV1::ResourceExhausted(FsCasResourceV1::Memory))
+    }
+
+    fn note_receipt_prelink_unwind_v1(&mut self) {
+        self.receipt_prelink_unwound = true;
+    }
+
+    fn take_receipt_prelink_unwind_v1(&mut self) -> bool {
+        core::mem::take(&mut self.receipt_prelink_unwound)
+    }
+
+    /// Prepare the exact custody record before the destination pathname can
+    /// become visible.  The spool write is the last fallible publication
+    /// step; the no-replace link is followed only by the infallible commit
+    /// below. A failed or abandoned write is truncated back to the committed
+    /// receipt population before control can leave this staging boundary.
+    fn prepare_v1<C>(
+        &mut self,
+        input: LocatorPublicationReceiptInputV1,
+        snapshot: ImmutableFileSnapshotV1,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        if self.pending_receipt.is_some() {
+            return Err(FsCasErrorV1::Integrity);
+        }
+        let receipt = LocatorPublicationReceiptV1 {
+            locator: input.locator,
+            snapshot,
+        };
+        #[cfg(feature = "operation-polymorphism")]
+        if let Some(spool) = self.receipt_spool.as_deref_mut() {
+            let offset = self
+                .receipt_count
+                .checked_mul(LOCATOR_RECEIPT_RECORD_BYTES_U64_V1)
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+            poll_control_v1(control)?;
+            let write = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                spool.write_exact_at_controlled_v1(
+                    offset,
+                    &encode_locator_publication_receipt_v1(receipt),
+                    control,
+                )
+            }));
+            match write {
+                Ok(Ok(())) => {}
+                Ok(Err(first)) => {
+                    return Err(
+                        match Self::truncate_staged_receipt_v1(spool, offset, control) {
+                            Ok(()) => first,
+                            Err(cleanup) => first.dominated_by_v1(cleanup),
+                        },
+                    );
+                }
+                Err(payload) => match Self::truncate_staged_receipt_v1(spool, offset, control) {
+                    Ok(()) => std::panic::resume_unwind(payload),
+                    Err(cleanup) => return Err(cleanup),
+                },
+            }
+            self.pending_receipt = Some(receipt);
+            return Ok(());
+        }
+        self.pending_receipt = Some(receipt);
+        Ok(())
+    }
+
+    /// Commit a receipt after the authoritative no-replace link succeeds.
+    /// All fallible work was completed by `prepare_v1`; this transition only
+    /// moves already-reserved custody and increments bounded counters.
+    fn commit_visible_v1(&mut self) {
+        let receipt = self
+            .pending_receipt
+            .take()
+            .expect("locator receipt must be prepared before visibility");
+        // A pack contains at most `u32::MAX` records and `reserve_v1` checked
+        // the next fixed receipt slot before the link.  The post-link commit
+        // is intentionally infallible.
         self.live_unclassified += 1;
+        #[cfg(feature = "operation-polymorphism")]
+        if self.receipt_spool.is_some() {
+            self.receipt_count += 1;
+            return;
+        }
+        debug_assert!(self.receipts.len() < self.receipts.capacity());
+        self.receipts.push(receipt);
+    }
+
+    /// Discard a prepared-but-never-visible receipt and restore the physical
+    /// spool to the exact committed receipt count.
+    fn discard_prepared_v1<C>(&mut self, control: &mut C) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        self.pending_receipt.take().ok_or(FsCasErrorV1::Integrity)?;
+        #[cfg(feature = "operation-polymorphism")]
+        if let Some(spool) = self.receipt_spool.as_deref_mut() {
+            let offset = self
+                .receipt_count
+                .checked_mul(LOCATOR_RECEIPT_RECORD_BYTES_U64_V1)
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+            Self::truncate_staged_receipt_v1(spool, offset, control)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "operation-polymorphism")]
+    fn truncate_staged_receipt_v1<C>(
+        spool: &mut FsOperationSpoolV1,
+        offset: u64,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            spool.set_len_controlled_v1(offset, control)
+        })) {
+            Ok(Ok(())) => Ok(()),
+            // The truncate completed before an accounting transition failed.
+            // Preserve that typed accounting cause; the spool bytes are exact.
+            Ok(Err(first)) if spool.len == offset => Err(first),
+            Ok(Err(first)) => {
+                let cleanup = spool.owner.cleanup_failure_after_unwind_v1(
+                    FsCasCleanupTargetV1::PreparationSpool,
+                    control,
+                );
+                Err(first.dominated_by_v1(cleanup))
+            }
+            Err(_) => Err(spool
+                .owner
+                .cleanup_failure_after_unwind_v1(FsCasCleanupTargetV1::PreparationSpool, control)),
+        }
+    }
+
+    // Kept for the direct in-module custody tests.  Production publication
+    // calls `prepare_v1` before the hard link and `commit_visible_v1` after it.
+    fn mark_visible_v1<C>(
+        &mut self,
+        input: LocatorPublicationReceiptInputV1,
+        snapshot: ImmutableFileSnapshotV1,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        self.reserve_v1(1)?;
+        self.prepare_v1(input, snapshot, control)?;
+        self.commit_visible_v1();
+        Ok(())
+    }
+
+    fn receipt_count_v1(&self) -> Result<u64, FsCasErrorV1> {
+        #[cfg(feature = "operation-polymorphism")]
+        if self.receipt_spool.is_some() {
+            return Ok(self.receipt_count);
+        }
+        u64::try_from(self.receipts.len())
+            .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))
+    }
+
+    fn authenticate_receipt_spool_len_v1(&self) -> Result<(), FsCasErrorV1> {
+        #[cfg(feature = "operation-polymorphism")]
+        if let Some(spool) = self.receipt_spool.as_deref() {
+            let expected = self
+                .receipt_count
+                .checked_mul(LOCATOR_RECEIPT_RECORD_BYTES_U64_V1)
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+            if spool.authoritative_file_len_v1()? != expected {
+                return Err(FsCasErrorV1::Integrity);
+            }
+        }
+        Ok(())
+    }
+
+    fn receipt_v1(&mut self, ordinal: u64) -> Result<LocatorPublicationReceiptV1, FsCasErrorV1> {
+        #[cfg(feature = "operation-polymorphism")]
+        if let Some(spool) = self.receipt_spool.as_deref_mut() {
+            let offset = ordinal
+                .checked_mul(LOCATOR_RECEIPT_RECORD_BYTES_U64_V1)
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+            let mut bytes = [0_u8; LOCATOR_RECEIPT_RECORD_BYTES_V1];
+            spool.read_exact_at(offset, &mut bytes)?;
+            return decode_locator_publication_receipt_v1(bytes);
+        }
+        let index = usize::try_from(ordinal).map_err(|_| FsCasErrorV1::Integrity)?;
+        self.receipts
+            .get(index)
+            .copied()
+            .ok_or(FsCasErrorV1::Integrity)
     }
 
     fn mark_removed_v1(&mut self) -> Result<(), FsCasErrorV1> {
@@ -1318,7 +3304,7 @@ impl ImmutableMarkerCustodyV1 {
     }
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FsClosureAdmissionErrorV1 {
     Core(CoreError),
@@ -1425,6 +3411,10 @@ pub struct FsCasV1 {
 struct FsCasInnerV1 {
     root: PathBuf,
     generation: [u8; 32],
+    /// Fresh for each opened shared owner. It is folded into every durable
+    /// locator transaction tag so a process-local nonce cannot authorize a
+    /// publication from an earlier incarnation after close-all/reopen.
+    locator_incarnation: u64,
     invalidated: AtomicBool,
     #[cfg(test)]
     invalidation_probe_failure: Mutex<Option<FsCasErrorV1>>,
@@ -1507,6 +3497,57 @@ impl ImmutableFileSnapshotV1 {
             }
         }
     }
+}
+
+fn encode_locator_publication_receipt_v1(
+    receipt: LocatorPublicationReceiptV1,
+) -> [u8; LOCATOR_RECEIPT_RECORD_BYTES_V1] {
+    let mut bytes = [0_u8; LOCATOR_RECEIPT_RECORD_BYTES_V1];
+    bytes[..PERSISTENT_LOCATOR_BYTES_V1]
+        .copy_from_slice(&encode_persistent_locator_v1(receipt.locator));
+    bytes[PERSISTENT_LOCATOR_BYTES_V1..PERSISTENT_LOCATOR_BYTES_V1 + 8]
+        .copy_from_slice(&receipt.snapshot.len.to_be_bytes());
+    #[cfg(unix)]
+    {
+        bytes[PERSISTENT_LOCATOR_BYTES_V1 + 8..PERSISTENT_LOCATOR_BYTES_V1 + 16]
+            .copy_from_slice(&receipt.snapshot.device.to_be_bytes());
+        bytes[PERSISTENT_LOCATOR_BYTES_V1 + 16..PERSISTENT_LOCATOR_BYTES_V1 + 24]
+            .copy_from_slice(&receipt.snapshot.inode.to_be_bytes());
+    }
+    bytes
+}
+
+fn decode_locator_publication_receipt_v1(
+    bytes: [u8; LOCATOR_RECEIPT_RECORD_BYTES_V1],
+) -> Result<LocatorPublicationReceiptV1, FsCasErrorV1> {
+    let locator_bytes: [u8; PERSISTENT_LOCATOR_BYTES_V1] = bytes[..PERSISTENT_LOCATOR_BYTES_V1]
+        .try_into()
+        .map_err(|_| FsCasErrorV1::Integrity)?;
+    let locator = decode_persistent_locator_self_describing_v1(locator_bytes)
+        .map_err(|_| FsCasErrorV1::Integrity)?;
+    let len = u64::from_be_bytes(
+        bytes[PERSISTENT_LOCATOR_BYTES_V1..PERSISTENT_LOCATOR_BYTES_V1 + 8]
+            .try_into()
+            .map_err(|_| FsCasErrorV1::Integrity)?,
+    );
+    Ok(LocatorPublicationReceiptV1 {
+        locator,
+        snapshot: ImmutableFileSnapshotV1 {
+            len,
+            #[cfg(unix)]
+            device: u64::from_be_bytes(
+                bytes[PERSISTENT_LOCATOR_BYTES_V1 + 8..PERSISTENT_LOCATOR_BYTES_V1 + 16]
+                    .try_into()
+                    .map_err(|_| FsCasErrorV1::Integrity)?,
+            ),
+            #[cfg(unix)]
+            inode: u64::from_be_bytes(
+                bytes[PERSISTENT_LOCATOR_BYTES_V1 + 16..PERSISTENT_LOCATOR_BYTES_V1 + 24]
+                    .try_into()
+                    .map_err(|_| FsCasErrorV1::Integrity)?,
+            ),
+        },
+    })
 }
 
 #[derive(Debug, Default)]
@@ -3139,7 +5180,7 @@ impl Drop for FsCasInnerV1 {
 /// owner. Lower storage layers may borrow its reservation but cannot mint or
 /// replace it. Only this outer capability may monotonically refine its own
 /// conservative storage envelope before preparation begins.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) struct FsOperationCapabilityV1<'owner> {
     owner: &'owner FsCasV1,
     operation_kind: FsOperationKindV1,
@@ -3148,7 +5189,7 @@ pub(crate) struct FsOperationCapabilityV1<'owner> {
     admission: RootAdmissionLeaseV1<'owner>,
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl FsOperationCapabilityV1<'_> {
     pub(crate) fn owner_ref_v1(&self) -> &FsCasV1 {
         self.owner
@@ -3406,7 +5447,7 @@ impl FsOperationCapabilityV1<'_> {
     }
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl Drop for FsOperationCapabilityV1<'_> {
     fn drop(&mut self) {
         if let Some(mut lease) = self.storage.take() {
@@ -3547,9 +5588,11 @@ where
             return Err(error);
         }
     };
+    let locator_incarnation = locator_incarnation_v1(storage_admission.identity.instance);
     let owner = Arc::new(FsCasInnerV1 {
         root: root.to_path_buf(),
         generation,
+        locator_incarnation,
         invalidated: AtomicBool::new(false),
         #[cfg(test)]
         invalidation_probe_failure: Mutex::new(None),
@@ -3562,6 +5605,45 @@ where
     });
     roots.insert(root.to_path_buf(), Arc::downgrade(&owner));
     Ok(owner)
+}
+
+/// Generate the in-memory incarnation component used by persistent locator
+/// transaction tags. The storage-owner instance is monotonic within one
+/// process; wall-clock and process identity provide a useful diagnostic
+/// distinction for a fresh process/restart even though the value is not a
+/// uniqueness proof. The resulting tag is never used as deletion custody:
+/// exact operation-local receipts authorize locator unlinking.
+fn locator_incarnation_v1(storage_owner_instance: u64) -> u64 {
+    #[cfg(test)]
+    if let Ok(value) = std::env::var("LAYERFS_TEST_LOCATOR_INCARNATION") {
+        return value
+            .parse()
+            .expect("test locator incarnation must be a u64");
+    }
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"LFSINC01");
+    hasher.update(&storage_owner_instance.to_be_bytes());
+    hasher.update(&std::process::id().to_be_bytes());
+    hasher.update(&elapsed.to_be_bytes());
+    u64::from_be_bytes(
+        hasher.finalize().as_bytes()[..8]
+            .try_into()
+            .expect("BLAKE3 digest has at least eight bytes"),
+    )
+}
+
+fn next_locator_operation_nonce_v1() -> u64 {
+    #[cfg(test)]
+    if let Ok(value) = std::env::var("LAYERFS_TEST_LOCATOR_OPERATION_NONCE") {
+        return value
+            .parse()
+            .expect("test locator operation nonce must be a u64");
+    }
+    NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed)
 }
 
 fn observe_directory_storage_usage_v1(
@@ -3666,7 +5748,7 @@ impl FsCasV1 {
     /// Crate-private logical admission observation for deterministic
     /// qualification. This does not expose the root-owned ledger or permit a
     /// caller to mint an operation reservation.
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn operation_admitted_slots_v1(&self) -> u64 {
         self.inner.operation_ledger.admitted_slots()
     }
@@ -3950,6 +6032,8 @@ impl FsCasV1 {
             None,
             None,
             None,
+            None,
+            false,
             true,
             control,
         )
@@ -4018,6 +6102,7 @@ impl FsCasV1 {
             8,
             FsCasCleanupTargetV1::PreparationSpool,
             control,
+            true,
         )
     }
 
@@ -4076,7 +6161,10 @@ impl FsCasV1 {
         }
         let candidate = candidate.ok_or(FsCasErrorV1::MissingOccupant)?;
         let mut reader = FilePackReadV1::open(&candidate)?;
-        let sealed = read_sealed_shape(&mut reader)?;
+        let sealed = match read_sealed_pack_shape_v1(&mut reader) {
+            Ok(sealed) => sealed,
+            Err(error) => return Err(restore_private_pack_shape_failure_v1(&mut reader, error)),
+        };
         let carrier = self
             .inner
             .root
@@ -4275,6 +6363,31 @@ impl FsCasV1 {
             FsCasBoundaryV1::PublicationLockReleased,
             FsCasBoundaryV1::PublicationLockWaitTerminated,
             true,
+            control,
+        )
+    }
+
+    /// Acquire the publication fence for exact cleanup of an operation that
+    /// has already crossed a fail-closed invalidation boundary.  Invalidation
+    /// prevents new work, but it must not strand an operation's already
+    /// authenticated private aliases or carrier: cleanup still needs the
+    /// publication record and namespace fence, while the cleanup caller
+    /// supplies the exact receipt/snapshot authorization separately.
+    fn lock_publication_for_cleanup_controlled_v1<C>(
+        &self,
+        control: &mut C,
+    ) -> Result<ControlledRootMutexGuardV1<'_, PublicationStateV1>, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        self.lock_root_mutex_controlled_v1(
+            &self.inner.publication,
+            FsCasBoundaryV1::PublicationLockRequested,
+            FsCasBoundaryV1::PublicationLockContended,
+            FsCasBoundaryV1::PublicationLockAcquired,
+            FsCasBoundaryV1::PublicationLockReleased,
+            FsCasBoundaryV1::PublicationLockWaitTerminated,
+            false,
             control,
         )
     }
@@ -4693,16 +6806,95 @@ impl FsCasV1 {
     where
         C: FsCasControlV1 + ?Sized,
     {
-        let mut guard = self.lock_publication_controlled_v1(control)?;
-        let revalidated = (|| -> Result<(), FsCasErrorV1> {
-            self.ensure_valid()?;
+        self.lock_active_pack_with_catalog_policy_controlled_v1(
+            id,
+            transaction,
+            carrier_path,
+            marker_path,
+            validated_file,
+            ActivePackCatalogPolicyV1::RequireVacancy,
+            true,
+            control,
+        )
+        .map(|(guard, _)| guard)
+    }
+
+    fn lock_active_pack_for_catalog_rollback_controlled_v1<'owner, C>(
+        &'owner self,
+        id: PackIdV1,
+        transaction: u64,
+        carrier_path: &Path,
+        catalog_path: &Path,
+        expected: SealedPackV1,
+        validated_file: Option<&File>,
+        control: &mut C,
+    ) -> Result<
+        (
+            ControlledRootMutexGuardV1<'owner, PublicationStateV1>,
+            CatalogRollbackDispositionV1,
+        ),
+        FsCasErrorV1,
+    >
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        self.lock_active_pack_with_catalog_policy_controlled_v1(
+            id,
+            transaction,
+            carrier_path,
+            catalog_path,
+            validated_file,
+            ActivePackCatalogPolicyV1::AllowForeign { expected },
+            false,
+            control,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn lock_active_pack_with_catalog_policy_controlled_v1<'owner, C>(
+        &'owner self,
+        id: PackIdV1,
+        transaction: u64,
+        carrier_path: &Path,
+        marker_path: &Path,
+        validated_file: Option<&File>,
+        catalog_policy: ActivePackCatalogPolicyV1,
+        require_valid_root: bool,
+        control: &mut C,
+    ) -> Result<
+        (
+            ControlledRootMutexGuardV1<'owner, PublicationStateV1>,
+            CatalogRollbackDispositionV1,
+        ),
+        FsCasErrorV1,
+    >
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let mut guard = if require_valid_root {
+            self.lock_publication_controlled_v1(control)?
+        } else {
+            self.lock_publication_for_cleanup_controlled_v1(control)?
+        };
+        let revalidated = (|| -> Result<CatalogRollbackDispositionV1, FsCasErrorV1> {
+            if require_valid_root {
+                self.ensure_valid()?;
+            }
             if !guard.owns_pack_v1(id, transaction) {
                 return Err(FsCasErrorV1::Integrity);
             }
-            match open_regular_file_if_present(marker_path)? {
-                None => {}
-                Some(_) => return Err(FsCasErrorV1::Integrity),
-            }
+            let catalog_disposition = match catalog_policy {
+                ActivePackCatalogPolicyV1::RequireVacancy => {
+                    match open_regular_file_if_present(marker_path)? {
+                        None => {}
+                        Some(_) => return Err(FsCasErrorV1::Integrity),
+                    }
+                    CatalogRollbackDispositionV1::RollbackAllowed
+                }
+                ActivePackCatalogPolicyV1::AllowForeign { expected } => {
+                    classify_catalog_for_rollback_v1(marker_path, expected)?
+                }
+            };
             let installed =
                 open_regular_file_if_present(carrier_path)?.ok_or(FsCasErrorV1::MissingOccupant)?;
             let installed_metadata = installed
@@ -4730,10 +6922,10 @@ impl FsCasV1 {
                     return Err(FsCasErrorV1::Integrity);
                 }
             }
-            Ok(())
+            Ok(catalog_disposition)
         })();
         match revalidated {
-            Ok(()) => Ok(guard),
+            Ok(disposition) => Ok((guard, disposition)),
             Err(error) => {
                 self.unlock_publication_controlled_v1(guard, control);
                 Err(error)
@@ -4761,7 +6953,30 @@ impl FsCasV1 {
         report_completed_root_lock_v1(guard.release_v1(), control);
     }
 
-    #[cfg(all(test, feature = "c3-polymorphism"))]
+    fn finish_post_unlink_publication_release_v1<C>(
+        &self,
+        completion: CompletedRootLockV1,
+        accounting: Result<(), FsCasErrorV1>,
+        target: FsCasCleanupTargetV1,
+        control: &mut C,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            report_completed_root_lock_v1(completion, control)
+        })) {
+            Ok(()) => accounting,
+            Err(_) => {
+                let cleanup = self.cleanup_failure_after_unwind_v1(target, control);
+                Err(accounting
+                    .err()
+                    .map_or(cleanup, |first| first.dominated_by_v1(cleanup)))
+            }
+        }
+    }
+
+    #[cfg(all(test, feature = "operation-polymorphism"))]
     pub(crate) fn issue_pending_admission_for_test_v1(
         &self,
         cancellation_key: u64,
@@ -4781,7 +6996,7 @@ impl FsCasV1 {
 
     /// Acquire the shared root's fixed-profile operation authority before any
     /// typed request, supplier, sink, or preparation object is inspected.
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_operation_capability_v1<C>(
         &self,
         operation_kind: FsOperationKindV1,
@@ -4872,7 +7087,7 @@ impl FsCasV1 {
     /// not be delegated to `Drop`, and a poisoned release must synchronously
     /// establish the persistent fail-closed barrier without erasing the
     /// chronological entry failure.
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     fn finish_failed_operation_entry_v1<C>(
         &self,
         admission: &mut RootAdmissionLeaseV1<'_>,
@@ -4892,7 +7107,7 @@ impl FsCasV1 {
         let _ = counters.record_root_admission_release_failure_v1();
         self.fail_closed_preserving_error_after_unwind_v1(first, control)
     }
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     fn preparation_path_capacity_bound_v1(&self, prefix: &str) -> CoreResult<u64> {
         // `unique_private_path` appends the fixed preparation component, the
         // caller-owned prefix, a decimal `u32` process id, and a 16-digit
@@ -4908,7 +7123,7 @@ impl FsCasV1 {
 
     /// Side-effect-free resident declaration used before the one operation
     /// slot is requested. This allocates or opens no private carrier.
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn private_pack_resident_memory_bound_v1(&self) -> CoreResult<u64> {
         u64::try_from(core::mem::size_of::<FsPrivatePackV1>())
             .map_err(|_| CoreError::IntegerOverflow)?
@@ -4918,7 +7133,7 @@ impl FsCasV1 {
 
     /// Side-effect-free resident declaration used before an operation spool
     /// path is allocated or its `create_new` is attempted.
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn operation_spool_resident_memory_bound_v1(&self, prefix: &str) -> CoreResult<u64> {
         u64::try_from(core::mem::size_of::<FsOperationSpoolV1>())
             .map_err(|_| CoreError::IntegerOverflow)?
@@ -4927,7 +7142,7 @@ impl FsCasV1 {
     }
 
     /// The occupied reader contains no source- or workspace-sized allocation.
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn occupied_resident_memory_bound_v1(&self) -> CoreResult<u64> {
         u64::try_from(core::mem::size_of::<FsCasOccupiedV1>())
             .map_err(|_| CoreError::IntegerOverflow)
@@ -5082,7 +7297,7 @@ impl FsCasV1 {
         self.begin_private_pack_inner_v1(None, &mut control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_private_pack_borrowed_v1(
         &self,
         token: FsStorageOperationTokenV1,
@@ -5091,7 +7306,7 @@ impl FsCasV1 {
         self.begin_private_pack_inner_v1(Some(token), &mut control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_private_pack_borrowed_controlled_v1<C>(
         &self,
         token: FsStorageOperationTokenV1,
@@ -5139,7 +7354,7 @@ impl FsCasV1 {
     /// detail used by bounded storage operations, not a caller-visible CAS
     /// surface. Its name is removed on every drop path and it is never
     /// scanned or recovered by [`Self::open_existing`].
-    #[cfg(all(test, feature = "c3-polymorphism"))]
+    #[cfg(all(test, feature = "operation-polymorphism"))]
     pub(crate) fn begin_operation_spool_v1<C>(
         &self,
         prefix: &str,
@@ -5151,7 +7366,7 @@ impl FsCasV1 {
         self.begin_operation_spool_inner_v1(prefix, None, control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_operation_spool_borrowed_v1<C>(
         &self,
         prefix: &str,
@@ -5164,7 +7379,7 @@ impl FsCasV1 {
         self.begin_operation_spool_inner_v1(prefix, Some(token), control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     fn begin_operation_spool_inner_v1<C>(
         &self,
         prefix: &str,
@@ -5259,6 +7474,7 @@ impl FsCasV1 {
                             0,
                             FsCasCleanupTargetV1::PreparationSpool,
                             control,
+                            true,
                         )
                     }));
                     return match cleanup {
@@ -5320,6 +7536,7 @@ impl FsCasV1 {
                                     0,
                                     FsCasCleanupTargetV1::PreparationSpool,
                                     control,
+                                    true,
                                 )
                             }));
                         match cleanup {
@@ -5443,11 +7660,13 @@ impl FsCasV1 {
             PackAdmissionAuthorityV1::Independent(ledger),
             counters,
             scratch,
+            #[cfg(feature = "operation-polymorphism")]
+            None,
             control,
         )
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn admit_pack_borrowed_controlled_v1<M, C>(
         &self,
@@ -5457,6 +7676,7 @@ impl FsCasV1 {
         storage_token: FsStorageOperationTokenV1,
         counters: &mut OperationCountersV1,
         scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+        locator_receipts: &mut FsOperationSpoolV1,
         control: &mut C,
     ) -> Result<FsPackAdmissionV1, FsCasErrorV1>
     where
@@ -5472,11 +7692,12 @@ impl FsCasV1 {
             },
             counters,
             scratch,
+            Some(locator_receipts),
             control,
         )
     }
 
-    #[cfg(any(test, feature = "c3-polymorphism"))]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     #[allow(clippy::too_many_arguments)]
     fn admit_pack_controlled_inner<M, C>(
         &self,
@@ -5485,6 +7706,9 @@ impl FsCasV1 {
         authority: PackAdmissionAuthorityV1<'_, '_>,
         counters: &mut OperationCountersV1,
         scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+        #[cfg(feature = "operation-polymorphism")] locator_receipts: Option<
+            &mut FsOperationSpoolV1,
+        >,
         control: &mut C,
     ) -> Result<FsPackAdmissionV1, FsCasErrorV1>
     where
@@ -5495,9 +7719,27 @@ impl FsCasV1 {
         let storage_token = authority.storage_token_v1();
         let declared_for_unwind = prepared.sealed()?;
         let mut carrier_custody = CarrierPublicationCustodyV1::Absent;
-        let mut locator_custody = LocatorPublicationCustodyV1::default();
+        let mut carrier_receipt = None;
+        let mut locator_custody = {
+            #[cfg(feature = "operation-polymorphism")]
+            {
+                match locator_receipts {
+                    Some(spool) => LocatorPublicationCustodyV1::file_backed(spool),
+                    None => LocatorPublicationCustodyV1::default(),
+                }
+            }
+            #[cfg(not(feature = "operation-polymorphism"))]
+            {
+                LocatorPublicationCustodyV1::default()
+            }
+        };
         let mut catalog_marker_custody = ImmutableMarkerCustodyV1::default();
-        let transaction = NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed);
+        let operation_nonce = next_locator_operation_nonce_v1();
+        let transaction = locator_transaction_tag_v1(
+            self.inner.generation,
+            self.inner.locator_incarnation,
+            operation_nonce,
+        );
         let mut active_publication = false;
         // A root-owned immutable charge is acquired before the no-replace
         // carrier link. Keep that prepublication custody outside the unwind
@@ -5514,6 +7756,12 @@ impl FsCasV1 {
             (|| {
                 if !Arc::ptr_eq(&prepared.owner.inner, &self.inner) {
                     return Err(FsCasErrorV1::Integrity);
+                }
+                #[cfg(feature = "operation-polymorphism")]
+                if locator_custody.receipt_spool.is_some() {
+                    // One operation spool is reused across carrier admissions;
+                    // receipts from a completed carrier no longer own custody.
+                    locator_custody.reset_file_backed_spool_v1(control)?;
                 }
                 counters.observe_layerfs_open_file_handles(1);
                 sample_control(control, FsCasBoundaryV1::BeforeCandidateValidation)?;
@@ -5535,6 +7783,11 @@ impl FsCasV1 {
                 if declared != validated {
                     return Err(FsCasErrorV1::Integrity);
                 }
+                // Exact locator receipts are operation-local custody, not a
+                // best-effort audit trail. Preallocate the bounded receipt
+                // population before any immutable name can become visible so
+                // allocator failure cannot occur after the authoritative link.
+                locator_custody.reserve_v1(validated.record_count())?;
                 sample_control(control, FsCasBoundaryV1::AfterCandidateValidation)?;
 
                 // The operation metadata is private and immutable at this point.
@@ -5815,9 +8068,70 @@ impl FsCasV1 {
                 active_publication = true;
                 #[cfg(test)]
                 control.before_carrier_no_replace_transition_for_test_v1();
+
+                // Prepare every authority needed to identify and roll back
+                // the exact linked inode before it can become visible.  The
+                // successful hard link below therefore commits custody by
+                // infallible assignments before any later validation runs.
+                let prepared_carrier_snapshot = (|| {
+                    #[cfg(test)]
+                    if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
+                        CarrierReceiptTransitionCheckV1::PrivateHandle,
+                    ) {
+                        return Err(error);
+                    }
+                    let sealed_file = prepared.sealed_file_v1()?;
+                    #[cfg(test)]
+                    if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
+                        CarrierReceiptTransitionCheckV1::PrivateMetadata,
+                    ) {
+                        return Err(error);
+                    }
+                    let private_metadata = sealed_file
+                        .metadata()
+                        .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
+                    let snapshot = ImmutableFileSnapshotV1::from_metadata_v1(&private_metadata);
+                    #[cfg(test)]
+                    if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
+                        CarrierReceiptTransitionCheckV1::ActivePublicationAuthority,
+                    ) {
+                        return Err(error);
+                    }
+                    publication_guard
+                        .as_mut()
+                        .ok_or(FsCasErrorV1::Integrity)?
+                        .authenticate_carrier_v1(validated.id(), transaction, snapshot)?;
+                    Ok(snapshot)
+                })();
+                let prepared_carrier_snapshot = match prepared_carrier_snapshot {
+                    Ok(snapshot) => snapshot,
+                    Err(original) => {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
+                        let terminal = self
+                            .release_prepublication_carrier_charge_preserving_error_v1(
+                                storage_token,
+                                validated.pack_len(),
+                                control,
+                                original,
+                            );
+                        prepublication_carrier_charge_held = false;
+                        return Err(terminal);
+                    }
+                };
+                let prepared_carrier_receipt = CarrierPublicationReceiptV1 {
+                    sealed: validated,
+                    transaction,
+                    root_generation: self.inner.generation,
+                    root_incarnation: self.inner.locator_incarnation,
+                    snapshot: prepared_carrier_snapshot,
+                };
                 match fs::hard_link(&prepared.path, &carrier_path) {
                     Ok(()) => {
                         prepublication_carrier_charge_held = false;
+                        carrier_receipt = Some(prepared_carrier_receipt);
                         carrier_custody = CarrierPublicationCustodyV1::InstalledUnreported;
                     }
                     Err(error) if error.kind() == ErrorKind::AlreadyExists => {
@@ -5884,46 +8198,59 @@ impl FsCasV1 {
                     }
                 }
 
-                // Establish the exact installed-carrier namespace snapshot
-                // while no callback or bulk validation can run under the
-                // publication fence. The sealed private file handle is the
-                // transaction's exact pre-link identity authority; pathname
-                // metadata alone is not sufficient after an unlocked span.
                 let snapshot_authentication = (|| -> Result<(), FsCasErrorV1> {
-                    let private_metadata = prepared
-                        .sealed_file_v1()?
-                        .metadata()
-                        .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
+                    #[cfg(test)]
+                    if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
+                        CarrierReceiptTransitionCheckV1::CarrierMetadata,
+                    ) {
+                        return Err(error);
+                    }
                     let carrier_metadata = fs::metadata(&carrier_path)
                         .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
-                    if !same_file_identity(&private_metadata, &carrier_metadata)
-                        || private_metadata.len() != carrier_metadata.len()
-                    {
+                    #[cfg(test)]
+                    if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
+                        CarrierReceiptTransitionCheckV1::CarrierIdentity,
+                    ) {
+                        return Err(error);
+                    }
+                    if !prepared_carrier_snapshot.matches_v1(&carrier_metadata) {
                         return Err(FsCasErrorV1::Integrity);
                     }
-                    publication_guard
-                        .as_mut()
+                    #[cfg(test)]
+                    if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
+                        CarrierReceiptTransitionCheckV1::ActivePublicationValidation,
+                    ) {
+                        return Err(error);
+                    }
+                    let registered = publication_guard
+                        .as_ref()
                         .ok_or(FsCasErrorV1::Integrity)?
-                        .authenticate_carrier_v1(
-                            validated.id(),
-                            transaction,
-                            ImmutableFileSnapshotV1::from_metadata_v1(&carrier_metadata),
-                        )
+                        .carrier_snapshot_v1(validated.id(), transaction)
+                        .ok_or(FsCasErrorV1::Integrity)?;
+                    if registered != prepared_carrier_snapshot {
+                        return Err(FsCasErrorV1::Integrity);
+                    }
+                    Ok(())
                 })();
-                if let Err(error) = snapshot_authentication {
-                    self.unlock_publication_controlled_v1(
-                        publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
-                        control,
-                    );
-                    return Err(self.rollback_unpublished_carrier_preserving_error_v1(
-                        &carrier_path,
-                        validated,
-                        storage_token,
-                        counters,
-                        &mut carrier_custody,
-                        control,
-                        error,
-                    ));
+                match snapshot_authentication {
+                    Ok(()) => {}
+                    Err(error) => {
+                        self.unlock_publication_controlled_v1(
+                            publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
+                            control,
+                        );
+                        return Err(self.rollback_unpublished_carrier_preserving_error_v1(
+                            &carrier_path,
+                            validated,
+                            transaction,
+                            storage_token,
+                            counters,
+                            &mut carrier_custody,
+                            &mut carrier_receipt,
+                            control,
+                            error,
+                        ));
+                    }
                 }
                 self.unlock_publication_controlled_v1(
                     publication_guard.take().ok_or(FsCasErrorV1::Integrity)?,
@@ -5954,9 +8281,11 @@ impl FsCasV1 {
                             return Err(self.rollback_unpublished_carrier_preserving_error_v1(
                                 &carrier_path,
                                 validated,
+                                transaction,
                                 storage_token,
                                 counters,
                                 &mut carrier_custody,
+                                &mut carrier_receipt,
                                 control,
                                 original,
                             ));
@@ -6034,9 +8363,11 @@ impl FsCasV1 {
                                 return Err(self.rollback_unpublished_carrier_preserving_error_v1(
                                     &carrier_path,
                                     validated,
+                                    transaction,
                                     storage_token,
                                     counters,
                                     &mut carrier_custody,
+                                    &mut carrier_receipt,
                                     control,
                                     error,
                                 ));
@@ -6103,9 +8434,11 @@ impl FsCasV1 {
                                         .rollback_unpublished_carrier_preserving_error_v1(
                                             &carrier_path,
                                             validated,
+                                            transaction,
                                             storage_token,
                                             counters,
                                             &mut carrier_custody,
+                                            &mut carrier_receipt,
                                             control,
                                             error,
                                         ));
@@ -6143,9 +8476,11 @@ impl FsCasV1 {
                                 return Err(self.rollback_unpublished_carrier_preserving_error_v1(
                                     &carrier_path,
                                     validated,
+                                    transaction,
                                     storage_token,
                                     counters,
                                     &mut carrier_custody,
+                                    &mut carrier_receipt,
                                     control,
                                     error,
                                 ));
@@ -6200,9 +8535,11 @@ impl FsCasV1 {
                                 return Err(self.rollback_unpublished_carrier_preserving_error_v1(
                                     &carrier_path,
                                     validated,
+                                    transaction,
                                     storage_token,
                                     counters,
                                     &mut carrier_custody,
+                                    &mut carrier_receipt,
                                     control,
                                     error,
                                 ));
@@ -6222,9 +8559,11 @@ impl FsCasV1 {
                                     .rollback_unpublished_carrier_preserving_error_v1(
                                         &carrier_path,
                                         validated,
+                                        transaction,
                                         storage_token,
                                         counters,
                                         &mut carrier_custody,
+                                        &mut carrier_receipt,
                                         control,
                                         original,
                                     );
@@ -6292,9 +8631,11 @@ impl FsCasV1 {
                                     self.rollback_unpublished_carrier(
                                         &carrier_path,
                                         validated,
+                                        transaction,
                                         storage_token,
                                         counters,
                                         &mut carrier_custody,
+                                        &mut carrier_receipt,
                                         control,
                                     )
                                 }));
@@ -6377,18 +8718,46 @@ impl FsCasV1 {
                 }
 
                 let carrier_snapshot = validated_carrier_snapshot.ok_or(FsCasErrorV1::Integrity)?;
-                let locator_terminal = self.install_object_locators(
-                    &carrier_path,
-                    validated,
-                    carrier_snapshot,
-                    metadata,
-                    counters,
-                    scratch,
-                    transaction,
-                    storage_token,
-                    &mut locator_custody,
-                    control,
-                );
+                let locator_terminal =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        self.install_object_locators(
+                            &carrier_path,
+                            validated,
+                            carrier_snapshot,
+                            metadata,
+                            counters,
+                            scratch,
+                            transaction,
+                            storage_token,
+                            &mut locator_custody,
+                            control,
+                        )
+                    }));
+                let locator_terminal = match locator_terminal {
+                    Ok(terminal) => terminal,
+                    Err(payload) => {
+                        if !locator_custody.take_receipt_prelink_unwind_v1() {
+                            std::panic::resume_unwind(payload);
+                        }
+                        match self.rollback_unpublished_admission(
+                            &carrier_path,
+                            validated,
+                            transaction,
+                            storage_token,
+                            counters,
+                            &mut carrier_custody,
+                            &mut carrier_receipt,
+                            &mut locator_custody,
+                            control,
+                        ) {
+                            Ok(()) => std::panic::resume_unwind(payload),
+                            Err(terminal) => {
+                                drop(payload);
+                                return Err(terminal);
+                            }
+                        }
+                    }
+                };
                 if let Err(error) = locator_terminal {
                     if locator_custody.rollback_forbidden_v1() {
                         // A successful locator no-replace transition already
@@ -6416,6 +8785,7 @@ impl FsCasV1 {
                         storage_token,
                         counters,
                         &mut carrier_custody,
+                        &mut carrier_receipt,
                         &mut locator_custody,
                         control,
                         error,
@@ -6472,6 +8842,7 @@ impl FsCasV1 {
                         storage_token,
                         counters,
                         &mut carrier_custody,
+                        &mut carrier_receipt,
                         &mut locator_custody,
                         control,
                         error,
@@ -6496,6 +8867,7 @@ impl FsCasV1 {
                     storage_token,
                     Some(FsCasBoundaryV1::AfterCatalogMarkerLink),
                     None,
+                    None,
                     Some(&mut catalog_marker_custody),
                     Some(MarkerPublicationPrerequisiteV1 {
                         active_pack: ActivePackKeyV1 {
@@ -6512,6 +8884,7 @@ impl FsCasV1 {
                         require_catalog_vacancy: false,
                     }),
                     true,
+                    true,
                     control,
                 );
                 match publication {
@@ -6523,6 +8896,7 @@ impl FsCasV1 {
                             storage_token,
                             counters,
                             &mut carrier_custody,
+                            &mut carrier_receipt,
                             &mut locator_custody,
                             control,
                             error,
@@ -6538,7 +8912,7 @@ impl FsCasV1 {
                                 other => other,
                             })
                             .and_then(|incumbent| {
-                                classify_catalog_incumbent_v1(incumbent, validated)
+                                require_persistent_catalog_incumbent_v1(incumbent, validated)
                             });
                         let terminal = match authenticated.and_then(|()| {
                             self.revalidate_active_pack_marker_incumbent_controlled_v1(
@@ -6565,6 +8939,7 @@ impl FsCasV1 {
                             storage_token,
                             counters,
                             &mut carrier_custody,
+                            &mut carrier_receipt,
                             &mut locator_custody,
                             control,
                             terminal,
@@ -6609,7 +8984,7 @@ impl FsCasV1 {
                                 other => other,
                             })
                             .and_then(|incumbent| {
-                                classify_catalog_incumbent_v1(incumbent, validated)
+                                require_persistent_catalog_incumbent_v1(incumbent, validated)
                             });
                         let authenticated = authenticated.and_then(|()| {
                             self.revalidate_active_pack_marker_incumbent_controlled_v1(
@@ -6634,6 +9009,7 @@ impl FsCasV1 {
                                 storage_token,
                                 counters,
                                 &mut carrier_custody,
+                                &mut carrier_receipt,
                                 &mut locator_custody,
                                 control,
                                 error,
@@ -7293,13 +9669,20 @@ impl FsCasV1 {
         let _ = self.invalidate_root_controlled_v1(&mut control);
     }
 
+    #[cfg(test)]
+    fn observe_final_carrier_snapshot_check_for_test_v1() {
+        FINAL_CARRIER_SNAPSHOT_CHECKS_FOR_TEST_V1.with(|checks| checks.set(checks.get() + 1));
+    }
+
     fn rollback_unpublished_carrier<C>(
         &self,
         path: &Path,
         sealed: SealedPackV1,
+        transaction: u64,
         storage_token: Option<FsStorageOperationTokenV1>,
         counters: &mut OperationCountersV1,
         custody: &mut CarrierPublicationCustodyV1,
+        receipt: &mut Option<CarrierPublicationReceiptV1>,
         control: &mut C,
     ) -> Result<(), FsCasErrorV1>
     where
@@ -7311,11 +9694,100 @@ impl FsCasV1 {
         } else {
             match sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierUnlink) {
                 Err(error) => Err(Some(error)),
-                Ok(()) => match fs::remove_file(path) {
-                    Ok(()) => Ok(()),
-                    Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-                    Err(error) => Err(Some(map_required_filesystem_write_error_v1(&error))),
-                },
+                Ok(()) => {
+                    match *receipt {
+                        None => {
+                            // A successful carrier link without an exact
+                            // operation-local receipt is not deletion
+                            // authority. Retain the visible carrier rather
+                            // than falling back to a pathname-only unlink.
+                            Err(None)
+                        }
+                        Some(receipt_value) => {
+                            let catalog_path = self
+                                .inner
+                                .root
+                                .join("catalog")
+                                .join(hex_id(sealed.id().as_bytes()));
+                            let result = (|| -> Result<(), FsCasErrorV1> {
+                                if receipt_value.sealed != sealed
+                                    || receipt_value.transaction != transaction
+                                    || receipt_value.root_generation != self.inner.generation
+                                    || receipt_value.root_incarnation
+                                        != self.inner.locator_incarnation
+                                    || receipt_value.snapshot.len != sealed.pack_len()
+                                {
+                                    return Err(FsCasErrorV1::Integrity);
+                                }
+                                let (publication_guard, catalog_disposition) = self
+                                    .lock_active_pack_for_catalog_rollback_controlled_v1(
+                                        sealed.id(),
+                                        transaction,
+                                        path,
+                                        &catalog_path,
+                                        sealed,
+                                        None,
+                                        control,
+                                    )?;
+                                let result = (|| -> Result<(), FsCasErrorV1> {
+                                    // A valid equal marker is irreversible
+                                    // adoption authority. Foreign or absent
+                                    // catalog state does not block this exact
+                                    // carrier rollback.
+                                    if catalog_disposition == CatalogRollbackDispositionV1::Adopted
+                                    {
+                                        return Err(FsCasErrorV1::Integrity);
+                                    }
+                                    // This is the final exact carrier
+                                    // authorization. No callback, wait, or
+                                    // externally observable hook may occur
+                                    // between this identity check and the
+                                    // unlink.
+                                    #[cfg(test)]
+                                    Self::observe_final_carrier_snapshot_check_for_test_v1();
+                                    revalidate_immutable_file_snapshot_v1(
+                                        path,
+                                        receipt_value.snapshot,
+                                    )?;
+                                    match fs::remove_file(path) {
+                                        Ok(()) => Ok(()),
+                                        Err(error) => {
+                                            Err(map_required_filesystem_write_error_v1(&error))
+                                        }
+                                    }
+                                })();
+                                match result {
+                                    Ok(()) => {
+                                        let completion = publication_guard.release_v1();
+                                        *receipt = None;
+                                        *custody = CarrierPublicationCustodyV1::Absent;
+                                        let accounting = storage_token.map_or(Ok(()), |token| {
+                                            self.record_storage_immutable_remove_v1(
+                                                token,
+                                                sealed.pack_len(),
+                                                1,
+                                            )
+                                        });
+                                        self.finish_post_unlink_publication_release_v1(
+                                            completion,
+                                            accounting,
+                                            FsCasCleanupTargetV1::Carrier,
+                                            control,
+                                        )
+                                    }
+                                    Err(error) => {
+                                        self.unlock_publication_controlled_v1(
+                                            publication_guard,
+                                            control,
+                                        );
+                                        Err(error)
+                                    }
+                                }
+                            })();
+                            result.map_err(Some)
+                        }
+                    }
+                }
             }
         };
         if let Err(first) = removal {
@@ -7327,23 +9799,6 @@ impl FsCasV1 {
                 self.cleanup_failure_controlled_v1(FsCasCleanupTargetV1::Carrier, control);
             return Err(first.map_or(cleanup, |error| error.dominated_by_v1(cleanup)));
         }
-        *custody = CarrierPublicationCustodyV1::Absent;
-        if let Some(token) = storage_token {
-            if let Err(accounting) =
-                self.record_storage_immutable_remove_v1(token, sealed.pack_len(), 1)
-            {
-                // Physical cleanup succeeded, but its root-owned accounting
-                // transition observed an untrustworthy synchronization state.
-                // Classify this as a controlled cleanup terminal instead of
-                // discarding an invalidation backstop and allowing the
-                // initiating cancellation/deadline to masquerade as a clean
-                // rollback. The accounting cell has already been reconciled
-                // to the completed unlink, so terminal residue remains exact.
-                let cleanup =
-                    self.cleanup_failure_controlled_v1(FsCasCleanupTargetV1::Carrier, control);
-                return Err(accounting.dominated_by_v1(cleanup));
-            }
-        }
         Ok(())
     }
 
@@ -7352,9 +9807,11 @@ impl FsCasV1 {
         &self,
         path: &Path,
         sealed: SealedPackV1,
+        transaction: u64,
         storage_token: Option<FsStorageOperationTokenV1>,
         counters: &mut OperationCountersV1,
         custody: &mut CarrierPublicationCustodyV1,
+        receipt: &mut Option<CarrierPublicationReceiptV1>,
         control: &mut C,
         original: FsCasErrorV1,
     ) -> FsCasErrorV1
@@ -7364,9 +9821,11 @@ impl FsCasV1 {
         match self.rollback_unpublished_carrier(
             path,
             sealed,
+            transaction,
             storage_token,
             counters,
             custody,
+            receipt,
             control,
         ) {
             Ok(()) => original,
@@ -7474,6 +9933,7 @@ impl FsCasV1 {
         storage_token: Option<FsStorageOperationTokenV1>,
         counters: &mut OperationCountersV1,
         carrier_custody: &mut CarrierPublicationCustodyV1,
+        carrier_receipt: &mut Option<CarrierPublicationReceiptV1>,
         locator_custody: &mut LocatorPublicationCustodyV1,
         control: &mut C,
     ) -> Result<(), FsCasErrorV1>
@@ -7482,10 +9942,21 @@ impl FsCasV1 {
     {
         let objects = self.inner.root.join("objects");
         let mut cleanup_failed = false;
+        let mut carrier_scan_failed = false;
         let mut requires_invalidation = false;
         let mut first_error = None;
         let mut cleanup_terminal = None;
         let mut first_cleanup_unwind = None;
+        let mut catalog_adopted = false;
+        let receipt_count = locator_custody.receipt_count_v1()?;
+        let mut next_receipt_ordinal = 0_u64;
+        let mut receipt_binding_failed = false;
+        if let Err(error) = locator_custody.authenticate_receipt_spool_len_v1() {
+            first_error = Some(error);
+            receipt_binding_failed = true;
+            cleanup_failed = true;
+            requires_invalidation = true;
+        }
 
         // The mutable pack-index spool is not cleanup authority: its sort,
         // rewind, and entry reads are independently fallible. Enumerate the
@@ -7517,68 +9988,313 @@ impl FsCasV1 {
                                     .take_first_error_typed_v1()
                                     .unwrap_or(FsCasErrorV1::Core(error))
                             });
+                            carrier_scan_failed = true;
                             cleanup_failed = true;
                             break;
                         }
                     };
                     let path = objects.join(hex_typed_id(entry.id()));
+                    // Receipts are emitted in the same canonical key order as
+                    // the immutable carrier index, but equal-incumbent reuse
+                    // deliberately emits no owned receipt.  Merge the two
+                    // ordered streams before any unlink: every receipt must
+                    // authenticate the exact carrier entry it occupies, and
+                    // every duplicate/reordered/substituted record must be
+                    // rejected before a valid earlier record can be removed.
+                    if !receipt_binding_failed && next_receipt_ordinal < receipt_count {
+                        let receipt = match locator_custody.receipt_v1(next_receipt_ordinal) {
+                            Ok(receipt) => receipt,
+                            Err(error) => {
+                                first_error.get_or_insert(error);
+                                receipt_binding_failed = true;
+                                cleanup_failed = true;
+                                // The carrier remains authenticated, so finish
+                                // its bounded physical scan; no receipt can be
+                                // used for deletion after this point.
+                                continue;
+                            }
+                        };
+                        match entry.compare_key(&receipt.locator.entry()) {
+                            core::cmp::Ordering::Less => {
+                                // This carrier entry was an equal incumbent;
+                                // the next owned receipt belongs later in the
+                                // canonical stream.
+                            }
+                            core::cmp::Ordering::Equal => {
+                                if decide_persistent_locator_publication_v1(
+                                    PersistentLocatorPublicationEvidenceV1::new(
+                                        receipt.locator,
+                                        sealed,
+                                        entry,
+                                        transaction,
+                                    ),
+                                ) != PersistentLocatorPublicationDecisionV1::Authenticated
+                                {
+                                    first_error.get_or_insert(FsCasErrorV1::Integrity);
+                                    receipt_binding_failed = true;
+                                    cleanup_failed = true;
+                                } else {
+                                    next_receipt_ordinal += 1;
+                                }
+                            }
+                            core::cmp::Ordering::Greater => {
+                                // A receipt for an earlier/missing carrier
+                                // entry proves reorder, duplication, or
+                                // substitution.  Fail closed before cleanup.
+                                first_error.get_or_insert(FsCasErrorV1::Integrity);
+                                receipt_binding_failed = true;
+                                cleanup_failed = true;
+                            }
+                        }
+                    }
+                    // The carrier scan validates the immutable index and
+                    // observes malformed occupants, but it is deliberately
+                    // not deletion authority. A matching tag/binding found
+                    // here may be an incumbent installed by an earlier
+                    // operation. Only the exact post-link receipts below can
+                    // authorize an unlink.
                     match read_object_locator_if_present(&path, entry.id()) {
-                        Ok(None) => continue,
-                        Ok(Some(locator)) if locator.transaction() == transaction => {
-                            let removal =
-                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                    let injected = control.inject_cleanup_failure(
-                                        FsCasCleanupTargetV1::ObjectLocator,
-                                    );
-                                    if injected {
-                                        Err(None)
-                                    } else {
-                                        match sample_filesystem_fault_v1(
-                                            control,
-                                            FsCasFilesystemBoundaryV1::LocatorUnlink,
-                                        ) {
-                                            Err(error) => Err(Some(error)),
-                                            Ok(()) => match fs::remove_file(&path) {
-                                                Ok(()) => Ok(()),
-                                                Err(error)
-                                                    if error.kind() == ErrorKind::NotFound =>
-                                                {
-                                                    Ok(())
+                        Ok(_) => {}
+                        Err(error) => {
+                            first_error.get_or_insert(error);
+                            requires_invalidation = true;
+                            // A malformed foreign incumbent is the operation's
+                            // typed failure, not itself a failed cleanup. If
+                            // this transaction has a live receipt, the receipt
+                            // pass below retains it and its carrier dependency.
+                        }
+                    }
+                }
+                if let Err(error) =
+                    counters.record_fscas_read(installed.bytes_read, installed.read_calls)
+                {
+                    first_error.get_or_insert(FsCasErrorV1::Core(error));
+                    cleanup_failed = true;
+                }
+            }
+            Err(error) => {
+                first_error.get_or_insert(error);
+                carrier_scan_failed = true;
+                cleanup_failed = true;
+            }
+        }
+
+        // Receipt count is an internal custody equation: every live locator
+        // must have exactly one post-install receipt. If the equation is
+        // broken, restore the receipts, retain the live custody, and fail
+        // closed rather than guessing which names this operation installed.
+        if !receipt_binding_failed && next_receipt_ordinal != receipt_count {
+            first_error.get_or_insert(FsCasErrorV1::Integrity);
+            receipt_binding_failed = true;
+            cleanup_failed = true;
+        }
+
+        if carrier_scan_failed || receipt_binding_failed {
+            // A malformed or unreadable immutable carrier cannot establish
+            // the complete publication set. Keep every receipt as visible
+            // residue, even though each receipt individually names an alias
+            // this operation installed: deleting a known alias while the
+            // carrier's authoritative index is unauthenticated would make
+            // the dependency set asymmetric and would violate the existing
+            // fail-closed carrier-custody contract.
+            first_error.get_or_insert(FsCasErrorV1::Integrity);
+            requires_invalidation = true;
+            cleanup_failed = true;
+        } else if locator_custody.live_unclassified != receipt_count {
+            first_error.get_or_insert(FsCasErrorV1::Integrity);
+            requires_invalidation = true;
+            cleanup_failed = true;
+        } else {
+            for ordinal in 0..receipt_count {
+                let receipt = match locator_custody.receipt_v1(ordinal) {
+                    Ok(receipt) => receipt,
+                    Err(error) => {
+                        first_error.get_or_insert(error);
+                        requires_invalidation = true;
+                        cleanup_failed = true;
+                        break;
+                    }
+                };
+                if catalog_adopted {
+                    continue;
+                }
+                let id = receipt.locator.entry().id();
+                let path = objects.join(hex_typed_id(id));
+                match read_object_locator_if_present_with_snapshot_and_bytes_v1(&path, id) {
+                    Ok(None) => {
+                        // The exact alias was installed by this operation but
+                        // is already absent. Reconcile its logical custody
+                        // once, invalidate the root for the lost publication,
+                        // and never inspect or delete a different occupant.
+                        first_error.get_or_insert(FsCasErrorV1::Integrity);
+                        requires_invalidation = true;
+                        if let Err(error) = locator_custody.mark_removed_v1() {
+                            first_error.get_or_insert(error);
+                            cleanup_failed = true;
+                        }
+                        if let Some(token) = storage_token {
+                            if let Err(error) = self.record_storage_immutable_remove_v1(
+                                token,
+                                PERSISTENT_LOCATOR_BYTES_U64_V1,
+                                1,
+                            ) {
+                                first_error.get_or_insert(error);
+                                cleanup_failed = true;
+                            }
+                        }
+                    }
+                    Ok(Some((_bytes, _locator, _snapshot))) => {
+                        // Every mutation-capable cleanup/fault hook must run
+                        // before the final deletion authorization. The first
+                        // snapshot above is only a preliminary observation;
+                        // a hook is allowed to replace the pathname while it
+                        // runs. Reacquire the active publication fence after
+                        // those hooks, then re-read and revalidate the exact
+                        // receipt immediately before the one unlink
+                        // transition. No callback, wait, or second fallible
+                        // observation is permitted between that check and
+                        // `remove_file`.
+                        let mut locator_removed = false;
+                        let removal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                            || {
+                                let injected = control
+                                    .inject_cleanup_failure(FsCasCleanupTargetV1::ObjectLocator);
+                                if injected {
+                                    return Err(None);
+                                }
+                                if let Err(error) = sample_filesystem_fault_v1(
+                                    control,
+                                    FsCasFilesystemBoundaryV1::LocatorUnlink,
+                                ) {
+                                    return Err(Some(error));
+                                }
+
+                                let catalog_path = self
+                                    .inner
+                                    .root
+                                    .join("catalog")
+                                    .join(hex_id(sealed.id().as_bytes()));
+                                let (publication_guard, catalog_disposition) = match self
+                                    .lock_active_pack_for_catalog_rollback_controlled_v1(
+                                        sealed.id(),
+                                        transaction,
+                                        carrier,
+                                        &catalog_path,
+                                        sealed,
+                                        None,
+                                        control,
+                                    ) {
+                                    Ok(result) => result,
+                                    Err(error) => return Err(Some(error)),
+                                };
+
+                                let result = if catalog_disposition
+                                    == CatalogRollbackDispositionV1::Adopted
+                                {
+                                    // Once a valid equal catalog marker is
+                                    // authenticated under the publication
+                                    // fence, retain every remaining receipt
+                                    // instead of deleting below its authority.
+                                    catalog_adopted = true;
+                                    Err(None)
+                                } else {
+                                    match read_object_locator_if_present_with_snapshot_and_bytes_v1(
+                                        &path, id,
+                                    ) {
+                                        Ok(Some((final_bytes, final_locator, final_snapshot))) => {
+                                            let authenticated =
+                                                decide_persistent_locator_rollback_v1(
+                                                    PersistentLocatorRollbackEvidenceV1::new(
+                                                        receipt.locator,
+                                                        final_locator,
+                                                        final_bytes,
+                                                        final_snapshot == receipt.snapshot,
+                                                        transaction,
+                                                    ),
+                                                )
+                                                    == PersistentLocatorRollbackDecisionV1::Authorized;
+                                            let authenticated = if authenticated {
+                                                revalidate_immutable_file_snapshot_v1(
+                                                    &path,
+                                                    receipt.snapshot,
+                                                )
+                                            } else {
+                                                Err(FsCasErrorV1::Integrity)
+                                            };
+                                            match authenticated {
+                                                Ok(()) => match fs::remove_file(&path) {
+                                                    Ok(()) => Ok(()),
+                                                    Err(error) => Err(Some(
+                                                        map_required_filesystem_write_error_v1(
+                                                            &error,
+                                                        ),
+                                                    )),
+                                                },
+                                                Err(error) => Err(Some(error)),
+                                            }
+                                        }
+                                        Ok(None) => Err(Some(FsCasErrorV1::Integrity)),
+                                        Err(error) => Err(Some(error)),
+                                    }
+                                };
+                                match result {
+                                    Ok(()) => {
+                                        locator_removed = true;
+                                        let completion = publication_guard.release_v1();
+                                        let mut accounting = locator_custody.mark_removed_v1();
+                                        if let Some(token) = storage_token {
+                                            if let Err(error) = self
+                                                .record_storage_immutable_remove_v1(
+                                                    token,
+                                                    PERSISTENT_LOCATOR_BYTES_U64_V1,
+                                                    1,
+                                                )
+                                            {
+                                                if accounting.is_ok() {
+                                                    accounting = Err(error);
                                                 }
-                                                Err(error) => Err(Some(
-                                                    map_required_filesystem_write_error_v1(&error),
-                                                )),
-                                            },
+                                            }
                                         }
+                                        self.finish_post_unlink_publication_release_v1(
+                                            completion,
+                                            accounting,
+                                            FsCasCleanupTargetV1::ObjectLocator,
+                                            control,
+                                        )
+                                        .map_err(Some)
                                     }
-                                }));
-                            match removal {
-                                Ok(Ok(())) => {
-                                    if let Err(error) = locator_custody.mark_removed_v1() {
-                                        first_error.get_or_insert(error);
-                                        cleanup_failed = true;
-                                    }
-                                    if let Some(token) = storage_token {
-                                        if let Err(error) = self.record_storage_immutable_remove_v1(
-                                            token,
-                                            PERSISTENT_LOCATOR_BYTES_U64_V1,
-                                            1,
-                                        ) {
-                                            first_error.get_or_insert(error);
-                                            cleanup_failed = true;
-                                        }
+                                    Err(error) => {
+                                        self.unlock_publication_controlled_v1(
+                                            publication_guard,
+                                            control,
+                                        );
+                                        Err(error)
                                     }
                                 }
-                                Ok(Err(first)) => {
-                                    if let Some(error) = first {
+                            },
+                        ));
+                        match removal {
+                            Ok(Ok(())) => {}
+                            Ok(Err(first)) => {
+                                if catalog_adopted {
+                                    continue;
+                                }
+                                if let Some(error) = first {
+                                    if error.has_cleanup_or_invalidation_dominance_v1() {
+                                        cleanup_terminal.get_or_insert(error);
+                                    } else {
                                         first_error.get_or_insert(error);
                                     }
+                                }
+                                if !locator_removed {
                                     if let Err(error) = locator_custody.retain_one_v1(counters) {
                                         first_error.get_or_insert(error);
                                     }
-                                    cleanup_failed = true;
                                 }
-                                Err(payload) => {
+                                cleanup_failed = true;
+                            }
+                            Err(payload) => {
+                                if !locator_removed {
                                     #[cfg(test)]
                                     let retention = if control.inject_residue_accounting_failure(
                                         FsCasResidueAccountingBoundaryV1::ObjectLocator,
@@ -7592,40 +10308,46 @@ impl FsCasV1 {
                                     if let Err(error) = retention {
                                         first_error.get_or_insert(error);
                                     }
-                                    cleanup_failed = true;
-                                    if first_cleanup_unwind.is_none() {
-                                        first_cleanup_unwind =
-                                            Some((FsCasCleanupTargetV1::ObjectLocator, payload));
-                                    }
+                                }
+                                cleanup_failed = true;
+                                if first_cleanup_unwind.is_none() {
+                                    first_cleanup_unwind =
+                                        Some((FsCasCleanupTargetV1::ObjectLocator, payload));
                                 }
                             }
                         }
-                        Ok(Some(_)) => {}
-                        Err(error) => {
+                    }
+                    Err(error) => {
+                        first_error.get_or_insert(error);
+                        requires_invalidation = true;
+                        if let Err(error) = locator_custody.retain_one_v1(counters) {
                             first_error.get_or_insert(error);
-                            requires_invalidation = true;
-                            // A malformed foreign incumbent is the operation's
-                            // typed failure, not itself a failed cleanup.  If
-                            // this transaction has an unauthenticated visible
-                            // locator, `live_unclassified` below retains and
-                            // charges it (and its carrier dependency) exactly.
-                            // With no live transaction locator, the carrier is
-                            // still safely removable and the original malformed
-                            // occupant must retain error precedence.
                         }
+                        cleanup_failed = true;
                     }
                 }
-                if let Err(error) =
-                    counters.record_fscas_read(installed.bytes_read, installed.read_calls)
-                {
-                    first_error.get_or_insert(FsCasErrorV1::Core(error));
-                    cleanup_failed = true;
+            }
+        }
+
+        if catalog_adopted {
+            if let Err(error) = locator_custody.retain_all_live_v1(counters) {
+                first_error.get_or_insert(error);
+            }
+            if *carrier_custody == CarrierPublicationCustodyV1::InstalledUnreported {
+                match counters.record_unreachable_installed_residue(sealed.pack_len()) {
+                    Ok(()) => {
+                        *carrier_custody = CarrierPublicationCustodyV1::RetainedAndRecorded;
+                    }
+                    Err(error) => {
+                        first_error.get_or_insert(FsCasErrorV1::Core(error));
+                    }
                 }
             }
-            Err(error) => {
-                first_error.get_or_insert(error);
-                cleanup_failed = true;
-            }
+            let error = first_error.unwrap_or(FsCasErrorV1::Integrity);
+            return Err(match self.invalidate_root_controlled_v1(control) {
+                Ok(()) => error,
+                Err(invalidation) => error.dominated_by_v1(invalidation),
+            });
         }
 
         if locator_custody.live_unclassified != 0 {
@@ -7657,9 +10379,11 @@ impl FsCasV1 {
                 self.rollback_unpublished_carrier(
                     carrier,
                     sealed,
+                    transaction,
                     storage_token,
                     counters,
                     carrier_custody,
+                    carrier_receipt,
                     control,
                 )
             }));
@@ -7667,7 +10391,10 @@ impl FsCasV1 {
                 Ok(Ok(())) => {}
                 Ok(Err(error)) => {
                     if error.has_cleanup_or_invalidation_dominance_v1() {
-                        cleanup_terminal.get_or_insert(error);
+                        cleanup_terminal = Some(match cleanup_terminal {
+                            Some(first) => first.dominated_by_v1(error),
+                            None => error,
+                        });
                     } else {
                         first_error.get_or_insert(error);
                     }
@@ -7741,6 +10468,7 @@ impl FsCasV1 {
         storage_token: Option<FsStorageOperationTokenV1>,
         counters: &mut OperationCountersV1,
         carrier_custody: &mut CarrierPublicationCustodyV1,
+        carrier_receipt: &mut Option<CarrierPublicationReceiptV1>,
         locator_custody: &mut LocatorPublicationCustodyV1,
         control: &mut C,
         original: FsCasErrorV1,
@@ -7755,14 +10483,27 @@ impl FsCasV1 {
             storage_token,
             counters,
             carrier_custody,
+            carrier_receipt,
             locator_custody,
             control,
         ) {
+            Ok(()) if original.has_cleanup_or_invalidation_dominance_v1() => {
+                match self.invalidate_root_controlled_v1(control) {
+                    Ok(()) => original,
+                    Err(invalidation) => original.dominated_by_v1(invalidation),
+                }
+            }
             Ok(()) => original,
             Err(cleanup @ FsCasErrorV1::CleanupFailed(_))
             | Err(cleanup @ FsCasErrorV1::InvalidationFailed)
             | Err(cleanup @ FsCasErrorV1::TerminalFailure { .. }) => {
-                original.dominated_by_v1(cleanup)
+                if original.has_cleanup_or_invalidation_dominance_v1()
+                    && !cleanup.has_invalidation_dominance_v1()
+                {
+                    original
+                } else {
+                    original.dominated_by_v1(cleanup)
+                }
             }
             // A cleanup/lifecycle failure is the first retained error when it
             // already occurred before rollback. Other rollback observations
@@ -7796,7 +10537,7 @@ impl FsCasV1 {
         self.occupied_private_controlled_inner_v1(None, control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn occupied_private_borrowed_v1(
         &self,
         token: FsStorageOperationTokenV1,
@@ -7805,7 +10546,7 @@ impl FsCasV1 {
         self.occupied_private_controlled_borrowed_v1(token, &mut control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn occupied_private_controlled_borrowed_v1<C>(
         &self,
         token: FsStorageOperationTokenV1,
@@ -7882,7 +10623,7 @@ impl FsCasV1 {
         self.validate_closure_for_read_controlled_inner_v1(None, version_record, control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn validate_closure_for_read_controlled_borrowed_v1<C>(
         &self,
         storage_token: FsStorageOperationTokenV1,
@@ -8044,6 +10785,28 @@ impl FsCasV1 {
         }
         let mut candidate = FilePackReadV1::open(candidate_path)?;
 
+        // Full carrier validation orders the shared metadata spool by physical
+        // offset while checking payload contiguity.  Locator publication and
+        // its file-backed custody receipts must follow the immutable carrier's
+        // canonical key order instead; restore that order before the first
+        // no-replace locator transition.  This is still entirely pre-visibility
+        // work, so a fallible sort cannot strand a visible locator.
+        {
+            let mut work_control = FsCasWorkControlBorrowV1(control);
+            if let Err(error) = metadata.sort_by_key_controlled(&mut work_control, counters) {
+                return Err(restore_pack_spool_error_v1(
+                    metadata,
+                    map_pack_spool_error_v1(error),
+                ));
+            }
+        }
+        if let Err(error) = metadata.rewind() {
+            return Err(restore_pack_spool_error_v1(
+                metadata,
+                map_pack_spool_error_v1(error),
+            ));
+        }
+
         // Validate every incumbent before creating any locator for this pack.
         loop {
             let entry = match metadata.next() {
@@ -8059,10 +10822,12 @@ impl FsCasV1 {
             let path = objects.join(hex_typed_id(entry.id()));
             sample_control(control, FsCasBoundaryV1::BeforeObjectLocatorRead)?;
             sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
-            let locator = read_object_locator_if_present_with_snapshot_v1(&path, entry.id())?;
+            let locator = read_object_locator_if_present_with_snapshot_and_raw_v1(&path)?;
             sample_control(control, FsCasBoundaryV1::AfterObjectLocatorRead)?;
-            if let Some((locator, locator_snapshot)) = locator {
-                self.validate_and_compare_object_locator(
+            if let Some((bytes, locator_snapshot)) = locator {
+                let locator = decode_persistent_locator_for_install_v1(bytes, entry.id())
+                    .map_err(map_persistent_locator_install_error_v1)?;
+                let evidence = self.gather_object_locator_incumbent_evidence(
                     &mut candidate,
                     entry,
                     locator,
@@ -8070,6 +10835,9 @@ impl FsCasV1 {
                     scratch,
                     control,
                 )?;
+                map_persistent_locator_install_decision_v1(decide_persistent_locator_install_v1(
+                    PersistentLocatorInstallObservationV1::Incumbent(evidence),
+                ))?;
                 self.revalidate_active_pack_marker_incumbent_controlled_v1(
                     &path,
                     locator_snapshot,
@@ -8120,6 +10888,9 @@ impl FsCasV1 {
                 storage_token,
                 Some(FsCasBoundaryV1::AfterObjectLocatorMarkerLink),
                 Some(&mut *locator_custody),
+                Some(LocatorPublicationReceiptInputV1 {
+                    locator: PersistentObjectLocatorV1::new(sealed, entry, transaction),
+                }),
                 None,
                 Some(MarkerPublicationPrerequisiteV1 {
                     active_pack: ActivePackKeyV1 {
@@ -8131,6 +10902,7 @@ impl FsCasV1 {
                     carrier: carrier_snapshot,
                     require_catalog_vacancy: true,
                 }),
+                true,
                 true,
                 control,
             )?;
@@ -8170,26 +10942,28 @@ impl FsCasV1 {
                     return Err(error);
                 }
                 MarkerPublicationV1::IncumbentWithPreparationResidue(incumbent, cleanup) => {
-                    let locator = decode_persistent_locator_v1(incumbent.bytes, entry.id())
-                        .map_err(|error| match error {
-                            PersistentLocatorCodecErrorV1::Malformed => {
-                                FsCasErrorV1::MalformedOccupant
-                            }
-                            PersistentLocatorCodecErrorV1::BindingMismatch => {
-                                FsCasErrorV1::Integrity
-                            }
-                        });
+                    let locator =
+                        decode_persistent_locator_for_install_v1(incumbent.bytes, entry.id())
+                            .map_err(map_persistent_locator_install_error_v1);
                     let locator = match locator {
                         Ok(locator) => locator,
                         Err(error) => return Err(error.dominated_by_v1(cleanup)),
                     };
-                    if let Err(error) = self.validate_and_compare_object_locator(
+                    let evidence = match self.gather_object_locator_incumbent_evidence(
                         &mut candidate,
                         entry,
                         locator,
                         counters,
                         scratch,
                         control,
+                    ) {
+                        Ok(evidence) => evidence,
+                        Err(error) => return Err(error.dominated_by_v1(cleanup)),
+                    };
+                    if let Err(error) = map_persistent_locator_install_decision_v1(
+                        decide_persistent_locator_install_v1(
+                            PersistentLocatorInstallObservationV1::Incumbent(evidence),
+                        ),
                     ) {
                         return Err(error.dominated_by_v1(cleanup));
                     }
@@ -8214,22 +10988,21 @@ impl FsCasV1 {
                     return Err(cleanup);
                 }
                 MarkerPublicationV1::IncumbentClean(incumbent) => {
-                    let locator = decode_persistent_locator_v1(incumbent.bytes, entry.id())
-                        .map_err(|error| match error {
-                            PersistentLocatorCodecErrorV1::Malformed => {
-                                FsCasErrorV1::MalformedOccupant
-                            }
-                            PersistentLocatorCodecErrorV1::BindingMismatch => {
-                                FsCasErrorV1::Integrity
-                            }
-                        })?;
-                    self.validate_and_compare_object_locator(
+                    let locator =
+                        decode_persistent_locator_for_install_v1(incumbent.bytes, entry.id())
+                            .map_err(map_persistent_locator_install_error_v1)?;
+                    let evidence = self.gather_object_locator_incumbent_evidence(
                         &mut candidate,
                         entry,
                         locator,
                         counters,
                         scratch,
                         control,
+                    )?;
+                    map_persistent_locator_install_decision_v1(
+                        decide_persistent_locator_install_v1(
+                            PersistentLocatorInstallObservationV1::Incumbent(evidence),
+                        ),
                     )?;
                     self.revalidate_active_pack_marker_incumbent_controlled_v1(
                         &path,
@@ -8252,7 +11025,7 @@ impl FsCasV1 {
         Ok(())
     }
 
-    fn validate_and_compare_object_locator<C>(
+    fn gather_object_locator_incumbent_evidence<C>(
         &self,
         candidate: &mut FilePackReadV1,
         candidate_entry: PackIndexEntryV1,
@@ -8260,7 +11033,7 @@ impl FsCasV1 {
         counters: &mut OperationCountersV1,
         scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
         control: &mut C,
-    ) -> Result<(), FsCasErrorV1>
+    ) -> Result<PersistentLocatorIncumbentEvidenceV1, FsCasErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -8301,10 +11074,9 @@ impl FsCasV1 {
                 control,
             )?;
         };
-        if catalog != locator.sealed() {
-            // Both records decoded completely. Their authenticated carrier
-            // bindings disagree; this is an integrity failure, not malformed
-            // bytes in either occupant.
+        if decide_persistent_locator_catalog_binding_v1(locator, catalog)
+            != PersistentLocatorCatalogBindingDecisionV1::Authenticated
+        {
             return Err(FsCasErrorV1::Integrity);
         }
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierMetadataRead)?;
@@ -8325,13 +11097,10 @@ impl FsCasV1 {
             }
         }
         .ok_or(FsCasErrorV1::MissingOccupant)?;
-        if indexed != locator.entry() {
-            return Err(FsCasErrorV1::Integrity);
-        }
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierObjectRead)?;
         let location = match validate_validated_pack_object_controlled_v1(
             &mut incumbent,
-            locator.entry(),
+            indexed,
             scratch,
             counters,
             control,
@@ -8343,7 +11112,7 @@ impl FsCasV1 {
         };
         counters.record_fscas_read(incumbent.bytes_read, incumbent.read_calls)?;
         sample_control(control, FsCasBoundaryV1::AfterObjectIncumbentValidation)?;
-        compare_complete_object_bytes(
+        let object_bytes_equal = match compare_complete_object_bytes(
             candidate,
             PackObjectLocationV1 {
                 object_offset: candidate_entry
@@ -8357,7 +11126,11 @@ impl FsCasV1 {
             scratch,
             counters,
             control,
-        )?;
+        ) {
+            Ok(()) => true,
+            Err(FsCasErrorV1::UnequalOccupant) => false,
+            Err(error) => return Err(error),
+        };
         let carrier_snapshot = incumbent.immutable_snapshot_v1()?;
 
         // Catalog decode, carrier/index validation, and complete object-byte
@@ -8374,7 +11147,13 @@ impl FsCasV1 {
         })();
         self.unlock_visibility_controlled_v1(guard, control);
         revalidated?;
-        Ok(())
+        Ok(PersistentLocatorIncumbentEvidenceV1::new(
+            locator,
+            catalog,
+            indexed,
+            candidate_entry,
+            object_bytes_equal,
+        ))
     }
 
     fn validate_existing_object_locators<M, C>(
@@ -8423,9 +11202,11 @@ impl FsCasV1 {
                 read_object_locator_if_present_with_snapshot_v1(&path, entry.id())?
                     .ok_or(FsCasErrorV1::MissingOccupant)?;
             sample_control(control, FsCasBoundaryV1::AfterObjectLocatorRead)?;
-            if !locator.matches_binding(sealed, entry) {
-                return Err(FsCasErrorV1::Integrity);
-            }
+            map_persistent_locator_install_decision_v1(decide_persistent_locator_install_v1(
+                PersistentLocatorInstallObservationV1::Incumbent(
+                    PersistentLocatorIncumbentEvidenceV1::new(locator, sealed, entry, entry, true),
+                ),
+            ))?;
             // The complete carrier and candidate bytes were validated and
             // compared immediately above. Matching the locator to that exact
             // seal and canonical entry therefore validates the incumbent
@@ -8443,7 +11224,7 @@ impl FsCasV1 {
         self.begin_closure_operation_inner_v1(None, &mut control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_closure_operation_borrowed_v1(
         &self,
         storage_token: FsStorageOperationTokenV1,
@@ -8452,7 +11233,7 @@ impl FsCasV1 {
         self.begin_closure_operation_inner_v1(Some(storage_token), &mut control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_closure_operation_borrowed_controlled_v1<C>(
         &self,
         storage_token: FsStorageOperationTokenV1,
@@ -8591,7 +11372,7 @@ impl FsCasV1 {
         Ok((admitted, capability))
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn admit_complete_closure_borrowed_v1<C, K>(
         &self,
@@ -8602,7 +11383,7 @@ impl FsCasV1 {
         reservation: &OperationReservationV1<'_>,
         counters: &mut OperationCountersV1,
         buffers: AdmissionBuffersV1<'_>,
-        algorithm: crate::cdc::C3CdcAlgorithmV1,
+        algorithm: crate::cdc::CdcAlgorithmV1,
         control: &mut K,
     ) -> Result<(AdmittedClosureV1, CompleteValidatedClosureV1), FsClosureAdmissionErrorV1>
     where
@@ -8690,7 +11471,7 @@ impl FsCasV1 {
         )
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn consume_validated_closure_for_handoff_controlled_v1<C>(
         &self,
         operation: &mut FsClosureOperationV1,
@@ -8778,7 +11559,7 @@ impl FsCasV1 {
         result
     }
 
-    #[cfg(any(test, feature = "c3-polymorphism"))]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     #[allow(clippy::too_many_arguments)]
     fn admit_against_incumbent<M, C>(
         &self,
@@ -8804,7 +11585,7 @@ impl FsCasV1 {
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
         let (marker, marker_snapshot) = read_catalog_marker_with_snapshot_v1(marker_path)?;
         sample_control(control, FsCasBoundaryV1::AfterIncumbentMarkerRead)?;
-        classify_catalog_incumbent_v1(marker, candidate)?;
+        require_persistent_catalog_incumbent_v1(marker, candidate)?;
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierMetadataRead)?;
         let mut incumbent = FilePackReadV1::open_occupant(carrier_path)?;
         counters.observe_layerfs_open_file_handles(2);
@@ -8833,14 +11614,16 @@ impl FsCasV1 {
             return Err(FsCasErrorV1::Integrity);
         }
         sample_control(control, FsCasBoundaryV1::AfterIncumbentValidation)?;
-        compare_complete_pack_bytes(
+        if let Err(error) = compare_complete_pack_bytes(
             prepared,
             &mut incumbent,
             candidate.pack_len(),
             scratch,
             counters,
             control,
-        )?;
+        ) {
+            return Err(error);
+        }
         self.validate_existing_object_locators(candidate, metadata, counters, control)?;
         let carrier_snapshot = incumbent.immutable_snapshot_v1()?;
         prepared.abort_private();
@@ -8875,11 +11658,16 @@ impl FsCasV1 {
     }
 }
 
+#[cfg(test)]
+std::thread_local! {
+    static FINAL_CARRIER_SNAPSHOT_CHECKS_FOR_TEST_V1: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// Validation and storage-accounting authority for one pack admission. The
 /// production form can only borrow the reservation and storage token minted
 /// by the root operation. Independent ledger admission exists solely for the
 /// inherited unit-test compatibility wall and is absent from production.
-#[cfg(any(test, feature = "c3-polymorphism"))]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 #[derive(Clone, Copy)]
 enum PackAdmissionAuthorityV1<'operation, 'ledger> {
     #[cfg(test)]
@@ -8890,7 +11678,7 @@ enum PackAdmissionAuthorityV1<'operation, 'ledger> {
     },
 }
 
-#[cfg(any(test, feature = "c3-polymorphism"))]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 impl PackAdmissionAuthorityV1<'_, '_> {
     fn storage_token_v1(self) -> Option<FsStorageOperationTokenV1> {
         match self {
@@ -8901,7 +11689,7 @@ impl PackAdmissionAuthorityV1<'_, '_> {
     }
 }
 
-#[cfg(any(test, feature = "c3-polymorphism"))]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 #[allow(clippy::too_many_arguments)]
 fn validate_pack_for_operation_v1<P, M, C>(
     pack: &mut P,
@@ -8978,11 +11766,11 @@ fn restore_pack_spool_error_v1<M>(metadata: &mut M, fallback: FsCasErrorV1) -> F
 where
     M: PackIndexSpoolV1 + ?Sized,
 {
-    #[cfg(any(test, feature = "c3-polymorphism"))]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     {
         metadata.take_storage_error_typed_v1().unwrap_or(fallback)
     }
-    #[cfg(not(any(test, feature = "c3-polymorphism")))]
+    #[cfg(not(any(test, feature = "operation-polymorphism")))]
     {
         let _ = metadata;
         fallback
@@ -9011,14 +11799,14 @@ pub struct FsPrivatePackV1 {
 /// Keeping both values in one private carrier lets the coordinator finish all
 /// earlier preparation targets, terminalize the operation, and return the
 /// classified error without retrying the partially constructed spool.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) struct FsOperationSpoolConstructionUnwindV1 {
     terminal: FsCasErrorV1,
     primary_payload: Box<dyn core::any::Any + Send>,
     secondary_payload: Option<Box<dyn core::any::Any + Send>>,
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl FsOperationSpoolConstructionUnwindV1 {
     const fn new_v1(
         terminal: FsCasErrorV1,
@@ -9056,7 +11844,7 @@ impl FsOperationSpoolConstructionUnwindV1 {
 
 /// One bounded operation's file-backed metadata. The file has no recovery or
 /// publication semantics and its private name is unconditionally removed.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) struct FsOperationSpoolV1 {
     owner: FsCasV1,
     path: PathBuf,
@@ -9076,7 +11864,7 @@ std::thread_local! {
         std::cell::Cell<Option<(u64, u64)>> = const { std::cell::Cell::new(None) };
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl FsOperationSpoolV1 {
     pub(crate) fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
         let path_capacity =
@@ -9201,6 +11989,10 @@ impl FsOperationSpoolV1 {
             return Err(FsCasErrorV1::Integrity);
         }
         let next_len = self.len.max(end);
+        #[cfg(test)]
+        if let Some(error) = control.inject_operation_spool_precharge_failure_v1() {
+            return Err(error);
+        }
         if let Some(token) = self.storage_token {
             if let Err(error) = self
                 .owner
@@ -9281,6 +12073,19 @@ impl FsOperationSpoolV1 {
         self.bytes_read = bytes_read;
         self.read_calls = read_calls;
         self.owner.ensure_valid()
+    }
+
+    fn authoritative_file_len_v1(&self) -> Result<u64, FsCasErrorV1> {
+        self.owner.ensure_valid()?;
+        let len = self
+            .file
+            .as_ref()
+            .ok_or(FsCasErrorV1::Integrity)?
+            .metadata()
+            .map_err(|error| map_required_filesystem_read_error_v1(&error))?
+            .len();
+        self.owner.ensure_valid()?;
+        Ok(len)
     }
 
     /// Explicitly release an operation spool while the borrowed operation
@@ -9413,7 +12218,7 @@ impl FsOperationSpoolV1 {
     }
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl Drop for FsOperationSpoolV1 {
     fn drop(&mut self) {
         if self.cleanup_complete || self.cleanup_error.is_some() {
@@ -9687,12 +12492,12 @@ impl FsPrivatePackV1 {
         terminal
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_direct_v1(&mut self) -> Result<(), PackPortErrorV1> {
         self.begin_direct_controlled_v1(MAX_PACK_BYTES, &mut ContinueFsCasControlV1)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn begin_direct_controlled_v1<C>(
         &mut self,
         exact_len: u64,
@@ -9705,7 +12510,7 @@ impl FsPrivatePackV1 {
         self.append_controlled_v1(&[0_u8; crate::pack::PACK_HEADER_BYTES as usize], control)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn patch_direct_v1(
         &mut self,
         offset: u64,
@@ -9714,7 +12519,7 @@ impl FsPrivatePackV1 {
         self.patch_direct_controlled_v1(offset, bytes, &mut ContinueFsCasControlV1)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn patch_direct_controlled_v1<C>(
         &mut self,
         offset: u64,
@@ -9751,12 +12556,12 @@ impl FsPrivatePackV1 {
         self.ensure_owner_valid_v1()
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn truncate_direct_v1(&mut self, len: u64) -> Result<(), PackPortErrorV1> {
         self.truncate_direct_controlled_v1(len, &mut ContinueFsCasControlV1)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn truncate_direct_controlled_v1<C>(
         &mut self,
         len: u64,
@@ -9791,12 +12596,12 @@ impl FsPrivatePackV1 {
         self.ensure_owner_valid_v1()
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn seal_direct_v1(&mut self, id: PackIdV1) -> Result<(), PackPortErrorV1> {
         self.seal_direct_controlled_v1(id, &mut ContinueFsCasControlV1)
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn seal_direct_controlled_v1<C>(
         &mut self,
         id: PackIdV1,
@@ -10008,10 +12813,11 @@ impl FsPrivatePackV1 {
                 return Err(self.retain_error_v1(error));
             }
         };
-        let sealed = match read_sealed_shape(&mut reader) {
+        let sealed = match read_sealed_pack_shape_v1(&mut reader) {
             Ok(sealed) => sealed,
             Err(error) => {
                 drop(file);
+                let error = restore_private_pack_shape_failure_v1(&mut reader, error);
                 return Err(self.retain_error_v1(error));
             }
         };
@@ -10228,6 +13034,16 @@ fn restore_pack_occupant_failure_v1(pack: &mut FilePackReadV1, error: CoreError)
     })
 }
 
+fn restore_private_pack_shape_failure_v1(
+    pack: &mut FilePackReadV1,
+    error: CoreError,
+) -> FsCasErrorV1 {
+    pack.restore_failure_v1(match error {
+        CoreError::PackInvalid => FsCasErrorV1::Integrity,
+        other => FsCasErrorV1::Core(other),
+    })
+}
+
 impl PackReadPortV1 for FilePackReadV1 {
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
         u64::try_from(core::mem::size_of::<Self>()).map_err(|_| CoreError::IntegerOverflow)
@@ -10407,10 +13223,10 @@ impl FsCasOccupiedV1 {
         let locator_path = objects.join(hex_typed_id(id));
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
         let (locator_bytes, locator_snapshot) = loop {
-            match read_exact_regular_file_if_present_with_snapshot_v1::<
+            let locator_read = read_exact_regular_file_if_present_with_snapshot_v1::<
                 PERSISTENT_LOCATOR_BYTES_V1,
-            >(&locator_path)
-            .map_err(|error| match error {
+            >(&locator_path);
+            match locator_read.map_err(|error| match error {
                 FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
                 other => other,
             })? {
@@ -10434,11 +13250,8 @@ impl FsCasOccupiedV1 {
                 }
             }
         };
-        let locator =
-            decode_persistent_locator_v1(locator_bytes, id).map_err(|error| match error {
-                PersistentLocatorCodecErrorV1::Malformed => FsCasErrorV1::MalformedOccupant,
-                PersistentLocatorCodecErrorV1::BindingMismatch => FsCasErrorV1::Integrity,
-            })?;
+        let locator = decode_persistent_locator_for_install_v1(locator_bytes, id)
+            .map_err(map_persistent_locator_install_error_v1)?;
         let pack_name = hex_id(locator.sealed().id().as_bytes());
         let catalog_path = self.cas.inner.root.join("catalog").join(&pack_name);
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
@@ -10452,7 +13265,9 @@ impl FsCasOccupiedV1 {
             FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
             other => other,
         })?;
-        if catalog != locator.sealed() {
+        if decide_persistent_locator_catalog_binding_v1(locator, catalog)
+            != PersistentLocatorCatalogBindingDecisionV1::Authenticated
+        {
             return Err(FsCasErrorV1::Integrity);
         }
         let carrier_path = self.cas.inner.root.join("carriers").join(&pack_name);
@@ -10496,9 +13311,9 @@ impl FsCasOccupiedV1 {
             Err(error) => return Err(restore_pack_occupant_failure_v1(&mut pack, error)),
         }
         .ok_or(FsCasErrorV1::MissingOccupant)?;
-        if indexed != locator.entry() {
-            return Err(FsCasErrorV1::Integrity);
-        }
+        require_persistent_locator_binding_v1(PersistentLocatorBindingEvidenceV1::new(
+            locator, catalog, indexed,
+        ))?;
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierObjectRead)?;
         let location = match validate_validated_pack_object_controlled_v1(
             &mut pack,
@@ -10899,8 +13714,10 @@ where
             self.inject_marker_alias_cleanup
                 .then_some(FsCasBoundaryV1::AfterClosureMarkerLink),
             None,
+            None,
             Some(&mut *self.marker_custody),
             None,
+            true,
             true,
             self.control,
         );
@@ -10959,7 +13776,20 @@ where
                 });
                 let terminal = match authenticated {
                     Ok(()) => cleanup,
-                    Err(error) => error.dominated_by_v1(cleanup),
+                    Err(error) => {
+                        // A cleanup failure was deliberately deferred while
+                        // the incumbent was still only a generic, fixed-size
+                        // marker.  Once the closure-owned decoder rejects
+                        // that incumbent, no semantic owner can adopt its
+                        // dependency chain.  Force the fail-closed root
+                        // transition here instead of allowing the outer
+                        // preparation cleanup to return a malformed-occupant
+                        // error with no invalidation attempt.
+                        let cleanup = self
+                            .cas
+                            .fail_closed_preserving_error_controlled_v1(cleanup, self.control);
+                        error.dominated_by_v1(cleanup)
+                    }
                 };
                 self.first_error.get_or_insert(terminal);
                 return Err(ImmutablePortErrorV1::Failure);
@@ -10991,6 +13821,9 @@ where
                     )
                 })
                 .map_err(|error| {
+                    let error = self
+                        .cas
+                        .fail_closed_preserving_error_controlled_v1(error, self.control);
                     self.first_error.get_or_insert(error);
                     ImmutablePortErrorV1::Failure
                 })?;
@@ -11295,33 +14128,6 @@ where
         .map_err(|error| map_filesystem_write_error_v1(&error))
 }
 
-fn read_sealed_shape(pack: &mut FilePackReadV1) -> Result<SealedPackV1, FsCasErrorV1> {
-    let len = pack.len;
-    if len < 144 {
-        return Err(FsCasErrorV1::Integrity);
-    }
-    let mut header = [0_u8; 64];
-    checked_file_read(&mut pack.file, len, 0, &mut header)?;
-    let record_count = u32::from_be_bytes(
-        header[48..52]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    let index_offset = u64::from_be_bytes(
-        header[56..64]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    let mut digest = [0_u8; 32];
-    checked_file_read(&mut pack.file, len, len - 32, &mut digest)?;
-    Ok(SealedPackV1::from_validated_parts(
-        PackIdV1::from_digest(digest),
-        len,
-        record_count,
-        index_offset,
-    ))
-}
-
 fn read_catalog_marker(path: &Path) -> Result<SealedPackV1, FsCasErrorV1> {
     let bytes = read_exact_regular_file_if_present::<CATALOG_MARKER_BYTES>(path)
         .map_err(|error| match error {
@@ -11352,6 +14158,54 @@ fn read_catalog_marker_with_snapshot_v1(
     Ok((marker, snapshot))
 }
 
+/// Decide whether an incumbent catalog name still authorizes rollback of the
+/// unpublished candidate.  A malformed, unequal, or structurally foreign
+/// occupant is not adoption authority and must remain in place while the
+/// candidate's own exact receipts are unwound.  A valid equal marker is the
+/// irreversible dependency crossing and therefore retains the carrier chain.
+fn classify_catalog_for_rollback_v1(
+    path: &Path,
+    expected: SealedPackV1,
+) -> Result<CatalogRollbackDispositionV1, FsCasErrorV1> {
+    match read_catalog_marker(path) {
+        Ok(incumbent) => match require_persistent_catalog_incumbent_v1(incumbent, expected) {
+            Ok(()) => Ok(CatalogRollbackDispositionV1::Adopted),
+            Err(
+                FsCasErrorV1::MalformedOccupant
+                | FsCasErrorV1::Integrity
+                | FsCasErrorV1::UnequalOccupant,
+            ) => Ok(CatalogRollbackDispositionV1::RollbackAllowed),
+            Err(error) => Err(error),
+        },
+        Err(
+            FsCasErrorV1::MalformedOccupant
+            | FsCasErrorV1::Integrity
+            | FsCasErrorV1::UnequalOccupant
+            | FsCasErrorV1::MissingOccupant,
+        ) => Ok(CatalogRollbackDispositionV1::RollbackAllowed),
+        Err(error @ FsCasErrorV1::Filesystem(_)) => {
+            // A publication fault can replace the catalog directory itself
+            // with a non-directory occupant.  That namespace shape cannot
+            // contain a matching catalog marker, so it is foreign cleanup
+            // residue rather than a reason to strand the candidate carrier.
+            let parent = path.parent().ok_or(error)?;
+            match fs::symlink_metadata(parent) {
+                Ok(metadata)
+                    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() =>
+                {
+                    Ok(CatalogRollbackDispositionV1::RollbackAllowed)
+                }
+                Ok(_) => Err(error),
+                Err(lookup) if lookup.kind() == ErrorKind::NotFound => {
+                    Ok(CatalogRollbackDispositionV1::RollbackAllowed)
+                }
+                Err(lookup) => Err(map_filesystem_read_error_v1(&lookup)),
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn read_catalog_marker_from_open_v1(file: &mut File) -> Result<SealedPackV1, FsCasErrorV1> {
     let bytes =
         read_exact_regular_file_from_open_v1::<CATALOG_MARKER_BYTES>(file).map_err(|error| {
@@ -11364,18 +14218,6 @@ fn read_catalog_marker_from_open_v1(file: &mut File) -> Result<SealedPackV1, FsC
         FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
         other => other,
     })
-}
-
-fn classify_catalog_incumbent_v1(
-    incumbent: SealedPackV1,
-    expected: SealedPackV1,
-) -> Result<(), FsCasErrorV1> {
-    if incumbent.id() != expected.id() {
-        return Err(FsCasErrorV1::Integrity);
-    }
-    (incumbent == expected)
-        .then_some(())
-        .ok_or(FsCasErrorV1::UnequalOccupant)
 }
 
 fn read_object_locator(
@@ -11397,40 +14239,108 @@ fn read_object_locator_if_present(
     else {
         return Ok(None);
     };
-    decode_persistent_locator_v1(bytes, expected)
+    decode_persistent_locator_for_install_v1(bytes, expected)
         .map(Some)
-        .map_err(|error| match error {
-            PersistentLocatorCodecErrorV1::Malformed => FsCasErrorV1::MalformedOccupant,
-            PersistentLocatorCodecErrorV1::BindingMismatch => FsCasErrorV1::Integrity,
-        })
+        .map_err(map_persistent_locator_install_error_v1)
 }
 
 fn read_object_locator_if_present_with_snapshot_v1(
     path: &Path,
     expected: TypedPhysicalObjectIdV1,
 ) -> Result<Option<(PersistentObjectLocatorV1, ImmutableFileSnapshotV1)>, FsCasErrorV1> {
-    let Some((bytes, snapshot)) =
-        read_exact_regular_file_if_present_with_snapshot_v1::<PERSISTENT_LOCATOR_BYTES_V1>(path)
-            .map_err(|error| match error {
-                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-                other => other,
-            })?
-    else {
-        return Ok(None);
-    };
-    decode_persistent_locator_v1(bytes, expected)
-        .map(|locator| Some((locator, snapshot)))
+    read_object_locator_if_present_with_snapshot_and_bytes_v1(path, expected)
+        .map(|result| result.map(|(_bytes, locator, snapshot)| (locator, snapshot)))
+}
+
+fn read_object_locator_if_present_with_snapshot_and_raw_v1(
+    path: &Path,
+) -> Result<Option<([u8; PERSISTENT_LOCATOR_BYTES_V1], ImmutableFileSnapshotV1)>, FsCasErrorV1> {
+    read_exact_regular_file_if_present_with_snapshot_v1::<PERSISTENT_LOCATOR_BYTES_V1>(path)
         .map_err(|error| match error {
-            PersistentLocatorCodecErrorV1::Malformed => FsCasErrorV1::MalformedOccupant,
-            PersistentLocatorCodecErrorV1::BindingMismatch => FsCasErrorV1::Integrity,
+            FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+            other => other,
         })
 }
 
+fn read_object_locator_if_present_with_snapshot_and_bytes_v1(
+    path: &Path,
+    expected: TypedPhysicalObjectIdV1,
+) -> Result<
+    Option<(
+        [u8; PERSISTENT_LOCATOR_BYTES_V1],
+        PersistentObjectLocatorV1,
+        ImmutableFileSnapshotV1,
+    )>,
+    FsCasErrorV1,
+> {
+    let Some((bytes, snapshot)) = read_object_locator_if_present_with_snapshot_and_raw_v1(path)?
+    else {
+        return Ok(None);
+    };
+    decode_persistent_locator_for_install_v1(bytes, expected)
+        .map(|locator| Some((bytes, locator, snapshot)))
+        .map_err(map_persistent_locator_install_error_v1)
+}
+
+fn require_persistent_catalog_incumbent_v1(
+    incumbent: SealedPackV1,
+    expected: SealedPackV1,
+) -> Result<(), FsCasErrorV1> {
+    match decide_persistent_catalog_incumbent_v1(incumbent, expected) {
+        PersistentCatalogIncumbentDecisionV1::Authenticated => Ok(()),
+        PersistentCatalogIncumbentDecisionV1::Collision => Err(FsCasErrorV1::Integrity),
+        PersistentCatalogIncumbentDecisionV1::Unequal => Err(FsCasErrorV1::UnequalOccupant),
+    }
+}
+
+fn require_persistent_locator_binding_v1(
+    evidence: PersistentLocatorBindingEvidenceV1,
+) -> Result<(), FsCasErrorV1> {
+    match decide_persistent_locator_binding_v1(evidence) {
+        PersistentLocatorBindingDecisionV1::Authenticated => Ok(()),
+        PersistentLocatorBindingDecisionV1::Collision => Err(FsCasErrorV1::Integrity),
+    }
+}
+
+fn map_persistent_locator_install_error_v1(
+    decision: PersistentLocatorInstallDecisionV1,
+) -> FsCasErrorV1 {
+    match decision {
+        PersistentLocatorInstallDecisionV1::BindingCollision => FsCasErrorV1::Integrity,
+        PersistentLocatorInstallDecisionV1::UnequalObject => FsCasErrorV1::UnequalOccupant,
+        PersistentLocatorInstallDecisionV1::Malformed => FsCasErrorV1::MalformedOccupant,
+        PersistentLocatorInstallDecisionV1::Installed
+        | PersistentLocatorInstallDecisionV1::EqualReuse => FsCasErrorV1::Integrity,
+    }
+}
+
+fn map_persistent_locator_install_decision_v1(
+    decision: PersistentLocatorInstallDecisionV1,
+) -> Result<(), FsCasErrorV1> {
+    match decision {
+        PersistentLocatorInstallDecisionV1::Installed
+        | PersistentLocatorInstallDecisionV1::EqualReuse => Ok(()),
+        PersistentLocatorInstallDecisionV1::BindingCollision
+        | PersistentLocatorInstallDecisionV1::UnequalObject
+        | PersistentLocatorInstallDecisionV1::Malformed => {
+            Err(map_persistent_locator_install_error_v1(decision))
+        }
+    }
+}
+
 fn encode_root_owner(generation: [u8; 32], state: u8) -> [u8; ROOT_OWNER_BYTES] {
+    encode_root_owner_for_process_v1(generation, state, std::process::id())
+}
+
+fn encode_root_owner_for_process_v1(
+    generation: [u8; 32],
+    state: u8,
+    process_id: u32,
+) -> [u8; ROOT_OWNER_BYTES] {
     let mut bytes = [0_u8; ROOT_OWNER_BYTES];
     bytes[..8].copy_from_slice(ROOT_OWNER_MAGIC);
     bytes[8] = state;
-    bytes[12..16].copy_from_slice(&std::process::id().to_be_bytes());
+    bytes[12..16].copy_from_slice(&process_id.to_be_bytes());
     bytes[16..].copy_from_slice(&generation);
     bytes
 }
@@ -11696,6 +14606,8 @@ fn publish_small_marker<const N: usize>(
         None,
         None,
         None,
+        None,
+        false,
         false,
         &mut control,
     )
@@ -11751,8 +14663,10 @@ fn publish_small_marker_controlled<const N: usize, C>(
     storage_token: Option<FsStorageOperationTokenV1>,
     linked_boundary: Option<FsCasBoundaryV1>,
     mut locator_custody: Option<&mut LocatorPublicationCustodyV1>,
+    locator_receipt: Option<LocatorPublicationReceiptInputV1>,
     mut marker_custody: Option<&mut ImmutableMarkerCustodyV1>,
     prerequisite: Option<MarkerPublicationPrerequisiteV1<'_>>,
+    defer_incumbent_invalidation: bool,
     serialize_publication: bool,
     control: &mut C,
 ) -> Result<MarkerPublicationV1<N>, FsCasErrorV1>
@@ -11908,11 +14822,39 @@ where
                     return Err(FsCasErrorV1::Integrity);
                 }
             }
+            // A locator receipt is operation-local cleanup authority. Make
+            // the custody object and its next receipt slot available before
+            // the no-replace link; no allocation or missing-custody branch
+            // may remain after the destination becomes visible.
+            let locator_receipt_prepared = if let Some(input) = locator_receipt {
+                let custody = locator_custody.as_mut().ok_or(FsCasErrorV1::Integrity)?;
+                custody.reserve_v1(1)?;
+                let preparation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    custody.prepare_v1(
+                        input,
+                        candidate_snapshot.ok_or(FsCasErrorV1::Integrity)?,
+                        control,
+                    )
+                }));
+                match preparation {
+                    Ok(result) => result?,
+                    Err(payload) => {
+                        custody.note_receipt_prelink_unwind_v1();
+                        std::panic::resume_unwind(payload);
+                    }
+                }
+                true
+            } else {
+                false
+            };
             match fs::hard_link(&temporary, destination) {
                 Ok(()) => {
                     destination_linked = true;
-                    if let Some(custody) = locator_custody.as_mut() {
-                        custody.mark_visible_v1();
+                    if locator_receipt_prepared {
+                        let custody = locator_custody
+                            .as_mut()
+                            .expect("locator custody was reserved before linking");
+                        custody.commit_visible_v1();
                     }
                     if let Some(custody) = marker_custody.as_mut() {
                         custody.mark_visible_v1(N as u64);
@@ -11927,6 +14869,12 @@ where
                     Ok(None)
                 }
                 Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                    if locator_receipt_prepared {
+                        locator_custody
+                            .as_mut()
+                            .expect("locator custody was reserved before incumbent read")
+                            .discard_prepared_v1(control)?;
+                    }
                     // Open and authenticate the incumbent pathname while the
                     // no-replace transition remains serialized. The complete
                     // fixed-size read is performed only after both root
@@ -11978,11 +14926,23 @@ where
                     incumbent.map(|incumbent| Some(MarkerPublicationV1::IncumbentClean(incumbent)))
                 }
                 Err(error) => {
-                    let original = if is_unsupported_link_error(&error) {
+                    let receipt_cleanup = if locator_receipt_prepared {
+                        locator_custody
+                            .as_mut()
+                            .expect("locator custody was reserved before link error")
+                            .discard_prepared_v1(control)
+                            .err()
+                    } else {
+                        None
+                    };
+                    let mut original = if is_unsupported_link_error(&error) {
                         FsCasErrorV1::Unsupported
                     } else {
                         map_required_filesystem_write_error_v1(&error)
                     };
+                    if let Some(cleanup) = receipt_cleanup {
+                        original = original.dominated_by_v1(cleanup);
+                    }
                     unlock_marker_guards_v1(
                         visibility_owner,
                         &mut visibility_guard,
@@ -12033,6 +14993,14 @@ where
     match pre_link {
         Ok(Ok(None)) => {}
         Ok(terminal) => {
+            // An incumbent marker is not this transaction's publication. If
+            // its private preparation alias cannot be removed, defer the
+            // root-invalidation transition until the owned carrier rollback
+            // has completed. The active publication record and exact carrier
+            // receipt still fence that cleanup; the residue itself remains a
+            // fail-closed reason once all owned dependencies are reconciled.
+            let defer_invalidation = defer_incumbent_invalidation
+                && matches!(&terminal, Ok(Some(MarkerPublicationV1::IncumbentClean(_))));
             let cleanup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 cleanup_unpublished_marker_v1(
                     &temporary,
@@ -12041,6 +15009,7 @@ where
                     accounted_len,
                     FsCasCleanupTargetV1::PreparationSpool,
                     control,
+                    !defer_invalidation,
                 )
             }));
             return match cleanup {
@@ -12061,10 +15030,14 @@ where
                     let cleanup = visibility_owner.map_or(
                         FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool),
                         |owner| {
-                            owner.cleanup_failure_after_unwind_v1(
-                                FsCasCleanupTargetV1::PreparationSpool,
-                                control,
-                            )
+                            if defer_invalidation {
+                                FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool)
+                            } else {
+                                owner.cleanup_failure_after_unwind_v1(
+                                    FsCasCleanupTargetV1::PreparationSpool,
+                                    control,
+                                )
+                            }
                         },
                     );
                     match terminal {
@@ -12105,6 +15078,7 @@ where
                         accounted_len,
                         FsCasCleanupTargetV1::PreparationSpool,
                         control,
+                        true,
                     )
                 }));
                 let cleanup_terminal = match cleanup {
@@ -12142,6 +15116,7 @@ where
                     accounted_len,
                     FsCasCleanupTargetV1::PublishedMarkerAlias,
                     control,
+                    true,
                 )
             }));
             let terminal = match cleanup {
@@ -12225,6 +15200,7 @@ where
                         accounted_len,
                         FsCasCleanupTargetV1::PublishedMarkerAlias,
                         control,
+                        true,
                     )
                 })) {
                     Ok(Ok(())) => visibility_owner
@@ -12275,6 +15251,7 @@ fn cleanup_unpublished_marker_v1<C>(
     accounted_len: u64,
     target: FsCasCleanupTargetV1,
     control: &mut C,
+    invalidate_on_failure: bool,
 ) -> Result<(), FsCasErrorV1>
 where
     C: FsCasControlV1 + ?Sized,
@@ -12297,19 +15274,26 @@ where
                         // Retain the typed accounting cause and make this a
                         // stable explicit cleanup terminal; a failed durable
                         // invalidation is the only stronger terminal cause.
-                        let cleanup = owner.cleanup_failure_controlled_v1(target, control);
+                        let cleanup = marker_cleanup_failure_v1(
+                            owner,
+                            target,
+                            control,
+                            invalidate_on_failure,
+                        );
                         return Err(accounting.dominated_by_v1(cleanup));
                     }
                 }
             }
             Ok(_) => {
                 let first = FsCasErrorV1::Integrity;
-                let cleanup = owner.cleanup_failure_controlled_v1(target, control);
+                let cleanup =
+                    marker_cleanup_failure_v1(owner, target, control, invalidate_on_failure);
                 return Err(first.dominated_by_v1(cleanup));
             }
             Err(error) => {
                 let first = map_required_filesystem_read_error_v1(&error);
-                let cleanup = owner.cleanup_failure_controlled_v1(target, control);
+                let cleanup =
+                    marker_cleanup_failure_v1(owner, target, control, invalidate_on_failure);
                 return Err(first.dominated_by_v1(cleanup));
             }
         }
@@ -12331,17 +15315,34 @@ where
     if removed {
         if let (Some(owner), Some(token)) = (owner, storage_token) {
             if let Err(first) = owner.record_storage_preparation_remove_v1(token, observed_len) {
-                let cleanup = owner.cleanup_failure_controlled_v1(target, control);
+                let cleanup =
+                    marker_cleanup_failure_v1(owner, target, control, invalidate_on_failure);
                 return Err(first.dominated_by_v1(cleanup));
             }
         }
         Ok(())
     } else if let Some(owner) = owner {
-        let cleanup = owner.cleanup_failure_controlled_v1(target, control);
+        let cleanup = marker_cleanup_failure_v1(owner, target, control, invalidate_on_failure);
         Err(unlink_error.map_or(cleanup, |first| first.dominated_by_v1(cleanup)))
     } else {
         let cleanup = FsCasErrorV1::CleanupFailed(target);
         Err(unlink_error.map_or(cleanup, |first| first.dominated_by_v1(cleanup)))
+    }
+}
+
+fn marker_cleanup_failure_v1<C>(
+    owner: &FsCasV1,
+    target: FsCasCleanupTargetV1,
+    control: &mut C,
+    invalidate_on_failure: bool,
+) -> FsCasErrorV1
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    if invalidate_on_failure {
+        owner.cleanup_failure_controlled_v1(target, control)
+    } else {
+        FsCasErrorV1::CleanupFailed(target)
     }
 }
 
@@ -12541,6 +15542,7 @@ fn same_file_identity(_left: &fs::Metadata, _right: &fs::Metadata) -> bool {
 #[cfg(test)]
 mod resource_concurrency_tests {
     use super::*;
+    use crate::identity::PhysicalFileIdV1;
 
     fn usage(bytes: u64, inodes: u64) -> RootStorageUsageV1 {
         RootStorageUsageV1 { bytes, inodes }
@@ -12724,7 +15726,31 @@ mod resource_concurrency_tests {
     #[test]
     fn locator_custody_keeps_carrier_dependency_after_residue_counter_failure() {
         let mut custody = LocatorPublicationCustodyV1::default();
-        custody.mark_visible_v1();
+        let id = TypedPhysicalObjectIdV1::File(PhysicalFileIdV1::from_digest([0x11; 32]));
+        let sealed =
+            SealedPackV1::from_validated_parts(PackIdV1::from_digest([0x22; 32]), 160, 1, 0);
+        let entry = PackIndexEntryV1::from_validated_parts(
+            id,
+            0,
+            1,
+            crate::identity::ObjectChecksumV1::from_digest([0x33; 32]),
+        );
+        let locator = super::PersistentObjectLocatorV1::new(sealed, entry, 7);
+        custody.reserve_v1(1).unwrap();
+        let mut control = ContinueFsCasControlV1;
+        custody
+            .mark_visible_v1(
+                LocatorPublicationReceiptInputV1 { locator },
+                ImmutableFileSnapshotV1 {
+                    len: PERSISTENT_LOCATOR_BYTES_V1 as u64,
+                    #[cfg(unix)]
+                    device: 1,
+                    #[cfg(unix)]
+                    inode: 1,
+                },
+                &mut control,
+            )
+            .unwrap();
         let mut counters = OperationCountersV1 {
             unreachable_installed_residue_bytes: u64::MAX,
             ..OperationCountersV1::default()
@@ -12764,7 +15790,7 @@ mod resource_concurrency_tests {
         SampledUnsupported,
         SampledWriteFailure,
         PermissionDenied,
-        WriteFailure,
+        CarrierDisappeared,
         InjectedCleanup,
     }
 
@@ -12789,7 +15815,7 @@ mod resource_concurrency_tests {
 
                     fs::set_permissions(&self.carriers, fs::Permissions::from_mode(0o700)).unwrap();
                 }
-                CarrierRollbackFaultModeV1::WriteFailure => {
+                CarrierRollbackFaultModeV1::CarrierDisappeared => {
                     fs::remove_file(&self.carriers).unwrap();
                     fs::rename(&self.held_carriers, &self.carriers).unwrap();
                 }
@@ -12837,10 +15863,160 @@ mod resource_concurrency_tests {
                     FsCasFilesystemFailureV1::WriteFailure,
                 )),
                 CarrierRollbackFaultModeV1::PermissionDenied
-                | CarrierRollbackFaultModeV1::WriteFailure
+                | CarrierRollbackFaultModeV1::CarrierDisappeared
                 | CarrierRollbackFaultModeV1::InjectedCleanup => None,
             }
         }
+    }
+
+    #[cfg(unix)]
+    struct ReplaceCarrierDuringRollbackControlV1 {
+        cas: FsCasV1,
+        carrier: PathBuf,
+        held: PathBuf,
+        bytes: Vec<u8>,
+        sealed: SealedPackV1,
+        transaction: u64,
+        replaced: bool,
+    }
+
+    #[cfg(unix)]
+    impl FsCasControlV1 for ReplaceCarrierDuringRollbackControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target != FsCasCleanupTargetV1::Carrier || self.replaced {
+                return false;
+            }
+
+            // Replace the pathname before rollback acquires its publication
+            // guard. Advance only this synthetic test publication snapshot;
+            // the exact carrier receipt remains bound to the original inode,
+            // so the earlier guard passes and the final receipt check must
+            // reject the foreign occupant.
+            fs::rename(&self.carrier, &self.held).unwrap();
+            fs::write(&self.carrier, &self.bytes).unwrap();
+            let replacement =
+                ImmutableFileSnapshotV1::from_metadata_v1(&fs::metadata(&self.carrier).unwrap());
+            let mut publication = self.cas.inner.publication.lock().unwrap();
+            let active = publication
+                .active_packs
+                .iter_mut()
+                .flatten()
+                .find(|active| {
+                    active.id == self.sealed.id() && active.transaction == self.transaction
+                })
+                .expect("synthetic active publication");
+            active.carrier = Some(replacement);
+            self.replaced = true;
+            false
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn carrier_rollback_rejects_foreign_replacement_after_final_validation() {
+        const CARRIER_BYTES: u64 = 127;
+        let parent = std::env::temp_dir().canonicalize().unwrap();
+        let root = parent.join(format!(
+            "layerfs-carrier-replacement-{}-{}",
+            std::process::id(),
+            NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed)
+        ));
+        let cas = FsCasV1::create_new(&root).unwrap();
+        let carrier = root.join("carriers").join("foreign-replacement-carrier");
+        let bytes = vec![0xa7; CARRIER_BYTES as usize];
+        fs::write(&carrier, &bytes).unwrap();
+        let original_snapshot =
+            ImmutableFileSnapshotV1::from_metadata_v1(&fs::metadata(&carrier).unwrap());
+        let held = root.join("held-carrier-during-rollback");
+        let sealed = SealedPackV1::from_validated_parts(
+            PackIdV1::from_digest([0x71; 32]),
+            CARRIER_BYTES,
+            1,
+            64,
+        );
+        let mut receipt = Some(CarrierPublicationReceiptV1 {
+            sealed,
+            transaction: 0x41,
+            root_generation: cas.inner.generation,
+            root_incarnation: cas.inner.locator_incarnation,
+            snapshot: original_snapshot,
+        });
+        // The exact carrier receipt is only meaningful while the matching
+        // active publication record is still fenced.  Register the synthetic
+        // test publication so this regression reaches the final snapshot
+        // check instead of being rejected early as an unowned receipt.
+        {
+            let mut publication = cas.inner.publication.lock().unwrap();
+            publication.begin_pack_v1(sealed.id(), 0x41).unwrap();
+            publication
+                .authenticate_carrier_v1(sealed.id(), 0x41, original_snapshot)
+                .unwrap();
+        }
+        let mut control = ReplaceCarrierDuringRollbackControlV1 {
+            cas: cas.clone(),
+            carrier: carrier.clone(),
+            held: held.clone(),
+            bytes: bytes.clone(),
+            sealed,
+            transaction: 0x41,
+            replaced: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let mut custody = CarrierPublicationCustodyV1::InstalledUnreported;
+        FINAL_CARRIER_SNAPSHOT_CHECKS_FOR_TEST_V1.with(|checks| checks.set(0));
+
+        let result = cas.rollback_unpublished_carrier(
+            &carrier,
+            sealed,
+            0x41,
+            None,
+            &mut counters,
+            &mut custody,
+            &mut receipt,
+            &mut control,
+        );
+
+        assert!(matches!(
+            result,
+            Err(FsCasErrorV1::TerminalFailure {
+                first: FsCasFailureCauseV1::Integrity,
+                dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::Carrier),
+            })
+        ));
+        assert!(control.replaced);
+        assert_eq!(
+            FINAL_CARRIER_SNAPSHOT_CHECKS_FOR_TEST_V1.with(std::cell::Cell::get),
+            1,
+            "replacement must reach the final non-callback snapshot check"
+        );
+        assert_eq!(custody, CarrierPublicationCustodyV1::RetainedAndRecorded);
+        assert!(receipt.is_some());
+        assert_eq!(counters.unreachable_installed_residue_bytes, CARRIER_BYTES);
+
+        // Both the foreign replacement and the original authenticated inode
+        // remain byte-for-byte present.  The exact receipt still names the
+        // original inode, while the pathname now names a different inode.
+        assert_eq!(fs::read(&carrier).unwrap(), bytes);
+        assert_eq!(fs::read(&held).unwrap(), bytes);
+        let carrier_snapshot =
+            ImmutableFileSnapshotV1::from_metadata_v1(&fs::metadata(&carrier).unwrap());
+        let held_snapshot =
+            ImmutableFileSnapshotV1::from_metadata_v1(&fs::metadata(&held).unwrap());
+        assert_ne!(carrier_snapshot, original_snapshot);
+        assert_eq!(held_snapshot, original_snapshot);
+        assert_eq!(fs::read_dir(root.join("carriers")).unwrap().count(), 1);
+        assert!(matches!(cas.ensure_valid(), Err(FsCasErrorV1::Invalidated)));
+
+        drop(cas);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[cfg(unix)]
@@ -12870,10 +16046,10 @@ mod resource_concurrency_tests {
                 )),
             ),
             (
-                "write-failure",
-                CarrierRollbackFaultModeV1::WriteFailure,
+                "carrier-disappeared",
+                CarrierRollbackFaultModeV1::CarrierDisappeared,
                 Some(FsCasFailureCauseV1::Filesystem(
-                    FsCasFilesystemFailureV1::WriteFailure,
+                    FsCasFilesystemFailureV1::ReadFailure,
                 )),
             ),
             (
@@ -12893,12 +16069,14 @@ mod resource_concurrency_tests {
                 let carriers = root.join("carriers");
                 let carrier = carriers.join("direct-rollback-carrier");
                 fs::write(&carrier, vec![0x5a; CARRIER_BYTES as usize]).unwrap();
+                let carrier_snapshot =
+                    ImmutableFileSnapshotV1::from_metadata_v1(&fs::metadata(&carrier).unwrap());
                 let held_carriers = root.join("carriers-held-for-rollback");
                 match mode {
                     CarrierRollbackFaultModeV1::PermissionDenied => {
                         fs::set_permissions(&carriers, fs::Permissions::from_mode(0o500)).unwrap();
                     }
-                    CarrierRollbackFaultModeV1::WriteFailure => {
+                    CarrierRollbackFaultModeV1::CarrierDisappeared => {
                         fs::rename(&carriers, &held_carriers).unwrap();
                         fs::write(&carriers, b"not-a-directory").unwrap();
                     }
@@ -12921,6 +16099,23 @@ mod resource_concurrency_tests {
                 );
                 let mut counters = OperationCountersV1::default();
                 let mut custody = CarrierPublicationCustodyV1::InstalledUnreported;
+                let mut receipt = Some(CarrierPublicationReceiptV1 {
+                    sealed,
+                    transaction: 1,
+                    root_generation: cas.inner.generation,
+                    root_incarnation: cas.inner.locator_incarnation,
+                    snapshot: carrier_snapshot,
+                });
+                // Model the real admission state that minted this receipt;
+                // rollback must authenticate both the receipt and its active
+                // publication fence before it may classify the unlink fault.
+                {
+                    let mut publication = cas.inner.publication.lock().unwrap();
+                    publication.begin_pack_v1(sealed.id(), 1).unwrap();
+                    publication
+                        .authenticate_carrier_v1(sealed.id(), 1, carrier_snapshot)
+                        .unwrap();
+                }
                 let cleanup = FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::Carrier);
                 let expected = if fail_invalidation {
                     FsCasErrorV1::TerminalFailure {
@@ -12940,9 +16135,11 @@ mod resource_concurrency_tests {
                     cas.rollback_unpublished_carrier(
                         &carrier,
                         sealed,
+                        1,
                         None,
                         &mut counters,
                         &mut custody,
+                        &mut receipt,
                         &mut control,
                     ),
                     Err(expected),
@@ -13227,7 +16424,7 @@ mod resource_concurrency_tests {
         assert!(state.operations.iter().all(|operation| !operation.active));
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn storage_tokens_bind_root_generation_owner_instance_and_operation_lifetime() {
         let parent = std::env::temp_dir().canonicalize().unwrap();
@@ -14149,6 +17346,150 @@ mod admission_queue_tests {
     }
 
     #[test]
+    fn frozen_compatibility_all_five_byte_domains_round_trip_and_hash_exactly() {
+        fn digest_hex(bytes: &[u8]) -> String {
+            blake3::hash(bytes)
+                .as_bytes()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect()
+        }
+
+        let mut object = Vec::from(crate::object::encode_physical_object_header_v1(
+            crate::format::PhysicalObjectKindV1::Chunk,
+            1,
+        ));
+        object.push(0);
+        let mut visitor = crate::object::DiscardStrongEdgesV1;
+        let decoded = crate::object::decode_physical_object_v1(&object, &mut visitor).unwrap();
+        assert_eq!(
+            decoded.header().kind(),
+            crate::format::PhysicalObjectKindV1::Chunk
+        );
+        assert_eq!(decoded.canonical_bytes(), object.as_slice());
+
+        let object_id = TypedPhysicalObjectIdV1::Chunk(
+            crate::identity::PhysicalChunkIdV1::from_digest([0x11; 32]),
+        );
+        let sealed =
+            SealedPackV1::from_validated_parts(PackIdV1::from_digest([0x22; 32]), 160, 1, 0);
+        let entry = PackIndexEntryV1::from_validated_parts(
+            object_id,
+            0,
+            1,
+            crate::identity::ObjectChecksumV1::from_digest([0x33; 32]),
+        );
+        let locator = PersistentObjectLocatorV1::new(sealed, entry, 0x5152_5354_5556_5758);
+        let locator_bytes = encode_persistent_locator_v1(locator);
+        assert_eq!(
+            decode_persistent_locator_for_install_v1(locator_bytes, object_id),
+            Ok(locator)
+        );
+
+        let catalog_bytes = encode_catalog_marker(sealed);
+        assert_eq!(decode_catalog_marker(catalog_bytes), Ok(sealed));
+
+        let version = PhysicalVersionRecordIdV1::from_digest([0x31; 32]);
+        let generation = [0x42; 32];
+        let transcript = [0x53; 32];
+        let closure_bytes = encode_closure_marker(
+            TypedPhysicalObjectIdV1::VersionRecord(version),
+            7,
+            generation,
+            transcript,
+        );
+        assert_eq!(
+            decode_closure_marker_v1(closure_bytes, version, generation),
+            Ok(FsCasAcceptedClosureReadV1 {
+                version_record: version,
+                object_count: 7,
+                transcript,
+            })
+        );
+
+        let generation_bytes = encode_generation_marker(generation);
+        let owner_bytes =
+            encode_root_owner_for_process_v1(generation, ROOT_OWNER_STATE_ACTIVE, 0x1234_5678);
+        let decoder_root = std::env::temp_dir().join(format!(
+            "layerfs-frozen-decoder-{}-{}",
+            std::process::id(),
+            NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&decoder_root).unwrap();
+        let generation_path = decoder_root.join("generation");
+        let owner_path = decoder_root.join(ROOT_OWNER_NAME);
+        fs::write(&generation_path, generation_bytes).unwrap();
+        fs::write(&owner_path, owner_bytes).unwrap();
+        assert_eq!(read_generation_marker(&generation_path), Ok(generation));
+        assert_eq!(
+            decode_existing_root_owner(&owner_path, generation),
+            Ok(FsCasErrorV1::Busy)
+        );
+        let mut wrong_generation = generation;
+        wrong_generation[0] ^= 0xff;
+        assert_eq!(
+            decode_existing_root_owner(&owner_path, wrong_generation),
+            Err(FsCasErrorV1::Integrity)
+        );
+        fs::write(
+            &generation_path,
+            &generation_bytes[..GENERATION_MARKER_BYTES - 1],
+        )
+        .unwrap();
+        assert_eq!(
+            read_generation_marker(&generation_path),
+            Err(FsCasErrorV1::MalformedOccupant)
+        );
+        fs::write(&owner_path, &owner_bytes[..ROOT_OWNER_BYTES - 1]).unwrap();
+        assert_eq!(
+            decode_existing_root_owner(&owner_path, generation),
+            Err(FsCasErrorV1::MalformedOccupant)
+        );
+        fs::remove_dir_all(decoder_root).unwrap();
+        assert_eq!(&generation_bytes[..8], GENERATION_MAGIC);
+        assert_eq!(&owner_bytes[..8], ROOT_OWNER_MAGIC);
+        assert_eq!(owner_bytes[8], ROOT_OWNER_STATE_ACTIVE);
+        assert_eq!(&owner_bytes[9..12], &[0; 3]);
+        assert_eq!(&owner_bytes[12..16], &0x1234_5678_u32.to_be_bytes());
+        assert_eq!(&owner_bytes[16..], &generation);
+
+        for (label, bytes, expected) in [
+            (
+                "object",
+                object.as_slice(),
+                "b3dff2fe8172cc9790e132bb7944da7090053373c54eac8be17e992295fd51ac",
+            ),
+            (
+                "locator",
+                locator_bytes.as_slice(),
+                "cb690382512f0f25da46b0db53f481644a607631c2103b2307edccab9ef5ebc8",
+            ),
+            (
+                "catalog",
+                catalog_bytes.as_slice(),
+                "4cfa704cef178bbb7de1f31e785893150e1ad6ee763a1b014ebee953cec98976",
+            ),
+            (
+                "closure",
+                closure_bytes.as_slice(),
+                "decd34050cc83019fa5a62f2e214278e9c0a188d3ba39ab113d95bcdee1409d9",
+            ),
+            (
+                "generation",
+                generation_bytes.as_slice(),
+                "76b2d4b844a9f0c207296ffe0b0645449fbd3d1edd11593507fcbab1fe6c3c6c",
+            ),
+            (
+                "root-owner",
+                owner_bytes.as_slice(),
+                "47fe3b8bfbaecda043ca9d9aff15a26415a783e4655d2e6a0ed3c73674127fdc",
+            ),
+        ] {
+            assert_eq!(digest_hex(bytes), expected, "frozen {label} hash");
+        }
+    }
+
+    #[test]
     fn closure_marker_decode_distinguishes_structure_binding_and_unequal_content() {
         let version = PhysicalVersionRecordIdV1::from_digest([0x31; 32]);
         let generation = [0x42; 32];
@@ -14321,7 +17662,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn closure_terminal_preserves_invalidation_probe_failure_and_double_fault() {
         for (case, probe_error, first_cause) in [
@@ -14534,7 +17875,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn closure_terminal_invalidation_unwind_reports_the_real_backstop_result() {
         for refuse_backstop in [false, true] {
@@ -14672,7 +18013,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn closure_fence_unwind_returns_owned_terminal_or_resumes_original_payload() {
         const ORIGINAL_PAYLOAD: &str = "inject closure admission callback unwind";
@@ -14865,7 +18206,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn closure_spool_restores_missing_and_length_mismatch_causes() {
         use crate::cas::{ClosureObjectRecordV1, FileClosureObjectSpoolV1, FsCasClosureSpoolV1};
@@ -15085,7 +18426,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn terminal_half_invalidation_unwind_preserves_first_cause_and_real_backstop_result() {
         for (case, poison_storage, poison_admission) in [
@@ -15273,7 +18614,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn storage_terminal_counter_failure_consumes_owned_lease_before_fail_closed_return() {
         for poison_storage in [false, true] {
@@ -15376,7 +18717,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn storage_terminal_reservation_underflow_reconciles_and_consumes_owned_lease() {
         for fail_invalidation in [false, true] {
@@ -15489,7 +18830,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn storage_terminal_custody_overflow_quarantines_snapshot_and_retires_lease() {
         for custody in ["immutable", "preparation"] {
@@ -15671,7 +19012,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn storage_terminal_sibling_reservation_failure_retires_only_owned_lease() {
         for fail_invalidation in [false, true] {
@@ -15872,7 +19213,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn storage_terminal_sibling_reservation_overflow_retires_owned_leases_in_order() {
         for fail_invalidation in [false, true] {
@@ -16785,7 +20126,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn queue_entry_observation_overflow_fails_closed_before_ticket_issue() {
         for fail_invalidation in [false, true] {
@@ -16866,7 +20207,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn ticket_sequence_overflow_fails_closed_before_observation_or_state_change() {
         for fail_invalidation in [false, true] {
@@ -16967,7 +20308,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn nonempty_target_slot_fails_closed_without_queue_transition() {
         for fail_invalidation in [false, true] {
@@ -17074,7 +20415,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn queue_refusal_observation_overflow_preserves_queue_and_fails_closed() {
         for fail_invalidation in [false, true] {
@@ -17364,7 +20705,7 @@ mod admission_queue_tests {
         );
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn queued_control_unwind_retirement_failure_is_typed_and_durably_fail_closed() {
         for fail_invalidation in [false, true] {
@@ -17609,7 +20950,7 @@ mod admission_queue_tests {
             .all(|ticket| ticket.operation_kind == 0 && ticket.cancellation_key == 0));
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn granted_wait_observation_overflow_uses_owned_entry_release_path() {
         let parent = std::env::temp_dir().canonicalize().unwrap();
@@ -17651,7 +20992,7 @@ mod admission_queue_tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn granted_wait_observation_overflow_retains_release_double_fault() {
         for fail_invalidation in [false, true] {
@@ -17741,7 +21082,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn poisoned_admission_release_is_typed_and_durably_invalidates_reopen() {
         let parent = std::env::temp_dir().canonicalize().unwrap();
@@ -17823,7 +21164,7 @@ mod admission_queue_tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn poisoned_admission_release_preserves_poison_when_active_state_underflows() {
         for fail_invalidation in [false, true] {
@@ -17909,7 +21250,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn release_observation_overflow_is_typed_without_replacing_admission_failure() {
         for fail_invalidation in [false, true] {
@@ -18007,7 +21348,7 @@ mod admission_queue_tests {
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn memory_refusal_observation_overflow_uses_owned_entry_release_path() {
         let parent = std::env::temp_dir().canonicalize().unwrap();
@@ -18066,7 +21407,7 @@ mod admission_queue_tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn failed_entry_release_poison_preserves_first_cause_and_double_fault() {
         for fail_invalidation in [false, true] {
@@ -18185,6 +21526,31 @@ mod admission_queue_tests {
             FsCasErrorV1::Core(CoreError::IntegerOverflow)
         );
 
+        drop(reader);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sealed_shape_adapter_restores_exact_filesystem_read_failure() {
+        let parent = std::env::temp_dir().canonicalize().unwrap();
+        let root = parent.join(format!(
+            "layerfs-pack-shape-read-failure-{}-{}",
+            std::process::id(),
+            NEXT_PRIVATE_NAME.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("pack");
+        fs::write(&path, [0_u8; 144]).unwrap();
+        let file = OpenOptions::new().write(true).open(&path).unwrap();
+        let mut reader = FilePackReadV1::from_file(file).unwrap();
+
+        let error = read_sealed_pack_shape_v1(&mut reader).unwrap_err();
+
+        assert_eq!(error, CoreError::SourceFailure);
+        assert_eq!(
+            restore_private_pack_shape_failure_v1(&mut reader, error),
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ReadFailure)
+        );
         drop(reader);
         fs::remove_dir_all(root).unwrap();
     }
@@ -18538,7 +21904,7 @@ mod admission_queue_tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[cfg(all(unix, feature = "c3-polymorphism"))]
+    #[cfg(all(unix, feature = "operation-polymorphism"))]
     #[test]
     fn unix_post_open_path_replacement_fails_closed_with_exact_terminal_authority() {
         let parent = std::env::temp_dir().canonicalize().unwrap();
@@ -18623,7 +21989,7 @@ mod admission_queue_tests {
         fs::remove_dir_all(probe).unwrap();
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     #[test]
     fn cloned_and_reopened_handles_share_one_sixteen_slot_domain() {
         let parent = std::env::temp_dir().canonicalize().unwrap();

@@ -1,4 +1,4 @@
-#![cfg(feature = "c3-polymorphism")]
+#![cfg(feature = "operation-polymorphism")]
 
 #[path = "reference/naive_seqcdc.rs"]
 mod naive_seqcdc;

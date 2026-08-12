@@ -11,11 +11,11 @@ use layerfs_storage::cas::{
     FsOperationKindV1, FsPackAdmissionOutcomeV1, FsStorageEnvelopeV1,
     ROOT_LOGICAL_STORAGE_BUDGET_V1, ROOT_NAMESPACE_ENTRY_BUDGET_V1,
 };
-use layerfs_storage::cdc::C3CdcAlgorithmV1;
+use layerfs_storage::cdc::CdcAlgorithmV1;
 use layerfs_storage::cdc::{CdcControlV1, MAXIMUM_CHUNK_BYTES};
 use layerfs_storage::content::{
-    request_c3_create_qualification_v1, request_c3_tree_operation_v1, run_c3_create_tree_v1,
-    run_c3_create_v1, C3OperationBuffersV1, C3OperationErrorV1, C3SourceSupplierV1, C3TreeFileV1,
+    request_create_operation_v1, request_tree_operation_v1, run_create_tree_v1, run_create_v1,
+    OperationBuffersV1, OperationErrorV1, SourceSupplierV1, TreeFileV1,
 };
 use layerfs_storage::content::{ContentSourceErrorV1, ContentSourceV1};
 use layerfs_storage::cow::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
@@ -407,7 +407,7 @@ struct FailingAfterBytesSupplier {
     bytes_before_failure: u64,
 }
 
-impl C3SourceSupplierV1 for PanickingSupplier {
+impl SourceSupplierV1 for PanickingSupplier {
     type Source = CounterSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -419,7 +419,7 @@ impl C3SourceSupplierV1 for PanickingSupplier {
     }
 }
 
-impl C3SourceSupplierV1 for PanicDuringPreparationFreeStageSupplier<'_> {
+impl SourceSupplierV1 for PanicDuringPreparationFreeStageSupplier<'_> {
     type Source = CounterSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -436,7 +436,7 @@ impl C3SourceSupplierV1 for PanicDuringPreparationFreeStageSupplier<'_> {
     }
 }
 
-impl C3SourceSupplierV1 for FailingPreparationFreeStageSupplier<'_> {
+impl SourceSupplierV1 for FailingPreparationFreeStageSupplier<'_> {
     type Source = CounterSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -460,7 +460,7 @@ impl ContentSourceV1 for FailingBodySource {
     }
 }
 
-impl C3SourceSupplierV1 for FailingBodySupplier {
+impl SourceSupplierV1 for FailingBodySupplier {
     type Source = FailingBodySource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -489,7 +489,7 @@ impl ContentSourceV1 for FailingAfterBytesSource {
     }
 }
 
-impl C3SourceSupplierV1 for FailingAfterBytesSupplier {
+impl SourceSupplierV1 for FailingAfterBytesSupplier {
     type Source = FailingAfterBytesSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -503,7 +503,7 @@ impl C3SourceSupplierV1 for FailingAfterBytesSupplier {
     }
 }
 
-impl<'a> C3SourceSupplierV1 for InvocationCheckedSupplier<'a> {
+impl<'a> SourceSupplierV1 for InvocationCheckedSupplier<'a> {
     type Source = CounterSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -516,7 +516,7 @@ impl<'a> C3SourceSupplierV1 for InvocationCheckedSupplier<'a> {
     }
 }
 
-impl<'a> C3SourceSupplierV1 for CallbackCheckedSupplier<'a> {
+impl<'a> SourceSupplierV1 for CallbackCheckedSupplier<'a> {
     type Source = CounterSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -530,7 +530,7 @@ impl<'a> C3SourceSupplierV1 for CallbackCheckedSupplier<'a> {
     }
 }
 
-impl C3SourceSupplierV1 for CounterSupplier {
+impl SourceSupplierV1 for CounterSupplier {
     type Source = CounterSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -545,7 +545,7 @@ impl C3SourceSupplierV1 for CounterSupplier {
     }
 }
 
-impl C3SourceSupplierV1 for BarrierCounterSupplier {
+impl SourceSupplierV1 for BarrierCounterSupplier {
     type Source = CounterSource;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -581,7 +581,7 @@ struct CheckedSupplier<'a> {
     bytes: &'a [u8],
 }
 
-impl<'a> C3SourceSupplierV1 for CheckedSupplier<'a> {
+impl<'a> SourceSupplierV1 for CheckedSupplier<'a> {
     type Source = SliceSource<'a>;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -605,7 +605,7 @@ struct BarrierCheckedSupplier<'a> {
     start: Arc<WatchdogGateV1>,
 }
 
-impl<'a> C3SourceSupplierV1 for BarrierCheckedSupplier<'a> {
+impl<'a> SourceSupplierV1 for BarrierCheckedSupplier<'a> {
     type Source = SliceSource<'a>;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -629,7 +629,7 @@ struct BarrierFailingSupplier {
     start: Arc<WatchdogGateV1>,
 }
 
-impl C3SourceSupplierV1 for BarrierFailingSupplier {
+impl SourceSupplierV1 for BarrierFailingSupplier {
     type Source = SliceSource<'static>;
 
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -2259,7 +2259,7 @@ fn run_small_create_with_callback_observation<C>(
     bound_invoked: &AtomicBool,
     supply_invoked: &AtomicBool,
 ) -> (
-    Result<layerfs_storage::lifecycle::C3HandoffV1, C3OperationErrorV1>,
+    Result<layerfs_storage::lifecycle::OperationHandoffV1, OperationErrorV1>,
     OperationCountersV1,
 )
 where
@@ -2350,12 +2350,12 @@ fn run_small_create_with_supplier<C, S>(
     control: &mut C,
     supplier: S,
 ) -> (
-    Result<layerfs_storage::lifecycle::C3HandoffV1, C3OperationErrorV1>,
+    Result<layerfs_storage::lifecycle::OperationHandoffV1, OperationErrorV1>,
     OperationCountersV1,
 )
 where
     C: CdcControlV1 + FsCasControlV1,
-    S: C3SourceSupplierV1,
+    S: SourceSupplierV1,
 {
     let mut counters = OperationCountersV1::default();
     let result = run_small_create_with_supplier_and_counters(
@@ -2374,16 +2374,16 @@ fn run_small_create_with_supplier_and_counters<C, S>(
     control: &mut C,
     supplier: S,
     counters: &mut OperationCountersV1,
-) -> Result<layerfs_storage::lifecycle::C3HandoffV1, C3OperationErrorV1>
+) -> Result<layerfs_storage::lifecycle::OperationHandoffV1, OperationErrorV1>
 where
     C: CdcControlV1 + FsCasControlV1,
-    S: C3SourceSupplierV1,
+    S: SourceSupplierV1,
 {
     run_create_with_supplier_and_counters(
         cas,
         cancellation_key,
         control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         1,
         supplier,
         counters,
@@ -2394,14 +2394,14 @@ fn run_create_with_supplier_and_counters<C, S>(
     cas: &FsCasV1,
     cancellation_key: u64,
     control: &mut C,
-    algorithm: C3CdcAlgorithmV1,
+    algorithm: CdcAlgorithmV1,
     declared_len: u64,
     supplier: S,
     counters: &mut OperationCountersV1,
-) -> Result<layerfs_storage::lifecycle::C3HandoffV1, C3OperationErrorV1>
+) -> Result<layerfs_storage::lifecycle::OperationHandoffV1, OperationErrorV1>
 where
     C: CdcControlV1 + FsCasControlV1,
-    S: C3SourceSupplierV1,
+    S: SourceSupplierV1,
 {
     let mut source_window = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
     let mut cdc_ring = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
@@ -2410,16 +2410,15 @@ where
     let mut tree_object = boxed_zeroes::<MAX_TREE_OBJECT_BYTES>();
     let mut tree_pages = boxed_tree_pages();
     let mut traversal = [0_u8; 64];
-    let grant =
-        request_c3_create_qualification_v1(cas, cancellation_key, counters, control).unwrap();
-    run_c3_create_v1(
+    let grant = request_create_operation_v1(cas, cancellation_key, counters, control).unwrap();
+    run_create_v1(
         grant,
         algorithm,
         b"payload.bin",
         0o644,
         declared_len,
         supplier,
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -2440,10 +2439,10 @@ fn run_large_create_with_supplier_and_counters<C, S>(
     declared_len: u64,
     supplier: S,
     counters: &mut OperationCountersV1,
-) -> Result<layerfs_storage::lifecycle::C3HandoffV1, C3OperationErrorV1>
+) -> Result<layerfs_storage::lifecycle::OperationHandoffV1, OperationErrorV1>
 where
     C: CdcControlV1 + FsCasControlV1,
-    S: C3SourceSupplierV1,
+    S: SourceSupplierV1,
 {
     let mut source_window = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
     let mut cdc_ring = boxed_zeroes::<MAXIMUM_CHUNK_BYTES>();
@@ -2452,16 +2451,15 @@ where
     let mut tree_object = boxed_zeroes::<MAX_TREE_OBJECT_BYTES>();
     let mut tree_pages = boxed_tree_pages();
     let mut traversal = vec![0_u8; 64 * 1024];
-    let grant =
-        request_c3_create_qualification_v1(cas, cancellation_key, counters, control).unwrap();
-    run_c3_create_v1(
+    let grant = request_create_operation_v1(cas, cancellation_key, counters, control).unwrap();
+    run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         declared_len,
         supplier,
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -2832,7 +2830,7 @@ fn carrier_already_exists_owner_blocks_same_pack_until_adoption_terminal() {
                     assert!(
                         matches!(
                             first_result,
-                            Ok(Err(C3OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
+                            Ok(Err(OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
                                 FsCasCleanupTargetV1::PrivatePack
                             ))))
                         ),
@@ -2841,7 +2839,7 @@ fn carrier_already_exists_owner_blocks_same_pack_until_adoption_terminal() {
                     assert!(
                         matches!(
                             contender_result,
-                            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::Invalidated))
+                            Err(OperationErrorV1::FsCas(FsCasErrorV1::Invalidated))
                         ),
                         "{label}: {contender_result:?}"
                     );
@@ -3033,7 +3031,7 @@ fn same_pack_contender_waits_for_pre_catalog_unwind_terminal_custody() {
                     assert!(
                         matches!(
                             contender_terminal,
-                            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::Invalidated))
+                            Err(OperationErrorV1::FsCas(FsCasErrorV1::Invalidated))
                         ),
                         "{label}: {contender_terminal:?}"
                     );
@@ -3428,15 +3426,15 @@ fn simultaneous_reopened_success_crosses_typed_cancelled_and_deadline_terminals(
         let failure_error = failure_terminal.unwrap_err();
         match failure {
             ConcurrentFailureV1::Typed => {
-                assert_eq!(failure_error, C3OperationErrorV1::Core(CoreError::CountCap));
+                assert_eq!(failure_error, OperationErrorV1::Core(CoreError::CountCap));
             }
             ConcurrentFailureV1::Cancelled => assert_eq!(
                 failure_error,
-                C3OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::Cancelled))
+                OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::Cancelled))
             ),
             ConcurrentFailureV1::Deadline => assert_eq!(
                 failure_error,
-                C3OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::Deadline))
+                OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::Deadline))
             ),
         }
 
@@ -3841,7 +3839,7 @@ fn lifecycle_storage_counter_merge_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert_eq!(counters.physical_carrier_object_writes, 41);
     assert_eq!(counters.pack_entries, 43);
@@ -3893,7 +3891,7 @@ fn complete_create_cdc_stream_overflow_is_transactional_and_terminal() {
         &cas,
         0x0011_5505,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         LOGICAL_BYTES,
         CounterSupplier { len: LOGICAL_BYTES },
         &mut counters,
@@ -3901,7 +3899,7 @@ fn complete_create_cdc_stream_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert_eq!(counters.ring_fills, 41);
     assert_eq!(counters.ring_wrap_spans, 43);
@@ -3953,7 +3951,7 @@ fn complete_create_seqcdc_overflow_is_transactional_and_terminal() {
         &cas,
         0x0011_5506,
         &mut control,
-        C3CdcAlgorithmV1::SeqCdc,
+        CdcAlgorithmV1::SeqCdc,
         LOGICAL_BYTES as u64,
         CheckedSupplier { bytes: &input },
         &mut counters,
@@ -3961,7 +3959,7 @@ fn complete_create_seqcdc_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert_eq!(counters.seqcdc_comparisons, 41);
     assert_eq!(counters.seqcdc_equal_absorptions, 43);
@@ -4007,7 +4005,7 @@ fn complete_create_global_seen_overflow_is_transactional_and_terminal() {
         &cas,
         0x0011_5507,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         LOGICAL_BYTES,
         CounterSupplier { len: LOGICAL_BYTES },
         &mut counters,
@@ -4015,7 +4013,7 @@ fn complete_create_global_seen_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert!(control.injected);
     assert_eq!(counters.global_seen_lookups, 41);
@@ -4066,7 +4064,7 @@ fn complete_create_operation_spool_write_overflow_retains_typed_cause_and_cleans
         &cas,
         0x0011_550d,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         LOGICAL_BYTES,
         CounterSupplier { len: LOGICAL_BYTES },
         &mut counters,
@@ -4074,7 +4072,7 @@ fn complete_create_operation_spool_write_overflow_retains_typed_cause_and_cleans
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+        OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::IntegerOverflow))
     );
     assert!(control.injected);
     assert_operation_authority_baseline(&cas, fixture.path());
@@ -4116,7 +4114,7 @@ fn complete_create_operation_spool_read_overflow_is_transactional_and_terminal()
         &cas,
         0x0011_550e,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         LOGICAL_BYTES,
         CounterSupplier { len: LOGICAL_BYTES },
         &mut counters,
@@ -4124,7 +4122,7 @@ fn complete_create_operation_spool_read_overflow_is_transactional_and_terminal()
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::IntegerOverflow))
+        OperationErrorV1::FsCas(FsCasErrorV1::Core(CoreError::IntegerOverflow))
     );
     assert_eq!(
         (
@@ -4170,7 +4168,7 @@ fn complete_create_counted_pack_read_overflow_is_transactional_and_terminal() {
         &cas,
         0x0011_550f,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         LOGICAL_BYTES,
         CounterSupplier { len: LOGICAL_BYTES },
         &mut counters,
@@ -4178,7 +4176,7 @@ fn complete_create_counted_pack_read_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert!(control.injected);
     assert_operation_authority_baseline(&cas, fixture.path());
@@ -4212,7 +4210,7 @@ fn complete_create_same_carrier_comparison_overflow_is_transactional_and_termina
         &cas,
         0x0011_5510,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         LOGICAL_BYTES as u64,
         CheckedSupplier { bytes: &input },
         &mut counters,
@@ -4220,7 +4218,7 @@ fn complete_create_same_carrier_comparison_overflow_is_transactional_and_termina
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert!(control.injected);
     assert!(counters.source_read_calls > 0);
@@ -4256,7 +4254,7 @@ fn complete_create_post_admission_tally_overflow_retains_exact_visible_residue()
         &cas,
         0x0011_5511,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         LOGICAL_BYTES,
         CounterSupplier { len: LOGICAL_BYTES },
         &mut counters,
@@ -4264,7 +4262,7 @@ fn complete_create_post_admission_tally_overflow_retains_exact_visible_residue()
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert!(control.injected);
     assert!(counters.source_read_calls > 0);
@@ -4341,7 +4339,7 @@ fn complete_create_created_disposition_overflow_is_transactional_and_terminal() 
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert!(control.injected);
     assert_eq!(saturated_created_kind_count(&counters), 1);
@@ -4377,13 +4375,13 @@ fn complete_tree_reused_disposition_overflow_is_transactional_and_terminal() {
     let stale = FsCasV1::open_existing(fixture.path()).unwrap();
     let payload = [0x6b_u8; 1];
     let mut files = [
-        C3TreeFileV1::new(
+        TreeFileV1::new(
             b"a.bin",
             0o644,
             payload.len() as u64,
             CheckedSupplier { bytes: &payload },
         ),
-        C3TreeFileV1::new(
+        TreeFileV1::new(
             b"b.bin",
             0o644,
             payload.len() as u64,
@@ -4403,13 +4401,13 @@ fn complete_tree_reused_disposition_overflow_is_transactional_and_terminal() {
         injected: false,
     };
     let operation =
-        request_c3_tree_operation_v1(&cas, 0x0011_5509, &mut counters, &mut control).unwrap();
+        request_tree_operation_v1(&cas, 0x0011_5509, &mut counters, &mut control).unwrap();
 
-    let terminal = run_c3_create_tree_v1(
+    let terminal = run_create_tree_v1(
         operation,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         &mut files,
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -4424,7 +4422,7 @@ fn complete_tree_reused_disposition_overflow_is_transactional_and_terminal() {
 
     assert_eq!(
         terminal.unwrap_err(),
-        C3OperationErrorV1::Core(CoreError::IntegerOverflow)
+        OperationErrorV1::Core(CoreError::IntegerOverflow)
     );
     assert!(control.injected);
     assert_eq!(saturated_reused_kind_count(&counters), 1);
@@ -4539,7 +4537,7 @@ fn preparation_free_unwind_returns_typed_terminal_only_when_terminalization_fail
             },
         );
 
-        assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{case}");
+        assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{case}");
         assert!(bound_invoked.load(Ordering::Acquire), "{case}");
         assert!(!supply_invoked.load(Ordering::Acquire), "{case}");
         assert_eq!(control.invalidation_attempts, 1, "{case}");
@@ -4597,7 +4595,7 @@ fn typed_preparation_free_error_survives_operation_terminal_unwind() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::Core(CoreError::ResourceRefused))
+        Err(OperationErrorV1::Core(CoreError::ResourceRefused))
     );
     assert!(bound_invoked.load(Ordering::Acquire));
     assert!(!supply_invoked.load(Ordering::Acquire));
@@ -4652,7 +4650,7 @@ fn typed_complete_body_error_survives_operation_terminal_unwind() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::Core(CoreError::SourceFailure))
+        Err(OperationErrorV1::Core(CoreError::SourceFailure))
     );
     assert_eq!(control.terminal_hook_calls, 1);
     assert_operation_authority_baseline(&cas, fixture.path());
@@ -4694,7 +4692,7 @@ fn typed_complete_body_error_survives_later_global_seen_observation_failure() {
         &cas,
         0x0011_5524,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         BODY_BYTES + 1,
         FailingAfterBytesSupplier {
             bytes_before_failure: BODY_BYTES,
@@ -4704,7 +4702,7 @@ fn typed_complete_body_error_survives_later_global_seen_observation_failure() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::Core(CoreError::SourceFailure))
+        Err(OperationErrorV1::Core(CoreError::SourceFailure))
     );
     assert!(control.injected);
     assert_operation_authority_baseline(&cas, fixture.path());
@@ -4754,7 +4752,7 @@ fn typed_complete_body_error_survives_later_storage_counter_merge_failure() {
         &cas,
         0x0011_5525,
         &mut control,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         BODY_BYTES + 1,
         FailingAfterBytesSupplier {
             bytes_before_failure: BODY_BYTES,
@@ -4764,7 +4762,7 @@ fn typed_complete_body_error_survives_later_storage_counter_merge_failure() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::Core(CoreError::SourceFailure))
+        Err(OperationErrorV1::Core(CoreError::SourceFailure))
     );
     assert_operation_authority_baseline(&cas, fixture.path());
     assert!(cas.visibility_lock_available_for_test_v1());
@@ -4815,7 +4813,7 @@ fn typed_body_error_crosses_cleanup_and_invalidation_dominance_exactly() {
 
         assert_eq!(
             result,
-            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+            Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                 first: FsCasFailureCauseV1::Core(CoreError::SourceFailure),
                 dominant: if fail_invalidation {
                     FsCasFailureCauseV1::InvalidationFailed
@@ -4975,7 +4973,7 @@ fn filesystem_capacity_and_io_failures_are_typed_and_leave_no_unpublished_state(
 
         assert_eq!(
             result,
-            Err(C3OperationErrorV1::FsCas(expected)),
+            Err(OperationErrorV1::FsCas(expected)),
             "typed failure at {boundary:?}",
         );
         assert!(control.fired, "unreached filesystem boundary {boundary:?}");
@@ -5066,7 +5064,7 @@ fn carrier_link_failure_preserves_first_cause_when_charge_unwind_fails() {
 
         assert_eq!(
             result,
-            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+            Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                 first,
                 dominant,
             })),
@@ -5137,7 +5135,7 @@ fn actual_carrier_already_exists_stops_when_charge_unwind_fails() {
 
         assert_eq!(
             result,
-            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+            Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                 first: FsCasFailureCauseV1::SynchronizationPoisoned,
                 dominant,
             })),
@@ -5213,7 +5211,7 @@ fn preparation_construction_preserves_first_failure_when_cleanup_dominates() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
             dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool,),
         }))
@@ -5304,7 +5302,7 @@ fn partial_preparation_cleanup_unwind_preserves_directional_first_cause_and_domi
             };
             assert_eq!(
                 result,
-                Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                     first: first_cause,
                     dominant,
                 })),
@@ -5431,7 +5429,7 @@ fn preparation_construction_unwind_returns_cleanup_terminal_only_after_owned_cle
                     }
                 }
             };
-            assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{label}",);
+            assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{label}",);
             assert!(control.construction_panicked, "{label}");
             assert_eq!(
                 control.preparation_cleanup_calls,
@@ -5589,7 +5587,7 @@ fn preparation_unwind_returns_typed_outer_terminal_only_when_terminalization_fai
             &mut counters,
         );
 
-        assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{case}");
+        assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{case}");
         assert!(control.construction_panicked, "{case}");
         assert_eq!(control.preparation_cleanup_calls, 4, "{case}");
         assert_eq!(control.root_invalidation_callbacks, 1, "{case}");
@@ -5673,7 +5671,7 @@ fn closure_unwind_returns_typed_outer_terminal_only_when_terminalization_fails()
             };
             assert_eq!(
                 terminal.unwrap(),
-                Err(C3OperationErrorV1::FsCas(expected)),
+                Err(OperationErrorV1::FsCas(expected)),
                 "{case}",
             );
         } else {
@@ -5686,10 +5684,11 @@ fn closure_unwind_returns_typed_outer_terminal_only_when_terminalization_fails()
         }
 
         assert!(control.closure_panicked, "{case}");
-        // File Create owns the four always-present preparation spools. The
-        // built-file and built-directory spools are tree-operation-only and
-        // must not be fabricated merely to make the unwind count uniform.
-        assert_eq!(control.preparation_cleanup_calls, 4, "{case}");
+        // File Create owns five always-present preparation spools, including
+        // the file-backed locator-receipt spool. The built-file and
+        // built-directory spools are tree-operation-only and must not be
+        // fabricated merely to make the unwind count uniform.
+        assert_eq!(control.preparation_cleanup_calls, 5, "{case}");
         assert_eq!(
             control.root_invalidation_callbacks,
             usize::from(poison_terminal),
@@ -5781,7 +5780,7 @@ fn preparation_initialization_unwind_returns_typed_cleanup_terminal_after_all_ow
             FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool)
         };
 
-        assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{label}");
+        assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{label}");
         assert!(control.construction_panicked, "{label}");
         assert_eq!(control.preparation_cleanup_calls, 4, "{label}");
         assert_eq!(control.root_invalidation_callbacks, 1, "{label}");
@@ -5861,7 +5860,7 @@ fn preparation_accounting_failure_preserves_poison_and_invalidation_dominance() 
             &supply_invoked,
         );
 
-        assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{case}");
+        assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{case}");
         assert!(control.poisoned, "{case}");
         assert!(bound_invoked.load(Ordering::Acquire), "{case}");
         assert!(!supply_invoked.load(Ordering::Acquire), "{case}");
@@ -5913,7 +5912,7 @@ fn preparation_open_failure_preserves_cleanup_accounting_failure() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
             dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool,),
         }))
@@ -8887,7 +8886,7 @@ fn marker_write_failure_survives_pre_link_cleanup_failure() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
             dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool,),
         }))
@@ -9215,7 +9214,7 @@ fn carrier_alias_unlink_failure_is_typed_cleanup_with_exact_preparation_residue(
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
             dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PrivatePack,),
         }))
@@ -9309,7 +9308,7 @@ fn carrier_alias_post_unlink_accounting_failure_retains_exact_dual_custody() {
             &supply_invoked,
         );
 
-        assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{case}");
+        assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{case}");
         assert!(control.armed, "{case}");
         assert_eq!(control.root_invalidation_callbacks, 1, "{case}");
         assert!(bound_invoked.load(Ordering::Acquire), "{case}");
@@ -9399,7 +9398,7 @@ fn published_locator_alias_unlink_failure_retains_dependencies_and_exact_residue
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::Quota),
             dominant: FsCasFailureCauseV1::CleanupFailed(
                 FsCasCleanupTargetV1::PublishedMarkerAlias,
@@ -9549,7 +9548,7 @@ fn alias_cleanup_and_invalidation_persistence_double_fault_stays_fail_closed() {
 
     assert_eq!(
         result,
-        Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
             dominant: FsCasFailureCauseV1::InvalidationFailed,
         }))
@@ -9752,7 +9751,7 @@ fn queued_control_unwind_cancels_its_ticket_without_poisoning_root_admission() {
     let mut active = Vec::with_capacity(16);
     for cancellation_key in 0..16 {
         active.push(
-            request_c3_create_qualification_v1(
+            request_create_operation_v1(
                 &cas,
                 cancellation_key,
                 &mut counters,
@@ -9764,7 +9763,7 @@ fn queued_control_unwind_cancels_its_ticket_without_poisoning_root_admission() {
 
     let mut panic_control = PanicWhileQueuedControlV1::default();
     let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = request_c3_create_qualification_v1(&cas, 16, &mut counters, &mut panic_control);
+        let _ = request_create_operation_v1(&cas, 16, &mut counters, &mut panic_control);
     }))
     .expect_err("queued cancellation observation must unwind");
     assert_eq!(
@@ -9878,17 +9877,16 @@ fn acquired_and_released_root_lock_callback_unwind_is_balanced_and_does_not_pois
             matching_boundaries: 0,
             panicked: false,
         };
-        let grant =
-            request_c3_create_qualification_v1(&cas, 0x180, &mut counters, &mut control).unwrap();
+        let grant = request_create_operation_v1(&cas, 0x180, &mut counters, &mut control).unwrap();
         let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _ = run_c3_create_v1(
+            let _ = run_create_v1(
                 grant,
-                C3CdcAlgorithmV1::FastCdc,
+                CdcAlgorithmV1::FastCdc,
                 b"first.bin",
                 0o644,
                 input.len() as u64,
                 CheckedSupplier { bytes: &input },
-                C3OperationBuffersV1 {
+                OperationBuffersV1 {
                     source: &mut source_window,
                     cdc_ring: &mut cdc_ring,
                     incoming_comparison: &mut incoming,
@@ -9942,21 +9940,17 @@ fn acquired_and_released_root_lock_callback_unwind_is_balanced_and_does_not_pois
 
         let mut followup_counters = OperationCountersV1::default();
         let mut followup_control = ContinueControl;
-        let followup = request_c3_create_qualification_v1(
-            &cas,
-            0x181,
-            &mut followup_counters,
-            &mut followup_control,
-        )
-        .unwrap();
-        run_c3_create_v1(
+        let followup =
+            request_create_operation_v1(&cas, 0x181, &mut followup_counters, &mut followup_control)
+                .unwrap();
+        run_create_v1(
             followup,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"second.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -9998,7 +9992,7 @@ fn seventeenth_operation_genuinely_queues_then_grants_cancels_or_exceeds_deadlin
             let mut active = Vec::with_capacity(16);
             for cancellation_key in 0..16_u64 {
                 active.push(
-                    request_c3_create_qualification_v1(
+                    request_create_operation_v1(
                         &cas,
                         0x20_000 + cancellation_key,
                         &mut setup_counters,
@@ -10018,13 +10012,9 @@ fn seventeenth_operation_genuinely_queues_then_grants_cancels_or_exceeds_deadlin
                     observed_polls: waiter_polls,
                 };
                 let mut counters = OperationCountersV1::default();
-                let terminal = request_c3_create_qualification_v1(
-                    &waiter_cas,
-                    0x20_100,
-                    &mut counters,
-                    &mut control,
-                )
-                .map(|capability| drop(capability));
+                let terminal =
+                    request_create_operation_v1(&waiter_cas, 0x20_100, &mut counters, &mut control)
+                        .map(|capability| drop(capability));
                 terminal_tx
                     .send((terminal, counters))
                     .expect("C+1 terminal receiver remains live");
@@ -10124,7 +10114,7 @@ fn queued_cancel_and_deadline_create_no_preparation_and_cannot_invoke_typed_supp
         let mut active = Vec::with_capacity(16);
         for cancellation_key in 0..16 {
             active.push(
-                request_c3_create_qualification_v1(
+                request_create_operation_v1(
                     &cas,
                     cancellation_key,
                     &mut admission_counters,
@@ -10140,7 +10130,7 @@ fn queued_cancel_and_deadline_create_no_preparation_and_cannot_invoke_typed_supp
         };
         let mut stop_control = StopWhileQueuedControlV1(stop);
         assert!(matches!(
-            request_c3_create_qualification_v1(
+            request_create_operation_v1(
                 &cas,
                 16,
                 &mut admission_counters,
@@ -10191,7 +10181,7 @@ fn one_thousand_twenty_fifth_operation_entry_refuses_before_callbacks_or_storage
     let mut control = ContinueControl;
     let mut counters = OperationCountersV1::default();
     assert!(matches!(
-        request_c3_create_qualification_v1(&cas, 1_024, &mut counters, &mut control),
+        request_create_operation_v1(&cas, 1_024, &mut counters, &mut control),
         Err(FsCasErrorV1::ResourceExhausted(
             layerfs_storage::cas::FsCasResourceV1::Queue
         ))
@@ -10257,11 +10247,10 @@ fn root_storage_byte_and_inode_refusal_precede_supplier_and_preparation() {
         let mut tree_object = [0_u8; MAX_TREE_OBJECT_BYTES];
         let mut tree_pages = [None::<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES];
         let mut traversal = [0_u8; 64];
-        let grant =
-            request_c3_create_qualification_v1(&cas, 0x52, &mut counters, &mut control).unwrap();
-        let result = run_c3_create_v1(
+        let grant = request_create_operation_v1(&cas, 0x52, &mut counters, &mut control).unwrap();
+        let result = run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             1,
@@ -10269,7 +10258,7 @@ fn root_storage_byte_and_inode_refusal_precede_supplier_and_preparation() {
                 bound_invoked: &bound_invoked,
                 supply_invoked: &supply_invoked,
             },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -10283,7 +10272,7 @@ fn root_storage_byte_and_inode_refusal_precede_supplier_and_preparation() {
         );
         assert!(matches!(
             result,
-            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::ResourceExhausted(
+            Err(OperationErrorV1::FsCas(FsCasErrorV1::ResourceExhausted(
                 observed
             ))) if observed == resource
         ));
@@ -10588,16 +10577,16 @@ fn exact_complete_c3_boundary_spans_slot_request_through_clean_validated_handoff
         starts: 0,
         ends: 0,
     };
-    let grant = request_c3_create_qualification_v1(&cas, 100, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 100, &mut counters, &mut control).unwrap();
 
-    run_c3_create_v1(
+    run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         input.len() as u64,
         CheckedSupplier { bytes: &input },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -10633,17 +10622,16 @@ fn final_handoff_admission_release_failure_retains_exact_immutable_set() {
         cas: cas.clone(),
         injected: false,
     };
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x742, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 0x742, &mut counters, &mut control).unwrap();
 
-    let result = run_c3_create_v1(
+    let result = run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         input.len() as u64,
         CheckedSupplier { bytes: &input },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -10658,7 +10646,7 @@ fn final_handoff_admission_release_failure_retains_exact_immutable_set() {
 
     assert!(matches!(
         result,
-        Err(C3OperationErrorV1::FsCas(
+        Err(OperationErrorV1::FsCas(
             FsCasErrorV1::SynchronizationPoisoned
         ))
     ));
@@ -10745,18 +10733,17 @@ fn admission_terminal_invalidation_unwind_retains_first_cause_and_reclassifies_c
         admission_poisoned: false,
         invalidation_panicked: false,
     };
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x745, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 0x745, &mut counters, &mut control).unwrap();
 
     assert_eq!(
-        run_c3_create_v1(
+        run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -10768,7 +10755,7 @@ fn admission_terminal_invalidation_unwind_retains_first_cause_and_reclassifies_c
             &mut control,
             &mut counters,
         ),
-        Err(C3OperationErrorV1::FsCas(
+        Err(OperationErrorV1::FsCas(
             FsCasErrorV1::SynchronizationPoisoned,
         ))
     );
@@ -10819,17 +10806,16 @@ fn final_handoff_storage_poison_terminalizes_exact_immutable_set() {
         cas: cas.clone(),
         injected: false,
     };
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x743, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 0x743, &mut counters, &mut control).unwrap();
 
-    let result = run_c3_create_v1(
+    let result = run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         input.len() as u64,
         CheckedSupplier { bytes: &input },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -10844,7 +10830,7 @@ fn final_handoff_storage_poison_terminalizes_exact_immutable_set() {
 
     assert!(matches!(
         result,
-        Err(C3OperationErrorV1::FsCas(
+        Err(OperationErrorV1::FsCas(
             FsCasErrorV1::SynchronizationPoisoned
         ))
     ));
@@ -10929,18 +10915,17 @@ fn storage_terminal_invalidation_unwind_still_releases_authority_and_persists_fa
         storage_poisoned: false,
         invalidation_panicked: false,
     };
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x744, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 0x744, &mut counters, &mut control).unwrap();
 
     assert_eq!(
-        run_c3_create_v1(
+        run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -10952,7 +10937,7 @@ fn storage_terminal_invalidation_unwind_still_releases_authority_and_persists_fa
             &mut control,
             &mut counters,
         ),
-        Err(C3OperationErrorV1::FsCas(
+        Err(OperationErrorV1::FsCas(
             FsCasErrorV1::SynchronizationPoisoned,
         ))
     );
@@ -11021,18 +11006,17 @@ fn final_handoff_unwind_retains_installed_carriers_and_fails_root_closed() {
     let mut tree_pages = boxed_tree_pages();
     let mut traversal = [0_u8; 64];
     let mut control = PanicAtFinalHandoff::default();
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x740, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 0x740, &mut counters, &mut control).unwrap();
 
     let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = run_c3_create_v1(
+        let _ = run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -11114,18 +11098,17 @@ fn final_handoff_and_invalidation_double_unwind_still_terminalizes_operation() {
         panic_during_invalidation: true,
         ..PanicAtFinalHandoff::default()
     };
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x741, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 0x741, &mut counters, &mut control).unwrap();
 
     let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = run_c3_create_v1(
+        let _ = run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -11202,17 +11185,17 @@ fn supplier_unwind_finishes_explicit_cleanup_storage_equations_and_slot_release(
     let mut tree_pages = boxed_tree_pages();
     let mut traversal = [0_u8; 64];
     let mut control = ContinueControl;
-    let grant = request_c3_create_qualification_v1(&cas, 109, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 109, &mut counters, &mut control).unwrap();
 
     let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = run_c3_create_v1(
+        let _ = run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             1,
             PanickingSupplier,
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -11299,17 +11282,16 @@ fn complete_preflight_rejects_traversal_and_page_scratch_before_supplier_or_prep
             &mut full_traversal
         };
         let mut control = ContinueControl;
-        let grant =
-            request_c3_create_qualification_v1(&cas, 101, &mut counters, &mut control).unwrap();
+        let grant = request_create_operation_v1(&cas, 101, &mut counters, &mut control).unwrap();
 
-        let error = run_c3_create_v1(
+        let error = run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             1,
             InvocationCheckedSupplier { invoked: &invoked },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -11325,7 +11307,7 @@ fn complete_preflight_rejects_traversal_and_page_scratch_before_supplier_or_prep
 
         assert_eq!(
             error,
-            C3OperationErrorV1::Core(layerfs_storage::CoreError::ResourceRefused)
+            OperationErrorV1::Core(layerfs_storage::CoreError::ResourceRefused)
         );
         assert!(!invoked.load(Ordering::Acquire));
         assert_eq!(
@@ -11407,16 +11389,16 @@ fn preparation_cleanup_failure_is_typed_invalidates_shared_owner_and_retains_exa
             let mut traversal = [0_u8; 64];
             let mut control = FailPreparationCleanupOnce::default();
             let grant =
-                request_c3_create_qualification_v1(&cas, 102, &mut counters, &mut control).unwrap();
+                request_create_operation_v1(&cas, 102, &mut counters, &mut control).unwrap();
 
-            let error = run_c3_create_v1(
+            let error = run_create_v1(
                 grant,
-                C3CdcAlgorithmV1::FastCdc,
+                CdcAlgorithmV1::FastCdc,
                 b"payload.bin",
                 0o644,
                 input.len() as u64,
                 CheckedSupplier { bytes: &input },
-                C3OperationBuffersV1 {
+                OperationBuffersV1 {
                     source: &mut source_window,
                     cdc_ring: &mut cdc_ring,
                     incoming_comparison: &mut incoming,
@@ -11432,7 +11414,7 @@ fn preparation_cleanup_failure_is_typed_invalidates_shared_owner_and_retains_exa
 
             assert_eq!(
                 error,
-                C3OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
+                OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
                     FsCasCleanupTargetV1::PreparationSpool,
                 ))
             );
@@ -11666,7 +11648,7 @@ fn preparation_construction_unwind_explicitly_cleans_every_locally_owned_spool()
                 let cas = FsCasV1::create_new(fixture.path()).unwrap();
                 let mut counters = OperationCountersV1::default();
                 let payload = [0x51_u8; 1];
-                let mut files = [C3TreeFileV1::new(
+                let mut files = [TreeFileV1::new(
                     b"a.bin",
                     0o644,
                     payload.len() as u64,
@@ -11685,7 +11667,7 @@ fn preparation_construction_unwind_explicitly_cleans_every_locally_owned_spool()
                     observed_calls: 0,
                     injected: false,
                 };
-                let operation = request_c3_tree_operation_v1(
+                let operation = request_tree_operation_v1(
                     &cas,
                     0x400 + target_call as u64,
                     &mut counters,
@@ -11693,11 +11675,11 @@ fn preparation_construction_unwind_explicitly_cleans_every_locally_owned_spool()
                 )
                 .unwrap();
                 let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let _ = run_c3_create_tree_v1(
+                    let _ = run_create_tree_v1(
                         operation,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         &mut files,
-                        C3OperationBuffersV1 {
+                        OperationBuffersV1 {
                             source: &mut source_window,
                             cdc_ring: &mut cdc_ring,
                             incoming_comparison: &mut incoming,
@@ -11776,20 +11758,20 @@ fn preparation_construction_unwind_explicitly_cleans_every_locally_owned_spool()
 }
 
 #[test]
-fn preparation_cleanup_unwind_attempts_all_six_targets_before_typed_terminal() {
+fn preparation_cleanup_unwind_attempts_all_lifecycle_targets_before_typed_terminal() {
     std::thread::Builder::new()
         .name("preparation-cleanup-unwind".into())
         .stack_size(16 * 1024 * 1024)
         .spawn(|| {
             for (fail_invalidation, target_call) in [false, true]
                 .into_iter()
-                .flat_map(|fail| (1..=6).map(move |target| (fail, target)))
+                .flat_map(|fail| (1..=7).map(move |target| (fail, target)))
             {
                 let fixture = TestRoot::new("cleanup-unwind");
                 let cas = FsCasV1::create_new(fixture.path()).unwrap();
                 let stale = FsCasV1::open_existing(fixture.path()).unwrap();
                 let payload = [0x61_u8; 1];
-                let mut files = [C3TreeFileV1::new(
+                let mut files = [TreeFileV1::new(
                     b"a.bin",
                     0o644,
                     payload.len() as u64,
@@ -11810,18 +11792,18 @@ fn preparation_cleanup_unwind_attempts_all_six_targets_before_typed_terminal() {
                     fail_invalidation,
                     invalidation_attempted: false,
                 };
-                let operation = request_c3_tree_operation_v1(
+                let operation = request_tree_operation_v1(
                     &cas,
                     0x500 + target_call as u64,
                     &mut counters,
                     &mut control,
                 )
                 .unwrap();
-                let error = run_c3_create_tree_v1(
+                let error = run_create_tree_v1(
                     operation,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     &mut files,
-                    C3OperationBuffersV1 {
+                    OperationBuffersV1 {
                         source: &mut source_window,
                         cdc_ring: &mut cdc_ring,
                         incoming_comparison: &mut incoming,
@@ -11841,9 +11823,9 @@ fn preparation_cleanup_unwind_attempts_all_six_targets_before_typed_terminal() {
                 } else {
                     cleanup
                 };
-                assert_eq!(error, C3OperationErrorV1::FsCas(expected));
+                assert_eq!(error, OperationErrorV1::FsCas(expected));
                 assert!(control.injected);
-                assert_eq!(control.observed_calls, 6);
+                assert_eq!(control.observed_calls, 7);
                 assert_eq!(control.invalidation_attempted, fail_invalidation);
                 assert_eq!(cas.operation_admitted_slots_v1(), 0);
                 assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
@@ -11925,17 +11907,16 @@ fn assert_private_pack_cleanup_unwind_terminal(case: &'static str, fail_invalida
         fail_invalidation,
         ..PanicPrivatePackCleanupAfterWriteFailure::default()
     };
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x600, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 0x600, &mut counters, &mut control).unwrap();
 
-    let error = run_c3_create_v1(
+    let error = run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         1,
         CounterSupplier { len: 1 },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -11957,7 +11938,7 @@ fn assert_private_pack_cleanup_unwind_terminal(case: &'static str, fail_invalida
     };
     assert_eq!(
         error,
-        C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure { first, dominant })
+        OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure { first, dominant })
     );
     assert!(control.write_injected);
     assert!(control.cleanup_panicked);
@@ -12088,7 +12069,7 @@ impl FsCasControlV1 for FailNthPreparationCleanup {
 
 #[test]
 fn every_lifecycle_preparation_cleanup_boundary_is_fallible_and_invalidates_exactly() {
-    // The six lifecycle-owned spools are cleaned in this fixed order. Inject
+    // The seven lifecycle-owned spools are cleaned in this fixed order. Inject
     // each boundary independently to prove that cleanup continues through all
     // remaining artifacts, retains only the failed artifact, and releases the
     // root grant only after durable invalidation.
@@ -12103,6 +12084,7 @@ fn every_lifecycle_preparation_cleanup_boundary_is_fallible_and_invalidates_exac
                 (4, "closure-objects-"),
                 (5, "pack-index-"),
                 (6, "chunk-references-"),
+                (7, "locator-receipts-"),
             ] {
                 let fixture = TestRoot::new(expected_prefix);
                 let cas = FsCasV1::create_new(fixture.path()).unwrap();
@@ -12110,13 +12092,13 @@ fn every_lifecycle_preparation_cleanup_boundary_is_fallible_and_invalidates_exac
                 let first = [0x31_u8; 64 * 1024 + 17];
                 let second = [0xa7_u8; 72 * 1024 + 29];
                 let mut files = [
-                    C3TreeFileV1::new(
+                    TreeFileV1::new(
                         b"a.bin",
                         0o644,
                         first.len() as u64,
                         CheckedSupplier { bytes: &first },
                     ),
-                    C3TreeFileV1::new(
+                    TreeFileV1::new(
                         b"nested/b.bin",
                         0o600,
                         second.len() as u64,
@@ -12136,7 +12118,7 @@ fn every_lifecycle_preparation_cleanup_boundary_is_fallible_and_invalidates_exac
                     observed_calls: 0,
                     injected: false,
                 };
-                let operation = request_c3_tree_operation_v1(
+                let operation = request_tree_operation_v1(
                     &cas,
                     0x300 + target_call as u64,
                     &mut counters,
@@ -12144,11 +12126,11 @@ fn every_lifecycle_preparation_cleanup_boundary_is_fallible_and_invalidates_exac
                 )
                 .unwrap();
 
-                let error = run_c3_create_tree_v1(
+                let error = run_create_tree_v1(
                     operation,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     &mut files,
-                    C3OperationBuffersV1 {
+                    OperationBuffersV1 {
                         source: &mut source_window,
                         cdc_ring: &mut cdc_ring,
                         incoming_comparison: &mut incoming,
@@ -12164,13 +12146,13 @@ fn every_lifecycle_preparation_cleanup_boundary_is_fallible_and_invalidates_exac
 
                 assert_eq!(
                     error,
-                    C3OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
+                    OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
                         FsCasCleanupTargetV1::PreparationSpool,
                     )),
                     "cleanup boundary {target_call} ({expected_prefix})",
                 );
                 assert!(control.injected);
-                assert_eq!(control.observed_calls, 6);
+                assert_eq!(control.observed_calls, 7);
                 assert_eq!(cas.operation_admitted_slots_v1(), 0);
                 let preparation: Vec<_> = fs::read_dir(fixture.path().join("preparation"))
                     .unwrap()
@@ -12296,16 +12278,16 @@ fn cleanup_and_persistent_invalidation_double_fault_remains_fail_closed_after_dr
             let mut traversal = [0_u8; 64];
             let mut control = FailPreparationCleanupAndPersistentInvalidation::default();
             let grant =
-                request_c3_create_qualification_v1(&cas, 109, &mut counters, &mut control).unwrap();
+                request_create_operation_v1(&cas, 109, &mut counters, &mut control).unwrap();
 
-            let error = run_c3_create_v1(
+            let error = run_create_v1(
                 grant,
-                C3CdcAlgorithmV1::FastCdc,
+                CdcAlgorithmV1::FastCdc,
                 b"payload.bin",
                 0o644,
                 input.len() as u64,
                 CheckedSupplier { bytes: &input },
-                C3OperationBuffersV1 {
+                OperationBuffersV1 {
                     source: &mut source_window,
                     cdc_ring: &mut cdc_ring,
                     incoming_comparison: &mut incoming,
@@ -12321,7 +12303,7 @@ fn cleanup_and_persistent_invalidation_double_fault_remains_fail_closed_after_dr
 
             assert_eq!(
                 error,
-                C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                     first: FsCasFailureCauseV1::CleanupFailed(
                         FsCasCleanupTargetV1::PreparationSpool,
                     ),
@@ -13232,18 +13214,17 @@ fn post_link_marker_unwind_cleans_alias_records_exact_residue_and_invalidates() 
                     injected: false,
                 };
                 let grant =
-                    request_c3_create_qualification_v1(&cas, 0x710, &mut counters, &mut control)
-                        .unwrap();
+                    request_create_operation_v1(&cas, 0x710, &mut counters, &mut control).unwrap();
 
                 let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let _ = run_c3_create_v1(
+                    let _ = run_create_v1(
                         grant,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         b"payload.bin",
                         0o644,
                         input.len() as u64,
                         CheckedSupplier { bytes: &input },
-                        C3OperationBuffersV1 {
+                        OperationBuffersV1 {
                             source: &mut source_window,
                             cdc_ring: &mut cdc_ring,
                             incoming_comparison: &mut incoming,
@@ -13473,18 +13454,17 @@ fn post_link_marker_unwind_classifies_cleanup_and_invalidation_secondary_termina
                     invalidation_calls: 0,
                 };
                 let grant =
-                    request_c3_create_qualification_v1(&cas, 0x711, &mut counters, &mut control)
-                        .unwrap();
+                    request_create_operation_v1(&cas, 0x711, &mut counters, &mut control).unwrap();
 
                 let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_c3_create_v1(
+                    run_create_v1(
                         grant,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         b"payload.bin",
                         0o644,
                         input.len() as u64,
                         CheckedSupplier { bytes: &input },
-                        C3OperationBuffersV1 {
+                        OperationBuffersV1 {
                             source: &mut source_window,
                             cdc_ring: &mut cdc_ring,
                             incoming_comparison: &mut incoming,
@@ -13502,7 +13482,7 @@ fn post_link_marker_unwind_classifies_cleanup_and_invalidation_secondary_termina
                     None => assert!(terminal.is_err(), "{label}"),
                     Some(error) => assert_eq!(
                         terminal.unwrap(),
-                        Err(C3OperationErrorV1::FsCas(error)),
+                        Err(OperationErrorV1::FsCas(error)),
                         "{label}",
                     ),
                 }
@@ -13659,18 +13639,17 @@ fn pre_link_marker_unwind_cleans_once_or_retains_exact_fail_closed_residue() {
                     cleanup_injected: false,
                 };
                 let grant =
-                    request_c3_create_qualification_v1(&cas, 0x718, &mut counters, &mut control)
-                        .unwrap();
+                    request_create_operation_v1(&cas, 0x718, &mut counters, &mut control).unwrap();
 
                 let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_c3_create_v1(
+                    run_create_v1(
                         grant,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         b"payload.bin",
                         0o644,
                         input.len() as u64,
                         CheckedSupplier { bytes: &input },
-                        C3OperationBuffersV1 {
+                        OperationBuffersV1 {
                             source: &mut source_window,
                             cdc_ring: &mut cdc_ring,
                             incoming_comparison: &mut incoming,
@@ -13683,10 +13662,9 @@ fn pre_link_marker_unwind_cleans_once_or_retains_exact_fail_closed_residue() {
                         &mut counters,
                     )
                 }));
-
                 if retain_marker {
                     match terminal {
-                        Ok(Err(C3OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
+                        Ok(Err(OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
                             FsCasCleanupTargetV1::PreparationSpool,
                         )))) => {}
                         Ok(_) => panic!("{label}: cleanup failure did not remain terminal"),
@@ -13819,18 +13797,17 @@ fn carrier_pre_link_unwind_releases_publication_guard_and_preserves_healthy_root
             let mut traversal = [0_u8; 64];
             let mut control = PanicBeforeCarrierInstall::default();
             let grant =
-                request_c3_create_qualification_v1(&cas, 0x71f, &mut counters, &mut control)
-                    .unwrap();
+                request_create_operation_v1(&cas, 0x71f, &mut counters, &mut control).unwrap();
 
             let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let _ = run_c3_create_v1(
+                let _ = run_create_v1(
                     grant,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     b"payload.bin",
                     0o644,
                     input.len() as u64,
                     CheckedSupplier { bytes: &input },
-                    C3OperationBuffersV1 {
+                    OperationBuffersV1 {
                         source: &mut source_window,
                         cdc_ring: &mut cdc_ring,
                         incoming_comparison: &mut incoming,
@@ -13958,18 +13935,17 @@ fn carrier_post_link_unwind_rolls_back_once_or_retains_exact_fail_closed_residue
                     invalidation_calls: 0,
                 };
                 let grant =
-                    request_c3_create_qualification_v1(&cas, 0x720, &mut counters, &mut control)
-                        .unwrap();
+                    request_create_operation_v1(&cas, 0x720, &mut counters, &mut control).unwrap();
 
                 let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_c3_create_v1(
+                    run_create_v1(
                         grant,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         b"payload.bin",
                         0o644,
                         input.len() as u64,
                         CheckedSupplier { bytes: &input },
-                        C3OperationBuffersV1 {
+                        OperationBuffersV1 {
                             source: &mut source_window,
                             cdc_ring: &mut cdc_ring,
                             incoming_comparison: &mut incoming,
@@ -13986,7 +13962,7 @@ fn carrier_post_link_unwind_rolls_back_once_or_retains_exact_fail_closed_residue
                 if overflow_counter_transfer {
                     assert_eq!(
                         terminal.unwrap().unwrap_err(),
-                        C3OperationErrorV1::Core(CoreError::IntegerOverflow),
+                        OperationErrorV1::Core(CoreError::IntegerOverflow),
                         "{case}",
                     );
                 } else if retain_carrier {
@@ -14002,7 +13978,7 @@ fn carrier_post_link_unwind_rolls_back_once_or_retains_exact_fail_closed_residue
                     };
                     assert_eq!(
                         terminal.unwrap().unwrap_err(),
-                        C3OperationErrorV1::FsCas(expected),
+                        OperationErrorV1::FsCas(expected),
                         "{case}",
                     );
                 } else {
@@ -14107,17 +14083,16 @@ fn locator_cleanup_residue_retains_its_carrier_without_unlink_attempt() {
             let mut traversal = [0_u8; 64];
             let mut control = LocatorResidueRetainsCarrier::default();
             let grant =
-                request_c3_create_qualification_v1(&cas, 0x728, &mut counters, &mut control)
-                    .unwrap();
+                request_create_operation_v1(&cas, 0x728, &mut counters, &mut control).unwrap();
 
-            let result = run_c3_create_v1(
+            let result = run_create_v1(
                 grant,
-                C3CdcAlgorithmV1::FastCdc,
+                CdcAlgorithmV1::FastCdc,
                 b"payload.bin",
                 0o644,
                 input.len() as u64,
                 CheckedSupplier { bytes: &input },
-                C3OperationBuffersV1 {
+                OperationBuffersV1 {
                     source: &mut source_window,
                     cdc_ring: &mut cdc_ring,
                     incoming_comparison: &mut incoming,
@@ -14132,7 +14107,7 @@ fn locator_cleanup_residue_retains_its_carrier_without_unlink_attempt() {
 
             assert!(matches!(
                 result,
-                Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                     first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
                     dominant: FsCasFailureCauseV1::CleanupFailed(
                         FsCasCleanupTargetV1::ObjectLocator,
@@ -14236,22 +14211,18 @@ fn locator_rollback_preserves_directional_unlink_faults_and_dependency_custody()
                         fail_invalidation,
                         carrier_cleanup_attempted: false,
                     };
-                    let grant = request_c3_create_qualification_v1(
-                        &cas,
-                        0x72a,
-                        &mut counters,
-                        &mut control,
-                    )
-                    .unwrap();
+                    let grant =
+                        request_create_operation_v1(&cas, 0x72a, &mut counters, &mut control)
+                            .unwrap();
 
-                    let result = run_c3_create_v1(
+                    let result = run_create_v1(
                         grant,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         b"payload.bin",
                         0o644,
                         input.len() as u64,
                         CheckedSupplier { bytes: &input },
-                        C3OperationBuffersV1 {
+                        OperationBuffersV1 {
                             source: &mut source_window,
                             cdc_ring: &mut cdc_ring,
                             incoming_comparison: &mut incoming,
@@ -14271,7 +14242,7 @@ fn locator_rollback_preserves_directional_unlink_faults_and_dependency_custody()
                     };
                     assert_eq!(
                         result.unwrap_err(),
-                        C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                        OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                             first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
                             dominant: expected_dominant,
                         }),
@@ -14375,17 +14346,16 @@ fn locator_rollback_accounting_poison_defers_invalidation_to_owned_terminal() {
                     carrier_cleanup_attempted: false,
                 };
                 let grant =
-                    request_c3_create_qualification_v1(&cas, 0x72b, &mut counters, &mut control)
-                        .unwrap();
+                    request_create_operation_v1(&cas, 0x72b, &mut counters, &mut control).unwrap();
 
-                let result = run_c3_create_v1(
+                let result = run_create_v1(
                     grant,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     b"payload.bin",
                     0o644,
                     input.len() as u64,
                     CheckedSupplier { bytes: &input },
-                    C3OperationBuffersV1 {
+                    OperationBuffersV1 {
                         source: &mut source_window,
                         cdc_ring: &mut cdc_ring,
                         incoming_comparison: &mut incoming,
@@ -14405,7 +14375,7 @@ fn locator_rollback_accounting_poison_defers_invalidation_to_owned_terminal() {
                 };
                 assert_eq!(
                     result.unwrap_err(),
-                    C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                    OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                         first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
                         dominant: expected_dominant,
                     })
@@ -14486,7 +14456,7 @@ fn locator_cleanup_unwind_attempts_every_remaining_locator_and_carrier_once() {
                             accounting_injected: false,
                             invalidation_calls: 0,
                         };
-                        let grant = request_c3_create_qualification_v1(
+                        let grant = request_create_operation_v1(
                             &cas,
                             0x729,
                             &mut counters,
@@ -14494,14 +14464,14 @@ fn locator_cleanup_unwind_attempts_every_remaining_locator_and_carrier_once() {
                         )
                         .unwrap();
 
-                        let error = run_c3_create_v1(
+                        let error = run_create_v1(
                             grant,
-                            C3CdcAlgorithmV1::FastCdc,
+                            CdcAlgorithmV1::FastCdc,
                             b"payload.bin",
                             0o644,
                             input.len() as u64,
                             CheckedSupplier { bytes: &input },
-                            C3OperationBuffersV1 {
+                            OperationBuffersV1 {
                                 source: &mut source_window,
                                 cdc_ring: &mut cdc_ring,
                                 incoming_comparison: &mut incoming,
@@ -14522,7 +14492,7 @@ fn locator_cleanup_unwind_attempts_every_remaining_locator_and_carrier_once() {
                         };
                         assert_eq!(
                             error,
-                            C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                            OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                                 first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
                                 dominant: expected_dominant,
                             }),
@@ -14662,17 +14632,16 @@ fn post_link_alias_cleanup_failure_retains_visible_dependencies_and_invalidates_
                     injected: false,
                 };
                 let grant =
-                    request_c3_create_qualification_v1(&cas, 103, &mut counters, &mut control)
-                        .unwrap();
+                    request_create_operation_v1(&cas, 103, &mut counters, &mut control).unwrap();
 
-                let error = run_c3_create_v1(
+                let error = run_create_v1(
                     grant,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     b"payload.bin",
                     0o644,
                     input.len() as u64,
                     CheckedSupplier { bytes: &input },
-                    C3OperationBuffersV1 {
+                    OperationBuffersV1 {
                         source: &mut source_window,
                         cdc_ring: &mut cdc_ring,
                         incoming_comparison: &mut incoming,
@@ -14688,7 +14657,7 @@ fn post_link_alias_cleanup_failure_retains_visible_dependencies_and_invalidates_
 
                 assert_eq!(
                     error,
-                    C3OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
+                    OperationErrorV1::FsCas(FsCasErrorV1::CleanupFailed(
                         FsCasCleanupTargetV1::PublishedMarkerAlias,
                     ))
                 );
@@ -14822,7 +14791,7 @@ fn visible_locator_terminal_retains_carrier_when_residue_accounting_fails() {
                     } else {
                         FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PublishedMarkerAlias)
                     };
-                    assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{label}");
+                    assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{label}");
                     assert!(control.alias_injected, "{label}");
                     assert!(control.accounting_injected, "{label}");
                     assert!(control.root_invalidation_calls >= 1, "{label}");
@@ -14987,7 +14956,7 @@ fn visible_catalog_terminal_attempts_every_dependency_custody_once() {
                                 FsCasCleanupTargetV1::PublishedMarkerAlias,
                             ),
                         };
-                        assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{label}",);
+                        assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{label}",);
                         assert!(control.alias_injected, "{label}");
                         assert!(control.accounting_injected, "{label}");
                         assert_eq!(control.root_invalidation_calls, 1, "{label}");
@@ -15149,7 +15118,7 @@ fn post_catalog_control_terminal_preserves_cause_and_all_dependency_custody() {
                         } else {
                             FsCasErrorV1::Core(first)
                         };
-                        assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{label}");
+                        assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{label}");
                         assert!(!control.alias_injected, "{label}");
                         assert_eq!(
                             control.accounting_injected,
@@ -15364,7 +15333,7 @@ fn admission_callback_unwind_classifies_secondary_terminal_and_dependency_custod
                     private_cleanup_calls: 0,
                     root_invalidation_calls: 0,
                 };
-                let grant = request_c3_create_qualification_v1(
+                let grant = request_create_operation_v1(
                     &cas,
                     0x92d + index as u64,
                     &mut counters,
@@ -15373,14 +15342,14 @@ fn admission_callback_unwind_classifies_secondary_terminal_and_dependency_custod
                 .unwrap();
 
                 let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_c3_create_v1(
+                    run_create_v1(
                         grant,
-                        C3CdcAlgorithmV1::FastCdc,
+                        CdcAlgorithmV1::FastCdc,
                         b"payload.bin",
                         0o644,
                         input.len() as u64,
                         CheckedSupplier { bytes: &input },
-                        C3OperationBuffersV1 {
+                        OperationBuffersV1 {
                             source: &mut source_window,
                             cdc_ring: &mut cdc_ring,
                             incoming_comparison: &mut incoming,
@@ -15423,7 +15392,7 @@ fn admission_callback_unwind_classifies_secondary_terminal_and_dependency_custod
                     };
                     assert_eq!(
                         terminal.unwrap().unwrap_err(),
-                        C3OperationErrorV1::FsCas(expected),
+                        OperationErrorV1::FsCas(expected),
                         "{label}",
                     );
                 }
@@ -15631,7 +15600,7 @@ fn post_link_alias_directional_failure_retains_first_cause_across_visible_domain
                     };
                     assert_eq!(
                         result,
-                        Err(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+                        Err(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                             first: FsCasFailureCauseV1::Filesystem(
                                 FsCasFilesystemFailureV1::PermissionDenied,
                             ),
@@ -15757,16 +15726,15 @@ fn atomic_closure_no_replace_authenticates_a_racing_malformed_occupant() {
     let mut first_control = ContinueControl;
     let mut first_counters = OperationCountersV1::default();
     let first_grant =
-        request_c3_create_qualification_v1(&cas, 0x410, &mut first_counters, &mut first_control)
-            .unwrap();
-    run_c3_create_v1(
+        request_create_operation_v1(&cas, 0x410, &mut first_counters, &mut first_control).unwrap();
+    run_create_v1(
         first_grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         input.len() as u64,
         CheckedSupplier { bytes: &input },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -15799,16 +15767,15 @@ fn atomic_closure_no_replace_authenticates_a_racing_malformed_occupant() {
         injected: false,
     };
     let mut counters = OperationCountersV1::default();
-    let grant =
-        request_c3_create_qualification_v1(&cas, 0x411, &mut counters, &mut control).unwrap();
-    let error = run_c3_create_v1(
+    let grant = request_create_operation_v1(&cas, 0x411, &mut counters, &mut control).unwrap();
+    let error = run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         input.len() as u64,
         CheckedSupplier { bytes: &input },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -15824,7 +15791,7 @@ fn atomic_closure_no_replace_authenticates_a_racing_malformed_occupant() {
 
     assert_eq!(
         error,
-        C3OperationErrorV1::FsCas(FsCasErrorV1::MalformedOccupant)
+        OperationErrorV1::FsCas(FsCasErrorV1::MalformedOccupant)
     );
     assert!(control.injected);
     assert_eq!(fs::read(&closure).unwrap(), [0_u8; 120]);
@@ -15888,21 +15855,21 @@ fn malformed_closure_admission_preserves_primary_error_through_marker_cleanup_te
 
                 let mut first_control = ContinueControl;
                 let mut first_counters = OperationCountersV1::default();
-                let first_grant = request_c3_create_qualification_v1(
+                let first_grant = request_create_operation_v1(
                     &cas,
                     0x412,
                     &mut first_counters,
                     &mut first_control,
                 )
                 .unwrap();
-                run_c3_create_v1(
+                run_create_v1(
                     first_grant,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     b"payload.bin",
                     0o644,
                     input.len() as u64,
                     CheckedSupplier { bytes: &input },
-                    C3OperationBuffersV1 {
+                    OperationBuffersV1 {
                         source: &mut source_window,
                         cdc_ring: &mut cdc_ring,
                         incoming_comparison: &mut incoming,
@@ -15940,16 +15907,15 @@ fn malformed_closure_admission_preserves_primary_error_through_marker_cleanup_te
                 };
                 let mut counters = OperationCountersV1::default();
                 let grant =
-                    request_c3_create_qualification_v1(&cas, 0x413, &mut counters, &mut control)
-                        .unwrap();
-                let result = run_c3_create_v1(
+                    request_create_operation_v1(&cas, 0x413, &mut counters, &mut control).unwrap();
+                let result = run_create_v1(
                     grant,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     b"payload.bin",
                     0o644,
                     input.len() as u64,
                     CheckedSupplier { bytes: &input },
-                    C3OperationBuffersV1 {
+                    OperationBuffersV1 {
                         source: &mut source_window,
                         cdc_ring: &mut cdc_ring,
                         incoming_comparison: &mut incoming,
@@ -15970,13 +15936,13 @@ fn malformed_closure_admission_preserves_primary_error_through_marker_cleanup_te
                         FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool)
                     },
                 };
-                assert_eq!(result, Err(C3OperationErrorV1::FsCas(expected)), "{label}");
+                assert_eq!(result, Err(OperationErrorV1::FsCas(expected)), "{label}");
                 assert!(control.malformed_installed, "{label}");
                 assert!(control.preparation_cleanup_injected, "{label}");
                 // One explicit cleanup belongs to the temporary closure marker
-                // itself; the four preparation spools that existed before the
+                // itself; the five preparation spools that existed before the
                 // closure fence then each receive their own terminal attempt.
-                assert_eq!(control.preparation_cleanup_calls, 5, "{label}");
+                assert_eq!(control.preparation_cleanup_calls, 6, "{label}");
                 assert_eq!(control.root_invalidation_calls, 1, "{label}");
                 assert_eq!(fs::read(&closure).unwrap(), [0_u8; 120], "{label}");
 
@@ -16161,17 +16127,16 @@ fn invalidation_probe_failure_before_candidate_validation_preserves_typed_cause(
             injected: false,
         };
         let grant =
-            request_c3_create_qualification_v1(&cas, operation, &mut counters, &mut control)
-                .unwrap();
+            request_create_operation_v1(&cas, operation, &mut counters, &mut control).unwrap();
 
-        let error = run_c3_create_v1(
+        let error = run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -16185,7 +16150,7 @@ fn invalidation_probe_failure_before_candidate_validation_preserves_typed_cause(
         )
         .unwrap_err();
 
-        assert_eq!(error, C3OperationErrorV1::FsCas(expected), "{case}");
+        assert_eq!(error, OperationErrorV1::FsCas(expected), "{case}");
         assert!(control.injected, "{case}");
         assert_operation_authority_baseline(&cas, fixture.path());
         assert_storage_equations(&counters);
@@ -16225,16 +16190,16 @@ fn private_pack_cleanup_failure_is_typed_invalidates_stale_handles_and_retains_e
     let mut tree_pages = [None::<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES];
     let mut traversal = [0_u8; 64];
     let mut control = CancelBeforeCandidateValidationAndFailPrivatePackCleanupOnce::default();
-    let grant = request_c3_create_qualification_v1(&cas, 104, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 104, &mut counters, &mut control).unwrap();
 
-    let error = run_c3_create_v1(
+    let error = run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         input.len() as u64,
         CheckedSupplier { bytes: &input },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -16250,7 +16215,7 @@ fn private_pack_cleanup_failure_is_typed_invalidates_stale_handles_and_retains_e
 
     assert_eq!(
         error,
-        C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
             dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::PrivatePack,),
         })
@@ -16375,16 +16340,16 @@ fn carrier_cleanup_failure_is_typed_through_sink_and_retains_exact_residue() {
     let mut tree_pages = [None::<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES];
     let mut traversal = [0_u8; 64];
     let mut control = CancelAfterCarrierInstallAndFailCleanupOnce::default();
-    let grant = request_c3_create_qualification_v1(&cas, 105, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 105, &mut counters, &mut control).unwrap();
 
-    let error = run_c3_create_v1(
+    let error = run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         input.len() as u64,
         CheckedSupplier { bytes: &input },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,
@@ -16400,7 +16365,7 @@ fn carrier_cleanup_failure_is_typed_through_sink_and_retains_exact_residue() {
 
     assert_eq!(
         error,
-        C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+        OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
             first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
             dominant: FsCasFailureCauseV1::CleanupFailed(FsCasCleanupTargetV1::Carrier,),
         })
@@ -16488,17 +16453,16 @@ fn carrier_accounting_poison_preserves_cancellation_and_cleanup_dominance() {
             storage_poisoned: false,
             fail_invalidation,
         };
-        let grant =
-            request_c3_create_qualification_v1(&cas, 0x75a, &mut counters, &mut control).unwrap();
+        let grant = request_create_operation_v1(&cas, 0x75a, &mut counters, &mut control).unwrap();
 
-        let error = run_c3_create_v1(
+        let error = run_create_v1(
             grant,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             b"payload.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -16514,7 +16478,7 @@ fn carrier_accounting_poison_preserves_cancellation_and_cleanup_dominance() {
 
         assert_eq!(
             error,
-            C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+            OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                 first: FsCasFailureCauseV1::Core(CoreError::Cancelled),
                 dominant: expected_dominant,
             }),
@@ -16562,7 +16526,7 @@ fn complete_algorithms_use_one_pre_supplier_slot_and_return_all_preparation_reso
         *byte = (state as u8) ^ (index as u8).wrapping_mul(17);
     }
 
-    for algorithm in [C3CdcAlgorithmV1::FastCdc, C3CdcAlgorithmV1::SeqCdc] {
+    for algorithm in [CdcAlgorithmV1::FastCdc, CdcAlgorithmV1::SeqCdc] {
         let fixture = TestRoot::new("success");
         let cas = FsCasV1::create_new(fixture.path()).unwrap();
         let mut counters = OperationCountersV1::default();
@@ -16574,17 +16538,16 @@ fn complete_algorithms_use_one_pre_supplier_slot_and_return_all_preparation_reso
         let mut tree_pages = [None::<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES];
         let mut traversal = [0_u8; 64];
         let mut control = ContinueControl;
-        let grant =
-            request_c3_create_qualification_v1(&cas, 106, &mut counters, &mut control).unwrap();
+        let grant = request_create_operation_v1(&cas, 106, &mut counters, &mut control).unwrap();
 
-        let result = run_c3_create_v1(
+        let result = run_create_v1(
             grant,
             algorithm,
             b"payload.bin",
             0o644,
             input.len() as u64,
             CheckedSupplier { bytes: &input },
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -16682,16 +16645,16 @@ fn exact_100_mib_complete_c3_rolls_over_real_fscas_carriers() {
     let mut tree_pages = [None::<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES];
     let mut traversal = vec![0_u8; 64 * 1024];
     let mut control = ContinueControl;
-    let grant = request_c3_create_qualification_v1(&cas, 107, &mut counters, &mut control).unwrap();
+    let grant = request_create_operation_v1(&cas, 107, &mut counters, &mut control).unwrap();
 
-    let result = run_c3_create_v1(
+    let result = run_create_v1(
         grant,
-        C3CdcAlgorithmV1::FastCdc,
+        CdcAlgorithmV1::FastCdc,
         b"payload.bin",
         0o644,
         LOGICAL_BYTES,
         CounterSupplier { len: LOGICAL_BYTES },
-        C3OperationBuffersV1 {
+        OperationBuffersV1 {
             source: &mut source_window,
             cdc_ring: &mut cdc_ring,
             incoming_comparison: &mut incoming,

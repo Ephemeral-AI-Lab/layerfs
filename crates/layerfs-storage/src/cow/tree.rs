@@ -597,7 +597,7 @@ pub fn build_canonical_directory_v1<S: PreparedTreeSinkV1 + ?Sized>(
     result
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_canonical_directory_borrowed_v1<S: PreparedTreeSinkV1 + ?Sized>(
     mode: DirectoryBuildModeV1,
@@ -757,7 +757,7 @@ pub(super) fn replace_directory_entry_cow_impl_v1<S: PreparedTreeSinkV1 + ?Sized
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn replace_directory_entry_cow_borrowed_impl_v1<S: PreparedTreeSinkV1 + ?Sized>(
     base: CanonicalDirectoryTreeV1,
@@ -1087,7 +1087,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn add_directory_entry_cow_borrowed_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -1155,7 +1155,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn remove_directory_entry_cow_borrowed_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -1189,7 +1189,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn move_directory_entry_cow_borrowed_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
@@ -1235,7 +1235,7 @@ where
 /// source detach and destination attach candidates have both been prepared.
 /// The caller supplies the one final result view; no intermediate root is
 /// emitted or made visible.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn replace_two_directory_entries_cow_borrowed_impl_v1<T, S>(
     base: CanonicalDirectoryTreeV1,

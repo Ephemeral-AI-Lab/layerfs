@@ -18,7 +18,7 @@ pub(crate) mod content;
 pub(crate) mod cow;
 pub mod format;
 pub mod identity;
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(dead_code)]
 pub(crate) mod lifecycle;
 #[allow(dead_code)]
@@ -27,7 +27,7 @@ pub mod object;
 #[allow(dead_code)]
 pub(crate) mod pack;
 pub mod profile;
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(dead_code)]
 pub(crate) mod read;
 
@@ -44,22 +44,22 @@ extern crate self as layerfs_storage;
 #[path = "../tests/support/mod.rs"]
 mod test_support;
 
-#[cfg(all(test, feature = "c3-polymorphism"))]
+#[cfg(all(test, feature = "operation-polymorphism"))]
 #[path = "../tests/c3_fscas.rs"]
 mod c3_fscas_tests;
-#[cfg(all(test, feature = "c3-polymorphism"))]
+#[cfg(all(test, feature = "operation-polymorphism"))]
 #[path = "../tests/c3_mutation.rs"]
 mod c3_mutation_tests;
-#[cfg(all(test, feature = "c3-polymorphism"))]
+#[cfg(all(test, feature = "operation-polymorphism"))]
 #[path = "../tests/c3_operation.rs"]
 mod c3_operation_tests;
-#[cfg(all(test, feature = "c3-polymorphism"))]
+#[cfg(all(test, feature = "operation-polymorphism"))]
 #[path = "../tests/l1_cas.rs"]
 mod l1_cas_tests;
 #[cfg(test)]
 #[path = "../tests/l1_content.rs"]
 mod l1_content_tests;
-#[cfg(all(test, feature = "c3-polymorphism"))]
+#[cfg(all(test, feature = "operation-polymorphism"))]
 #[path = "../tests/l1_pack.rs"]
 mod l1_pack_tests;
 #[cfg(test)]

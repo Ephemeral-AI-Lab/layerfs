@@ -9,7 +9,7 @@ use crate::{CoreError, CoreResult};
 mod engine;
 mod fastcdc;
 mod resync;
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 mod seqcdc;
 
 pub use fastcdc::{FastCdcV1, FastCdcV1Stream};
@@ -17,7 +17,7 @@ pub use resync::{
     MAX_UPDATE_ANCHOR_SCAN_BYTES, MAX_UPDATE_REJOIN_VERIFICATION_BYTES,
     MAX_UPDATE_RESYNCHRONIZATION_BYTES,
 };
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub use seqcdc::{SeqCdcV1, SeqCdcV1Stream};
 
 pub const MINIMUM_CHUNK_BYTES: usize = 8_192;
@@ -170,15 +170,15 @@ pub struct SeqCdcCountersV1 {
 ///
 /// This is not a provider registry: the choice is explicit, statically
 /// dispatched, and cannot fall back or redispatch during an operation.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum C3CdcAlgorithmV1 {
+pub enum CdcAlgorithmV1 {
     FastCdc,
     SeqCdc,
 }
 
-#[cfg(feature = "c3-polymorphism")]
-impl C3CdcAlgorithmV1 {
+#[cfg(feature = "operation-polymorphism")]
+impl CdcAlgorithmV1 {
     pub const fn evidence_tag(self) -> [u8; 8] {
         match self {
             Self::FastCdc => fastcdc::ALGORITHM_TAG,
@@ -190,26 +190,26 @@ impl C3CdcAlgorithmV1 {
         self,
         ring: &'ring mut [u8],
         control: &mut C,
-    ) -> CoreResult<C3CdcStreamV1<'ring>> {
+    ) -> CoreResult<CdcStreamV1<'ring>> {
         match self {
             Self::FastCdc => FastCdcV1::new()
                 .stream(ring, control)
-                .map(C3CdcStreamV1::FastCdc),
+                .map(CdcStreamV1::FastCdc),
             Self::SeqCdc => SeqCdcV1::new()
                 .stream(ring, control)
-                .map(C3CdcStreamV1::SeqCdc),
+                .map(CdcStreamV1::SeqCdc),
         }
     }
 }
 
-#[cfg(feature = "c3-polymorphism")]
-pub enum C3CdcStreamV1<'ring> {
+#[cfg(feature = "operation-polymorphism")]
+pub enum CdcStreamV1<'ring> {
     FastCdc(FastCdcV1Stream<'ring>),
     SeqCdc(SeqCdcV1Stream<'ring>),
 }
 
-#[cfg(feature = "c3-polymorphism")]
-impl C3CdcStreamV1<'_> {
+#[cfg(feature = "operation-polymorphism")]
+impl CdcStreamV1<'_> {
     pub const fn counters(&self) -> CdcStreamCountersV1 {
         match self {
             Self::FastCdc(stream) => stream.counters(),

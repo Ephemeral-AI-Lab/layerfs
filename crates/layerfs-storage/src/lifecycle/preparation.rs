@@ -19,7 +19,7 @@ use crate::format::{
 use crate::identity::{
     FileNodeIdV1, LogicalChunkIdV1, PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalTreeIdV1,
 };
-use crate::lifecycle::{BuiltDirectoryRecordV1, BuiltFileRecordV1, C3PreparationResidentBoundsV1};
+use crate::lifecycle::{BuiltDirectoryRecordV1, BuiltFileRecordV1, PreparationResidentBoundsV1};
 use crate::limits::{
     FileSortEventV1, FileSortWorkV1, ObservationScopeV1, OperationCountersV1,
     OperationWorkControlV1, OptionalU64ObservationV1,
@@ -32,18 +32,18 @@ const BUILT_FILE_RECORD_BYTES: u64 = 80;
 const BUILT_DIRECTORY_RECORD_BYTES: u64 = 40;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum C3PreparationErrorV1 {
+pub(crate) enum PreparationErrorV1 {
     Core(CoreError),
     FsCas(FsCasErrorV1),
 }
 
-impl From<CoreError> for C3PreparationErrorV1 {
+impl From<CoreError> for PreparationErrorV1 {
     fn from(error: CoreError) -> Self {
         Self::Core(error)
     }
 }
 
-impl From<FsCasErrorV1> for C3PreparationErrorV1 {
+impl From<FsCasErrorV1> for PreparationErrorV1 {
     fn from(error: FsCasErrorV1) -> Self {
         Self::FsCas(error)
     }
@@ -52,25 +52,26 @@ impl From<FsCasErrorV1> for C3PreparationErrorV1 {
 /// The single preparation lifecycle shared by complete one-file and tree C3.
 /// Every filesystem artifact is opened here, after the root grant, and every
 /// terminal path is cleaned here before that grant can be released.
-pub(crate) struct C3OperationPreparationV1 {
+pub(crate) struct OperationPreparationV1 {
     references: Option<FileChunkReferenceSpoolV1>,
     metadata: Option<FilePackIndexSpoolV1>,
     closure_objects: Option<FileClosureObjectSpoolV1>,
     global_seen: Option<FileGlobalSeenSpoolV1>,
+    locator_receipts: Option<FsOperationSpoolV1>,
     built_files: Option<FileBuiltFileSpoolV1>,
     built_directories: Option<FileBuiltDirectorySpoolV1>,
 }
 
-/// Aggregate terminal state for the six independently owned preparation
+/// Aggregate terminal state for the seven independently owned preparation
 /// files. Cleanup must attempt every present target even when one target
 /// returns an error or unwinds. The outer lifecycle consumes this state only
 /// after root storage and the operation capability have been terminalized.
-pub(crate) struct C3PreparationTerminalV1 {
+pub(crate) struct PreparationTerminalV1 {
     first_error: Option<FsCasErrorV1>,
     first_unwind: Option<Box<dyn core::any::Any + Send>>,
 }
 
-impl C3PreparationTerminalV1 {
+impl PreparationTerminalV1 {
     fn clean_v1() -> Self {
         Self {
             first_error: None,
@@ -120,14 +121,14 @@ impl C3PreparationTerminalV1 {
     }
 }
 
-impl C3OperationPreparationV1 {
+impl OperationPreparationV1 {
     pub(crate) fn begin<C>(
         cas: &FsCasV1,
         storage_token: FsStorageOperationTokenV1,
         global_seen_capacity: u32,
-        bounds: C3PreparationResidentBoundsV1,
+        bounds: PreparationResidentBoundsV1,
         control: &mut C,
-    ) -> Result<Self, C3PreparationErrorV1>
+    ) -> Result<Self, PreparationErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -139,11 +140,12 @@ impl C3OperationPreparationV1 {
             metadata: None,
             closure_objects: None,
             global_seen: None,
+            locator_receipts: None,
             built_files: None,
             built_directories: None,
         };
         let opened = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-            || -> Result<(), C3PreparationErrorV1> {
+            || -> Result<(), PreparationErrorV1> {
                 preparation.references = Some(FileChunkReferenceSpoolV1::new(
                     cas.begin_operation_spool_borrowed_v1(
                         "chunk-references",
@@ -195,9 +197,24 @@ impl C3OperationPreparationV1 {
                     .global_seen_mut()
                     .initialize_controlled_v1(global_seen_capacity, control)
                     .map_err(|error| match error {
-                        GlobalSeenErrorV1::Core(error) => C3PreparationErrorV1::Core(error),
-                        GlobalSeenErrorV1::FsCas(error) => C3PreparationErrorV1::FsCas(error),
+                        GlobalSeenErrorV1::Core(error) => PreparationErrorV1::Core(error),
+                        GlobalSeenErrorV1::FsCas(error) => PreparationErrorV1::FsCas(error),
                     })?;
+
+                preparation.locator_receipts = Some(cas.begin_operation_spool_borrowed_v1(
+                    "locator-receipts",
+                    storage_token,
+                    control,
+                )?);
+                if preparation
+                    .locator_receipts
+                    .as_ref()
+                    .expect("opened locator-receipt spool")
+                    .resident_memory_bound_bytes()?
+                    > bounds.locator_receipts
+                {
+                    return Err(CoreError::ResourceRefused.into());
+                }
 
                 if let Some(bound) = bounds.built_files {
                     preparation.built_files = Some(FileBuiltFileSpoolV1::new(
@@ -240,10 +257,10 @@ impl C3OperationPreparationV1 {
                 let mut terminal = preparation.finish(control);
                 if let Some(cleanup) = terminal.first_error_v1() {
                     let first = match error {
-                        C3PreparationErrorV1::Core(error) => FsCasErrorV1::Core(error),
-                        C3PreparationErrorV1::FsCas(error) => error,
+                        PreparationErrorV1::Core(error) => FsCasErrorV1::Core(error),
+                        PreparationErrorV1::FsCas(error) => error,
                     };
-                    return Err(C3PreparationErrorV1::FsCas(first.dominated_by_v1(cleanup)));
+                    return Err(PreparationErrorV1::FsCas(first.dominated_by_v1(cleanup)));
                 }
                 if let Some(payload) = terminal.take_unwind_v1() {
                     std::panic::resume_unwind(payload);
@@ -259,7 +276,7 @@ impl C3OperationPreparationV1 {
                     // every previously returned spool is explicitly finished,
                     // then consume them only after the operation has a bounded
                     // typed result. Never retry the partial spool through Drop.
-                    let mut terminal = C3PreparationTerminalV1 {
+                    let mut terminal = PreparationTerminalV1 {
                         first_error: Some(error),
                         first_unwind: Some(primary_payload),
                     };
@@ -269,7 +286,7 @@ impl C3OperationPreparationV1 {
                         .expect("classified construction unwind retained a typed terminal");
                     drop(terminal.take_unwind_v1());
                     drop(secondary_payload);
-                    return Err(C3PreparationErrorV1::FsCas(error));
+                    return Err(PreparationErrorV1::FsCas(error));
                 }
                 Err(payload) => {
                     let mut terminal = preparation.finish_after_unwind_v1(control, payload);
@@ -280,7 +297,7 @@ impl C3OperationPreparationV1 {
                         // bounded here and must not replace cleanup or
                         // invalidation dominance with a fabricated panic.
                         drop(terminal.take_unwind_v1());
-                        return Err(C3PreparationErrorV1::FsCas(cleanup));
+                        return Err(PreparationErrorV1::FsCas(cleanup));
                     }
                     std::panic::resume_unwind(
                         terminal
@@ -300,6 +317,7 @@ impl C3OperationPreparationV1 {
         &mut FilePackIndexSpoolV1,
         &mut FileClosureObjectSpoolV1,
         &mut FileGlobalSeenSpoolV1,
+        &mut FsOperationSpoolV1,
         Option<&mut FileBuiltFileSpoolV1>,
         Option<&mut FileBuiltDirectorySpoolV1>,
     ) {
@@ -308,6 +326,9 @@ impl C3OperationPreparationV1 {
             self.metadata.as_mut().expect("opened metadata spool"),
             self.closure_objects.as_mut().expect("opened closure spool"),
             self.global_seen.as_mut().expect("opened global-seen spool"),
+            self.locator_receipts
+                .as_mut()
+                .expect("opened locator-receipt spool"),
             self.built_files.as_mut(),
             self.built_directories.as_mut(),
         )
@@ -347,11 +368,11 @@ impl C3OperationPreparationV1 {
 
     /// Attempt every fallible cleanup before the operation capability can be
     /// released. Drop remains only the lower adapter's unwind backstop.
-    pub(crate) fn finish<C>(&mut self, control: &mut C) -> C3PreparationTerminalV1
+    pub(crate) fn finish<C>(&mut self, control: &mut C) -> PreparationTerminalV1
     where
         C: FsCasControlV1 + ?Sized,
     {
-        let mut terminal = C3PreparationTerminalV1::clean_v1();
+        let mut terminal = PreparationTerminalV1::clean_v1();
         self.finish_into_v1(control, &mut terminal);
         terminal
     }
@@ -360,16 +381,16 @@ impl C3OperationPreparationV1 {
         &mut self,
         control: &mut C,
         payload: Box<dyn core::any::Any + Send>,
-    ) -> C3PreparationTerminalV1
+    ) -> PreparationTerminalV1
     where
         C: FsCasControlV1 + ?Sized,
     {
-        let mut terminal = C3PreparationTerminalV1::after_unwind_v1(payload);
+        let mut terminal = PreparationTerminalV1::after_unwind_v1(payload);
         self.finish_into_v1(control, &mut terminal);
         terminal
     }
 
-    fn finish_into_v1<C>(&mut self, control: &mut C, terminal: &mut C3PreparationTerminalV1)
+    fn finish_into_v1<C>(&mut self, control: &mut C, terminal: &mut PreparationTerminalV1)
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -439,6 +460,12 @@ impl C3OperationPreparationV1 {
         attempt_cleanup!(self.closure_objects);
         attempt_cleanup!(self.metadata);
         attempt_cleanup!(self.references);
+        // Keep the historical lifecycle-spool order stable.  Locator
+        // receipts are an additional accounted spool, so clean them after
+        // the existing six boundaries; this preserves the first-cause and
+        // residue identity of established cleanup tests while still making
+        // the new receipt store an explicit fallible boundary.
+        attempt_cleanup!(self.locator_receipts);
     }
 }
 

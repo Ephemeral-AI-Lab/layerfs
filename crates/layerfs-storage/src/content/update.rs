@@ -259,9 +259,9 @@ where
 /// Complete-C3 adapter which borrows the already granted root operation.
 /// It cannot mint another ledger slot and therefore preserves the single
 /// operation capability across verified rejoin and immutable staging.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn update_file_c3_borrowed_v1<S, O, R, E, B, C>(
+pub(crate) fn update_file_borrowed_v1<S, O, R, E, B, C>(
     path: &[u8],
     mode: u16,
     base: AuthenticatedBaseFileV1,
@@ -665,8 +665,8 @@ pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + 
 /// Re-encode a file object with new metadata while replaying only the already
 /// authenticated bounded chunk-reference stream. This borrows the outer root
 /// reservation; it cannot mint an independent operation or read base payload.
-#[cfg(feature = "c3-polymorphism")]
-pub(crate) fn reencode_file_metadata_c3_borrowed_v1<O, R, E>(
+#[cfg(feature = "operation-polymorphism")]
+pub(crate) fn reencode_file_metadata_borrowed_v1<O, R, E>(
     new_mode: u16,
     base: AuthenticatedBaseFileV1,
     evidence: &mut E,

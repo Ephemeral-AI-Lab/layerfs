@@ -9,8 +9,9 @@ use std::cell::RefCell;
 
 use crate::cas::{
     ClosureObjectRecordV1, FileClosureObjectSpoolV1, FileGlobalSeenSpoolV1, FsCasControlV1,
-    FsCasErrorV1, FsCasOccupiedV1, FsCasV1, FsPackAdmissionOutcomeV1, FsPrivatePackV1,
-    FsStorageOperationTokenV1, GlobalSeenErrorV1, GlobalSeenLookupV1, GlobalSeenRecordV1,
+    FsCasErrorV1, FsCasOccupiedV1, FsCasV1, FsOperationSpoolV1, FsPackAdmissionOutcomeV1,
+    FsPrivatePackV1, FsStorageOperationTokenV1, GlobalSeenErrorV1, GlobalSeenLookupV1,
+    GlobalSeenRecordV1,
 };
 use crate::cdc::CdcControlV1;
 use crate::content::{
@@ -23,7 +24,7 @@ use crate::identity::{
     PhysicalTreeIdV1, PhysicalVersionRecordIdV1, COMPARISON_WINDOW_BYTES, TAG_OBJECT_CHECKSUM,
     TAG_PACK,
 };
-use crate::lifecycle::{SharedC3ControlV1, VersionSummaryInputV1};
+use crate::lifecycle::{SharedOperationControlV1, VersionSummaryInputV1};
 use crate::limits::{
     CounterFieldV1, ObservationScopeV1, OperationCountersV1, OptionalU64ObservationV1,
 };
@@ -109,6 +110,7 @@ pub(crate) struct DirectPackSinkV1<'operation, 'ledger, 'control, M: ?Sized, C: 
     metadata: &'operation mut M,
     closure_objects: &'operation mut FileClosureObjectSpoolV1,
     global_seen: &'operation mut FileGlobalSeenSpoolV1,
+    locator_receipts: &'operation mut FsOperationSpoolV1,
     occupied: FsCasOccupiedV1,
     left: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
     right: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
@@ -152,6 +154,7 @@ where
         metadata: &'operation mut M,
         closure_objects: &'operation mut FileClosureObjectSpoolV1,
         global_seen: &'operation mut FileGlobalSeenSpoolV1,
+        locator_receipts: &'operation mut FsOperationSpoolV1,
         occupied: FsCasOccupiedV1,
         left: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
         right: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
@@ -167,6 +170,7 @@ where
             metadata,
             closure_objects,
             global_seen,
+            locator_receipts,
             occupied,
             left,
             right,
@@ -231,7 +235,7 @@ where
     }
 
     fn poll_control_v1(&mut self) -> CoreResult<()> {
-        let mut control = SharedC3ControlV1::new(self.control);
+        let mut control = SharedOperationControlV1::new(self.control);
         if crate::limits::OperationWorkControlV1::cancellation_requested_v1(&mut control) {
             Err(CoreError::Cancelled)
         } else if crate::limits::OperationWorkControlV1::deadline_exceeded_v1(&mut control) {
@@ -245,14 +249,14 @@ where
         &mut self,
         id: TypedPhysicalObjectIdV1,
     ) -> CoreResult<GlobalSeenLookupV1> {
-        let mut shared_control = SharedC3ControlV1::new(self.control);
+        let mut shared_control = SharedOperationControlV1::new(self.control);
         let lookup = self.global_seen.lookup(id, &mut shared_control);
         lookup.map_err(|error| self.map_global_seen_error(error))
     }
 
     fn begin_current_carrier_v1(&mut self) -> CoreResult<()> {
         let result = {
-            let mut control = SharedC3ControlV1::new(self.control);
+            let mut control = SharedOperationControlV1::new(self.control);
             self.pack
                 .begin_direct_controlled_v1(MAX_PACK_BYTES, &mut control)
         };
@@ -281,7 +285,7 @@ where
     }
 
     fn start_next_carrier_v1(&mut self) -> CoreResult<()> {
-        let mut shared_control = SharedC3ControlV1::new(self.control);
+        let mut shared_control = SharedOperationControlV1::new(self.control);
         let mut next_pack = match self
             .cas
             .begin_private_pack_borrowed_controlled_v1(self.storage_token, &mut shared_control)
@@ -328,7 +332,7 @@ where
             "direct cumulative pack-index spool logical length",
         )?;
         let admission_terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let mut shared_control = SharedC3ControlV1::new(self.control);
+            let mut shared_control = SharedOperationControlV1::new(self.control);
             self.cas.admit_pack_borrowed_controlled_v1(
                 &mut self.pack,
                 self.metadata,
@@ -336,6 +340,7 @@ where
                 self.storage_token,
                 &mut carrier_counters,
                 self.left,
+                self.locator_receipts,
                 &mut shared_control,
             )
         }));
@@ -466,7 +471,7 @@ where
         // `stats.count` is the post-canonical closure count, not a comparison
         // against the already-mutated spool count.
         let stats = {
-            let mut shared_control = SharedC3ControlV1::new(self.control);
+            let mut shared_control = SharedOperationControlV1::new(self.control);
             self.closure_objects
                 .sort_unique(&mut shared_control, &mut self.storage_counters)?
         };
@@ -558,7 +563,7 @@ where
     }
 
     pub(crate) fn cleanup_private_pack_controlled_v1(&mut self) -> Result<(), FsCasErrorV1> {
-        let mut shared_control = SharedC3ControlV1::new(self.control);
+        let mut shared_control = SharedOperationControlV1::new(self.control);
         let result = self.pack.cleanup_controlled_v1(&mut shared_control);
         if let Err(error) = result {
             self.first_fscas_error.get_or_insert(error);
@@ -679,7 +684,7 @@ where
         }
         current.checksum.write(bytes)?;
         let result = {
-            let mut control = SharedC3ControlV1::new(self.control);
+            let mut control = SharedOperationControlV1::new(self.control);
             self.pack.append_controlled_v1(bytes, &mut control)
         };
         result.map_err(|error| {
@@ -781,7 +786,7 @@ where
             return Err(self.promote_metadata_spool_error_v1(error));
         }
         let carrier_ordinal = self.carrier_count;
-        let mut shared_control = SharedC3ControlV1::new(self.control);
+        let mut shared_control = SharedOperationControlV1::new(self.control);
         if let Err(error) = self.global_seen.insert_controlled_v1(
             lookup.vacant_slot,
             expected_id,
@@ -884,7 +889,7 @@ where
         };
         let result = (|| {
             let occupied_len = match {
-                let mut control = SharedC3ControlV1::new(self.control);
+                let mut control = SharedOperationControlV1::new(self.control);
                 self.occupied
                     .occupied_len_typed_controlled_v1(id, &mut control)
             } {
@@ -904,7 +909,7 @@ where
                 let take = usize::try_from((len - offset).min(COMPARISON_WINDOW_BYTES as u64))
                     .map_err(|_| CoreError::IntegerOverflow)?;
                 let occupied_read = {
-                    let mut control = SharedC3ControlV1::new(self.control);
+                    let mut control = SharedOperationControlV1::new(self.control);
                     self.occupied.read_occupied_exact_at_typed_controlled_v1(
                         id,
                         offset,
@@ -986,7 +991,7 @@ where
 
     fn append_pack(&mut self, bytes: &[u8]) -> CoreResult<()> {
         let result = {
-            let mut control = SharedC3ControlV1::new(self.control);
+            let mut control = SharedOperationControlV1::new(self.control);
             self.pack.append_controlled_v1(bytes, &mut control)
         };
         result.map_err(|error| {
@@ -1013,7 +1018,7 @@ where
         counters: &mut OperationCountersV1,
     ) -> CoreResult<PhysicalVersionRecordIdV1> {
         let closure_stats = {
-            let mut shared_control = SharedC3ControlV1::new(self.control);
+            let mut shared_control = SharedOperationControlV1::new(self.control);
             self.closure_objects
                 .sort_unique(&mut shared_control, &mut self.storage_counters)?
         };
@@ -1086,7 +1091,7 @@ where
             return Err(CoreError::ResourceRefused);
         }
         let header_result = {
-            let mut control = SharedC3ControlV1::new(self.control);
+            let mut control = SharedOperationControlV1::new(self.control);
             self.pack.patch_direct_controlled_v1(
                 0,
                 &encode_header(self.record_count, index_offset),
@@ -1106,7 +1111,7 @@ where
             .checked_add(64)
             .ok_or(CoreError::IntegerOverflow)?;
         {
-            let mut shared_control = SharedC3ControlV1::new(self.control);
+            let mut shared_control = SharedOperationControlV1::new(self.control);
             if let Err(error) = self
                 .metadata
                 .sort_by_key_controlled(&mut shared_control, &mut self.storage_counters)
@@ -1161,7 +1166,7 @@ where
             counted_pack.read_calls = u64::MAX;
         }
         let digest_result = {
-            let mut control = SharedC3ControlV1::new(self.control);
+            let mut control = SharedOperationControlV1::new(self.control);
             hash_port_range_controlled_v1(
                 &mut counted_pack,
                 0,
@@ -1202,7 +1207,7 @@ where
         self.append_pack(&digest)?;
         let id = PackIdV1::from_digest(digest);
         let seal_result = {
-            let mut control = SharedC3ControlV1::new(self.control);
+            let mut control = SharedOperationControlV1::new(self.control);
             self.pack.seal_direct_controlled_v1(id, &mut control)
         };
         seal_result.map_err(|error| {

@@ -5,8 +5,8 @@
 //! consumed storage handoff. One ledger reservation is acquired before the
 //! source supplier is invoked and is borrowed by every lower layer.
 
-use crate::cdc::C3CdcAlgorithmV1;
-use crate::content::{create_file_c3_borrowed_v1, ContentBuffersV1, ContentSourceV1};
+use crate::cdc::CdcAlgorithmV1;
+use crate::content::{create_file_borrowed_v1, ContentBuffersV1, ContentSourceV1};
 use crate::cow::{
     build_canonical_directory_borrowed_v1, preflight_canonical_tree_v1, CanonicalTreeChildV1,
     CanonicalTreeEntryV1, DirectoryBuildModeV1, DirectoryLogicalIdentityV1, TreePageSummaryV1,
@@ -28,11 +28,11 @@ use crate::limits::{
 use crate::{CoreError, CoreResult};
 
 use crate::lifecycle::{
-    c3_admission_traversal_resident_bytes_v1, c3_storage_envelope_v1, run_c3_lifecycle_v1,
-    BuiltDirectoryRecordV1, BuiltFileRecordV1, C3HandoffV1, C3LifecycleControlV1,
-    C3LifecyclePlanV1, C3OperationBuffersV1, C3OperationErrorV1, C3PreparedCandidateV1,
-    C3QualificationCreateGrantV1, C3StorageOperationV1, C3StorageSessionPortV1, SharedC3ControlV1,
-    VersionSummaryInputV1, C3_MAX_STORAGE_RECORDS_V1,
+    admission_traversal_resident_bytes_v1, run_lifecycle_v1, storage_envelope_v1,
+    BuiltDirectoryRecordV1, BuiltFileRecordV1, CreateOperationGrantV1, LifecycleControlV1,
+    LifecyclePlanV1, OperationBuffersV1, OperationErrorV1, OperationHandoffV1, PreparedCandidateV1,
+    SharedOperationControlV1, StorageOperationV1, StorageSessionPortV1, VersionSummaryInputV1,
+    MAX_STORAGE_RECORDS_V1,
 };
 const DEFAULT_METADATA_RESERVATION_BYTES: u64 = 1_048_576;
 const DEFAULT_EXPLICIT_DIRECTORY_MODE: u16 = 0o755;
@@ -58,7 +58,7 @@ fn global_seen_capacity_v1(maximum_objects: u64) -> CoreResult<u32> {
     u32::try_from(capacity).map_err(|_| CoreError::CountCap)
 }
 
-pub(crate) trait C3SourceSupplierV1 {
+pub(crate) trait SourceSupplierV1 {
     type Source: ContentSourceV1;
 
     /// Side-effect-free bound queried only after the root grant is held.
@@ -69,14 +69,14 @@ pub(crate) trait C3SourceSupplierV1 {
 /// One file in a bounded, canonically ordered private C3 tree operation.
 /// The source is retained by the caller and is not read until the complete
 /// manifest has passed path, type, count, and memory preflight.
-pub(crate) struct C3TreeFileV1<'path, S> {
+pub(crate) struct TreeFileV1<'path, S> {
     path: &'path [u8],
     mode: u16,
     declared_len: u64,
     supplier: Option<S>,
 }
 
-impl<'path, S> C3TreeFileV1<'path, S> {
+impl<'path, S> TreeFileV1<'path, S> {
     pub(crate) const fn new(path: &'path [u8], mode: u16, declared_len: u64, source: S) -> Self {
         Self {
             path,
@@ -88,20 +88,20 @@ impl<'path, S> C3TreeFileV1<'path, S> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_create_v1<S, C>(
-    grant: C3QualificationCreateGrantV1<'_>,
-    algorithm: C3CdcAlgorithmV1,
+pub(crate) fn run_create_v1<S, C>(
+    grant: CreateOperationGrantV1<'_>,
+    algorithm: CdcAlgorithmV1,
     name: &[u8],
     mode: u16,
     declared_len: u64,
     supplier: S,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
-    S: C3SourceSupplierV1,
-    C: C3LifecycleControlV1 + ?Sized,
+    S: SourceSupplierV1,
+    C: LifecycleControlV1 + ?Sized,
 {
     let mut operation = grant.into_operation();
     let (component, maximum_records_u32, global_seen_capacity, supplier_resident, storage_resident) =
@@ -121,7 +121,7 @@ where
                 let maximum_records = maximum_refs
                     .checked_add(4)
                     .ok_or(CoreError::IntegerOverflow)?;
-                if maximum_records > C3_MAX_STORAGE_RECORDS_V1 {
+                if maximum_records > MAX_STORAGE_RECORDS_V1 {
                     return Err(CoreError::CountCap.into());
                 }
                 let maximum_records_u32 =
@@ -137,7 +137,7 @@ where
                     return Err(CoreError::ResourceRefused.into());
                 }
 
-                operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+                operation.declare_storage_envelope_v1(storage_envelope_v1(
                     maximum_records,
                     maximum_records,
                     maximum_refs,
@@ -151,7 +151,8 @@ where
                 // The final conservative envelope is live before the first
                 // supplier callback. No preparation path exists in this stage.
                 let supplier_resident = supplier.resident_memory_bound_bytes()?;
-                let storage_resident = operation.storage_resident_plan_v1(false)?;
+                let storage_resident =
+                    operation.storage_resident_plan_v1(false, maximum_records_u32)?;
                 let port_resident = supplier_resident
                     .checked_add(storage_resident.total_resident_bytes_v1())
                     .ok_or(CoreError::IntegerOverflow)?;
@@ -169,7 +170,7 @@ where
                     )?
                     .charge(
                         MemoryComponentV1::PageSummaries,
-                        c3_admission_traversal_resident_bytes_v1()?
+                        admission_traversal_resident_bytes_v1()?
                             .max(core::mem::size_of_val(buffers.tree_pages) as u64),
                     )?
                     .charge(
@@ -197,9 +198,9 @@ where
             },
         )?;
 
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
@@ -214,9 +215,9 @@ where
             if source.resident_memory_bound_bytes()? > supplier_resident {
                 return Err(CoreError::ResourceRefused.into());
             }
-            let mut cdc_control = SharedC3ControlV1::new(control_cell);
+            let mut cdc_control = SharedOperationControlV1::new(control_cell);
             let (references, sink) = storage.content_parts_v1();
-            let file = create_file_c3_borrowed_v1(
+            let file = create_file_borrowed_v1(
                 name,
                 mode,
                 declared_len,
@@ -263,7 +264,7 @@ where
             )?;
             let completed = storage.complete_v1(version)?;
             let reference_spool_bytes = storage.reference_storage_bytes_v1()?;
-            Ok(C3PreparedCandidateV1::new(
+            Ok(PreparedCandidateV1::new(
                 version,
                 tree.physical(),
                 completed,
@@ -274,7 +275,7 @@ where
 }
 
 #[derive(Clone, Copy, Default)]
-struct C3TreePreflightV1 {
+struct TreePreflightV1 {
     directory_entry_count: u64,
     tree_object_count: u64,
     directory_count: u64,
@@ -282,7 +283,7 @@ struct C3TreePreflightV1 {
     maximum_page_summary_count: u32,
 }
 
-impl C3TreePreflightV1 {
+impl TreePreflightV1 {
     fn add_child(&mut self, child: Self) -> CoreResult<()> {
         self.directory_entry_count = self
             .directory_entry_count
@@ -316,7 +317,7 @@ fn path_component_at(path: &[u8], prefix_len: usize) -> CoreResult<(&[u8], bool)
 }
 
 fn directory_group_end<S>(
-    files: &[C3TreeFileV1<'_, S>],
+    files: &[TreeFileV1<'_, S>],
     start: usize,
     end: usize,
     prefix_len: usize,
@@ -340,7 +341,7 @@ struct ManifestPreflightFrameV1 {
     prefix_len: usize,
     cursor: usize,
     entry_count: u64,
-    result: C3TreePreflightV1,
+    result: TreePreflightV1,
 }
 
 impl ManifestPreflightFrameV1 {
@@ -351,7 +352,7 @@ impl ManifestPreflightFrameV1 {
             prefix_len,
             cursor: start,
             entry_count: 0,
-            result: C3TreePreflightV1 {
+            result: TreePreflightV1 {
                 directory_entry_count: 0,
                 tree_object_count: 0,
                 directory_count: 0,
@@ -361,7 +362,7 @@ impl ManifestPreflightFrameV1 {
         }
     }
 
-    fn finish(mut self) -> CoreResult<C3TreePreflightV1> {
+    fn finish(mut self) -> CoreResult<TreePreflightV1> {
         if self.cursor != self.end || self.start > self.end {
             return Err(CoreError::Truncated);
         }
@@ -400,11 +401,11 @@ impl ManifestPreflightFrameV1 {
 }
 
 fn preflight_manifest_directory_v1<S>(
-    files: &[C3TreeFileV1<'_, S>],
+    files: &[TreeFileV1<'_, S>],
     start: usize,
     end: usize,
     prefix_len: usize,
-) -> CoreResult<C3TreePreflightV1> {
+) -> CoreResult<TreePreflightV1> {
     // This pass intentionally uses an explicit fixed-capacity stack. A legal
     // 256-component path must not depend on the platform's native call-stack
     // size, and an invalid 257th component has already been rejected by
@@ -486,7 +487,7 @@ fn manifest_build_stack_resident_bytes_v1() -> CoreResult<u64> {
 }
 
 fn manifest_directory_entry_count_v1<S>(
-    files: &[C3TreeFileV1<'_, S>],
+    files: &[TreeFileV1<'_, S>],
     start: usize,
     end: usize,
     prefix_len: usize,
@@ -503,7 +504,7 @@ fn manifest_directory_entry_count_v1<S>(
 }
 
 fn new_manifest_build_frame_v1<'path, S>(
-    files: &[C3TreeFileV1<'path, S>],
+    files: &[TreeFileV1<'path, S>],
     start: usize,
     end: usize,
     prefix_len: usize,
@@ -530,7 +531,7 @@ fn new_manifest_build_frame_v1<'path, S>(
 
 #[allow(clippy::too_many_arguments)]
 fn build_manifest_directory_v1<'path, S, P>(
-    files: &[C3TreeFileV1<'path, S>],
+    files: &[TreeFileV1<'path, S>],
     storage: &mut P,
     start: usize,
     end: usize,
@@ -542,7 +543,7 @@ fn build_manifest_directory_v1<'path, S, P>(
     page_scratch: &mut [Option<TreePageSummaryV1>],
 ) -> CoreResult<crate::cow::CanonicalDirectoryTreeV1>
 where
-    P: C3StorageSessionPortV1 + ?Sized,
+    P: StorageSessionPortV1 + ?Sized,
 {
     let mut frames = Vec::new();
     frames
@@ -641,17 +642,17 @@ where
 /// zero or more files. All manifest validation and the sole operation-slot
 /// reservation happen before the first supplier is invoked.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_create_tree_v1<S, C>(
-    mut operation: C3StorageOperationV1<'_>,
-    algorithm: C3CdcAlgorithmV1,
-    files: &mut [C3TreeFileV1<'_, S>],
-    buffers: C3OperationBuffersV1<'_>,
+pub(crate) fn run_create_tree_v1<S, C>(
+    mut operation: StorageOperationV1<'_>,
+    algorithm: CdcAlgorithmV1,
+    files: &mut [TreeFileV1<'_, S>],
+    buffers: OperationBuffersV1<'_>,
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
-    S: C3SourceSupplierV1,
-    C: C3LifecycleControlV1 + ?Sized,
+    S: SourceSupplierV1,
+    C: LifecycleControlV1 + ?Sized,
 {
     let (
         canonical_len,
@@ -713,7 +714,7 @@ where
                 .ok_or(CoreError::IntegerOverflow)?;
             validate_total_object_count(maximum_objects)?;
             let global_seen_capacity = global_seen_capacity_v1(maximum_objects)?;
-            let maximum_records = maximum_objects.min(C3_MAX_STORAGE_RECORDS_V1);
+            let maximum_records = maximum_objects.min(MAX_STORAGE_RECORDS_V1);
             let maximum_records_u32 =
                 u32::try_from(maximum_records).map_err(|_| CoreError::IntegerOverflow)?;
             let required_traversal_bytes = closure_traversal_bytes_v1(maximum_objects)?;
@@ -725,7 +726,7 @@ where
                 return Err(CoreError::ResourceRefused.into());
             }
 
-            operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+            operation.declare_storage_envelope_v1(storage_envelope_v1(
                 maximum_objects,
                 maximum_objects,
                 maximum_refs_per_version,
@@ -744,7 +745,7 @@ where
                 maximum_source_resident =
                     maximum_source_resident.max(supplier.resident_memory_bound_bytes()?);
             }
-            let storage_resident = operation.storage_resident_plan_v1(true)?;
+            let storage_resident = operation.storage_resident_plan_v1(true, maximum_records_u32)?;
             // `files` and its path bytes are caller-owned immutable
             // manifest input. Charge LayerFS-created views and borrowed
             // ports without relabelling caller storage as slot allocation.
@@ -767,7 +768,7 @@ where
                 })
                 .ok_or(CoreError::IntegerOverflow)?;
             let traversal_phase_resident =
-                c3_admission_traversal_resident_bytes_v1()?.max(tree_build_resident);
+                admission_traversal_resident_bytes_v1()?.max(tree_build_resident);
             let plan = OperationMemoryPlanV1::empty()
                 .charge(MemoryComponentV1::SourceWindow, buffers.source.len() as u64)?
                 .charge(MemoryComponentV1::CdcRing, buffers.cdc_ring.len() as u64)?
@@ -808,9 +809,9 @@ where
         },
     )?;
 
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: true,
@@ -837,9 +838,9 @@ where
                 {
                     return Err(CoreError::ResourceRefused.into());
                 }
-                let mut cdc_control = SharedC3ControlV1::new(control_cell);
+                let mut cdc_control = SharedOperationControlV1::new(control_cell);
                 let (references, sink) = storage.content_parts_v1();
-                let prepared = create_file_c3_borrowed_v1(
+                let prepared = create_file_borrowed_v1(
                     file.path,
                     file.mode,
                     file.declared_len,
@@ -882,7 +883,7 @@ where
             let summary = storage.built_version_summary_v1(
                 canonical_len,
                 counters,
-                &mut SharedC3ControlV1::new(control_cell),
+                &mut SharedOperationControlV1::new(control_cell),
             )?;
             let version = storage.write_version_v1(
                 derive_version_v1(logical_root),
@@ -891,7 +892,7 @@ where
                 counters,
             )?;
             let completed = storage.complete_v1(version)?;
-            Ok(C3PreparedCandidateV1::new(
+            Ok(PreparedCandidateV1::new(
                 version,
                 tree.physical(),
                 completed,
@@ -910,7 +911,7 @@ mod tests {
     };
     use crate::cdc::{CdcControlV1, MAXIMUM_CHUNK_BYTES};
     use crate::format::PhysicalObjectKindV1;
-    use crate::lifecycle::request_c3_tree_operation_v1;
+    use crate::lifecycle::{request_create_operation_v1, request_tree_operation_v1};
     use crate::object::TypedPhysicalObjectIdV1;
     use crate::pack::MAX_PACK_BYTES;
     use std::fs::{self, OpenOptions};
@@ -975,7 +976,7 @@ mod tests {
         cas: &'a FsCasV1,
     }
 
-    impl<'a> C3SourceSupplierV1 for EmptyShapeSupplier<'a> {
+    impl<'a> SourceSupplierV1 for EmptyShapeSupplier<'a> {
         type Source = FragmentedSource<'static>;
 
         fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -993,7 +994,7 @@ mod tests {
         }
     }
 
-    impl<'a> C3SourceSupplierV1 for FragmentedSupplier<'a> {
+    impl<'a> SourceSupplierV1 for FragmentedSupplier<'a> {
         type Source = FragmentedSource<'a>;
 
         fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
@@ -1024,6 +1025,176 @@ mod tests {
     }
 
     impl FsCasControlV1 for ContinueControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    struct PreparationNamespaceControlV1 {
+        preparation: PathBuf,
+        carrier_phases: Vec<Vec<String>>,
+        marker_phases: Vec<Vec<String>>,
+        receipt_spool_high_water: u64,
+        receipt_spool_name: Option<String>,
+        carrier_receipt_starts: Vec<u64>,
+        carrier_receipt_high_waters: Vec<u64>,
+    }
+
+    const LOCATOR_RECEIPT_RECORD_BYTES_V1: u64 = 184;
+
+    impl PreparationNamespaceControlV1 {
+        fn new(root: &std::path::Path) -> Self {
+            Self {
+                preparation: root.join("preparation"),
+                carrier_phases: Vec::new(),
+                marker_phases: Vec::new(),
+                receipt_spool_high_water: 0,
+                receipt_spool_name: None,
+                carrier_receipt_starts: Vec::new(),
+                carrier_receipt_high_waters: Vec::new(),
+            }
+        }
+
+        fn snapshot_v1(&mut self, carrier_start: bool) -> Vec<String> {
+            let mut receipt_spool = None;
+            let mut names = fs::read_dir(&self.preparation)
+                .expect("preparation directory")
+                .map(|entry| {
+                    let entry = entry.expect("preparation entry");
+                    let name = entry
+                        .file_name()
+                        .into_string()
+                        .expect("ASCII preparation name");
+                    if name.starts_with("locator-receipts-") {
+                        let len = entry.metadata().expect("receipt metadata").len();
+                        assert!(receipt_spool.replace((name.clone(), len)).is_none());
+                        self.receipt_spool_high_water = self.receipt_spool_high_water.max(len);
+                    }
+                    name
+                })
+                .collect::<Vec<_>>();
+            names.sort();
+            let (receipt_spool_name, receipt_spool_len) =
+                receipt_spool.expect("one operation-owned locator receipt spool");
+            assert_eq!(
+                receipt_spool_len % LOCATOR_RECEIPT_RECORD_BYTES_V1,
+                0,
+                "every physical receipt-spool observation is record-aligned"
+            );
+            match self.receipt_spool_name.as_deref() {
+                Some(expected) => assert_eq!(receipt_spool_name, expected),
+                None => self.receipt_spool_name = Some(receipt_spool_name),
+            }
+            if carrier_start {
+                self.carrier_receipt_starts.push(receipt_spool_len);
+                self.carrier_receipt_high_waters.push(receipt_spool_len);
+            } else {
+                let high_water = self
+                    .carrier_receipt_high_waters
+                    .last_mut()
+                    .expect("carrier start precedes locator publication");
+                *high_water = (*high_water).max(receipt_spool_len);
+            }
+            names
+        }
+
+        fn assert_exact_namespace_lifetime_v1(
+            &self,
+            expected_high_water: u64,
+            counters: &OperationCountersV1,
+        ) {
+            assert_eq!(
+                counters.storage_preparation_inodes_high_water, expected_high_water,
+                "compatibility counter measures logical namespace entries"
+            );
+            assert!(!self.carrier_phases.is_empty());
+            assert!(!self.marker_phases.is_empty());
+            for carrier in &self.carrier_phases {
+                assert_eq!(carrier.len() as u64, expected_high_water);
+                for marker in &self.marker_phases {
+                    assert_eq!(marker.len() as u64, expected_high_water);
+                    assert_eq!(
+                        carrier.iter().filter(|name| marker.contains(name)).count() as u64,
+                        expected_high_water - 1,
+                        "the private carrier and private marker names are phase-local"
+                    );
+                }
+            }
+            assert_eq!(
+                self.receipt_spool_high_water,
+                counters.locator_installs * LOCATOR_RECEIPT_RECORD_BYTES_V1,
+                "one real file-backed receipt record per installed locator"
+            );
+        }
+
+        fn assert_receipt_spool_reused_across_carriers_v1(&self, counters: &OperationCountersV1) {
+            assert!(self.carrier_receipt_starts.len() >= 2);
+            assert_eq!(
+                self.carrier_receipt_starts.len(),
+                self.carrier_receipt_high_waters.len()
+            );
+            assert_eq!(self.carrier_receipt_starts[0], 0);
+            assert_eq!(
+                self.carrier_receipt_starts[1], 0,
+                "the same operation spool is reset before carrier two"
+            );
+            assert!(self.carrier_receipt_high_waters[0] > 0);
+            assert!(self.carrier_receipt_high_waters[1] > 0);
+
+            let maximum_carrier_receipts = self
+                .carrier_receipt_high_waters
+                .iter()
+                .copied()
+                .max()
+                .unwrap()
+                / LOCATOR_RECEIPT_RECORD_BYTES_V1;
+            assert_eq!(
+                self.receipt_spool_high_water,
+                maximum_carrier_receipts * LOCATOR_RECEIPT_RECORD_BYTES_V1
+            );
+            let observed_operation_receipts = self
+                .carrier_receipt_high_waters
+                .iter()
+                .map(|bytes| bytes / LOCATOR_RECEIPT_RECORD_BYTES_V1)
+                .sum::<u64>();
+            assert_eq!(observed_operation_receipts, counters.locator_installs);
+            assert!(
+                self.receipt_spool_high_water
+                    < counters.locator_installs * LOCATOR_RECEIPT_RECORD_BYTES_V1,
+                "physical receipt storage is one carrier maximum, not the operation total"
+            );
+        }
+    }
+
+    impl CdcControlV1 for PreparationNamespaceControlV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationNamespaceControlV1 {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            match boundary {
+                FsCasBoundaryV1::BeforeCarrierInstall => {
+                    let snapshot = self.snapshot_v1(true);
+                    self.carrier_phases.push(snapshot);
+                }
+                FsCasBoundaryV1::AfterObjectLocatorMarkerLink => {
+                    let snapshot = self.snapshot_v1(false);
+                    self.marker_phases.push(snapshot);
+                }
+                _ => {}
+            }
+        }
+
         fn cancellation_requested(&mut self) -> bool {
             false
         }
@@ -1101,6 +1272,107 @@ mod tests {
         fn deadline_exceeded(&mut self) -> bool {
             false
         }
+    }
+
+    #[test]
+    fn non_tree_operation_reaches_six_live_preparation_namespace_entries() {
+        let fixture = TestRoot::new();
+        let cas = FsCasV1::create_new(&fixture.0).expect("create FsCas");
+        let bytes = b"namespace-envelope";
+        let mut counters = OperationCountersV1::default();
+        let mut source_window = [0_u8; MAXIMUM_CHUNK_BYTES];
+        let mut cdc_ring = [0_u8; MAXIMUM_CHUNK_BYTES];
+        let mut incoming = [0_u8; COMPARISON_WINDOW_BYTES];
+        let mut occupied = [0_u8; COMPARISON_WINDOW_BYTES];
+        let mut tree_object = [0_u8; MAX_TREE_OBJECT_BYTES];
+        let mut tree_pages = vec![None::<TreePageSummaryV1>; crate::cow::MAX_TREE_PAGE_SUMMARIES];
+        let mut traversal = vec![0_u8; 64 * 1024];
+        let mut control = PreparationNamespaceControlV1::new(&fixture.0);
+        let operation = request_create_operation_v1(&cas, 6, &mut counters, &mut control).unwrap();
+
+        let handoff = run_create_v1(
+            operation,
+            CdcAlgorithmV1::FastCdc,
+            b"file.bin",
+            0o644,
+            bytes.len() as u64,
+            FragmentedSupplier {
+                bytes,
+                maximum_read: bytes.len(),
+                cas: &cas,
+            },
+            OperationBuffersV1 {
+                source: &mut source_window,
+                cdc_ring: &mut cdc_ring,
+                incoming_comparison: &mut incoming,
+                occupied_comparison: &mut occupied,
+                tree_object: &mut tree_object,
+                tree_pages: &mut tree_pages,
+                traversal_state: &mut traversal,
+            },
+            &mut control,
+            &mut counters,
+        )
+        .unwrap_or_else(|error| panic!("{error:?}; {counters:#?}"));
+
+        assert_eq!(handoff.carrier_count(), 1);
+        control.assert_exact_namespace_lifetime_v1(6, &counters);
+        assert_eq!(
+            fs::read_dir(fixture.0.join("preparation")).unwrap().count(),
+            0
+        );
+    }
+
+    #[test]
+    fn tree_operation_reaches_eight_live_preparation_namespace_entries() {
+        let fixture = TestRoot::new();
+        let cas = FsCasV1::create_new(&fixture.0).expect("create FsCas");
+        let bytes = b"tree-namespace-envelope";
+        let mut files = [TreeFileV1::new(
+            b"file.bin",
+            0o644,
+            bytes.len() as u64,
+            FragmentedSupplier {
+                bytes,
+                maximum_read: bytes.len(),
+                cas: &cas,
+            },
+        )];
+        let mut counters = OperationCountersV1::default();
+        let mut source_window = [0_u8; MAXIMUM_CHUNK_BYTES];
+        let mut cdc_ring = [0_u8; MAXIMUM_CHUNK_BYTES];
+        let mut incoming = [0_u8; COMPARISON_WINDOW_BYTES];
+        let mut occupied = [0_u8; COMPARISON_WINDOW_BYTES];
+        let mut tree_object = [0_u8; MAX_TREE_OBJECT_BYTES];
+        let mut tree_pages = vec![None::<TreePageSummaryV1>; crate::cow::MAX_TREE_PAGE_SUMMARIES];
+        let mut traversal = vec![0_u8; 64 * 1024];
+        let mut control = PreparationNamespaceControlV1::new(&fixture.0);
+        let operation = request_tree_operation_v1(&cas, 8, &mut counters, &mut control).unwrap();
+
+        let handoff = run_create_tree_v1(
+            operation,
+            CdcAlgorithmV1::FastCdc,
+            &mut files,
+            OperationBuffersV1 {
+                source: &mut source_window,
+                cdc_ring: &mut cdc_ring,
+                incoming_comparison: &mut incoming,
+                occupied_comparison: &mut occupied,
+                tree_object: &mut tree_object,
+                tree_pages: &mut tree_pages,
+                traversal_state: &mut traversal,
+            },
+            &mut control,
+            &mut counters,
+        )
+        .unwrap_or_else(|error| panic!("{error:?}; {counters:#?}"));
+
+        assert_eq!(handoff.carrier_count(), 1);
+        control.assert_exact_namespace_lifetime_v1(8, &counters);
+        assert_eq!(
+            fs::read_dir(fixture.0.join("preparation")).unwrap().count(),
+            0
+        );
     }
 
     #[test]
@@ -1300,7 +1572,7 @@ mod tests {
             0x8a51_e349_c072_6dbf,
         );
         let mut files = [
-            C3TreeFileV1::new(
+            TreeFileV1::new(
                 b"a-shared.bin",
                 0o644,
                 shared.len() as u64,
@@ -1310,7 +1582,7 @@ mod tests {
                     cas: &cas,
                 },
             ),
-            C3TreeFileV1::new(
+            TreeFileV1::new(
                 b"b-large.bin",
                 0o644,
                 large.len() as u64,
@@ -1320,7 +1592,7 @@ mod tests {
                     cas: &cas,
                 },
             ),
-            C3TreeFileV1::new(
+            TreeFileV1::new(
                 b"z-shared-again.bin",
                 0o644,
                 shared.len() as u64,
@@ -1339,14 +1611,14 @@ mod tests {
         let mut tree_object = [0_u8; MAX_TREE_OBJECT_BYTES];
         let mut tree_pages = [None::<TreePageSummaryV1>; crate::cow::MAX_TREE_PAGE_SUMMARIES];
         let mut traversal = vec![0_u8; 64 * 1024];
-        let mut control = ContinueControl;
-        let operation = request_c3_tree_operation_v1(&cas, 1, &mut counters, &mut control).unwrap();
+        let mut control = PreparationNamespaceControlV1::new(&fixture.0);
+        let operation = request_tree_operation_v1(&cas, 1, &mut counters, &mut control).unwrap();
 
-        let result = run_c3_create_tree_v1(
+        let result = run_create_tree_v1(
             operation,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             &mut files,
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -1361,6 +1633,7 @@ mod tests {
         .unwrap_or_else(|error| panic!("{error:?}; {counters:#?}"));
 
         assert!(result.carrier_count() >= 2, "real rollover was required");
+        control.assert_receipt_spool_reused_across_carriers_v1(&counters);
         assert_eq!(
             counters.carrier_rollovers,
             u64::from(result.carrier_rollovers())
@@ -1424,6 +1697,30 @@ mod tests {
         );
         assert_eq!(cas.operation_admitted_slots_v1(), 0);
         assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters
+                .storage_bytes_released
+                .checked_add(counters.storage_bytes_committed)
+                .and_then(|value| value.checked_add(counters.storage_bytes_retained))
+                .unwrap()
+        );
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters
+                .storage_inodes_released
+                .checked_add(counters.storage_inodes_committed)
+                .and_then(|value| value.checked_add(counters.storage_inodes_retained))
+                .unwrap()
+        );
+        assert_eq!(
             fs::read_dir(fixture.0.join("preparation"))
                 .expect("preparation directory")
                 .count(),
@@ -1441,7 +1738,7 @@ mod tests {
             0x8a51_e349_c072_6dbf,
         );
         let mut files = [
-            C3TreeFileV1::new(
+            TreeFileV1::new(
                 b"a-shared.bin",
                 0o644,
                 shared.len() as u64,
@@ -1451,7 +1748,7 @@ mod tests {
                     cas: &cas,
                 },
             ),
-            C3TreeFileV1::new(
+            TreeFileV1::new(
                 b"b-large.bin",
                 0o644,
                 large.len() as u64,
@@ -1461,7 +1758,7 @@ mod tests {
                     cas: &cas,
                 },
             ),
-            C3TreeFileV1::new(
+            TreeFileV1::new(
                 b"z-shared-again.bin",
                 0o644,
                 shared.len() as u64,
@@ -1485,13 +1782,13 @@ mod tests {
             corrupted_locator_count: 0,
             corrupted: false,
         };
-        let operation = request_c3_tree_operation_v1(&cas, 2, &mut counters, &mut control).unwrap();
+        let operation = request_tree_operation_v1(&cas, 2, &mut counters, &mut control).unwrap();
 
-        let result = run_c3_create_tree_v1(
+        let result = run_create_tree_v1(
             operation,
-            C3CdcAlgorithmV1::FastCdc,
+            CdcAlgorithmV1::FastCdc,
             &mut files,
-            C3OperationBuffersV1 {
+            OperationBuffersV1 {
                 source: &mut source_window,
                 cdc_ring: &mut cdc_ring,
                 incoming_comparison: &mut incoming,
@@ -1506,7 +1803,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(C3OperationErrorV1::FsCas(FsCasErrorV1::MalformedOccupant))
+            Err(OperationErrorV1::FsCas(FsCasErrorV1::MalformedOccupant))
         );
         assert!(control.corrupted_locator_count > 0);
         assert_eq!(cas.operation_admitted_slots_v1(), 0);
@@ -1536,7 +1833,7 @@ mod tests {
             let mut files = paths
                 .iter()
                 .map(|path| {
-                    C3TreeFileV1::new(
+                    TreeFileV1::new(
                         path,
                         0o644,
                         0,
@@ -1558,13 +1855,13 @@ mod tests {
             let mut traversal = vec![0_u8; 64 * 1024];
             let mut control = ContinueControl;
             let operation =
-                request_c3_tree_operation_v1(&cas, 3, &mut counters, &mut control).unwrap();
+                request_tree_operation_v1(&cas, 3, &mut counters, &mut control).unwrap();
 
-            let result = run_c3_create_tree_v1(
+            let result = run_create_tree_v1(
                 operation,
-                C3CdcAlgorithmV1::FastCdc,
+                CdcAlgorithmV1::FastCdc,
                 &mut files,
-                C3OperationBuffersV1 {
+                OperationBuffersV1 {
                     source: &mut source_window,
                     cdc_ring: &mut cdc_ring,
                     incoming_comparison: &mut incoming,
@@ -1647,7 +1944,7 @@ mod tests {
             let mut traversal = vec![0_u8; 64 * 1024];
             let mut control = ContinueControl;
             let mut files = [
-                C3TreeFileV1::new(
+                TreeFileV1::new(
                     b"alpha.bin",
                     0o644,
                     alpha.len() as u64,
@@ -1657,7 +1954,7 @@ mod tests {
                         cas: &cas,
                     },
                 ),
-                C3TreeFileV1::new(
+                TreeFileV1::new(
                     b"dir/beta.bin",
                     0o600,
                     beta.len() as u64,
@@ -1667,7 +1964,7 @@ mod tests {
                         cas: &cas,
                     },
                 ),
-                C3TreeFileV1::new(
+                TreeFileV1::new(
                     b"dir/nested/gamma.bin",
                     0o644,
                     gamma.len() as u64,
@@ -1677,7 +1974,7 @@ mod tests {
                         cas: &cas,
                     },
                 ),
-                C3TreeFileV1::new(
+                TreeFileV1::new(
                     b"omega.bin",
                     0o644,
                     omega.len() as u64,
@@ -1689,12 +1986,12 @@ mod tests {
                 ),
             ];
             let operation =
-                request_c3_tree_operation_v1(&cas, 4, &mut counters, &mut control).unwrap();
-            let result = run_c3_create_tree_v1(
+                request_tree_operation_v1(&cas, 4, &mut counters, &mut control).unwrap();
+            let result = run_create_tree_v1(
                 operation,
-                C3CdcAlgorithmV1::FastCdc,
+                CdcAlgorithmV1::FastCdc,
                 &mut files,
-                C3OperationBuffersV1 {
+                OperationBuffersV1 {
                     source: &mut source_window,
                     cdc_ring: &mut cdc_ring,
                     incoming_comparison: &mut incoming,

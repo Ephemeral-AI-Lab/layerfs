@@ -314,3 +314,98 @@ fn decode_global_seen_record_v1(
         ),
     })
 }
+
+#[cfg(all(test, feature = "operation-polymorphism"))]
+mod tests {
+    use super::{
+        global_seen_hash_v1, FileGlobalSeenSpoolV1, GlobalSeenErrorV1,
+        GLOBAL_SEEN_MAXIMUM_PROBES_PER_LOOKUP_V1,
+    };
+    use crate::cas::fs::ContinueFsCasControlV1;
+    use crate::cas::FsCasV1;
+    use crate::identity::PhysicalChunkIdV1;
+    use crate::object::TypedPhysicalObjectIdV1;
+    use crate::CoreError;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn chunk_id(seed: u64) -> TypedPhysicalObjectIdV1 {
+        let mut digest = [0_u8; 32];
+        digest[..8].copy_from_slice(&seed.to_be_bytes());
+        TypedPhysicalObjectIdV1::Chunk(PhysicalChunkIdV1::from_digest(digest))
+    }
+
+    #[test]
+    fn file_backed_index_reaches_the_real_maximum_collision_probe() {
+        const CAPACITY: u32 = 512;
+        const INSERTIONS: usize = 256;
+        let target = chunk_id(u64::MAX);
+        let mask = u64::from(CAPACITY - 1);
+        let target_bucket = global_seen_hash_v1(target) & mask;
+        let mut colliding = Vec::with_capacity(INSERTIONS);
+        let mut seed = 0_u64;
+        while colliding.len() < INSERTIONS {
+            let candidate = chunk_id(seed);
+            seed = seed.checked_add(1).unwrap();
+            if candidate != target
+                && global_seen_hash_v1(candidate) & mask == target_bucket
+                && !colliding.contains(&candidate)
+            {
+                colliding.push(candidate);
+            }
+        }
+
+        let parent = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = parent.join(format!(
+            "layerfs-locator-index-collision-{}-{timestamp}",
+            std::process::id()
+        ));
+        let cas = FsCasV1::create_new(&root).unwrap();
+        let mut control = ContinueFsCasControlV1;
+        let storage = cas
+            .begin_operation_spool_v1("locator-index-collision", &mut control)
+            .unwrap();
+        let mut index = FileGlobalSeenSpoolV1::new(storage);
+        index
+            .initialize_controlled_v1(CAPACITY, &mut control)
+            .unwrap();
+
+        for (ordinal, id) in colliding.iter().copied().enumerate() {
+            let lookup = index.lookup(id, &mut control).unwrap();
+            assert!(lookup.record.is_none());
+            index
+                .insert_controlled_v1(
+                    lookup.vacant_slot,
+                    id,
+                    super::GlobalSeenRecordV1 {
+                        complete_len: 1,
+                        private_payload_offset: ordinal as u64,
+                        carrier_ordinal: ordinal as u32,
+                    },
+                    &mut control,
+                )
+                .unwrap();
+        }
+
+        assert!(matches!(
+            index.lookup(target, &mut control),
+            Err(GlobalSeenErrorV1::Core(CoreError::CountCap))
+        ));
+        let (lookups, probes, maximum_probe, count) = index.work_observation();
+        assert_eq!(lookups, u64::from(INSERTIONS as u32) + 1);
+        let expected_probes = (INSERTIONS as u64 * (INSERTIONS as u64 + 1)) / 2
+            + u64::from(GLOBAL_SEEN_MAXIMUM_PROBES_PER_LOOKUP_V1);
+        assert_eq!(probes, expected_probes);
+        assert_eq!(maximum_probe, GLOBAL_SEEN_MAXIMUM_PROBES_PER_LOOKUP_V1);
+        assert_eq!(count, INSERTIONS as u32);
+
+        index.cleanup_controlled_v1(&mut control).unwrap();
+        drop(index);
+        drop(cas);
+        fs::remove_dir_all(root).unwrap();
+    }
+}

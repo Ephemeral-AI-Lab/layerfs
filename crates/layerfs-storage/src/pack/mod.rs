@@ -14,7 +14,7 @@ use crate::format::{
 use crate::identity::{
     FramedHasherV1, ObjectChecksumV1, PackIdV1, PhysicalChunkIdV1, PhysicalFileIdV1,
     PhysicalSymlinkIdV1, PhysicalTreeIdV1, PhysicalVersionRecordIdV1, ProfileId,
-    COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1, TAG_OBJECT_CHECKSUM, TAG_PACK,
+    COMPARISON_WINDOW_BYTES, DIGEST_BYTES, IDENTITY_HASHER_BYTES_V1, TAG_OBJECT_CHECKSUM, TAG_PACK,
 };
 #[cfg(test)]
 use crate::limits::ResourceLedgerV1;
@@ -29,17 +29,17 @@ use crate::object::{
 use crate::profile::ProfileSpecV1;
 use crate::{CoreError, CoreResult};
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 use crate::cas::FsPackAdmissionOutcomeV1;
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 mod complete_writer;
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 mod operation_index;
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) use complete_writer::DirectPackSinkV1;
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) use operation_index::FilePackIndexSpoolV1;
 
 pub const PACK_HEADER_BYTES: u64 = 64;
@@ -55,7 +55,7 @@ const OBJECT_HEADER_BYTES: u64 = 52;
 
 /// Pack-owned result of a complete bounded carrier sequence. Lifecycle sees
 /// only this immutable summary, never a concrete writer or carrier handle.
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[derive(Clone, Copy)]
 pub(crate) struct CompletedPackSetV1 {
     pub(crate) last_sealed: SealedPackV1,
@@ -67,7 +67,7 @@ pub(crate) struct CompletedPackSetV1 {
     pub(crate) index_spool_bytes: OptionalU64ObservationV1,
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 impl CompletedPackSetV1 {
     pub(crate) const fn last_sealed(self) -> SealedPackV1 {
         self.last_sealed
@@ -226,7 +226,7 @@ pub trait PackIndexSpoolV1 {
     /// default. This is an internal transitional bridge: the semantic pack
     /// port still returns its bounded portable error, while the FsCas owner
     /// can preserve exact filesystem provenance at the adapter boundary.
-    #[cfg(any(test, feature = "c3-polymorphism"))]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     #[doc(hidden)]
     fn take_storage_error_typed_v1(&mut self) -> Option<crate::cas::FsCasErrorV1> {
         None
@@ -318,6 +318,35 @@ impl SealedPackV1 {
     pub const fn index_offset(self) -> u64 {
         self.index_offset
     }
+}
+
+/// Decode only the immutable shape fields needed after a private pack has
+/// already passed complete validation. This deliberately preserves the
+/// private-seal I/O order without repeating full validation work.
+pub(crate) fn read_sealed_pack_shape_v1<P>(pack: &mut P) -> CoreResult<SealedPackV1>
+where
+    P: PackReadPortV1 + ?Sized,
+{
+    let pack_len = pack.len().map_err(map_read_port)?;
+    if pack_len < PACK_HEADER_BYTES + PACK_TRAILER_BYTES {
+        return Err(CoreError::PackInvalid);
+    }
+    let mut header = [0_u8; PACK_HEADER_BYTES as usize];
+    pack.read_exact_at(0, &mut header).map_err(map_read_port)?;
+    let record_count = be_u32(&header[48..52]);
+    let index_offset = be_u64(&header[56..64]);
+    let digest_offset = pack_len
+        .checked_sub(DIGEST_BYTES as u64)
+        .ok_or(CoreError::PackInvalid)?;
+    let mut digest = [0_u8; DIGEST_BYTES];
+    pack.read_exact_at(digest_offset, &mut digest)
+        .map_err(map_read_port)?;
+    Ok(SealedPackV1::from_validated_parts(
+        PackIdV1::from_digest(digest),
+        pack_len,
+        record_count,
+        index_offset,
+    ))
 }
 
 /// Checked location of one canonical object inside a validated dense pack.
@@ -709,7 +738,7 @@ where
     )
 }
 
-#[cfg(any(test, feature = "c3-polymorphism"))]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 pub(crate) fn validate_pack_borrowed_v1<P, M>(
     pack: &mut P,
     metadata: &mut M,
@@ -1327,6 +1356,36 @@ const _: () = assert!(MAX_PHYSICAL_OBJECT_BYTES < u32::MAX as u64);
 mod port_error_mapping_tests {
     use super::*;
 
+    struct ShapeReadPortV1 {
+        bytes: [u8; 144],
+        reads: Vec<(u64, usize)>,
+    }
+
+    impl PackReadPortV1 for ShapeReadPortV1 {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn len(&mut self) -> Result<u64, PackPortErrorV1> {
+            Ok(self.bytes.len() as u64)
+        }
+
+        fn read_exact_at(
+            &mut self,
+            offset: u64,
+            destination: &mut [u8],
+        ) -> Result<(), PackPortErrorV1> {
+            let start = usize::try_from(offset).map_err(|_| PackPortErrorV1::Failure)?;
+            let end = start
+                .checked_add(destination.len())
+                .ok_or(PackPortErrorV1::Failure)?;
+            destination
+                .copy_from_slice(self.bytes.get(start..end).ok_or(PackPortErrorV1::Failure)?);
+            self.reads.push((offset, destination.len()));
+            Ok(())
+        }
+    }
+
     #[test]
     fn read_and_write_ports_preserve_control_and_resource_causes() {
         assert_eq!(
@@ -1346,5 +1405,26 @@ mod port_error_mapping_tests {
             assert_eq!(map_read_port(port_error), expected);
             assert_eq!(map_write_port(port_error), expected);
         }
+    }
+
+    #[test]
+    fn sealed_shape_decoder_preserves_exact_output_and_read_order() {
+        let mut bytes = [0_u8; 144];
+        bytes[48..52].copy_from_slice(&7_u32.to_be_bytes());
+        bytes[56..64].copy_from_slice(&96_u64.to_be_bytes());
+        let digest = [0xa5_u8; DIGEST_BYTES];
+        bytes[112..144].copy_from_slice(&digest);
+        let mut port = ShapeReadPortV1 {
+            bytes,
+            reads: Vec::new(),
+        };
+
+        let sealed = read_sealed_pack_shape_v1(&mut port).unwrap();
+
+        assert_eq!(sealed.id(), PackIdV1::from_digest(digest));
+        assert_eq!(sealed.pack_len(), 144);
+        assert_eq!(sealed.record_count(), 7);
+        assert_eq!(sealed.index_offset(), 96);
+        assert_eq!(port.reads, [(0, 64), (112, 32)]);
     }
 }

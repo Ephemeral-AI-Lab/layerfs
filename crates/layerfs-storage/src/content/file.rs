@@ -17,7 +17,7 @@ use crate::identity::{
     LogicalFileHasherV1, LogicalFileIdentityV1, PhysicalChunkIdV1, PhysicalFileIdV1,
     IDENTITY_HASHER_BYTES_V1, TAG_PHYSICAL_CHUNK, TAG_PHYSICAL_FILE,
 };
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 use crate::limits::OperationReservationV1;
 #[cfg(test)]
 use crate::limits::ResourceLedgerV1;
@@ -288,9 +288,9 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn create_file_c3_borrowed_v1<S, O, R, C>(
+pub(crate) fn create_file_borrowed_v1<S, O, R, C>(
     path: &[u8],
     mode: u16,
     declared_len: u64,
@@ -300,7 +300,7 @@ pub(crate) fn create_file_c3_borrowed_v1<S, O, R, C>(
     buffers: ContentBuffersV1<'_>,
     control: &mut C,
     reservation: &OperationReservationV1<'_>,
-    algorithm: crate::cdc::C3CdcAlgorithmV1,
+    algorithm: crate::cdc::CdcAlgorithmV1,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<PreparedFileV1>
 where
@@ -352,14 +352,14 @@ where
 #[derive(Clone, Copy)]
 enum ContentCdcV1 {
     FastCdc,
-    #[cfg(feature = "c3-polymorphism")]
-    Selected(crate::cdc::C3CdcAlgorithmV1),
+    #[cfg(feature = "operation-polymorphism")]
+    Selected(crate::cdc::CdcAlgorithmV1),
 }
 
 enum ContentCdcStreamV1<'ring> {
     FastCdc(crate::cdc::FastCdcV1Stream<'ring>),
-    #[cfg(feature = "c3-polymorphism")]
-    Selected(crate::cdc::C3CdcStreamV1<'ring>),
+    #[cfg(feature = "operation-polymorphism")]
+    Selected(crate::cdc::CdcStreamV1<'ring>),
 }
 
 impl ContentCdcV1 {
@@ -372,7 +372,7 @@ impl ContentCdcV1 {
             Self::FastCdc => FastCdcV1::new()
                 .stream(ring, control)
                 .map(ContentCdcStreamV1::FastCdc),
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             Self::Selected(algorithm) => algorithm
                 .stream(ring, control)
                 .map(ContentCdcStreamV1::Selected),
@@ -389,7 +389,7 @@ impl ContentCdcStreamV1<'_> {
     ) -> CoreResult<()> {
         match self {
             Self::FastCdc(stream) => stream.push(fragment, control, consumer),
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             Self::Selected(stream) => stream.push(fragment, control, consumer),
         }
     }
@@ -401,7 +401,7 @@ impl ContentCdcStreamV1<'_> {
     ) -> CoreResult<()> {
         match self {
             Self::FastCdc(stream) => stream.finish(control, consumer),
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             Self::Selected(stream) => stream.finish(control, consumer),
         }
     }
@@ -409,12 +409,12 @@ impl ContentCdcStreamV1<'_> {
     fn counters(&self) -> crate::cdc::CdcStreamCountersV1 {
         match self {
             Self::FastCdc(stream) => stream.counters(),
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             Self::Selected(stream) => stream.counters(),
         }
     }
 
-    #[cfg(feature = "c3-polymorphism")]
+    #[cfg(feature = "operation-polymorphism")]
     fn seqcdc_counters(&self) -> Option<crate::cdc::SeqCdcCountersV1> {
         match self {
             Self::FastCdc(_) => None,
@@ -501,7 +501,7 @@ where
                 Ok(())
             })();
             consumer.counters.add_cdc_stream(stream.counters())?;
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             if let Some(seqcdc) = stream.seqcdc_counters() {
                 consumer.counters.add_seqcdc(seqcdc)?;
             }

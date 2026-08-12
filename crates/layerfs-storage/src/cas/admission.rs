@@ -15,8 +15,8 @@ use crate::cdc::{
     CdcSourceErrorV1, ChunkBoundaryV1, ContinueCdcControlV1, FastCdcV1, FastCdcV1Stream,
     MAXIMUM_CHUNK_BYTES,
 };
-#[cfg(feature = "c3-polymorphism")]
-use crate::cdc::{C3CdcAlgorithmV1, C3CdcStreamV1};
+#[cfg(feature = "operation-polymorphism")]
+use crate::cdc::{CdcAlgorithmV1, CdcStreamV1};
 use crate::format::{
     DirectoryModeContext, ExtentTagV1, PhysicalTreeChildKindV1, TreeSubtypeV1, ValidatedComponent,
     ValidatedSymlinkTarget, MAX_PATH_DEPTH, MAX_TREE_PAGE_DEPTH,
@@ -49,8 +49,8 @@ const ADMISSION_DIRECTORY_STACK_CAPACITY_V1: usize = MAX_PATH_DEPTH + 1;
 #[derive(Clone, Copy)]
 enum ClosureCdcV1 {
     FastCdc,
-    #[cfg(feature = "c3-polymorphism")]
-    Selected(C3CdcAlgorithmV1),
+    #[cfg(feature = "operation-polymorphism")]
+    Selected(CdcAlgorithmV1),
 }
 
 impl ClosureCdcV1 {
@@ -63,7 +63,7 @@ impl ClosureCdcV1 {
             Self::FastCdc => FastCdcV1::new()
                 .stream(ring, control)
                 .map(ClosureCdcStreamV1::FastCdc),
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             Self::Selected(algorithm) => algorithm
                 .stream(ring, control)
                 .map(ClosureCdcStreamV1::Selected),
@@ -73,8 +73,8 @@ impl ClosureCdcV1 {
 
 enum ClosureCdcStreamV1<'ring> {
     FastCdc(FastCdcV1Stream<'ring>),
-    #[cfg(feature = "c3-polymorphism")]
-    Selected(C3CdcStreamV1<'ring>),
+    #[cfg(feature = "operation-polymorphism")]
+    Selected(CdcStreamV1<'ring>),
 }
 
 impl ClosureCdcStreamV1<'_> {
@@ -86,7 +86,7 @@ impl ClosureCdcStreamV1<'_> {
     ) -> CoreResult<()> {
         match self {
             Self::FastCdc(stream) => stream.push(fragment, control, consumer),
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             Self::Selected(stream) => stream.push(fragment, control, consumer),
         }
     }
@@ -98,7 +98,7 @@ impl ClosureCdcStreamV1<'_> {
     ) -> CoreResult<()> {
         match self {
             Self::FastCdc(stream) => stream.finish(control, consumer),
-            #[cfg(feature = "c3-polymorphism")]
+            #[cfg(feature = "operation-polymorphism")]
             Self::Selected(stream) => stream.finish(control, consumer),
         }
     }
@@ -162,7 +162,7 @@ where
     )
 }
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn admit_complete_immutable_borrowed_v1<C, O, S>(
     closure: &mut C,
@@ -172,7 +172,7 @@ pub(crate) fn admit_complete_immutable_borrowed_v1<C, O, S>(
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
     buffers: AdmissionBuffersV1<'_>,
-    algorithm: C3CdcAlgorithmV1,
+    algorithm: CdcAlgorithmV1,
 ) -> CoreResult<AdmittedClosureV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,

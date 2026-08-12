@@ -6,33 +6,34 @@
 //! pack, locator, and closure implementations remain below their private
 //! ports.
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 mod preparation;
 
-#[cfg(feature = "c3-polymorphism")]
+#[cfg(feature = "operation-polymorphism")]
 pub(crate) use preparation::{
-    C3OperationPreparationV1, C3PreparationErrorV1, FileBuiltDirectorySpoolV1,
-    FileBuiltFileSpoolV1, FileChunkReferenceSpoolV1,
+    FileBuiltDirectorySpoolV1, FileBuiltFileSpoolV1, FileChunkReferenceSpoolV1,
+    OperationPreparationV1, PreparationErrorV1,
 };
 
 use std::cell::RefCell;
 
 use crate::cas::{
     authenticate_base_root_storage_v1, begin_storage_session_v1, complete_closure_fence_storage_v1,
-    AdmissionBuffersV1, C3StorageSessionV1, ClosureFenceStorageOutcomeV1, FsCasBoundaryV1,
-    FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasV1, FsClosureAdmissionErrorV1,
-    FsOperationCapabilityV1, FsOperationKindV1, FsOperationObservedControlV1,
-    FsPackAdmissionOutcomeV1, FsStorageEnvelopeV1, FsStorageOperationTokenV1, CATALOG_MARKER_BYTES,
-    CLOSURE_MARKER_BYTES, GLOBAL_SEEN_RECORD_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
+    locator_publication_receipt_preparation_bytes_bound_v1, AdmissionBuffersV1,
+    ClosureFenceStorageOutcomeV1, FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1,
+    FsCasErrorV1, FsCasV1, FsClosureAdmissionErrorV1, FsOperationCapabilityV1, FsOperationKindV1,
+    FsOperationObservedControlV1, FsPackAdmissionOutcomeV1, FsStorageEnvelopeV1,
+    FsStorageOperationTokenV1, StorageSessionV1, CATALOG_MARKER_BYTES, CLOSURE_MARKER_BYTES,
+    GLOBAL_SEEN_RECORD_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
 };
-use crate::cdc::{C3CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
+use crate::cdc::{CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
 use crate::content::update::{
-    authenticate_base_file_evidence_v1, reencode_file_metadata_c3_borrowed_v1,
-    update_file_c3_borrowed_v1, AuthenticatedBaseByteReaderV1, BaseChunkEvidenceSourceV1,
+    authenticate_base_file_evidence_v1, reencode_file_metadata_borrowed_v1,
+    update_file_borrowed_v1, AuthenticatedBaseByteReaderV1, BaseChunkEvidenceSourceV1,
     UpdateBuffersV1, MAX_UPDATE_RESYNCHRONIZATION_BYTES,
 };
 use crate::content::{
-    replace_file_c3_borrowed_v1, ChunkReferenceSpoolV1, ContentBuffersV1, ContentSourceV1,
+    replace_file_borrowed_v1, ChunkReferenceSpoolV1, ContentBuffersV1, ContentSourceV1,
     PreparedObjectSinkV1,
 };
 use crate::cow::file::{AuthenticatedBaseFileV1, UpdateRangeV1};
@@ -73,7 +74,36 @@ const BUILT_DIRECTORY_PREPARATION_BYTES_V1: u64 = 40;
 const FILE_EXTENT_CANONICAL_BYTES_V1: u64 = 36;
 const FILE_FIXED_CANONICAL_BYTES_V1: u64 = 23;
 const PACK_OBJECT_RECORD_BYTES_V1: u64 = 52;
-const FIXED_PREPARATION_INODES_V1: u64 = 6;
+// The preparation namespace has five base spools that remain open for the
+// operation lifetime. A storage-session phase adds one private carrier path;
+// the later marker-publication phase uses one private marker path instead of
+// that carrier path. The two optional tree spools remain open whenever tree
+// storage is requested. Keep these phase names explicit: the fixed count is
+// not a guess about how many prefixes happen to exist in one test.
+const NAMED_NON_TREE_PREPARATION_SPOOLS_V1: u64 = 5;
+const NAMED_PRIVATE_PACK_PREPARATION_PATH_V1: u64 = 1;
+const NAMED_MARKER_PREPARATION_PATH_V1: u64 = 1;
+const NAMED_TREE_PREPARATION_SPOOLS_V1: u64 = 2;
+const FIXED_PREPARATION_NAMESPACE_ENTRIES_V1: u64 =
+    NAMED_NON_TREE_PREPARATION_SPOOLS_V1 + NAMED_PRIVATE_PACK_PREPARATION_PATH_V1;
+
+fn maximum_simultaneous_preparation_names_v1(require_tree_storage: bool) -> CoreResult<u64> {
+    let tree_names = if require_tree_storage {
+        NAMED_TREE_PREPARATION_SPOOLS_V1
+    } else {
+        0
+    };
+    let long_lived = NAMED_NON_TREE_PREPARATION_SPOOLS_V1
+        .checked_add(tree_names)
+        .ok_or(CoreError::IntegerOverflow)?;
+    let storage_session = long_lived
+        .checked_add(NAMED_PRIVATE_PACK_PREPARATION_PATH_V1)
+        .ok_or(CoreError::IntegerOverflow)?;
+    let marker_publication = long_lived
+        .checked_add(NAMED_MARKER_PREPARATION_PATH_V1)
+        .ok_or(CoreError::IntegerOverflow)?;
+    Ok(storage_session.max(marker_publication))
+}
 
 fn checked_ceil_div_v1(numerator: u64, denominator: u64) -> CoreResult<u64> {
     if denominator == 0 {
@@ -109,6 +139,123 @@ mod storage_envelope_tests {
     use super::*;
 
     #[test]
+    fn locator_receipt_spool_high_water_is_checked_and_charged() {
+        let record_bytes = (PERSISTENT_LOCATOR_BYTES_V1 + 24) as u64;
+        assert_eq!(record_bytes, 184);
+        assert_eq!(
+            locator_publication_receipt_preparation_bytes_bound_v1(1),
+            Ok(record_bytes)
+        );
+        assert_eq!(
+            locator_publication_receipt_preparation_bytes_bound_v1(25_600),
+            Ok(25_600 * 184)
+        );
+        assert_eq!(
+            locator_publication_receipt_preparation_bytes_bound_v1(MAX_PACK_RECORDS as u64),
+            Ok(466_032 * 184)
+        );
+        assert_eq!(
+            locator_publication_receipt_preparation_bytes_bound_v1(u64::MAX),
+            Err(CoreError::IntegerOverflow)
+        );
+    }
+
+    #[test]
+    fn preparation_namespace_entry_envelope_uses_the_phase_maximum() {
+        assert_eq!(
+            NAMED_NON_TREE_PREPARATION_SPOOLS_V1, 5,
+            "references, pack-index, closure, global-seen, and locator receipts"
+        );
+        assert_eq!(NAMED_PRIVATE_PACK_PREPARATION_PATH_V1, 1);
+        assert_eq!(NAMED_MARKER_PREPARATION_PATH_V1, 1);
+        assert_eq!(NAMED_TREE_PREPARATION_SPOOLS_V1, 2);
+        assert_eq!(FIXED_PREPARATION_NAMESPACE_ENTRIES_V1, 6);
+        assert_eq!(maximum_simultaneous_preparation_names_v1(false), Ok(6));
+        assert_eq!(maximum_simultaneous_preparation_names_v1(true), Ok(8));
+        assert_eq!(
+            FIXED_PREPARATION_NAMESPACE_ENTRIES_V1 + NAMED_TREE_PREPARATION_SPOOLS_V1,
+            maximum_simultaneous_preparation_names_v1(true).unwrap()
+        );
+    }
+
+    #[test]
+    fn total_storage_envelope_decomposes_receipts_and_all_other_components() {
+        let maximum_candidate_objects = 7_u64;
+        let maximum_new_objects = 5_u64;
+        let maximum_chunk_references = 11_u64;
+        let maximum_files = 2_u64;
+        let maximum_tree_objects = 3_u64;
+        let maximum_logical_payload_bytes = 1_000_u64;
+        let global_seen_capacity = 16_u32;
+
+        let receipts = locator_publication_receipt_preparation_bytes_bound_v1(5).unwrap();
+        let references = maximum_chunk_references * CHUNK_REFERENCE_PREPARATION_BYTES_V1;
+        let index = maximum_new_objects * PACK_INDEX_ENTRY_BYTES;
+        let closure = maximum_candidate_objects * CLOSURE_OBJECT_PREPARATION_BYTES_V1;
+        let seen = u64::from(global_seen_capacity) * GLOBAL_SEEN_RECORD_BYTES;
+        let tree = maximum_files * BUILT_FILE_PREPARATION_BYTES_V1
+            + maximum_tree_objects * BUILT_DIRECTORY_PREPARATION_BYTES_V1;
+        let marker = PERSISTENT_LOCATOR_BYTES_V1
+            .max(CATALOG_MARKER_BYTES)
+            .max(CLOSURE_MARKER_BYTES) as u64;
+        let preparation_bytes =
+            references + index + closure + seen + tree + receipts + MAX_PACK_BYTES + marker;
+
+        let file_metadata = maximum_chunk_references * FILE_EXTENT_CANONICAL_BYTES_V1
+            + maximum_files * (OBJECT_HEADER_BYTES + FILE_FIXED_CANONICAL_BYTES_V1);
+        let tree_metadata = maximum_tree_objects * MAX_TREE_OBJECT_BYTES as u64;
+        let canonical_bytes = maximum_logical_payload_bytes
+            + file_metadata
+            + tree_metadata
+            + OBJECT_HEADER_BYTES
+            + VERSION_RECORD_PAYLOAD_BYTES;
+        let pack_content_bytes = canonical_bytes
+            + maximum_new_objects * (PACK_OBJECT_RECORD_BYTES_V1 + PACK_INDEX_ENTRY_BYTES);
+        let maximum_carriers = 2_u64;
+        let immutable_bytes = pack_content_bytes
+            + maximum_carriers * (PACK_HEADER_BYTES + PACK_TRAILER_BYTES)
+            + maximum_new_objects * PERSISTENT_LOCATOR_BYTES_V1 as u64
+            + maximum_carriers * CATALOG_MARKER_BYTES as u64
+            + CLOSURE_MARKER_BYTES as u64;
+        let immutable_namespace_entries = maximum_new_objects + maximum_carriers * 2 + 2;
+
+        assert_eq!(receipts, 5 * 184);
+        assert_eq!(
+            storage_envelope_v1(
+                maximum_candidate_objects,
+                maximum_new_objects,
+                maximum_chunk_references,
+                maximum_files,
+                maximum_tree_objects,
+                maximum_logical_payload_bytes,
+                global_seen_capacity,
+                true,
+            ),
+            FsStorageEnvelopeV1::new(
+                preparation_bytes,
+                immutable_bytes,
+                8,
+                immutable_namespace_entries,
+            )
+        );
+    }
+
+    #[test]
+    fn total_storage_envelope_rejects_checked_aggregate_overflow_at_receipts() {
+        let index = PACK_INDEX_ENTRY_BYTES;
+        let maximum_candidate_objects = (u64::MAX - index) / CLOSURE_OBJECT_PREPARATION_BYTES_V1;
+        let closure = maximum_candidate_objects * CLOSURE_OBJECT_PREPARATION_BYTES_V1;
+        let before_receipts = index.checked_add(closure).unwrap();
+        let receipts = locator_publication_receipt_preparation_bytes_bound_v1(1).unwrap();
+        assert_eq!(receipts, 184);
+        assert!(before_receipts.checked_add(receipts).is_none());
+        assert_eq!(
+            storage_envelope_v1(maximum_candidate_objects, 1, 0, 0, 0, 0, 0, false,),
+            Err(CoreError::IntegerOverflow)
+        );
+    }
+
+    #[test]
     fn update_payload_envelope_covers_predecessor_insert_and_rejoin_window() {
         let window = MAXIMUM_CHUNK_BYTES as u64 + MAX_UPDATE_RESYNCHRONIZATION_BYTES;
         assert_eq!(
@@ -137,7 +284,7 @@ mod storage_envelope_tests {
 /// while only `maximum_new_objects` and their canonical bytes can become new
 /// immutable namespace state.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn c3_storage_envelope_v1(
+pub(crate) fn storage_envelope_v1(
     maximum_candidate_objects: u64,
     maximum_new_objects: u64,
     maximum_chunk_references: u64,
@@ -152,6 +299,8 @@ pub(crate) fn c3_storage_envelope_v1(
     }
 
     let maximum_pack_records = maximum_new_objects.min(MAX_PACK_RECORDS);
+    let locator_receipt_preparation =
+        locator_publication_receipt_preparation_bytes_bound_v1(maximum_pack_records)?;
     let reference_preparation = maximum_chunk_references
         .checked_mul(CHUNK_REFERENCE_PREPARATION_BYTES_V1)
         .ok_or(CoreError::IntegerOverflow)?;
@@ -187,6 +336,7 @@ pub(crate) fn c3_storage_envelope_v1(
         .and_then(|bytes| bytes.checked_add(closure_preparation))
         .and_then(|bytes| bytes.checked_add(seen_preparation))
         .and_then(|bytes| bytes.checked_add(tree_preparation))
+        .and_then(|bytes| bytes.checked_add(locator_receipt_preparation))
         .and_then(|bytes| bytes.checked_add(MAX_PACK_BYTES))
         .and_then(|bytes| bytes.checked_add(marker_preparation))
         .ok_or(CoreError::IntegerOverflow)?;
@@ -247,9 +397,7 @@ pub(crate) fn c3_storage_envelope_v1(
         .and_then(|bytes| bytes.checked_add(catalog_bytes))
         .and_then(|bytes| bytes.checked_add(CLOSURE_MARKER_BYTES as u64))
         .ok_or(CoreError::IntegerOverflow)?;
-    let preparation_inodes = FIXED_PREPARATION_INODES_V1
-        .checked_add(u64::from(require_tree_storage) * 2)
-        .ok_or(CoreError::IntegerOverflow)?;
+    let preparation_inodes = maximum_simultaneous_preparation_names_v1(require_tree_storage)?;
     let immutable_inodes = maximum_new_objects
         .checked_add(
             maximum_carriers
@@ -287,7 +435,7 @@ fn candidate_global_seen_capacity_v1(maximum_objects: u64) -> CoreResult<u32> {
     u32::try_from(capacity).map_err(|_| CoreError::CountCap)
 }
 
-fn check_lifecycle_control_v1<C: C3LifecycleControlV1 + ?Sized>(control: &mut C) -> CoreResult<()> {
+fn check_lifecycle_control_v1<C: LifecycleControlV1 + ?Sized>(control: &mut C) -> CoreResult<()> {
     if FsCasControlV1::cancellation_requested(control) {
         Err(CoreError::Cancelled)
     } else if FsCasControlV1::deadline_exceeded(control) {
@@ -297,30 +445,30 @@ fn check_lifecycle_control_v1<C: C3LifecycleControlV1 + ?Sized>(control: &mut C)
     }
 }
 
-pub(crate) const C3_MAX_STORAGE_RECORDS_V1: u64 = crate::pack::MAX_PACK_RECORDS;
+pub(crate) const MAX_STORAGE_RECORDS_V1: u64 = crate::pack::MAX_PACK_RECORDS;
 
-pub(crate) fn c3_admission_traversal_resident_bytes_v1() -> CoreResult<u64> {
+pub(crate) fn admission_traversal_resident_bytes_v1() -> CoreResult<u64> {
     crate::cas::admission_traversal_resident_bytes_v1()
 }
 
 /// Lifecycle-level control contract. Content code does not depend on the
 /// concrete filesystem CAS control surface; the root lifecycle adapter is the
 /// sole bridge to both CDC and durable storage cancellation/fault boundaries.
-pub(crate) trait C3LifecycleControlV1: CdcControlV1 + FsCasControlV1 {}
+pub(crate) trait LifecycleControlV1: CdcControlV1 + FsCasControlV1 {}
 
-impl<T> C3LifecycleControlV1 for T where T: CdcControlV1 + FsCasControlV1 + ?Sized {}
+impl<T> LifecycleControlV1 for T where T: CdcControlV1 + FsCasControlV1 + ?Sized {}
 
-pub(crate) struct SharedC3ControlV1<'cell, 'control, C: ?Sized> {
+pub(crate) struct SharedOperationControlV1<'cell, 'control, C: ?Sized> {
     inner: &'cell RefCell<&'control mut C>,
 }
 
-impl<'cell, 'control, C: ?Sized> SharedC3ControlV1<'cell, 'control, C> {
+impl<'cell, 'control, C: ?Sized> SharedOperationControlV1<'cell, 'control, C> {
     pub(crate) fn new(inner: &'cell RefCell<&'control mut C>) -> Self {
         Self { inner }
     }
 }
 
-impl<C: CdcControlV1 + ?Sized> CdcControlV1 for SharedC3ControlV1<'_, '_, C> {
+impl<C: CdcControlV1 + ?Sized> CdcControlV1 for SharedOperationControlV1<'_, '_, C> {
     fn cancellation_requested(&mut self) -> bool {
         (**self.inner.borrow_mut()).cancellation_requested()
     }
@@ -330,7 +478,7 @@ impl<C: CdcControlV1 + ?Sized> CdcControlV1 for SharedC3ControlV1<'_, '_, C> {
     }
 }
 
-impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedC3ControlV1<'_, '_, C> {
+impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedOperationControlV1<'_, '_, C> {
     fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
         (**self.inner.borrow_mut()).boundary_reached(boundary);
     }
@@ -368,6 +516,14 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedC3ControlV1<'_, '_, C>
     }
 
     #[cfg(test)]
+    fn inject_carrier_receipt_transition_failure_v1(
+        &mut self,
+        check: crate::cas::CarrierReceiptTransitionCheckV1,
+    ) -> Option<crate::cas::FsCasErrorV1> {
+        (**self.inner.borrow_mut()).inject_carrier_receipt_transition_failure_v1(check)
+    }
+
+    #[cfg(test)]
     fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_operation_terminal_unwind_after_release()
     }
@@ -398,6 +554,11 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedC3ControlV1<'_, '_, C>
     }
 
     #[cfg(test)]
+    fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<crate::cas::FsCasErrorV1> {
+        (**self.inner.borrow_mut()).inject_operation_spool_precharge_failure_v1()
+    }
+
+    #[cfg(test)]
     fn inject_counted_pack_read_observation_overflow(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_counted_pack_read_observation_overflow()
     }
@@ -421,11 +582,12 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedC3ControlV1<'_, '_, C>
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct C3PreparationResidentBoundsV1 {
+pub(crate) struct PreparationResidentBoundsV1 {
     pub(crate) references: u64,
     pub(crate) metadata: u64,
     pub(crate) closure_objects: u64,
     pub(crate) global_seen: u64,
+    pub(crate) locator_receipts: u64,
     pub(crate) built_files: Option<u64>,
     pub(crate) built_directories: Option<u64>,
 }
@@ -434,13 +596,14 @@ pub(crate) struct C3PreparationResidentBoundsV1 {
 /// lifecycle. Content orchestration may charge the aggregate, but cannot name
 /// or construct concrete preparation, carrier, locator, or closure adapters.
 #[derive(Clone, Copy)]
-pub(crate) struct C3StorageResidentPlanV1 {
-    preparation: C3PreparationResidentBoundsV1,
+pub(crate) struct StorageResidentPlanV1 {
+    preparation: PreparationResidentBoundsV1,
     private_storage: u64,
+    locator_receipts: u64,
     total: u64,
 }
 
-impl C3StorageResidentPlanV1 {
+impl StorageResidentPlanV1 {
     pub(crate) const fn total_resident_bytes_v1(self) -> u64 {
         self.total
     }
@@ -490,7 +653,7 @@ impl VersionSummaryInputV1 {
 
 /// Narrow lifecycle storage port borrowed by content orchestration. It
 /// deliberately exposes no filesystem, carrier, locator, or closure types.
-pub(crate) trait C3StorageSessionPortV1 {
+pub(crate) trait StorageSessionPortV1 {
     fn content_parts_v1(
         &mut self,
     ) -> (
@@ -513,7 +676,7 @@ pub(crate) trait C3StorageSessionPortV1 {
         root_tree: PhysicalTreeIdV1,
         counters: &mut OperationCountersV1,
         control: &mut dyn FsCasControlV1,
-    ) -> Result<VersionSummaryInputV1, C3OperationErrorV1>;
+    ) -> Result<VersionSummaryInputV1, OperationErrorV1>;
     fn write_version_v1(
         &mut self,
         version_id: VersionIdV1,
@@ -535,16 +698,16 @@ pub(crate) trait C3StorageSessionPortV1 {
 
 /// Opaque, non-cloneable root-owned operation capability. Lifecycle is the
 /// only owner that can turn an admitted ticket into preparation and handoff.
-pub(crate) struct C3StorageOperationV1<'root> {
+pub(crate) struct StorageOperationV1<'root> {
     capability: FsOperationCapabilityV1<'root>,
 }
 
-pub(crate) struct C3QualificationCreateGrantV1<'root> {
-    operation: C3StorageOperationV1<'root>,
+pub(crate) struct CreateOperationGrantV1<'root> {
+    operation: StorageOperationV1<'root>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum C3MutationOperationKindV1 {
+pub(crate) enum MutationOperationKindV1 {
     Replace,
     Update,
     Add,
@@ -553,7 +716,7 @@ pub(crate) enum C3MutationOperationKindV1 {
     Metadata,
 }
 
-impl C3MutationOperationKindV1 {
+impl MutationOperationKindV1 {
     const fn storage_kind_v1(self) -> FsOperationKindV1 {
         match self {
             Self::Replace => FsOperationKindV1::CompleteReplace,
@@ -570,18 +733,18 @@ impl C3MutationOperationKindV1 {
 /// cancellation key are the complete phase-one ticket; no typed mutation
 /// request, base root, edit path, source, sink, bound, or policy is inspected
 /// until this function succeeds.
-pub(crate) fn request_c3_mutation_operation_v1<'root, C>(
+pub(crate) fn request_mutation_operation_v1<'root, C>(
     cas: &'root FsCasV1,
-    kind: C3MutationOperationKindV1,
+    kind: MutationOperationKindV1,
     cancellation_key: u64,
     counters: &mut OperationCountersV1,
     control: &mut C,
-) -> Result<C3StorageOperationV1<'root>, FsCasErrorV1>
+) -> Result<StorageOperationV1<'root>, FsCasErrorV1>
 where
     C: FsCasControlV1 + ?Sized,
 {
     control.boundary_reached(FsCasBoundaryV1::BeforeOperationSlotReservationRequest);
-    Ok(C3StorageOperationV1 {
+    Ok(StorageOperationV1 {
         capability: cas.begin_operation_capability_v1(
             kind.storage_kind_v1(),
             cancellation_key,
@@ -591,18 +754,18 @@ where
     })
 }
 
-pub(crate) fn request_c3_create_qualification_v1<'root, C>(
+pub(crate) fn request_create_operation_v1<'root, C>(
     cas: &'root FsCasV1,
     cancellation_key: u64,
     counters: &mut OperationCountersV1,
     control: &mut C,
-) -> Result<C3QualificationCreateGrantV1<'root>, FsCasErrorV1>
+) -> Result<CreateOperationGrantV1<'root>, FsCasErrorV1>
 where
     C: FsCasControlV1 + ?Sized,
 {
     control.boundary_reached(FsCasBoundaryV1::BeforeOperationSlotReservationRequest);
-    Ok(C3QualificationCreateGrantV1 {
-        operation: C3StorageOperationV1 {
+    Ok(CreateOperationGrantV1 {
+        operation: StorageOperationV1 {
             capability: cas.begin_operation_capability_v1(
                 FsOperationKindV1::CompleteC3File,
                 cancellation_key,
@@ -613,17 +776,17 @@ where
     })
 }
 
-pub(crate) fn request_c3_tree_operation_v1<'root, C>(
+pub(crate) fn request_tree_operation_v1<'root, C>(
     cas: &'root FsCasV1,
     cancellation_key: u64,
     counters: &mut OperationCountersV1,
     control: &mut C,
-) -> Result<C3StorageOperationV1<'root>, FsCasErrorV1>
+) -> Result<StorageOperationV1<'root>, FsCasErrorV1>
 where
     C: FsCasControlV1 + ?Sized,
 {
     control.boundary_reached(FsCasBoundaryV1::BeforeOperationSlotReservationRequest);
-    Ok(C3StorageOperationV1 {
+    Ok(StorageOperationV1 {
         capability: cas.begin_operation_capability_v1(
             FsOperationKindV1::CompleteC3Tree,
             cancellation_key,
@@ -633,13 +796,13 @@ where
     })
 }
 
-impl<'root> C3QualificationCreateGrantV1<'root> {
-    pub(crate) fn into_operation(self) -> C3StorageOperationV1<'root> {
+impl<'root> CreateOperationGrantV1<'root> {
+    pub(crate) fn into_operation(self) -> StorageOperationV1<'root> {
         self.operation
     }
 }
 
-impl C3StorageOperationV1<'_> {
+impl StorageOperationV1<'_> {
     pub(crate) fn require_operation_kind_v1(
         &self,
         expected: FsOperationKindV1,
@@ -674,16 +837,16 @@ impl C3StorageOperationV1<'_> {
     /// Any typed error or unwind after the root grant is balanced through the
     /// same explicit storage/admission terminal path used by full lifecycle;
     /// the capability remains live on success and is then consumed by
-    /// `run_c3_lifecycle_v1`.
+    /// `run_lifecycle_v1`.
     pub(crate) fn run_preparation_free_stage_v1<T, C, F>(
         &mut self,
         counters: &mut OperationCountersV1,
         control: &mut C,
         body: F,
-    ) -> Result<T, C3OperationErrorV1>
+    ) -> Result<T, OperationErrorV1>
     where
-        C: C3LifecycleControlV1 + ?Sized,
-        F: FnOnce(&mut Self, &mut OperationCountersV1, &mut C) -> Result<T, C3OperationErrorV1>,
+        C: LifecycleControlV1 + ?Sized,
+        F: FnOnce(&mut Self, &mut OperationCountersV1, &mut C) -> Result<T, OperationErrorV1>,
     {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             body(self, counters, control)
@@ -708,7 +871,7 @@ impl C3StorageOperationV1<'_> {
                         // attempted; do not replace this cause with a string
                         // panic.
                         drop(payload);
-                        Err(C3OperationErrorV1::FsCas(terminal))
+                        Err(OperationErrorV1::FsCas(terminal))
                     }
                     Err(terminal_payload) => {
                         // Both payloads are non-typed. Resume the initiating
@@ -767,7 +930,7 @@ impl C3StorageOperationV1<'_> {
         counters: &mut OperationCountersV1,
         comparison: &mut [u8; COMPARISON_WINDOW_BYTES],
         control: &mut C,
-    ) -> Result<u64, C3OperationErrorV1>
+    ) -> Result<u64, OperationErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -785,7 +948,8 @@ impl C3StorageOperationV1<'_> {
     pub(crate) fn storage_resident_plan_v1(
         &self,
         require_tree_storage: bool,
-    ) -> Result<C3StorageResidentPlanV1, CoreError> {
+        _maximum_records: u32,
+    ) -> Result<StorageResidentPlanV1, CoreError> {
         let owner = self.capability.owner_ref_v1();
         let references = owner.operation_spool_resident_memory_bound_v1("chunk-references")?;
         let metadata = owner.operation_spool_resident_memory_bound_v1("pack-index")?;
@@ -799,11 +963,14 @@ impl C3StorageOperationV1<'_> {
             .transpose()?;
         let private_storage = owner.private_pack_resident_memory_bound_v1()?;
         let occupied = owner.occupied_resident_memory_bound_v1()?;
-        let preparation = C3PreparationResidentBoundsV1 {
+        let locator_receipts =
+            owner.operation_spool_resident_memory_bound_v1("locator-receipts")?;
+        let preparation = PreparationResidentBoundsV1 {
             references,
             metadata,
             closure_objects,
             global_seen,
+            locator_receipts,
             built_files,
             built_directories,
         };
@@ -815,10 +982,12 @@ impl C3StorageOperationV1<'_> {
             .and_then(|bytes| bytes.checked_add(built_directories.unwrap_or(0)))
             .and_then(|bytes| bytes.checked_add(private_storage))
             .and_then(|bytes| bytes.checked_add(occupied))
+            .and_then(|bytes| bytes.checked_add(locator_receipts))
             .ok_or(CoreError::IntegerOverflow)?;
-        Ok(C3StorageResidentPlanV1 {
+        Ok(StorageResidentPlanV1 {
             preparation,
             private_storage,
+            locator_receipts,
             total,
         })
     }
@@ -826,13 +995,13 @@ impl C3StorageOperationV1<'_> {
     fn begin_preparation_v1<C>(
         &self,
         global_seen_capacity: u32,
-        bounds: C3PreparationResidentBoundsV1,
+        bounds: PreparationResidentBoundsV1,
         control: &mut C,
-    ) -> Result<C3OperationPreparationV1, C3PreparationErrorV1>
+    ) -> Result<OperationPreparationV1, PreparationErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
-        C3OperationPreparationV1::begin(
+        OperationPreparationV1::begin(
             self.capability.owner_ref_v1(),
             self.storage_token_v1()?,
             global_seen_capacity,
@@ -844,7 +1013,7 @@ impl C3StorageOperationV1<'_> {
     #[allow(clippy::too_many_arguments)]
     fn begin_session_v1<'operation, 'ledger, 'control, C>(
         &'operation self,
-        preparation: &'operation mut C3OperationPreparationV1,
+        preparation: &'operation mut OperationPreparationV1,
         require_tree_storage: bool,
         left: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
         right: &'operation mut [u8; COMPARISON_WINDOW_BYTES],
@@ -852,7 +1021,7 @@ impl C3StorageOperationV1<'_> {
         private_pack_resident_bound: u64,
         reservation: &'operation OperationReservationV1<'ledger>,
         control: &'operation RefCell<&'control mut C>,
-    ) -> Result<C3StorageSessionV1<'operation, 'ledger, 'control, C>, FsCasErrorV1>
+    ) -> Result<StorageSessionV1<'operation, 'ledger, 'control, C>, FsCasErrorV1>
     where
         C: CdcControlV1 + FsCasControlV1 + ?Sized,
     {
@@ -873,12 +1042,12 @@ impl C3StorageOperationV1<'_> {
     #[allow(clippy::too_many_arguments)]
     fn complete_closure_fence_v1<C>(
         &self,
-        preparation: &mut C3OperationPreparationV1,
+        preparation: &mut OperationPreparationV1,
         root: TypedPhysicalObjectIdV1,
         reservation: &OperationReservationV1<'_>,
         counters: &mut OperationCountersV1,
         buffers: AdmissionBuffersV1<'_>,
-        algorithm: C3CdcAlgorithmV1,
+        algorithm: CdcAlgorithmV1,
         control: &mut C,
     ) -> Result<ClosureFenceStorageOutcomeV1, FsClosureAdmissionErrorV1>
     where
@@ -900,12 +1069,12 @@ impl C3StorageOperationV1<'_> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum C3OperationErrorV1 {
+pub(crate) enum OperationErrorV1 {
     Core(CoreError),
     FsCas(FsCasErrorV1),
 }
 
-impl C3OperationErrorV1 {
+impl OperationErrorV1 {
     fn into_fscas_v1(self) -> FsCasErrorV1 {
         match self {
             Self::Core(error) => FsCasErrorV1::Core(error),
@@ -945,30 +1114,30 @@ impl C3OperationErrorV1 {
     }
 }
 
-impl From<CoreError> for C3OperationErrorV1 {
+impl From<CoreError> for OperationErrorV1 {
     fn from(error: CoreError) -> Self {
         Self::Core(error)
     }
 }
 
-impl From<FsCasErrorV1> for C3OperationErrorV1 {
+impl From<FsCasErrorV1> for OperationErrorV1 {
     fn from(error: FsCasErrorV1) -> Self {
         Self::FsCas(error)
     }
 }
 
-impl From<C3PreparationErrorV1> for C3OperationErrorV1 {
-    fn from(error: C3PreparationErrorV1) -> Self {
+impl From<PreparationErrorV1> for OperationErrorV1 {
+    fn from(error: PreparationErrorV1) -> Self {
         match error {
-            C3PreparationErrorV1::Core(error) => Self::Core(error),
-            C3PreparationErrorV1::FsCas(error) => Self::FsCas(error),
+            PreparationErrorV1::Core(error) => Self::Core(error),
+            PreparationErrorV1::FsCas(error) => Self::FsCas(error),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct C3HandoffV1 {
-    algorithm: C3CdcAlgorithmV1,
+pub(crate) struct OperationHandoffV1 {
+    algorithm: CdcAlgorithmV1,
     version_record: PhysicalVersionRecordIdV1,
     root_tree: PhysicalTreeIdV1,
     pack: SealedPackV1,
@@ -983,8 +1152,8 @@ pub(crate) struct C3HandoffV1 {
     terminal_optional_observations: TerminalOptionalObservationsV1,
 }
 
-impl C3HandoffV1 {
-    pub(crate) const fn algorithm(self) -> C3CdcAlgorithmV1 {
+impl OperationHandoffV1 {
+    pub(crate) const fn algorithm(self) -> CdcAlgorithmV1 {
         self.algorithm
     }
 
@@ -1037,7 +1206,7 @@ impl C3HandoffV1 {
     }
 }
 
-pub(crate) struct C3OperationBuffersV1<'a> {
+pub(crate) struct OperationBuffersV1<'a> {
     pub(crate) source: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
     pub(crate) cdc_ring: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
     pub(crate) incoming_comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
@@ -1050,22 +1219,22 @@ pub(crate) struct C3OperationBuffersV1<'a> {
 /// Builder-visible buffers exclude the comparison and traversal storage held
 /// by the storage session and the later closure fence. This split makes it
 /// impossible for a content builder to alias those lifecycle-owned regions.
-pub(crate) struct C3LifecycleBuildBuffersV1<'a> {
+pub(crate) struct LifecycleBuildBuffersV1<'a> {
     pub(crate) source: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
     pub(crate) cdc_ring: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
     pub(crate) tree_object: &'a mut [u8; MAX_TREE_OBJECT_BYTES],
     pub(crate) tree_pages: &'a mut [Option<TreePageSummaryV1>],
 }
 
-pub(crate) struct C3LifecyclePlanV1 {
+pub(crate) struct LifecyclePlanV1 {
     pub(crate) global_seen_capacity: u32,
-    pub(crate) storage_resident: C3StorageResidentPlanV1,
+    pub(crate) storage_resident: StorageResidentPlanV1,
     pub(crate) require_tree_storage: bool,
     pub(crate) maximum_records: u32,
-    pub(crate) algorithm: C3CdcAlgorithmV1,
+    pub(crate) algorithm: CdcAlgorithmV1,
 }
 
-pub(crate) struct C3PreparedCandidateV1 {
+pub(crate) struct PreparedCandidateV1 {
     version_record: PhysicalVersionRecordIdV1,
     root_tree: PhysicalTreeIdV1,
     completed: CompletedPackSetV1,
@@ -1084,13 +1253,13 @@ fn mutation_candidate_bounds_v1(
         .ok_or(CoreError::IntegerOverflow)?;
     validate_total_object_count(maximum_objects)?;
     let global_seen_capacity = candidate_global_seen_capacity_v1(maximum_objects)?;
-    let maximum_records = u32::try_from(maximum_objects.min(C3_MAX_STORAGE_RECORDS_V1))
+    let maximum_records = u32::try_from(maximum_objects.min(MAX_STORAGE_RECORDS_V1))
         .map_err(|_| CoreError::IntegerOverflow)?;
     Ok((maximum_objects, global_seen_capacity, maximum_records))
 }
 
 fn ensure_mutation_buffers_v1(
-    buffers: &C3OperationBuffersV1<'_>,
+    buffers: &OperationBuffersV1<'_>,
     maximum_objects: u64,
     maximum_page_summaries: u32,
 ) -> CoreResult<()> {
@@ -1105,8 +1274,8 @@ fn ensure_mutation_buffers_v1(
 
 #[allow(clippy::too_many_arguments)]
 fn mutation_memory_plan_v1(
-    buffers: &C3OperationBuffersV1<'_>,
-    storage_resident: C3StorageResidentPlanV1,
+    buffers: &OperationBuffersV1<'_>,
+    storage_resident: StorageResidentPlanV1,
     source_resident: u64,
     other_port_resident: u64,
     evidence_resident: u64,
@@ -1132,7 +1301,7 @@ fn mutation_memory_plan_v1(
         )?
         .charge(
             MemoryComponentV1::PageSummaries,
-            c3_admission_traversal_resident_bytes_v1()?
+            admission_traversal_resident_bytes_v1()?
                 .max(core::mem::size_of_val(buffers.tree_pages) as u64),
         )?
         .charge(
@@ -1145,13 +1314,13 @@ fn mutation_memory_plan_v1(
 }
 
 fn complete_mutation_candidate_v1<C>(
-    storage: &mut dyn C3StorageSessionPortV1,
+    storage: &mut dyn StorageSessionPortV1,
     control_cell: &RefCell<&mut C>,
     candidate: CanonicalDirectoryTreeV1,
     counters: &mut OperationCountersV1,
-) -> Result<C3PreparedCandidateV1, C3OperationErrorV1>
+) -> Result<PreparedCandidateV1, OperationErrorV1>
 where
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
     let DirectoryLogicalIdentityV1::ImplicitRoot(logical_root) = candidate.logical() else {
         return Err(CoreError::TypeDomain.into());
@@ -1159,7 +1328,7 @@ where
     let summary = storage.rebuild_candidate_closure_v1(
         candidate.physical(),
         counters,
-        &mut SharedC3ControlV1::new(control_cell),
+        &mut SharedOperationControlV1::new(control_cell),
     )?;
     let version = storage.write_version_v1(
         derive_version_v1(logical_root),
@@ -1169,7 +1338,7 @@ where
     )?;
     let completed = storage.complete_v1(version)?;
     let reference_spool_bytes = storage.reference_storage_bytes_v1()?;
-    Ok(C3PreparedCandidateV1::new(
+    Ok(PreparedCandidateV1::new(
         version,
         candidate.physical(),
         completed,
@@ -1177,7 +1346,7 @@ where
     ))
 }
 
-impl C3PreparedCandidateV1 {
+impl PreparedCandidateV1 {
     pub(crate) const fn new(
         version_record: PhysicalVersionRecordIdV1,
         root_tree: PhysicalTreeIdV1,
@@ -1198,10 +1367,10 @@ impl C3PreparedCandidateV1 {
 /// request bound is inspected, and is borrowed through candidate closure,
 /// exact closure fencing, explicit cleanup, and handoff.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_complete_replace_v1<S, C>(
+pub(crate) fn run_complete_replace_v1<S, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
-    algorithm: C3CdcAlgorithmV1,
+    algorithm: CdcAlgorithmV1,
     version_record: PhysicalVersionRecordIdV1,
     base_root: CanonicalDirectoryTreeV1,
     replacement_evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
@@ -1210,18 +1379,18 @@ pub(crate) fn run_c3_complete_replace_v1<S, C>(
     mode: u16,
     declared_len: u64,
     source: &mut S,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     cow_logical: &mut [u8; COMPARISON_WINDOW_BYTES],
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     S: ContentSourceV1 + ?Sized,
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
-    let mut operation = request_c3_mutation_operation_v1(
+    let mut operation = request_mutation_operation_v1(
         cas,
-        C3MutationOperationKindV1::Replace,
+        MutationOperationKindV1::Replace,
         cancellation_key,
         counters,
         control,
@@ -1267,7 +1436,7 @@ where
                     maximum_objects,
                     tree_shape.page_summary_count(),
                 )?;
-                operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+                operation.declare_storage_envelope_v1(storage_envelope_v1(
                     maximum_objects,
                     maximum_refs
                         .checked_add(u64::from(tree_shape.tree_object_count()))
@@ -1282,7 +1451,8 @@ where
                 )?)?;
 
                 let source_resident = source.resident_memory_bound_bytes()?;
-                let storage_resident = operation.storage_resident_plan_v1(false)?;
+                let storage_resident =
+                    operation.storage_resident_plan_v1(false, maximum_records)?;
                 let evidence_resident = u64::try_from(replacement_evidence_resident_bytes_v1(
                     replacement_evidence,
                 )?)
@@ -1312,9 +1482,9 @@ where
             },
         )?;
 
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
@@ -1330,7 +1500,7 @@ where
             }
             let file = {
                 let (references, sink) = storage.content_parts_v1();
-                replace_file_c3_borrowed_v1(
+                replace_file_borrowed_v1(
                     name,
                     mode,
                     declared_len,
@@ -1338,7 +1508,7 @@ where
                     sink,
                     references,
                     ContentBuffersV1::new(buffers.source, buffers.cdc_ring),
-                    &mut SharedC3ControlV1::new(control_cell),
+                    &mut SharedOperationControlV1::new(control_cell),
                     reservation,
                     algorithm,
                     counters,
@@ -1373,7 +1543,7 @@ where
 /// accepted Phase-1 format; it has no Replace redispatch or full-base payload
 /// fallback path.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_complete_update_v1<S, B, E, C>(
+pub(crate) fn run_complete_update_v1<S, B, E, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -1388,20 +1558,20 @@ pub(crate) fn run_c3_complete_update_v1<S, B, E, C>(
     inserted: &mut S,
     base_bytes: &mut B,
     chunk_evidence: &mut E,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     cow_logical: &mut [u8; COMPARISON_WINDOW_BYTES],
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     S: ContentSourceV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
     E: BaseChunkEvidenceSourceV1 + ?Sized,
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
-    let mut operation = request_c3_mutation_operation_v1(
+    let mut operation = request_mutation_operation_v1(
         cas,
-        C3MutationOperationKindV1::Update,
+        MutationOperationKindV1::Update,
         cancellation_key,
         counters,
         control,
@@ -1471,7 +1641,7 @@ where
                 new_len,
                 inserted_len,
             )?;
-            operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+            operation.declare_storage_envelope_v1(storage_envelope_v1(
                 maximum_objects,
                 maximum_refs
                     .checked_add(u64::from(tree_shape.tree_object_count()))
@@ -1491,7 +1661,7 @@ where
             let other_port_resident = base_reader_resident
                 .checked_add(chunk_evidence_resident)
                 .ok_or(CoreError::IntegerOverflow)?;
-            let storage_resident = operation.storage_resident_plan_v1(false)?;
+            let storage_resident = operation.storage_resident_plan_v1(false, maximum_records)?;
             let evidence_resident = u64::try_from(replacement_evidence_resident_bytes_v1(
                 replacement_evidence,
             )?)
@@ -1523,14 +1693,14 @@ where
         },
     )?;
 
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
             maximum_records,
-            algorithm: C3CdcAlgorithmV1::FastCdc,
+            algorithm: CdcAlgorithmV1::FastCdc,
         },
         buffers,
         control,
@@ -1544,7 +1714,7 @@ where
             }
             let file = {
                 let (references, sink) = storage.content_parts_v1();
-                update_file_c3_borrowed_v1(
+                update_file_borrowed_v1(
                     name,
                     mode,
                     base_file,
@@ -1556,7 +1726,7 @@ where
                     sink,
                     references,
                     UpdateBuffersV1::new(buffers.source, buffers.cdc_ring),
-                    &mut SharedC3ControlV1::new(control_cell),
+                    &mut SharedOperationControlV1::new(control_cell),
                     reservation,
                     counters,
                 )?
@@ -1589,7 +1759,7 @@ where
 /// COW, candidate-graph authentication, complete closure fencing, and one
 /// synchronous handoff under the same root-owned grant.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_complete_add_v1<S, T, C>(
+pub(crate) fn run_complete_add_v1<S, T, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -1601,19 +1771,19 @@ pub(crate) fn run_c3_complete_add_v1<S, T, C>(
     declared_len: u64,
     source: &mut S,
     tree_source: &mut T,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     cow_logical: &mut [u8; COMPARISON_WINDOW_BYTES],
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     S: ContentSourceV1 + ?Sized,
     T: CanonicalTreeMutationSourceV1 + ?Sized,
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
-    let mut operation = request_c3_mutation_operation_v1(
+    let mut operation = request_mutation_operation_v1(
         cas,
-        C3MutationOperationKindV1::Add,
+        MutationOperationKindV1::Add,
         cancellation_key,
         counters,
         control,
@@ -1669,7 +1839,7 @@ where
                 maximum_objects,
                 result_shape.page_summary_count(),
             )?;
-            operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+            operation.declare_storage_envelope_v1(storage_envelope_v1(
                 maximum_objects,
                 maximum_refs
                     .checked_add(u64::from(result_shape.tree_object_count()))
@@ -1693,7 +1863,7 @@ where
             }
             let source_resident = source.resident_memory_bound_bytes()?;
             let tree_source_resident = tree_source.resident_memory_bound_bytes()?;
-            let storage_resident = operation.storage_resident_plan_v1(false)?;
+            let storage_resident = operation.storage_resident_plan_v1(false, maximum_records)?;
             let evidence_resident =
                 u64::try_from(mutation_evidence_resident_bytes_v1(mutation_evidence)?)
                     .map_err(|_| CoreError::IntegerOverflow)?;
@@ -1726,14 +1896,14 @@ where
         },
     )?;
 
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
             maximum_records,
-            algorithm: C3CdcAlgorithmV1::FastCdc,
+            algorithm: CdcAlgorithmV1::FastCdc,
         },
         buffers,
         control,
@@ -1746,7 +1916,7 @@ where
             }
             let file = {
                 let (references, sink) = storage.content_parts_v1();
-                replace_file_c3_borrowed_v1(
+                replace_file_borrowed_v1(
                     name,
                     mode,
                     declared_len,
@@ -1754,9 +1924,9 @@ where
                     sink,
                     references,
                     ContentBuffersV1::new(buffers.source, buffers.cdc_ring),
-                    &mut SharedC3ControlV1::new(control_cell),
+                    &mut SharedOperationControlV1::new(control_cell),
                     reservation,
-                    C3CdcAlgorithmV1::FastCdc,
+                    CdcAlgorithmV1::FastCdc,
                     counters,
                 )?
             };
@@ -1790,7 +1960,7 @@ where
 /// accepted root, exact removed entry, result snapshot, new tree objects,
 /// candidate closure, cleanup, and handoff remain one indivisible operation.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_complete_remove_v1<T, C>(
+pub(crate) fn run_complete_remove_v1<T, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -1799,18 +1969,18 @@ pub(crate) fn run_c3_complete_remove_v1<T, C>(
     removal_index: usize,
     expected_removed: CanonicalTreeEntryV1<'_>,
     tree_source: &mut T,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     cow_logical: &mut [u8; COMPARISON_WINDOW_BYTES],
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     T: CanonicalTreeMutationSourceV1 + ?Sized,
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
-    let mut operation = request_c3_mutation_operation_v1(
+    let mut operation = request_mutation_operation_v1(
         cas,
-        C3MutationOperationKindV1::Remove,
+        MutationOperationKindV1::Remove,
         cancellation_key,
         counters,
         control,
@@ -1845,7 +2015,7 @@ where
                 maximum_objects,
                 result_shape.page_summary_count(),
             )?;
-            operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+            operation.declare_storage_envelope_v1(storage_envelope_v1(
                 maximum_objects,
                 u64::from(result_shape.tree_object_count())
                     .checked_add(1)
@@ -1863,7 +2033,7 @@ where
                 return Err(CoreError::Path.into());
             }
             let tree_source_resident = tree_source.resident_memory_bound_bytes()?;
-            let storage_resident = operation.storage_resident_plan_v1(false)?;
+            let storage_resident = operation.storage_resident_plan_v1(false, maximum_records)?;
             let evidence_resident =
                 u64::try_from(mutation_evidence_resident_bytes_v1(mutation_evidence)?)
                     .map_err(|_| CoreError::IntegerOverflow)?;
@@ -1888,14 +2058,14 @@ where
             ))
         })?;
 
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
             maximum_records,
-            algorithm: C3CdcAlgorithmV1::FastCdc,
+            algorithm: CdcAlgorithmV1::FastCdc,
         },
         buffers,
         control,
@@ -1927,7 +2097,7 @@ where
 /// chunk-reference stream are authenticated before any preparation artifact
 /// is created; only the file-node mode and affected directory spine change.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_complete_metadata_v1<E, C>(
+pub(crate) fn run_complete_metadata_v1<E, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -1938,18 +2108,18 @@ pub(crate) fn run_c3_complete_metadata_v1<E, C>(
     new_mode: u16,
     base_file: AuthenticatedBaseFileV1,
     chunk_evidence: &mut E,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     cow_logical: &mut [u8; COMPARISON_WINDOW_BYTES],
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     E: BaseChunkEvidenceSourceV1 + ?Sized,
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
-    let mut operation = request_c3_mutation_operation_v1(
+    let mut operation = request_mutation_operation_v1(
         cas,
-        C3MutationOperationKindV1::Metadata,
+        MutationOperationKindV1::Metadata,
         cancellation_key,
         counters,
         control,
@@ -1990,7 +2160,7 @@ where
                     u64::from(tree_shape.tree_object_count()),
                 )?;
             ensure_mutation_buffers_v1(&buffers, maximum_objects, tree_shape.page_summary_count())?;
-            operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+            operation.declare_storage_envelope_v1(storage_envelope_v1(
                 maximum_objects,
                 u64::from(tree_shape.tree_object_count())
                     .checked_add(2)
@@ -2004,7 +2174,7 @@ where
             )?)?;
 
             let chunk_evidence_resident = chunk_evidence.resident_memory_bound_bytes()?;
-            let storage_resident = operation.storage_resident_plan_v1(false)?;
+            let storage_resident = operation.storage_resident_plan_v1(false, maximum_records)?;
             let evidence_resident = u64::try_from(replacement_evidence_resident_bytes_v1(
                 replacement_evidence,
             )?)
@@ -2037,14 +2207,14 @@ where
             ))
         })?;
 
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
             maximum_records,
-            algorithm: C3CdcAlgorithmV1::FastCdc,
+            algorithm: CdcAlgorithmV1::FastCdc,
         },
         buffers,
         control,
@@ -2052,7 +2222,7 @@ where
         move |storage, control_cell, reservation, buffers, counters| {
             let file = {
                 let (references, sink) = storage.content_parts_v1();
-                reencode_file_metadata_c3_borrowed_v1(
+                reencode_file_metadata_borrowed_v1(
                     new_mode,
                     base_file,
                     chunk_evidence,
@@ -2090,7 +2260,7 @@ where
 /// transformation. No intermediate removed tree is admitted, so every object
 /// written by a successful operation belongs to the final candidate graph.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_c3_complete_move_v1<T, C>(
+pub(crate) fn run_complete_move_v1<T, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -2101,18 +2271,18 @@ pub(crate) fn run_c3_complete_move_v1<T, C>(
     expected_removed: CanonicalTreeEntryV1<'_>,
     new_name: &[u8],
     tree_source: &mut T,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     cow_logical: &mut [u8; COMPARISON_WINDOW_BYTES],
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     T: CanonicalTreeMutationSourceV1 + ?Sized,
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
-    let mut operation = request_c3_mutation_operation_v1(
+    let mut operation = request_mutation_operation_v1(
         cas,
-        C3MutationOperationKindV1::Move,
+        MutationOperationKindV1::Move,
         cancellation_key,
         counters,
         control,
@@ -2153,7 +2323,7 @@ where
                     maximum_objects,
                     tree_shape.page_summary_count(),
                 )?;
-                operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+                operation.declare_storage_envelope_v1(storage_envelope_v1(
                     maximum_objects,
                     u64::from(tree_shape.tree_object_count())
                         .checked_add(1)
@@ -2171,7 +2341,8 @@ where
                     return Err(CoreError::Path.into());
                 }
                 let tree_source_resident = tree_source.resident_memory_bound_bytes()?;
-                let storage_resident = operation.storage_resident_plan_v1(false)?;
+                let storage_resident =
+                    operation.storage_resident_plan_v1(false, maximum_records)?;
                 let evidence_resident =
                     u64::try_from(mutation_evidence_resident_bytes_v1(mutation_evidence)?)
                         .map_err(|_| CoreError::IntegerOverflow)?;
@@ -2199,14 +2370,14 @@ where
         )?;
 
     let moved = CanonicalTreeEntryV1::new(component, expected_removed.child());
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
             maximum_records,
-            algorithm: C3CdcAlgorithmV1::FastCdc,
+            algorithm: CdcAlgorithmV1::FastCdc,
         },
         buffers,
         control,
@@ -2275,20 +2446,20 @@ pub(crate) fn complete_cross_directory_move_operation_v1<ST, DT, RT, C>(
     new_name: &[u8],
     destination_tree_source: &mut DT,
     root_tree_source: &mut RT,
-    buffers: C3OperationBuffersV1<'_>,
+    buffers: OperationBuffersV1<'_>,
     cow_logical: &mut [u8; COMPARISON_WINDOW_BYTES],
     control: &mut C,
     counters: &mut OperationCountersV1,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     ST: CanonicalTreeMutationSourceV1 + ?Sized,
     DT: CanonicalTreeMutationSourceV1 + ?Sized,
     RT: CanonicalTreeMutationSourceV1 + ?Sized,
-    C: C3LifecycleControlV1 + ?Sized,
+    C: LifecycleControlV1 + ?Sized,
 {
-    let mut operation = request_c3_mutation_operation_v1(
+    let mut operation = request_mutation_operation_v1(
         cas,
-        C3MutationOperationKindV1::Move,
+        MutationOperationKindV1::Move,
         cancellation_key,
         counters,
         control,
@@ -2357,7 +2528,7 @@ where
             let (maximum_objects, global_seen_capacity, maximum_records) =
                 mutation_candidate_bounds_v1(base_objects, 0, maximum_tree_objects)?;
             ensure_mutation_buffers_v1(&buffers, maximum_objects, maximum_page_summaries)?;
-            operation.declare_storage_envelope_v1(c3_storage_envelope_v1(
+            operation.declare_storage_envelope_v1(storage_envelope_v1(
                 maximum_objects,
                 maximum_tree_objects
                     .checked_add(1)
@@ -2398,7 +2569,7 @@ where
                 .ok_or(CoreError::IntegerOverflow)?;
             let evidence_resident =
                 u64::try_from(evidence_resident).map_err(|_| CoreError::IntegerOverflow)?;
-            let storage_resident = operation.storage_resident_plan_v1(false)?;
+            let storage_resident = operation.storage_resident_plan_v1(false, maximum_records)?;
             let plan = mutation_memory_plan_v1(
                 &buffers,
                 storage_resident,
@@ -2425,14 +2596,14 @@ where
     )?;
 
     let moved = CanonicalTreeEntryV1::new(moved_name, expected_removed.child());
-    run_c3_lifecycle_v1(
+    run_lifecycle_v1(
         operation,
-        C3LifecyclePlanV1 {
+        LifecyclePlanV1 {
             global_seen_capacity,
             storage_resident,
             require_tree_storage: false,
             maximum_records,
-            algorithm: C3CdcAlgorithmV1::FastCdc,
+            algorithm: CdcAlgorithmV1::FastCdc,
         },
         buffers,
         control,
@@ -2510,27 +2681,27 @@ where
 // The explicit drops end the RefCell-held mutable control borrow before the
 // same control is borrowed for fallible preparation cleanup below.
 #[allow(clippy::too_many_arguments, clippy::drop_non_drop)]
-pub(crate) fn run_c3_lifecycle_v1<C, B>(
-    operation: C3StorageOperationV1<'_>,
-    plan: C3LifecyclePlanV1,
-    buffers: C3OperationBuffersV1<'_>,
+pub(crate) fn run_lifecycle_v1<C, B>(
+    operation: StorageOperationV1<'_>,
+    plan: LifecyclePlanV1,
+    buffers: OperationBuffersV1<'_>,
     control: &mut C,
     counters: &mut OperationCountersV1,
     build: B,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     C: CdcControlV1 + FsCasControlV1 + ?Sized,
     B: FnOnce(
-        &mut dyn C3StorageSessionPortV1,
+        &mut dyn StorageSessionPortV1,
         &RefCell<&mut FsOperationObservedControlV1<'_, C>>,
         &OperationReservationV1<'_>,
-        &mut C3LifecycleBuildBuffersV1<'_>,
+        &mut LifecycleBuildBuffersV1<'_>,
         &mut OperationCountersV1,
-    ) -> Result<C3PreparedCandidateV1, C3OperationErrorV1>,
+    ) -> Result<PreparedCandidateV1, OperationErrorV1>,
 {
     let mut observed_control = FsOperationObservedControlV1::new(control);
     let terminal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        run_c3_lifecycle_observed_body_v1(
+        run_lifecycle_observed_body_v1(
             operation,
             plan,
             buffers,
@@ -2555,9 +2726,9 @@ where
     match terminal {
         Ok(result) => match observation {
             Ok(()) => result,
-            Err(error) => Err(C3OperationErrorV1::retain_terminal_v1(
+            Err(error) => Err(OperationErrorV1::retain_terminal_v1(
                 result.err(),
-                C3OperationErrorV1::Core(error),
+                OperationErrorV1::Core(error),
             )
             .expect("direct lock observation failure")),
         },
@@ -2570,43 +2741,43 @@ where
                 // lifecycle has already completed cleanup and capability
                 // terminalization inside the caught body.
                 drop(payload);
-                Err(C3OperationErrorV1::Core(error))
+                Err(OperationErrorV1::Core(error))
             }
         },
     }
 }
 
 #[allow(clippy::too_many_arguments, clippy::drop_non_drop)]
-fn run_c3_lifecycle_observed_body_v1<C, B>(
-    mut operation: C3StorageOperationV1<'_>,
-    plan: C3LifecyclePlanV1,
-    buffers: C3OperationBuffersV1<'_>,
+fn run_lifecycle_observed_body_v1<C, B>(
+    mut operation: StorageOperationV1<'_>,
+    plan: LifecyclePlanV1,
+    buffers: OperationBuffersV1<'_>,
     control: &mut C,
     counters: &mut OperationCountersV1,
     build: B,
-) -> Result<C3HandoffV1, C3OperationErrorV1>
+) -> Result<OperationHandoffV1, OperationErrorV1>
 where
     C: CdcControlV1 + FsCasControlV1 + ?Sized,
     B: FnOnce(
-        &mut dyn C3StorageSessionPortV1,
+        &mut dyn StorageSessionPortV1,
         &RefCell<&mut C>,
         &OperationReservationV1<'_>,
-        &mut C3LifecycleBuildBuffersV1<'_>,
+        &mut LifecycleBuildBuffersV1<'_>,
         &mut OperationCountersV1,
-    ) -> Result<C3PreparedCandidateV1, C3OperationErrorV1>,
+    ) -> Result<PreparedCandidateV1, OperationErrorV1>,
 {
     // The complete variant owns the already-bounded operation buffers; boxing
     // it would add a fallible allocation to terminal unwind reconciliation.
     #[allow(clippy::large_enum_variant)]
     enum BuildTerminalV1 {
-        Complete(Result<C3PreparedCandidateV1, C3OperationErrorV1>),
+        Complete(Result<PreparedCandidateV1, OperationErrorV1>),
         Unwind {
             payload: Box<dyn core::any::Any + Send>,
-            failure: Option<C3OperationErrorV1>,
+            failure: Option<OperationErrorV1>,
         },
     }
 
-    let C3OperationBuffersV1 {
+    let OperationBuffersV1 {
         source,
         cdc_ring,
         incoming_comparison,
@@ -2626,7 +2797,7 @@ where
     let mut preparation = match preparation_result {
         Ok(Ok(preparation)) => preparation,
         Ok(Err(error)) => {
-            let original = C3OperationErrorV1::from(error);
+            let original = OperationErrorV1::from(error);
             return match operation.finish_operation_caught_v1(false, counters, control) {
                 Ok(Ok(())) => Err(original),
                 Ok(Err(terminal)) => Err(original.dominated_by_fscas_v1(terminal)),
@@ -2645,7 +2816,7 @@ where
                     // Once that terminal fails, its typed cause is the
                     // machine-readable operation outcome.
                     drop(payload);
-                    return Err(C3OperationErrorV1::FsCas(terminal));
+                    return Err(OperationErrorV1::FsCas(terminal));
                 }
                 Err(terminal_payload) => {
                     drop(terminal_payload);
@@ -2654,7 +2825,7 @@ where
             }
         }
     };
-    let mut build_buffers = C3LifecycleBuildBuffersV1 {
+    let mut build_buffers = LifecycleBuildBuffersV1 {
         source,
         cdc_ring,
         tree_object,
@@ -2731,32 +2902,32 @@ where
                                 let original = global_seen
                                     .err()
                                     .or_else(|| counter_result.err())
-                                    .map(C3OperationErrorV1::Core)
+                                    .map(OperationErrorV1::Core)
                                     .expect("completed candidate observation failure");
                                 terminal_first_failure.set(Some(original));
                                 let residue = storage.record_incomplete_residue_v1();
                                 let mut failure = Some(original);
                                 if let Err(error) = residue {
-                                    failure = C3OperationErrorV1::retain_terminal_v1(
+                                    failure = OperationErrorV1::retain_terminal_v1(
                                         failure,
-                                        C3OperationErrorV1::Core(error),
+                                        OperationErrorV1::Core(error),
                                     );
                                 }
                                 terminal_first_failure.set(failure);
                                 let private_cleanup = storage.cleanup_private_pack_controlled_v1();
                                 if let Err(error) = private_cleanup {
-                                    failure = C3OperationErrorV1::retain_terminal_v1(
+                                    failure = OperationErrorV1::retain_terminal_v1(
                                         failure,
-                                        C3OperationErrorV1::FsCas(error),
+                                        OperationErrorV1::FsCas(error),
                                     );
                                 }
                                 terminal_first_failure.set(failure);
                                 let residue_counters =
                                     counters.accumulate(storage.take_storage_counters_v1());
                                 if let Err(error) = residue_counters {
-                                    failure = C3OperationErrorV1::retain_terminal_v1(
+                                    failure = OperationErrorV1::retain_terminal_v1(
                                         failure,
-                                        C3OperationErrorV1::Core(error),
+                                        OperationErrorV1::Core(error),
                                     );
                                 }
                                 terminal_first_failure.set(failure);
@@ -2771,41 +2942,41 @@ where
                         let core_error = storage.take_first_core_error_v1();
                         let fscas_error = storage.take_first_fscas_error_v1();
                         let original = fscas_error.map_or_else(
-                            || core_error.map_or(error, C3OperationErrorV1::Core),
-                            C3OperationErrorV1::FsCas,
+                            || core_error.map_or(error, OperationErrorV1::Core),
+                            OperationErrorV1::FsCas,
                         );
                         let mut failure = Some(original);
                         terminal_first_failure.set(failure);
                         let residue_result = storage.record_incomplete_residue_v1();
                         if let Err(error) = residue_result {
-                            failure = C3OperationErrorV1::retain_terminal_v1(
+                            failure = OperationErrorV1::retain_terminal_v1(
                                 failure,
-                                C3OperationErrorV1::Core(error),
+                                OperationErrorV1::Core(error),
                             );
                         }
                         terminal_first_failure.set(failure);
                         let private_cleanup = storage.cleanup_private_pack_controlled_v1();
                         if let Err(error) = private_cleanup {
-                            failure = C3OperationErrorV1::retain_terminal_v1(
+                            failure = OperationErrorV1::retain_terminal_v1(
                                 failure,
-                                C3OperationErrorV1::FsCas(error),
+                                OperationErrorV1::FsCas(error),
                             );
                         }
                         terminal_first_failure.set(failure);
                         let global_seen = storage.record_global_seen_observation_v1();
                         if let Err(error) = global_seen {
-                            failure = C3OperationErrorV1::retain_terminal_v1(
+                            failure = OperationErrorV1::retain_terminal_v1(
                                 failure,
-                                C3OperationErrorV1::Core(error),
+                                OperationErrorV1::Core(error),
                             );
                         }
                         terminal_first_failure.set(failure);
                         let counter_result =
                             counters.accumulate(storage.take_storage_counters_v1());
                         if let Err(error) = counter_result {
-                            failure = C3OperationErrorV1::retain_terminal_v1(
+                            failure = OperationErrorV1::retain_terminal_v1(
                                 failure,
-                                C3OperationErrorV1::Core(error),
+                                OperationErrorV1::Core(error),
                             );
                         }
                         terminal_first_failure.set(failure);
@@ -2816,42 +2987,42 @@ where
                 let core_error = storage.take_first_core_error_v1();
                 let fscas_error = storage.take_first_fscas_error_v1();
                 let mut failure = fscas_error
-                    .map(C3OperationErrorV1::FsCas)
-                    .or_else(|| core_error.map(C3OperationErrorV1::Core));
+                    .map(OperationErrorV1::FsCas)
+                    .or_else(|| core_error.map(OperationErrorV1::Core));
                 terminal_first_failure.set(failure);
                 let residue = storage.record_incomplete_residue_v1();
                 if let Err(error) = residue {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::Core(error),
+                        OperationErrorV1::Core(error),
                     );
                 }
                 terminal_first_failure.set(failure);
                 let private_cleanup = storage.cleanup_private_pack_controlled_v1();
                 if let Err(error) = private_cleanup {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::FsCas(error),
+                        OperationErrorV1::FsCas(error),
                     );
                 }
                 terminal_first_failure.set(failure);
                 let global_seen = storage.record_global_seen_observation_v1();
                 if let Err(error) = global_seen {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::Core(error),
+                        OperationErrorV1::Core(error),
                     );
                 }
                 terminal_first_failure.set(failure);
                 let counter_result = counters.accumulate(storage.take_storage_counters_v1());
                 if let Err(error) = counter_result {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::Core(error),
+                        OperationErrorV1::Core(error),
                     );
                 }
                 terminal_first_failure.set(failure);
-                Err(failure.unwrap_or(C3OperationErrorV1::Core(CoreError::SourceFailure)))
+                Err(failure.unwrap_or(OperationErrorV1::Core(CoreError::SourceFailure)))
             }
         }));
         let terminal = match terminal {
@@ -2872,39 +3043,39 @@ where
                 // must be paired with—not replace—the first typed cause.
                 let mut failure = terminal_first_failure.take();
                 if let Some(error) = core_error {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::Core(error),
+                        OperationErrorV1::Core(error),
                     );
                 }
                 if let Some(error) = fscas_error {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::FsCas(error),
+                        OperationErrorV1::FsCas(error),
                     );
                 }
                 if let Err(error) = residue {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::Core(error),
+                        OperationErrorV1::Core(error),
                     );
                 }
                 if let Err(error) = private_cleanup {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::FsCas(error),
+                        OperationErrorV1::FsCas(error),
                     );
                 }
                 if let Err(error) = global_seen {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::Core(error),
+                        OperationErrorV1::Core(error),
                     );
                 }
                 if let Err(error) = counter_result {
-                    failure = C3OperationErrorV1::retain_terminal_v1(
+                    failure = OperationErrorV1::retain_terminal_v1(
                         failure,
-                        C3OperationErrorV1::Core(error),
+                        OperationErrorV1::Core(error),
                     );
                 }
                 drop(storage);
@@ -2916,7 +3087,7 @@ where
             }
         };
         if let Some(payload) = build_unwind {
-            let failure = C3OperationErrorV1::reconcile_unwind_terminal_v1(
+            let failure = OperationErrorV1::reconcile_unwind_terminal_v1(
                 terminal_first_failure.take(),
                 terminal,
             );
@@ -2942,18 +3113,16 @@ where
             let mut cleanup_terminal = preparation.finish_after_unwind_v1(control, payload);
             let (operation_failure, operation_unwind) =
                 match operation.finish_operation_caught_v1(false, counters, control) {
-                    Ok(result) => (result.err().map(C3OperationErrorV1::FsCas), None),
+                    Ok(result) => (result.err().map(OperationErrorV1::FsCas), None),
                     Err(payload) => (None, Some(payload)),
                 };
             let mut failure = storage_failure;
             if let Some(error) = cleanup_terminal.first_error_v1() {
-                failure = C3OperationErrorV1::retain_terminal_v1(
-                    failure,
-                    C3OperationErrorV1::FsCas(error),
-                );
+                failure =
+                    OperationErrorV1::retain_terminal_v1(failure, OperationErrorV1::FsCas(error));
             }
             if let Some(error) = operation_failure {
-                failure = C3OperationErrorV1::retain_terminal_v1(failure, error);
+                failure = OperationErrorV1::retain_terminal_v1(failure, error);
             }
             if let Some(failure) = failure {
                 // Once cleanup or terminalization has produced a typed
@@ -3002,7 +3171,7 @@ where
                     unreturned_installed_residue_bytes = unreturned_installed_residue_bytes
                         .checked_add(closure.installed_residue_bytes_v1())
                         .ok_or(CoreError::IntegerOverflow)?;
-                    Ok(C3HandoffV1 {
+                    Ok(OperationHandoffV1 {
                         algorithm: plan.algorithm,
                         version_record: candidate.version_record,
                         root_tree: candidate.root_tree,
@@ -3024,8 +3193,8 @@ where
                         .record_unreachable_installed_residue(unreturned_installed_residue_bytes)?;
                     unreturned_installed_residue_bytes = 0;
                     Err(match error {
-                        FsClosureAdmissionErrorV1::Core(error) => C3OperationErrorV1::Core(error),
-                        FsClosureAdmissionErrorV1::FsCas(error) => C3OperationErrorV1::FsCas(error),
+                        FsClosureAdmissionErrorV1::Core(error) => OperationErrorV1::Core(error),
+                        FsClosureAdmissionErrorV1::FsCas(error) => OperationErrorV1::FsCas(error),
                     })
                 }
             }
@@ -3042,22 +3211,20 @@ where
             let residue_failure = counters
                 .record_unreachable_installed_residue(unreturned_installed_residue_bytes)
                 .err()
-                .map(C3OperationErrorV1::Core);
+                .map(OperationErrorV1::Core);
             let mut cleanup_terminal = preparation.finish_after_unwind_v1(control, payload);
             let (operation_failure, operation_unwind) =
                 match operation.finish_operation_caught_v1(false, counters, control) {
-                    Ok(result) => (result.err().map(C3OperationErrorV1::FsCas), None),
+                    Ok(result) => (result.err().map(OperationErrorV1::FsCas), None),
                     Err(payload) => (None, Some(payload)),
                 };
             let mut failure = residue_failure;
             if let Some(error) = cleanup_terminal.first_error_v1() {
-                failure = C3OperationErrorV1::retain_terminal_v1(
-                    failure,
-                    C3OperationErrorV1::FsCas(error),
-                );
+                failure =
+                    OperationErrorV1::retain_terminal_v1(failure, OperationErrorV1::FsCas(error));
             }
             if let Some(error) = operation_failure {
-                failure = C3OperationErrorV1::retain_terminal_v1(failure, error);
+                failure = OperationErrorV1::retain_terminal_v1(failure, error);
             }
             if let Some(failure) = failure {
                 // The closure payload is resumed only when residue
@@ -3098,18 +3265,18 @@ where
         counters
             .record_unreachable_installed_residue(unreturned_installed_residue_bytes)
             .err()
-            .map(C3OperationErrorV1::Core)
+            .map(OperationErrorV1::Core)
     };
     let invalidation_failure = if handoff_unwind.is_some() {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             operation.capability.invalidate_owner_controlled_v1(control)
         })) {
-            Ok(result) => result.err().map(C3OperationErrorV1::FsCas),
+            Ok(result) => result.err().map(OperationErrorV1::FsCas),
             Err(_secondary_payload) => operation
                 .capability
                 .invalidate_owner_backstop_v1()
                 .err()
-                .map(C3OperationErrorV1::FsCas),
+                .map(OperationErrorV1::FsCas),
         }
     } else {
         None
@@ -3121,21 +3288,19 @@ where
         };
     let mut terminal_error = handoff.as_ref().err().copied();
     if let Some(cleanup) = cleanup_terminal.first_error_v1() {
-        terminal_error = C3OperationErrorV1::retain_terminal_v1(
-            terminal_error,
-            C3OperationErrorV1::FsCas(cleanup),
-        );
+        terminal_error =
+            OperationErrorV1::retain_terminal_v1(terminal_error, OperationErrorV1::FsCas(cleanup));
     }
     if let Some(residue) = residue_failure {
-        terminal_error = C3OperationErrorV1::retain_terminal_v1(terminal_error, residue);
+        terminal_error = OperationErrorV1::retain_terminal_v1(terminal_error, residue);
     }
     if let Some(invalidation) = invalidation_failure {
-        terminal_error = C3OperationErrorV1::retain_terminal_v1(terminal_error, invalidation);
+        terminal_error = OperationErrorV1::retain_terminal_v1(terminal_error, invalidation);
     }
     if let Err(operation) = operation_terminal {
-        terminal_error = C3OperationErrorV1::retain_terminal_v1(
+        terminal_error = OperationErrorV1::retain_terminal_v1(
             terminal_error,
-            C3OperationErrorV1::FsCas(operation),
+            OperationErrorV1::FsCas(operation),
         );
     }
     if let Some(error) = terminal_error {
@@ -3165,7 +3330,7 @@ mod tests {
 
     #[test]
     fn non_dominant_fscas_candidate_preserves_exact_core_wrapper() {
-        let first = C3OperationErrorV1::Core(CoreError::ResourceRefused);
+        let first = OperationErrorV1::Core(CoreError::ResourceRefused);
         let later = FsCasErrorV1::Core(CoreError::IntegerOverflow);
 
         assert_eq!(first.dominated_by_fscas_v1(later), first);
@@ -3173,37 +3338,37 @@ mod tests {
 
     #[test]
     fn build_unwind_reconciliation_resumes_only_without_a_typed_terminal() {
-        let first = C3OperationErrorV1::Core(CoreError::ResourceRefused);
+        let first = OperationErrorV1::Core(CoreError::ResourceRefused);
 
         assert_eq!(
-            C3OperationErrorV1::reconcile_unwind_terminal_v1(
+            OperationErrorV1::reconcile_unwind_terminal_v1(
                 Some(first),
-                Err::<(), _>(C3OperationErrorV1::Core(CoreError::SourceFailure)),
+                Err::<(), _>(OperationErrorV1::Core(CoreError::SourceFailure)),
             ),
             Some(first)
         );
         assert_eq!(
-            C3OperationErrorV1::reconcile_unwind_terminal_v1(
+            OperationErrorV1::reconcile_unwind_terminal_v1(
                 Some(first),
-                Err::<(), _>(C3OperationErrorV1::Core(CoreError::IntegerOverflow)),
+                Err::<(), _>(OperationErrorV1::Core(CoreError::IntegerOverflow)),
             ),
             Some(first)
         );
         assert_eq!(
-            C3OperationErrorV1::reconcile_unwind_terminal_v1(
+            OperationErrorV1::reconcile_unwind_terminal_v1(
                 None,
-                Err::<(), _>(C3OperationErrorV1::Core(CoreError::SourceFailure)),
+                Err::<(), _>(OperationErrorV1::Core(CoreError::SourceFailure)),
             ),
             None
         );
 
         let dominant = FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PrivatePack);
         assert_eq!(
-            C3OperationErrorV1::reconcile_unwind_terminal_v1(
+            OperationErrorV1::reconcile_unwind_terminal_v1(
                 Some(first),
-                Err::<(), _>(C3OperationErrorV1::FsCas(dominant)),
+                Err::<(), _>(OperationErrorV1::FsCas(dominant)),
             ),
-            Some(C3OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
+            Some(OperationErrorV1::FsCas(FsCasErrorV1::TerminalFailure {
                 first: crate::cas::FsCasFailureCauseV1::Core(CoreError::ResourceRefused),
                 dominant: crate::cas::FsCasFailureCauseV1::CleanupFailed(
                     FsCasCleanupTargetV1::PrivatePack,

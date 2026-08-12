@@ -17,3 +17,36 @@ pub(crate) fn require_canonical_traversal_depth_v1(depth: usize) -> CoreResult<(
         Err(CoreError::CountCap)
     }
 }
+
+/// Operation-local depth accounting for an authenticated canonical object
+/// walk. The object layer owns the cap and its checked push/pop law; a reader
+/// may store any frame representation it needs without reimplementing the
+/// bounded traversal policy.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CanonicalTraversalBudgetV1 {
+    len: usize,
+}
+
+impl CanonicalTraversalBudgetV1 {
+    pub(crate) const fn new() -> Self {
+        Self { len: 0 }
+    }
+
+    pub(crate) const fn len(self) -> usize {
+        self.len
+    }
+
+    pub(crate) fn push(&mut self) -> CoreResult<()> {
+        require_canonical_traversal_depth_v1(self.len)?;
+        self.len = self.len.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    pub(crate) fn pop(&mut self) -> Option<()> {
+        if self.len == 0 {
+            return None;
+        }
+        self.len -= 1;
+        Some(())
+    }
+}

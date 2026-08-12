@@ -12,7 +12,7 @@ autotests = false
 default = []
 # Closed C3 CDC polymorphism and its externally supervised qualification
 # harness. FastCDC is the selected baseline; SeqCDC is the explicit alternate.
-c3-polymorphism = []
+operation-polymorphism = []
 
 [lib]
 name = "layerfs_storage"
@@ -59,4 +59,4 @@ path = "tests/l1_profiles.rs"
 [[test]]
 name = "c3_seqcdc_compare"
 path = "tests/c3_seqcdc_compare.rs"
-required-features = ["c3-polymorphism"]
+required-features = ["operation-polymorphism"]
