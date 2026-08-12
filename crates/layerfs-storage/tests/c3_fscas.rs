@@ -4362,7 +4362,7 @@ fn simultaneous_reopened_disjoint_success_crosses_unequal_and_malformed_incumben
         let mut seed_counters = OperationCountersV1::default();
         let mut seed_pack = build_private_pack(
             &seed,
-            &[shared.clone()],
+            std::slice::from_ref(&shared),
             &ledger,
             &mut seed_counters,
             &mut build_scratch,
@@ -4409,7 +4409,7 @@ fn simultaneous_reopened_disjoint_success_crosses_unequal_and_malformed_incumben
         let mut failure_counters = OperationCountersV1::default();
         let mut failure_pack = build_private_pack(
             &failing_cas,
-            &[shared.clone()],
+            std::slice::from_ref(&shared),
             &ledger,
             &mut failure_counters,
             &mut build_scratch,
@@ -4417,7 +4417,7 @@ fn simultaneous_reopened_disjoint_success_crosses_unequal_and_malformed_incumben
         let mut success_counters = OperationCountersV1::default();
         let mut success_pack = build_private_pack(
             &success_cas,
-            &[disjoint.clone()],
+            std::slice::from_ref(&disjoint),
             &ledger,
             &mut success_counters,
             &mut build_scratch,

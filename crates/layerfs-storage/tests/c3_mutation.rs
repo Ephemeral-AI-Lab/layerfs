@@ -13,8 +13,9 @@ use layerfs_storage::content::update::{
     AuthenticatedBaseByteReaderV1, BaseChunkEvidenceSourceV1, BaseChunkEvidenceV1, BaseReadErrorV1,
 };
 use layerfs_storage::content::{
-    request_tree_operation_v1, run_create_tree_v1, ContentSourceErrorV1, ContentSourceV1,
-    OperationBuffersV1, PreparedSinkErrorV1, SourceSupplierV1, TreeFileV1,
+    request_create_operation_v1, request_tree_operation_v1, run_create_tree_v1, run_create_v1,
+    ContentSourceErrorV1, ContentSourceV1, OperationBuffersV1, OperationErrorV1,
+    PreparedSinkErrorV1, SourceSupplierV1, TreeFileV1,
 };
 use layerfs_storage::cow::file::{AuthenticatedBaseFileV1, UpdateRangeV1};
 use layerfs_storage::cow::{
@@ -35,9 +36,9 @@ use layerfs_storage::lifecycle::{
 use layerfs_storage::limits::OperationCountersV1;
 use layerfs_storage::profile::ProfileSpecV1;
 use layerfs_storage::read::extraction::{
-    extract_root_v1, read_file_range_impl_v1, ReadBuffersV1, ReadKindV1, ReadSinkErrorV1,
-    ReadSinkV1,
+    extract_root_v1, ReadBuffersV1, ReadKindV1, ReadSinkErrorV1, ReadSinkV1,
 };
+use layerfs_storage::read::read_file_range_impl_v1;
 use layerfs_storage::{CoreError, CoreResult};
 
 use crate::l1_tree_tests::{build, mutation_fixture, replacement_fixture, MutationSource};
@@ -171,6 +172,52 @@ impl FsCasControlV1 for ContinueControl {
 
     fn deadline_exceeded(&mut self) -> bool {
         false
+    }
+}
+
+#[derive(Default)]
+struct EquivalentCreateTraceControl {
+    boundaries: Vec<FsCasBoundaryV1>,
+    fail_marker_hard_link: bool,
+    marker_hard_link_failed: bool,
+}
+
+impl CdcControlV1 for EquivalentCreateTraceControl {
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+}
+
+impl FsCasControlV1 for EquivalentCreateTraceControl {
+    fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+        self.boundaries.push(boundary);
+    }
+
+    fn cancellation_requested(&mut self) -> bool {
+        false
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        false
+    }
+
+    fn inject_filesystem_failure(
+        &mut self,
+        boundary: FsCasFilesystemBoundaryV1,
+    ) -> Option<FsCasErrorV1> {
+        if self.fail_marker_hard_link
+            && !self.marker_hard_link_failed
+            && boundary == FsCasFilesystemBoundaryV1::MarkerHardLink
+        {
+            self.marker_hard_link_failed = true;
+            Some(FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace))
+        } else {
+            None
+        }
     }
 }
 
@@ -869,6 +916,186 @@ fn accept_files(
     )
     .expect("accepted base root");
     (handoff.version_record(), handoff.root_tree())
+}
+
+fn run_single_file_create<C>(
+    cas: &FsCasV1,
+    key: u64,
+    name: &[u8],
+    mode: u16,
+    bytes: &[u8],
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+) -> Result<(), OperationErrorV1>
+where
+    C: CdcControlV1 + FsCasControlV1,
+{
+    let operation = request_create_operation_v1(cas, key, counters, control)
+        .map_err(OperationErrorV1::FsCas)?;
+    let mut scratch = OperationScratch::new();
+    run_create_v1(
+        operation,
+        CdcAlgorithmV1::FastCdc,
+        name,
+        mode,
+        bytes.len() as u64,
+        SliceSupplier { bytes },
+        scratch.borrow(),
+        control,
+        counters,
+    )
+    .map(|_| ())
+}
+
+fn run_multi_entry_create<C>(
+    cas: &FsCasV1,
+    key: u64,
+    files: &[(&[u8], u16, &[u8])],
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+) -> Result<(), OperationErrorV1>
+where
+    C: CdcControlV1 + FsCasControlV1,
+{
+    let mut manifest: Vec<_> = files
+        .iter()
+        .map(|(path, mode, bytes)| {
+            TreeFileV1::new(path, *mode, bytes.len() as u64, SliceSupplier { bytes })
+        })
+        .collect();
+    let operation =
+        request_tree_operation_v1(cas, key, counters, control).map_err(OperationErrorV1::FsCas)?;
+    let mut scratch = OperationScratch::new();
+    run_create_tree_v1(
+        operation,
+        CdcAlgorithmV1::FastCdc,
+        &mut manifest,
+        scratch.borrow(),
+        control,
+        counters,
+    )
+    .map(|_| ())
+}
+
+fn outer_create_trace(boundaries: &[FsCasBoundaryV1]) -> Vec<FsCasBoundaryV1> {
+    boundaries
+        .iter()
+        .copied()
+        .filter(|boundary| {
+            matches!(
+                boundary,
+                FsCasBoundaryV1::BeforeOperationSlotReservationRequest
+                    | FsCasBoundaryV1::BeforeClosureMarkerPublication
+                    | FsCasBoundaryV1::AfterClosureMarkerLink
+                    | FsCasBoundaryV1::AfterCompleteValidatedHandoff
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn one_file_and_multi_entry_create_share_outer_lifecycle_trace_and_fault_terminal() {
+    let one_bytes = b"one-file-create";
+    let two_bytes = b"second-entry-create";
+
+    let success_one_root = TestRoot::new("create-trace-one-success");
+    let success_one_cas = FsCasV1::create_new(success_one_root.path()).expect("create FsCas");
+    let mut success_one_control = EquivalentCreateTraceControl::default();
+    let mut success_one_counters = OperationCountersV1::default();
+    run_single_file_create(
+        &success_one_cas,
+        0x601,
+        b"one.txt",
+        0o644,
+        one_bytes,
+        &mut success_one_control,
+        &mut success_one_counters,
+    )
+    .expect("one-file Create succeeds");
+
+    let success_tree_root = TestRoot::new("create-trace-tree-success");
+    let success_tree_cas = FsCasV1::create_new(success_tree_root.path()).expect("create FsCas");
+    let mut success_tree_control = EquivalentCreateTraceControl::default();
+    let mut success_tree_counters = OperationCountersV1::default();
+    run_multi_entry_create(
+        &success_tree_cas,
+        0x602,
+        &[
+            (b"one.txt", 0o644, one_bytes),
+            (b"two.txt", 0o644, two_bytes),
+        ],
+        &mut success_tree_control,
+        &mut success_tree_counters,
+    )
+    .expect("multi-entry Create succeeds");
+
+    assert_eq!(
+        outer_create_trace(&success_one_control.boundaries),
+        outer_create_trace(&success_tree_control.boundaries),
+        "one-file and multi-entry Create must use the same successful outer lifecycle ordering"
+    );
+    assert_eq!(
+        outer_create_trace(&success_one_control.boundaries)
+            .first()
+            .copied(),
+        Some(FsCasBoundaryV1::BeforeOperationSlotReservationRequest)
+    );
+    assert_eq!(
+        outer_create_trace(&success_one_control.boundaries)
+            .last()
+            .copied(),
+        Some(FsCasBoundaryV1::AfterCompleteValidatedHandoff)
+    );
+
+    let failed_one_root = TestRoot::new("create-trace-one-failure");
+    let failed_one_cas = FsCasV1::create_new(failed_one_root.path()).expect("create FsCas");
+    let mut failed_one_control = EquivalentCreateTraceControl {
+        fail_marker_hard_link: true,
+        ..EquivalentCreateTraceControl::default()
+    };
+    let mut failed_one_counters = OperationCountersV1::default();
+    let failed_one = run_single_file_create(
+        &failed_one_cas,
+        0x603,
+        b"one.txt",
+        0o644,
+        one_bytes,
+        &mut failed_one_control,
+        &mut failed_one_counters,
+    )
+    .expect_err("one-file Create must surface the injected marker failure");
+
+    let failed_tree_root = TestRoot::new("create-trace-tree-failure");
+    let failed_tree_cas = FsCasV1::create_new(failed_tree_root.path()).expect("create FsCas");
+    let mut failed_tree_control = EquivalentCreateTraceControl {
+        fail_marker_hard_link: true,
+        ..EquivalentCreateTraceControl::default()
+    };
+    let mut failed_tree_counters = OperationCountersV1::default();
+    let failed_tree = run_multi_entry_create(
+        &failed_tree_cas,
+        0x604,
+        &[
+            (b"one.txt", 0o644, one_bytes),
+            (b"two.txt", 0o644, two_bytes),
+        ],
+        &mut failed_tree_control,
+        &mut failed_tree_counters,
+    )
+    .expect_err("multi-entry Create must surface the injected marker failure");
+
+    assert!(failed_one_control.marker_hard_link_failed);
+    assert!(failed_tree_control.marker_hard_link_failed);
+    assert_eq!(failed_one, failed_tree);
+    assert_eq!(
+        outer_create_trace(&failed_one_control.boundaries),
+        outer_create_trace(&failed_tree_control.boundaries),
+        "one-file and multi-entry Create must share outer lifecycle ordering on the same injected failure"
+    );
+    assert!(!outer_create_trace(&failed_one_control.boundaries)
+        .contains(&FsCasBoundaryV1::AfterCompleteValidatedHandoff));
+    assert_clean_terminal(&failed_one_cas, failed_one_root.path());
+    assert_clean_terminal(&failed_tree_cas, failed_tree_root.path());
 }
 
 fn assert_clean_terminal(cas: &FsCasV1, root: &Path) {

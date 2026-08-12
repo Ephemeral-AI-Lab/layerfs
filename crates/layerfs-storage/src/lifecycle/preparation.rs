@@ -49,7 +49,7 @@ impl From<FsCasErrorV1> for PreparationErrorV1 {
     }
 }
 
-/// The single preparation lifecycle shared by complete one-file and tree C3.
+/// The single preparation lifecycle shared by complete one-file and tree operations.
 /// Every filesystem artifact is opened here, after the root grant, and every
 /// terminal path is cleaned here before that grant can be released.
 pub(crate) struct OperationPreparationV1 {

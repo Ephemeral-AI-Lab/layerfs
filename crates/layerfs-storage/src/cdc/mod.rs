@@ -13,6 +13,9 @@ mod resync;
 mod seqcdc;
 
 pub use fastcdc::{FastCdcV1, FastCdcV1Stream};
+pub(crate) use resync::{
+    resynchronize_update_v1, verify_rejoin_bytes_v1, RejoinOperationBindingV1, VerifiedRejoinV1,
+};
 pub use resync::{
     MAX_UPDATE_ANCHOR_SCAN_BYTES, MAX_UPDATE_REJOIN_VERIFICATION_BYTES,
     MAX_UPDATE_RESYNCHRONIZATION_BYTES,

@@ -1229,10 +1229,7 @@ mod locator_custody_regression_tests {
             .collect();
         assert_eq!(catalog_entries.len(), 1);
         assert_eq!(fs::read(&catalog_entries[0]).unwrap(), *marker);
-        assert_eq!(
-            super::decode_catalog_marker(marker.clone().try_into().unwrap()).is_ok(),
-            true
-        );
+        assert!(super::decode_catalog_marker(marker.clone().try_into().unwrap()).is_ok());
 
         // The catalog became visible before rollback began.  Its carrier and
         // every locator remain present as one adopted dependency chain; only
@@ -1665,7 +1662,7 @@ mod locator_receipt_memory_tests {
         let receipt_bytes = core::mem::size_of::<LocatorPublicationReceiptV1>() as u64;
         let custody_bytes = core::mem::size_of::<LocatorPublicationCustodyV1>() as u64;
         let fixed = custody_bytes + receipt_bytes;
-        for count in [1_u64, 25_600, crate::pack::MAX_PACK_RECORDS as u64] {
+        for count in [1_u64, 25_600, crate::pack::MAX_PACK_RECORDS] {
             assert_eq!(
                 locator_publication_receipt_resident_memory_bound_v1(count),
                 Ok(fixed)
@@ -1683,10 +1680,9 @@ mod locator_receipt_memory_tests {
         let custody_bytes = core::mem::size_of::<LocatorPublicationCustodyV1>() as u64;
         let one = locator_publication_receipt_resident_memory_bound_v1(1).unwrap();
         let sentinel = locator_publication_receipt_resident_memory_bound_v1(25_600).unwrap();
-        let legal_max = locator_publication_receipt_resident_memory_bound_v1(
-            crate::pack::MAX_PACK_RECORDS as u64,
-        )
-        .unwrap();
+        let legal_max =
+            locator_publication_receipt_resident_memory_bound_v1(crate::pack::MAX_PACK_RECORDS)
+                .unwrap();
 
         let fixed = custody_bytes + receipt_bytes;
         assert_eq!(one, fixed);
@@ -2148,10 +2144,10 @@ pub enum FsCasCleanupTargetV1 {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FsCasBoundaryV1 {
-    /// Exact complete-C3 benchmark start: immediately before the one
+    /// Exact complete-operation benchmark start: immediately before the one
     /// orchestrator-owned operation slot is requested.
     BeforeOperationSlotReservationRequest,
-    /// Exact complete-C3 benchmark end: the validated handoff is complete,
+    /// Exact complete-operation benchmark end: the validated handoff is complete,
     /// all private preparation cleanup succeeded, and the slot is still held.
     AfterCompleteValidatedHandoff,
     /// The operation requested the short shared-root visibility fence.
@@ -2923,6 +2919,7 @@ pub(crate) fn locator_publication_receipt_preparation_bytes_bound_v1(
 /// publication transaction. Visibility is recorded at the successful
 /// no-replace link, before any fallible observation counter or callback can
 /// return control to the semantic owner.
+#[derive(Default)]
 struct LocatorPublicationCustodyV1<'spool> {
     live_unclassified: u64,
     retained_and_recorded: u64,
@@ -2934,23 +2931,6 @@ struct LocatorPublicationCustodyV1<'spool> {
     receipt_spool: Option<&'spool mut FsOperationSpoolV1>,
     #[cfg(feature = "operation-polymorphism")]
     receipt_count: u64,
-}
-
-impl<'spool> Default for LocatorPublicationCustodyV1<'spool> {
-    fn default() -> Self {
-        Self {
-            live_unclassified: 0,
-            retained_and_recorded: 0,
-            rollback_forbidden: false,
-            receipts: Vec::new(),
-            pending_receipt: None,
-            receipt_prelink_unwound: false,
-            #[cfg(feature = "operation-polymorphism")]
-            receipt_spool: None,
-            #[cfg(feature = "operation-polymorphism")]
-            receipt_count: 0,
-        }
-    }
 }
 
 impl<'spool> LocatorPublicationCustodyV1<'spool> {
@@ -6176,6 +6156,7 @@ impl FsCasV1 {
         Ok(carrier)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn lock_root_mutex_controlled_v1<'owner, T, C>(
         &'owner self,
         mutex: &'owner Mutex<T>,
@@ -6819,6 +6800,7 @@ impl FsCasV1 {
         .map(|(guard, _)| guard)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn lock_active_pack_for_catalog_rollback_controlled_v1<'owner, C>(
         &'owner self,
         id: PackIdV1,
@@ -9674,6 +9656,7 @@ impl FsCasV1 {
         FINAL_CARRIER_SNAPSHOT_CHECKS_FOR_TEST_V1.with(|checks| checks.set(checks.get() + 1));
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn rollback_unpublished_carrier<C>(
         &self,
         path: &Path,
@@ -11614,16 +11597,14 @@ impl FsCasV1 {
             return Err(FsCasErrorV1::Integrity);
         }
         sample_control(control, FsCasBoundaryV1::AfterIncumbentValidation)?;
-        if let Err(error) = compare_complete_pack_bytes(
+        compare_complete_pack_bytes(
             prepared,
             &mut incumbent,
             candidate.pack_len(),
             scratch,
             counters,
             control,
-        ) {
-            return Err(error);
-        }
+        )?;
         self.validate_existing_object_locators(candidate, metadata, counters, control)?;
         let carrier_snapshot = incumbent.immutable_snapshot_v1()?;
         prepared.abort_private();

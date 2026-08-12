@@ -23,8 +23,8 @@ use crate::lifecycle::{
 };
 use crate::limits::{OperationCountersV1, OperationReservationV1, OptionalU64ObservationV1};
 use crate::object::{
-    decode_physical_object_from_port_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1,
-    PhysicalObjectReadPortV1, StrongEdgeV1, StrongEdgeVisitorV1, TreeRecordV1,
+    decode_physical_object_from_port_v1, traverse_strong_edges_v1, DiscardStrongEdgesV1,
+    PhysicalObjectPayloadV1, PhysicalObjectReadPortV1, StrongEdgeTraversalQueueV1, TreeRecordV1,
     TypedPhysicalObjectIdV1,
 };
 use crate::pack::{CompletedPackSetV1, DirectPackSinkV1, FilePackIndexSpoolV1, PackReadPortV1};
@@ -606,22 +606,36 @@ impl PhysicalObjectReadPortV1 for CandidateOccupiedReaderV1<'_, '_, '_, '_> {
     }
 }
 
-struct CandidateEdgeVisitorV1<'closure, 'seen, 'cell, 'control> {
+struct CandidateTraversalQueueV1<'closure, 'seen, 'cell, 'control, 'errors> {
     closure: &'closure mut FileClosureObjectSpoolV1,
     seen: &'seen mut FileGlobalSeenSpoolV1,
     control: &'cell RefCell<&'control mut dyn FsCasControlV1>,
-    first_error: Option<OperationErrorV1>,
+    first_error: &'errors RefCell<Option<OperationErrorV1>>,
 }
 
-impl CandidateEdgeVisitorV1<'_, '_, '_, '_> {
-    fn enqueue(&mut self, id: TypedPhysicalObjectIdV1) -> CoreResult<()> {
+impl CandidateTraversalQueueV1<'_, '_, '_, '_, '_> {
+    fn retain_operation_error(&self, terminal: OperationErrorV1) -> CoreError {
+        self.first_error.borrow_mut().get_or_insert(terminal);
+        map_operation_to_core_v1(terminal)
+    }
+
+    fn retain_closure_error(&mut self, error: CoreError) -> CoreError {
+        let terminal = self
+            .closure
+            .take_first_error()
+            .map(OperationErrorV1::FsCas)
+            .unwrap_or(OperationErrorV1::Core(error));
+        self.retain_operation_error(terminal)
+    }
+}
+
+impl StrongEdgeTraversalQueueV1 for CandidateTraversalQueueV1<'_, '_, '_, '_, '_> {
+    fn enqueue_if_new_v1(&mut self, id: TypedPhysicalObjectIdV1) -> CoreResult<()> {
         let mut shared_control = CandidateSharedControlV1 {
             inner: self.control,
         };
         let lookup = self.seen.lookup(id, &mut shared_control).map_err(|error| {
-            let terminal = map_global_seen_operation_error_v1(error);
-            self.first_error.get_or_insert(terminal);
-            map_operation_to_core_v1(terminal)
+            self.retain_operation_error(map_global_seen_operation_error_v1(error))
         })?;
         if lookup.record.is_some() {
             return Ok(());
@@ -638,15 +652,34 @@ impl CandidateEdgeVisitorV1<'_, '_, '_, '_> {
                 &mut shared_control,
             )
             .map_err(|error| {
-                let terminal = map_global_seen_operation_error_v1(error);
-                self.first_error.get_or_insert(terminal);
-                map_operation_to_core_v1(terminal)
+                self.retain_operation_error(map_global_seen_operation_error_v1(error))
             })?;
         let next_count = u64::from(self.closure.count)
             .checked_add(1)
             .ok_or(CoreError::IntegerOverflow)?;
         crate::format::validate_total_object_count(next_count)?;
         self.closure.push(ClosureObjectRecordV1::pending(id))
+    }
+
+    fn pending_count_v1(&mut self) -> CoreResult<u32> {
+        Ok(self.closure.count)
+    }
+
+    fn pending_id_v1(&mut self, ordinal: u32) -> CoreResult<TypedPhysicalObjectIdV1> {
+        let pending = self
+            .closure
+            .read(ordinal)
+            .map_err(|error| self.retain_closure_error(error))?;
+        if !pending.is_pending() {
+            return Err(CoreError::IdMismatch);
+        }
+        Ok(pending.id)
+    }
+
+    fn complete_pending_v1(&mut self, ordinal: u32, complete_len: u64) -> CoreResult<()> {
+        self.closure
+            .complete_pending(ordinal, complete_len)
+            .map_err(|error| self.retain_closure_error(error))
     }
 }
 
@@ -702,18 +735,6 @@ impl FsCasControlV1 for CandidateSharedControlV1<'_, '_> {
     }
 }
 
-impl StrongEdgeVisitorV1 for CandidateEdgeVisitorV1<'_, '_, '_, '_> {
-    fn begin_object(&mut self) {}
-
-    fn visit_edge(&mut self, edge: StrongEdgeV1) -> CoreResult<()> {
-        self.enqueue(edge.typed_id())
-    }
-
-    fn commit_object(&mut self) {}
-
-    fn abort_object(&mut self) {}
-}
-
 #[allow(clippy::too_many_arguments)]
 fn rebuild_candidate_graph_v1(
     closure: &mut FileClosureObjectSpoolV1,
@@ -734,94 +755,90 @@ fn rebuild_candidate_graph_v1(
         .map_err(map_global_seen_operation_error_v1)?;
 
     let control_cell = RefCell::new(control);
-
-    {
-        let mut visitor = CandidateEdgeVisitorV1 {
-            closure,
-            seen,
-            control: &control_cell,
-            first_error: None,
-        };
-        visitor
-            .enqueue(TypedPhysicalObjectIdV1::Tree(root_tree))
-            .map_err(|error| visitor.first_error.unwrap_or(OperationErrorV1::Core(error)))?;
-    }
-
     let before = occupied.direct_storage_read_observation_typed_v1()?;
     let mut summary = CandidateGraphSummaryV1::default();
-    let mut ordinal = 0_u32;
-    while ordinal < closure.count {
-        if (**control_cell.borrow_mut()).cancellation_requested() {
-            return Err(CoreError::Cancelled.into());
-        }
-        if (**control_cell.borrow_mut()).deadline_exceeded() {
-            return Err(CoreError::Deadline.into());
-        }
-        let pending = closure.read(ordinal).map_err(|error| {
-            closure
-                .take_first_error()
-                .map(OperationErrorV1::FsCas)
-                .unwrap_or(OperationErrorV1::Core(error))
-        })?;
-        if !pending.is_pending() {
-            return Err(CoreError::IdMismatch.into());
-        }
-        let len = match occupied.occupied_len_typed_controlled_v1(
-            pending.id,
-            &mut CandidateSharedControlV1 {
-                inner: &control_cell,
-            },
-        ) {
-            Ok(Some(len)) => len,
-            Ok(None) => {
-                occupied.retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
-                return Err(FsCasErrorV1::MissingOccupant.into());
-            }
-            Err(error) => {
-                occupied.retain_first_error_typed_v1(error);
-                return Err(error.into());
-            }
-        };
-        let decoded = {
+    let first_error = RefCell::new(None);
+    let mut queue = CandidateTraversalQueueV1 {
+        closure,
+        seen,
+        control: &control_cell,
+        first_error: &first_error,
+    };
+    let traversal = traverse_strong_edges_v1(
+        &mut queue,
+        TypedPhysicalObjectIdV1::Tree(root_tree),
+        |id, visitor| {
+            let len = match occupied.occupied_len_typed_controlled_v1(
+                id,
+                &mut CandidateSharedControlV1 {
+                    inner: &control_cell,
+                },
+            ) {
+                Ok(Some(len)) => len,
+                Ok(None) => {
+                    let terminal = OperationErrorV1::FsCas(FsCasErrorV1::MissingOccupant);
+                    occupied.retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+                    first_error.borrow_mut().get_or_insert(terminal);
+                    return Err(map_operation_to_core_v1(terminal));
+                }
+                Err(error) => {
+                    occupied.retain_first_error_typed_v1(error);
+                    let terminal = OperationErrorV1::FsCas(error);
+                    first_error.borrow_mut().get_or_insert(terminal);
+                    return Err(map_operation_to_core_v1(terminal));
+                }
+            };
             let mut reader = CandidateOccupiedReaderV1 {
                 occupied,
                 control: &control_cell,
                 counters,
-                id: pending.id,
+                id,
                 len,
             };
-            let mut visitor = CandidateEdgeVisitorV1 {
-                closure,
-                seen,
-                control: &control_cell,
-                first_error: None,
-            };
-            let result = decode_physical_object_from_port_v1(&mut reader, &mut visitor, comparison);
+            let result = decode_physical_object_from_port_v1(&mut reader, visitor, comparison);
             match result {
-                Ok(decoded) => decoded,
-                Err(error) => {
-                    if let Some(terminal) = visitor.first_error {
-                        return Err(terminal);
+                Ok(decoded) => {
+                    if let Some(terminal) = first_error.borrow().as_ref().copied() {
+                        return Err(map_operation_to_core_v1(terminal));
                     }
                     if let Some(error) = reader.occupied.first_error_typed_v1() {
-                        return Err(error.into());
+                        let terminal = OperationErrorV1::FsCas(error);
+                        first_error.borrow_mut().get_or_insert(terminal);
+                        return Err(map_operation_to_core_v1(terminal));
                     }
-                    return Err(error.into());
+                    if decoded.physical_id() != id || decoded.header().kind() != id.kind() {
+                        return Err(CoreError::IdMismatch);
+                    }
+                    Ok((len, decoded))
+                }
+                Err(error) => {
+                    if let Some(terminal) = first_error.borrow().as_ref().copied() {
+                        return Err(map_operation_to_core_v1(terminal));
+                    }
+                    if let Some(error) = reader.occupied.first_error_typed_v1() {
+                        let terminal = OperationErrorV1::FsCas(error);
+                        first_error.borrow_mut().get_or_insert(terminal);
+                        return Err(map_operation_to_core_v1(terminal));
+                    }
+                    Err(error)
                 }
             }
-        };
-        if decoded.physical_id() != pending.id || decoded.header().kind() != pending.id.kind() {
-            return Err(CoreError::IdMismatch.into());
-        }
-        closure.complete_pending(ordinal, len).map_err(|error| {
-            closure
-                .take_first_error()
-                .map(OperationErrorV1::FsCas)
-                .unwrap_or(OperationErrorV1::Core(error))
-        })?;
-        summary.observe(decoded.payload())?;
-        ordinal = ordinal.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
+        },
+        |_ordinal, _id, _len, decoded| summary.observe(decoded.payload()),
+        || {
+            if (**control_cell.borrow_mut()).cancellation_requested() {
+                return Err(CoreError::Cancelled);
+            }
+            if (**control_cell.borrow_mut()).deadline_exceeded() {
+                return Err(CoreError::Deadline);
+            }
+            Ok(())
+        },
+    );
+    if let Some(terminal) = first_error.into_inner() {
+        return Err(terminal);
     }
+    traversal.map_err(OperationErrorV1::Core)?;
     let after = occupied.direct_storage_read_observation_typed_v1()?;
     counters.record_fscas_read(
         after

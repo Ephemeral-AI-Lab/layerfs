@@ -35,7 +35,7 @@ pub use error::{CoreError, CoreResult, OutcomeCode};
 
 // These accepted storage tests exercise private production boundaries from
 // inside this crate. Keeping them internal prevents test plumbing from turning
-// concrete FsCas, pack, COW, resource, or C3 machinery into a dependent-crate
+// concrete FsCas, pack, COW, resource, or complete-operation machinery into a dependent-crate
 // SDK.
 #[cfg(test)]
 extern crate self as layerfs_storage;

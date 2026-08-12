@@ -6,25 +6,22 @@
 //! ranges resolve only the canonical metadata and chunks needed for the
 //! requested logical interval; they never reconstruct a full file.
 
-use core::cmp::Ordering;
-
 use crate::cas::{
-    FsCasBoundaryV1, FsCasControlV1, FsCasErrorV1, FsCasOccupiedV1, FsCasV1, FsOperationKindV1,
+    FsCasBoundaryV1, FsCasControlV1, FsCasOccupiedV1, FsCasV1, FsOperationKindV1,
     FsOperationObservedControlV1, FsStorageEnvelopeV1, ImmutablePortErrorV1,
 };
 #[cfg(test)]
 use crate::cas::{
-    FsCasCleanupTargetV1, FsCasFailureCauseV1, FsCasFilesystemBoundaryV1, FsCasFilesystemFailureV1,
-    CATALOG_MARKER_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
+    FsCasCleanupTargetV1, FsCasErrorV1, FsCasFailureCauseV1, FsCasFilesystemBoundaryV1,
+    FsCasFilesystemFailureV1, CATALOG_MARKER_BYTES, PERSISTENT_LOCATOR_BYTES_V1,
 };
+use core::cmp::Ordering;
+
 use crate::content::{
     stream_verified_file_range_v1, VerifiedFileBytesConsumerV1, VerifiedFileRangePortV1,
     VerifiedFileSegmentV1,
 };
-use crate::format::{
-    ExtentTagV1, PhysicalTreeChildKindV1, ValidatedComponent, MAX_PATH_BYTES, MAX_PATH_DEPTH,
-    MAX_TREE_PAGE_DEPTH,
-};
+use crate::format::{ValidatedComponent, MAX_PATH_BYTES, MAX_PATH_DEPTH};
 use crate::identity::{
     PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalSymlinkIdV1, PhysicalTreeIdV1,
     PhysicalVersionRecordIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
@@ -33,190 +30,22 @@ use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
 use crate::object::{
-    decode_physical_object_from_port_v1, CanonicalTraversalBudgetV1, DiscardStrongEdgesV1,
-    PhysicalObjectPayloadV1, TreeRecordV1, TypedPhysicalObjectIdV1,
+    decode_physical_object_from_port_v1, read_object_payload_exact_v1, CanonicalTraversalBudgetV1,
+    DiscardStrongEdgesV1, PhysicalObjectPayloadV1, StrongEdgeV1, TreeRecordV1,
+    TypedPhysicalObjectIdV1, VerifiedFileExtentV1, VerifiedObjectStreamV1,
 };
 use crate::{CoreError, CoreResult};
 
-use super::object_reader::OccupiedObjectReaderV1;
 #[cfg(test)]
-use super::range::read_file_range_v1;
-use super::range::{
-    begin_exact_range_digest_v1, execute_exact_range_v1, ExactRangeExecutorV1, ExactRangePlanV1,
-    ExactRangeRequestV1,
+use self::read_file_range_impl_v1 as read_file_range_v1;
+use super::object_reader::{required_occupied_len_v1, OccupiedObjectReaderV1};
+use super::range::{begin_exact_range_digest_v1, ExactRangePlanV1, ExactRangeRequestV1};
+pub(crate) use super::{
+    ReadBuffersV1, ReadKindV1, ReadOperationErrorV1, ReadResultV1, ReadSinkErrorV1, ReadSinkV1,
 };
 
 const FULL_DIGEST_DOMAIN: &[u8; 8] = b"L155EXT1";
 const CLOSURE_MARKER_BYTES: u64 = 120;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ReadSinkErrorV1 {
-    Refused,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ReadKindV1 {
-    FullExtraction,
-    ExactRange,
-}
-
-/// Exact private read/extraction failure. FsCas failures are never flattened
-/// into a generic source or sink error at this operation boundary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ReadOperationErrorV1 {
-    Core(CoreError),
-    FsCas(FsCasErrorV1),
-    Sink(ReadSinkErrorV1),
-}
-
-impl ReadOperationErrorV1 {
-    const fn into_fscas_v1(self) -> FsCasErrorV1 {
-        match self {
-            Self::Core(error) => FsCasErrorV1::Core(error),
-            Self::FsCas(error) => error,
-            Self::Sink(ReadSinkErrorV1::Refused) => FsCasErrorV1::Core(CoreError::SinkRefused),
-        }
-    }
-
-    fn dominated_by_fscas_v1(self, dominant: FsCasErrorV1) -> Self {
-        Self::FsCas(self.into_fscas_v1().dominated_by_v1(dominant))
-    }
-
-    fn retain_terminal_v1(current: Option<Self>, candidate: Self) -> Option<Self> {
-        match (current, candidate) {
-            (None, candidate) => Some(candidate),
-            (Some(first), Self::FsCas(dominant))
-                if dominant.has_cleanup_or_invalidation_dominance_v1() =>
-            {
-                Some(first.dominated_by_fscas_v1(dominant))
-            }
-            (Some(first), _) => Some(first),
-        }
-    }
-}
-
-impl From<CoreError> for ReadOperationErrorV1 {
-    fn from(error: CoreError) -> Self {
-        Self::Core(error)
-    }
-}
-
-impl From<FsCasErrorV1> for ReadOperationErrorV1 {
-    fn from(error: FsCasErrorV1) -> Self {
-        Self::FsCas(error)
-    }
-}
-
-/// Transactional bounded consumer for private extraction bytes.
-///
-/// `finish_read` is the only success boundary. A sink that exposes data
-/// before that boundary owns the consequences of its own non-transactional
-/// behavior; LayerFS always invokes `abort_read` after a later failure.
-pub(crate) trait ReadSinkV1 {
-    fn resident_memory_bound_bytes(&self) -> CoreResult<u64>;
-    fn begin_read(&mut self, kind: ReadKindV1) -> Result<(), ReadSinkErrorV1>;
-    fn begin_file(
-        &mut self,
-        path: &[u8],
-        mode: u16,
-        logical_len: u64,
-        selected_offset: u64,
-        selected_len: u64,
-    ) -> Result<(), ReadSinkErrorV1>;
-    fn write_file_bytes(&mut self, bytes: &[u8]) -> Result<(), ReadSinkErrorV1>;
-    fn finish_file(&mut self) -> Result<(), ReadSinkErrorV1>;
-    fn finish_read(&mut self, verification_digest: [u8; 32]) -> Result<(), ReadSinkErrorV1>;
-    fn abort_read(&mut self);
-}
-
-pub(crate) struct ReadBuffersV1<'a> {
-    pub(crate) comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
-    pub(crate) path: &'a mut [u8; MAX_PATH_BYTES],
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ReadResultV1 {
-    kind: ReadKindV1,
-    verification_digest: [u8; 32],
-    payload_bytes: u64,
-    files: u64,
-    directories: u64,
-    symlinks: u64,
-    ranges: u64,
-    objects_traversed: u64,
-    closure_direct_bytes: u64,
-    closure_direct_calls: u64,
-    metadata_direct_bytes: u64,
-    metadata_direct_calls: u64,
-    payload_direct_bytes: u64,
-    payload_direct_calls: u64,
-}
-
-impl ReadResultV1 {
-    pub(crate) const fn kind(self) -> ReadKindV1 {
-        self.kind
-    }
-
-    pub(crate) const fn verification_digest(self) -> [u8; 32] {
-        self.verification_digest
-    }
-
-    pub(crate) const fn payload_bytes(self) -> u64 {
-        self.payload_bytes
-    }
-
-    pub(crate) const fn files(self) -> u64 {
-        self.files
-    }
-
-    pub(crate) const fn directories(self) -> u64 {
-        self.directories
-    }
-
-    pub(crate) const fn symlinks(self) -> u64 {
-        self.symlinks
-    }
-
-    pub(crate) const fn ranges(self) -> u64 {
-        self.ranges
-    }
-
-    pub(crate) const fn objects_traversed(self) -> u64 {
-        self.objects_traversed
-    }
-
-    pub(crate) const fn closure_direct_bytes(self) -> u64 {
-        self.closure_direct_bytes
-    }
-
-    pub(crate) const fn closure_direct_calls(self) -> u64 {
-        self.closure_direct_calls
-    }
-
-    pub(crate) const fn metadata_direct_bytes(self) -> u64 {
-        self.metadata_direct_bytes
-    }
-
-    pub(crate) const fn metadata_direct_calls(self) -> u64 {
-        self.metadata_direct_calls
-    }
-
-    pub(crate) const fn payload_direct_bytes(self) -> u64 {
-        self.payload_direct_bytes
-    }
-
-    pub(crate) const fn payload_direct_calls(self) -> u64 {
-        self.payload_direct_calls
-    }
-
-    pub(crate) const fn direct_fscas_bytes(self) -> u64 {
-        self.closure_direct_bytes + self.metadata_direct_bytes + self.payload_direct_bytes
-    }
-
-    pub(crate) const fn direct_fscas_calls(self) -> u64 {
-        self.closure_direct_calls + self.metadata_direct_calls + self.payload_direct_calls
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn extract_root_v1<S, C>(
@@ -280,7 +109,7 @@ where
 }
 
 #[derive(Clone, Copy)]
-enum ReadRequestV1<'a> {
+pub(super) enum ReadRequestV1<'a> {
     Full,
     RangeInput(ExactRangeRequestV1<'a>),
     Range(ExactRangePlanV1<'a>),
@@ -301,7 +130,7 @@ enum ReadSinkTransactionStateV1 {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_read_v1<S, C>(
+pub(super) fn run_read_v1<S, C>(
     cas: &FsCasV1,
     operation_kind: FsOperationKindV1,
     cancellation_key: u64,
@@ -463,8 +292,7 @@ where
                         sink_transaction = ReadSinkTransactionStateV1::Active;
                         let mut hasher =
                             begin_exact_range_digest_v1(version_record, requested_root, plan);
-                        let operation =
-                            execute_exact_range_v1(&mut reader, requested_root, plan, &mut hasher);
+                        let operation = reader.read_exact_range(requested_root, plan, &mut hasher);
                         let digest = match operation {
                             Ok(()) => finish_digest(hasher),
                             Err(error) => return Err(error),
@@ -616,9 +444,9 @@ where
     Ok(value)
 }
 
-struct ValidatedObjectV1 {
-    len: u64,
-    payload: PhysicalObjectPayloadV1,
+pub(super) struct ValidatedObjectV1 {
+    pub(super) len: u64,
+    pub(super) payload: PhysicalObjectPayloadV1,
 }
 
 #[derive(Clone, Copy)]
@@ -635,13 +463,17 @@ enum FullTraversalFrameV1 {
         path_depth: usize,
     },
     LeafEntries {
-        cursor: ObjectCursorV1,
+        id: TypedPhysicalObjectIdV1,
+        len: u64,
+        stream: VerifiedObjectStreamV1,
         remaining: u16,
         path_len: usize,
         path_depth: usize,
     },
     IndexEntries {
-        cursor: ObjectCursorV1,
+        id: TypedPhysicalObjectIdV1,
+        len: u64,
+        stream: VerifiedObjectStreamV1,
         remaining: u16,
         child_depth: u8,
         path_len: usize,
@@ -687,17 +519,17 @@ impl BoundedFullTraversalStackV1 {
     }
 }
 
-struct ReaderV1<'a, S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> {
-    occupied: &'a mut FsCasOccupiedV1,
-    sink: &'a mut S,
-    counters: &'a mut OperationCountersV1,
-    comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
+pub(super) struct ReaderV1<'a, S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> {
+    pub(super) occupied: &'a mut FsCasOccupiedV1,
+    pub(super) sink: &'a mut S,
+    pub(super) counters: &'a mut OperationCountersV1,
+    pub(super) comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
     path: &'a mut [u8; MAX_PATH_BYTES],
     path_len: usize,
     path_depth: usize,
-    control: &'a mut C,
+    pub(super) control: &'a mut C,
     payload_bytes: u64,
-    files: u64,
+    pub(super) files: u64,
     directories: u64,
     symlinks: u64,
     objects_traversed: u64,
@@ -706,27 +538,12 @@ struct ReaderV1<'a, S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> {
 }
 
 impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
-    fn required_occupied_len(&mut self, id: TypedPhysicalObjectIdV1) -> CoreResult<u64> {
-        match self
-            .occupied
-            .occupied_len_typed_controlled_v1(id, self.control)
-        {
-            Ok(Some(len)) => Ok(len),
-            Ok(None) => {
-                self.occupied
-                    .retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
-                Err(CoreError::SourceFailure)
-            }
-            Err(error) => {
-                self.occupied.retain_first_error_typed_v1(error);
-                Err(CoreError::SourceFailure)
-            }
-        }
-    }
-
-    fn validate_object(&mut self, id: TypedPhysicalObjectIdV1) -> CoreResult<ValidatedObjectV1> {
+    pub(super) fn validate_object(
+        &mut self,
+        id: TypedPhysicalObjectIdV1,
+    ) -> CoreResult<ValidatedObjectV1> {
         check_control(self.control)?;
-        let len = self.required_occupied_len(id)?;
+        let len = required_occupied_len_v1(self.occupied, self.control, id)?;
         let mut source =
             OccupiedObjectReaderV1::new(self.occupied, self.counters, self.control, id, len);
         let decoded = decode_physical_object_from_port_v1(
@@ -747,12 +564,151 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
         })
     }
 
-    fn cursor(&mut self, id: TypedPhysicalObjectIdV1, len: u64) -> ObjectCursorV1 {
-        ObjectCursorV1 {
-            id,
-            offset: crate::object::OBJECT_HEADER_BYTES,
-            end: len,
+    pub(super) fn object_stream(&mut self, len: u64) -> VerifiedObjectStreamV1 {
+        VerifiedObjectStreamV1::new(len)
+    }
+
+    pub(super) fn read_exact_range(
+        &mut self,
+        root: PhysicalTreeIdV1,
+        plan: ExactRangePlanV1<'_>,
+        hasher: &mut blake3::Hasher,
+    ) -> CoreResult<()> {
+        let mut directory = root;
+        let mut components = plan.path().split(|byte| *byte == b'/').peekable();
+        while let Some(component) = components.next() {
+            let edge = self.lookup_directory_component(directory, component)?;
+            if components.peek().is_some() {
+                directory = match edge {
+                    StrongEdgeV1::Tree(id) => id,
+                    _ => return Err(CoreError::TypedEdge),
+                };
+                continue;
+            }
+            let StrongEdgeV1::File(id) = edge else {
+                return Err(CoreError::TypedEdge);
+            };
+            return self.stream_file_range(id, plan.path(), plan.offset(), plan.end(), hasher);
         }
+        Err(CoreError::Path)
+    }
+
+    fn lookup_directory_component(
+        &mut self,
+        directory: PhysicalTreeIdV1,
+        component: &[u8],
+    ) -> CoreResult<StrongEdgeV1> {
+        let object = self.validate_object(TypedPhysicalObjectIdV1::Tree(directory))?;
+        let PhysicalObjectPayloadV1::Tree(TreeRecordV1::Directory(directory)) = object.payload
+        else {
+            return Err(CoreError::TypedEdge);
+        };
+        let page = directory
+            .root_page_id
+            .ok_or(CoreError::MissingClosureEdge)?;
+        self.lookup_page_component(page, directory.page_depth, component)
+    }
+
+    fn lookup_page_component(
+        &mut self,
+        mut page: PhysicalTreeIdV1,
+        mut expected_depth: u8,
+        component: &[u8],
+    ) -> CoreResult<StrongEdgeV1> {
+        for _ in 0..=crate::format::MAX_TREE_PAGE_DEPTH {
+            check_control(self.control)?;
+            let object = self.validate_object(TypedPhysicalObjectIdV1::Tree(page))?;
+            let page_id = TypedPhysicalObjectIdV1::Tree(page);
+            let mut stream = self.object_stream(object.len);
+            let mut source = OccupiedObjectReaderV1::resolved_new(
+                self.occupied,
+                self.counters,
+                self.control,
+                page_id,
+                object.len,
+            )?;
+            match object.payload {
+                PhysicalObjectPayloadV1::Tree(TreeRecordV1::Leaf(leaf)) => {
+                    stream.begin_tree_leaf(&mut source, expected_depth, leaf.depth, leaf.count)?;
+                    for _ in 0..leaf.count {
+                        let mut name = [0_u8; 255];
+                        let (name_len, edge) = stream.next_leaf_entry(&mut source, &mut name)?;
+                        match name[..name_len].cmp(component) {
+                            Ordering::Less => {}
+                            Ordering::Equal => return Ok(edge),
+                            Ordering::Greater => return Err(CoreError::MissingClosureEdge),
+                        }
+                    }
+                    return Err(CoreError::MissingClosureEdge);
+                }
+                PhysicalObjectPayloadV1::Tree(TreeRecordV1::Index(index)) => {
+                    stream.begin_tree_index(
+                        &mut source,
+                        expected_depth,
+                        index.depth,
+                        index.count,
+                    )?;
+                    let mut selected = None;
+                    for _ in 0..index.count {
+                        let mut first = [0_u8; 255];
+                        let mut last = [0_u8; 255];
+                        let (_subtree, first_len, last_len, child) =
+                            stream.next_index_entry(&mut source, &mut first, &mut last)?;
+                        if component < &first[..first_len] {
+                            return Err(CoreError::MissingClosureEdge);
+                        }
+                        if component <= &last[..last_len] {
+                            selected = Some(child);
+                            break;
+                        }
+                    }
+                    page = selected.ok_or(CoreError::MissingClosureEdge)?;
+                    expected_depth -= 1;
+                }
+                _ => return Err(CoreError::TypedEdge),
+            }
+        }
+        Err(CoreError::CountCap)
+    }
+
+    fn stream_file_range(
+        &mut self,
+        id: PhysicalFileIdV1,
+        path: &[u8],
+        selected_start: u64,
+        selected_end: u64,
+        hasher: &mut blake3::Hasher,
+    ) -> CoreResult<()> {
+        let object = self.validate_object(TypedPhysicalObjectIdV1::File(id))?;
+        let PhysicalObjectPayloadV1::File(file) = object.payload else {
+            return Err(CoreError::TypedEdge);
+        };
+        if selected_end > file.logical_len {
+            return Err(CoreError::LogicalLength);
+        }
+        let selected_len = selected_end - selected_start;
+        digest_entry_prefix(hasher, 0x11, path, file.mode, file.logical_len);
+        digest_stream_prefix(hasher, 0x33, selected_len);
+        self.sink
+            .begin_file(
+                path,
+                file.mode,
+                file.logical_len,
+                selected_start,
+                selected_len,
+            )
+            .map_err(map_sink)?;
+        self.stream_verified_file(
+            id,
+            object.len,
+            file.extent_count,
+            file.logical_len,
+            selected_start,
+            selected_end,
+            hasher,
+        )?;
+        self.files = 1;
+        self.sink.finish_file().map_err(map_sink)
     }
 
     fn walk_root_full(
@@ -809,40 +765,54 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
                 } => {
                     self.restore_path(path_len, path_depth)?;
                     let object = self.validate_object(TypedPhysicalObjectIdV1::Tree(id))?;
-                    let mut cursor = self.cursor(TypedPhysicalObjectIdV1::Tree(id), object.len);
+                    let typed_id = TypedPhysicalObjectIdV1::Tree(id);
+                    let mut stream = self.object_stream(object.len);
                     match object.payload {
                         PhysicalObjectPayloadV1::Tree(TreeRecordV1::Leaf(leaf)) => {
-                            if expected_depth != 0
-                                || cursor.read_u8(self.occupied, self.counters, self.control)?
-                                    != 0x02
-                                || cursor.read_u8(self.occupied, self.counters, self.control)?
-                                    != leaf.depth
-                                || cursor.read_u16(self.occupied, self.counters, self.control)?
-                                    != leaf.count
                             {
-                                return Err(CoreError::TypeDomain);
+                                let mut source = OccupiedObjectReaderV1::resolved_new(
+                                    self.occupied,
+                                    self.counters,
+                                    self.control,
+                                    typed_id,
+                                    object.len,
+                                )?;
+                                stream.begin_tree_leaf(
+                                    &mut source,
+                                    expected_depth,
+                                    leaf.depth,
+                                    leaf.count,
+                                )?;
                             }
                             stack.push(FullTraversalFrameV1::LeafEntries {
-                                cursor,
+                                id: typed_id,
+                                len: object.len,
+                                stream,
                                 remaining: leaf.count,
                                 path_len,
                                 path_depth,
                             })?;
                         }
                         PhysicalObjectPayloadV1::Tree(TreeRecordV1::Index(index)) => {
-                            if expected_depth == 0
-                                || index.depth != expected_depth
-                                || cursor.read_u8(self.occupied, self.counters, self.control)?
-                                    != 0x03
-                                || cursor.read_u8(self.occupied, self.counters, self.control)?
-                                    != index.depth
-                                || cursor.read_u16(self.occupied, self.counters, self.control)?
-                                    != index.count
                             {
-                                return Err(CoreError::TypeDomain);
+                                let mut source = OccupiedObjectReaderV1::resolved_new(
+                                    self.occupied,
+                                    self.counters,
+                                    self.control,
+                                    typed_id,
+                                    object.len,
+                                )?;
+                                stream.begin_tree_index(
+                                    &mut source,
+                                    expected_depth,
+                                    index.depth,
+                                    index.count,
+                                )?;
                             }
                             stack.push(FullTraversalFrameV1::IndexEntries {
-                                cursor,
+                                id: typed_id,
+                                len: object.len,
+                                stream,
                                 remaining: index.count,
                                 child_depth: expected_depth - 1,
                                 path_len,
@@ -853,32 +823,33 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
                     }
                 }
                 FullTraversalFrameV1::LeafEntries {
-                    mut cursor,
+                    id,
+                    len,
+                    mut stream,
                     remaining,
                     path_len,
                     path_depth,
                 } => {
                     self.restore_path(path_len, path_depth)?;
                     if remaining == 0 {
-                        cursor.finish()?;
+                        stream.finish()?;
                         continue;
                     }
                     let mut component = [0_u8; 255];
-                    let component_len = cursor.read_component(
-                        self.occupied,
-                        self.counters,
-                        self.control,
-                        &mut component,
-                    )?;
-                    let kind = PhysicalTreeChildKindV1::try_from(cursor.read_u8(
-                        self.occupied,
-                        self.counters,
-                        self.control,
-                    )?)?;
-                    let digest =
-                        cursor.read_array::<32>(self.occupied, self.counters, self.control)?;
+                    let (component_len, edge) = {
+                        let mut source = OccupiedObjectReaderV1::resolved_new(
+                            self.occupied,
+                            self.counters,
+                            self.control,
+                            id,
+                            len,
+                        )?;
+                        stream.next_leaf_entry(&mut source, &mut component)?
+                    };
                     stack.push(FullTraversalFrameV1::LeafEntries {
-                        cursor,
+                        id,
+                        len,
+                        stream,
                         remaining: remaining - 1,
                         path_len,
                         path_depth,
@@ -886,27 +857,30 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
                     self.push_component(&component[..component_len])?;
                     let child_path_len = self.path_len;
                     let child_path_depth = self.path_depth;
-                    let child = match kind {
-                        PhysicalTreeChildKindV1::Tree => FullTraversalFrameV1::Directory {
-                            id: PhysicalTreeIdV1::from_digest(digest),
+                    let child = match edge {
+                        StrongEdgeV1::Tree(id) => FullTraversalFrameV1::Directory {
+                            id,
                             path_len: child_path_len,
                             path_depth: child_path_depth,
                         },
-                        PhysicalTreeChildKindV1::File => FullTraversalFrameV1::File {
-                            id: PhysicalFileIdV1::from_digest(digest),
+                        StrongEdgeV1::File(id) => FullTraversalFrameV1::File {
+                            id,
                             path_len: child_path_len,
                             path_depth: child_path_depth,
                         },
-                        PhysicalTreeChildKindV1::Symlink => FullTraversalFrameV1::Symlink {
-                            id: PhysicalSymlinkIdV1::from_digest(digest),
+                        StrongEdgeV1::Symlink(id) => FullTraversalFrameV1::Symlink {
+                            id,
                             path_len: child_path_len,
                             path_depth: child_path_depth,
                         },
+                        StrongEdgeV1::Chunk(_) => return Err(CoreError::TypedEdge),
                     };
                     stack.push(child)?;
                 }
                 FullTraversalFrameV1::IndexEntries {
-                    mut cursor,
+                    id,
+                    len,
+                    mut stream,
                     remaining,
                     child_depth,
                     path_len,
@@ -914,19 +888,25 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
                 } => {
                     self.restore_path(path_len, path_depth)?;
                     if remaining == 0 {
-                        cursor.finish()?;
+                        stream.finish()?;
                         continue;
                     }
-                    let _subtree = cursor.read_u32(self.occupied, self.counters, self.control)?;
-                    cursor.skip_component(self.occupied, self.counters, self.control)?;
-                    cursor.skip_component(self.occupied, self.counters, self.control)?;
-                    let child = PhysicalTreeIdV1::from_digest(cursor.read_array::<32>(
-                        self.occupied,
-                        self.counters,
-                        self.control,
-                    )?);
+                    let mut first = [0_u8; 255];
+                    let mut last = [0_u8; 255];
+                    let (_subtree, _first_len, _last_len, child) = {
+                        let mut source = OccupiedObjectReaderV1::resolved_new(
+                            self.occupied,
+                            self.counters,
+                            self.control,
+                            id,
+                            len,
+                        )?;
+                        stream.next_index_entry(&mut source, &mut first, &mut last)?
+                    };
                     stack.push(FullTraversalFrameV1::IndexEntries {
-                        cursor,
+                        id,
+                        len,
+                        stream,
                         remaining: remaining - 1,
                         child_depth,
                         path_len,
@@ -1004,7 +984,7 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn stream_verified_file(
+    pub(super) fn stream_verified_file(
         &mut self,
         id: PhysicalFileIdV1,
         object_len: u64,
@@ -1014,60 +994,64 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
         selected_end: u64,
         hasher: &mut blake3::Hasher,
     ) -> CoreResult<()> {
-        let mut cursor = self.cursor(TypedPhysicalObjectIdV1::File(id), object_len);
-        let _mode = cursor.read_u16(self.occupied, self.counters, self.control)?;
-        if cursor.read_u64(self.occupied, self.counters, self.control)? != logical_len {
-            return Err(CoreError::LogicalLength);
-        }
-        if cursor.read_u32(self.occupied, self.counters, self.control)? != extent_count {
-            return Err(CoreError::CountCap);
+        let mut stream = self.object_stream(object_len);
+        let typed_id = TypedPhysicalObjectIdV1::File(id);
+        {
+            let mut source = OccupiedObjectReaderV1::resolved_new(
+                self.occupied,
+                self.counters,
+                self.control,
+                typed_id,
+                object_len,
+            )?;
+            stream.begin_file(&mut source, logical_len, extent_count)?;
         }
         let expected = selected_end
             .checked_sub(selected_start)
             .ok_or(CoreError::LogicalLength)?;
-        let stream_result = {
-            let mut port = FsCasVerifiedFileRangeV1 {
-                occupied: self.occupied,
-                counters: self.counters,
-                control: self.control,
-                cursor,
-                file_logical_len: logical_len,
-                selected_start,
-                selected_end,
-                extents_remaining: extent_count,
-                logical_offset: 0,
-                active_data_chunks: 0,
-                active_data_end: 0,
-                next_token: 1,
-                current_data: None,
-                validated_chunks: 0,
-            };
-            let mut consumer = ExtractionFileConsumerV1 {
-                sink: self.sink,
-                hasher,
-            };
-            let result =
-                stream_verified_file_range_v1(expected, &mut port, &mut consumer, self.comparison)?;
-            (result, port.validated_chunks)
+        let mut port = FsCasVerifiedFileRangeV1 {
+            occupied: self.occupied,
+            counters: self.counters,
+            control: self.control,
+            object_id: typed_id,
+            object_len,
+            stream,
+            file_logical_len: logical_len,
+            selected_start,
+            selected_end,
+            extents_remaining: extent_count,
+            logical_offset: 0,
+            active_data_chunks: 0,
+            active_data_end: 0,
+            next_token: 1,
+            current_data: None,
+            validated_chunks: 0,
         };
+        let mut consumer = RangeFileConsumerV1 {
+            sink: self.sink,
+            hasher,
+        };
+        let stream_result =
+            stream_verified_file_range_v1(expected, &mut port, &mut consumer, self.comparison)?;
+        let validated_chunks = port.validated_chunks;
         self.payload_bytes = self
             .payload_bytes
-            .checked_add(stream_result.0.logical_bytes)
+            .checked_add(stream_result.logical_bytes)
             .ok_or(CoreError::IntegerOverflow)?;
         self.payload_direct_bytes = self
             .payload_direct_bytes
-            .checked_add(stream_result.0.payload_direct_bytes)
+            .checked_add(stream_result.payload_direct_bytes)
             .ok_or(CoreError::IntegerOverflow)?;
         self.payload_direct_calls = self
             .payload_direct_calls
-            .checked_add(stream_result.0.payload_direct_calls)
+            .checked_add(stream_result.payload_direct_calls)
             .ok_or(CoreError::IntegerOverflow)?;
         self.objects_traversed = self
             .objects_traversed
-            .checked_add(stream_result.1)
+            .checked_add(validated_chunks)
             .ok_or(CoreError::IntegerOverflow)?;
         self.counters
-            .add(CounterFieldV1::BytesWritten, stream_result.0.logical_bytes)?;
+            .add(CounterFieldV1::BytesWritten, stream_result.logical_bytes)?;
         if selected_end > logical_len {
             return Err(CoreError::LogicalLength);
         }
@@ -1096,14 +1080,16 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
         );
         digest_stream_prefix(hasher, 0x32, u64::from(link.target_len));
         let len = usize::try_from(link.target_len).map_err(|_| CoreError::IntegerOverflow)?;
-        read_occupied_exact_accounted_v1(
+        let typed_id = TypedPhysicalObjectIdV1::Symlink(id);
+        let occupied_len = required_occupied_len_v1(self.occupied, self.control, typed_id)?;
+        let mut source = OccupiedObjectReaderV1::new(
             self.occupied,
             self.counters,
             self.control,
-            TypedPhysicalObjectIdV1::Symlink(id),
-            crate::object::OBJECT_HEADER_BYTES + 4,
-            &mut self.comparison[..len],
-        )?;
+            typed_id,
+            occupied_len,
+        );
+        read_object_payload_exact_v1(&mut source, 4, &mut self.comparison[..len])?;
         self.payload_direct_bytes = self
             .payload_direct_bytes
             .checked_add(len as u64)
@@ -1115,190 +1101,6 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
         hasher.update(&self.comparison[..len]);
         Ok(())
     }
-
-    fn read_exact_range(
-        &mut self,
-        root: PhysicalTreeIdV1,
-        path: &[u8],
-        offset: u64,
-        end: u64,
-        hasher: &mut blake3::Hasher,
-    ) -> CoreResult<()> {
-        let mut directory = root;
-        let mut components = path.split(|byte| *byte == b'/').peekable();
-        while let Some(component) = components.next() {
-            let (kind, digest) = self.lookup_directory_component(directory, component)?;
-            if components.peek().is_some() {
-                if kind != PhysicalTreeChildKindV1::Tree {
-                    return Err(CoreError::TypedEdge);
-                }
-                directory = PhysicalTreeIdV1::from_digest(digest);
-                continue;
-            }
-            if kind != PhysicalTreeChildKindV1::File {
-                return Err(CoreError::TypedEdge);
-            }
-            return self.stream_file_range(
-                PhysicalFileIdV1::from_digest(digest),
-                path,
-                offset,
-                end,
-                hasher,
-            );
-        }
-        Err(CoreError::Path)
-    }
-
-    fn lookup_directory_component(
-        &mut self,
-        directory: PhysicalTreeIdV1,
-        component: &[u8],
-    ) -> CoreResult<(PhysicalTreeChildKindV1, [u8; 32])> {
-        let object = self.validate_object(TypedPhysicalObjectIdV1::Tree(directory))?;
-        let PhysicalObjectPayloadV1::Tree(TreeRecordV1::Directory(directory)) = object.payload
-        else {
-            return Err(CoreError::TypedEdge);
-        };
-        let page = directory
-            .root_page_id
-            .ok_or(CoreError::MissingClosureEdge)?;
-        self.lookup_page_component(page, directory.page_depth, component)
-    }
-
-    fn lookup_page_component(
-        &mut self,
-        mut page: PhysicalTreeIdV1,
-        mut expected_depth: u8,
-        component: &[u8],
-    ) -> CoreResult<(PhysicalTreeChildKindV1, [u8; 32])> {
-        for _ in 0..=MAX_TREE_PAGE_DEPTH {
-            check_control(self.control)?;
-            let object = self.validate_object(TypedPhysicalObjectIdV1::Tree(page))?;
-            let mut cursor = self.cursor(TypedPhysicalObjectIdV1::Tree(page), object.len);
-            match object.payload {
-                PhysicalObjectPayloadV1::Tree(TreeRecordV1::Leaf(leaf)) => {
-                    if expected_depth != 0
-                        || cursor.read_u8(self.occupied, self.counters, self.control)? != 0x02
-                        || cursor.read_u8(self.occupied, self.counters, self.control)? != leaf.depth
-                        || cursor.read_u16(self.occupied, self.counters, self.control)?
-                            != leaf.count
-                    {
-                        return Err(CoreError::TypeDomain);
-                    }
-                    for _ in 0..leaf.count {
-                        let mut name = [0_u8; 255];
-                        let name_len = cursor.read_component(
-                            self.occupied,
-                            self.counters,
-                            self.control,
-                            &mut name,
-                        )?;
-                        let kind = PhysicalTreeChildKindV1::try_from(cursor.read_u8(
-                            self.occupied,
-                            self.counters,
-                            self.control,
-                        )?)?;
-                        let digest =
-                            cursor.read_array::<32>(self.occupied, self.counters, self.control)?;
-                        match name[..name_len].cmp(component) {
-                            Ordering::Less => {}
-                            Ordering::Equal => return Ok((kind, digest)),
-                            Ordering::Greater => return Err(CoreError::MissingClosureEdge),
-                        }
-                    }
-                    return Err(CoreError::MissingClosureEdge);
-                }
-                PhysicalObjectPayloadV1::Tree(TreeRecordV1::Index(index)) => {
-                    if expected_depth == 0
-                        || index.depth != expected_depth
-                        || cursor.read_u8(self.occupied, self.counters, self.control)? != 0x03
-                        || cursor.read_u8(self.occupied, self.counters, self.control)?
-                            != index.depth
-                        || cursor.read_u16(self.occupied, self.counters, self.control)?
-                            != index.count
-                    {
-                        return Err(CoreError::TypeDomain);
-                    }
-                    let mut selected = None;
-                    for _ in 0..index.count {
-                        let _subtree =
-                            cursor.read_u32(self.occupied, self.counters, self.control)?;
-                        let mut first = [0_u8; 255];
-                        let first_len = cursor.read_component(
-                            self.occupied,
-                            self.counters,
-                            self.control,
-                            &mut first,
-                        )?;
-                        let mut last = [0_u8; 255];
-                        let last_len = cursor.read_component(
-                            self.occupied,
-                            self.counters,
-                            self.control,
-                            &mut last,
-                        )?;
-                        let child = PhysicalTreeIdV1::from_digest(cursor.read_array::<32>(
-                            self.occupied,
-                            self.counters,
-                            self.control,
-                        )?);
-                        if component < &first[..first_len] {
-                            return Err(CoreError::MissingClosureEdge);
-                        }
-                        if component <= &last[..last_len] {
-                            selected = Some(child);
-                            break;
-                        }
-                    }
-                    page = selected.ok_or(CoreError::MissingClosureEdge)?;
-                    expected_depth -= 1;
-                }
-                _ => return Err(CoreError::TypedEdge),
-            }
-        }
-        Err(CoreError::CountCap)
-    }
-
-    fn stream_file_range(
-        &mut self,
-        id: PhysicalFileIdV1,
-        path: &[u8],
-        selected_start: u64,
-        selected_end: u64,
-        hasher: &mut blake3::Hasher,
-    ) -> CoreResult<()> {
-        let object = self.validate_object(TypedPhysicalObjectIdV1::File(id))?;
-        let PhysicalObjectPayloadV1::File(file) = object.payload else {
-            return Err(CoreError::TypedEdge);
-        };
-        if selected_end > file.logical_len {
-            return Err(CoreError::LogicalLength);
-        }
-        let selected_len = selected_end - selected_start;
-        digest_entry_prefix(hasher, 0x11, path, file.mode, file.logical_len);
-        digest_stream_prefix(hasher, 0x33, selected_len);
-        self.sink
-            .begin_file(
-                path,
-                file.mode,
-                file.logical_len,
-                selected_start,
-                selected_len,
-            )
-            .map_err(map_sink)?;
-        self.stream_verified_file(
-            id,
-            object.len,
-            file.extent_count,
-            file.logical_len,
-            selected_start,
-            selected_end,
-            hasher,
-        )?;
-        self.files = 1;
-        self.sink.finish_file().map_err(map_sink)
-    }
-
     fn push_component(&mut self, component: &[u8]) -> CoreResult<()> {
         ValidatedComponent::new(component)?;
         let next_depth = self
@@ -1337,68 +1139,12 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
     }
 }
 
-impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ExactRangeExecutorV1
-    for ReaderV1<'_, S, C>
-{
-    fn execute_exact_range_v1(
-        &mut self,
-        root: PhysicalTreeIdV1,
-        plan: ExactRangePlanV1<'_>,
-        hasher: &mut blake3::Hasher,
-    ) -> CoreResult<()> {
-        self.read_exact_range(root, plan.path(), plan.offset(), plan.end(), hasher)
-    }
-}
-
-fn read_occupied_exact_accounted_v1<C>(
-    occupied: &mut FsCasOccupiedV1,
-    counters: &mut OperationCountersV1,
-    control: &mut C,
-    id: TypedPhysicalObjectIdV1,
-    offset: u64,
-    destination: &mut [u8],
-) -> CoreResult<()>
-where
-    C: FsCasControlV1 + ?Sized,
-{
-    // Traversal frames intentionally retain only canonical IDs and byte
-    // offsets. A descended child can evict its parent's resolved carrier from
-    // the occupied reader's two-entry locality cache, so every resumed frame
-    // must resolve its own ID again before reading. Treating the cache as an
-    // implicit lifetime capability made otherwise valid depth-first reads
-    // fail closed after visiting a child with more than one object.
-    let occupied_len = match occupied.occupied_len_typed_controlled_v1(id, control) {
-        Ok(Some(len)) => len,
-        Ok(None) => {
-            occupied.retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
-            return Err(CoreError::SourceFailure);
-        }
-        Err(error) => {
-            occupied.retain_first_error_typed_v1(error);
-            return Err(CoreError::SourceFailure);
-        }
-    };
-    let end = offset
-        .checked_add(destination.len() as u64)
-        .ok_or(CoreError::IntegerOverflow)?;
-    if end > occupied_len {
-        return Err(CoreError::Truncated);
-    }
-    occupied
-        .read_occupied_exact_at_typed_controlled_v1(id, offset, destination, control)
-        .map_err(|error| {
-            occupied.retain_first_error_typed_v1(error);
-            CoreError::SourceFailure
-        })?;
-    counters.add(CounterFieldV1::BytesRead, destination.len() as u64)
-}
-
-struct ExtractionFileConsumerV1<'a, S: ReadSinkV1 + ?Sized> {
+struct RangeFileConsumerV1<'a, S: ReadSinkV1 + ?Sized> {
     sink: &'a mut S,
     hasher: &'a mut blake3::Hasher,
 }
 
-impl<S: ReadSinkV1 + ?Sized> VerifiedFileBytesConsumerV1 for ExtractionFileConsumerV1<'_, S> {
+impl<S: ReadSinkV1 + ?Sized> VerifiedFileBytesConsumerV1 for RangeFileConsumerV1<'_, S> {
     fn write_verified_bytes(&mut self, bytes: &[u8]) -> CoreResult<()> {
         self.hasher.update(bytes);
         self.sink.write_file_bytes(bytes).map_err(map_sink)
@@ -1413,14 +1159,15 @@ struct CurrentVerifiedDataV1 {
     allowed_end: u64,
 }
 
-/// FsCas-backed implementation of the narrow verified-file port. Concrete
-/// namespace and locator behavior remains here in the extraction owner;
-/// `content::read` sees only opaque, single-use data tokens.
+/// Extraction owns the concrete occupied-file adapter. The range owner sees
+/// only authenticated intersections and opaque data tokens.
 struct FsCasVerifiedFileRangeV1<'a, C: FsCasControlV1 + ?Sized> {
     occupied: &'a mut FsCasOccupiedV1,
     counters: &'a mut OperationCountersV1,
     control: &'a mut C,
-    cursor: ObjectCursorV1,
+    object_id: TypedPhysicalObjectIdV1,
+    object_len: u64,
+    stream: VerifiedObjectStreamV1,
     file_logical_len: u64,
     selected_start: u64,
     selected_end: u64,
@@ -1441,21 +1188,7 @@ impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
         scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     ) -> CoreResult<()> {
         let typed = TypedPhysicalObjectIdV1::Chunk(id);
-        let len = match self
-            .occupied
-            .occupied_len_typed_controlled_v1(typed, self.control)
-        {
-            Ok(Some(len)) => len,
-            Ok(None) => {
-                self.occupied
-                    .retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
-                return Err(CoreError::SourceFailure);
-            }
-            Err(error) => {
-                self.occupied.retain_first_error_typed_v1(error);
-                return Err(CoreError::SourceFailure);
-            }
-        };
+        let len = required_occupied_len_v1(self.occupied, self.control, typed)?;
         let mut source =
             OccupiedObjectReaderV1::new(self.occupied, self.counters, self.control, typed, len);
         let decoded =
@@ -1483,7 +1216,7 @@ impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
         if self.logical_offset != self.file_logical_len {
             return Err(CoreError::LogicalLength);
         }
-        self.cursor.finish()?;
+        self.stream.finish()?;
         Ok(None)
     }
 }
@@ -1501,14 +1234,16 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
         loop {
             self.check_control()?;
             if self.active_data_chunks != 0 {
-                let chunk_len = self
-                    .cursor
-                    .read_u32(self.occupied, self.counters, self.control)?;
-                let chunk = PhysicalChunkIdV1::from_digest(self.cursor.read_array::<32>(
-                    self.occupied,
-                    self.counters,
-                    self.control,
-                )?);
+                let (chunk_len, chunk) = {
+                    let mut source = OccupiedObjectReaderV1::resolved_new(
+                        self.occupied,
+                        self.counters,
+                        self.control,
+                        self.object_id,
+                        self.object_len,
+                    )?;
+                    self.stream.next_chunk_reference(&mut source)?
+                };
                 self.active_data_chunks -= 1;
                 let chunk_start = self.logical_offset;
                 let chunk_end = chunk_start
@@ -1552,14 +1287,23 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
             if self.extents_remaining == 0 {
                 return self.finish_if_complete();
             }
-            let tag = ExtentTagV1::try_from(self.cursor.read_u8(
-                self.occupied,
-                self.counters,
-                self.control,
-            )?)?;
-            let extent_len = self
-                .cursor
-                .read_u64(self.occupied, self.counters, self.control)?;
+            let extent = {
+                let mut source = OccupiedObjectReaderV1::resolved_new(
+                    self.occupied,
+                    self.counters,
+                    self.control,
+                    self.object_id,
+                    self.object_len,
+                )?;
+                self.stream.next_file_extent(&mut source)?
+            };
+            let (extent_len, is_hole, chunk_count) = match extent {
+                VerifiedFileExtentV1::Hole { length } => (length, true, 0),
+                VerifiedFileExtentV1::Data {
+                    length,
+                    chunk_count,
+                } => (length, false, chunk_count),
+            };
             if extent_len == 0 {
                 return Err(CoreError::LogicalLength);
             }
@@ -1571,28 +1315,22 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
             if extent_end > self.file_logical_len {
                 return Err(CoreError::LogicalLength);
             }
-            match tag {
-                ExtentTagV1::Hole => {
-                    self.logical_offset = extent_end;
-                    if let Some((start, end)) = overlap(
-                        extent_start,
-                        extent_end,
-                        self.selected_start,
-                        self.selected_end,
-                    ) {
-                        return Ok(Some(VerifiedFileSegmentV1::hole(end - start)));
-                    }
+            if is_hole {
+                self.logical_offset = extent_end;
+                if let Some((start, end)) = overlap(
+                    extent_start,
+                    extent_end,
+                    self.selected_start,
+                    self.selected_end,
+                ) {
+                    return Ok(Some(VerifiedFileSegmentV1::hole(end - start)));
                 }
-                ExtentTagV1::Data => {
-                    let count = self
-                        .cursor
-                        .read_u32(self.occupied, self.counters, self.control)?;
-                    if count == 0 {
-                        return Err(CoreError::CountCap);
-                    }
-                    self.active_data_chunks = count;
-                    self.active_data_end = extent_end;
+            } else {
+                if chunk_count == 0 {
+                    return Err(CoreError::CountCap);
                 }
+                self.active_data_chunks = chunk_count;
+                self.active_data_end = extent_end;
             }
         }
     }
@@ -1613,143 +1351,24 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
         {
             return Err(CoreError::TypedEdge);
         }
-        read_occupied_exact_accounted_v1(
+        let typed = TypedPhysicalObjectIdV1::Chunk(current.id);
+        let len = required_occupied_len_v1(self.occupied, self.control, typed)?;
+        let mut source = OccupiedObjectReaderV1::resolved_new(
             self.occupied,
             self.counters,
             self.control,
-            TypedPhysicalObjectIdV1::Chunk(current.id),
-            crate::object::OBJECT_HEADER_BYTES
-                .checked_add(source_offset)
-                .ok_or(CoreError::IntegerOverflow)?,
-            destination,
-        )
+            typed,
+            len,
+        )?;
+        let payload_offset = source_offset;
+        read_object_payload_exact_v1(&mut source, payload_offset, destination)
     }
 }
 
-#[derive(Clone, Copy)]
-struct ObjectCursorV1 {
-    id: TypedPhysicalObjectIdV1,
-    offset: u64,
-    end: u64,
-}
-
-impl ObjectCursorV1 {
-    fn read_array<const N: usize>(
-        &mut self,
-        occupied: &mut FsCasOccupiedV1,
-        counters: &mut OperationCountersV1,
-        control: &mut (impl FsCasControlV1 + ?Sized),
-    ) -> CoreResult<[u8; N]> {
-        let next = self
-            .offset
-            .checked_add(N as u64)
-            .ok_or(CoreError::IntegerOverflow)?;
-        if next > self.end {
-            return Err(CoreError::Truncated);
-        }
-        let mut bytes = [0_u8; N];
-        read_occupied_exact_accounted_v1(
-            occupied,
-            counters,
-            control,
-            self.id,
-            self.offset,
-            &mut bytes,
-        )?;
-        self.offset = next;
-        Ok(bytes)
-    }
-
-    fn read_u8(
-        &mut self,
-        occupied: &mut FsCasOccupiedV1,
-        counters: &mut OperationCountersV1,
-        control: &mut (impl FsCasControlV1 + ?Sized),
-    ) -> CoreResult<u8> {
-        Ok(self.read_array::<1>(occupied, counters, control)?[0])
-    }
-
-    fn read_u16(
-        &mut self,
-        occupied: &mut FsCasOccupiedV1,
-        counters: &mut OperationCountersV1,
-        control: &mut (impl FsCasControlV1 + ?Sized),
-    ) -> CoreResult<u16> {
-        Ok(u16::from_be_bytes(
-            self.read_array::<2>(occupied, counters, control)?,
-        ))
-    }
-
-    fn read_u32(
-        &mut self,
-        occupied: &mut FsCasOccupiedV1,
-        counters: &mut OperationCountersV1,
-        control: &mut (impl FsCasControlV1 + ?Sized),
-    ) -> CoreResult<u32> {
-        Ok(u32::from_be_bytes(
-            self.read_array::<4>(occupied, counters, control)?,
-        ))
-    }
-
-    fn read_u64(
-        &mut self,
-        occupied: &mut FsCasOccupiedV1,
-        counters: &mut OperationCountersV1,
-        control: &mut (impl FsCasControlV1 + ?Sized),
-    ) -> CoreResult<u64> {
-        Ok(u64::from_be_bytes(
-            self.read_array::<8>(occupied, counters, control)?,
-        ))
-    }
-
-    fn read_component(
-        &mut self,
-        occupied: &mut FsCasOccupiedV1,
-        counters: &mut OperationCountersV1,
-        control: &mut (impl FsCasControlV1 + ?Sized),
-        destination: &mut [u8; 255],
-    ) -> CoreResult<usize> {
-        let len = usize::from(self.read_u16(occupied, counters, control)?);
-        if len == 0 || len > destination.len() {
-            return Err(CoreError::Name);
-        }
-        let next = self
-            .offset
-            .checked_add(len as u64)
-            .ok_or(CoreError::IntegerOverflow)?;
-        if next > self.end {
-            return Err(CoreError::Truncated);
-        }
-        read_occupied_exact_accounted_v1(
-            occupied,
-            counters,
-            control,
-            self.id,
-            self.offset,
-            &mut destination[..len],
-        )?;
-        self.offset = next;
-        Ok(len)
-    }
-
-    fn skip_component(
-        &mut self,
-        occupied: &mut FsCasOccupiedV1,
-        counters: &mut OperationCountersV1,
-        control: &mut (impl FsCasControlV1 + ?Sized),
-    ) -> CoreResult<()> {
-        let mut bytes = [0_u8; 255];
-        self.read_component(occupied, counters, control, &mut bytes)
-            .map(|_| ())
-    }
-
-    fn finish(self) -> CoreResult<()> {
-        if self.offset == self.end {
-            Ok(())
-        } else {
-            Err(CoreError::TrailingBytes)
-        }
-    }
+fn overlap(a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> Option<(u64, u64)> {
+    let start = a_start.max(b_start);
+    let end = a_end.min(b_end);
+    (start < end).then_some((start, end))
 }
 
 fn begin_digest(
@@ -1764,7 +1383,7 @@ fn begin_digest(
     hasher
 }
 
-fn digest_entry_prefix(
+pub(super) fn digest_entry_prefix(
     hasher: &mut blake3::Hasher,
     tag: u8,
     path: &[u8],
@@ -1776,7 +1395,7 @@ fn digest_entry_prefix(
     digest_frame(hasher, 0x42, &logical_len.to_be_bytes());
 }
 
-fn digest_stream_prefix(hasher: &mut blake3::Hasher, tag: u8, len: u64) {
+pub(super) fn digest_stream_prefix(hasher: &mut blake3::Hasher, tag: u8, len: u64) {
     hasher.update(&[tag]);
     hasher.update(&len.to_be_bytes());
 }
@@ -1791,13 +1410,7 @@ fn finish_digest(hasher: blake3::Hasher) -> [u8; 32] {
     *hasher.finalize().as_bytes()
 }
 
-fn overlap(a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> Option<(u64, u64)> {
-    let start = a_start.max(b_start);
-    let end = a_end.min(b_end);
-    (start < end).then_some((start, end))
-}
-
-fn check_control<C: FsCasControlV1 + ?Sized>(control: &mut C) -> CoreResult<()> {
+pub(super) fn check_control<C: FsCasControlV1 + ?Sized>(control: &mut C) -> CoreResult<()> {
     if control.cancellation_requested() {
         Err(CoreError::Cancelled)
     } else if control.deadline_exceeded() {
@@ -1811,7 +1424,7 @@ fn map_immutable(ImmutablePortErrorV1::Failure: ImmutablePortErrorV1) -> CoreErr
     CoreError::SourceFailure
 }
 
-fn map_sink(ReadSinkErrorV1::Refused: ReadSinkErrorV1) -> CoreError {
+pub(super) fn map_sink(ReadSinkErrorV1::Refused: ReadSinkErrorV1) -> CoreError {
     CoreError::SinkRefused
 }
 
@@ -1825,12 +1438,28 @@ mod tests {
     use std::rc::Rc;
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    use crate::cas::{
+        compare_closure_object_ids_v1, AdmissionBuffersV1, CompleteImmutableClosureReadPortV1,
+    };
+    use crate::cdc::{BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, FastCdcV1};
     use crate::cdc::{CdcAlgorithmV1, CdcControlV1, MAXIMUM_CHUNK_BYTES};
     use crate::content::{
         request_tree_operation_v1, run_create_tree_v1, ContentSourceErrorV1, ContentSourceV1,
         OperationBuffersV1, SourceSupplierV1, TreeFileV1,
     };
     use crate::cow::{TreePageSummaryV1, MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES};
+    use crate::identity::{
+        derive_file_node_v1, derive_implicit_root_directory_v1, derive_logical_chunk_spans_v1,
+        derive_logical_file_v1, derive_physical_chunk_id_v1, derive_physical_file_id_v1,
+        derive_physical_tree_id_v1, derive_physical_version_record_id_v1, derive_version_v1,
+        LogicalChildIdV1, LogicalChunkRefV1, LogicalDirectoryEntryV1,
+    };
+    use crate::limits::ResourceLedgerV1;
+    use crate::pack::{
+        build_dense_pack_v1, PackIndexEntryV1, PackIndexSpoolV1, PackObjectSourceV1,
+        PackPortErrorV1,
+    };
+    use crate::profile::{ChunkerSpecV1, DigestSpecV1, ProfileSpecV1};
 
     static NEXT_ROOT: AtomicU64 = AtomicU64::new(1);
 
@@ -2309,6 +1938,383 @@ mod tests {
         expected: Vec<(Vec<u8>, u16, Vec<u8>)>,
     }
 
+    fn canonical_test_object(kind: u8, payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(52 + payload.len());
+        bytes.extend_from_slice(b"ELSOBJ01");
+        bytes.extend_from_slice(&1_u16.to_be_bytes());
+        bytes.push(kind);
+        bytes.push(0);
+        bytes.extend_from_slice(ProfileSpecV1::frozen().id().as_bytes());
+        bytes.extend_from_slice(&(payload.len() as u64).to_be_bytes());
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+
+    struct SparseObjectPort<'a> {
+        objects: &'a [(TypedPhysicalObjectIdV1, Vec<u8>)],
+    }
+
+    impl PackObjectSourceV1 for SparseObjectPort<'_> {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn declared_object_count(&self) -> CoreResult<u32> {
+            u32::try_from(self.objects.len()).map_err(|_| CoreError::IntegerOverflow)
+        }
+
+        fn object_id(&mut self, ordinal: u32) -> Result<TypedPhysicalObjectIdV1, PackPortErrorV1> {
+            self.objects
+                .get(ordinal as usize)
+                .map(|(id, _)| *id)
+                .ok_or(PackPortErrorV1::Failure)
+        }
+
+        fn object_len(&mut self, ordinal: u32) -> Result<u64, PackPortErrorV1> {
+            self.objects
+                .get(ordinal as usize)
+                .ok_or(PackPortErrorV1::Failure)
+                .and_then(|(_, bytes)| {
+                    u64::try_from(bytes.len()).map_err(|_| PackPortErrorV1::Failure)
+                })
+        }
+
+        fn read_object_exact_at(
+            &mut self,
+            ordinal: u32,
+            offset: u64,
+            destination: &mut [u8],
+        ) -> Result<(), PackPortErrorV1> {
+            let bytes = &self
+                .objects
+                .get(ordinal as usize)
+                .ok_or(PackPortErrorV1::Failure)?
+                .1;
+            let start = usize::try_from(offset).map_err(|_| PackPortErrorV1::Failure)?;
+            let end = start
+                .checked_add(destination.len())
+                .ok_or(PackPortErrorV1::Failure)?;
+            destination.copy_from_slice(bytes.get(start..end).ok_or(PackPortErrorV1::Failure)?);
+            Ok(())
+        }
+    }
+
+    impl CompleteImmutableClosureReadPortV1 for SparseObjectPort<'_> {
+        fn object_count(&mut self) -> Result<u64, ImmutablePortErrorV1> {
+            u64::try_from(self.objects.len()).map_err(|_| ImmutablePortErrorV1::Failure)
+        }
+
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn object_id_at(
+            &mut self,
+            ordinal: u64,
+        ) -> Result<TypedPhysicalObjectIdV1, ImmutablePortErrorV1> {
+            let ordinal = usize::try_from(ordinal).map_err(|_| ImmutablePortErrorV1::Failure)?;
+            self.objects
+                .get(ordinal)
+                .map(|(id, _)| *id)
+                .ok_or(ImmutablePortErrorV1::Failure)
+        }
+
+        fn object_len_at(&mut self, ordinal: u64) -> Result<u64, ImmutablePortErrorV1> {
+            let ordinal = usize::try_from(ordinal).map_err(|_| ImmutablePortErrorV1::Failure)?;
+            self.objects
+                .get(ordinal)
+                .ok_or(ImmutablePortErrorV1::Failure)
+                .and_then(|(_, bytes)| {
+                    u64::try_from(bytes.len()).map_err(|_| ImmutablePortErrorV1::Failure)
+                })
+        }
+
+        fn read_object_exact_at(
+            &mut self,
+            ordinal: u64,
+            offset: u64,
+            destination: &mut [u8],
+        ) -> Result<(), ImmutablePortErrorV1> {
+            let ordinal = usize::try_from(ordinal).map_err(|_| ImmutablePortErrorV1::Failure)?;
+            let start = usize::try_from(offset).map_err(|_| ImmutablePortErrorV1::Failure)?;
+            let end = start
+                .checked_add(destination.len())
+                .ok_or(ImmutablePortErrorV1::Failure)?;
+            let bytes = &self
+                .objects
+                .get(ordinal)
+                .ok_or(ImmutablePortErrorV1::Failure)?
+                .1;
+            destination
+                .copy_from_slice(bytes.get(start..end).ok_or(ImmutablePortErrorV1::Failure)?);
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct SparsePackIndexSpool {
+        entries: Vec<PackIndexEntryV1>,
+        cursor: usize,
+        maximum: usize,
+    }
+
+    impl PackIndexSpoolV1 for SparsePackIndexSpool {
+        fn resident_memory_bound_bytes(&self, maximum_entries: u32) -> CoreResult<u64> {
+            u64::from(maximum_entries)
+                .checked_mul(core::mem::size_of::<PackIndexEntryV1>() as u64)
+                .ok_or(CoreError::IntegerOverflow)
+        }
+
+        fn reset(&mut self, maximum_entries: u32) -> Result<(), PackPortErrorV1> {
+            self.entries.clear();
+            self.cursor = 0;
+            self.maximum = maximum_entries as usize;
+            Ok(())
+        }
+
+        fn push(&mut self, entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1> {
+            if self.entries.len() == self.maximum {
+                return Err(PackPortErrorV1::Failure);
+            }
+            self.entries.push(entry);
+            Ok(())
+        }
+
+        fn sort_by_key(&mut self) -> Result<(), PackPortErrorV1> {
+            self.entries.sort_by(PackIndexEntryV1::compare_key);
+            Ok(())
+        }
+
+        fn sort_by_offset(&mut self) -> Result<(), PackPortErrorV1> {
+            self.entries.sort_by(PackIndexEntryV1::compare_offset);
+            Ok(())
+        }
+
+        fn rewind(&mut self) -> Result<(), PackPortErrorV1> {
+            self.cursor = 0;
+            Ok(())
+        }
+
+        fn next(&mut self) -> Result<Option<PackIndexEntryV1>, PackPortErrorV1> {
+            let result = self.entries.get(self.cursor).copied();
+            self.cursor = self
+                .cursor
+                .checked_add(usize::from(result.is_some()))
+                .ok_or(PackPortErrorV1::Failure)?;
+            Ok(result)
+        }
+
+        fn abort(&mut self) {
+            self.entries.clear();
+            self.cursor = 0;
+        }
+    }
+
+    #[derive(Default)]
+    struct LogicalChunkCollector {
+        refs: Vec<LogicalChunkRefV1>,
+    }
+
+    impl BoundaryConsumerV1 for LogicalChunkCollector {
+        fn accept(
+            &mut self,
+            _boundary: crate::cdc::ChunkBoundaryV1,
+            chunk: BorrowedChunkV1<'_>,
+        ) -> Result<(), CdcBoundaryConsumerErrorV1> {
+            let logical = derive_logical_chunk_spans_v1(chunk.first(), chunk.second())
+                .map_err(|_| CdcBoundaryConsumerErrorV1::Refused)?;
+            self.refs.push(LogicalChunkRefV1::from_identity(logical));
+            Ok(())
+        }
+    }
+
+    struct HoleFixture {
+        _root: TestRoot,
+        cas: FsCasV1,
+        version: PhysicalVersionRecordIdV1,
+        root_tree: PhysicalTreeIdV1,
+        expected: Vec<u8>,
+    }
+
+    fn create_hole_fixture(label: &str) -> HoleFixture {
+        const HOLE_LENGTH: u64 = 65_536;
+        let root = TestRoot::new(label);
+        let cas = FsCasV1::create_new(root.path()).expect("create FsCas");
+
+        let first_chunk = canonical_test_object(5, b"ab");
+        let second_chunk = canonical_test_object(5, b"cd");
+        let third_chunk = canonical_test_object(5, b"XYZ");
+        let first_id = derive_physical_chunk_id_v1(&first_chunk).expect("first chunk id");
+        let second_id = derive_physical_chunk_id_v1(&second_chunk).expect("second chunk id");
+        let third_id = derive_physical_chunk_id_v1(&third_chunk).expect("third chunk id");
+
+        let mut expected = b"abcd".to_vec();
+        expected.resize(expected.len() + HOLE_LENGTH as usize, 0);
+        expected.extend_from_slice(b"XYZ");
+
+        let mut file_payload = Vec::new();
+        file_payload.extend_from_slice(&0o644_u16.to_be_bytes());
+        file_payload.extend_from_slice(&(expected.len() as u64).to_be_bytes());
+        file_payload.extend_from_slice(&3_u32.to_be_bytes());
+        file_payload.push(2);
+        file_payload.extend_from_slice(&4_u64.to_be_bytes());
+        file_payload.extend_from_slice(&2_u32.to_be_bytes());
+        for (id, length) in [(first_id, 2_u32), (second_id, 2_u32)] {
+            file_payload.extend_from_slice(&length.to_be_bytes());
+            file_payload.extend_from_slice(id.as_bytes());
+        }
+        file_payload.push(1);
+        file_payload.extend_from_slice(&HOLE_LENGTH.to_be_bytes());
+        file_payload.push(2);
+        file_payload.extend_from_slice(&3_u64.to_be_bytes());
+        file_payload.extend_from_slice(&1_u32.to_be_bytes());
+        file_payload.extend_from_slice(&3_u32.to_be_bytes());
+        file_payload.extend_from_slice(third_id.as_bytes());
+        let file = canonical_test_object(3, &file_payload);
+        let file_id = derive_physical_file_id_v1(&file).expect("file id");
+
+        let name = b"file";
+        let mut leaf_payload = vec![2, 0];
+        leaf_payload.extend_from_slice(&1_u16.to_be_bytes());
+        leaf_payload.extend_from_slice(&(name.len() as u16).to_be_bytes());
+        leaf_payload.extend_from_slice(name);
+        leaf_payload.push(2);
+        leaf_payload.extend_from_slice(file_id.as_bytes());
+        let leaf = canonical_test_object(2, &leaf_payload);
+        let leaf_id = derive_physical_tree_id_v1(&leaf).expect("leaf id");
+
+        let mut root_payload = vec![1];
+        root_payload.extend_from_slice(&0x1000_u16.to_be_bytes());
+        root_payload.extend_from_slice(&1_u32.to_be_bytes());
+        root_payload.push(0);
+        root_payload.push(1);
+        root_payload.extend_from_slice(leaf_id.as_bytes());
+        let root_object = canonical_test_object(2, &root_payload);
+        let root_tree = derive_physical_tree_id_v1(&root_object).expect("root tree id");
+
+        let mut collector = LogicalChunkCollector::default();
+        let mut ring = [0_u8; MAXIMUM_CHUNK_BYTES];
+        let mut control = ContinueControl;
+        let mut stream = FastCdcV1::new()
+            .stream(&mut ring, &mut control)
+            .expect("FastCDC ring");
+        stream
+            .push(Ok(expected.as_slice()), &mut control, &mut collector)
+            .expect("FastCDC source");
+        stream
+            .finish(&mut control, &mut collector)
+            .expect("FastCDC finish");
+        let logical_file = derive_logical_file_v1(expected.len() as u64, &collector.refs)
+            .expect("logical file id");
+        let logical_file_node = derive_file_node_v1(0o644, logical_file).expect("file node id");
+        let logical_root = derive_implicit_root_directory_v1(&[LogicalDirectoryEntryV1::new(
+            ValidatedComponent::new(name).expect("file name"),
+            LogicalChildIdV1::File(logical_file_node),
+        )])
+        .expect("logical root id");
+        let logical_version = derive_version_v1(logical_root);
+
+        let mut version_payload = Vec::with_capacity(184);
+        version_payload.extend_from_slice(logical_version.as_bytes());
+        version_payload.extend_from_slice(ChunkerSpecV1::frozen().id().as_bytes());
+        version_payload.extend_from_slice(DigestSpecV1::frozen().id().as_bytes());
+        version_payload.extend_from_slice(root_tree.as_bytes());
+        version_payload.extend_from_slice(&0_u64.to_be_bytes());
+        version_payload.extend_from_slice(&(expected.len() as u64).to_be_bytes());
+        for count in [1_u32, 2, 1, 0, 3, 3, 3, 7] {
+            version_payload.extend_from_slice(&count.to_be_bytes());
+        }
+        version_payload.extend_from_slice(&7_u64.to_be_bytes());
+        assert_eq!(version_payload.len(), 184);
+        let version_object = canonical_test_object(1, &version_payload);
+        let version =
+            derive_physical_version_record_id_v1(&version_object).expect("version record id");
+
+        let mut objects = vec![
+            (
+                TypedPhysicalObjectIdV1::VersionRecord(version),
+                version_object,
+            ),
+            (TypedPhysicalObjectIdV1::Tree(root_tree), root_object),
+            (TypedPhysicalObjectIdV1::Tree(leaf_id), leaf),
+            (TypedPhysicalObjectIdV1::File(file_id), file),
+            (TypedPhysicalObjectIdV1::Chunk(first_id), first_chunk),
+            (TypedPhysicalObjectIdV1::Chunk(second_id), second_chunk),
+            (TypedPhysicalObjectIdV1::Chunk(third_id), third_chunk),
+        ];
+        objects.sort_by(|left, right| compare_closure_object_ids_v1(left.0, right.0));
+
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut counters = OperationCountersV1::default();
+        let mut pack_scratch = [0_u8; COMPARISON_WINDOW_BYTES];
+        let mut pack_source = SparseObjectPort { objects: &objects };
+        let mut private_pack = cas.begin_private_pack().expect("begin private pack");
+        let mut pack_spool = SparsePackIndexSpool::default();
+        build_dense_pack_v1(
+            &mut pack_source,
+            &mut private_pack,
+            &mut pack_spool,
+            &ledger,
+            &mut counters,
+            &mut pack_scratch,
+        )
+        .expect("build dense pack");
+        let mut admission_spool = SparsePackIndexSpool::default();
+        cas.admit_pack(
+            &mut private_pack,
+            &mut admission_spool,
+            &ledger,
+            &mut counters,
+            &mut pack_scratch,
+        )
+        .expect("admit dense pack");
+
+        let mut closure_source = SparseObjectPort { objects: &objects };
+        let mut closure_operation = cas
+            .begin_closure_operation()
+            .expect("begin closure operation");
+        let mut incoming_comparison = [0_u8; COMPARISON_WINDOW_BYTES];
+        let mut occupied_comparison = [0_u8; COMPARISON_WINDOW_BYTES];
+        let mut source_window = [0_u8; MAXIMUM_CHUNK_BYTES];
+        let mut cdc_ring = [0_u8; MAXIMUM_CHUNK_BYTES];
+        let mut traversal = [0_u8; 2];
+        let (admitted, mut capability) = cas
+            .admit_complete_closure(
+                &mut closure_operation,
+                &mut closure_source,
+                TypedPhysicalObjectIdV1::VersionRecord(version),
+                &ledger,
+                &mut counters,
+                AdmissionBuffersV1::new(
+                    &mut incoming_comparison,
+                    &mut occupied_comparison,
+                    &mut source_window,
+                    &mut cdc_ring,
+                    &mut traversal,
+                ),
+            )
+            .expect("admit complete hole closure");
+        assert_eq!(admitted.object_count(), 7);
+        cas.consume_validated_closure_for_handoff(&mut closure_operation, &mut capability)
+            .expect("consume hole closure handoff");
+        assert_eq!(ledger.admitted_slots(), 0);
+        assert_eq!(cas.operation_admitted_slots_v1(), 0);
+        assert_eq!(
+            fs::read_dir(root.path().join("preparation"))
+                .unwrap()
+                .count(),
+            0
+        );
+
+        HoleFixture {
+            _root: root,
+            cas,
+            version,
+            root_tree,
+            expected,
+        }
+    }
+
     fn deterministic_bytes(len: usize, mut state: u64) -> Vec<u8> {
         let mut bytes = vec![0_u8; len];
         for destination in bytes.chunks_mut(8) {
@@ -2620,6 +2626,209 @@ mod tests {
             fixture.expected[1].2
                 [selected_offset as usize..(selected_offset + selected_len) as usize]
         );
+    }
+
+    #[test]
+    fn real_fscas_hole_and_cross_chunk_ranges_preserve_zero_payload_reads() {
+        let fixture = create_hole_fixture("hole-range");
+        let reopened = FsCasV1::open_existing(fixture._root.path()).expect("reopen FsCas");
+
+        let assert_baseline = |counters: &OperationCountersV1| {
+            assert_eq!(reopened.operation_admitted_slots_v1(), 0);
+            assert_eq!(reopened.operation_admission_active_for_test_v1(), 0);
+            assert_eq!(reopened.operation_admission_queue_for_test_v1(), (0, 0, 0));
+            assert_eq!(reopened.storage_admission_active_for_test_v1(), (0, 0, 0));
+            assert_eq!(
+                fs::read_dir(fixture._root.path().join("preparation"))
+                    .expect("read preparation")
+                    .count(),
+                0
+            );
+            assert_eq!(counters.storage_bytes_requested, 0);
+            assert_eq!(counters.storage_inodes_requested, 0);
+            assert_eq!(counters.storage_preparation_bytes_current_after_cleanup, 0);
+            assert_eq!(counters.storage_preparation_inodes_current_after_cleanup, 0);
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+            assert_eq!(counters.immutable_residue_bytes, 0);
+            assert_eq!(counters.immutable_residue_inodes, 0);
+            assert!(counters.has_zero_forbidden_work());
+        };
+
+        let (mut comparison, mut path) = read_buffers();
+        let mut counters = OperationCountersV1::default();
+        let mut sink = CaptureSink::new(fixture.expected.len() as u64 + 4096);
+        let result = extract_root_v1(
+            &reopened,
+            0x6_100,
+            fixture.version,
+            fixture.root_tree,
+            &mut sink,
+            &mut counters,
+            ReadBuffersV1 {
+                comparison: &mut comparison,
+                path: &mut path,
+            },
+            &mut ContinueControl,
+        )
+        .expect("full hole extraction");
+        assert_eq!(result.kind(), ReadKindV1::FullExtraction);
+        assert_eq!(result.payload_bytes(), fixture.expected.len() as u64);
+        assert_eq!(result.direct_fscas_bytes(), counters.fscas_bytes_read);
+        assert_eq!(result.direct_fscas_calls(), counters.fscas_read_calls);
+        assert_eq!(sink.began, 1);
+        assert_eq!(sink.finished, 1);
+        assert_eq!(sink.aborted, 0);
+        assert_eq!(sink.files.len(), 1);
+        assert_eq!(sink.files[0].path, b"file");
+        assert_eq!(sink.files[0].mode, 0o644);
+        assert_eq!(sink.files[0].logical_len, fixture.expected.len() as u64);
+        assert_eq!(sink.files[0].selected_offset, 0);
+        assert_eq!(sink.files[0].selected_len, fixture.expected.len() as u64);
+        assert_eq!(sink.files[0].bytes, fixture.expected);
+        assert_baseline(&counters);
+
+        for (label, offset, expected) in [
+            ("hole", 100_u64, vec![0_u8; 17]),
+            ("data-to-hole", 3_u64, vec![b'd', 0, 0]),
+            ("hole-to-data", 4_u64 + 65_536 - 1, vec![0, b'X']),
+            ("physical-chunks", 1_u64, b"bcd".to_vec()),
+        ] {
+            let selected_len = expected.len() as u64;
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(selected_len + 4096);
+            let result = read_file_range_v1(
+                &reopened,
+                0x6_200 + offset,
+                fixture.version,
+                fixture.root_tree,
+                b"file",
+                offset,
+                selected_len,
+                &mut sink,
+                &mut counters,
+                ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut ContinueControl,
+            )
+            .unwrap_or_else(|error| panic!("{label}: {error:?}"));
+            assert_eq!(result.kind(), ReadKindV1::ExactRange, "{label}");
+            assert_eq!(result.ranges(), 1, "{label}");
+            assert_eq!(result.payload_bytes(), selected_len, "{label}");
+            assert_eq!(
+                result.direct_fscas_bytes(),
+                counters.fscas_bytes_read,
+                "{label}"
+            );
+            assert_eq!(
+                result.direct_fscas_calls(),
+                counters.fscas_read_calls,
+                "{label}"
+            );
+            if label == "hole" {
+                assert_eq!(result.payload_direct_bytes(), 0, "{label}");
+                assert_eq!(result.payload_direct_calls(), 0, "{label}");
+            }
+            assert_eq!(sink.began, 1, "{label}");
+            assert_eq!(sink.finished, 1, "{label}");
+            assert_eq!(sink.aborted, 0, "{label}");
+            assert_eq!(sink.files.len(), 1, "{label}");
+            assert_eq!(sink.files[0].path, b"file", "{label}");
+            assert_eq!(sink.files[0].mode, 0o644, "{label}");
+            assert_eq!(
+                sink.files[0].logical_len,
+                fixture.expected.len() as u64,
+                "{label}"
+            );
+            assert_eq!(sink.files[0].selected_offset, offset, "{label}");
+            assert_eq!(sink.files[0].selected_len, selected_len, "{label}");
+            assert_eq!(sink.files[0].bytes, expected, "{label}");
+            assert_baseline(&counters);
+        }
+    }
+
+    #[test]
+    fn reopened_fscas_zero_length_ranges_authenticate_head_middle_tail_and_eof() {
+        let fixture = create_fixture("zero-length-range");
+        let reopened = FsCasV1::open_existing(fixture._root.path()).expect("reopen FsCas");
+        let logical_len = fixture.expected[1].2.len() as u64;
+
+        for (label, offset) in [
+            ("head", 0_u64),
+            ("middle", logical_len / 2),
+            ("tail", logical_len - 1),
+            ("eof", logical_len),
+        ] {
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(4 * 1024);
+            let result = read_file_range_v1(
+                &reopened,
+                0x500 + offset,
+                fixture.version,
+                fixture.root_tree,
+                b"d/b.bin",
+                offset,
+                0,
+                &mut sink,
+                &mut counters,
+                ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut ContinueControl,
+            )
+            .unwrap_or_else(|error| panic!("{label}: {error:?}"));
+            assert_eq!(result.payload_bytes(), 0, "{label}");
+            assert_eq!(result.files(), 1, "{label}");
+            assert_eq!(result.ranges(), 1, "{label}");
+            assert_eq!(
+                result.direct_fscas_bytes(),
+                counters.fscas_bytes_read,
+                "{label}"
+            );
+            assert_eq!(
+                result.direct_fscas_calls(),
+                counters.fscas_read_calls,
+                "{label}"
+            );
+            assert_eq!(sink.began, 1, "{label}");
+            assert_eq!(sink.finished, 1, "{label}");
+            assert_eq!(sink.aborted, 0, "{label}");
+            assert_eq!(sink.files.len(), 1, "{label}");
+            assert_eq!(sink.files[0].selected_offset, offset, "{label}");
+            assert_eq!(sink.files[0].selected_len, 0, "{label}");
+            assert!(sink.files[0].bytes.is_empty(), "{label}");
+        }
+
+        let (mut comparison, mut path) = read_buffers();
+        let mut counters = OperationCountersV1::default();
+        let mut sink = CaptureSink::new(4 * 1024);
+        let error = read_file_range_v1(
+            &reopened,
+            0x600,
+            fixture.version,
+            fixture.root_tree,
+            b"d/b.bin",
+            logical_len + 1,
+            0,
+            &mut sink,
+            &mut counters,
+            ReadBuffersV1 {
+                comparison: &mut comparison,
+                path: &mut path,
+            },
+            &mut ContinueControl,
+        )
+        .expect_err("one byte past EOF must fail");
+        assert_eq!(error, ReadOperationErrorV1::Core(CoreError::LogicalLength));
+        assert_eq!(sink.began, 1);
+        assert_eq!(sink.finished, 0);
+        assert_eq!(sink.aborted, 1);
+        assert!(sink.files.is_empty());
     }
 
     #[test]

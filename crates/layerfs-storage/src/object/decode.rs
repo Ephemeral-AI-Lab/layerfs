@@ -1,9 +1,8 @@
-//! Exact borrowed decoder for the five frozen `ELSOBJ01` object kinds.
+//! Canonical semantic decoder for the five frozen `ELSOBJ01` object kinds.
 //!
-//! The decoder validates declared lengths before entering any payload loop,
-//! retains only borrowed slices and scalar state, and reports strong edges one
-//! at a time through a transactional visitor. It never constructs an edge
-//! vector or a source-sized allocation.
+//! The grammar is written once against a bounded cursor. Slice and neutral
+//! read-port callers adapt that cursor; neither transport gets a second
+//! envelope, field-width, or semantic-verification rule set.
 
 use crate::format::{
     compare_unsigned, validate_chunk_object_count, validate_chunk_reference_len,
@@ -17,7 +16,7 @@ use crate::format::{
 };
 use crate::identity::{
     ChunkerSpecId, DigestSpecId, PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalSymlinkIdV1,
-    PhysicalTreeIdV1, ProfileId, VersionIdV1,
+    PhysicalTreeIdV1, ProfileId, VersionIdV1, COMPARISON_WINDOW_BYTES,
 };
 use crate::profile::ProfileSpecV1;
 use crate::{CoreError, CoreResult};
@@ -34,15 +33,76 @@ pub(super) const MIN_FILE_EXTENT_BYTES: u64 = 9;
 pub(super) const CHUNK_REFERENCE_BYTES: u64 = 36;
 pub(super) const HOLE_MIN_BYTES: u64 = 65_536;
 
+/// Bounded transport adapter used by the canonical semantic grammar.
+pub(super) trait CanonicalObjectCursorV1 {
+    fn remaining(&self) -> u64;
+    fn read_into(&mut self, destination: &mut [u8]) -> CoreResult<()>;
+    fn finish(&self) -> CoreResult<()>;
+
+    fn read_array<const N: usize>(&mut self) -> CoreResult<[u8; N]> {
+        let mut bytes = [0_u8; N];
+        self.read_into(&mut bytes)?;
+        Ok(bytes)
+    }
+
+    fn read_u8(&mut self) -> CoreResult<u8> {
+        Ok(self.read_array::<1>()?[0])
+    }
+
+    fn read_u16_be(&mut self) -> CoreResult<u16> {
+        Ok(u16::from_be_bytes(self.read_array::<2>()?))
+    }
+
+    fn read_u32_be(&mut self) -> CoreResult<u32> {
+        Ok(u32::from_be_bytes(self.read_array::<4>()?))
+    }
+
+    fn read_u64_be(&mut self) -> CoreResult<u64> {
+        Ok(u64::from_be_bytes(self.read_array::<8>()?))
+    }
+
+    fn consume_remaining(&mut self, scratch: &mut [u8; COMPARISON_WINDOW_BYTES]) -> CoreResult<()> {
+        while self.remaining() != 0 {
+            let take = usize::try_from(self.remaining().min(COMPARISON_WINDOW_BYTES as u64))
+                .map_err(|_| CoreError::IntegerOverflow)?;
+            self.read_into(&mut scratch[..take])?;
+        }
+        Ok(())
+    }
+}
+
+impl CanonicalObjectCursorV1 for SliceCursor<'_> {
+    fn remaining(&self) -> u64 {
+        self.remaining() as u64
+    }
+
+    fn read_into(&mut self, destination: &mut [u8]) -> CoreResult<()> {
+        let bytes = self.read_bytes(destination.len())?;
+        destination.copy_from_slice(bytes);
+        Ok(())
+    }
+
+    fn finish(&self) -> CoreResult<()> {
+        if self.is_eof() {
+            Ok(())
+        } else {
+            Err(CoreError::TrailingBytes)
+        }
+    }
+}
+
 pub fn decode_physical_object_v1<'a, V: StrongEdgeVisitorV1 + ?Sized>(
     bytes: &'a [u8],
     visitor: &mut V,
 ) -> CoreResult<ValidatedPhysicalObjectV1<'a>> {
-    let (header, payload_bytes) = decode_envelope(bytes)?;
+    let mut cursor = SliceCursor::new(bytes);
+    let header = decode_envelope_header_from_cursor_v1(&mut cursor)?;
+    let mut scratch = [0_u8; COMPARISON_WINDOW_BYTES];
     visitor.begin_object();
-    let decoded = decode_payload(header.kind, payload_bytes, visitor);
+    let decoded = decode_payload_from_cursor_v1(header.kind, &mut cursor, visitor, &mut scratch);
     match decoded {
         Ok(payload) => {
+            cursor.finish()?;
             visitor.commit_object();
             Ok(ValidatedPhysicalObjectV1 {
                 header,
@@ -57,8 +117,12 @@ pub fn decode_physical_object_v1<'a, V: StrongEdgeVisitorV1 + ?Sized>(
     }
 }
 
-fn decode_envelope(bytes: &[u8]) -> CoreResult<(PhysicalObjectHeaderV1, &[u8])> {
-    let mut cursor = SliceCursor::new(bytes);
+/// Parse and validate the fixed envelope header. The port decoder reads the
+/// same 52 bytes into its transport buffer and calls this function directly.
+pub(super) fn decode_envelope_header_bytes_v1(
+    envelope: &[u8; OBJECT_HEADER_BYTES as usize],
+) -> CoreResult<PhysicalObjectHeaderV1> {
+    let mut cursor = SliceCursor::new(envelope);
     cursor.expect(CANONICAL_OBJECT_MAGIC_V1, CoreError::TypeDomain)?;
     if cursor.read_u16_be()? != 1 {
         return Err(CoreError::Schema);
@@ -77,26 +141,27 @@ fn decode_envelope(bytes: &[u8]) -> CoreResult<(PhysicalObjectHeaderV1, &[u8])> 
         .ok_or(CoreError::IntegerOverflow)?;
     validate_physical_object_len(complete_len)?;
     validate_payload_bound(kind, payload_len)?;
-    let complete_len_usize =
-        usize::try_from(complete_len).map_err(|_| CoreError::IntegerOverflow)?;
-    if bytes.len() < complete_len_usize {
+    cursor.finish()?;
+    Ok(PhysicalObjectHeaderV1 {
+        kind,
+        profile_id,
+        payload_len,
+        complete_len,
+    })
+}
+
+pub(super) fn decode_envelope_header_from_cursor_v1<C: CanonicalObjectCursorV1 + ?Sized>(
+    cursor: &mut C,
+) -> CoreResult<PhysicalObjectHeaderV1> {
+    let envelope = cursor.read_array::<{ OBJECT_HEADER_BYTES as usize }>()?;
+    let header = decode_envelope_header_bytes_v1(&envelope)?;
+    if cursor.remaining() < header.payload_len {
         return Err(CoreError::Truncated);
     }
-    if bytes.len() > complete_len_usize {
+    if cursor.remaining() > header.payload_len {
         return Err(CoreError::TrailingBytes);
     }
-    let payload_len_usize = usize::try_from(payload_len).map_err(|_| CoreError::IntegerOverflow)?;
-    let payload = cursor.read_bytes(payload_len_usize)?;
-    cursor.finish()?;
-    Ok((
-        PhysicalObjectHeaderV1 {
-            kind,
-            profile_id,
-            payload_len,
-            complete_len,
-        },
-        payload,
-    ))
+    Ok(header)
 }
 
 pub(super) fn validate_payload_bound(
@@ -121,27 +186,33 @@ pub(super) fn validate_payload_bound(
     }
 }
 
-fn decode_payload<V: StrongEdgeVisitorV1 + ?Sized>(
+pub(super) fn decode_payload_from_cursor_v1<C, V>(
     kind: PhysicalObjectKindV1,
-    payload: &[u8],
+    cursor: &mut C,
     visitor: &mut V,
-) -> CoreResult<PhysicalObjectPayloadV1> {
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+) -> CoreResult<PhysicalObjectPayloadV1>
+where
+    C: CanonicalObjectCursorV1 + ?Sized,
+    V: StrongEdgeVisitorV1 + ?Sized,
+{
     match kind {
         PhysicalObjectKindV1::VersionRecord => {
-            decode_version(payload, visitor).map(PhysicalObjectPayloadV1::VersionRecord)
+            decode_version(cursor, visitor).map(PhysicalObjectPayloadV1::VersionRecord)
         }
         PhysicalObjectKindV1::Tree => {
-            decode_tree(payload, visitor).map(PhysicalObjectPayloadV1::Tree)
+            decode_tree(cursor, visitor).map(PhysicalObjectPayloadV1::Tree)
         }
         PhysicalObjectKindV1::File => {
-            decode_file(payload, visitor).map(PhysicalObjectPayloadV1::File)
+            decode_file(cursor, visitor).map(PhysicalObjectPayloadV1::File)
         }
         PhysicalObjectKindV1::Symlink => {
-            decode_symlink(payload).map(PhysicalObjectPayloadV1::Symlink)
+            decode_symlink(cursor, scratch).map(PhysicalObjectPayloadV1::Symlink)
         }
         PhysicalObjectKindV1::Chunk => {
             let payload_len =
-                u32::try_from(payload.len()).map_err(|_| CoreError::IntegerOverflow)?;
+                u32::try_from(cursor.remaining()).map_err(|_| CoreError::IntegerOverflow)?;
+            cursor.consume_remaining(scratch)?;
             Ok(PhysicalObjectPayloadV1::Chunk(ChunkRecordV1 {
                 payload_len,
             }))
@@ -149,15 +220,14 @@ fn decode_payload<V: StrongEdgeVisitorV1 + ?Sized>(
     }
 }
 
-fn decode_version<V: StrongEdgeVisitorV1 + ?Sized>(
-    payload: &[u8],
+fn decode_version<C: CanonicalObjectCursorV1 + ?Sized, V: StrongEdgeVisitorV1 + ?Sized>(
+    cursor: &mut C,
     visitor: &mut V,
 ) -> CoreResult<VersionRecordV1> {
-    let mut cursor = SliceCursor::new(payload);
-    let version_id = VersionIdV1::from_digest(*cursor.read_array::<32>()?);
-    let chunker_spec_id = ChunkerSpecId::from_digest(*cursor.read_array::<32>()?);
-    let digest_spec_id = DigestSpecId::from_digest(*cursor.read_array::<32>()?);
-    let root_tree_id = PhysicalTreeIdV1::from_digest(*cursor.read_array::<32>()?);
+    let version_id = VersionIdV1::from_digest(cursor.read_array::<32>()?);
+    let chunker_spec_id = ChunkerSpecId::from_digest(cursor.read_array::<32>()?);
+    let digest_spec_id = DigestSpecId::from_digest(cursor.read_array::<32>()?);
+    let root_tree_id = PhysicalTreeIdV1::from_digest(cursor.read_array::<32>()?);
     visitor.visit_edge(StrongEdgeV1::Tree(root_tree_id))?;
     let canonical_len = cursor.read_u64_be()?;
     validate_logical_length(canonical_len)?;
@@ -201,25 +271,22 @@ fn decode_version<V: StrongEdgeVisitorV1 + ?Sized>(
     })
 }
 
-fn decode_tree<V: StrongEdgeVisitorV1 + ?Sized>(
-    payload: &[u8],
+fn decode_tree<C: CanonicalObjectCursorV1 + ?Sized, V: StrongEdgeVisitorV1 + ?Sized>(
+    cursor: &mut C,
     visitor: &mut V,
 ) -> CoreResult<TreeRecordV1> {
-    let mut cursor = SliceCursor::new(payload);
     let subtype = TreeSubtypeV1::try_from(cursor.read_u8()?)?;
     let value = match subtype {
-        TreeSubtypeV1::Directory => {
-            TreeRecordV1::Directory(decode_directory(&mut cursor, visitor)?)
-        }
-        TreeSubtypeV1::Leaf => TreeRecordV1::Leaf(decode_leaf(&mut cursor, visitor)?),
-        TreeSubtypeV1::Index => TreeRecordV1::Index(decode_index(&mut cursor, visitor)?),
+        TreeSubtypeV1::Directory => TreeRecordV1::Directory(decode_directory(cursor, visitor)?),
+        TreeSubtypeV1::Leaf => TreeRecordV1::Leaf(decode_leaf(cursor, visitor)?),
+        TreeSubtypeV1::Index => TreeRecordV1::Index(decode_index(cursor, visitor)?),
     };
     cursor.finish()?;
     Ok(value)
 }
 
-fn decode_directory<V: StrongEdgeVisitorV1 + ?Sized>(
-    cursor: &mut SliceCursor<'_>,
+fn decode_directory<C: CanonicalObjectCursorV1 + ?Sized, V: StrongEdgeVisitorV1 + ?Sized>(
+    cursor: &mut C,
     visitor: &mut V,
 ) -> CoreResult<DirectoryTreeRecordV1> {
     let mode = cursor.read_u16_be()?;
@@ -242,7 +309,7 @@ fn decode_directory<V: StrongEdgeVisitorV1 + ?Sized>(
         return Err(CoreError::TypedEdge);
     }
     let root_page_id = if presence == PresenceV1::Present {
-        let id = PhysicalTreeIdV1::from_digest(*cursor.read_array::<32>()?);
+        let id = PhysicalTreeIdV1::from_digest(cursor.read_array::<32>()?);
         visitor.visit_edge(StrongEdgeV1::Tree(id))?;
         Some(id)
     } else {
@@ -264,8 +331,8 @@ fn decode_directory<V: StrongEdgeVisitorV1 + ?Sized>(
     })
 }
 
-fn decode_leaf<V: StrongEdgeVisitorV1 + ?Sized>(
-    cursor: &mut SliceCursor<'_>,
+fn decode_leaf<C: CanonicalObjectCursorV1 + ?Sized, V: StrongEdgeVisitorV1 + ?Sized>(
+    cursor: &mut C,
     visitor: &mut V,
 ) -> CoreResult<LeafTreeRecordV1> {
     let depth = cursor.read_u8()?;
@@ -275,17 +342,19 @@ fn decode_leaf<V: StrongEdgeVisitorV1 + ?Sized>(
     let count = cursor.read_u16_be()?;
     validate_tree_leaf_fanout(u64::from(count))?;
     require_repetition(cursor, u64::from(count), MIN_TREE_LEAF_ENTRY_BYTES)?;
-    let mut previous: Option<&[u8]> = None;
+    let mut previous = [0_u8; 255];
+    let mut previous_len = 0_usize;
     for _ in 0..count {
-        let name = read_component(cursor)?;
-        if previous.is_some_and(|prior| {
-            compare_unsigned(prior, name.as_bytes()) != core::cmp::Ordering::Less
-        }) {
+        let mut current = [0_u8; 255];
+        let current_len = read_component(cursor, &mut current)?;
+        if previous_len != 0
+            && compare_unsigned(&previous[..previous_len], &current[..current_len])
+                != core::cmp::Ordering::Less
+        {
             return Err(CoreError::NonCanonicalOrder);
         }
-        previous = Some(name.as_bytes());
         let kind = PhysicalTreeChildKindV1::try_from(cursor.read_u8()?)?;
-        let raw_id = *cursor.read_array::<32>()?;
+        let raw_id = cursor.read_array::<32>()?;
         let edge = match kind {
             PhysicalTreeChildKindV1::Tree => {
                 StrongEdgeV1::Tree(PhysicalTreeIdV1::from_digest(raw_id))
@@ -298,12 +367,14 @@ fn decode_leaf<V: StrongEdgeVisitorV1 + ?Sized>(
             }
         };
         visitor.visit_edge(edge)?;
+        previous[..current_len].copy_from_slice(&current[..current_len]);
+        previous_len = current_len;
     }
     Ok(LeafTreeRecordV1 { depth, count })
 }
 
-fn decode_index<V: StrongEdgeVisitorV1 + ?Sized>(
-    cursor: &mut SliceCursor<'_>,
+fn decode_index<C: CanonicalObjectCursorV1 + ?Sized, V: StrongEdgeVisitorV1 + ?Sized>(
+    cursor: &mut C,
     visitor: &mut V,
 ) -> CoreResult<IndexTreeRecordV1> {
     let depth = cursor.read_u8()?;
@@ -314,24 +385,28 @@ fn decode_index<V: StrongEdgeVisitorV1 + ?Sized>(
     validate_tree_index_fanout(u64::from(count))?;
     require_repetition(cursor, u64::from(count), MIN_TREE_INDEX_ENTRY_BYTES)?;
     let child_capacity = if depth == 1 { 192 } else { 18_432 };
-    let mut previous_last: Option<&[u8]> = None;
+    let mut previous_last = [0_u8; 255];
+    let mut previous_last_len = 0_usize;
     let mut total = 0_u64;
     for index in 0..count {
         let subtree_entry_count = cursor.read_u32_be()?;
         if subtree_entry_count == 0 || u64::from(subtree_entry_count) > MAX_ENTRIES {
             return Err(CoreError::CountCap);
         }
-        let first = read_component(cursor)?;
-        if previous_last.is_some_and(|prior| {
-            compare_unsigned(prior, first.as_bytes()) != core::cmp::Ordering::Less
-        }) {
+        let mut first = [0_u8; 255];
+        let first_len = read_component(cursor, &mut first)?;
+        if previous_last_len != 0
+            && compare_unsigned(&previous_last[..previous_last_len], &first[..first_len])
+                != core::cmp::Ordering::Less
+        {
             return Err(CoreError::NonCanonicalOrder);
         }
-        let last = read_component(cursor)?;
-        if compare_unsigned(first.as_bytes(), last.as_bytes()).is_gt() {
+        let mut last = [0_u8; 255];
+        let last_len = read_component(cursor, &mut last)?;
+        if compare_unsigned(&first[..first_len], &last[..last_len]).is_gt() {
             return Err(CoreError::NonCanonicalOrder);
         }
-        let child = PhysicalTreeIdV1::from_digest(*cursor.read_array::<32>()?);
+        let child = PhysicalTreeIdV1::from_digest(cursor.read_array::<32>()?);
         let final_child = index + 1 == count;
         if (!final_child && subtree_entry_count != child_capacity)
             || (final_child && subtree_entry_count > child_capacity)
@@ -342,7 +417,8 @@ fn decode_index<V: StrongEdgeVisitorV1 + ?Sized>(
             .checked_add(u64::from(subtree_entry_count))
             .ok_or(CoreError::IntegerOverflow)?;
         validate_entry_count(total)?;
-        previous_last = Some(last.as_bytes());
+        previous_last[..last_len].copy_from_slice(&last[..last_len]);
+        previous_last_len = last_len;
         visitor.visit_edge(StrongEdgeV1::Tree(child))?;
     }
     if depth == 2 && total <= 18_432 {
@@ -355,18 +431,17 @@ fn decode_index<V: StrongEdgeVisitorV1 + ?Sized>(
     })
 }
 
-fn decode_file<V: StrongEdgeVisitorV1 + ?Sized>(
-    payload: &[u8],
+fn decode_file<C: CanonicalObjectCursorV1 + ?Sized, V: StrongEdgeVisitorV1 + ?Sized>(
+    cursor: &mut C,
     visitor: &mut V,
 ) -> CoreResult<FileRecordV1> {
-    let mut cursor = SliceCursor::new(payload);
     let mode = cursor.read_u16_be()?;
     validate_file_mode(mode)?;
     let logical_len = cursor.read_u64_be()?;
     validate_logical_length(logical_len)?;
     let extent_count = cursor.read_u32_be()?;
     validate_extents_per_file(u64::from(extent_count))?;
-    require_repetition(&cursor, u64::from(extent_count), MIN_FILE_EXTENT_BYTES)?;
+    require_repetition(cursor, u64::from(extent_count), MIN_FILE_EXTENT_BYTES)?;
     let mut previous_tag = None;
     let mut coverage = 0_u64;
     let mut total_chunk_refs = 0_u64;
@@ -392,7 +467,7 @@ fn decode_file<V: StrongEdgeVisitorV1 + ?Sized>(
                     return Err(CoreError::CountCap);
                 }
                 validate_chunk_refs_per_file(u64::from(count))?;
-                require_repetition(&cursor, u64::from(count), CHUNK_REFERENCE_BYTES)?;
+                require_repetition(cursor, u64::from(count), CHUNK_REFERENCE_BYTES)?;
                 total_chunk_refs = total_chunk_refs
                     .checked_add(u64::from(count))
                     .ok_or(CoreError::IntegerOverflow)?;
@@ -404,7 +479,7 @@ fn decode_file<V: StrongEdgeVisitorV1 + ?Sized>(
                     reconstructed = reconstructed
                         .checked_add(u64::from(chunk_len))
                         .ok_or(CoreError::IntegerOverflow)?;
-                    let id = PhysicalChunkIdV1::from_digest(*cursor.read_array::<32>()?);
+                    let id = PhysicalChunkIdV1::from_digest(cursor.read_array::<32>()?);
                     visitor.visit_edge(StrongEdgeV1::Chunk(id))?;
                 }
                 if reconstructed != length {
@@ -429,28 +504,41 @@ fn decode_file<V: StrongEdgeVisitorV1 + ?Sized>(
     })
 }
 
-fn decode_symlink(payload: &[u8]) -> CoreResult<SymlinkRecordV1> {
-    let mut cursor = SliceCursor::new(payload);
+fn decode_symlink<C: CanonicalObjectCursorV1 + ?Sized>(
+    cursor: &mut C,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+) -> CoreResult<SymlinkRecordV1> {
     let target_len = cursor.read_u32_be()?;
-    let target =
-        cursor.read_nonzero_bounded_bytes(u64::from(target_len), 4_096, CoreError::Target)?;
-    ValidatedSymlinkTarget::new(target)?;
+    if target_len == 0 || target_len > 4_096 {
+        return Err(CoreError::Target);
+    }
+    let len = usize::try_from(target_len).map_err(|_| CoreError::IntegerOverflow)?;
+    cursor.read_into(&mut scratch[..len])?;
+    ValidatedSymlinkTarget::new(&scratch[..len])?;
     cursor.finish()?;
     Ok(SymlinkRecordV1 { target_len })
 }
 
-fn read_component<'a>(cursor: &mut SliceCursor<'a>) -> CoreResult<ValidatedComponent<'a>> {
-    let len = cursor.read_u16_be()?;
-    if len == 0 || len > 255 {
+fn read_component<C: CanonicalObjectCursorV1 + ?Sized>(
+    cursor: &mut C,
+    destination: &mut [u8; 255],
+) -> CoreResult<usize> {
+    let len = usize::from(cursor.read_u16_be()?);
+    if len == 0 || len > destination.len() {
         return Err(CoreError::Name);
     }
-    ValidatedComponent::new(cursor.read_bytes(usize::from(len))?)
+    cursor.read_into(&mut destination[..len])?;
+    ValidatedComponent::new(&destination[..len])?;
+    Ok(len)
 }
 
-fn require_repetition(cursor: &SliceCursor<'_>, count: u64, width: u64) -> CoreResult<()> {
+fn require_repetition<C: CanonicalObjectCursorV1 + ?Sized>(
+    cursor: &C,
+    count: u64,
+    width: u64,
+) -> CoreResult<()> {
     let minimum = count.checked_mul(width).ok_or(CoreError::IntegerOverflow)?;
-    let remaining = u64::try_from(cursor.remaining()).map_err(|_| CoreError::IntegerOverflow)?;
-    if minimum <= remaining {
+    if minimum <= cursor.remaining() {
         Ok(())
     } else {
         Err(CoreError::LogicalLength)

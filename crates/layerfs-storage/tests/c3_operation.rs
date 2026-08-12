@@ -10014,7 +10014,7 @@ fn seventeenth_operation_genuinely_queues_then_grants_cancels_or_exceeds_deadlin
                 let mut counters = OperationCountersV1::default();
                 let terminal =
                     request_create_operation_v1(&waiter_cas, 0x20_100, &mut counters, &mut control)
-                        .map(|capability| drop(capability));
+                        .map(drop);
                 terminal_tx
                     .send((terminal, counters))
                     .expect("C+1 terminal receiver remains live");

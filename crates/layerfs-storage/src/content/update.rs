@@ -5,27 +5,24 @@
 //! metadata is replayed to authenticate the base logical identity and to
 //! structurally reuse untouched references; base payload is never scanned.
 
+pub use crate::cdc::MAX_UPDATE_RESYNCHRONIZATION_BYTES;
 use crate::cdc::{
     BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1, ChunkBoundaryV1,
-    FastCdcV1, FASTCDC_ALGORITHM_TAG_V1, MAXIMUM_CHUNK_BYTES,
-};
-pub use crate::cdc::{
-    MAX_UPDATE_ANCHOR_SCAN_BYTES, MAX_UPDATE_REJOIN_VERIFICATION_BYTES,
-    MAX_UPDATE_RESYNCHRONIZATION_BYTES,
+    FastCdcV1, RejoinOperationBindingV1, VerifiedRejoinV1, MAXIMUM_CHUNK_BYTES,
 };
 use crate::content::{
-    file_object_lengths_v1, write_chunk_object, write_file_object_and_logical,
-    ChunkReferenceSpoolV1, ContentSourceErrorV1, ContentSourceV1, ObjectDispositionV1,
-    PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1, PreparedSinkErrorV1,
+    write_chunk_object, write_file_object_and_logical, ChunkReferenceSpoolV1, ContentSourceErrorV1,
+    ContentSourceV1, ObjectDispositionV1, PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1,
+    PreparedSinkErrorV1,
 };
 pub use crate::cow::file::{AuthenticatedBaseFileV1, UpdateRangeV1};
 use crate::format::{
     validate_chunk_reference_len, validate_chunk_refs_per_file, validate_file_mode,
-    validate_logical_length, PhysicalObjectKindV1, ValidatedPath,
+    validate_logical_length, ValidatedPath,
 };
 use crate::identity::{
-    derive_logical_chunk_spans_v1, FramedHasherV1, LogicalChunkIdV1, LogicalFileHasherV1,
-    PhysicalChunkIdV1, PhysicalFileIdV1, IDENTITY_HASHER_BYTES_V1, TAG_PHYSICAL_FILE,
+    derive_logical_chunk_spans_v1, LogicalChunkIdV1, LogicalFileHasherV1, PhysicalChunkIdV1,
+    IDENTITY_HASHER_BYTES_V1,
 };
 use crate::limits::OperationReservationV1;
 #[cfg(test)]
@@ -33,8 +30,7 @@ use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
-use crate::object::encode_physical_object_header_v1;
-use crate::profile::ChunkerSpecV1;
+use crate::object::CanonicalFileObjectEncoderV1;
 use crate::{CoreError, CoreResult};
 
 const CHUNK_REFERENCE_METADATA_BYTES: u64 = 36;
@@ -104,58 +100,6 @@ impl BaseChunkEvidenceV1 {
 
     fn prepared(self) -> PreparedChunkRefV1 {
         PreparedChunkRefV1::from_parts(self.logical_id, self.physical_id, self.len)
-    }
-}
-
-/// Private proof binding for a single Update invocation. The pointer identity
-/// of this value is deliberately part of token validation: a verified rejoin
-/// cannot be replayed into a later operation, even when both operations use
-/// the same algorithm and profile.
-#[derive(Debug, Eq, PartialEq)]
-struct UpdateOperationBindingV1 {
-    algorithm: [u8; 8],
-    chunker_profile: [u8; 32],
-}
-
-impl UpdateOperationBindingV1 {
-    fn frozen_fast() -> Self {
-        Self {
-            algorithm: FASTCDC_ALGORITHM_TAG_V1,
-            chunker_profile: *ChunkerSpecV1::frozen().id().as_bytes(),
-        }
-    }
-}
-
-/// Opaque, non-cloneable proof that a candidate boundary was authenticated by
-/// exact bounded byte comparison for this algorithm, profile, and operation.
-/// It remains crate-private and is consumed before suffix references can be
-/// structurally reused.
-#[derive(Debug)]
-struct VerifiedRejoinV1<'operation> {
-    evidence: BaseChunkEvidenceV1,
-    algorithm: [u8; 8],
-    chunker_profile: [u8; 32],
-    operation: &'operation UpdateOperationBindingV1,
-}
-
-impl<'operation> VerifiedRejoinV1<'operation> {
-    fn new(evidence: BaseChunkEvidenceV1, operation: &'operation UpdateOperationBindingV1) -> Self {
-        Self {
-            evidence,
-            algorithm: operation.algorithm,
-            chunker_profile: operation.chunker_profile,
-            operation,
-        }
-    }
-
-    fn consume(self, operation: &UpdateOperationBindingV1) -> CoreResult<BaseChunkEvidenceV1> {
-        if !core::ptr::eq(self.operation, operation)
-            || self.algorithm != operation.algorithm
-            || self.chunker_profile != operation.chunker_profile
-        {
-            return Err(CoreError::RangeResyncFailed);
-        }
-        Ok(self.evidence)
     }
 }
 
@@ -256,7 +200,7 @@ where
     result
 }
 
-/// Complete-C3 adapter which borrows the already granted root operation.
+/// Complete-operation adapter which borrows the already granted root operation.
 /// It cannot mint another ledger slot and therefore preserves the single
 /// operation capability across verified rejoin and immutable staging.
 #[cfg(feature = "operation-polymorphism")]
@@ -427,7 +371,7 @@ where
         objects.abort_closure();
         return Err(error);
     }
-    let operation_binding = UpdateOperationBindingV1::frozen_fast();
+    let operation_binding = RejoinOperationBindingV1::frozen_fast();
     let result = (|| {
         let prefix_chunk_count =
             copy_untouched_prefix(evidence, output, predecessor_start, counters)?;
@@ -501,58 +445,50 @@ where
                 return Err(CoreError::TrailingBytes);
             }
 
-            let mut base_cursor = range.end;
-            let mut resynchronization_bytes = 0_u64;
-            while base_cursor < base_len && consumer.rejoin.is_none() {
-                let containing = consumer
-                    .evidence
-                    .containing(base_cursor, false)
-                    .map_err(map_evidence)?
-                    .ok_or(CoreError::RangeResyncFailed)?;
-                consumer
-                    .counters
-                    .record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
-                let segment_end = containing.end()?;
-                let segment_len = segment_end
-                    .checked_sub(base_cursor)
-                    .ok_or(CoreError::RangeResyncFailed)?;
-                let remaining_window = MAX_UPDATE_ANCHOR_SCAN_BYTES
-                    .checked_sub(resynchronization_bytes)
-                    .ok_or(CoreError::RangeResyncFailed)?;
-                if remaining_window == 0 {
-                    return Err(CoreError::RangeResyncFailed);
-                }
-                let read_len = segment_len.min(remaining_window);
-                let next_total = resynchronization_bytes
-                    .checked_add(read_len)
-                    .ok_or(CoreError::RangeResyncFailed)?;
-                let segment = usize::try_from(read_len).map_err(|_| CoreError::IntegerOverflow)?;
-                read_base_exact(
-                    consumer.base_bytes,
-                    base_cursor,
-                    &mut buffers.source[..segment],
-                    consumer.counters,
-                    true,
-                )?;
-                let consumed = push_update_until_pause(
-                    &mut stream,
-                    &buffers.source[..segment],
-                    control,
-                    &mut consumer,
-                )?;
-                if consumer.rejoin.is_none() && consumed != segment {
-                    return Err(CoreError::RangeResyncFailed);
-                }
-                base_cursor = base_cursor
-                    .checked_add(read_len)
-                    .ok_or(CoreError::RangeResyncFailed)?;
-                resynchronization_bytes = next_total;
-            }
+            let reached_base_end = crate::cdc::resynchronize_update_v1(
+                base_len,
+                range.end,
+                &mut buffers.source[..],
+                |base_cursor, remaining_window, source| {
+                    let containing = consumer
+                        .evidence
+                        .containing(base_cursor, false)
+                        .map_err(map_evidence)?
+                        .ok_or(CoreError::RangeResyncFailed)?;
+                    consumer
+                        .counters
+                        .record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
+                    let segment_end = containing.end()?;
+                    let segment_len = segment_end
+                        .checked_sub(base_cursor)
+                        .ok_or(CoreError::RangeResyncFailed)?;
+                    let read_len = segment_len.min(remaining_window);
+                    let segment =
+                        usize::try_from(read_len).map_err(|_| CoreError::IntegerOverflow)?;
+                    read_base_exact(
+                        consumer.base_bytes,
+                        base_cursor,
+                        &mut source[..segment],
+                        consumer.counters,
+                        true,
+                    )?;
+                    let consumed = push_update_until_pause(
+                        &mut stream,
+                        &source[..segment],
+                        control,
+                        &mut consumer,
+                    )?;
+                    if consumer.rejoin.is_none() && consumed != segment {
+                        return Err(CoreError::RangeResyncFailed);
+                    }
+                    Ok((read_len, consumer.rejoin.is_some()))
+                },
+            )?;
 
             let rejoin = if let Some(rejoin) = consumer.rejoin.take() {
                 stream.finish_at_accepted_boundary(control)?;
                 Some(rejoin)
-            } else if base_cursor == base_len {
+            } else if reached_base_end {
                 finish_update(&mut stream, control, &mut consumer)?;
                 None
             } else {
@@ -598,31 +534,16 @@ pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + 
     let mut logical_hasher =
         LogicalFileHasherV1::new(base.identity.logical_len(), u64::from(base.chunk_count))
             .map_err(|_| CoreError::RangeResyncFailed)?;
-    let (payload_len, complete_len) = file_object_lengths_v1(u64::from(base.chunk_count))
+    let mut encoder = CanonicalFileObjectEncoderV1::new(
+        base.mode,
+        base.identity.logical_len(),
+        u64::from(base.chunk_count),
+    )
+    .map_err(|_| CoreError::RangeResyncFailed)?;
+    let mut discard = |_bytes: &[u8]| Ok(());
+    encoder
+        .begin(&mut discard)
         .map_err(|_| CoreError::RangeResyncFailed)?;
-    let mut physical_hasher = FramedHasherV1::new(TAG_PHYSICAL_FILE, complete_len);
-    physical_hasher
-        .write(&encode_physical_object_header_v1(
-            PhysicalObjectKindV1::File,
-            payload_len,
-        ))
-        .map_err(|_| CoreError::RangeResyncFailed)?;
-    physical_hasher
-        .write(&base.mode.to_be_bytes())
-        .map_err(|_| CoreError::RangeResyncFailed)?;
-    physical_hasher
-        .write(&base.identity.logical_len().to_be_bytes())
-        .map_err(|_| CoreError::RangeResyncFailed)?;
-    physical_hasher
-        .write(&u32::from(base.chunk_count != 0).to_be_bytes())
-        .map_err(|_| CoreError::RangeResyncFailed)?;
-    if base.chunk_count != 0 {
-        physical_hasher
-            .write(&[0x02])
-            .and_then(|_| physical_hasher.write(&base.identity.logical_len().to_be_bytes()))
-            .and_then(|_| physical_hasher.write(&base.chunk_count.to_be_bytes()))
-            .map_err(|_| CoreError::RangeResyncFailed)?;
-    }
     let mut expected_start = 0_u64;
     for _ in 0..base.chunk_count {
         let chunk = evidence
@@ -639,19 +560,14 @@ pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + 
         logical_hasher
             .push(chunk.prepared().logical_ref())
             .map_err(|_| CoreError::RangeResyncFailed)?;
-        physical_hasher
-            .write(&chunk.len.to_be_bytes())
-            .and_then(|_| physical_hasher.write(chunk.physical_id.as_bytes()))
+        encoder
+            .emit_chunk_reference(chunk.len, &chunk.physical_id, &mut discard)
             .map_err(|_| CoreError::RangeResyncFailed)?;
     }
     let logical = logical_hasher
         .finish()
         .map_err(|_| CoreError::RangeResyncFailed)?;
-    let physical = PhysicalFileIdV1::from_digest(
-        physical_hasher
-            .finish()
-            .map_err(|_| CoreError::RangeResyncFailed)?,
-    );
+    let physical = encoder.finish().map_err(|_| CoreError::RangeResyncFailed)?;
     if evidence.next().map_err(map_evidence)?.is_some()
         || expected_start != base.identity.logical_len()
         || logical != base.identity
@@ -819,8 +735,8 @@ struct UpdateConsumerV1<'a, 'operation, E: ?Sized, O: ?Sized, R: ?Sized, B: ?Siz
     suffix_origin: u64,
     base_suffix_origin: u64,
     chunk_count: u64,
-    operation_binding: &'operation UpdateOperationBindingV1,
-    rejoin: Option<VerifiedRejoinV1<'operation>>,
+    operation_binding: &'operation RejoinOperationBindingV1,
+    rejoin: Option<VerifiedRejoinV1<'operation, BaseChunkEvidenceV1>>,
     failure: Option<CoreError>,
 }
 
@@ -881,16 +797,31 @@ where
             if let Some(base) = self.evidence.at_start(base_start).map_err(map_evidence)? {
                 self.counters
                     .record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
-                if u64::from(base.len) == boundary.len()
-                    && base.logical_id == logical.id()
-                    && exact_rejoin_bytes(self.base_bytes, base, chunk, self.counters)?
-                {
+                let rejoin =
+                    if u64::from(base.len) == boundary.len() && base.logical_id == logical.id() {
+                        crate::cdc::verify_rejoin_bytes_v1(
+                            self.operation_binding,
+                            base,
+                            base.start(),
+                            base.len(),
+                            chunk,
+                            self.counters,
+                            |offset, first, second| {
+                                self.base_bytes
+                                    .compare_exact_at(offset, first, second)
+                                    .map_err(|_| CoreError::RangeResyncFailed)
+                            },
+                        )?
+                    } else {
+                        None
+                    };
+                if let Some(rejoin) = rejoin {
                     reuse_ref(self.output, base, self.counters)?;
                     self.chunk_count = self
                         .chunk_count
                         .checked_add(1)
                         .ok_or(CoreError::IntegerOverflow)?;
-                    self.rejoin = Some(VerifiedRejoinV1::new(base, self.operation_binding));
+                    self.rejoin = Some(rejoin);
                     return Ok(());
                 }
             }
@@ -989,37 +920,6 @@ where
         .counters
         .add_cdc_stream(stream.counters().checked_delta(before)?)?;
     result
-}
-
-fn exact_rejoin_bytes<B: AuthenticatedBaseByteReaderV1 + ?Sized>(
-    base_bytes: &mut B,
-    evidence: BaseChunkEvidenceV1,
-    candidate: BorrowedChunkV1<'_>,
-    counters: &mut OperationCountersV1,
-) -> CoreResult<bool> {
-    let len = usize::try_from(evidence.len).map_err(|_| CoreError::IntegerOverflow)?;
-    if candidate.len() != len {
-        return Ok(false);
-    }
-    let len_u64 = u64::try_from(len).map_err(|_| CoreError::IntegerOverflow)?;
-    if len_u64 > MAX_UPDATE_REJOIN_VERIFICATION_BYTES {
-        return Err(CoreError::RangeResyncFailed);
-    }
-    let next_resynchronization_bytes = counters
-        .update_resynchronization_bytes
-        .checked_add(len_u64)
-        .ok_or(CoreError::RangeResyncFailed)?;
-    if next_resynchronization_bytes > MAX_UPDATE_RESYNCHRONIZATION_BYTES {
-        return Err(CoreError::RangeResyncFailed);
-    }
-    let equal = base_bytes
-        .compare_exact_at(evidence.start, candidate.first(), candidate.second())
-        .map_err(|_| CoreError::RangeResyncFailed)?;
-    counters.add(CounterFieldV1::BytesRead, len_u64)?;
-    counters.record_update_base_payload(len_u64)?;
-    counters.add(CounterFieldV1::UpdateResynchronizationBytes, len_u64)?;
-    counters.record_exact_rejoin(len_u64, equal)?;
-    Ok(equal)
 }
 
 fn read_base_exact<B: AuthenticatedBaseByteReaderV1 + ?Sized>(

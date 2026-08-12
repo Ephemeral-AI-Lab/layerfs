@@ -49,7 +49,7 @@ where
     )
 }
 
-/// Complete-C3 Replace constructor borrowing the already-granted root
+/// Complete-operation Replace constructor borrowing the already-granted root
 /// operation. Keeping this semantic entry distinct prevents Update from
 /// redispatching to Replace while sharing the one canonical file encoder.
 #[cfg(feature = "operation-polymorphism")]

@@ -307,6 +307,7 @@ pub(super) fn decide_persistent_locator_incumbent_v1(
 /// collision itself: that distinction depends on the authenticated catalog,
 /// index entry, object identity, and complete-byte comparison carried by the
 /// evidence above.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum PersistentLocatorInstallObservationV1 {
     Installed,

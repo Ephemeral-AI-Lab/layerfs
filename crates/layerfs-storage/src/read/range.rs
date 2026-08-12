@@ -6,13 +6,8 @@
 //! overflow, digest framing, and range execution policy in the read-range
 //! owner without moving the filesystem-backed object traversal into it.
 
-use super::extraction::{
-    read_file_range_impl_v1, ReadBuffersV1, ReadOperationErrorV1, ReadResultV1, ReadSinkV1,
-};
-use crate::cas::{FsCasControlV1, FsCasV1};
 use crate::format::ValidatedPath;
 use crate::identity::{PhysicalTreeIdV1, PhysicalVersionRecordIdV1};
-use crate::limits::OperationCountersV1;
 use crate::{CoreError, CoreResult};
 
 const RANGE_DIGEST_DOMAIN: &[u8; 8] = b"L155RNG1";
@@ -31,9 +26,6 @@ impl<'a> ExactRangeRequestV1<'a> {
 
     pub(super) fn validate(self) -> CoreResult<ExactRangePlanV1<'a>> {
         let path = ValidatedPath::new(self.path)?;
-        if self.len == 0 {
-            return Err(CoreError::LogicalLength);
-        }
         let end = self
             .offset
             .checked_add(self.len)
@@ -73,28 +65,6 @@ impl<'a> ExactRangePlanV1<'a> {
     }
 }
 
-/// The concrete extraction reader implements this narrow execution port. It
-/// keeps directory lookup, object authentication, and payload delivery in the
-/// extraction owner while the range module owns the exact-range operation
-/// boundary and its plan representation.
-pub(super) trait ExactRangeExecutorV1 {
-    fn execute_exact_range_v1(
-        &mut self,
-        root: PhysicalTreeIdV1,
-        plan: ExactRangePlanV1<'_>,
-        hasher: &mut blake3::Hasher,
-    ) -> CoreResult<()>;
-}
-
-pub(super) fn execute_exact_range_v1<E: ExactRangeExecutorV1 + ?Sized>(
-    executor: &mut E,
-    root: PhysicalTreeIdV1,
-    plan: ExactRangePlanV1<'_>,
-    hasher: &mut blake3::Hasher,
-) -> CoreResult<()> {
-    executor.execute_exact_range_v1(root, plan, hasher)
-}
-
 pub(super) fn begin_exact_range_digest_v1(
     version: PhysicalVersionRecordIdV1,
     root: PhysicalTreeIdV1,
@@ -116,39 +86,6 @@ fn digest_frame(hasher: &mut blake3::Hasher, tag: u8, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn read_file_range_v1<S, C>(
-    cas: &FsCasV1,
-    cancellation_key: u64,
-    version_record: PhysicalVersionRecordIdV1,
-    requested_root: PhysicalTreeIdV1,
-    path: &[u8],
-    offset: u64,
-    len: u64,
-    sink: &mut S,
-    counters: &mut OperationCountersV1,
-    buffers: ReadBuffersV1<'_>,
-    control: &mut C,
-) -> Result<ReadResultV1, ReadOperationErrorV1>
-where
-    S: ReadSinkV1 + ?Sized,
-    C: FsCasControlV1 + ?Sized,
-{
-    read_file_range_impl_v1(
-        cas,
-        cancellation_key,
-        version_record,
-        requested_root,
-        path,
-        offset,
-        len,
-        sink,
-        counters,
-        buffers,
-        control,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,11 +102,13 @@ mod tests {
     }
 
     #[test]
-    fn exact_range_plan_rejects_empty_zero_and_overflowing_requests() {
-        assert_eq!(
-            ExactRangeRequestV1::new(b"file", 0, 0).validate(),
-            Err(CoreError::LogicalLength)
-        );
+    fn exact_range_plan_accepts_empty_and_rejects_invalid_path_or_overflow() {
+        let plan = ExactRangeRequestV1::new(b"file", 9, 0)
+            .validate()
+            .expect("zero-length range remains a valid request");
+        assert_eq!(plan.offset(), 9);
+        assert_eq!(plan.len(), 0);
+        assert_eq!(plan.end(), 9);
         assert_eq!(
             ExactRangeRequestV1::new(b".", 0, 1).validate(),
             Err(CoreError::Path)

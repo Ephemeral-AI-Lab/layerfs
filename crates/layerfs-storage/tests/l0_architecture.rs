@@ -20,6 +20,18 @@ fn section<'a>(manifest: &'a str, name: &str) -> &'a str {
     rest.find("\n[").map(|end| &rest[..end]).unwrap_or(rest)
 }
 
+fn source_char_literal_start(bytes: &[u8], index: usize) -> bool {
+    if bytes.get(index) != Some(&b'\'') {
+        return false;
+    }
+    let Some(&next) = bytes.get(index + 1) else {
+        return false;
+    };
+    next == b'\\'
+        || bytes.get(index + 2) == Some(&b'\'')
+        || (!next.is_ascii_alphanumeric() && next != b'_')
+}
+
 fn function_body<'a>(source: &'a str, name: &str) -> &'a str {
     let signature = format!("fn {name}");
     let start = source
@@ -92,7 +104,7 @@ fn function_body<'a>(source: &'a str, name: &str) -> &'a str {
         }
         match byte {
             b'"' => string = true,
-            b'\'' => character = true,
+            b'\'' if source_char_literal_start(bytes, index) => character = true,
             b'{' => depth += 1,
             b'}' => {
                 depth -= 1;
@@ -105,6 +117,328 @@ fn function_body<'a>(source: &'a str, name: &str) -> &'a str {
         index += 1;
     }
     panic!("unterminated function {name}");
+}
+
+fn skip_source_trivia(source: &str, mut index: usize) -> usize {
+    let bytes = source.as_bytes();
+    while index < bytes.len() {
+        if bytes[index].is_ascii_whitespace() {
+            index += 1;
+        } else if bytes.get(index..index + 2) == Some(b"//") {
+            index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+        } else if bytes.get(index..index + 2) == Some(b"/*") {
+            index += 2;
+            let mut depth = 1_u32;
+            while index < bytes.len() && depth != 0 {
+                if bytes.get(index..index + 2) == Some(b"/*") {
+                    depth += 1;
+                    index += 2;
+                } else if bytes.get(index..index + 2) == Some(b"*/") {
+                    depth -= 1;
+                    index += 2;
+                } else {
+                    index += 1;
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    index
+}
+
+fn source_attribute_end(source: &str, start: usize) -> usize {
+    let bytes = source.as_bytes();
+    let mut index = start;
+    let mut depth = 0_u32;
+    let mut string = false;
+    let mut character = false;
+    let mut escaped = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if character {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'\'' {
+                character = false;
+            }
+            index += 1;
+            continue;
+        }
+        match byte {
+            b'"' => string = true,
+            b'\'' if source_char_literal_start(bytes, index) => character = true,
+            b'[' => depth += 1,
+            b']' => {
+                depth -= 1;
+                if depth == 0 {
+                    return index + 1;
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    panic!("unterminated source attribute");
+}
+
+fn cfg_test_item_end(source: &str, attribute_end: usize) -> usize {
+    let mut item_start = skip_source_trivia(source, attribute_end);
+    while source.as_bytes().get(item_start..item_start + 2) == Some(b"#[") {
+        item_start = source_attribute_end(source, item_start + 1);
+        item_start = skip_source_trivia(source, item_start);
+    }
+
+    let bytes = source.as_bytes();
+    let mut index = item_start;
+    let mut braces = 0_u32;
+    let mut parentheses = 0_u32;
+    let mut brackets = 0_u32;
+    let mut line_comment = false;
+    let mut block_comment_depth = 0_u32;
+    let mut string = false;
+    let mut character = false;
+    let mut escaped = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if line_comment {
+            if byte == b'\n' {
+                line_comment = false;
+            }
+            index += 1;
+            continue;
+        }
+        if block_comment_depth != 0 {
+            if bytes.get(index..index + 2) == Some(b"/*") {
+                block_comment_depth += 1;
+                index += 2;
+            } else if bytes.get(index..index + 2) == Some(b"*/") {
+                block_comment_depth -= 1;
+                index += 2;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+        if string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if character {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'\'' {
+                character = false;
+            }
+            index += 1;
+            continue;
+        }
+        if bytes.get(index..index + 2) == Some(b"//") {
+            line_comment = true;
+            index += 2;
+            continue;
+        }
+        if bytes.get(index..index + 2) == Some(b"/*") {
+            block_comment_depth = 1;
+            index += 2;
+            continue;
+        }
+        match byte {
+            b'"' => string = true,
+            b'\'' if source_char_literal_start(bytes, index) => character = true,
+            b'(' => parentheses += 1,
+            b')' => parentheses -= 1,
+            b'[' => brackets += 1,
+            b']' => brackets -= 1,
+            b'{' => braces += 1,
+            b'}' => {
+                braces -= 1;
+                if braces == 0 && parentheses == 0 && brackets == 0 {
+                    let after_body = skip_source_trivia(source, index + 1);
+                    return if bytes.get(after_body) == Some(&b';') {
+                        after_body + 1
+                    } else {
+                        index + 1
+                    };
+                }
+            }
+            b';' if braces == 0 && parentheses == 0 && brackets == 0 => return index + 1,
+            _ => {}
+        }
+        index += 1;
+    }
+    panic!(
+        "unterminated cfg(test) item at {item_start}: {}",
+        source[item_start..]
+            .lines()
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+}
+
+fn production_source_v1(source: &str) -> String {
+    let bytes = source.as_bytes();
+    let mut output = String::with_capacity(source.len());
+    let mut copy_start = 0_usize;
+    let mut index = 0_usize;
+    let mut braces = 0_u32;
+    let mut line_comment = false;
+    let mut block_comment_depth = 0_u32;
+    let mut string = false;
+    let mut character = false;
+    let mut escaped = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if line_comment {
+            if byte == b'\n' {
+                line_comment = false;
+            }
+            index += 1;
+            continue;
+        }
+        if block_comment_depth != 0 {
+            if bytes.get(index..index + 2) == Some(b"/*") {
+                block_comment_depth += 1;
+                index += 2;
+            } else if bytes.get(index..index + 2) == Some(b"*/") {
+                block_comment_depth -= 1;
+                index += 2;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+        if string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if character {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'\'' {
+                character = false;
+            }
+            index += 1;
+            continue;
+        }
+        if bytes.get(index..index + 2) == Some(b"//") {
+            line_comment = true;
+            index += 2;
+            continue;
+        }
+        if bytes.get(index..index + 2) == Some(b"/*") {
+            block_comment_depth = 1;
+            index += 2;
+            continue;
+        }
+        if braces == 0 && bytes.get(index..index + 6) == Some(b"#[cfg(") {
+            let attribute_end = source_attribute_end(source, index + 1);
+            let attribute = &source[index..attribute_end];
+            if attribute.contains("test") {
+                output.push_str(&source[copy_start..index]);
+                index = cfg_test_item_end(source, attribute_end);
+                copy_start = index;
+                continue;
+            }
+        }
+        match byte {
+            b'"' => string = true,
+            b'\'' if source_char_literal_start(bytes, index) => character = true,
+            b'{' => braces += 1,
+            b'}' => {
+                assert!(braces != 0, "unbalanced production source at byte {index}");
+                braces -= 1;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    output.push_str(&source[copy_start..]);
+    output
+}
+
+fn forbidden_content_import_v1(source: &str) -> Option<&'static str> {
+    const FORBIDDEN: &[&str] = &[
+        "crate::cas",
+        "crate::pack",
+        "crate::lifecycle",
+        "std::fs",
+        "std::path",
+        "FsCas",
+        "FsOperationSpool",
+        "FileClosureObjectSpool",
+        "FileGlobalSeenSpool",
+        "FilePackIndexSpool",
+        "CompletedPackSetV1",
+        "FsPrivatePack",
+        "FsCarrier",
+        "FsLocator",
+        "FsCatalog",
+        "CatalogMarker",
+        "LocatorIndex",
+        "OperationPreparationV1",
+        "PreparationV1",
+        "DirectPack",
+        "hard_link",
+    ];
+    let mut import = String::new();
+    let mut in_import = false;
+    for line in source.lines() {
+        let trimmed = line.trim_start();
+        if !in_import
+            && (trimmed.starts_with("use ")
+                || trimmed.starts_with("pub use ")
+                || trimmed.starts_with("pub(crate) use "))
+        {
+            import.clear();
+            in_import = true;
+        }
+        if in_import {
+            import.push_str(trimmed);
+            if trimmed.contains(';') {
+                if let Some(forbidden) = FORBIDDEN.iter().find(|value| import.contains(**value)) {
+                    return Some(forbidden);
+                }
+                in_import = false;
+            }
+        }
+    }
+    None
 }
 
 // Active PB-06 implementation evidence only. This compact map intentionally
@@ -630,12 +964,12 @@ fn main() {
 #[test]
 fn complete_content_depends_only_on_lifecycle_semantic_ports() {
     let create = include_str!("../src/content/create.rs");
-    let production = create
-        .split("#[cfg(test)]")
-        .next()
-        .expect("production content section");
+    let production = production_source_v1(create);
+    let lifecycle = include_str!("../src/lifecycle/mod.rs");
     for forbidden in [
         "crate::cas",
+        "crate::cow",
+        "crate::lifecycle",
         "crate::pack",
         "FsCas",
         "FsOperationSpool",
@@ -648,16 +982,38 @@ fn complete_content_depends_only_on_lifecycle_semantic_ports() {
         "closure-objects",
         "global-seen",
         "private_pack",
+        "CanonicalDirectoryTreeV1",
+        "PreparedCandidateV1",
+        "run_create_tree_v1",
+        "run_create_v1",
     ] {
         assert!(
             !production.contains(forbidden),
-            "content/create.rs crossed a concrete storage boundary: {forbidden}"
+            "content/create.rs retained complete-root/lifecycle ownership: {forbidden}"
+        );
+    }
+    assert_eq!(production.matches("run_lifecycle_v1(").count(), 0);
+    for operation in [
+        "run_create_v1",
+        "run_create_tree_v1",
+        "run_complete_replace_v1",
+        "run_complete_update_v1",
+        "run_complete_add_v1",
+        "run_complete_remove_v1",
+        "run_complete_metadata_v1",
+        "run_complete_move_v1",
+        "complete_cross_directory_move_operation_v1",
+    ] {
+        let body = function_body(lifecycle, operation);
+        assert!(
+            body.contains("run_lifecycle_v1("),
+            "{operation} does not enter the shared lifecycle coordinator"
         );
     }
     assert_eq!(
-        production.matches("run_lifecycle_v1(").count(),
-        2,
-        "one-file and multi-entry Create must both enter the same lifecycle coordinator"
+        lifecycle.matches("pub(crate) fn run_lifecycle_v1").count(),
+        1,
+        "complete operations must have one outer lifecycle state machine"
     );
     for duplicated_terminal in [
         "OperationPreparationV1",
@@ -749,13 +1105,7 @@ fn storage_mechanics_follow_semantic_module_ownership() {
     for owned in ["mod file;", "mod tree;", "mod view;", "mod mutate;"] {
         assert!(cow.contains(owned), "missing COW-owned module: {owned}");
     }
-    for owned in [
-        "mod file;",
-        "mod create;",
-        "mod replace;",
-        "mod update;",
-        "mod read;",
-    ] {
+    for owned in ["mod file;", "mod create;", "mod replace;", "mod update;"] {
         assert!(
             content.contains(owned),
             "missing content-owned module: {owned}"
@@ -1038,6 +1388,399 @@ fn storage_mechanics_follow_semantic_module_ownership() {
             !locator_index.contains(forbidden_transient_authority),
             "transient locator index gained publication authority: {forbidden_transient_authority}"
         );
+    }
+}
+
+#[test]
+fn pb07_substantive_owners_are_not_forwarding_shells() {
+    let tree = include_str!("../src/cow/tree.rs");
+    let mutate = include_str!("../src/cow/mutate.rs");
+    let view = include_str!("../src/cow/view.rs");
+    assert!(view.contains("trait CanonicalTreeMutationSourceV1"));
+    for view_owned_authentication in [
+        "struct SparsePreimageHasherV1",
+        "fn hash_streamed_directory_side",
+        "fn validate_mutation_relation",
+        "fn authenticate_and_derive_mutation_logical",
+        "fn validate_mutation_physical_evidence",
+        "fn validate_replacement_evidence",
+        "fn derive_replacement_logical",
+        "fn validate_page_boundaries",
+    ] {
+        assert!(
+            view.contains(view_owned_authentication),
+            "cow/view.rs lacks substantive authenticated-view ownership: {view_owned_authentication}"
+        );
+    }
+    assert!(mutate.contains("CanonicalTreeMutationSourceV1"));
+    assert!(mutate.contains("TreeProofMutationV1"));
+    assert!(mutate.contains("fn mutate_directory_entries_cow_v1"));
+    assert!(mutate.contains("fn mutate_directory_entries_inner"));
+    assert!(mutate.contains("fn replace_directory_entry_cow_with_admission_v1"));
+    assert!(!mutate.contains("tree::replace_directory_entry_cow_impl_v1"));
+    assert!(!mutate.contains("tree::add_directory_entry_cow_impl_v1"));
+    assert!(!mutate.contains("tree::remove_directory_entry_cow_impl_v1"));
+    for tree_owned_mutation in [
+        "fn replace_directory_entry_cow_impl_v1",
+        "fn replace_directory_entry_cow_borrowed_impl_v1",
+        "fn mutate_directory_entries_cow_v1",
+        "fn mutate_directory_entries_inner",
+        "enum TreeMutationKindV1",
+    ] {
+        assert!(
+            !tree.contains(tree_owned_mutation),
+            "COW mutation implementation remains in cow/tree.rs: {tree_owned_mutation}"
+        );
+    }
+    for proof_owned_function in [
+        "fn hash_streamed_directory_side",
+        "fn validate_mutation_relation",
+        "fn authenticate_and_derive_mutation_logical",
+        "fn validate_mutation_physical_evidence",
+        "fn validate_replacement_evidence",
+        "struct SparsePreimageHasherV1",
+        "struct VerificationTreeSinkV1",
+    ] {
+        assert!(
+            !mutate.contains(proof_owned_function),
+            "authenticated COW view implementation remains in cow/mutate.rs: {proof_owned_function}"
+        );
+    }
+
+    let extraction = include_str!("../src/read/extraction.rs");
+    let range = include_str!("../src/read/range.rs");
+    let content_read = include_str!("../src/content/read.rs");
+    for content_owned_streaming in [
+        "struct VerifiedFileSegmentV1",
+        "trait VerifiedFileRangePortV1",
+        "fn stream_verified_file_range_v1",
+    ] {
+        assert!(
+            content_read.contains(content_owned_streaming),
+            "content/read.rs lacks verified payload ownership: {content_owned_streaming}"
+        );
+    }
+    for range_forbidden_streaming in [
+        "struct VerifiedFileSegmentV1",
+        "trait VerifiedFileRangePortV1",
+        "fn stream_verified_file_range_v1",
+    ] {
+        assert!(
+            !range.contains(range_forbidden_streaming),
+            "read/range.rs retained verified payload streaming: {range_forbidden_streaming}"
+        );
+    }
+    assert!(range.contains("struct ExactRangePlanV1"));
+    assert!(range.contains("fn begin_exact_range_digest_v1"));
+    assert!(!range.contains("super::extraction"));
+    assert!(!range.contains("run_read_v1"));
+    assert!(!range.contains("ReaderV1"));
+    assert!(!range.contains("FsCas"));
+    for extraction_owned_range in ["fn read_file_range_impl_v1", "fn read_exact_range"] {
+        assert!(
+            extraction.contains(extraction_owned_range),
+            "root/path exact-range orchestration is missing from read/extraction.rs: {extraction_owned_range}"
+        );
+    }
+    assert!(extraction.contains("impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1"));
+    assert!(!extraction.contains("ExactRangeExecutorV1"));
+    for raw_object_layout in [
+        "ObjectCursorV1",
+        "read_u8",
+        "read_u16",
+        "read_u32",
+        "read_u64",
+        "read_component",
+        "ExtentTagV1",
+        "PhysicalTreeChildKindV1",
+        "TreeSubtypeV1",
+        "OBJECT_HEADER_BYTES",
+    ] {
+        assert!(
+            !range.contains(raw_object_layout),
+            "read/range.rs retained raw object-layout parsing: {raw_object_layout}"
+        );
+        assert!(
+            !extraction.contains(raw_object_layout),
+            "read/extraction.rs retained raw object-layout parsing: {raw_object_layout}"
+        );
+    }
+
+    let object_reader = include_str!("../src/read/object_reader.rs");
+    for owned in [
+        "struct OccupiedObjectReaderV1",
+        "fn required_occupied_len_v1",
+        "PhysicalObjectReadPortV1 for OccupiedObjectReaderV1",
+    ] {
+        assert!(
+            object_reader.contains(owned),
+            "object reader lacks bounded ownership: {owned}"
+        );
+    }
+    assert!(!object_reader.contains("struct ObjectCursorV1"));
+    assert!(!object_reader.contains("fn read_occupied_exact_accounted_v1"));
+    assert!(!extraction.contains("struct ObjectCursorV1"));
+    assert!(!extraction.contains("fn read_occupied_exact_accounted_v1"));
+
+    let traversal = include_str!("../src/object/traversal.rs");
+    let operation_admission = include_str!("../src/cas/operation_admission.rs");
+    assert!(traversal.contains("fn traverse_strong_edges_v1"));
+    assert!(traversal.contains("while"));
+    assert!(operation_admission.contains("traverse_strong_edges_v1"));
+    assert!(!operation_admission.contains("while ordinal < closure.count"));
+
+    let resync = include_str!("../src/cdc/resync.rs");
+    let update = include_str!("../src/content/update.rs");
+    assert!(resync.contains("fn resynchronize_update_v1"));
+    assert!(resync.contains("while base_cursor < base_len"));
+    assert!(resync.contains("fn verify_rejoin_bytes_v1"));
+    assert!(!update.contains("while base_cursor < base_len"));
+    assert!(!update.contains("fn exact_rejoin_bytes"));
+}
+
+#[test]
+fn pb07_canonical_transcripts_and_rejoin_proof_have_one_owner() {
+    let encode = include_str!("../src/object/encode.rs");
+    for owned in [
+        "struct CanonicalPhysicalObjectEncoderV1",
+        "struct CanonicalPhysicalObjectVerifierV1",
+        "FramedHasherV1",
+        "encode_physical_object_header_v1",
+        "physical_domain_tag_v1",
+        "FILE_FIXED_PAYLOAD_BYTES_V1",
+        "DATA_EXTENT_FIXED_BYTES_V1",
+        "CHUNK_REFERENCE_BYTES_V1",
+    ] {
+        assert!(
+            encode.contains(owned),
+            "object/encode.rs lacks canonical physical ownership: {owned}"
+        );
+    }
+
+    let decode = include_str!("../src/object/decode.rs");
+    let port_decode = include_str!("../src/object/port_decode.rs");
+    assert!(decode.contains("trait CanonicalObjectCursorV1"));
+    assert!(decode.contains("fn decode_payload_from_cursor_v1"));
+    assert!(port_decode.contains("decode_payload_from_cursor_v1("));
+    for duplicate in [
+        "FramedHasherV1",
+        "physical_domain_tag_v1",
+        "fn decode_tree",
+        "fn decode_file",
+    ] {
+        assert!(
+            !port_decode.contains(duplicate),
+            "object/port_decode.rs duplicated canonical semantic/transcript ownership: {duplicate}"
+        );
+    }
+
+    for (path, source) in [
+        ("content/file.rs", include_str!("../src/content/file.rs")),
+        (
+            "content/update.rs",
+            include_str!("../src/content/update.rs"),
+        ),
+        ("cow/tree.rs", include_str!("../src/cow/tree.rs")),
+    ] {
+        let production = production_source_v1(source);
+        for duplicate in [
+            "FramedHasherV1",
+            "TAG_PHYSICAL",
+            "OBJECT_HEADER_BYTES",
+            "FILE_FIXED_PAYLOAD_BYTES_V1",
+            "DATA_EXTENT_FIXED_BYTES_V1",
+            "CHUNK_REFERENCE_BYTES_V1",
+            "encode_physical_object_header_v1",
+            "physical_domain_tag_v1",
+        ] {
+            assert!(
+                !production.contains(duplicate),
+                "{path} retained canonical physical framing/transcript mechanics: {duplicate}"
+            );
+        }
+    }
+
+    assert!(encode.contains("struct EncodedVersionRecordV1"));
+    assert!(encode.contains("fn encode_version_record_v1"));
+    let complete_writer = include_str!("../src/pack/complete_writer.rs");
+    assert!(complete_writer.contains("encode_version_record_v1("));
+    for pack_forbidden_transcript in [
+        "derive_physical_version_record_id_v1",
+        "encode_physical_object_header_v1",
+        "VERSION_RECORD_PAYLOAD_BYTES",
+        "VERSION_OBJECT_BYTES",
+        "payload[0..32]",
+        "payload[176..184]",
+    ] {
+        assert!(
+            !complete_writer.contains(pack_forbidden_transcript),
+            "pack/complete_writer.rs retained VersionRecord layout/transcript ownership: {pack_forbidden_transcript}"
+        );
+    }
+
+    let range = include_str!("../src/read/range.rs");
+    assert!(!range.contains("crate::read::extraction"));
+    assert!(!range.contains("super::extraction"));
+    for forbidden in [
+        "FsCas",
+        "FsCasControlV1",
+        "CanonicalDirectoryTreeV1",
+        "read_object_payload_exact_v1",
+        "PhysicalTreeChildKindV1",
+        "RootDirectory",
+    ] {
+        assert!(
+            !range.contains(forbidden),
+            "read/range.rs crossed into extraction/storage ownership: {forbidden}"
+        );
+    }
+
+    let resync = include_str!("../src/cdc/resync.rs");
+    let update = include_str!("../src/content/update.rs");
+    for owned in [
+        "struct RejoinOperationBindingV1",
+        "struct VerifiedRejoinV1",
+        "fn verify_rejoin_bytes_v1",
+        "fn consume",
+    ] {
+        assert!(
+            resync.contains(owned),
+            "cdc/resync.rs lacks authenticated rejoin ownership: {owned}"
+        );
+    }
+    for duplicate in [
+        "struct UpdateOperationBindingV1",
+        "struct VerifiedRejoinV1",
+        "fn verify_rejoin_bytes_v1",
+        "ChunkerSpecV1",
+    ] {
+        assert!(
+            !update.contains(duplicate),
+            "content/update.rs retained CDC rejoin proof/profile ownership: {duplicate}"
+        );
+    }
+}
+
+#[test]
+fn pb07_semantic_modules_keep_concrete_storage_out() {
+    let sources = [
+        ("content/mod.rs", include_str!("../src/content/mod.rs")),
+        ("content/file.rs", include_str!("../src/content/file.rs")),
+        (
+            "content/create.rs",
+            include_str!("../src/content/create.rs"),
+        ),
+        (
+            "content/replace.rs",
+            include_str!("../src/content/replace.rs"),
+        ),
+        (
+            "content/update.rs",
+            include_str!("../src/content/update.rs"),
+        ),
+        ("content/read.rs", include_str!("../src/content/read.rs")),
+        ("read/range.rs", include_str!("../src/read/range.rs")),
+        ("cow/file.rs", include_str!("../src/cow/file.rs")),
+        ("cow/tree.rs", include_str!("../src/cow/tree.rs")),
+        ("cow/view.rs", include_str!("../src/cow/view.rs")),
+        ("cow/mutate.rs", include_str!("../src/cow/mutate.rs")),
+        ("object/model.rs", include_str!("../src/object/model.rs")),
+        ("object/encode.rs", include_str!("../src/object/encode.rs")),
+        ("object/decode.rs", include_str!("../src/object/decode.rs")),
+        (
+            "object/port_decode.rs",
+            include_str!("../src/object/port_decode.rs"),
+        ),
+        (
+            "object/traversal.rs",
+            include_str!("../src/object/traversal.rs"),
+        ),
+    ];
+    for (path, source) in sources {
+        let production = production_source_v1(source);
+        if path.starts_with("content/") {
+            assert_eq!(
+                forbidden_content_import_v1(&production),
+                None,
+                "{path} crossed a concrete storage/import boundary"
+            );
+        }
+        for forbidden in [
+            "crate::cas::fs",
+            "FsPrivatePack",
+            "FsOperationSpool",
+            "FileClosureObjectSpool",
+            "FileGlobalSeenSpool",
+            "hard_link",
+        ] {
+            assert!(
+                !production.contains(forbidden),
+                "{path} crossed a concrete storage/publication boundary: {forbidden}"
+            );
+        }
+    }
+}
+
+#[test]
+fn pb07_content_storage_import_guard_rejects_representative_forbidden_imports() {
+    for source in [
+        "use crate::cas::FsCasV1;",
+        "use crate::pack::CompletedPackSetV1;",
+        "use crate::lifecycle::run_lifecycle_v1;",
+        "use std::fs::OpenOptions;",
+        "use std::path::PathBuf;",
+    ] {
+        assert!(
+            forbidden_content_import_v1(source).is_some(),
+            "content import guard accepted {source}"
+        );
+    }
+}
+
+#[test]
+fn pb07_private_migration_names_are_absent_from_production() {
+    let sources = [
+        include_str!("../src/lib.rs"),
+        include_str!("../src/content/mod.rs"),
+        include_str!("../src/content/file.rs"),
+        include_str!("../src/content/create.rs"),
+        include_str!("../src/content/replace.rs"),
+        include_str!("../src/content/update.rs"),
+        include_str!("../src/content/read.rs"),
+        include_str!("../src/cow/mod.rs"),
+        include_str!("../src/cow/file.rs"),
+        include_str!("../src/cow/tree.rs"),
+        include_str!("../src/cow/view.rs"),
+        include_str!("../src/cow/mutate.rs"),
+        include_str!("../src/object/mod.rs"),
+        include_str!("../src/object/model.rs"),
+        include_str!("../src/object/encode.rs"),
+        include_str!("../src/object/decode.rs"),
+        include_str!("../src/object/port_decode.rs"),
+        include_str!("../src/object/traversal.rs"),
+        include_str!("../src/read/mod.rs"),
+        include_str!("../src/read/extraction.rs"),
+        include_str!("../src/read/range.rs"),
+        include_str!("../src/read/object_reader.rs"),
+        include_str!("../src/lifecycle/mod.rs"),
+        include_str!("../src/lifecycle/preparation.rs"),
+    ];
+    for source in sources {
+        let source = production_source_v1(source);
+        let lower = source.to_ascii_lowercase();
+        for forbidden in [
+            "run_c3_",
+            "request_c3_",
+            "c3_storage_",
+            "c3_admission_",
+            "c3operationpreparation",
+            "sharedc3control",
+        ] {
+            assert!(
+                !lower.contains(forbidden),
+                "private migration name remains: {forbidden}"
+            );
+        }
     }
 }
 

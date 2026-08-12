@@ -20,17 +20,14 @@ use crate::content::{
 use crate::cow::{PreparedTreeSinkV1, TreeObjectDispositionV1, TreeSinkErrorV1};
 use crate::format::{validate_physical_object_len, PhysicalObjectKindV1};
 use crate::identity::{
-    derive_physical_version_record_id_v1, FramedHasherV1, ObjectChecksumV1, PackIdV1,
-    PhysicalTreeIdV1, PhysicalVersionRecordIdV1, COMPARISON_WINDOW_BYTES, TAG_OBJECT_CHECKSUM,
-    TAG_PACK,
+    FramedHasherV1, ObjectChecksumV1, PackIdV1, PhysicalTreeIdV1, PhysicalVersionRecordIdV1,
+    COMPARISON_WINDOW_BYTES, TAG_OBJECT_CHECKSUM, TAG_PACK,
 };
 use crate::lifecycle::{SharedOperationControlV1, VersionSummaryInputV1};
 use crate::limits::{
     CounterFieldV1, ObservationScopeV1, OperationCountersV1, OptionalU64ObservationV1,
 };
-use crate::object::{
-    encode_physical_object_header_v1, TypedPhysicalObjectIdV1, VERSION_RECORD_PAYLOAD_BYTES,
-};
+use crate::object::{encode_version_record_v1, TypedPhysicalObjectIdV1, VersionRecordV1};
 use crate::profile::{ChunkerSpecV1, DigestSpecV1};
 use crate::{CoreError, CoreResult};
 
@@ -40,8 +37,6 @@ use super::{
     PackReadPortV1, PrivatePackPortV1, SealedPackV1, MAX_PACK_BYTES, MAX_PACK_RECORDS,
     PACK_INDEX_ENTRY_BYTES, PACK_TRAILER_BYTES,
 };
-
-const VERSION_OBJECT_BYTES: usize = 52 + VERSION_RECORD_PAYLOAD_BYTES as usize;
 
 struct CurrentObjectV1 {
     kind: PhysicalObjectKindV1,
@@ -888,11 +883,12 @@ where
             Err(error) => return Err(self.map_occupied_fscas_error(error)),
         };
         let result = (|| {
-            let occupied_len = match {
+            let occupied_len_result = {
                 let mut control = SharedOperationControlV1::new(self.control);
                 self.occupied
                     .occupied_len_typed_controlled_v1(id, &mut control)
-            } {
+            };
+            let occupied_len = match occupied_len_result {
                 Ok(Some(len)) => len,
                 Ok(None) => {
                     let error = FsCasErrorV1::Integrity;
@@ -1028,32 +1024,27 @@ where
             .count
             .checked_add(1)
             .ok_or(CoreError::IntegerOverflow)?;
-        let mut object = [0_u8; VERSION_OBJECT_BYTES];
-        object[..52].copy_from_slice(&encode_physical_object_header_v1(
-            PhysicalObjectKindV1::VersionRecord,
-            VERSION_RECORD_PAYLOAD_BYTES,
-        ));
-        let payload = &mut object[52..];
-        payload[0..32].copy_from_slice(version_id.as_bytes());
-        payload[32..64].copy_from_slice(ChunkerSpecV1::frozen().id().as_bytes());
-        payload[64..96].copy_from_slice(DigestSpecV1::frozen().id().as_bytes());
-        payload[96..128].copy_from_slice(root_tree.as_bytes());
-        payload[128..136].copy_from_slice(&summary.canonical_len.to_be_bytes());
-        payload[136..144].copy_from_slice(&summary.logical_file_bytes.to_be_bytes());
-        payload[144..148].copy_from_slice(&summary.entry_count.to_be_bytes());
-        payload[148..152].copy_from_slice(&tree_count.to_be_bytes());
-        payload[152..156].copy_from_slice(&file_count.to_be_bytes());
-        payload[156..160].copy_from_slice(&0_u32.to_be_bytes());
-        payload[160..164].copy_from_slice(
-            &closure_stats.kind_counts[kind_index(PhysicalObjectKindV1::Chunk)].to_be_bytes(),
-        );
-        payload[164..168].copy_from_slice(&summary.extent_count.to_be_bytes());
-        payload[168..172].copy_from_slice(&summary.chunk_ref_count.to_be_bytes());
-        payload[172..176].copy_from_slice(&total_object_count.to_be_bytes());
-        payload[176..184].copy_from_slice(&closure_stats.physical_chunk_bytes.to_be_bytes());
-        let id = derive_physical_version_record_id_v1(&object)?;
+        let encoded = encode_version_record_v1(VersionRecordV1 {
+            version_id,
+            chunker_spec_id: ChunkerSpecV1::frozen().id(),
+            digest_spec_id: DigestSpecV1::frozen().id(),
+            root_tree_id: root_tree,
+            canonical_len: summary.canonical_len,
+            logical_file_bytes: summary.logical_file_bytes,
+            entry_count: summary.entry_count,
+            tree_count,
+            file_count,
+            symlink_count: 0,
+            chunk_count: closure_stats.kind_counts[kind_index(PhysicalObjectKindV1::Chunk)],
+            extent_count: summary.extent_count,
+            chunk_ref_count: summary.chunk_ref_count,
+            total_object_count,
+            physical_chunk_bytes: closure_stats.physical_chunk_bytes,
+        })?;
+        let id = encoded.id();
+        let object = encoded.bytes();
         self.begin_object_inner(PhysicalObjectKindV1::VersionRecord, object.len() as u64)?;
-        self.write_inner(&object)?;
+        self.write_inner(object)?;
         let disposition = self.finish_object_inner(TypedPhysicalObjectIdV1::VersionRecord(id))?;
         counters.add(CounterFieldV1::BytesWritten, object.len() as u64)?;
         counters.add(CounterFieldV1::PhysicalHashBytes, object.len() as u64)?;

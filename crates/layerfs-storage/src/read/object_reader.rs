@@ -5,7 +5,7 @@
 //! are retained on the occupied owner so the outer operation can promote the
 //! first typed storage failure instead of flattening it.
 
-use crate::cas::{FsCasControlV1, FsCasOccupiedV1};
+use crate::cas::{FsCasControlV1, FsCasErrorV1, FsCasOccupiedV1};
 use crate::limits::{CounterFieldV1, OperationCountersV1};
 use crate::object::{PhysicalObjectReadPortV1, TypedPhysicalObjectIdV1};
 use crate::{CoreError, CoreResult};
@@ -34,6 +34,17 @@ impl<'a, C: FsCasControlV1 + ?Sized> OccupiedObjectReaderV1<'a, C> {
             len,
         }
     }
+
+    pub(super) fn resolved_new(
+        occupied: &'a mut FsCasOccupiedV1,
+        counters: &'a mut OperationCountersV1,
+        control: &'a mut C,
+        id: TypedPhysicalObjectIdV1,
+        len: u64,
+    ) -> CoreResult<Self> {
+        let _ = required_occupied_len_v1(occupied, control, id)?;
+        Ok(Self::new(occupied, counters, control, id, len))
+    }
 }
 
 impl<C: FsCasControlV1 + ?Sized> PhysicalObjectReadPortV1 for OccupiedObjectReaderV1<'_, C> {
@@ -56,5 +67,26 @@ impl<C: FsCasControlV1 + ?Sized> PhysicalObjectReadPortV1 for OccupiedObjectRead
             })?;
         self.counters
             .add(CounterFieldV1::BytesRead, destination.len() as u64)
+    }
+}
+
+pub(super) fn required_occupied_len_v1<C>(
+    occupied: &mut FsCasOccupiedV1,
+    control: &mut C,
+    id: TypedPhysicalObjectIdV1,
+) -> CoreResult<u64>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    match occupied.occupied_len_typed_controlled_v1(id, control) {
+        Ok(Some(len)) => Ok(len),
+        Ok(None) => {
+            occupied.retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+            Err(CoreError::SourceFailure)
+        }
+        Err(error) => {
+            occupied.retain_first_error_typed_v1(error);
+            Err(CoreError::SourceFailure)
+        }
     }
 }

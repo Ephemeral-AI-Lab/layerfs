@@ -13,9 +13,8 @@ use crate::format::{
     PhysicalObjectKindV1, ValidatedPath,
 };
 use crate::identity::{
-    derive_logical_chunk_spans_v1, FramedHasherV1, LogicalChunkIdV1, LogicalChunkRefV1,
-    LogicalFileHasherV1, LogicalFileIdentityV1, PhysicalChunkIdV1, PhysicalFileIdV1,
-    IDENTITY_HASHER_BYTES_V1, TAG_PHYSICAL_CHUNK, TAG_PHYSICAL_FILE,
+    derive_logical_chunk_spans_v1, LogicalChunkIdV1, LogicalChunkRefV1, LogicalFileHasherV1,
+    LogicalFileIdentityV1, PhysicalChunkIdV1, PhysicalFileIdV1, IDENTITY_HASHER_BYTES_V1,
 };
 #[cfg(feature = "operation-polymorphism")]
 use crate::limits::OperationReservationV1;
@@ -26,13 +25,9 @@ use crate::limits::{
     OperationMemoryPlanV1, OptionalU64ObservationV1,
 };
 use crate::object::{
-    encode_physical_object_header_v1, TypedPhysicalObjectIdV1, OBJECT_HEADER_BYTES,
+    CanonicalChunkObjectEncoderV1, CanonicalFileObjectEncoderV1, TypedPhysicalObjectIdV1,
 };
 use crate::{CoreError, CoreResult};
-
-const FILE_FIXED_PAYLOAD_BYTES: u64 = 14;
-const DATA_EXTENT_FIXED_BYTES: u64 = 13;
-const CHUNK_REFERENCE_BYTES: u64 = 36;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContentSourceErrorV1 {
@@ -615,18 +610,17 @@ pub(crate) fn write_chunk_object<O: PreparedObjectSinkV1 + ?Sized>(
     counters: &mut OperationCountersV1,
 ) -> CoreResult<(PhysicalChunkIdV1, ObjectDispositionV1)> {
     let payload_len = u64::try_from(chunk.len()).map_err(|_| CoreError::IntegerOverflow)?;
-    let complete_len = OBJECT_HEADER_BYTES
-        .checked_add(payload_len)
-        .ok_or(CoreError::IntegerOverflow)?;
+    let mut encoder = CanonicalChunkObjectEncoderV1::new(payload_len)?;
     objects
-        .begin_object(PhysicalObjectKindV1::Chunk, complete_len)
+        .begin_object(PhysicalObjectKindV1::Chunk, encoder.complete_len())
         .map_err(map_sink)?;
-    let mut hasher = FramedHasherV1::new(TAG_PHYSICAL_CHUNK, complete_len);
-    let header = encode_physical_object_header_v1(PhysicalObjectKindV1::Chunk, payload_len);
-    write_segment(objects, &mut hasher, &header, counters)?;
-    write_segment(objects, &mut hasher, chunk.first(), counters)?;
-    write_segment(objects, &mut hasher, chunk.second(), counters)?;
-    let id = PhysicalChunkIdV1::from_digest(hasher.finish()?);
+    {
+        let mut emit = |bytes: &[u8]| write_private_segment(objects, bytes, counters);
+        encoder.emit_header(&mut emit)?;
+        encoder.emit_segment(chunk.first(), &mut emit)?;
+        encoder.emit_segment(chunk.second(), &mut emit)?;
+    }
+    let id = encoder.finish()?;
     let disposition = objects
         .finish_object(TypedPhysicalObjectIdV1::Chunk(id))
         .map_err(map_sink)?;
@@ -645,83 +639,31 @@ pub(crate) fn write_file_object_and_logical<
     chunk_count: u64,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<(LogicalFileIdentityV1, PhysicalFileIdV1)> {
-    let extent_count = u32::from(chunk_count != 0);
-    let references_len = chunk_count
-        .checked_mul(CHUNK_REFERENCE_BYTES)
-        .ok_or(CoreError::IntegerOverflow)?;
-    let payload_len = FILE_FIXED_PAYLOAD_BYTES
-        .checked_add(if chunk_count == 0 {
-            0
-        } else {
-            DATA_EXTENT_FIXED_BYTES
-                .checked_add(references_len)
-                .ok_or(CoreError::IntegerOverflow)?
-        })
-        .ok_or(CoreError::IntegerOverflow)?;
-    let complete_len = OBJECT_HEADER_BYTES
-        .checked_add(payload_len)
-        .ok_or(CoreError::IntegerOverflow)?;
+    let mut encoder = CanonicalFileObjectEncoderV1::new(mode, logical_len, chunk_count)?;
     objects
-        .begin_object(PhysicalObjectKindV1::File, complete_len)
+        .begin_object(PhysicalObjectKindV1::File, encoder.complete_len())
         .map_err(map_sink)?;
-    let mut physical_hasher = FramedHasherV1::new(TAG_PHYSICAL_FILE, complete_len);
     let mut logical_hasher = LogicalFileHasherV1::new(logical_len, chunk_count)?;
-    let header = encode_physical_object_header_v1(PhysicalObjectKindV1::File, payload_len);
-    write_segment(objects, &mut physical_hasher, &header, counters)?;
-    write_segment(objects, &mut physical_hasher, &mode.to_be_bytes(), counters)?;
-    write_segment(
-        objects,
-        &mut physical_hasher,
-        &logical_len.to_be_bytes(),
-        counters,
-    )?;
-    write_segment(
-        objects,
-        &mut physical_hasher,
-        &extent_count.to_be_bytes(),
-        counters,
-    )?;
-    if chunk_count != 0 {
-        write_segment(objects, &mut physical_hasher, &[0x02], counters)?;
-        write_segment(
-            objects,
-            &mut physical_hasher,
-            &logical_len.to_be_bytes(),
-            counters,
-        )?;
-        let count = u32::try_from(chunk_count).map_err(|_| CoreError::IntegerOverflow)?;
-        write_segment(
-            objects,
-            &mut physical_hasher,
-            &count.to_be_bytes(),
-            counters,
-        )?;
-        references.rewind().map_err(map_sink)?;
-        for _ in 0..chunk_count {
-            let chunk = references
-                .next()
-                .map_err(map_sink)?
-                .ok_or(CoreError::Truncated)?;
-            logical_hasher.push(chunk.logical_ref())?;
-            write_segment(
-                objects,
-                &mut physical_hasher,
-                &chunk.len.to_be_bytes(),
-                counters,
-            )?;
-            write_segment(
-                objects,
-                &mut physical_hasher,
-                chunk.physical_id.as_bytes(),
-                counters,
-            )?;
+    let logical = {
+        let mut emit = |bytes: &[u8]| write_private_segment(objects, bytes, counters);
+        encoder.begin(&mut emit)?;
+        if chunk_count != 0 {
+            references.rewind().map_err(map_sink)?;
+            for _ in 0..chunk_count {
+                let chunk = references
+                    .next()
+                    .map_err(map_sink)?
+                    .ok_or(CoreError::Truncated)?;
+                logical_hasher.push(chunk.logical_ref())?;
+                encoder.emit_chunk_reference(chunk.len, &chunk.physical_id, &mut emit)?;
+            }
+            if references.next().map_err(map_sink)?.is_some() {
+                return Err(CoreError::TrailingBytes);
+            }
         }
-        if references.next().map_err(map_sink)?.is_some() {
-            return Err(CoreError::TrailingBytes);
-        }
-    }
-    let logical = logical_hasher.finish()?;
-    let id = PhysicalFileIdV1::from_digest(physical_hasher.finish()?);
+        logical_hasher.finish()?
+    };
+    let id = encoder.finish()?;
     let disposition = objects
         .finish_object(TypedPhysicalObjectIdV1::File(id))
         .map_err(map_sink)?;
@@ -729,32 +671,11 @@ pub(crate) fn write_file_object_and_logical<
     Ok((logical, id))
 }
 
-pub(crate) fn file_object_lengths_v1(chunk_count: u64) -> CoreResult<(u64, u64)> {
-    let references_len = chunk_count
-        .checked_mul(CHUNK_REFERENCE_BYTES)
-        .ok_or(CoreError::IntegerOverflow)?;
-    let payload_len = FILE_FIXED_PAYLOAD_BYTES
-        .checked_add(if chunk_count == 0 {
-            0
-        } else {
-            DATA_EXTENT_FIXED_BYTES
-                .checked_add(references_len)
-                .ok_or(CoreError::IntegerOverflow)?
-        })
-        .ok_or(CoreError::IntegerOverflow)?;
-    let complete_len = OBJECT_HEADER_BYTES
-        .checked_add(payload_len)
-        .ok_or(CoreError::IntegerOverflow)?;
-    Ok((payload_len, complete_len))
-}
-
-fn write_segment<O: PreparedObjectSinkV1 + ?Sized>(
+fn write_private_segment<O: PreparedObjectSinkV1 + ?Sized>(
     objects: &mut O,
-    hasher: &mut FramedHasherV1,
     bytes: &[u8],
     counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
-    hasher.write(bytes)?;
     let len = u64::try_from(bytes.len()).map_err(|_| CoreError::IntegerOverflow)?;
     counters.add(CounterFieldV1::PhysicalHashBytes, len)?;
     counters.add(CounterFieldV1::PhysicalHashUpdateCalls, 1)?;
