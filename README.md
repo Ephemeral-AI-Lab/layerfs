@@ -11,7 +11,7 @@ read and edit files independently, share unchanged content, and publish changes 
 one authoritative SQLite-backed workspace.
 
 [Quick start](#-quick-start) · [How it works](#-how-it-works) ·
-[Benchmarks](#-m3-benchmark-progress) · [Milestones](#-milestone-progress)
+[Benchmarks](#-benchmark-progress) · [Milestones](#-milestone-progress)
 
 ## ✨ At a glance
 
@@ -142,36 +142,39 @@ See the [implementation plan](./docs/implementation/implementation-plan.md),
 [M2 exit record](./docs/evidence/m2/exit.md), and
 [M3 improvement plan](./docs/benchmarks/m3-improvements.md).
 
-## 📊 M2 benchmark
+## 📊 Benchmark progress
 
-M2's mini-benchmark measures the file-backed Node SQLite engine directly. It does not
-include FUSE, page-cache effects, or the complete Computer execution path. Results below
-compare the pre-improvement M2 candidate with the accepted M2 implementation after
-native host hashing, statement batching, and FastCDC copy reduction.
+The mini-benchmark measures the file-backed Node SQLite engine directly. It does not
+include FUSE, page-cache effects, or the complete Computer execution path. The tables
+compare the pre-improvement baseline, the accepted M2 implementation, and the accepted
+M3 implementation.
 
 ### Headline results
 
-| Metric                                   |                              Result |
-| ---------------------------------------- | ----------------------------------: |
-| Cold 100 MiB write                       |  **2.5× faster**: 17.9 → 44.2 MiB/s |
-| Cold 100 MiB read                        | **2.7× faster**: 43.8 → 118.1 MiB/s |
-| Warm 100 MiB read                        | **2.7× faster**: 44.4 → 118.6 MiB/s |
-| A1 write statements                      |      **4.3× fewer**: 12,472 → 2,880 |
-| M2 storage/integration/maintenance tests |             **99 passed, 0 failed** |
+| Metric              |   Baseline |          M2 |            M3 |
+| ------------------- | ---------: | ----------: | ------------: |
+| Cold 100 MiB write  | 17.9 MiB/s |  44.2 MiB/s |    60.0 MiB/s |
+| Cold 100 MiB read   | 43.8 MiB/s | 118.1 MiB/s |   259.6 MiB/s |
+| Warm 100 MiB read   | 44.4 MiB/s | 118.6 MiB/s | 2,921.5 MiB/s |
+| A1 write statements |     12,472 |       2,880 |         1,174 |
+| Evidence checks     |          — |   99 passed |    156 passed |
 
 ### Workload results
 
-| Workload                     |        Before |     M2 result |            Change |
-| ---------------------------- | ------------: | ------------: | ----------------: |
-| 4 KiB random read            |    2.85 ms/op |    1.17 ms/op |       2.4× faster |
-| 100 MiB materialization      |    33.8 MiB/s |    67.9 MiB/s |       2.0× faster |
-| 100 × 1 MiB materialization  |    33.7 MiB/s |    64.6 MiB/s |       1.9× faster |
-| 100 one-byte edits           |        8.95 s |        4.44 s |       2.0× faster |
-| Mixed workspace, cold / warm | 5.99 / 5.65 s | 2.28 / 2.33 s | About 2.5× faster |
+| Workload                        |      Baseline |            M2 |                            M3 |
+| ------------------------------- | ------------: | ------------: | ----------------------------: |
+| 4 KiB random read               |    2.85 ms/op |    1.17 ms/op |               0.57–1.02 ms/op |
+| 100 MiB materialization         |    33.8 MiB/s |    67.9 MiB/s |                   108.5 MiB/s |
+| 100 × 1 MiB materialization     |    33.7 MiB/s |    64.6 MiB/s |                    98.1 MiB/s |
+| 100 one-byte edits              |        8.95 s |        4.44 s |                        2.13 s |
+| Mixed workspace, cold / warm    | 5.99 / 5.65 s | 2.28 / 2.33 s |                 2.29 / 2.30 s |
+| Three one-byte edits on 100 MiB |        18.6 s |         9.4 s |                     70.676 ms |
+| A6: 500 scattered edits         |             — |             — | **500/500 in 9.975 s — pass** |
+| Workerd write-path hashing      |             — |    69.3 MiB/s |                   383.5 MiB/s |
 
 The 100,001-entry closure test completed with 4,655 reconciliation statements, or 0.0465
 statements per manifest entry. Exact quota accounting and deduplication behavior were
-preserved.
+preserved across M2 and M3.
 
 <details>
 <summary>🧪 Benchmark methodology and caveats</summary>
@@ -179,36 +182,17 @@ preserved.
 - Runtime: Windows x64, Node 24.11.1, file-backed SQLite, WAL, `synchronous=FULL`.
 - Fixtures: deterministic 100 MiB, 100 × 1 MiB, and mixed-workspace workloads.
 - The matrix is a single-trial engineering benchmark with approximately 10–20% variance.
-- The A6 workload of 1,000 scattered one-byte edits still uses an O(file) fallback on
-  large leaves and is not an M2 pass criterion. Bounded local reconnection is an M3
-  goal.
+- M3's A6 acceptance gate is 500 scattered one-byte edits in ≤20 seconds. The former
+  1,000-edit target remains a documented SQLite WAL/fsync floor on the validation
+  hardware, not an M3 acceptance requirement.
 - Read-cell resident-memory peaks are conservative proxies because the harness currently
   samples the stream before consumption completes.
 
 Full methodology and raw artifacts are in the
-[M2 mini-benchmark report](./docs/benchmarks/m2-minibench.md).
+[benchmark report](./docs/benchmarks/m2-minibench.md) and
+[M3 evidence](./docs/evidence/m3/exit.md).
 
 </details>
-
-## 📈 M3 benchmark progress
-
-M3's focused benchmark work improved the 100 MiB edit and read paths while retaining
-authenticated manifests, exact reconciliation checks, transaction and memory limits, and
-acknowledged SQLite durability.
-
-| Metric                      |                     M3 result |
-| --------------------------- | ----------------------------: |
-| Cold 100 MiB read           |                   259.6 MiB/s |
-| Warm 100 MiB read           |                 2,921.5 MiB/s |
-| A5: three one-byte edits    |               70.676 ms total |
-| A6: scattered edits         | **500/500 in 9.975 s — pass** |
-| Workerd async write hashing |   383.5 MiB/s, 5.53× baseline |
-
-The revised A6 acceptance gate is 500 edits in ≤20 seconds. The former 1,000-edit target
-remains a documented SQLite WAL/fsync floor on the validation hardware, not an M3
-acceptance requirement. See the [M3 exit record](./docs/evidence/m3/exit.md),
-[benchmark report](./docs/benchmarks/m2-minibench.md), and raw
-[A6 artifact](./tests/performance/artifacts-m3-final/A6-scattered-edits.json).
 
 ## 🚀 Quick start
 
