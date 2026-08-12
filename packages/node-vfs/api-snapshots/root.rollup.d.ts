@@ -236,6 +236,10 @@ export interface GarbageCollectionOptions {
 export interface GarbageCollectionResult {
     readonly runId: string;
     readonly state: "complete" | "paused" | "abandoned";
+    readonly phase: "marking" | "sweeping-manifest-roots" | "sweeping-manifest-nodes" | "sweeping-objects" | "cleaning-marks" | "cleaning-root-journal" | "cleaning-terminal-runs" | "complete" | "abandoned";
+    readonly progressCursor: string | null;
+    /** Exact when zero; null means the remaining total is not boundedly knowable yet. */
+    readonly remainingWork: number | null;
     readonly examinedManifestRootCount: number;
     readonly deletedManifestRootCount: number;
     readonly examinedManifestNodeCount: number;
@@ -250,12 +254,25 @@ export interface GarbageCollectionResult {
     readonly committedBatches: number;
     readonly elapsedMs: number;
 }
+export interface StorageSnapshotOptions {
+    readonly maxBatches?: number;
+    readonly signal?: AbortSignal;
+}
 export interface PhysicalStorageSnapshot {
     readonly mainFileBytes?: number;
     readonly walBytes?: number;
     readonly freelistBytes?: number;
 }
 export interface StorageSnapshot {
+    readonly state: "complete" | "paused";
+    readonly phase: "roots" | "marking" | "stored-payload" | "logical-namespace" | "branch-overlays" | "mark-cleanup" | "mark-reset" | "complete";
+    readonly progressCursor: string | null;
+    /** Exact when zero; null means the remaining total is not boundedly knowable yet. */
+    readonly remainingWork: number | null;
+    readonly committedBatches: number;
+    readonly batchSize: number;
+    readonly elapsedMs: number;
+    readonly peakManagedResidentBytes: number;
     readonly rootMutationGeneration: number;
     readonly mainLogicalBytes: number;
     readonly storedObjectPayloadBytes: number;
@@ -268,6 +285,7 @@ export interface StorageSnapshot {
     readonly branchExclusiveObjectBytes: number;
     readonly branchExclusiveManifestBytes: number;
     readonly branchExclusivePayloadBytes: number;
+    readonly operationResultPayloadBytes: number;
     readonly objectCount: number;
     readonly manifestRootCount: number;
     readonly manifestNodeCount: number;
@@ -287,13 +305,19 @@ export interface VerificationOptions {
 }
 export interface VerificationResult {
     readonly rootMutationGeneration: number;
+    readonly phase: "roots" | "nodes" | "objects" | "inodes" | "usage" | "complete";
+    readonly progressCursor: string | null;
+    readonly remainingWork: number | null;
+    readonly committedBatches: 0;
+    readonly elapsedMs: number;
+    readonly peakManagedResidentBytes: number;
     readonly checkedEntities: number;
     readonly complete: boolean;
     readonly nextCursor: string | null;
 }
 export interface FilesystemMaintenance {
     collectGarbage(options?: GarbageCollectionOptions): Promise<GarbageCollectionResult>;
-    snapshotStorage(): Promise<StorageSnapshot>;
+    snapshotStorage(options?: StorageSnapshotOptions): Promise<StorageSnapshot>;
     verify(options?: VerificationOptions): Promise<VerificationResult>;
 }
 export interface OpenFilesystemOptions {

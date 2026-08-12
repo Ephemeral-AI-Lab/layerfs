@@ -212,6 +212,10 @@ export interface GarbageCollectionOptions {
 export interface GarbageCollectionResult {
     readonly runId: string;
     readonly state: "complete" | "paused" | "abandoned";
+    readonly phase: "marking" | "sweeping-manifest-roots" | "sweeping-manifest-nodes" | "sweeping-objects" | "cleaning-marks" | "cleaning-root-journal" | "cleaning-terminal-runs" | "complete" | "abandoned";
+    readonly progressCursor: string | null;
+    /** Exact when zero; null means the remaining total is not boundedly knowable yet. */
+    readonly remainingWork: number | null;
     readonly examinedManifestRootCount: number;
     readonly deletedManifestRootCount: number;
     readonly examinedManifestNodeCount: number;
@@ -226,12 +230,25 @@ export interface GarbageCollectionResult {
     readonly committedBatches: number;
     readonly elapsedMs: number;
 }
+export interface StorageSnapshotOptions {
+    readonly maxBatches?: number;
+    readonly signal?: AbortSignal;
+}
 export interface PhysicalStorageSnapshot {
     readonly mainFileBytes?: number;
     readonly walBytes?: number;
     readonly freelistBytes?: number;
 }
 export interface StorageSnapshot {
+    readonly state: "complete" | "paused";
+    readonly phase: "roots" | "marking" | "stored-payload" | "logical-namespace" | "branch-overlays" | "mark-cleanup" | "mark-reset" | "complete";
+    readonly progressCursor: string | null;
+    /** Exact when zero; null means the remaining total is not boundedly knowable yet. */
+    readonly remainingWork: number | null;
+    readonly committedBatches: number;
+    readonly batchSize: number;
+    readonly elapsedMs: number;
+    readonly peakManagedResidentBytes: number;
     readonly rootMutationGeneration: number;
     readonly mainLogicalBytes: number;
     readonly storedObjectPayloadBytes: number;
@@ -244,6 +261,7 @@ export interface StorageSnapshot {
     readonly branchExclusiveObjectBytes: number;
     readonly branchExclusiveManifestBytes: number;
     readonly branchExclusivePayloadBytes: number;
+    readonly operationResultPayloadBytes: number;
     readonly objectCount: number;
     readonly manifestRootCount: number;
     readonly manifestNodeCount: number;
@@ -263,13 +281,19 @@ export interface VerificationOptions {
 }
 export interface VerificationResult {
     readonly rootMutationGeneration: number;
+    readonly phase: "roots" | "nodes" | "objects" | "inodes" | "usage" | "complete";
+    readonly progressCursor: string | null;
+    readonly remainingWork: number | null;
+    readonly committedBatches: 0;
+    readonly elapsedMs: number;
+    readonly peakManagedResidentBytes: number;
     readonly checkedEntities: number;
     readonly complete: boolean;
     readonly nextCursor: string | null;
 }
 export interface FilesystemMaintenance {
     collectGarbage(options?: GarbageCollectionOptions): Promise<GarbageCollectionResult>;
-    snapshotStorage(): Promise<StorageSnapshot>;
+    snapshotStorage(options?: StorageSnapshotOptions): Promise<StorageSnapshot>;
     verify(options?: VerificationOptions): Promise<VerificationResult>;
 }
 export interface OpenFilesystemOptions {
@@ -727,7 +751,7 @@ export interface NamespaceStore {
     touch(id: string, mtime: number, ctime: number, token: number): void;
     deleteEntriesUnder(parentInode: string, tombstonesOnly?: boolean): void;
     deleteInode(id: string): void;
-    bumpRoot(kind: number, id: string): void;
+    bumpRoot(kind: number, id: string, mayRemoveRoots?: boolean): void;
 }
 export interface BranchRow {
     readonly id: string;
@@ -888,7 +912,7 @@ export interface StagingStore {
         readonly entryCount: number;
     }[]): void;
     levelRecordsAfter(leaseId: string, level: number, cursor: number, limit: number, maxBytes: number): readonly StagingLevelRow[];
-    bumpRoot(kind: number, id: string): void;
+    bumpRoot(kind: number, id: string, mayRemoveRoots?: boolean): void;
     release(leaseId: string, ownerNonce: Uint8Array, requireSealed: boolean, validated?: ValidatedSealedLease): boolean;
     delete(leaseId: string, ownerNonce: Uint8Array): boolean;
     acquireReadLease(leaseId: string, ownerId: string, ownerNonce: Uint8Array, manifestHash: Uint8Array, expiresAt: number, branchId?: string, generation?: number): void;
@@ -941,6 +965,8 @@ export interface GcRunRow {
     readonly state: number;
     readonly high_water: number;
     readonly root_generation: number;
+    readonly cursor_kind: number;
+    readonly cursor_value: Uint8Array | null;
     readonly examined_roots: number;
     readonly deleted_roots: number;
     readonly examined_nodes: number;
@@ -949,11 +975,13 @@ export interface GcRunRow {
     readonly deleted_objects: number;
     readonly reclaimed_object_bytes: number;
     readonly reclaimed_manifest_bytes: number;
+    readonly reclaimed_overlay_bytes: number;
 }
 export interface GcMarkRow {
     readonly kind: number;
     readonly hash: Uint8Array;
     readonly edge_cursor: number;
+    readonly payload_size: number;
 }
 export interface PayloadRow {
     readonly hash: Uint8Array;
@@ -969,10 +997,76 @@ export interface StorageSnapshotRow {
     readonly manifest_node_bytes: number;
     readonly page_bytes: number;
     readonly patch_bytes: number;
+    readonly result_bytes: number;
     readonly charged_metadata_bytes: number;
     readonly generation: number;
     readonly logical_bytes: number;
     readonly revisions: number;
+}
+export interface StorageSnapshotRunRow {
+    readonly state: number;
+    readonly high_water: number;
+    readonly root_generation: number;
+    readonly last_root_removal_generation: number;
+    readonly evaluation_time_ms: number;
+    readonly next_root_expiry_ms: number | null;
+    readonly root_kind: number;
+    readonly root_cursor: Uint8Array | null;
+    readonly mark_kind: number;
+    readonly mark_cursor: Uint8Array | null;
+    readonly stored_kind: number;
+    readonly stored_cursor: number;
+    readonly logical_cursor: string;
+    readonly logical_complete: number;
+    readonly logical_bytes: number;
+    readonly overlay_kind: number;
+    readonly overlay_branch_cursor: string;
+    readonly overlay_inode_cursor: string;
+    readonly overlay_sequence_cursor: number;
+    readonly overlay_index_cursor: number;
+    readonly stored_page_bytes: number;
+    readonly stored_patch_bytes: number;
+    readonly reclaimable_overlay_bytes: number;
+    readonly result_bytes: number;
+    readonly charged_metadata_bytes: number;
+    readonly revision_count: number;
+    readonly stored_object_count: number;
+    readonly stored_object_bytes: number;
+    readonly stored_manifest_root_count: number;
+    readonly stored_manifest_root_bytes: number;
+    readonly stored_manifest_node_count: number;
+    readonly stored_manifest_node_bytes: number;
+    readonly reachable_object_count: number;
+    readonly reachable_object_bytes: number;
+    readonly reachable_manifest_root_count: number;
+    readonly reachable_manifest_root_bytes: number;
+    readonly reachable_manifest_node_count: number;
+    readonly reachable_manifest_node_bytes: number;
+    readonly branch_exclusive_object_bytes: number;
+    readonly branch_exclusive_manifest_root_bytes: number;
+    readonly branch_exclusive_manifest_node_bytes: number;
+    readonly committed_batches: number;
+    readonly created_at_ms: number;
+    readonly updated_at_ms: number;
+    readonly current?: number;
+}
+export interface StorageSnapshotMarkRow {
+    readonly kind: number;
+    readonly hash: Uint8Array;
+    readonly edge_cursor: number;
+    readonly accounted: number;
+    readonly scope_mask: number;
+    readonly payload_size: number;
+}
+export interface StoragePayloadRow {
+    readonly hash: Uint8Array;
+    readonly size: number;
+    readonly allocation_sequence: number;
+    readonly scope_mask: number;
+}
+export interface StorageInodeRow {
+    readonly id: string;
+    readonly size: number | null;
 }
 export interface HashRow {
     readonly hash: Uint8Array;
@@ -1001,6 +1095,7 @@ export interface MaintenanceStore {
     abandonRun(runId: string, completeState: number, abandonedState: number): void;
     resumeAbandonedRun(runId: string, abandonedState: number, cleanupMarksState: number): void;
     run(id: string): GcRunRow | undefined;
+    activeRun(): GcRunRow | undefined;
     snapshot(): StorageSnapshotRow | undefined;
     physical(): {
         readonly pageCount: number;
@@ -1025,6 +1120,24 @@ export interface MaintenanceStore {
     usageVerificationState(): UsageVerificationState;
     usageVerificationPhaseCount(): number;
     usageVerificationBatch(phase: number, afterKey: string | null, limit: number, maxBytes: number): UsageVerificationBatch;
+    storageSnapshot(): StorageSnapshotRunRow | undefined;
+    storageSnapshotCurrent(now: number): boolean;
+    storageSnapshotResult(now: number): StorageSnapshotRunRow | undefined;
+    beginStorageSnapshot(now: number): void;
+    recordStorageSnapshotBatch(): void;
+    storageRootBatch(limit: number, maxBytes: number, now: number): boolean;
+    storageMarks(limit: number, maxBytes: number): readonly StorageSnapshotMarkRow[];
+    addStorageMark(kind: number, hash: Uint8Array, scopeMask: number): boolean;
+    accountStorageMark(kind: number, hash: Uint8Array, payloadBytes: number): boolean;
+    storagePayloadSize(kind: number, hash: Uint8Array): number | undefined;
+    advanceStorageMark(kind: number, hash: Uint8Array, edgeCursor: number, processed: boolean): void;
+    reconcileStorageSnapshotGeneration(now: number): boolean;
+    finishStorageMarking(now: number): boolean;
+    storageStoredBatch(limit: number, maxBytes: number, now: number): boolean;
+    storageLogicalBatch(limit: number, maxBytes: number, now: number): boolean;
+    cleanupStorageMarks(limit: number, maxBytes: number, now: number): boolean;
+    resetStorageMarksBatch(limit: number, maxBytes: number): boolean;
+    addReclaimedOverlayBytes(runId: string, bytes: number): void;
 }
 export interface PersistedPatch {
     readonly sequence: number;
@@ -1048,7 +1161,10 @@ export interface OverlayStore {
     patches(branchId: string, inodeId: string, minimumGeneration?: number, minimumSequence?: number): readonly PersistedPatch[];
     clearPages(branchId: string, inodeId: string): void;
     clearPatches(branchId: string, inodeId: string): void;
-    cleanupUnleased(limit: number): number;
+    cleanupUnleased(limit: number): {
+        readonly worked: boolean;
+        readonly reclaimedPayloadBytes: number;
+    };
 }
 export interface StorageTransactionPorts {
     content(limits: StorageLimits, cache?: ContentCache): ContentStore;

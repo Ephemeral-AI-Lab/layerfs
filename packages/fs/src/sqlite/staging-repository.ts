@@ -770,14 +770,24 @@ export class StagingRepository {
       { maxRows: limit, maxBytes },
     );
   }
-  bumpRoot(kind: number, id: string): void {
+  bumpRoot(kind: number, id: string, mayRemoveRoots = true): void {
     const rootId = encodeUtf8(id);
-    new UsageRepository(this.#tx, this.#limits).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
-      "root journal",
-      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
-    );
-    const generation = advanceRootMutationGeneration(this.#tx);
+    const prior = this.#tx.all<{ generation: number } & SqliteRow>(
+      "SELECT generation FROM efs_root_journal WHERE kind=? AND root_id=? ORDER BY generation DESC LIMIT 1",
+      [kind, rootId],
+      { maxRows: 1, maxBytes: intrinsicByteLength(rootId) + 128 },
+    )[0];
+    if (!prior)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
+        "root journal",
+        { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
+      );
+    const generation = advanceRootMutationGeneration(this.#tx, mayRemoveRoots);
+    if (prior)
+      this.#tx.run("DELETE FROM efs_root_journal WHERE generation=?", [
+        prior.generation,
+      ]);
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
       [generation!, kind, rootId],
@@ -789,11 +799,17 @@ export class StagingRepository {
     if (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0)
       throw new RangeError("invalid root mutation generation snapshot");
     const rootId = encodeUtf8(id);
-    new UsageRepository(this.#tx, this.#limits).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
-      "root journal",
-      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
-    );
+    const prior = this.#tx.all<{ generation: number } & SqliteRow>(
+      "SELECT generation FROM efs_root_journal WHERE kind=? AND root_id=? ORDER BY generation DESC LIMIT 1",
+      [kind, rootId],
+      { maxRows: 1, maxBytes: intrinsicByteLength(rootId) + 128 },
+    )[0];
+    if (!prior)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
+        "root journal",
+        { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
+      );
     const next = expectedGeneration + 1;
     if (!Number.isSafeInteger(next))
       throw new Error("ENOSPC: root mutation generation space exhausted");
@@ -802,7 +818,11 @@ export class StagingRepository {
       [next, expectedGeneration],
     );
     const generation =
-      updated.changes === 1 ? next : advanceRootMutationGeneration(this.#tx);
+      updated.changes === 1 ? next : advanceRootMutationGeneration(this.#tx, false);
+    if (prior)
+      this.#tx.run("DELETE FROM efs_root_journal WHERE generation=?", [
+        prior.generation,
+      ]);
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
       [generation, kind, rootId],
@@ -904,7 +924,7 @@ export class StagingRepository {
       "INSERT INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
       [leaseId, manifestHash],
     );
-    this.bumpRoot(2, leaseId);
+    this.bumpRoot(2, leaseId, false);
   }
   renewReadLease(
     leaseId: string,
@@ -927,11 +947,11 @@ export class StagingRepository {
     )
       throw new RangeError("invalid read lease renewal interval");
     const updated = this.#tx.run(
-      "UPDATE efs_leases SET expires_at_ms=?,last_renewal_at_ms=? WHERE id=? AND owner_id=? AND owner_nonce=? AND state=1 AND expires_at_ms=? AND expires_at_ms>=?",
+      "UPDATE efs_leases SET expires_at_ms=?,last_renewal_at_ms=? WHERE id=? AND owner_id=? AND owner_nonce=? AND state=1 AND expires_at_ms=? AND expires_at_ms>?",
       [expiresAt, now, leaseId, ownerId, ownerNonce, priorExpiresAt, now],
     );
     if (updated.changes !== 1) return false;
-    this.bumpRoot(4, leaseId);
+    this.bumpRoot(4, leaseId, false);
     return true;
   }
   releaseReadLease(leaseId: string, ownerId: string, ownerNonce: Uint8Array): boolean {
@@ -1601,6 +1621,7 @@ export class StagingRepository {
       membership_count: sequence,
       next_sequence: sequence,
     });
+    if (insertedRows) this.bumpRoot(6, leaseId, false);
     return Object.freeze({
       leaseId,
       ownerNonce: copyBytes(ownerNonce),

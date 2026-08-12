@@ -65,7 +65,10 @@ export interface ResolvedPath {
 const SUBTREE_WALK_BATCH = 256;
 const SUBTREE_WALK_CAP = 4096;
 
-export function advanceRootMutationGeneration(tx: FilesystemSQLiteTransaction): number {
+export function advanceRootMutationGeneration(
+  tx: FilesystemSQLiteTransaction,
+  mayRemoveRoots = true,
+): number {
   // The durable row is authoritative. Other repositories may advance the
   // root generation in the same transaction, so a transaction-local cache
   // must never be used as the compare value for this update.
@@ -80,8 +83,10 @@ export function advanceRootMutationGeneration(tx: FilesystemSQLiteTransaction): 
   if (!Number.isSafeInteger(next))
     throw new Error("ENOSPC: root mutation generation space exhausted");
   const updated = tx.run(
-    "UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1 AND root_mutation_generation=?",
-    [next, current!],
+    mayRemoveRoots
+      ? "UPDATE efs_meta SET root_mutation_generation=?,last_root_removal_generation=? WHERE singleton=1 AND root_mutation_generation=?"
+      : "UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1 AND root_mutation_generation=?",
+    mayRemoveRoots ? [next, next, current!] : [next, current!],
   );
   if (updated.changes !== 1)
     throw new Error("ECORRUPT: root mutation generation changed unexpectedly");
@@ -265,8 +270,14 @@ export class NamespaceRepository {
       [revision, meta.main_revision, now, writer, changeCount],
     );
     this.#tx.run(
-      "UPDATE efs_meta SET main_revision=?,root_mutation_generation=? WHERE singleton=1 AND main_revision=? AND root_mutation_generation=?",
-      [revision, generation, meta.main_revision, meta.root_mutation_generation],
+      "UPDATE efs_meta SET main_revision=?,root_mutation_generation=?,last_root_removal_generation=? WHERE singleton=1 AND main_revision=? AND root_mutation_generation=?",
+      [
+        revision,
+        generation,
+        generation,
+        meta.main_revision,
+        meta.root_mutation_generation,
+      ],
     );
     noteRootMutationGeneration(this.#tx, generation);
     this.#tx.run(
@@ -296,8 +307,8 @@ export class NamespaceRepository {
     if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(generation))
       throw new Error("ENOSPC: revision or generation space exhausted");
     const updated = this.#tx.run(
-      "UPDATE efs_meta SET main_revision=?,root_mutation_generation=? WHERE singleton=1 AND main_revision=? AND root_mutation_generation=?",
-      [revision, generation, mainRevision, rootMutationGeneration],
+      "UPDATE efs_meta SET main_revision=?,root_mutation_generation=?,last_root_removal_generation=? WHERE singleton=1 AND main_revision=? AND root_mutation_generation=?",
+      [revision, generation, generation, mainRevision, rootMutationGeneration],
     );
     if (updated.changes !== 1) return this.nextRevision(now, changeCount, writer);
     const rootId = encodeUtf8(String(revision));

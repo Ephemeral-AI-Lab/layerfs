@@ -8,6 +8,11 @@ import { checkedAdd } from "../resources/safe-integers.js";
 import { AdmissionController } from "../resources/limits.js";
 
 export type ContentCacheKind = "object" | "manifest-root" | "manifest-node";
+// A cache entry retains a Map bucket, a UTF-16 digest key, the entry and
+// reservation objects, closures, typed-array headers, and allocator slack in
+// addition to payload bytes. Charging only payload lets tiny objects create an
+// effectively unbounded resident object graph under a byte-bounded cache.
+const CONTENT_CACHE_ENTRY_OVERHEAD_BYTES = 8192;
 interface Entry {
   readonly bytes: Uint8Array;
   readonly weight: number;
@@ -141,16 +146,21 @@ export class ContentCache {
   reserve(weight: number): ContentCacheReservation | undefined {
     if (!Number.isSafeInteger(weight) || weight <= 0)
       throw new RangeError("cache reservation must be positive");
-    if (weight > this.#limit) {
+    const chargedWeight = checkedAdd(
+      weight,
+      CONTENT_CACHE_ENTRY_OVERHEAD_BYTES,
+      "cache entry resident charge",
+    );
+    if (chargedWeight > this.#limit) {
       this.#bypasses += 1;
       return undefined;
     }
-    while (this.#bytes + weight > this.#limit && this.#entries.size)
+    while (this.#bytes + chargedWeight > this.#limit && this.#entries.size)
       this.#evictOldest();
     let release: (() => void) | undefined;
     while (!release) {
       try {
-        release = this.#admission.reserve(weight);
+        release = this.#admission.reserve(chargedWeight);
       } catch {
         if (!this.#entries.size)
           throw new RangeError(
@@ -161,7 +171,7 @@ export class ContentCache {
     }
     let active = true;
     return Object.freeze({
-      weight,
+      weight: chargedWeight,
       release() {
         if (active) {
           active = false;

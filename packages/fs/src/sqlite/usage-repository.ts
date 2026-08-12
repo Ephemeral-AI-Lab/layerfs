@@ -123,6 +123,10 @@ export function flushUsageMutationBatch(
 export const CHARGED_ROW_BYTES = DURABLE_METADATA_ROW_BYTES;
 /** Logical per-content-row reservation that is exchanged for one live GC mark. */
 export const GC_MARK_RESERVATION_BYTES = 704;
+/** Fixed durable envelope reserved while a bounded storage snapshot is resumable. */
+export const STORAGE_SNAPSHOT_STATE_BYTES = 2048;
+/** Storage marks consume the per-content GC reservation and add no second charge. */
+export const STORAGE_SNAPSHOT_MARK_BYTES = GC_MARK_RESERVATION_BYTES;
 
 export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_cas_objects",
@@ -213,6 +217,9 @@ export const DIRECT_USAGE_TABLES = Object.freeze([
   "efs_gc_runs",
   "efs_gc_marks",
   "efs_lease_cleanups",
+  "efs_storage_snapshots",
+  "efs_storage_marks",
+  "efs_root_holds",
 ] as const);
 
 const DIRECT_USAGE_SQL = `SELECT
@@ -229,7 +236,7 @@ const DIRECT_USAGE_SQL = `SELECT
   (${DIRECT_STAGING_BYTES_SQL.replace(/^SELECT /u, "").replace(/ value$/u, "")}) staging_bytes,
   (${DIRECT_INGEST_RESERVATION_SQL.replace(/ value FROM/u, " FROM")}) ingest_reservation_bytes,
   (SELECT coalesce(sum(length(encoded)),0) FROM efs_operation_results) result_bytes,
-  ((SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_cas_objects)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_roots)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_nodes)+(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs)+(SELECT count(*)*${CHARGED_ROW_BYTES} FROM efs_lease_cleanups)) maintenance_bytes,
+  ((SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_cas_objects)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_roots)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_nodes)+(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs)+(SELECT count(*)*${CHARGED_ROW_BYTES} FROM efs_lease_cleanups)+(SELECT count(*)*${STORAGE_SNAPSHOT_STATE_BYTES} FROM efs_storage_snapshots)+(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_holds)) maintenance_bytes,
   ((SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_operation_ids)) permanent_identifiers,
   (${DIRECT_CHARGED_METADATA_EXPRESSION}) charged_metadata_bytes`;
 
@@ -627,6 +634,23 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
     table: "efs_lease_cleanups",
     keys: [key("lease_id", "string")],
     contributions: { maintenance_bytes: String(CHARGED_ROW_BYTES) },
+  },
+  {
+    table: "efs_storage_snapshots",
+    keys: [key("singleton", "number")],
+    contributions: { maintenance_bytes: String(STORAGE_SNAPSHOT_STATE_BYTES) },
+  },
+  {
+    table: "efs_storage_marks",
+    keys: [key("kind", "number"), key("hash", "blob")],
+    contributions: {},
+  },
+  {
+    table: "efs_root_holds",
+    keys: [key("id", "string")],
+    contributions: {
+      maintenance_bytes: `${CHARGED_ROW_BYTES}+length(t.root_id)`,
+    },
   },
 ]);
 

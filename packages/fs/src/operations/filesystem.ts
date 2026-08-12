@@ -237,6 +237,7 @@ export class EphemeralFS implements EphemeralFilesystem {
       this.#cache,
       this.capabilities.format.cowPageBytes,
       this.#branchLimits,
+      this.#admission,
     );
   }
 

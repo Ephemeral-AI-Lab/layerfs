@@ -11,12 +11,18 @@
 //   node tests/performance/branch-bench.mjs --artifacts=C:\\tmp\\branch-bench
 
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
+import { DatabaseSync } from "node:sqlite";
 import { BranchError, EphemeralFS } from "../../packages/fs/dist/index.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
+import {
+  effectiveResourceLimits,
+  runtimeEnvironment,
+} from "../helpers/runtime-environment.mjs";
 
 const SEED = 0x5eed_5eed;
 const DEFAULT_TRIALS = 1;
@@ -24,6 +30,14 @@ const BRANCH_COUNTS = [1, 5, 10];
 const PATHS_PER_BRANCH = [1, 10, 100];
 const EDIT_COUNTS = [10, 100, 500];
 const MIB = 1024 * 1024;
+const metadataDatabase = new DatabaseSync(":memory:");
+const SQLITE_VERSION = metadataDatabase
+  .prepare("SELECT sqlite_version() version")
+  .get().version;
+const SQLITE_PAGE_SIZE = metadataDatabase.prepare("PRAGMA page_size").get().page_size;
+metadataDatabase.close();
+const BENCHMARK_ENVIRONMENT = runtimeEnvironment({ sqlite: SQLITE_VERSION });
+let currentResourceLimits;
 
 function argument(name, fallback = undefined) {
   const prefix = `--${name}=`;
@@ -54,6 +68,21 @@ function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function gitHead() {
+  const revision = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: path.resolve(import.meta.dirname, "..", ".."),
+  });
+  if (revision.status !== 0) throw new Error("branch benchmark cannot resolve HEAD");
+  const status = spawnSync("git", ["status", "--porcelain"], {
+    cwd: path.resolve(import.meta.dirname, "..", ".."),
+  });
+  if (status.status !== 0) throw new Error("branch benchmark cannot inspect worktree");
+  return Object.freeze({
+    commit: revision.stdout.toString().trim(),
+    dirty: status.stdout.toString().trim().length > 0,
+  });
+}
+
 function barrier(size) {
   let arrived = 0;
   let release;
@@ -70,6 +99,7 @@ function barrier(size) {
 async function openFilesystem(filename = ":memory:", options = {}) {
   const database = await openNodeSqlite({ filename });
   const filesystem = await EphemeralFS.open({ database, ...options });
+  currentResourceLimits = effectiveResourceLimits(filesystem);
   return { database, filesystem };
 }
 
@@ -468,6 +498,10 @@ async function main() {
     : await mkdtemp(path.join(tmpdir(), "efs-branch-bench-artifacts-"));
   await mkdir(artifactsDirectory, { recursive: true });
   const cells = cellsFor(selection);
+  const head = gitHead();
+  const fixtureSha256 = createHash("sha256")
+    .update(JSON.stringify({ seed: SEED, cells }))
+    .digest("hex");
   const started = performance.now();
   const artifacts = [];
   console.log(`branch-bench: cells=${cells.length}, trials=${trials}`);
@@ -492,16 +526,36 @@ async function main() {
     const artifact = {
       schema: "efs-benchmark-result-v1",
       benchmark: `M4-${cell.name}`,
+      commit: head.commit,
+      worktreeDirty: head.dirty,
       engine: "ephemeral-ai-fs",
       driver: "sqlite-node",
-      fixture: { name: "small-branch-matrix", seed: SEED },
-      configuration: cell,
+      environment: BENCHMARK_ENVIRONMENT,
+      fixture: { name: "small-branch-matrix", sha256: fixtureSha256 },
+      configuration: {
+        seed: SEED,
+        databaseIsolation: "fresh-database-per-trial",
+        sqlitePageSize: SQLITE_PAGE_SIZE,
+        journalMode: "wal",
+        cacheTargetBytes: 16 * MIB,
+        mmapLimitBytes: 0,
+        manifestFormat: "efs-merkle-manifest-v1",
+        operatingSystemCacheDropAttempted: false,
+        operatingSystemCacheDropSucceeded: false,
+        resourceLimits: currentResourceLimits,
+        ...cell,
+      },
       trials: samples.length,
       latencyMs: publicationSamples.length
         ? {
             p50: percentile(publicationSamples, 0.5),
             p95: percentile(publicationSamples, 0.95),
             p99: percentile(publicationSamples, 0.99),
+            min: Math.min(...publicationSamples),
+            max: Math.max(...publicationSamples),
+            mean:
+              publicationSamples.reduce((total, value) => total + value, 0) /
+              publicationSamples.length,
           }
         : null,
       counters: samples.length
@@ -542,7 +596,18 @@ async function main() {
 
   await writeFile(
     path.join(artifactsDirectory, "index.json"),
-    `${JSON.stringify({ schema: "efs-branch-bench-v1", artifacts }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        schema: "efs-branch-bench-v1",
+        commit: head.commit,
+        worktreeDirty: head.dirty,
+        fixture: { name: "small-branch-matrix", sha256: fixtureSha256 },
+        environment: BENCHMARK_ENVIRONMENT,
+        artifacts,
+      },
+      null,
+      2,
+    )}\n`,
   );
   const failed = artifacts.filter((artifact) => !artifact.pass).length;
   const elapsedMs = performance.now() - started;

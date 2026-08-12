@@ -16,6 +16,7 @@ import {
   validateOperationIdentifier,
 } from "./identifiers.js";
 import { encodeUtf8 } from "../namespace/utf8.js";
+import { advanceRootMutationGeneration } from "./namespace-repository.js";
 
 const checkpointDecoder = new TextDecoder();
 
@@ -219,6 +220,7 @@ export class BranchRepository {
       "INSERT INTO efs_branches(id,base_revision,state,generation,created_at_ms,terminal_at_ms,merged_revision) VALUES(?,?,0,0,?,NULL,NULL)",
       [id, baseRevision, now],
     );
+    this.#bumpRoot(1, id, false);
     return this.row(id)!;
   }
   row(id: string): BranchRow | undefined {
@@ -365,7 +367,7 @@ export class BranchRepository {
       nextCharge - (prior ? CHARGED_ROW_BYTES + prior.bytes : 0),
       "branch manifest root metadata",
     );
-    this.#bumpRoot(1, branchId);
+    this.#bumpRoot(1, branchId, prior !== undefined);
     this.#tx.run("DELETE FROM efs_branch_manifest_roots WHERE branch_id=? AND path=?", [
       branchId,
       path,
@@ -445,10 +447,11 @@ export class BranchRepository {
     );
   }
   incrementGeneration(branchId: string): void {
-    this.#tx.run(
+    const updated = this.#tx.run(
       "UPDATE efs_branches SET generation=generation+1 WHERE id=? AND state=0",
       [branchId],
     );
+    if (updated.changes) this.#bumpRoot(1, branchId, true);
   }
   finish(
     branchId: string,
@@ -464,6 +467,7 @@ export class BranchRepository {
       "UPDATE efs_branches SET state=?,terminal_at_ms=?,merged_revision=? WHERE id=? AND state=0",
       [state, now, state === 1 ? mergedRevision : null, branchId],
     );
+    this.#bumpRoot(1, branchId, true);
     // Terminal namespace rows are no longer mutable.  COW versions and
     // structural patches remain only when a durable stream lease needs them;
     // the deletes below are single bounded statements and therefore do not
@@ -688,6 +692,7 @@ export class BranchRepository {
         "UPDATE efs_operation_results SET encoded=X'' WHERE operation_id=? AND length(encoded)>0",
         [row.operation_id],
       );
+    this.#bumpRoot(3, `expired-results:${now}`, true);
     return rows.length;
   }
   pruneTerminalBranches(now: number, retentionMs: number, limit: number): number {
@@ -886,7 +891,6 @@ export class BranchRepository {
         limit,
       );
       if (!rows.length) {
-        this.#bumpRoot(2, `checkpoint-${checkpointTarget}`);
         this.#tx.run(
           "UPDATE efs_revision_checkpoints SET phase=1,inode_cursor=NULL WHERE target_revision=? AND state=0",
           [checkpointTarget],
@@ -894,6 +898,7 @@ export class BranchRepository {
         return 1;
       }
       let metadata = 0;
+      let rootsAdded = 0;
       for (const row of rows) {
         const encodedBytes = row.encoded ? intrinsicByteLength(row.encoded) : 0;
         const inserted = this.#tx.run(
@@ -908,13 +913,17 @@ export class BranchRepository {
             "INSERT OR IGNORE INTO efs_checkpoint_manifest_roots(target_revision,inode_id,manifest_hash) VALUES(?,?,?)",
             [checkpointTarget, row.inode_id, manifestHash],
           );
-          if (root.changes === 1) metadata += CHARGED_ROW_BYTES;
+          if (root.changes === 1) {
+            metadata += CHARGED_ROW_BYTES;
+            rootsAdded += 1;
+          }
         }
       }
       new UsageRepository(this.#tx, this.#limits).apply(
         { charged_metadata_bytes: metadata },
         "revision checkpoint inode rows",
       );
+      if (rootsAdded) this.#bumpRoot(2, `checkpoint-${checkpointTarget}`, false);
       const last = rows[rows.length - 1]!;
       this.#tx.run(
         "UPDATE efs_revision_checkpoints SET inode_cursor=?,inode_count=inode_count+? WHERE target_revision=? AND state=0",
@@ -1252,27 +1261,28 @@ export class BranchRepository {
       reason,
     );
   }
-  #bumpRoot(kind: number, id: string): void {
+  #bumpRoot(kind: number, id: string, mayRemoveRoots = true): void {
     validateDurableIdentifier(id, "root journal identifier");
     const rootId = encodeUtf8(id);
-    new UsageRepository(this.#tx, this.#limits).apply(
-      { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
-      "branch root journal",
-      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
-    );
-    this.#tx.run(
-      "UPDATE efs_meta SET root_mutation_generation=root_mutation_generation+1 WHERE singleton=1",
-    );
-    const generation = this.#tx.all<{ value: number } & SqliteRow>(
-      "SELECT root_mutation_generation value FROM efs_meta WHERE singleton=1",
-      [],
-      { maxRows: 1, maxBytes: 128 },
-    )[0]?.value;
-    if (!Number.isSafeInteger(generation))
-      throw new Error("ECORRUPT: invalid root mutation generation");
+    const prior = this.#tx.all<{ generation: number } & SqliteRow>(
+      "SELECT generation FROM efs_root_journal WHERE kind=? AND root_id=? ORDER BY generation DESC LIMIT 1",
+      [kind, rootId],
+      { maxRows: 1, maxBytes: intrinsicByteLength(rootId) + 128 },
+    )[0];
+    if (!prior)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
+        "branch root journal",
+        { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
+      );
+    const generation = advanceRootMutationGeneration(this.#tx, mayRemoveRoots);
+    if (prior)
+      this.#tx.run("DELETE FROM efs_root_journal WHERE generation=?", [
+        prior.generation,
+      ]);
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
-      [generation!, kind, rootId],
+      [generation, kind, rootId],
     );
   }
 }

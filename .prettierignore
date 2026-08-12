@@ -2,3 +2,4 @@
 **/dist/**
 **/api-snapshots/**
 pnpm-lock.yaml
+tests/performance/artifacts*/**

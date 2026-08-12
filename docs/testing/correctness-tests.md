@@ -22,11 +22,29 @@ The same portable suite MUST run against:
 
 Driver-specific setup may differ. Observable filesystem results may not.
 
+### 1.1 Durable Object execution tiers
+
+Durable Object evidence is split into two non-interchangeable tiers:
+
+1. **M6 local conformance:** the complete portable driver suite runs in the pinned
+   `@cloudflare/vitest-pool-workers` workerd/Miniflare environment with a real local
+   SQLite-backed Durable Object binding. It MUST NOT route SQL through the Node adapter
+   or another mirror. This tier is mandatory, fully local, and credential-free.
+2. **M9 hosted preview:** the already-accepted M6 Worker bundle runs in a dedicated
+   non-production Cloudflare account environment. This tier reruns the 60-second smoke
+   profile and the Durable Object release benchmarks against hosted storage. It requires
+   explicit user authorization and authenticated Wrangler access.
+
+Passing the local tier does not satisfy the hosted M9 gate. Conversely, a hosted smoke
+run does not replace the complete local portable suite. Normal M6 commands MUST NOT read
+Cloudflare credentials or create remote resources.
+
 ## 2. Fast smoke suite
 
 The first integration gate is a finite high-volume smoke suite, not a long-running soak.
-Each Node SQLite, Durable Object SQLite, and real-FUSE target MUST finish its reference
-profile within 60 seconds:
+Each Node SQLite, faithful-local Durable Object SQLite, and real-FUSE target MUST finish
+its reference profile within 60 seconds. M9 MUST rerun the identical Durable Object
+profile in the hosted preview; it may not substitute a smaller remote workload.
 
 - one 16 MiB pseudorandom write, close, reopen, read, and digest check;
 - 5,000 same-page, clustered, and scattered one-byte COW edits;
@@ -348,8 +366,9 @@ an isolated database.
 
 All of the following are required:
 
-- every mandatory case passes on Node and Durable Object SQLite;
-- the 60-second smoke profile passes on Node, Durable Object SQLite, and real FUSE;
+- every mandatory portable case passes on Node and faithful-local Durable Object SQLite;
+- the 60-second smoke profile passes on Node, faithful-local Durable Object SQLite,
+  hosted-preview Durable Object SQLite, and real FUSE;
 - zero digest mismatch, partial commit, lost update, incorrect replay, unsafe
   collection, leaked lease, leaked reservation, or quota-accounting mismatch;
 - every normative `MUST` and `MUST NOT` maps to a test identifier;

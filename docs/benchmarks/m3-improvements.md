@@ -14,14 +14,16 @@ reference numbers: 1,000 edits on 16 MiB = 274 ms edit + 124 ms publish (10.1x v
 96% less SQL); 10 B prepend 16.5x; 1.08x write amplification over 32 checkpoints;
 explicit conflicts instead of lost updates.
 
-## Accepted M3 benchmark result
+## Historical M3 acceptance run (superseded evidence)
 
-M3 is accepted. The implementation combines read-path batching, durable bounded local
-reconnection, and async write-path hashing while retaining authenticated manifests,
-exact reconciliation checks, transaction and memory limits, and acknowledged SQLite
-durability.
+This table records an earlier acceptance run and is not the current retained result.
+Exact current values are in `docs/evidence/m3/benchmarks/` and
+`docs/evidence/m3/exit.md`. The implementation combines read-path batching, durable
+bounded local reconnection, and async write-path hashing while retaining authenticated
+manifests, exact reconciliation checks, transaction and memory limits, and acknowledged
+SQLite durability.
 
-| Gate                        |               Latest result | Status   |
+| Gate                        |           Historical result | Status   |
 | --------------------------- | --------------------------: | -------- |
 | A3 cold 100 MiB read        |                 259.6 MiB/s | Pass     |
 | A4 warm 100 MiB read        |               2,921.5 MiB/s | Pass     |
@@ -31,9 +33,9 @@ durability.
 
 The revised A6 acceptance gate is 500 scattered edits in <=20 seconds. The former
 1,000-edit target remains documented as beyond the acknowledged SQLite WAL/fsync floor
-on the validation hardware, not as an M3 acceptance requirement. The raw A-group result
-is recorded in `tests/performance/artifacts-m3-final/` and the full milestone record is
-in `docs/evidence/m3/exit.md`.
+on the validation hardware, not as an M3 acceptance requirement. The historical raw
+A-group result is recorded in `tests/performance/artifacts-m3-final/`; it is not
+accepted evidence. The current milestone record is in `docs/evidence/m3/exit.md`.
 
 ## Improvement matrix (diff vs current)
 

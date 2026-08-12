@@ -547,6 +547,18 @@
       ]
     },
     {
+      "name": "StorageSnapshotOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "VerificationOptions",
       "kinds": [
         "type"

@@ -71,7 +71,7 @@ test("milestone gates select only their owned suites and sequential predecessors
     2: "tests/storage tests/node-integration tests/maintenance",
     3: "tests/conformance",
     4: "tests/branches",
-    5: "tests/maintenance",
+    5: "tests/maintenance tests/fault",
     6: "tests/durable-object-integration",
     7: "tests/node-vfs",
     8: "tests/replication",
@@ -84,29 +84,15 @@ test("milestone gates select only their owned suites and sequential predecessors
       `node scripts/run-test-suite.mjs ${owned}`,
     );
     const expectedValidation =
-      Number(milestone) === 0
-        ? "pnpm validate:m0:pre-evidence && pnpm check:evidence"
-        : Number(milestone) === 1
-          ? "pnpm validate:m1:pre-evidence && pnpm check:evidence"
-          : Number(milestone) === 2
-            ? "pnpm validate:m2:pre-evidence && pnpm check:evidence"
-            : Number(milestone) === 3
-              ? "pnpm validate:m3:pre-evidence && pnpm check:evidence"
-              : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
+      Number(milestone) <= 5
+        ? `pnpm validate:m${milestone}:pre-evidence && pnpm check:evidence`
+        : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
     assert.equal(scripts[`validate:m${milestone}`], expectedValidation);
-    assert.doesNotMatch(
-      scripts[`validate:m${milestone}`],
-      /test:unit|test:smoke:built|test:fault:built|test:performance:built/,
-    );
-    if (Number(milestone) > 3)
+    assert.doesNotMatch(scripts[`validate:m${milestone}`], /test:unit/);
+    if (Number(milestone) > 5)
       assert.match(
         scripts[`validate:m${milestone}`],
         new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `),
-      );
-    if (Number(milestone) === 3)
-      assert.match(
-        scripts["validate:m3:pre-evidence"],
-        /^pnpm validate:m2:pre-evidence && /,
       );
   }
   assert.equal(
@@ -121,7 +107,48 @@ test("milestone gates select only their owned suites and sequential predecessors
     scripts["validate:m2:pre-evidence"],
     "pnpm validate:m1:pre-evidence && pnpm test:m2",
   );
-  assert.equal(scripts["validate:accepted"], "pnpm validate:m2");
+  assert.equal(
+    scripts["validate:m3:pre-evidence"],
+    "pnpm validate:m2:pre-evidence && pnpm test:m3 && pnpm test:smoke:built && pnpm bench:m3",
+  );
+  assert.equal(
+    scripts["validate:m4:pre-evidence"],
+    "pnpm validate:m3:pre-evidence && pnpm test:m4 && pnpm bench:branches",
+  );
+  assert.equal(
+    scripts["validate:m5:pre-evidence"],
+    "node scripts/run-accepted-node-gate.mjs",
+  );
+  const acceptedNodeGate = readFileSync(
+    path.join(root, "scripts", "run-accepted-node-gate.mjs"),
+    "utf8",
+  );
+  for (const requiredSelection of [
+    "const deadlineMs = 600_000;",
+    'runPnpm("workspace-build", ["build"])',
+    'runPnpm("fixtures-check", ["fixtures:check"])',
+    'runPnpm("docs-check", ["check:docs"])',
+    'runPnpm("style-check", ["check:style"])',
+    'runPnpm("architecture-check", ["check:architecture"])',
+    'runPnpm("exports-check", ["check:exports"])',
+    '"tests/architecture"',
+    '"tests/algorithms"',
+    '"tests/storage"',
+    '"tests/node-integration"',
+    '"tests/conformance"',
+    '"tests/branches"',
+    '"tests/maintenance"',
+    '"tests/fault"',
+    '"tests/smoke"',
+    '"scripts/check-workerd-algorithms.mjs"',
+    '"tests/performance/mini-bench.mjs"',
+    '"tests/performance/branch-bench.mjs"',
+  ])
+    assert.ok(
+      acceptedNodeGate.includes(requiredSelection),
+      `accepted Node gate omitted ${requiredSelection}`,
+    );
+  assert.equal(scripts["validate:accepted"], "pnpm validate:m5");
 });
 
 test("documentation links resolve inline and reference-style targets", async () => {

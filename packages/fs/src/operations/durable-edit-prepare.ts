@@ -1081,7 +1081,7 @@ function persistCandidate(
         snapshotStaging.bumpRootFromSnapshot
       )
         snapshotStaging.bumpRootFromSnapshot(5, leaseId, source.rootMutationGeneration);
-      else staging.bumpRoot(5, leaseId);
+      else staging.bumpRoot(5, leaseId, false);
     },
   });
   for (const batch of batchesByBytes(
@@ -2538,7 +2538,7 @@ function persistLocallyRebuilt(
         snapshotStaging.bumpRootFromSnapshot
       )
         snapshotStaging.bumpRootFromSnapshot(5, leaseId, source.rootMutationGeneration);
-      else staging.bumpRoot(5, leaseId);
+      else staging.bumpRoot(5, leaseId, false);
     },
   });
   const objectBatches = batchesByBytes(

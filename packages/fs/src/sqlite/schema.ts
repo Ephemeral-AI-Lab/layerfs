@@ -22,7 +22,7 @@ import {
 } from "./usage-repository.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
-export const EFS_SCHEMA_VERSION = 12;
+export const EFS_SCHEMA_VERSION = 13;
 const MAX_ATOMIC_MIGRATION_RECOUNT_ROWS = 100_000;
 const MAX_ATOMIC_LEGACY_TRANSFORM_BYTES =
   MAX_CONTENT_OBJECT_BYTES + CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES;
@@ -195,6 +195,15 @@ const SCHEMA_V11_STATEMENTS = Object.freeze([
 const SCHEMA_V12_STATEMENTS = Object.freeze([
   "ALTER TABLE efs_branches ADD COLUMN merged_revision INTEGER REFERENCES efs_revisions(revision)",
 ] as const);
+const SCHEMA_V13_STATEMENTS = Object.freeze([
+  `ALTER TABLE efs_meta ADD COLUMN last_root_removal_generation INTEGER NOT NULL DEFAULT 0 CHECK(last_root_removal_generation>=0 AND last_root_removal_generation<=root_mutation_generation)`,
+  `CREATE TABLE efs_storage_snapshots (singleton INTEGER PRIMARY KEY CHECK(singleton=1), state INTEGER NOT NULL CHECK(state BETWEEN 1 AND 7), high_water INTEGER NOT NULL CHECK(high_water>=0), root_generation INTEGER NOT NULL CHECK(root_generation>=0), last_root_removal_generation INTEGER NOT NULL CHECK(last_root_removal_generation>=0 AND last_root_removal_generation<=root_generation), evaluation_time_ms INTEGER NOT NULL CHECK(evaluation_time_ms>=0), next_root_expiry_ms INTEGER CHECK(next_root_expiry_ms IS NULL OR next_root_expiry_ms>=0), root_kind INTEGER NOT NULL CHECK(root_kind BETWEEN 0 AND 9), root_cursor BLOB, mark_kind INTEGER NOT NULL CHECK(mark_kind BETWEEN 0 AND 3), mark_cursor BLOB, stored_kind INTEGER NOT NULL CHECK(stored_kind BETWEEN 0 AND 3), stored_cursor INTEGER NOT NULL CHECK(stored_cursor>=0), logical_cursor TEXT NOT NULL, logical_complete INTEGER NOT NULL DEFAULT 0 CHECK(logical_complete IN (0,1)), logical_bytes INTEGER NOT NULL DEFAULT 0 CHECK(logical_bytes>=0), overlay_kind INTEGER NOT NULL DEFAULT 0 CHECK(overlay_kind BETWEEN 0 AND 2), overlay_branch_cursor TEXT NOT NULL DEFAULT '', overlay_inode_cursor TEXT NOT NULL DEFAULT '', overlay_sequence_cursor INTEGER NOT NULL DEFAULT -1 CHECK(overlay_sequence_cursor>=-1), overlay_index_cursor INTEGER NOT NULL DEFAULT -1 CHECK(overlay_index_cursor>=-1), stored_page_bytes INTEGER NOT NULL DEFAULT 0 CHECK(stored_page_bytes>=0), stored_patch_bytes INTEGER NOT NULL DEFAULT 0 CHECK(stored_patch_bytes>=0), reclaimable_overlay_bytes INTEGER NOT NULL DEFAULT 0 CHECK(reclaimable_overlay_bytes>=0), result_bytes INTEGER NOT NULL DEFAULT 0 CHECK(result_bytes>=0), charged_metadata_bytes INTEGER NOT NULL DEFAULT 0 CHECK(charged_metadata_bytes>=0), revision_count INTEGER NOT NULL DEFAULT 0 CHECK(revision_count>=0), stored_object_count INTEGER NOT NULL DEFAULT 0 CHECK(stored_object_count>=0), stored_object_bytes INTEGER NOT NULL DEFAULT 0 CHECK(stored_object_bytes>=0), stored_manifest_root_count INTEGER NOT NULL DEFAULT 0 CHECK(stored_manifest_root_count>=0), stored_manifest_root_bytes INTEGER NOT NULL DEFAULT 0 CHECK(stored_manifest_root_bytes>=0), stored_manifest_node_count INTEGER NOT NULL DEFAULT 0 CHECK(stored_manifest_node_count>=0), stored_manifest_node_bytes INTEGER NOT NULL DEFAULT 0 CHECK(stored_manifest_node_bytes>=0), reachable_object_count INTEGER NOT NULL DEFAULT 0 CHECK(reachable_object_count>=0), reachable_object_bytes INTEGER NOT NULL DEFAULT 0 CHECK(reachable_object_bytes>=0), reachable_manifest_root_count INTEGER NOT NULL DEFAULT 0 CHECK(reachable_manifest_root_count>=0), reachable_manifest_root_bytes INTEGER NOT NULL DEFAULT 0 CHECK(reachable_manifest_root_bytes>=0), reachable_manifest_node_count INTEGER NOT NULL DEFAULT 0 CHECK(reachable_manifest_node_count>=0), reachable_manifest_node_bytes INTEGER NOT NULL DEFAULT 0 CHECK(reachable_manifest_node_bytes>=0), branch_exclusive_object_bytes INTEGER NOT NULL DEFAULT 0 CHECK(branch_exclusive_object_bytes>=0), branch_exclusive_manifest_root_bytes INTEGER NOT NULL DEFAULT 0 CHECK(branch_exclusive_manifest_root_bytes>=0), branch_exclusive_manifest_node_bytes INTEGER NOT NULL DEFAULT 0 CHECK(branch_exclusive_manifest_node_bytes>=0), committed_batches INTEGER NOT NULL DEFAULT 0 CHECK(committed_batches>=0), created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL) WITHOUT ROWID`,
+  `CREATE TABLE efs_storage_marks (kind INTEGER NOT NULL CHECK(kind IN (0,1,2)), hash BLOB NOT NULL CHECK(length(hash)=32), edge_cursor INTEGER NOT NULL DEFAULT 0 CHECK(edge_cursor>=0), processed INTEGER NOT NULL DEFAULT 0 CHECK(processed IN (0,1)), accounted INTEGER NOT NULL DEFAULT 0 CHECK(accounted IN (0,1)), scope_mask INTEGER NOT NULL CHECK(scope_mask BETWEEN 0 AND 7), PRIMARY KEY(kind,hash)) WITHOUT ROWID`,
+  `CREATE INDEX efs_storage_marks_pending ON efs_storage_marks(processed,kind,hash)`,
+  `CREATE TABLE efs_root_holds (id TEXT PRIMARY KEY, kind INTEGER NOT NULL CHECK(kind IN (0,1)), root_id BLOB NOT NULL CHECK(length(root_id)=32)) WITHOUT ROWID`,
+  `CREATE INDEX efs_root_holds_kind ON efs_root_holds(kind,root_id)`,
+  `ALTER TABLE efs_gc_runs ADD COLUMN reclaimed_overlay_bytes INTEGER NOT NULL DEFAULT 0 CHECK(reclaimed_overlay_bytes>=0)`,
+] as const);
 
 const REQUIRED_V4_SCHEMA_OBJECTS = Object.freeze(
   SCHEMA_V4_STATEMENTS.flatMap((sql) => {
@@ -226,6 +235,12 @@ const REQUIRED_V9_SCHEMA_OBJECTS = Object.freeze(
     return matched?.[1] ? [Object.freeze({ name: matched[1], sql })] : [];
   }),
 );
+const REQUIRED_V13_SCHEMA_OBJECTS = Object.freeze(
+  SCHEMA_V13_STATEMENTS.flatMap((sql) => {
+    const matched = /^CREATE (?:TABLE|INDEX|TRIGGER) ([a-z0-9_]+)/u.exec(sql);
+    return matched?.[1] ? [Object.freeze({ name: matched[1], sql })] : [];
+  }),
+);
 const REQUIRED_SCHEMA_OBJECTS = Object.freeze([
   ...REQUIRED_V4_SCHEMA_OBJECTS.filter(
     ({ name }) => name !== "efs_staging_reused_subtrees",
@@ -234,6 +249,7 @@ const REQUIRED_SCHEMA_OBJECTS = Object.freeze([
   ...REQUIRED_V7_SCHEMA_OBJECTS,
   ...REQUIRED_V8_SCHEMA_OBJECTS,
   ...REQUIRED_V9_SCHEMA_OBJECTS,
+  ...REQUIRED_V13_SCHEMA_OBJECTS,
 ]);
 const OWNED_TABLE_NAMES = Object.freeze(
   [
@@ -243,6 +259,7 @@ const OWNED_TABLE_NAMES = Object.freeze(
     ...SCHEMA_V7_STATEMENTS,
     ...SCHEMA_V8_STATEMENTS,
     ...SCHEMA_V9_STATEMENTS,
+    ...SCHEMA_V13_STATEMENTS,
   ].flatMap((sql) => {
     const matched = /^CREATE TABLE ([a-z0-9_]+)/u.exec(sql);
     return matched?.[1] ? [matched[1]] : [];
@@ -258,6 +275,7 @@ interface MetaRow extends SqliteRow {
   main_revision: number;
   root_inode: string;
   root_mutation_generation: number;
+  last_root_removal_generation: number;
   next_allocation_sequence: number;
   cow_page_bytes: number;
   max_manifest_entries: number;
@@ -317,7 +335,7 @@ function validateCurrent(
   if (state.userVersion !== EFS_SCHEMA_VERSION)
     throw new Error("ESCHEMA: unsupported or mismatched schema version");
   const rows = tx.all<MetaRow>(
-    "SELECT schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,next_allocation_sequence,cow_page_bytes,max_manifest_entries,max_manifest_depth,max_file_bytes,writer_profile FROM efs_meta WHERE singleton=1",
+    "SELECT schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,last_root_removal_generation,next_allocation_sequence,cow_page_bytes,max_manifest_entries,max_manifest_depth,max_file_bytes,writer_profile FROM efs_meta WHERE singleton=1",
     [],
     { maxRows: 1, maxBytes: 4096 },
   );
@@ -342,6 +360,9 @@ function validateCurrent(
     meta.main_revision < 0 ||
     !Number.isSafeInteger(meta.root_mutation_generation) ||
     meta.root_mutation_generation < 0 ||
+    !Number.isSafeInteger(meta.last_root_removal_generation) ||
+    meta.last_root_removal_generation < 0 ||
+    meta.last_root_removal_generation > meta.root_mutation_generation ||
     !Number.isSafeInteger(meta.next_allocation_sequence) ||
     meta.next_allocation_sequence < 1 ||
     !Number.isSafeInteger(meta.max_manifest_entries) ||
@@ -367,9 +388,10 @@ function validateCurrent(
       deleted_objects: number;
       reclaimed_object_bytes: number;
       reclaimed_manifest_bytes: number;
+      reclaimed_overlay_bytes: number;
     } & SqliteRow
   >(
-    "SELECT id,length(CAST(id AS BLOB)) id_bytes,state,high_water,root_generation,cursor_kind,CASE WHEN cursor_value IS NULL OR (typeof(cursor_value)='blob' AND length(cursor_value)=32) THEN 1 ELSE 0 END cursor_valid,created_at_ms,examined_roots,deleted_roots,examined_nodes,deleted_nodes,examined_objects,deleted_objects,reclaimed_object_bytes,reclaimed_manifest_bytes FROM efs_gc_runs ORDER BY id LIMIT 3",
+    "SELECT id,length(CAST(id AS BLOB)) id_bytes,state,high_water,root_generation,cursor_kind,CASE WHEN cursor_value IS NULL OR (typeof(cursor_value)='blob' AND length(cursor_value)=32) THEN 1 ELSE 0 END cursor_valid,created_at_ms,examined_roots,deleted_roots,examined_nodes,deleted_nodes,examined_objects,deleted_objects,reclaimed_object_bytes,reclaimed_manifest_bytes,reclaimed_overlay_bytes FROM efs_gc_runs ORDER BY id LIMIT 3",
     [],
     { maxRows: 3, maxBytes: 4096 },
   );
@@ -390,6 +412,7 @@ function validateCurrent(
       run.deleted_objects,
       run.reclaimed_object_bytes,
       run.reclaimed_manifest_bytes,
+      run.reclaimed_overlay_bytes,
     ];
     if (
       typeof run.id !== "string" ||
@@ -399,7 +422,7 @@ function validateCurrent(
       run.state < 0 ||
       run.state > 8 ||
       !counters.every((value) => Number.isSafeInteger(value) && value >= 0) ||
-      run.cursor_kind > 6 ||
+      run.cursor_kind > 9 ||
       run.cursor_valid !== 1
     )
       throw new Error("ECORRUPT: invalid retained garbage-collection state");
@@ -407,6 +430,18 @@ function validateCurrent(
   }
   if (nonterminalRuns > 1)
     throw new Error("ECORRUPT: multiple garbage-collection runs are nonterminal");
+  const invalidSnapshotState = oneNumber(
+    tx,
+    "SELECT count(*) value FROM (SELECT 1 FROM efs_storage_snapshots WHERE state NOT BETWEEN 1 AND 7 OR root_kind NOT BETWEEN 0 AND 9 OR mark_kind NOT BETWEEN 0 AND 3 OR stored_kind NOT BETWEEN 0 AND 3 OR overlay_kind NOT BETWEEN 0 AND 2 OR root_generation<last_root_removal_generation OR evaluation_time_ms<0 OR (next_root_expiry_ms IS NOT NULL AND next_root_expiry_ms<0) OR (root_cursor IS NOT NULL AND (typeof(root_cursor)<>'blob' OR length(root_cursor)<>32)) OR (mark_cursor IS NOT NULL AND (typeof(mark_cursor)<>'blob' OR length(mark_cursor)<>32)) OR high_water>9007199254740991 OR root_generation>9007199254740991 OR committed_batches>9007199254740991 OR stored_object_bytes>9007199254740991 OR stored_manifest_root_bytes>9007199254740991 OR stored_manifest_node_bytes>9007199254740991 OR reachable_object_bytes>9007199254740991 OR reachable_manifest_root_bytes>9007199254740991 OR reachable_manifest_node_bytes>9007199254740991 OR reclaimable_overlay_bytes>9007199254740991 LIMIT 1)",
+  );
+  if (invalidSnapshotState !== 0)
+    throw new Error("ECORRUPT: invalid durable storage-snapshot state");
+  const invalidSnapshotMarks = oneNumber(
+    tx,
+    "SELECT count(*) value FROM (SELECT 1 FROM efs_storage_marks WHERE kind NOT IN (0,1,2) OR typeof(hash)<>'blob' OR length(hash)<>32 OR edge_cursor<0 OR edge_cursor>9007199254740991 OR processed NOT IN (0,1) OR accounted NOT IN (0,1) OR scope_mask NOT BETWEEN 0 AND 7 LIMIT 1)",
+  );
+  if (invalidSnapshotMarks !== 0)
+    throw new Error("ECORRUPT: invalid durable storage-snapshot mark");
   const roots = tx.all(
     "SELECT i.id AS inode_id,r.revision AS revision FROM efs_inodes i, efs_revisions r WHERE i.id=? AND i.type=1 AND r.revision=?",
     [meta.root_inode, meta.main_revision],
@@ -1007,6 +1042,22 @@ function migrateV11ToV12(tx: FilesystemSQLiteTransaction): void {
   tx.run("PRAGMA user_version=12");
 }
 
+function migrateV12ToV13(tx: FilesystemSQLiteTransaction): void {
+  const state = inspect(tx);
+  if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 12)
+    throw new Error("ESCHEMA: schema v13 migration precondition failed");
+  const meta = tx.all<MetaRow>(
+    "SELECT schema_version,filesystem_id,main_revision,root_inode,cow_page_bytes FROM efs_meta WHERE singleton=1",
+    [],
+    { maxRows: 1, maxBytes: 4096 },
+  )[0];
+  if (!meta || meta.schema_version !== 12)
+    throw new Error("ECORRUPT: invalid schema v12 metadata");
+  for (const statement of SCHEMA_V13_STATEMENTS) tx.run(statement);
+  tx.run("UPDATE efs_meta SET schema_version=13 WHERE singleton=1");
+  tx.run("PRAGMA user_version=13");
+}
+
 function assertBoundedLegacyTransformBytes(tx: FilesystemSQLiteTransaction): void {
   const bytes = tx.all<{ bytes: number } & SqliteRow>(
     "SELECT (SELECT coalesce(sum(length(bytes)+256),0) FROM efs_cow_pages)+(SELECT coalesce(sum(length(insert_bytes)+512),0) FROM efs_patches) bytes",
@@ -1203,6 +1254,12 @@ export function initializeOrValidateSchema(
         throw new Error("ESCHEMA: schema v11 requires a writable migration");
       driver.transaction("exclusive", (tx) => migrateV11ToV12(tx));
     }
+    const afterV11 = driver.transaction("read", (tx) => inspect(tx));
+    if (afterV11.userVersion === 12) {
+      if (driver.readOnly)
+        throw new Error("ESCHEMA: schema v12 requires a writable migration");
+      driver.transaction("exclusive", (tx) => migrateV12ToV13(tx));
+    }
     const meta = driver.transaction("read", (tx) =>
       validateCurrent(
         tx,
@@ -1277,6 +1334,7 @@ export function initializeOrValidateSchema(
     migrateV9ToV10(tx);
     migrateV10ToV11(tx);
     migrateV11ToV12(tx);
+    migrateV12ToV13(tx);
     validateCurrent(tx, pageBytes, requestedManifest, requestedWriterProfile);
   });
   return Object.freeze({

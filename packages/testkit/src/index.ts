@@ -36,11 +36,16 @@ export interface CorrectnessResult {
   readonly schema: "efs-correctness-result-v1";
   readonly commit: string;
   readonly adapter: string;
+  readonly driver: string;
+  readonly capabilities: Readonly<Record<string, string | number | boolean | null>>;
+  readonly limits: Readonly<Record<string, number>>;
   readonly schemaVersion: number;
   readonly formatVersion: string;
   readonly seed: number;
   readonly fixtureDigest: string;
   readonly faultPoint: string | null;
+  readonly commands: readonly string[];
+  readonly environment: Readonly<Record<string, string>>;
   readonly passed: number;
   readonly failed: number;
   readonly elapsedMs: number;

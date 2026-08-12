@@ -15,7 +15,7 @@ const acceptedMatch = /^pnpm validate:(m\d+)$/u.exec(acceptedValidation ?? "");
 if (!acceptedMatch)
   throw new Error("validate:accepted must select one milestone validation command");
 const activeAcceptedMilestone = acceptedMatch[1];
-if (!new Set(["m0", "m1", "m2", "m3"]).has(activeAcceptedMilestone))
+if (!new Set(["m0", "m1", "m2", "m3", "m4", "m5"]).has(activeAcceptedMilestone))
   throw new Error(
     `evidence checker has no validation schema for ${activeAcceptedMilestone}`,
   );
@@ -28,6 +28,24 @@ function requireObject(value, name) {
 function requirePositiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value <= 0)
     throw new Error(`${name} must be a positive safe integer`);
+}
+function requireNonemptyString(value, name) {
+  if (typeof value !== "string" || value.length === 0)
+    throw new Error(`${name} must be a nonempty string`);
+}
+function requireScalarRecord(value, name) {
+  const record = requireObject(value, name);
+  for (const [key, item] of Object.entries(record)) {
+    if (
+      !key ||
+      (item !== null &&
+        typeof item !== "string" &&
+        typeof item !== "number" &&
+        typeof item !== "boolean")
+    )
+      throw new Error(`${name}.${key || "<empty>"} must be a scalar`);
+  }
+  return record;
 }
 function candidateFromExit(source, milestone) {
   const match = source.match(/^- Candidate commit: `([0-9a-f]{40})`$/mu);
@@ -82,10 +100,25 @@ function ownedByMilestone(milestone, filename) {
     filename.startsWith("tests/node-integration/") ||
     filename.startsWith("tests/maintenance/");
   if (milestone === "m2") return m2;
-  return (
+  const m3 =
     m2 ||
     filename.startsWith("tests/conformance/") ||
-    filename.startsWith("packages/sqlite-cloudflare/src/")
+    filename.startsWith("packages/sqlite-cloudflare/src/") ||
+    filename.startsWith("packages/testkit/src/") ||
+    filename.startsWith("tests/smoke/") ||
+    filename === "tests/helpers/runtime-environment.mjs" ||
+    filename === "tests/performance/mini-bench.mjs" ||
+    filename.startsWith("docs/benchmarks/");
+  if (milestone === "m3") return m3;
+  const m4 =
+    m3 ||
+    filename.startsWith("tests/branches/") ||
+    filename === "tests/performance/branch-bench.mjs";
+  if (milestone === "m4") return m4;
+  return (
+    m4 ||
+    filename.startsWith("tests/fault/") ||
+    filename === "docs/implementation/m5-handoff.md"
   );
 }
 const m1SourceEntrypoints = [
@@ -203,7 +236,7 @@ async function assertOwnedWorktreeClean(milestone) {
 async function validateMilestone(
   name,
   requiredMetrics,
-  { requireCurrentDigest = false } = {},
+  { requireCurrentDigest = false, requireStructuredContext = false } = {},
 ) {
   const directory = path.join(root, "docs", "evidence", name);
   const jsonFilename = path.join(directory, "correctness.json");
@@ -216,6 +249,36 @@ async function validateMilestone(
     throw new Error(`${name} correctness artifact has an invalid schema`);
   if (!/^[0-9a-f]{40}$/u.test(artifact.commit))
     throw new Error(`${name} correctness artifact has an invalid commit`);
+  if (requireStructuredContext) {
+    requireNonemptyString(artifact.adapter, `${name}.adapter`);
+    requireNonemptyString(artifact.driver, `${name}.driver`);
+    const capabilities = requireScalarRecord(
+      artifact.capabilities,
+      `${name}.capabilities`,
+    );
+    const limits = requireObject(artifact.limits, `${name}.limits`);
+    if (!Object.keys(capabilities).length)
+      throw new Error(`${name}.capabilities must not be empty`);
+    if (!Object.keys(limits).length)
+      throw new Error(`${name}.limits must not be empty`);
+    for (const [key, value] of Object.entries(limits))
+      requirePositiveInteger(value, `${name}.limits.${key}`);
+    if (!Array.isArray(artifact.commands) || !artifact.commands.length)
+      throw new Error(`${name}.commands must be a nonempty array`);
+    for (const [index, command] of artifact.commands.entries())
+      requireNonemptyString(command, `${name}.commands[${index}]`);
+    const environment = requireScalarRecord(
+      artifact.environment,
+      `${name}.environment`,
+    );
+    for (const key of ["platform", "architecture", "node", "pnpm"])
+      requireNonemptyString(environment[key], `${name}.environment.${key}`);
+    requireNonemptyString(artifact.fixtureDigest, `${name}.fixtureDigest`);
+    if (!/^[0-9a-f]{64}$/u.test(artifact.fixtureDigest))
+      throw new Error(`${name}.fixtureDigest must be a SHA-256 digest`);
+    if (typeof artifact.faultPoint !== "string" || !artifact.faultPoint.length)
+      throw new Error(`${name}.faultPoint must identify the exercised fault boundary`);
+  }
   requirePositiveInteger(artifact.schemaVersion, `${name}.schemaVersion`);
   requirePositiveInteger(artifact.passed, `${name}.passed`);
   requirePositiveInteger(artifact.elapsedMs, `${name}.elapsedMs`);
@@ -234,6 +297,9 @@ async function validateMilestone(
     windowsHide: true,
   });
   const recordCommit = await evidenceCommit(path.relative(root, jsonFilename));
+  const exitRecordCommit = await evidenceCommit(path.relative(root, exitFilename));
+  if (exitRecordCommit !== recordCommit)
+    throw new Error(`${name} exit and correctness artifacts have different commits`);
   const parents = (
     await execute("git", ["show", "-s", "--format=%P", recordCommit], {
       cwd: root,
@@ -257,14 +323,75 @@ async function validateMilestone(
       throw new Error(`${name} accepted evidence is stale for milestone-owned files`);
   }
   await assertOwnedWorktreeClean(name);
-  return { artifact, exit, candidate };
+  return { artifact, exit, candidate, recordCommit };
+}
+
+async function validateBenchmarkArtifact(filename, candidate, evidenceRecordCommit) {
+  const relative = path.posix.normalize(filename.replaceAll("\\", "/"));
+  const artifact = requireObject(
+    JSON.parse(await readFile(path.join(root, relative), "utf8")),
+    `${relative} benchmark artifact`,
+  );
+  if (artifact.schema !== "efs-benchmark-result-v1")
+    throw new Error(`${relative} has an invalid benchmark schema`);
+  if (artifact.commit !== candidate)
+    throw new Error(`${relative} is not bound to its accepted candidate`);
+  if (artifact.worktreeDirty !== false)
+    throw new Error(`${relative} was not measured from a clean worktree`);
+  requireNonemptyString(artifact.driver, `${relative}.driver`);
+  const environment = requireScalarRecord(
+    artifact.environment,
+    `${relative}.environment`,
+  );
+  for (const key of [
+    "platform",
+    "architecture",
+    "node",
+    "pnpm",
+    "cpu",
+    "storage",
+    "sqlite",
+  ])
+    requireNonemptyString(environment[key], `${relative}.environment.${key}`);
+  requirePositiveInteger(
+    environment.totalMemoryBytes,
+    `${relative}.environment.totalMemoryBytes`,
+  );
+  const resourceLimits = requireObject(
+    artifact.configuration?.resourceLimits,
+    `${relative}.configuration.resourceLimits`,
+  );
+  for (const domain of ["filesystem", "storage", "runtime", "branch"]) {
+    const values = requireObject(
+      resourceLimits[domain],
+      `${relative}.configuration.resourceLimits.${domain}`,
+    );
+    if (!Object.keys(values).length)
+      throw new Error(`${relative} has an empty ${domain} resource-limit domain`);
+    for (const [key, value] of Object.entries(values))
+      requirePositiveInteger(
+        value,
+        `${relative}.configuration.resourceLimits.${domain}.${key}`,
+      );
+  }
+  const fixture = requireObject(artifact.fixture, `${relative}.fixture`);
+  requireNonemptyString(fixture.name, `${relative}.fixture.name`);
+  if (!/^[0-9a-f]{64}$/u.test(fixture.sha256 ?? ""))
+    throw new Error(`${relative} fixture lacks a SHA-256 digest`);
+  requirePositiveInteger(artifact.trials, `${relative}.trials`);
+  if (!Array.isArray(artifact.samples) || artifact.samples.length !== artifact.trials)
+    throw new Error(`${relative} does not retain every raw measured trial`);
+  if (artifact.pass !== true) throw new Error(`${relative} benchmark did not pass`);
+  if ((await evidenceCommit(relative)) !== evidenceRecordCommit)
+    throw new Error(`${relative} was not committed with its milestone evidence`);
+  return artifact;
 }
 
 if (process.argv[2] === "--owned-tree-digest") {
   const milestone = process.argv[3];
   const commit = process.argv[4] ?? "HEAD";
-  if (!new Set(["m0", "m1", "m2", "m3"]).has(milestone))
-    throw new Error("owned-tree digest milestone must be m0, m1, m2, or m3");
+  if (!new Set(["m0", "m1", "m2", "m3", "m4", "m5"]).has(milestone))
+    throw new Error("owned-tree digest milestone must be m0 through m5");
   console.log(await ownedTreeDigest(milestone, commit));
   process.exit(0);
 }
@@ -361,6 +488,7 @@ const m3 = await validateMilestone(
     "nodeStorageTests",
     "maintenanceTests",
     "conformanceTests",
+    "nodeSmokeTests",
     "readMiBPerSecondCold",
     "readMiBPerSecondWarm",
     "readTransactionsPerHundredMiB",
@@ -371,7 +499,10 @@ const m3 = await validateMilestone(
     "workerdWriteHashingMiBPerSecond",
     "workerdWriteHashingSpeedupPercent",
   ],
-  { requireCurrentDigest: activeAcceptedMilestone === "m3" },
+  {
+    requireCurrentDigest: activeAcceptedMilestone === "m3",
+    requireStructuredContext: true,
+  },
 );
 if (
   m3.artifact.passed !==
@@ -379,14 +510,248 @@ if (
     m3.artifact.metrics.workerdChecks +
     m3.artifact.metrics.nodeStorageTests +
     m3.artifact.metrics.maintenanceTests +
-    m3.artifact.metrics.conformanceTests
+    m3.artifact.metrics.conformanceTests +
+    m3.artifact.metrics.nodeSmokeTests
 )
   throw new Error("m3 passed count differs from the recorded suite checks");
+if (
+  m3.artifact.metrics.nodeAlgorithmTests !== 40 ||
+  m3.artifact.metrics.workerdChecks !== 12 ||
+  m3.artifact.metrics.nodeStorageTests !== 92 ||
+  m3.artifact.metrics.maintenanceTests < 31 ||
+  m3.artifact.metrics.conformanceTests !== 5 ||
+  m3.artifact.metrics.nodeSmokeTests !== 1
+)
+  throw new Error("m3 suite metrics do not match the accepted baseline");
+if (m3.artifact.independentAudit !== "approved")
+  throw new Error("m3 correctness artifact lacks independent audit approval");
 const m3Predecessor = m3.exit.match(
   /Sequential predecessor:[\s\S]*?`([0-9a-f]{40})`/u,
 )?.[1];
 if (m3Predecessor !== m2.candidate)
   throw new Error("m3 sequential predecessor differs from the accepted m2 candidate");
+const m3Benchmarks = {};
+for (const name of [
+  "A1-cold-write",
+  "A2-rewrite-identical",
+  "A3-cold-read",
+  "A4-warm-read",
+  "A5-one-byte-edit",
+  "A6-scattered-edits",
+  "A6-small-reads",
+  "A7-materialization",
+])
+  m3Benchmarks[name] = await validateBenchmarkArtifact(
+    `docs/evidence/m3/benchmarks/${name}.json`,
+    m3.candidate,
+    m3.recordCommit,
+  );
+for (const artifact of Object.values(m3Benchmarks))
+  if (
+    artifact.trials !== 5 ||
+    artifact.configuration?.databaseIsolation !== "fresh-database-per-trial" ||
+    artifact.configuration?.operatingSystemCacheDropAttempted !== false ||
+    artifact.configuration?.operatingSystemCacheDropSucceeded !== false ||
+    artifact.configuration?.manifestFormat !== "efs-merkle-manifest-v1" ||
+    !Number.isSafeInteger(artifact.configuration?.cacheTargetBytes) ||
+    !Number.isSafeInteger(artifact.configuration?.maxManagedResidentBytes) ||
+    !Number.isSafeInteger(artifact.configuration?.sqlitePageSize) ||
+    !["p50", "p95", "p99", "min", "max", "mean"].every((metric) =>
+      Number.isFinite(artifact.latencyMs?.[metric]),
+    ) ||
+    artifact.samples.some(
+      (sample) =>
+        !/^[0-9a-f]{64}$/u.test(sample.measuredCounters?.verifiedDigest ?? "") ||
+        sample.pass !== true,
+    )
+  )
+    throw new Error(
+      `${artifact.benchmark} lacks five fresh isolated, digest-verified trials`,
+    );
+if (
+  m3Benchmarks["A6-scattered-edits"].samples.some(
+    (sample) => sample.physicalAfter - sample.physicalBefore < 100 * 1024 * 1024,
+  )
+)
+  throw new Error("m3 A6 edit trials do not start from equivalent fresh fixtures");
+if (
+  m3Benchmarks["A3-cold-read"].counters.mibPerSec < 250 ||
+  m3Benchmarks["A3-cold-read"].counters.transactions > 55 ||
+  m3Benchmarks["A3-cold-read"].counters.statements > 250 ||
+  m3Benchmarks["A4-warm-read"].counters.mibPerSec < 250 ||
+  m3Benchmarks["A4-warm-read"].counters.warmToColdRatio < 1.2 ||
+  m3Benchmarks["A5-one-byte-edit"].counters.editCount < 100 ||
+  m3Benchmarks["A5-one-byte-edit"].counters.canonicalThreeEditMs >= 1000 ||
+  m3Benchmarks["A5-one-byte-edit"].samples.some(
+    (sample) =>
+      sample.measuredCounters.editCount < 100 ||
+      !Array.isArray(sample.measuredCounters.perEditMs) ||
+      sample.measuredCounters.perEditMs.length < 100,
+  ) ||
+  m3Benchmarks["A6-scattered-edits"].counters.completedEdits < 500 ||
+  m3Benchmarks["A6-scattered-edits"].counters.wallMs > 20_000 ||
+  m3Benchmarks["A6-small-reads"].counters.smallReadMsPerOp > 1
+)
+  throw new Error("m3 retained benchmark artifacts miss an acceptance threshold");
+
+const m4 = await validateMilestone(
+  "m4",
+  [
+    "operatingSystems",
+    "nodeVersions",
+    "matrixRuns",
+    "cumulativePredecessorChecks",
+    "branchTests",
+    "independentWriterCount",
+    "sameInodeWriterCount",
+    "branchBenchmarkCells",
+  ],
+  {
+    requireCurrentDigest: activeAcceptedMilestone === "m4",
+    requireStructuredContext: true,
+  },
+);
+if (
+  m4.artifact.passed !==
+  m4.artifact.metrics.cumulativePredecessorChecks + m4.artifact.metrics.branchTests
+)
+  throw new Error("m4 passed count differs from predecessor plus branch checks");
+if (m4.artifact.independentAudit !== "approved")
+  throw new Error("m4 correctness artifact lacks independent audit approval");
+if (
+  m4.artifact.metrics.cumulativePredecessorChecks !== m3.artifact.passed ||
+  m4.artifact.metrics.branchTests !== 58 ||
+  m4.artifact.metrics.independentWriterCount !== 50 ||
+  m4.artifact.metrics.sameInodeWriterCount !== 50 ||
+  m4.artifact.metrics.branchBenchmarkCells !== 20
+)
+  throw new Error("m4 evidence metrics miss an accepted threshold");
+const m4Predecessor = m4.exit.match(
+  /Sequential predecessor:[\s\S]*?`([0-9a-f]{40})`/u,
+)?.[1];
+if (m4Predecessor !== m3.candidate)
+  throw new Error("m4 sequential predecessor differs from the accepted m3 candidate");
+const m4IndexRelative = "docs/evidence/m4/benchmarks/index.json";
+const m4Index = requireObject(
+  JSON.parse(await readFile(path.join(root, m4IndexRelative), "utf8")),
+  "m4 benchmark index",
+);
+const m4Environment = requireScalarRecord(
+  m4Index.environment,
+  "m4 benchmark environment",
+);
+if (
+  m4Index.schema !== "efs-branch-bench-v1" ||
+  m4Index.commit !== m4.candidate ||
+  m4Index.worktreeDirty !== false ||
+  !/^[0-9a-f]{64}$/u.test(m4Index.fixture?.sha256 ?? "") ||
+  !Array.isArray(m4Index.artifacts) ||
+  m4Index.artifacts.length !== 20 ||
+  !["platform", "architecture", "node", "pnpm", "cpu", "sqlite"].every(
+    (key) => typeof m4Environment[key] === "string" && m4Environment[key].length > 0,
+  ) ||
+  typeof m4Environment.storage !== "string" ||
+  m4Environment.storage.length === 0 ||
+  !Number.isSafeInteger(m4Environment.totalMemoryBytes) ||
+  m4Environment.totalMemoryBytes <= 0 ||
+  m4Index.artifacts.some(
+    (artifact) =>
+      artifact.pass !== true ||
+      artifact.configuration?.databaseIsolation !== "fresh-database-per-trial" ||
+      artifact.configuration?.operatingSystemCacheDropAttempted !== false ||
+      !Number.isSafeInteger(artifact.configuration?.cacheTargetBytes) ||
+      !Number.isSafeInteger(artifact.configuration?.mmapLimitBytes) ||
+      !["filesystem", "storage", "runtime", "branch"].every((domain) => {
+        const limits = artifact.configuration?.resourceLimits?.[domain];
+        return (
+          limits &&
+          typeof limits === "object" &&
+          !Array.isArray(limits) &&
+          Object.keys(limits).length > 0 &&
+          Object.values(limits).every(
+            (value) => Number.isSafeInteger(value) && value > 0,
+          )
+        );
+      }) ||
+      !Array.isArray(artifact.samples) ||
+      artifact.samples.length !== artifact.trials,
+  )
+)
+  throw new Error("m4 retained branch benchmark index is incomplete or stale");
+if ((await evidenceCommit(m4IndexRelative)) !== m4.recordCommit)
+  throw new Error("m4 branch benchmark index was not committed with its evidence");
+
+const m5 = await validateMilestone(
+  "m5",
+  [
+    "operatingSystems",
+    "nodeVersions",
+    "matrixRuns",
+    "cumulativePredecessorChecks",
+    "maintenanceTests",
+    "faultTests",
+    "observedFaultPositions",
+    "committedBatchFaultPositions",
+    "namespaceRows",
+    "reachableObjects",
+    "manifestRootRows",
+    "manifestNodeRows",
+    "baselineScaleRows",
+    "baselineScaleManagedResidentBytes",
+    "fullScaleManagedResidentBytes",
+    "peakStorageMarks",
+    "peakGcMarks",
+    "maxWalBytes",
+    "maxMaintenanceBatchMs",
+    "peakManagedResidentBytes",
+    "heapHighWaterBytes",
+    "rssHighWaterBytes",
+  ],
+  {
+    requireCurrentDigest: activeAcceptedMilestone === "m5",
+    requireStructuredContext: true,
+  },
+);
+if (
+  m5.artifact.passed !==
+  m5.artifact.metrics.cumulativePredecessorChecks +
+    m5.artifact.metrics.maintenanceTests +
+    m5.artifact.metrics.faultTests
+)
+  throw new Error(
+    "m5 passed count differs from predecessor plus maintenance/fault checks",
+  );
+if (m5.artifact.independentAudit !== "approved")
+  throw new Error("m5 correctness artifact lacks independent audit approval");
+if (
+  m5.artifact.metrics.cumulativePredecessorChecks !== m4.artifact.passed ||
+  m5.artifact.metrics.maintenanceTests < 31 ||
+  m5.artifact.metrics.faultTests !== 3 ||
+  m5.artifact.metrics.observedFaultPositions !== 328 ||
+  m5.artifact.metrics.committedBatchFaultPositions !== 150 ||
+  m5.artifact.metrics.namespaceRows < 100_000 ||
+  m5.artifact.metrics.reachableObjects < 100_000 ||
+  m5.artifact.metrics.manifestRootRows < 100_000 ||
+  m5.artifact.metrics.manifestNodeRows < 100_000 ||
+  m5.artifact.metrics.baselineScaleRows >= 100_000 ||
+  m5.artifact.metrics.baselineScaleManagedResidentBytes >= 16 * 1024 * 1024 ||
+  m5.artifact.metrics.fullScaleManagedResidentBytes >= 16 * 1024 * 1024 ||
+  m5.artifact.metrics.fullScaleManagedResidentBytes >
+    m5.artifact.metrics.baselineScaleManagedResidentBytes + 512 * 1024 ||
+  m5.artifact.metrics.peakStorageMarks < 300_000 ||
+  m5.artifact.metrics.peakGcMarks < 300_000 ||
+  m5.artifact.metrics.peakManagedResidentBytes >= 16 * 1024 * 1024 ||
+  m5.artifact.metrics.maxMaintenanceBatchMs >= 5_000 ||
+  m5.artifact.metrics.maxWalBytes > m5.artifact.limits.maxJournalBytes ||
+  m5.artifact.metrics.heapHighWaterBytes >= 512 * 1024 * 1024 ||
+  m5.artifact.metrics.rssHighWaterBytes >= 768 * 1024 * 1024
+)
+  throw new Error("m5 evidence metrics miss a crash, scale, or resource threshold");
+const m5Predecessor = m5.exit.match(
+  /Sequential predecessor:[\s\S]*?`([0-9a-f]{40})`/u,
+)?.[1];
+if (m5Predecessor !== m4.candidate)
+  throw new Error("m5 sequential predecessor differs from the accepted m4 candidate");
 
 console.log(
   `evidence: preserved predecessor candidates and current ${activeAcceptedMilestone.toUpperCase()} schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,

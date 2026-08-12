@@ -341,8 +341,10 @@ test("current schema recovery authority is revalidated after physical reopen", a
       {
         name: "root-generation",
         mutate: (tx) =>
-          tx.run("UPDATE efs_meta SET root_mutation_generation=-1 WHERE singleton=1"),
-        expected: /invalid persisted filesystem metadata/,
+          tx.run(
+            "UPDATE efs_meta SET root_mutation_generation=9007199254740992 WHERE singleton=1",
+          ),
+        expected: /invalid persisted filesystem metadata|unsafe integer/,
       },
       {
         name: "allocation-sequence",
@@ -357,6 +359,14 @@ test("current schema recovery authority is revalidated after physical reopen", a
             "INSERT INTO efs_gc_runs(id,state,high_water,root_generation,cursor_kind,cursor_value,created_at_ms) VALUES('corrupt-run',999,0,0,0,NULL,0)",
           ),
         expected: /invalid retained garbage-collection state/,
+      },
+      {
+        name: "storage-snapshot-cursor",
+        mutate: (tx) =>
+          tx.run(
+            "INSERT INTO efs_storage_snapshots(singleton,state,high_water,root_generation,last_root_removal_generation,evaluation_time_ms,root_kind,root_cursor,mark_kind,mark_cursor,stored_kind,stored_cursor,logical_cursor,created_at_ms,updated_at_ms) VALUES(1,1,0,0,0,0,0,X'01',0,NULL,0,0,'',0,0)",
+          ),
+        expected: /invalid durable storage-snapshot state/,
       },
       {
         name: "trigger",
@@ -375,13 +385,19 @@ test("current schema recovery authority is revalidated after physical reopen", a
     ];
     for (const corruption of corruptions) {
       const filename = path.join(directory, `${corruption.name}.db`);
-      let driver = await openNodeSqlite({ filename });
-      initializeOrValidateSchema(driver);
-      driver.transaction(corruption.mode ?? "write", corruption.mutate);
-      driver.close();
-      driver = await openNodeSqlite({ filename, create: false });
-      assert.throws(() => initializeOrValidateSchema(driver), corruption.expected);
-      driver.close();
+      let driver;
+      try {
+        driver = await openNodeSqlite({ filename });
+        initializeOrValidateSchema(driver);
+        driver.transaction(corruption.mode ?? "write", corruption.mutate);
+        driver.close();
+        driver = await openNodeSqlite({ filename, create: false });
+        assert.throws(() => initializeOrValidateSchema(driver), corruption.expected);
+      } finally {
+        try {
+          driver?.close();
+        } catch {}
+      }
     }
   } finally {
     await removeTree(directory);

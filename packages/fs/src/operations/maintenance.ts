@@ -1,5 +1,5 @@
 import {
-  maxPersistedContentObjectBytes,
+  AdmissionController,
   type BranchConfiguration,
   DEFAULT_BRANCH_CONFIGURATION,
   type RuntimeLimits,
@@ -13,6 +13,7 @@ import type {
   GarbageCollectionOptions,
   GarbageCollectionResult,
   StorageSnapshot,
+  StorageSnapshotOptions,
   VerificationOptions,
   VerificationResult,
   VerificationScope,
@@ -21,6 +22,7 @@ import { abortError, fsError } from "../filesystem/errors.js";
 import type {
   GcRunRow,
   OperationsStorage,
+  StorageSnapshotRunRow,
   StorageTransactionPorts,
 } from "./storage-ports.js";
 import type { ContentCache } from "../cache/content-cache.js";
@@ -71,6 +73,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
   readonly #cache: ContentCache;
   readonly #pageBytes: CowPageBytes;
   readonly #branch: BranchConfiguration;
+  readonly #admission: AdmissionController;
   readonly #verificationSecret = globalThis.crypto.getRandomValues(new Uint8Array(32));
   constructor(
     port: OperationsStorage,
@@ -80,6 +83,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
     cache: ContentCache,
     pageBytes: CowPageBytes,
     branch: BranchConfiguration = DEFAULT_BRANCH_CONFIGURATION,
+    admission?: AdmissionController,
   ) {
     this.#port = port;
     this.#storage = storage;
@@ -88,6 +92,8 @@ export class MaintenanceManager implements FilesystemMaintenance {
     this.#cache = cache;
     this.#pageBytes = pageBytes;
     this.#branch = branch;
+    this.#admission =
+      admission ?? new AdmissionController(runtime.maxManagedResidentBytes);
   }
 
   async collectGarbage(
@@ -102,7 +108,11 @@ export class MaintenanceManager implements FilesystemMaintenance {
       );
     if (options.signal?.aborted) throw abortError();
     const start = performance.now();
-    const runId = options.runId ?? globalThis.crypto.randomUUID();
+    const active =
+      options.runId === undefined
+        ? this.#read((tx) => tx.maintenance(this.#storage).activeRun())
+        : undefined;
+    const runId = options.runId ?? active?.id ?? globalThis.crypto.randomUUID();
     if (
       typeof runId !== "string" ||
       runId.length === 0 ||
@@ -179,10 +189,33 @@ export class MaintenanceManager implements FilesystemMaintenance {
           batches += 1;
           continue;
         }
-        const overlayCleanup = this.#write((tx) =>
-          tx.overlay(this.#storage, this.#pageBytes).cleanupUnleased(cleanupLimit),
-        );
-        if (overlayCleanup) {
+        const run = this.#read((tx) => tx.maintenance(this.#storage).run(runId));
+        if (!run) {
+          this.#write((tx) => tx.maintenance(this.#storage).beginRun(runId, now));
+          batches += 1;
+          continue;
+        }
+        if (run.state === COMPLETE) break;
+        if (run.state === ABANDONED) {
+          this.#write((tx) =>
+            tx
+              .maintenance(this.#storage)
+              .resumeAbandonedRun(runId, ABANDONED, CLEAN_MARKS),
+          );
+          batches += 1;
+          continue;
+        }
+        const overlayCleanup = this.#write((tx) => {
+          const result = tx
+            .overlay(this.#storage, this.#pageBytes)
+            .cleanupUnleased(cleanupLimit);
+          tx.maintenance(this.#storage).addReclaimedOverlayBytes(
+            runId,
+            result.reclaimedPayloadBytes,
+          );
+          return result;
+        });
+        if (overlayCleanup.worked) {
           batches += 1;
           continue;
         }
@@ -219,23 +252,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
           batches += 1;
           continue;
         }
-        const run = this.#read((tx) => tx.maintenance(this.#storage).run(runId));
-        if (!run) {
-          this.#write((tx) => tx.maintenance(this.#storage).beginRun(runId, now));
-          batches += 1;
-          continue;
-        }
         const state = run.state;
-        if (state === COMPLETE) break;
-        if (state === ABANDONED) {
-          this.#write((tx) =>
-            tx
-              .maintenance(this.#storage)
-              .resumeAbandonedRun(runId, ABANDONED, CLEAN_MARKS),
-          );
-          batches += 1;
-          continue;
-        }
         if (state === 0) this.#markBatch(runId);
         else this.#sweepBatch(runId, state);
         batches += 1;
@@ -254,9 +271,150 @@ export class MaintenanceManager implements FilesystemMaintenance {
     return this.#collectionResult(runId, row, batches, start);
   }
 
-  async snapshotStorage(): Promise<StorageSnapshot> {
-    const row = this.#read((tx) => tx.maintenance(this.#storage).snapshot());
-    if (!row) throw new Error("ECORRUPT: usage metadata is missing");
+  async snapshotStorage(
+    options: StorageSnapshotOptions = {},
+  ): Promise<StorageSnapshot> {
+    if (options.signal?.aborted) throw abortError();
+    const start = performance.now();
+    const maxBatches = options.maxBatches ?? 100_000;
+    if (!Number.isSafeInteger(maxBatches) || maxBatches < 0)
+      throw fsError(
+        "EINVAL",
+        "snapshotStorage",
+        undefined,
+        "maxBatches must be a nonnegative safe integer",
+      );
+    const batchLimit = Math.max(
+      1,
+      Math.min(
+        this.#storage.maxGcBatchSize,
+        this.#storage.maxQueryBatchSize,
+        Math.floor((this.#storage.maxFinalTransactionRows - 8) / 2),
+      ),
+    );
+    let run = this.#read((tx) => tx.maintenance(this.#storage).storageSnapshot());
+    if (this.#port.readOnly) {
+      if (!run || run.state !== 6)
+        throw fsError(
+          "EROFS",
+          "snapshotStorage",
+          undefined,
+          "an unfinished storage snapshot requires writable maintenance state",
+        );
+      const current = this.#read((tx) =>
+        tx.maintenance(this.#storage).storageSnapshotCurrent(this.#now()),
+      );
+      if (!current)
+        throw fsError(
+          "EAGAIN",
+          "snapshotStorage",
+          undefined,
+          "the completed storage snapshot is stale and requires writable reconciliation",
+        );
+    }
+    let committed = 0;
+    if (!this.#port.readOnly) {
+      while (committed < maxBatches) {
+        if (options.signal?.aborted) throw abortError();
+        run = this.#read((tx) => tx.maintenance(this.#storage).storageSnapshot());
+        if (!run || run.state === 6) {
+          const current = this.#read((tx) =>
+            tx.maintenance(this.#storage).storageSnapshotCurrent(this.#now()),
+          );
+          if (current) break;
+          this.#write((tx) => {
+            const maintenance = tx.maintenance(this.#storage);
+            maintenance.beginStorageSnapshot(this.#now());
+            maintenance.recordStorageSnapshotBatch();
+          });
+          committed += 1;
+          continue;
+        }
+        if (run.state === 1) {
+          this.#write((tx) => {
+            const maintenance = tx.maintenance(this.#storage);
+            maintenance.storageRootBatch(
+              batchLimit,
+              this.#runtime.maxQueryBatchBytes,
+              this.#now(),
+            );
+            maintenance.recordStorageSnapshotBatch();
+          });
+          committed += 1;
+          continue;
+        }
+        if (run.state === 2) {
+          this.#snapshotMarkBatch(batchLimit);
+          committed += 1;
+          continue;
+        }
+        if (run.state === 3) {
+          this.#write((tx) => {
+            const maintenance = tx.maintenance(this.#storage);
+            maintenance.storageStoredBatch(
+              batchLimit,
+              this.#runtime.maxQueryBatchBytes,
+              this.#now(),
+            );
+            maintenance.recordStorageSnapshotBatch();
+          });
+          committed += 1;
+          continue;
+        }
+        if (run.state === 4) {
+          this.#write((tx) => {
+            const maintenance = tx.maintenance(this.#storage);
+            maintenance.storageLogicalBatch(
+              batchLimit,
+              this.#runtime.maxQueryBatchBytes,
+              this.#now(),
+            );
+            maintenance.recordStorageSnapshotBatch();
+          });
+          committed += 1;
+          continue;
+        }
+        if (run.state === 5) {
+          this.#write((tx) => {
+            const maintenance = tx.maintenance(this.#storage);
+            maintenance.cleanupStorageMarks(
+              batchLimit,
+              this.#runtime.maxQueryBatchBytes,
+              this.#now(),
+            );
+            maintenance.recordStorageSnapshotBatch();
+          });
+          committed += 1;
+          continue;
+        }
+        if (run.state === 7) {
+          this.#write((tx) => {
+            const maintenance = tx.maintenance(this.#storage);
+            maintenance.resetStorageMarksBatch(
+              batchLimit,
+              this.#runtime.maxQueryBatchBytes,
+            );
+            maintenance.recordStorageSnapshotBatch();
+          });
+          committed += 1;
+          continue;
+        }
+        throw new Error("ECORRUPT: invalid storage snapshot state");
+      }
+    }
+    const resultNow = this.#now();
+    const row = this.#read((tx) =>
+      tx.maintenance(this.#storage).storageSnapshotResult(resultNow),
+    );
+    if (!row)
+      throw fsError(
+        "EAGAIN",
+        "snapshotStorage",
+        undefined,
+        "storage snapshot initialization requires another writable batch",
+      );
+    const current = row.state === 6 && row.current === 1;
+    const complete = row.state === 6 && current;
     const pagePhysical = this.#read((tx) => {
       const value = tx.maintenance(this.#storage).physical();
       return Object.freeze({
@@ -270,26 +428,51 @@ export class MaintenanceManager implements FilesystemMaintenance {
       ...(files.walBytes === undefined ? {} : { walBytes: files.walBytes }),
       freelistBytes: pagePhysical.freelistBytes,
     });
-    const manifestBytes = row.manifest_root_bytes + row.manifest_node_bytes;
+    const phase = complete ? "complete" : this.#storageSnapshotPhase(row);
     return Object.freeze({
-      rootMutationGeneration: row.generation,
+      state: complete ? "complete" : "paused",
+      phase: complete || row.state !== 6 ? phase : "roots",
+      progressCursor: this.#storageSnapshotCursor(row),
+      remainingWork: complete ? 0 : null,
+      committedBatches: row.committed_batches,
+      batchSize: batchLimit,
+      elapsedMs: performance.now() - start,
+      peakManagedResidentBytes: this.#admission.peakBytes,
+      rootMutationGeneration: row.root_generation,
       mainLogicalBytes: row.logical_bytes,
-      storedObjectPayloadBytes: row.object_bytes,
-      storedManifestPayloadBytes: manifestBytes,
-      reachableObjectPayloadBytes: row.object_bytes,
-      reachableManifestPayloadBytes: manifestBytes,
-      reclaimablePayloadBytes: 0,
-      branchPageBytes: row.page_bytes,
-      branchPatchBytes: row.patch_bytes,
-      branchExclusiveObjectBytes: 0,
-      branchExclusiveManifestBytes: 0,
-      branchExclusivePayloadBytes: row.page_bytes + row.patch_bytes,
-      objectCount: row.object_count,
-      manifestRootCount: row.manifest_root_count,
-      manifestNodeCount: row.manifest_node_count,
-      manifestCount: row.manifest_root_count + row.manifest_node_count,
+      storedObjectPayloadBytes: row.stored_object_bytes,
+      storedManifestPayloadBytes:
+        row.stored_manifest_root_bytes + row.stored_manifest_node_bytes,
+      reachableObjectPayloadBytes: row.reachable_object_bytes,
+      reachableManifestPayloadBytes:
+        row.reachable_manifest_root_bytes + row.reachable_manifest_node_bytes,
+      reclaimablePayloadBytes:
+        row.stored_object_bytes +
+        row.stored_manifest_root_bytes +
+        row.stored_manifest_node_bytes -
+        row.reachable_object_bytes -
+        row.reachable_manifest_root_bytes -
+        row.reachable_manifest_node_bytes +
+        row.reclaimable_overlay_bytes,
+      branchPageBytes: row.stored_page_bytes,
+      branchPatchBytes: row.stored_patch_bytes,
+      branchExclusiveObjectBytes: row.branch_exclusive_object_bytes,
+      branchExclusiveManifestBytes:
+        row.branch_exclusive_manifest_root_bytes +
+        row.branch_exclusive_manifest_node_bytes,
+      branchExclusivePayloadBytes:
+        row.stored_page_bytes +
+        row.stored_patch_bytes +
+        row.branch_exclusive_object_bytes +
+        row.branch_exclusive_manifest_root_bytes +
+        row.branch_exclusive_manifest_node_bytes,
+      objectCount: row.stored_object_count,
+      manifestRootCount: row.stored_manifest_root_count,
+      manifestNodeCount: row.stored_manifest_node_count,
+      manifestCount: row.stored_manifest_root_count + row.stored_manifest_node_count,
+      operationResultPayloadBytes: row.result_bytes,
       chargedMetadataBytes: row.charged_metadata_bytes,
-      revisionCount: row.revisions,
+      revisionCount: row.revision_count,
       includesNamespaceMetadata: true,
       includesOperationResults: true,
       physical,
@@ -298,6 +481,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
 
   async verify(options: VerificationOptions = {}): Promise<VerificationResult> {
     if (options.signal?.aborted) throw abortError();
+    const start = performance.now();
     const requestedMaximum = options.maxEntities ?? this.#storage.maxGcBatchSize;
     if (!Number.isSafeInteger(requestedMaximum) || requestedMaximum <= 0)
       throw fsError(
@@ -452,28 +636,30 @@ export class MaintenanceManager implements FilesystemMaintenance {
             };
           else break;
         } else if (phase === "objects") {
-          const rowLimit = Math.min(
-            maximum - checked,
-            Math.max(
-              1,
-              Math.floor(
-                (this.#storage.maxFinalTransactionBytes - 512) /
-                  (maxPersistedContentObjectBytes(this.#storage) + 512),
-              ),
-            ),
-          );
-          const rows = maintenance.objects(
+          const rowLimit = maximum - checked;
+          const candidates = maintenance.objects(
             cursor.last ? hexToBytes(cursor.last, 32) : Uint8Array.of(0),
             rowLimit,
             this.#runtime.maxQueryBatchBytes,
           );
+          const rows = [];
+          let payloadBytes = 0;
+          const payloadLimit = Math.max(
+            1,
+            this.#storage.maxFinalTransactionBytes - 512,
+          );
+          for (const row of candidates) {
+            if (rows.length > 0 && payloadBytes + row.size > payloadLimit) break;
+            rows.push(row);
+            payloadBytes += row.size;
+          }
           for (const row of rows) {
             if (!repo.verifyObject(row.hash, row.size, true))
               throw new Error("ECORRUPT: invalid CAS object");
             cursor.last = bytesToHex(row.hash);
             checked += 1;
           }
-          if (rows.length < rowLimit)
+          if (candidates.length < rowLimit && rows.length === candidates.length)
             cursor = {
               phase: cursor.phase + 1,
               last: "",
@@ -514,12 +700,125 @@ export class MaintenanceManager implements FilesystemMaintenance {
       }
       return result;
     });
+    const complete = cursor.phase >= phases.length;
+    const nextCursor = complete ? null : this.#encodeCursor(cursor);
     return Object.freeze({
       rootMutationGeneration: generation,
+      phase: complete ? "complete" : phases[cursor.phase]!,
+      progressCursor: nextCursor,
+      remainingWork: complete ? 0 : null,
+      committedBatches: 0,
+      elapsedMs: performance.now() - start,
+      peakManagedResidentBytes: this.#admission.peakBytes,
       checkedEntities: checked,
-      complete: cursor.phase >= phases.length,
-      nextCursor: cursor.phase >= phases.length ? null : this.#encodeCursor(cursor),
+      complete,
+      nextCursor,
     });
+  }
+
+  #snapshotMarkBatch(limit: number): void {
+    this.#write((tx) => {
+      const maintenance = tx.maintenance(this.#storage);
+      const edgeLimit = Math.max(
+        1,
+        Math.min(128, Math.floor((this.#storage.maxFinalTransactionRows - 16) / 4)),
+      );
+      const rowLimit = Math.max(
+        1,
+        Math.min(
+          limit,
+          this.#storage.maxQueryBatchSize,
+          Math.floor((this.#storage.maxFinalTransactionRows - 16) / (edgeLimit + 4)),
+        ),
+      );
+      const candidates = maintenance.storageMarks(
+        rowLimit,
+        this.#runtime.maxQueryBatchBytes,
+      );
+      const rows = [];
+      let payloadBytes = 0;
+      const payloadLimit = Math.max(1, this.#storage.maxFinalTransactionBytes - 512);
+      for (const row of candidates) {
+        if (!Number.isSafeInteger(row.payload_size) || row.payload_size < 0)
+          throw new Error("ECORRUPT: reachable storage mark payload is missing");
+        const resultBytes = row.payload_size + 1024;
+        if (rows.length > 0 && payloadBytes + resultBytes > payloadLimit) break;
+        rows.push(row);
+        payloadBytes += resultBytes;
+      }
+      const repo = tx.content(this.#storage, this.#cache);
+      for (const row of rows) {
+        if (row.kind === 0) {
+          const root = repo.withManifestRoot(row.hash, (encoded) => ({
+            value: decodeManifestRoot(encoded, row.hash),
+            bytes: encoded.length,
+          }));
+          if (!root) throw new Error("ECORRUPT: reachable manifest root is missing");
+          maintenance.accountStorageMark(row.kind, row.hash, root.bytes);
+          maintenance.addStorageMark(1, root.value.rootNodeHash, row.scope_mask);
+          maintenance.advanceStorageMark(row.kind, row.hash, 0, true);
+        } else if (row.kind === 1) {
+          const node = repo.withManifestNode(row.hash, (encoded) => ({
+            value: decodeManifestNode(encoded, row.hash),
+            bytes: encoded.length,
+          }));
+          if (!node) throw new Error("ECORRUPT: reachable manifest node is missing");
+          maintenance.accountStorageMark(row.kind, row.hash, node.bytes);
+          const edges =
+            node.value.kind === "leaf" ? node.value.entries : node.value.children;
+          if (row.edge_cursor > edges.length)
+            throw new Error("ECORRUPT: invalid storage snapshot node cursor");
+          const end = Math.min(edges.length, row.edge_cursor + edgeLimit);
+          for (let index = row.edge_cursor; index < end; index += 1) {
+            const edge = edges[index]!;
+            maintenance.addStorageMark(
+              node.value.kind === "leaf" ? 2 : 1,
+              edge.hash,
+              row.scope_mask,
+            );
+          }
+          maintenance.advanceStorageMark(row.kind, row.hash, end, end === edges.length);
+        } else if (row.kind === 2) {
+          if (!repo.verifyObject(row.hash, undefined, true))
+            throw new Error("ECORRUPT: reachable CAS object is missing or invalid");
+          const size = maintenance.storagePayloadSize(row.kind, row.hash);
+          if (size === undefined)
+            throw new Error("ECORRUPT: reachable CAS object is missing");
+          maintenance.accountStorageMark(row.kind, row.hash, size);
+          maintenance.advanceStorageMark(row.kind, row.hash, 0, true);
+        } else {
+          throw new Error("ECORRUPT: invalid storage snapshot mark kind");
+        }
+      }
+      if (!rows.length) maintenance.finishStorageMarking(this.#now());
+      maintenance.recordStorageSnapshotBatch();
+    });
+  }
+
+  #storageSnapshotPhase(row: StorageSnapshotRunRow): StorageSnapshot["phase"] {
+    if (row.state === 1) return "roots";
+    if (row.state === 2) return "marking";
+    if (row.state === 3) return "stored-payload";
+    if (row.state === 4)
+      return row.logical_complete ? "branch-overlays" : "logical-namespace";
+    if (row.state === 5) return "mark-cleanup";
+    if (row.state === 6) return "complete";
+    if (row.state === 7) return "mark-reset";
+    throw new Error("ECORRUPT: invalid storage snapshot state");
+  }
+
+  #storageSnapshotCursor(row: StorageSnapshotRunRow): string | null {
+    if (row.state === 1)
+      return `${row.root_kind}:${row.root_cursor ? bytesToHex(row.root_cursor) : ""}`;
+    if (row.state === 2)
+      return `${row.mark_kind}:${row.mark_cursor ? bytesToHex(row.mark_cursor) : ""}`;
+    if (row.state === 3) return `${row.stored_kind}:${row.stored_cursor}`;
+    if (row.state === 4)
+      return row.logical_complete
+        ? `${row.overlay_kind}:${row.overlay_branch_cursor}:${row.overlay_inode_cursor}:${row.overlay_sequence_cursor}:${row.overlay_index_cursor}`
+        : row.logical_cursor;
+    if (row.state === 7) return "reset";
+    return null;
   }
 
   #markBatch(runId: string): void {
@@ -529,7 +828,30 @@ export class MaintenanceManager implements FilesystemMaintenance {
         1,
         Math.min(128, Math.floor((this.#storage.maxFinalTransactionRows - 4) / 2)),
       );
-      const rows = maintenance.pendingMarks(runId, 1, this.#runtime.maxQueryBatchBytes);
+      const rowLimit = Math.max(
+        1,
+        Math.min(
+          this.#storage.maxGcBatchSize,
+          this.#storage.maxQueryBatchSize,
+          Math.floor((this.#storage.maxFinalTransactionRows - 4) / (edgeLimit + 3)),
+        ),
+      );
+      const candidates = maintenance.pendingMarks(
+        runId,
+        rowLimit,
+        this.#runtime.maxQueryBatchBytes,
+      );
+      const rows = [];
+      let payloadBytes = 0;
+      const payloadLimit = Math.max(1, this.#storage.maxFinalTransactionBytes - 512);
+      for (const row of candidates) {
+        if (!Number.isSafeInteger(row.payload_size) || row.payload_size < 0)
+          throw new Error("ECORRUPT: reachable garbage-collection mark is missing");
+        const resultBytes = row.payload_size + 1024;
+        if (rows.length > 0 && payloadBytes + resultBytes > payloadLimit) break;
+        rows.push(row);
+        payloadBytes += resultBytes;
+      }
       const repo = tx.content(this.#storage, this.#cache);
       let roots = 0;
       let nodes = 0;
@@ -660,26 +982,36 @@ export class MaintenanceManager implements FilesystemMaintenance {
     });
   }
   #read<T>(callback: (tx: StorageTransactionPorts) => T): T {
-    return this.#port.transaction(
-      "read",
-      {
-        maxRows: this.#storage.maxFinalTransactionRows,
-        maxBytes: this.#storage.maxFinalTransactionBytes,
-        maxElapsedMs: 1_000,
-      },
-      callback,
-    );
+    const release = this.#admission.reserve(this.#runtime.maxQueryBatchBytes);
+    try {
+      return this.#port.transaction(
+        "read",
+        {
+          maxRows: this.#storage.maxFinalTransactionRows,
+          maxBytes: this.#storage.maxFinalTransactionBytes,
+          maxElapsedMs: 1_000,
+        },
+        callback,
+      );
+    } finally {
+      release();
+    }
   }
   #write<T>(callback: (tx: StorageTransactionPorts) => T): T {
-    return this.#port.transaction(
-      "write",
-      {
-        maxRows: this.#storage.maxFinalTransactionRows,
-        maxBytes: this.#storage.maxFinalTransactionBytes,
-        maxElapsedMs: 1_000,
-      },
-      callback,
-    );
+    const release = this.#admission.reserve(this.#runtime.maxQueryBatchBytes);
+    try {
+      return this.#port.transaction(
+        "write",
+        {
+          maxRows: this.#storage.maxFinalTransactionRows,
+          maxBytes: this.#storage.maxFinalTransactionBytes,
+          maxElapsedMs: 1_000,
+        },
+        callback,
+      );
+    } finally {
+      release();
+    }
   }
   #now(): number {
     return this.#clock();
@@ -690,14 +1022,17 @@ export class MaintenanceManager implements FilesystemMaintenance {
     batches: number,
     start: number,
   ): GarbageCollectionResult {
+    const state = row?.state;
     return Object.freeze({
       runId,
       state:
-        row?.state === COMPLETE
-          ? "complete"
-          : row?.state === ABANDONED
-            ? "abandoned"
-            : "paused",
+        state === COMPLETE ? "complete" : state === ABANDONED ? "abandoned" : "paused",
+      phase: this.#garbageCollectionPhase(state),
+      progressCursor:
+        state === 0
+          ? `${row?.cursor_kind ?? 0}:${row?.cursor_value ? bytesToHex(row.cursor_value) : ""}`
+          : null,
+      remainingWork: state === COMPLETE ? 0 : null,
       examinedManifestRootCount: row?.examined_roots ?? 0,
       deletedManifestRootCount: row?.deleted_roots ?? 0,
       examinedManifestNodeCount: row?.examined_nodes ?? 0,
@@ -708,10 +1043,22 @@ export class MaintenanceManager implements FilesystemMaintenance {
       deletedObjectCount: row?.deleted_objects ?? 0,
       reclaimedObjectPayloadBytes: row?.reclaimed_object_bytes ?? 0,
       reclaimedManifestPayloadBytes: row?.reclaimed_manifest_bytes ?? 0,
-      reclaimedBranchOverlayPayloadBytes: 0,
+      reclaimedBranchOverlayPayloadBytes: row?.reclaimed_overlay_bytes ?? 0,
       committedBatches: batches,
       elapsedMs: performance.now() - start,
     });
+  }
+  #garbageCollectionPhase(state: number | undefined): GarbageCollectionResult["phase"] {
+    if (state === undefined || state === 0) return "marking";
+    if (state === 1) return "sweeping-manifest-roots";
+    if (state === 2) return "sweeping-manifest-nodes";
+    if (state === 3) return "sweeping-objects";
+    if (state === CLEAN_MARKS) return "cleaning-marks";
+    if (state === CLEAN_ROOT_JOURNAL) return "cleaning-root-journal";
+    if (state === CLEAN_TERMINAL_RUNS) return "cleaning-terminal-runs";
+    if (state === COMPLETE) return "complete";
+    if (state === ABANDONED) return "abandoned";
+    throw new Error("ECORRUPT: invalid garbage-collection state");
   }
   #encodeCursor(cursor: VerificationCursorState): string {
     const payload = JSON.stringify(cursor);

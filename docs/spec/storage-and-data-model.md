@@ -1242,9 +1242,13 @@ an integrity error.
 
 Lease acquisition, renewal, release, expiration, or membership change is a
 garbage-collection root mutation and MUST increment `root_mutation_generation`. Lease
-times are safe-integer Unix epoch milliseconds. The effective lease clock MUST have a
-persisted nondecreasing floor; a backward wall-clock jump MAY delay collection but MUST
-NOT expire a lease early.
+times are safe-integer Unix epoch milliseconds supplied by the host clock configured for
+that filesystem instance. Version 0.1 does not persist a global clock floor: fixtures,
+reopened hosts, and independent connections MAY supply a value lower than an earlier
+call. A backward value MAY delay collection but MUST NOT shorten an existing expiry or
+revive an expired or released lease. Hosts that require wall-clock monotonicity MUST
+provide it at the configured clock boundary rather than silently changing persisted
+lease time inside one repository path.
 
 #### Read-stream acquisition
 
@@ -1289,16 +1293,18 @@ input or fail without changing namespace state.
 
 #### Renewal, expiry, and collection races
 
-Renewal MUST compare owner nonce and current expiry in one transaction, extend from
-`max(effectiveNow, priorExpiry)`, and increment root mutation generation. It MUST NOT
-revive an expired or released lease. Release MUST make membership non-rooting atomically
-and be idempotent for the same owner.
+Renewal MUST compare owner nonce and current expiry in one transaction, accept only an
+extension no earlier than the persisted prior expiry, and increment root mutation
+generation. The caller time MUST be strictly earlier than the persisted expiry; equality
+is already expired. Caller-clock rollback therefore cannot shorten the lease. Renewal
+MUST NOT revive an expired or released lease. Release MUST make membership non-rooting
+atomically and be idempotent for the same owner.
 
 The collector MAY expire a lease only in a write transaction that rechecks its expiry
-against the effective lease clock and increments root mutation generation. A GC run
-whose captured generation predates an acquisition, renewal, release, expiry, or
-membership change MUST stop before its next sweep batch. Allocation high-water marks
-additionally protect newly staged rows.
+against the caller-supplied time for that maintenance call and increments root mutation
+generation. A GC run whose captured generation predates an acquisition, renewal,
+release, expiry, or membership change MUST stop before its next sweep batch. Allocation
+high-water marks additionally protect newly staged rows.
 
 Unexpired `preparing` and `active` leases are roots after restart. Expired leases are
 not silently deleted during open; bounded maintenance expires them using the transaction
@@ -1445,6 +1451,11 @@ Reclaimed payload MUST be computed from deleted row lengths, not from change in 
 file size. SQLite page allocation, free-list behavior, WAL size, and vacuum behavior are
 separate physical metrics.
 
+At most one nonterminal collection run may own the shared mark reservation. An anonymous
+caller that loses a response MUST be able to adopt that unfinished run after physical
+reopen; generating a new undiscoverable identifier and returning permanent `EBUSY` is
+not recovery.
+
 ## 15. Accounting and observability
 
 ### 15.1 Snapshot counters
@@ -1478,6 +1489,8 @@ selected main revisions.
 `branchExclusiveManifestBytes` : Unique manifest bytes reachable from branches but not
 selected main revisions.
 
+`operationResultPayloadBytes` : Sum of encoded retained operation-result BLOB lengths.
+
 `objectCount` : Number of object rows.
 
 `manifestRootCount` : Number of manifest-root rows.
@@ -1495,10 +1508,15 @@ It is not an estimate of the physical SQLite file.
 exclusive manifest payload under the snapshot's stated root and retention policy. Shared
 values MUST be counted once in each set-based metric.
 
-The default bounded mode MUST capture a root generation and row high-water marks in a
-short transaction, walk SQLite with keyset cursors, and persist partial marks and
-counters under `maxMaintenanceBytes`. A final short transaction MUST validate or
-reconcile the captured generation before returning the snapshot. It MUST NOT hold a read
+The default bounded mode MUST capture allocation high-water, root generation, last
+root-removal generation, caller evaluation time, and the next expiring-root boundary in
+a short transaction, walk SQLite with keyset cursors, and persist partial marks and
+counters under `maxMaintenanceBytes`. Root addition may preserve completed mark work,
+but removal or scope contraction MUST clear reachability, accounting, edge cursors, and
+scope bits in bounded durable batches before re-enumeration. A final short transaction
+MUST validate or reconcile the captured generations, expiry boundary, and exact stored
+row counters before returning the snapshot. GC deletion MUST make a cached snapshot
+stale even though allocation high-water does not decrease. It MUST NOT hold a read
 transaction for work proportional to total database rows or pin WAL history for the
 complete scan.
 
@@ -1508,9 +1526,12 @@ bounded reconciliation or restart, not an inconsistent result. Under finite or s
 mutation, repeated maintenance steps MUST eventually complete.
 
 The snapshot MUST state whether namespace metadata and operation-result BLOBs are
-included. Payload counters exclude relational row overhead, indexes, rollback journals,
-and WAL files. `chargedMetadataBytes` and physical counters MUST report those separate
-boundaries so metadata-only growth cannot be hidden behind a payload limit.
+included and MUST expose the exact included operation-result payload bytes. Exact
+reclaimable payload includes unreachable CAS/manifest bytes and stale branch overlay
+page and patch bytes. Payload counters exclude relational row overhead, indexes,
+rollback journals, and WAL files. `chargedMetadataBytes` and physical counters MUST
+report those separate boundaries so metadata-only growth cannot be hidden behind a
+payload limit.
 
 ### 15.2 Physical and operation metrics
 

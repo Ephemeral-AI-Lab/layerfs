@@ -327,7 +327,7 @@ class Bridge implements NodeVfsFilesystemBridge {
             this.storageLimits,
           ),
         });
-        staging.bumpRoot(5, leaseId);
+        staging.bumpRoot(5, leaseId, false);
       });
       begun = true;
       for (const [hash, object] of manifest.objects) {

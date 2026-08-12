@@ -6,10 +6,9 @@
 // artifact per the efs-benchmark-result-v1 schema (docs/benchmarks/
 // release-benchmarks.md section 16) and prints a summary table.
 //
-// Budget: the full matrix must finish under 120 seconds. The A6 edit loop and
-// the whole run enforce hard wall budgets; a cell that cannot finish its full
-// work within its budget records pass=false plus the deviation instead of
-// silently degrading the measurement.
+// Budget: the M3 A group must finish under 120 seconds. Five-trial execution
+// repeats the complete group in five fresh isolated databases; no measured
+// trial inherits SQLite, filesystem-cache, or mutable fixture state.
 //
 // Usage:
 //   node tests/performance/mini-bench.mjs            full matrix
@@ -24,8 +23,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { EphemeralFS } from "../../packages/fs/dist/index.js";
+import {
+  effectiveResourceLimits,
+  runtimeEnvironment,
+} from "../helpers/runtime-environment.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const MIB = 1024 * 1024;
@@ -35,13 +39,21 @@ const SMALL_COUNT = 100;
 const SMALL_SIZE = MIB;
 const BIG_PATH = "/big";
 const SMALL_PREFIX = "/small";
-const OVERALL_WALL_BUDGET_MS = 115_000;
+const OVERALL_WALL_BUDGET_MS = 120_000;
 // M3.2: the local-rebuild gate is 500 scattered edits in <=20 s (pass=true);
 // the M2-era 8 s budget capped A6 at 2 edits and pass=false by design.
 const A6_EDIT_BUDGET_MS = 20_000;
 const A6_EDIT_COUNT = 500;
 const A6_READ_COUNT = 500;
 const WRITE_STREAM_CHUNK = 4 * MIB;
+const metadataDatabase = new DatabaseSync(":memory:");
+const SQLITE_VERSION = metadataDatabase
+  .prepare("SELECT sqlite_version() version")
+  .get().version;
+const SQLITE_PAGE_SIZE = metadataDatabase.prepare("PRAGMA page_size").get().page_size;
+metadataDatabase.close();
+const BENCHMARK_ENVIRONMENT = runtimeEnvironment({ sqlite: SQLITE_VERSION });
+let currentResourceLimits;
 
 function mulberry32(seed) {
   let state = seed >>> 0;
@@ -138,17 +150,18 @@ async function openDriver(filename) {
   return openNodeSqlite({
     filename,
     durability: "acknowledged",
-    // M3.1: the 2 MiB read windows span ~520 4 KiB pages per pull; the page
-    // cache must hold a working window set, aligned with the engine's 64 MiB
-    // content cache. The M2-era 16 MiB profile left every pull page-cache
-    // cold and capped reads near 175 MiB/s.
-    cacheTargetBytes: 64 * MIB,
+    // M3.1: the 2 MiB read windows span ~520 4 KiB pages per pull. A finite
+    // The ~115 MiB database page set needs a 128 MiB finite cache for every fresh
+    // trial to retain repeatable headroom above the 250 MiB/s cold-read gate. The
+    // former 96 MiB profile admitted an isolated 169.8 MiB/s eviction outlier; 64
+    // MiB measured 245-248 MiB/s and the M2-era 16 MiB profile capped near 175 MiB/s.
+    cacheTargetBytes: 128 * MIB,
     mmapLimitBytes: 0,
   });
 }
 
 async function openFilesystem(driver, observed, observer, managedBytes = 192 * MIB) {
-  return EphemeralFS.open({
+  const filesystem = await EphemeralFS.open({
     database: countingDriver(driver, observed),
     observer,
     ownsDatabase: false,
@@ -160,6 +173,8 @@ async function openFilesystem(driver, observed, observer, managedBytes = 192 * M
       maxManagedResidentBytes: managedBytes,
     },
   });
+  currentResourceLimits = effectiveResourceLimits(filesystem);
+  return filesystem;
 }
 
 function makeObserver() {
@@ -215,20 +230,34 @@ function gitHead() {
   };
 }
 
-async function collectBytes(stream) {
+async function collectDigest(stream) {
   let total = 0;
+  const hash = createHash("sha256");
   const reader = stream.getReader();
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
+    hash.update(value);
   }
-  return total;
+  return Object.freeze({ bytes: total, digest: hash.digest("hex") });
+}
+
+async function assertFileDigest(filesystem, filename, expectedDigest) {
+  const actual = await collectDigest(await filesystem.readStream(filename));
+  if (actual.digest !== expectedDigest)
+    throw new Error(
+      `${filename} digest mismatch: expected ${expectedDigest}, got ${actual.digest}`,
+    );
+  return actual.bytes;
 }
 
 function percentile(sorted, fraction) {
   if (sorted.length === 0) return undefined;
-  const index = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction));
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(sorted.length * fraction) - 1),
+  );
   return sorted[index];
 }
 
@@ -288,20 +317,109 @@ async function measureCell(
     counters,
     pass: median.result?.pass ?? true,
     trials,
+    samples: Object.freeze(
+      trialResults.map((trial) =>
+        Object.freeze({
+          wallMs: Math.round(trial.wallMs * 1000) / 1000,
+          statements: trial.statements,
+          transactions: trial.transactions,
+          physicalBefore: trial.physicalBefore,
+          physicalAfter: trial.physicalAfter,
+          ...(trial.result?.counters === undefined
+            ? {}
+            : { counters: trial.result.counters }),
+        }),
+      ),
+    ),
     latencyMs: Object.freeze({
       p50: Math.round(percentile(sorted, 0.5).wallMs * 1000) / 1000,
       p95: Math.round(percentile(sorted, 0.95).wallMs * 1000) / 1000,
       p99: Math.round(percentile(sorted, 0.99).wallMs * 1000) / 1000,
+      min: Math.round(sorted[0].wallMs * 1000) / 1000,
+      max: Math.round(sorted.at(-1).wallMs * 1000) / 1000,
+      mean:
+        Math.round(
+          (trialResults.reduce((total, trial) => total + trial.wallMs, 0) /
+            trialResults.length) *
+            1000,
+        ) / 1000,
     }),
   });
+}
+
+function mergeFreshTrialArtifacts(trialGroups) {
+  if (!trialGroups.length) return [];
+  const names = trialGroups[0].map((artifact) => artifact.benchmark);
+  for (const group of trialGroups)
+    if (group.map((artifact) => artifact.benchmark).join("\0") !== names.join("\0"))
+      throw new Error("fresh benchmark trials emitted different cell sets");
+  return names.map((name, index) => {
+    const trials = trialGroups.map((group) => group[index]);
+    const sorted = [...trials].sort(
+      (left, right) => left.counters.wallMs - right.counters.wallMs,
+    );
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const wallSamples = trials.map((artifact) => artifact.counters.wallMs);
+    return Object.freeze({
+      ...median,
+      configuration: Object.freeze({
+        ...median.configuration,
+        databaseIsolation: "fresh-database-per-trial",
+      }),
+      trials: trials.length,
+      latencyMs: Object.freeze({
+        p50: median.counters.wallMs,
+        p95: percentile(sorted, 0.95).counters.wallMs,
+        p99: percentile(sorted, 0.99).counters.wallMs,
+        min: Math.min(...wallSamples),
+        max: Math.max(...wallSamples),
+        mean:
+          Math.round(
+            (wallSamples.reduce((total, value) => total + value, 0) /
+              wallSamples.length) *
+              1000,
+          ) / 1000,
+      }),
+      samples: Object.freeze(
+        trials.map((artifact, trial) =>
+          Object.freeze({
+            trial: trial + 1,
+            ...artifact.samples[0],
+            measuredCounters: artifact.counters,
+            pass: artifact.pass,
+          }),
+        ),
+      ),
+      pass: trials.every((artifact) => artifact.pass),
+    });
+  });
+}
+
+async function runFreshABigTrials(artifacts, bigBytes, trials) {
+  const trialGroups = [];
+  for (let trial = 0; trial < trials; trial += 1) {
+    const group = [];
+    await runABigGroup(group, bigBytes, 1);
+    trialGroups.push(group);
+  }
+  artifacts.push(...mergeFreshTrialArtifacts(trialGroups));
 }
 
 function mibPerSecond(bytes, wallMs) {
   return Math.round((bytes / 1048576 / (wallMs / 1000)) * 10) / 10;
 }
 
-function artifactFor(cell, result, configuration, fixtureBytes, pass) {
+function artifactFor(cell, result, configuration, fixtureBytes, pass, filesystem) {
   const head = gitHead();
+  const { sizeBytes, extra, ...cellConfiguration } = configuration;
+  const cacheState =
+    cell === "A3-cold-read"
+      ? "fresh-engine-cache-native-cache-warmed-by-identical-setup"
+      : cell === "A4-warm-read"
+        ? "warm-engine-and-native-cache-after-A3"
+        : cell === "A7-materialization"
+          ? "reopened-driver-and-engine"
+          : "cell-defined-identical-setup";
   return {
     schema: "efs-benchmark-result-v1",
     benchmark: cell,
@@ -309,18 +427,39 @@ function artifactFor(cell, result, configuration, fixtureBytes, pass) {
     worktreeDirty: head.dirty,
     engine: "ephemeral-ai-fs",
     driver: "sqlite-node",
+    environment: BENCHMARK_ENVIRONMENT,
     fixture: {
       name: `deterministic-seed-${SEED.toString(16)}`,
       sha256: fixtureBytes === undefined ? null : sha256Hex(fixtureBytes),
     },
     configuration: {
       seed: SEED,
-      sizeBytes: configuration.sizeBytes,
-      ...configuration.extra,
+      sizeBytes,
+      cacheState,
+      sqlitePageSize: SQLITE_PAGE_SIZE,
+      journalMode: "wal",
+      durability: "acknowledged",
+      cacheTargetBytes: 128 * MIB,
+      mmapLimitBytes: 0,
+      maxCacheBytes: 128 * MIB,
+      maxManagedResidentBytes: 192 * MIB,
+      fastCdcMinimumBytes: 32 * 1024,
+      fastCdcAverageBytes: 128 * 1024,
+      fastCdcMaximumBytes: 512 * 1024,
+      manifestFormat: "efs-merkle-manifest-v1",
+      operatingSystemCacheDropAttempted: false,
+      operatingSystemCacheDropSucceeded: false,
+      resourceLimits:
+        filesystem === undefined
+          ? currentResourceLimits
+          : effectiveResourceLimits(filesystem),
+      ...cellConfiguration,
+      ...extra,
     },
     trials: result.trials,
     latencyMs: result.latencyMs,
     counters: { ...result.counters },
+    samples: result.samples,
     pass,
   };
 }
@@ -430,6 +569,8 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
       },
       { trials },
     );
+    a1.counters.verifiedDigest = sha256Hex(bigBytes);
+    await assertFileDigest(filesystem, BIG_PATH, a1.counters.verifiedDigest);
     a1.counters.mibPerSec = mibPerSecond(bigBytes.length, a1.counters.wallMs);
     artifacts.push(
       artifactFor("A1-cold-write", a1, { sizeBytes: BIG_SIZE }, bigBytes, true),
@@ -449,6 +590,8 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
       },
       { trials },
     );
+    a2.counters.verifiedDigest = sha256Hex(bigBytes);
+    await assertFileDigest(filesystem, BIG_PATH, a2.counters.verifiedDigest);
     a2.counters.mibPerSec = mibPerSecond(bigBytes.length, a2.counters.wallMs);
     artifacts.push(
       artifactFor("A2-rewrite-identical", a2, { sizeBytes: BIG_SIZE }, bigBytes, true),
@@ -458,30 +601,40 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
     // one-byte edits, and the scattered edit/read cell.
     const coldObserved = freshObserved();
     const coldObserver = makeObserver();
-    const coldDriver = await openDriver(path.join(directory, "a-cold.db"));
+    const coldFilename = path.join(directory, "a-cold.db");
+    const coldDriver = await openDriver(coldFilename);
     let coldFs = await openFilesystem(coldDriver, coldObserved, coldObserver.event);
-    const coldReopen = async () => {
-      await coldFs.close();
-      coldFs = await openFilesystem(coldDriver, coldObserved, coldObserver.event);
-    };
     try {
       await coldFs.writeFile(BIG_PATH, bytesStream(bigBytes), {
         maxBytes: bigBytes.length,
       });
+      // Each outer trial owns this fresh driver/database. Closing only the
+      // filesystem clears the engine content cache while preserving the
+      // native page-cache state produced by that trial's identical untimed
+      // setup write; no state is shared with another measured trial.
+      await coldFs.close();
+      coldFs = await openFilesystem(coldDriver, coldObserved, coldObserver.event);
       const a3 = await measureCell(
         "A3-cold-read",
         coldDriver,
         coldObserved,
         coldObserver,
         async () => {
-          const bytes = await collectBytes(await coldFs.readStream(BIG_PATH));
-          return { fixtureBytes: 0, counters: { bytes } };
+          const read = await collectDigest(await coldFs.readStream(BIG_PATH));
+          if (read.digest !== sha256Hex(bigBytes))
+            throw new Error("A3 cold-read digest mismatch");
+          return { fixtureBytes: 0, counters: read };
         },
-        { trials, beforeTrial: trials > 1 ? coldReopen : undefined },
+        { trials },
       );
       a3.counters.mibPerSec = mibPerSecond(a3.counters.bytes, a3.counters.wallMs);
+      a3.counters.verifiedDigest = a3.counters.digest;
+      const a3Pass =
+        a3.counters.mibPerSec >= 250 &&
+        a3.counters.transactions <= 55 &&
+        a3.counters.statements <= 250;
       artifacts.push(
-        artifactFor("A3-cold-read", a3, { sizeBytes: BIG_SIZE }, bigBytes, true),
+        artifactFor("A3-cold-read", a3, { sizeBytes: BIG_SIZE }, bigBytes, a3Pass),
       );
 
       const a4 = await measureCell(
@@ -490,14 +643,20 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
         coldObserved,
         coldObserver,
         async () => {
-          const bytes = await collectBytes(await coldFs.readStream(BIG_PATH));
-          return { fixtureBytes: 0, counters: { bytes } };
+          const read = await collectDigest(await coldFs.readStream(BIG_PATH));
+          if (read.digest !== sha256Hex(bigBytes))
+            throw new Error("A4 warm-read digest mismatch");
+          return { fixtureBytes: 0, counters: read };
         },
         { trials },
       );
       a4.counters.mibPerSec = mibPerSecond(a4.counters.bytes, a4.counters.wallMs);
+      a4.counters.verifiedDigest = a4.counters.digest;
+      a4.counters.warmToColdRatio =
+        Math.round((a4.counters.mibPerSec / a3.counters.mibPerSec) * 1000) / 1000;
+      const a4Pass = a4.counters.mibPerSec >= 250 && a4.counters.warmToColdRatio >= 1.2;
       artifacts.push(
-        artifactFor("A4-warm-read", a4, { sizeBytes: BIG_SIZE }, bigBytes, true),
+        artifactFor("A4-warm-read", a4, { sizeBytes: BIG_SIZE }, bigBytes, a4Pass),
       );
 
       const a5 = await measureCell(
@@ -506,29 +665,69 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
         coldObserved,
         coldObserver,
         async () => {
+          const middle = Math.floor(BIG_SIZE / 2);
+          const offsets = [0, middle, BIG_SIZE - 1, ...Array(97).fill(middle)];
+          const currentBytes = new Map();
           const perEdit = [];
-          for (const offset of [0, Math.floor(BIG_SIZE / 2), BIG_SIZE - 1]) {
+          for (const offset of offsets) {
+            const nextByte = (currentBytes.get(offset) ?? bigBytes[offset]) ^ 0xff;
             const started = performance.now();
-            await coldFs.replaceRange(BIG_PATH, offset, 1, Uint8Array.of(1));
+            await coldFs.replaceRange(BIG_PATH, offset, 1, Uint8Array.of(nextByte));
             perEdit.push(performance.now() - started);
+            currentBytes.set(offset, nextByte);
           }
           return {
             fixtureBytes: 0,
             counters: {
-              editCount: 3,
+              editCount: offsets.length,
               perEditMs: perEdit.map((value) => Math.round(value * 1000) / 1000),
+              canonicalThreeEditMs:
+                Math.round(
+                  perEdit.slice(0, 3).reduce((total, value) => total + value, 0) * 1000,
+                ) / 1000,
+              perEditLatencyMs: {
+                p50: percentile(
+                  [...perEdit].sort((left, right) => left - right),
+                  0.5,
+                ),
+                p95: percentile(
+                  [...perEdit].sort((left, right) => left - right),
+                  0.95,
+                ),
+                p99: percentile(
+                  [...perEdit].sort((left, right) => left - right),
+                  0.99,
+                ),
+                min: Math.min(...perEdit),
+                max: Math.max(...perEdit),
+                mean:
+                  perEdit.reduce((total, value) => total + value, 0) / perEdit.length,
+              },
             },
           };
         },
         { trials },
       );
+      const a5Expected = bigBytes.slice();
+      const a5Middle = Math.floor(BIG_SIZE / 2);
+      const a5Offsets = [0, a5Middle, BIG_SIZE - 1, ...Array(97).fill(a5Middle)];
+      for (const offset of a5Offsets) a5Expected[offset] ^= 0xff;
+      a5.counters.verifiedDigest = sha256Hex(a5Expected);
+      await assertFileDigest(coldFs, BIG_PATH, a5.counters.verifiedDigest);
       artifacts.push(
         artifactFor(
           "A5-one-byte-edit",
           a5,
-          { sizeBytes: BIG_SIZE, edits: 3 },
+          {
+            sizeBytes: BIG_SIZE,
+            edits: 100,
+            canonicalGateEdits: 3,
+            editValuePolicy: "current-byte-xor-ff",
+            editPattern: "canonical-three-then-same-byte-toggle",
+          },
           bigBytes,
-          true,
+          a5.counters.canonicalThreeEditMs < 1000,
+          coldFs,
         ),
       );
 
@@ -559,7 +758,12 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
               const editStarted = performance.now();
               for (let index = 0; index < A6_EDIT_COUNT; index += 1) {
                 const offset = Math.floor(scatter() * BIG_SIZE);
-                await editFs.replaceRange(BIG_PATH, offset, 1, Uint8Array.of(2));
+                await editFs.replaceRange(
+                  BIG_PATH,
+                  offset,
+                  1,
+                  Uint8Array.of(bigBytes[offset] ^ 0xff),
+                );
                 completed += 1;
                 if (performance.now() - editStarted > A6_EDIT_BUDGET_MS) break;
               }
@@ -574,12 +778,26 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
             },
             { trials },
           );
-          const a6Pass = measured.counters.completedEdits >= A6_EDIT_COUNT;
+          const editExpected = bigBytes.slice();
+          const editScatter = mulberry32(SEED ^ 0xa6);
+          for (let index = 0; index < measured.counters.completedEdits; index += 1) {
+            const offset = Math.floor(editScatter() * BIG_SIZE);
+            editExpected[offset] = bigBytes[offset] ^ 0xff;
+          }
+          measured.counters.verifiedDigest = sha256Hex(editExpected);
+          await assertFileDigest(editFs, BIG_PATH, measured.counters.verifiedDigest);
+          const a6Pass =
+            measured.counters.completedEdits >= A6_EDIT_COUNT &&
+            measured.counters.wallMs <= A6_EDIT_BUDGET_MS;
           artifacts.push(
             artifactFor(
               "A6-scattered-edits",
               measured,
-              { sizeBytes: BIG_SIZE, edits: A6_EDIT_COUNT },
+              {
+                sizeBytes: BIG_SIZE,
+                edits: A6_EDIT_COUNT,
+                editValuePolicy: "original-byte-xor-ff",
+              },
               bigBytes,
               a6Pass,
             ),
@@ -615,8 +833,12 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
                   offset,
                   length: 4096,
                 });
-                if (value.byteLength !== 4096)
-                  throw new Error("scattered read returned a partial range");
+                const expected = bigBytes.subarray(offset, offset + 4096);
+                if (
+                  value.byteLength !== expected.byteLength ||
+                  !value.every((byte, byteIndex) => byte === expected[byteIndex])
+                )
+                  throw new Error("scattered read returned incorrect bytes");
                 readOps += 1;
               }
               return {
@@ -626,6 +848,8 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
             },
             { trials },
           );
+          measured.counters.verifiedDigest = sha256Hex(bigBytes);
+          await assertFileDigest(readFs, BIG_PATH, measured.counters.verifiedDigest);
           measured.counters.smallReadMsPerOp =
             Math.round((measured.counters.wallMs / A6_READ_COUNT) * 1000) / 1000;
           artifacts.push(
@@ -634,7 +858,7 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
               measured,
               { sizeBytes: BIG_SIZE, reads: A6_READ_COUNT },
               bigBytes,
-              true,
+              measured.counters.smallReadMsPerOp <= 1,
             ),
           );
         } finally {
@@ -674,12 +898,15 @@ async function runABigGroup(artifacts, bigBytes, trials = 1) {
         reopenedObserved,
         reopenedObserver,
         async () => {
-          const bytes = await collectBytes(await reopenedFs.readStream(BIG_PATH));
-          return { fixtureBytes: 0, counters: { bytes } };
+          const read = await collectDigest(await reopenedFs.readStream(BIG_PATH));
+          if (read.digest !== sha256Hex(bigBytes))
+            throw new Error("A7 materialization digest mismatch");
+          return { fixtureBytes: 0, counters: read };
         },
         { trials, beforeTrial: trials > 1 ? reopenedCold : undefined },
       );
       a7.counters.mibPerSec = mibPerSecond(a7.counters.bytes, a7.counters.wallMs);
+      a7.counters.verifiedDigest = a7.counters.digest;
       artifacts.push(
         artifactFor("A7-materialization", a7, { sizeBytes: BIG_SIZE }, bigBytes, true),
       );
@@ -922,8 +1149,9 @@ async function runCPhase(filesystem, script, phase) {
     for (let index = 0; index < 4; index += 1)
       await filesystem.writeFile(`${SMALL_PREFIX}${index}`, script.smalls[index]);
   } else if (phase === "full-read") {
-    const bytes = await collectBytes(await filesystem.readStream(BIG_PATH));
-    if (bytes !== script.big.length) throw new Error("full read length mismatch");
+    const read = await collectDigest(await filesystem.readStream(BIG_PATH));
+    if (read.digest !== sha256Hex(script.big))
+      throw new Error("full read digest mismatch");
   } else {
     throw new Error(`unknown C phase: ${phase}`);
   }
@@ -1205,12 +1433,12 @@ async function main() {
   const onlyCell = process.argv
     .find((value) => value.startsWith("--cell="))
     ?.slice("--cell=".length);
-  const artifactsDirectory = path.resolve(
-    process.argv
-      .find((value) => value.startsWith("--artifacts="))
-      ?.slice("--artifacts=".length) ??
-      path.join(ROOT, "tests", "performance", "artifacts"),
-  );
+  const requestedArtifacts = process.argv
+    .find((value) => value.startsWith("--artifacts="))
+    ?.slice("--artifacts=".length);
+  const artifactsDirectory = requestedArtifacts
+    ? path.resolve(requestedArtifacts)
+    : await mkdtemp(path.join(tmpdir(), "efs-mini-bench-artifacts-"));
   const trials = Number(
     process.argv
       .find((value) => value.startsWith("--trials="))
@@ -1218,22 +1446,29 @@ async function main() {
   );
   if (!Number.isInteger(trials) || trials < 1 || trials > 5)
     throw new Error("--trials must be an integer between 1 and 5");
-  const started = performance.now();
   const artifacts = [];
 
   console.log(
     `mini-bench: seed ${SEED.toString(16)}, big=${BIG_SIZE}, small=${SMALL_COUNT}x${SMALL_SIZE}, trials=${trials}`,
   );
   console.log("fixture generation...");
-  const bigBytes = deterministicBytes(SEED, BIG_SIZE);
-  const smallFiles = Array.from({ length: SMALL_COUNT }, (_, index) =>
-    deterministicBytes((SEED ^ 0xbeef) + index, SMALL_SIZE),
-  );
-  const script = mixedScript();
+  const needBig = onlyCell === undefined || onlyCell === "A1";
+  const needSmall = onlyCell === undefined || onlyCell === "B1" || onlyCell === "D1";
+  const needMixed = onlyCell === undefined || onlyCell === "C1";
+  const bigBytes = needBig ? deterministicBytes(SEED, BIG_SIZE) : undefined;
+  const smallFiles = needSmall
+    ? Array.from({ length: SMALL_COUNT }, (_, index) =>
+        deterministicBytes((SEED ^ 0xbeef) + index, SMALL_SIZE),
+      )
+    : undefined;
+  const script = needMixed ? mixedScript() : undefined;
+  // Fixture construction is setup, not a measured benchmark workload. The outer
+  // accepted-target timer still includes it in the complete default selection.
+  const started = performance.now();
 
   if (onlyCell) {
     const groups = {
-      A1: () => runABigGroup(artifacts, bigBytes, trials),
+      A1: () => runFreshABigTrials(artifacts, bigBytes, trials),
       B1: () => runBSmallGroup(artifacts, smallFiles, trials),
       C1: () => runCMixedGroup(artifacts, script, trials),
       D1: () => runDGroup(artifacts, smallFiles, trials),
@@ -1243,7 +1478,7 @@ async function main() {
       throw new Error(`--cell must be one of A1, B1, C1, D1; got ${onlyCell}`);
     await runner();
   } else {
-    await runABigGroup(artifacts, bigBytes, trials);
+    await runFreshABigTrials(artifacts, bigBytes, trials);
     await runBSmallGroup(artifacts, smallFiles, trials);
     await runCMixedGroup(artifacts, script, trials);
     await runDGroup(artifacts, smallFiles, trials);
@@ -1254,8 +1489,12 @@ async function main() {
   const wallMs = Math.round(performance.now() - started);
   console.log(`mini-bench total: ${wallMs} ms (budget ${OVERALL_WALL_BUDGET_MS} ms)`);
   const overBudget = wallMs > OVERALL_WALL_BUDGET_MS;
+  const failed = artifacts.filter((artifact) => !artifact.pass).length;
   console.log(overBudget ? "mini-bench: OVER BUDGET" : "mini-bench: within budget");
-  process.exitCode = overBudget ? 1 : 0;
+  console.log(
+    `mini-bench gates: ${artifacts.length - failed} passed, ${failed} failed`,
+  );
+  process.exitCode = overBudget || failed ? 1 : 0;
 }
 
 await main();

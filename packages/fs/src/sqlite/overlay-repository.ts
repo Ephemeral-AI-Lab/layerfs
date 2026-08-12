@@ -441,7 +441,10 @@ export class OverlayRepository {
     );
   }
 
-  cleanupUnleased(limit: number): number {
+  cleanupUnleased(limit: number): {
+    readonly worked: boolean;
+    readonly reclaimedPayloadBytes: number;
+  } {
     if (!Number.isSafeInteger(limit) || limit <= 0)
       throw new RangeError("invalid unleased overlay cleanup limit");
     const itemLimit = Math.max(
@@ -531,7 +534,7 @@ export class OverlayRepository {
           },
           "unleased branch patch segment cleanup",
         );
-        return 1;
+        return Object.freeze({ worked: true, reclaimedPayloadBytes: bytes });
       }
     }
     let patchBytes = 0;
@@ -559,7 +562,10 @@ export class OverlayRepository {
         },
         "unleased branch overlay cleanup",
       );
-    return pages.length + patches.length;
+    return Object.freeze({
+      worked: pages.length + patches.length > 0,
+      reclaimedPayloadBytes: pageBytes + patchBytes,
+    });
   }
 
   #assertLeaseMembershipBudget(leaseId: string, additional: number): void {

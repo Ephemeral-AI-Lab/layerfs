@@ -38,6 +38,25 @@ The release matrix includes:
 4. the Computer development shim as a non-gating diagnostic; and
 5. explicitly selected DOFS on the same Computer runner for common workloads.
 
+The Cloudflare entry above means a stable, dedicated, non-production environment in a
+user-controlled Cloudflare account. It MUST use the exact Worker bundle, compatibility
+date, limits, and SQLite Durable Object migration accepted by the credential-free M6
+local gate. A Node-backed mock, local Miniflare run, production namespace, or unclaimed
+temporary Wrangler deployment does not satisfy this release environment.
+
+Hosted preview execution is an external mutation and begins only in M9. Its command MUST
+fail closed unless all three conditions hold:
+
+1. the user has explicitly authorized the hosted run;
+2. `EFS_ALLOW_CLOUDFLARE_PREVIEW=1` is set for that command; and
+3. Wrangler reports authenticated access to the intended non-production account and
+   environment.
+
+Credentials alone are not authorization. Test code MUST NOT print, persist, or commit
+OAuth tokens, API tokens, account secrets, or secret-bearing environment dumps. The M6
+local conformance and smoke commands MUST neither inspect this opt-in nor contact
+Cloudflare.
+
 Reports MUST identify commit, runtime, operating system, CPU, memory, storage, SQLite
 version and journal mode, cache target, mmap limit, database and journal ceilings, page
 size, FastCDC parameters, manifest format, and every resource limit. They MUST state
@@ -45,8 +64,10 @@ whether OS cache dropping succeeded.
 
 ## 3. Fast pre-integration smoke profile
 
-Before running the detailed benchmarks, each Node SQLite, Durable Object SQLite, and
-real-FUSE target MUST complete this profile within 60 seconds on its reference runner:
+Before running the detailed benchmarks, Node SQLite, hosted-preview Durable Object
+SQLite, and real FUSE MUST each complete this profile within 60 seconds on its reference
+runner. The hosted profile is in addition to, not a replacement for, the identical
+faithful-local Durable Object smoke accepted at M6:
 
 1. initialize, write, reopen, and verify one 16 MiB pseudorandom file;
 2. perform 5,000 one-byte COW edits distributed across same-page, clustered, and

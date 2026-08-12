@@ -2,7 +2,7 @@
 
 | Field               | Value                                              |
 | ------------------- | -------------------------------------------------- |
-| Status              | M4 complete; overall plan in progress              |
+| Status              | M5 complete; overall plan in progress              |
 | Target              | Version 0.1 integration candidate                  |
 | Delivery style      | Milestone exits with objective acceptance evidence |
 | Database foundation | SQLite remains authoritative                       |
@@ -35,6 +35,35 @@ waive them. Tests are finite and iteration-based:
 - an optional `load-10m` profile is hard-capped at 10 minutes; and
 - 10 GiB logical manifests and millions-of-rows jobs are extended, non-gating
   diagnostics.
+
+### Execution environments and external authority
+
+The normative Durable Object runtime terms are defined in
+[`filesystem-api.md`](../spec/filesystem-api.md#durable-object-sqlite). M6 uses the
+credential-free faithful local Workers runtime for its complete conformance and
+60-second smoke gates. M6 creates a deployable preview fixture but MUST NOT deploy it.
+M9 is the first milestone whose gate requires that reviewed fixture to run in a hosted
+Cloudflare preview.
+
+The other external gates are equally explicit:
+
+- M7 requires a privileged Linux runner with a real mounted FUSE filesystem. A shim,
+  mocked binding, or bridge-only test does not satisfy the real-FUSE acceptance items.
+- M8 may use the faithful local Durable Object runtime for its Node-to-Durable-Object
+  correctness matrix; hosted replication evidence is deferred to M9/M10.
+- M9 requires the hosted Cloudflare preview, the real-FUSE reference runner, the
+  isolated DOFS comparison, and publication of the selected release-candidate package
+  set.
+- M10 requires the actual Computer integration target and the exact published package
+  versions selected by M9.
+
+Git pushes, hosted deployments, registry publication, changes outside the authorized
+workspace, and mutations of a Computer integration repository are external actions. They
+MUST NOT be inferred from a request to implement or validate a milestone. Each requires
+explicit user authorization at the point of execution. If a mandatory external gate
+lacks its environment, access, or authorization, the milestone remains incomplete and is
+reported as blocked; local evidence MUST NOT be relabeled as the missing external
+evidence.
 
 ## 2. Dependency map
 
@@ -318,33 +347,57 @@ publication results.
 Make long-lived databases self-verifying and reclaimable without unbounded transactions,
 memory, WAL retention, or process-local indexes.
 
+### M5 status
+
+Complete. All mandatory M5 checklist items and acceptance criteria below are verified.
+The default `pnpm validate:m5:pre-evidence` Node selection builds once, measures its
+benchmarks and 60-second smoke without competing I/O, and then runs isolated correctness
+groups concurrently without repeating predecessor maintenance tests; it enforces the
+ten-minute per-target ceiling directly. The final M5 suite passes 34/34 tests. Its
+physical-reopen fault matrix independently tests all 328 observed durable statement
+positions and all 150 committed batch positions, including root mutations between
+interruption and reopen. The mandatory scale fixture contains 100,001 namespace rows,
+100,001 reachable objects, 100,002 manifest roots, and 100,001 manifest nodes, plus
+300,003 durable snapshot and collection marks. It completes full verification,
+snapshotting, collection, exact usage recount, concurrent writing, WAL checkpointing,
+and physical reopen. Identical workloads at 10,240 and 100,000 fixture rows measured
+9,274,632 and 9,315,643 bytes of managed-memory high-water, respectively, proving a
+41,011-byte non-proportional difference under the 16 MiB asserted ceiling. Exact
+run-specific process peaks, WAL high-water, and maximum bounded-call duration are
+retained in the candidate's machine-readable exit evidence; the executable gates require
+absolute heap below 512 MiB, RSS below 768 MiB, WAL at or below the explicit 512 MiB
+limit, and every maintenance call below 5 seconds. The optional 10 GiB and
+millions-of-rows diagnostics remain intentionally deferred.
+
 ### M5 checklist
 
-- [ ] Implement bounded storage snapshots with high-water capture and reconciliation.
-- [ ] Implement bounded integrity verification with resumable cursors.
-- [ ] Implement root enumeration for main, revisions, branches, results, leases,
+- [x] Implement bounded storage snapshots with high-water capture and reconciliation.
+- [x] Implement bounded integrity verification with resumable cursors.
+- [x] Implement root enumeration for main, revisions, branches, results, leases,
       staging, checkpoints, and holds.
-- [ ] Implement durable manifest-tree and CAS mark traversal.
-- [ ] Implement root-change reconciliation without restarting completed work.
-- [ ] Implement bounded sweep, overlay pruning, and revision pruning.
-- [ ] Implement interrupted-run resume and abandoned-run cleanup.
-- [ ] Implement lease renewal, expiry, release, and cleanup races.
-- [ ] Implement root-journal compaction and emergency maintenance reserve.
-- [ ] Implement metadata, database-page, and WAL-pressure behavior.
-- [ ] Add 100,000-row cursor, accounting, verification, and collection cases.
+- [x] Implement durable manifest-tree and CAS mark traversal.
+- [x] Implement root-change reconciliation without restarting completed work.
+- [x] Implement bounded sweep, overlay pruning, and revision pruning.
+- [x] Implement interrupted-run resume and abandoned-run cleanup.
+- [x] Implement lease renewal, expiry, release, and cleanup races.
+- [x] Implement root-journal compaction and emergency maintenance reserve.
+- [x] Implement metadata, database-page, and WAL-pressure behavior.
+- [x] Add 100,000-row object, namespace, manifest-root, manifest-node, durable-mark,
+      cursor, accounting, verification, and collection cases under 256-row / 256 KiB
+      query envelopes and a 4 MiB cache.
 - [ ] Add optional 10 GiB logical-manifest and millions-of-rows diagnostics.
 
 ### M5 acceptance criteria
 
-- [ ] Collection never deletes any value reachable from a required root.
-- [ ] Reachable corruption stops the sweep and reports integrity failure.
-- [ ] Mark and sweep resume after every injected interruption.
-- [ ] Root additions reconcile without discarding completed mark work.
-- [ ] Bounded storage accounting holds no database-wide read transaction.
-- [ ] Managed memory does not grow with the mandatory 100,000-row fixture.
-- [ ] Metadata-only and blocked-checkpoint workloads enforce finite ceilings.
-- [ ] Quota failure leaves usage counters exact and maintenance able to progress.
-- [ ] All maintenance operations expose bounded progress and stable metrics.
+- [x] Collection never deletes any value reachable from a required root.
+- [x] Reachable corruption stops the sweep and reports integrity failure.
+- [x] Mark and sweep resume after every injected interruption.
+- [x] Root additions reconcile without discarding completed mark work.
+- [x] Bounded storage accounting holds no database-wide read transaction.
+- [x] Managed memory does not grow with the mandatory 100,000-row fixture.
+- [x] Metadata-only and blocked-checkpoint workloads enforce finite ceilings.
+- [x] Quota failure leaves usage counters exact and maintenance able to progress.
+- [x] All maintenance operations expose bounded progress and stable metrics.
 
 ## 9. Milestone 6: Cloudflare Durable Object SQLite parity
 
@@ -362,10 +415,13 @@ SQLite without importing DOFS or reimplementing filesystem logic.
 - [ ] Report conservative BLOB, binding, physical quota, journal, durability, and
       runtime-memory capabilities.
 - [ ] Implement runtime restart and eviction test hooks.
-- [ ] Add production-like preview deployment fixtures.
+- [ ] Add the deployable preview fixture and exercise its exact Worker bundle,
+      compatibility date, bindings, and SQLite migration in the faithful local Workers
+      runtime without deploying it.
 - [ ] Run storage, filesystem, branch, maintenance, recovery, and resource suites
-      through the shared testkit.
-- [ ] Add the 60-second Durable Object SQLite smoke profile.
+      through the shared testkit in the faithful local Workers runtime.
+- [ ] Add the credential-free, faithful-local 60-second Durable Object SQLite smoke
+      profile.
 
 ### M6 acceptance criteria
 
@@ -375,7 +431,10 @@ SQLite without importing DOFS or reimplementing filesystem logic.
 - [ ] Runtime restart reconstructs all state from committed SQLite data.
 - [ ] The driver never uses an in-memory SQLite mirror or filesystem index.
 - [ ] The driver reports finite conservative resource capabilities.
-- [ ] The 60-second production-like Durable Object smoke profile passes.
+- [ ] The faithful-local 60-second Durable Object smoke profile passes without a
+      Cloudflare account, credentials, network deployment, or remote resource.
+- [ ] `pnpm test:m6` and `pnpm validate:m6` are fully local and create no external
+      state.
 
 ## 10. Milestone 7: Node VFS and real FUSE readiness
 
@@ -397,7 +456,8 @@ and process ownership outside Ephemeral AI FS.
 - [ ] Implement provider sync, close, retry, abort, and error translation.
 - [ ] Implement shared backpressure across 1, 16, and 64 sessions.
 - [ ] Add real-FUSE test fixtures without adding FUSE to the core package.
-- [ ] Add the 60-second real-FUSE smoke profile.
+- [ ] Add the 60-second smoke profile on a privileged Linux runner with a real mounted
+      FUSE filesystem.
 
 ### M7 acceptance criteria
 
@@ -408,7 +468,8 @@ and process ownership outside Ephemeral AI FS.
 - [ ] Large reads and writes allocate no whole-file buffer.
 - [ ] Sixty-four sessions remain inside pending-write and aggregate memory limits with
       backpressure.
-- [ ] The real-FUSE smoke profile completes within 60 seconds.
+- [ ] The real-mounted-FUSE smoke profile completes within 60 seconds; a shim or mocked
+      binding does not count.
 - [ ] Computer needs only handle forwarding and no filesystem semantics.
 
 ## 11. Milestone 8: Replication
@@ -458,7 +519,10 @@ performance, migration, and compatibility evidence.
 
 - [ ] Run the complete mandatory correctness matrix on both SQLite drivers.
 - [ ] Run architecture, packed-export, migration, corruption, and fault suites.
-- [ ] Run the 60-second smoke profile on Node, Durable Object, and real FUSE.
+- [ ] After explicit authorization, deploy the exact M6 fixture to a dedicated
+      non-production hosted Cloudflare preview using the release-plan safety interlock.
+- [ ] Run the 60-second smoke profile on Node, hosted-preview Durable Object SQLite, and
+      real mounted FUSE; retain the faithful-local M6 result separately.
 - [ ] Run B01 through B09 from the release benchmark plan.
 - [ ] Compare common workloads with explicitly selected isolated DOFS.
 - [ ] Verify the 80% bounded-range throughput comparison gate.
@@ -481,6 +545,8 @@ performance, migration, and compatibility evidence.
 - [ ] Performance and resource result artifacts are checked in and reproducible.
 - [ ] Public exports match the approved API snapshot.
 - [ ] A clean consumer can open, use, close, reopen, and verify both drivers.
+- [ ] The hosted-preview artifact identifies the reviewed bundle, compatibility date,
+      target environment, Durable Object migration, and non-secret capability limits.
 
 ## 13. Milestone 10: Ephemeral AI Computer integration
 

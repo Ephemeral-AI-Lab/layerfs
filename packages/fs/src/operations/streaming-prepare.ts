@@ -333,7 +333,7 @@ export async function prepareContentStreaming(
         ingestReservationBytes: durableIngestReservation,
         metadataReservationBytes: durableMetadataReservation,
       });
-      staging.bumpRoot(5, leaseId);
+      staging.bumpRoot(5, leaseId, false);
     });
     leaseBegun = true;
     chunker = new StreamingFastCdc(DEFAULT_FASTCDC);
@@ -564,7 +564,7 @@ export async function prepareContentEntriesStreaming(
         ingestReservationBytes: durableIngestReservation,
         metadataReservationBytes: durableMetadataReservation,
       });
-      staging.bumpRoot(5, leaseId);
+      staging.bumpRoot(5, leaseId, false);
     });
     leaseBegun = true;
     releases.push(admission.reserve(builderBudget));

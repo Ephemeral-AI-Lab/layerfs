@@ -697,6 +697,18 @@ export interface GarbageCollectionOptions {
 export interface GarbageCollectionResult {
   readonly runId: string;
   readonly state: "complete" | "paused" | "abandoned";
+  readonly phase:
+    | "marking"
+    | "sweeping-manifest-roots"
+    | "sweeping-manifest-nodes"
+    | "sweeping-objects"
+    | "cleaning-marks"
+    | "cleaning-root-journal"
+    | "cleaning-terminal-runs"
+    | "complete"
+    | "abandoned";
+  readonly progressCursor: string | null;
+  readonly remainingWork: number | null;
   readonly examinedManifestRootCount: number;
   readonly deletedManifestRootCount: number;
   readonly examinedManifestNodeCount: number;
@@ -719,7 +731,28 @@ export interface PhysicalStorageSnapshot {
   readonly freelistBytes?: number;
 }
 
+export interface StorageSnapshotOptions {
+  readonly maxBatches?: number;
+  readonly signal?: AbortSignal;
+}
+
 export interface StorageSnapshot {
+  readonly state: "complete" | "paused";
+  readonly phase:
+    | "roots"
+    | "marking"
+    | "stored-payload"
+    | "logical-namespace"
+    | "branch-overlays"
+    | "mark-cleanup"
+    | "mark-reset"
+    | "complete";
+  readonly progressCursor: string | null;
+  readonly remainingWork: number | null;
+  readonly committedBatches: number;
+  readonly batchSize: number;
+  readonly elapsedMs: number;
+  readonly peakManagedResidentBytes: number;
   readonly rootMutationGeneration: number;
   readonly mainLogicalBytes: number;
   readonly storedObjectPayloadBytes: number;
@@ -732,6 +765,7 @@ export interface StorageSnapshot {
   readonly branchExclusiveObjectBytes: number;
   readonly branchExclusiveManifestBytes: number;
   readonly branchExclusivePayloadBytes: number;
+  readonly operationResultPayloadBytes: number;
   readonly objectCount: number;
   readonly manifestRootCount: number;
   readonly manifestNodeCount: number;
@@ -756,6 +790,12 @@ export interface VerificationOptions {
 
 export interface VerificationResult {
   readonly rootMutationGeneration: number;
+  readonly phase: "roots" | "nodes" | "objects" | "inodes" | "usage" | "complete";
+  readonly progressCursor: string | null;
+  readonly remainingWork: number | null;
+  readonly committedBatches: 0;
+  readonly elapsedMs: number;
+  readonly peakManagedResidentBytes: number;
   readonly checkedEntities: number;
   readonly complete: boolean;
   readonly nextCursor: string | null;
@@ -763,7 +803,7 @@ export interface VerificationResult {
 
 export interface FilesystemMaintenance {
   collectGarbage(options?: GarbageCollectionOptions): Promise<GarbageCollectionResult>;
-  snapshotStorage(): Promise<StorageSnapshot>;
+  snapshotStorage(options?: StorageSnapshotOptions): Promise<StorageSnapshot>;
   verify(options?: VerificationOptions): Promise<VerificationResult>;
 }
 
@@ -788,21 +828,32 @@ NOT claim a value larger than the adapter can execute safely.
 `collectGarbage` MUST implement the bounded mark-and-sweep behavior and result counters
 defined by the storage specification. `maxBatches` defaults to `100_000` and MUST be a
 nonnegative safe integer. Zero performs no writes and only observes an existing run. A
-paused run MUST return a reusable `runId`; a later call MAY resume it. A read-only
-filesystem MUST reject collection with `EROFS`. Public maintenance orchestration remains
-an M5 acceptance concern; M2 owns only its storage-safety prerequisites.
+paused run MUST return a reusable `runId`; a later call MAY resume it. If the caller did
+not supply a run identifier and a response is lost, the next anonymous call MUST adopt
+the one unfinished run after reopen instead of creating an unusable competing run. A
+read-only filesystem MUST reject collection with `EROFS`. Public maintenance
+orchestration remains an M5 acceptance concern; M2 owns only its storage-safety
+prerequisites.
 
 `snapshotStorage` MUST use the bounded accounting algorithm in the storage
 specification. Its default path captures a root generation and row high-water marks in
 one short transaction, walks keyset batches using durable cursors and marks, then
-reconciles in another short transaction. It MUST NOT hold a read transaction or pin WAL
-history for work proportional to database size. A single-read-transaction fast path is
-permitted only under configured row and elapsed-time limits.
+reconciles in another short transaction. Root removal or scope contraction during the
+walk MUST reset reachability and scopes in bounded durable batches; union-only scope
+updates are insufficient. A completed result is current only while its allocation
+high-water, root/removal generations, expiring-root boundary, and exact stored counters
+still match. GC deletion therefore invalidates a cached snapshot. Currentness and all
+logical, overlay, result, and metadata counters MUST be assembled from one consistent
+SQLite read. It MUST NOT hold a read transaction or pin WAL history for work
+proportional to database size. A single-read-transaction fast path is permitted only
+under configured row and elapsed-time limits.
 
 Physical counters are optional and MUST be clearly separated from payload counters.
 Hard-linked file bytes count once in logical set-based metrics. The two inclusion
-booleans MUST state the accounting boundary. Manifest payload and counts include both
-root envelopes and authenticated nodes; the two count fields expose that split.
+booleans MUST state the accounting boundary. `operationResultPayloadBytes` reports the
+encoded result BLOBs included by that boundary. Reclaimable payload includes stale
+branch page and patch bytes. Manifest payload and counts include both root envelopes and
+authenticated nodes; the two count fields expose that split.
 
 One `verify` call MUST examine at most `maxEntities`, which defaults to
 `maxQueryBatchSize` and MUST NOT exceed it. `nextCursor` is opaque and bound to the
@@ -1205,8 +1256,31 @@ close, delete, or invalidate runtime-owned Durable Object storage. The
 underlying-storage portion of `close()` MAY be a no-op. The adapter SHOULD be passed
 with `ownsDatabase: false` when another owner will continue to use it.
 
-The adapter's integration conformance tests MUST run in a supported Workers runtime or
-faithful local Workers runtime, not only against a mock that wraps the Node adapter.
+The Durable Object test targets have these exact meanings:
+
+- A **faithful local Workers runtime** is the pinned `@cloudflare/vitest-pool-workers`
+  runtime executing the Worker and a SQLite-backed Durable Object binding in
+  workerd/Miniflare. It MUST exercise `ctx.storage.sql` and `transactionSync` directly.
+  A mock, an in-memory SQLite mirror, or a wrapper around the Node adapter does not
+  qualify.
+- A **hosted Cloudflare preview** is the same reviewed Worker bundle deployed to a
+  dedicated, non-production Cloudflare environment and SQLite Durable Object namespace
+  in a user-controlled account. It is distinct from local conformance and requires
+  explicit deployment authorization plus Wrangler OAuth or an API token. An unclaimed
+  temporary deployment does not qualify as release evidence because its identity,
+  persisted restart state, and rerun environment are not stable.
+
+The mandatory M6 adapter conformance suite MUST run in the faithful local Workers
+runtime. `pnpm test:m6` and `pnpm validate:m6` MUST be fully local: they MUST NOT
+require a Cloudflare account, credentials, network deployment, or a pre-existing remote
+resource. M6 MUST also produce the deployable preview fixture, but creating or mutating
+a hosted Cloudflare resource is not part of the M6 gate.
+
+The hosted Cloudflare preview is a separate M9 release gate. It MUST deploy the exact
+bundle and configuration already accepted by M6, then run the specified hosted smoke and
+benchmark profiles. Possession of usable credentials does not itself authorize a
+deployment; the hosted command MUST require the explicit opt-in described by the release
+benchmark plan.
 
 ## Open, migration, and close lifecycle
 
