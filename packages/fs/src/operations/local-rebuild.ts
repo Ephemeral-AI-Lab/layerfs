@@ -4,7 +4,7 @@ import {
   equalBytes,
   intrinsicByteLength,
 } from "../cas/bytes.js";
-import { manifestIdFromHash, sha256 } from "../cas/sha256.js";
+import { manifestIdFromHash, sha256, type HashFunction } from "../cas/sha256.js";
 import { StreamingFastCdc, type FastCdcConfiguration } from "../cdc/fastcdc.js";
 import {
   decodeManifestRoot,
@@ -22,11 +22,8 @@ import {
 } from "../manifests/codec.js";
 import type { EncodedManifestNode } from "../manifests/builder.js";
 import { ManifestSequentialCursor } from "../manifests/cursor.js";
-import {
-  MAX_DIAGNOSTIC_CONTENT_BYTES,
-  type DiagnosticBuiltManifest,
-} from "./full-rebuild.js";
-import { checkedAdd } from "../resources/safe-integers.js";
+import type { DiagnosticBuiltManifest } from "./full-rebuild.js";
+import { checkedAdd, checkedMultiply } from "../resources/safe-integers.js";
 import { MAX_CONTENT_OBJECT_BYTES } from "../resources/limits.js";
 import {
   advanceManifestGroupingState,
@@ -300,6 +297,7 @@ function makeNode(
   records: readonly RecordValue[],
   old: DiagnosticBuiltManifest,
   newNodes: Map<string, EncodedManifestNode>,
+  hashBytes: HashFunction = sha256,
 ): EncodedManifestNode {
   let node: ManifestNode;
   if (level === 0) {
@@ -320,7 +318,7 @@ function makeNode(
     } satisfies ManifestInternal);
   }
   const encoded = encodeManifestNode(node);
-  const hash = sha256(encoded);
+  const hash = hashBytes(encoded);
   const key = bytesToHex(hash);
   const existing = old.nodes.get(key) ?? newNodes.get(key);
   if (existing) return existing;
@@ -338,6 +336,7 @@ function regroupLevel(
   replacement: readonly RecordValue[],
   old: DiagnosticBuiltManifest,
   newNodes: Map<string, EncodedManifestNode>,
+  hashBytes: HashFunction = sha256,
 ): RegroupedLevel {
   if (spliceStart < 0 || spliceEnd < spliceStart || spliceEnd > oldRecords.length)
     throw new RangeError("invalid manifest level splice");
@@ -359,7 +358,7 @@ function regroupLevel(
 
   const emit = (): boolean => {
     if (group.length === 0) return false;
-    segment.push(makeNode(level, group, old, newNodes));
+    segment.push(makeNode(level, group, old, newNodes, hashBytes));
     group = [];
     state = 0n;
     const logicalOldCursor =
@@ -399,7 +398,7 @@ function regroupLevel(
     reconnectGroup === bounds.length &&
     segment.length === 0
   )
-    segment.push(makeNode(0, [], old, newNodes));
+    segment.push(makeNode(0, [], old, newNodes, hashBytes));
   const totalGroupCount =
     startGroup + segment.length + (bounds.length - reconnectGroup);
   return Object.freeze({
@@ -585,6 +584,7 @@ function rebuildDiagnosticManifestLocallyOwned(
   old: DiagnosticBuiltManifest,
   edit: LocalContentEdit,
   limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
+  hashBytes: HashFunction = sha256,
 ): LocallyRebuiltManifest {
   const sourceSize = source.size;
   const editOffset = edit.offset;
@@ -604,16 +604,21 @@ function rebuildDiagnosticManifestLocallyOwned(
   if (!(callerInsertBytes instanceof Uint8Array))
     throw new TypeError("local edit insertion must be a Uint8Array");
   const newSize = checkedAdd(sourceSize - deleteLength, callerInsertBytes.byteLength);
-  if (
-    sourceSize > MAX_DIAGNOSTIC_CONTENT_BYTES ||
-    newSize > MAX_DIAGNOSTIC_CONTENT_BYTES
-  )
-    throw new LocalRebuildLimitError(
-      "diagnostic local rebuild exceeds its fixed content-size cap; use the streamed workspace fallback",
-    );
   old = authenticateDiagnosticManifest(old, limits, sourceSize);
   const oldRoot = decodeManifestRoot(old.root, old.rootHash);
   validateSupportedManifestParameters(oldRoot.parameters);
+  // A manifest entry can span at most the root FastCDC maximum, so any content
+  // larger than maxRetainedEntries x maximum provably cannot fit the retained
+  // entry budget; reject before any source work.
+  const contentCeiling = checkedMultiply(
+    limits.maxRetainedEntries,
+    oldRoot.parameters.maximum,
+    "local rebuild retained-entry content ceiling",
+  );
+  if (sourceSize > contentCeiling || newSize > contentCeiling)
+    throw new LocalRebuildLimitError(
+      "local rebuild exceeds its retained-entry content ceiling; use the streamed workspace fallback",
+    );
   if (callerInsertBytes.byteLength > limits.maxAffectedBytes)
     throw new LocalRebuildLimitError(
       "local edit insertion exceeds the affected-byte window; use the streamed workspace fallback",
@@ -769,7 +774,7 @@ function rebuildDiagnosticManifestLocallyOwned(
         "local reconnection exceeds its affected-byte limit; use the streamed workspace fallback";
       throw affectedLimit;
     }
-    const hash = sha256(chunk);
+    const hash = hashBytes(chunk);
     const key = bytesToHex(hash);
     bytesHashed = checkedAdd(bytesHashed, chunk.byteLength);
     affectedEntries.push(Object.freeze({ hash, length: chunk.byteLength }));
@@ -851,6 +856,7 @@ function rebuildDiagnosticManifestLocallyOwned(
     replacement,
     old,
     newNodes,
+    hashBytes,
   );
   let reusedManifestNodeCount =
     rebuilt.prefixGroupCount +
@@ -881,6 +887,7 @@ function rebuildDiagnosticManifestLocallyOwned(
       replacement,
       old,
       newNodes,
+      hashBytes,
     );
     reusedManifestNodeCount +=
       rebuilt.prefixGroupCount +
@@ -895,7 +902,7 @@ function rebuildDiagnosticManifestLocallyOwned(
     entryCount,
     rootNodeHash: rootNode.hash,
   });
-  const rootHash = sha256(root);
+  const rootHash = hashBytes(root);
   return Object.freeze({
     rootHash,
     root,
@@ -1001,10 +1008,11 @@ export function rebuildManifestLocallyWithParametersOwned(
   edit: LocalContentEdit,
   parameters: FastCdcConfiguration,
   limits: LocalRebuildLimits = DEFAULT_LOCAL_REBUILD_LIMITS,
+  hashBytes: HashFunction = sha256,
 ): LocallyRebuiltManifest {
   snapshotMatchingLocalParameters(old, parameters);
   limits = snapshotLocalRebuildLimits(limits);
-  return rebuildDiagnosticManifestLocallyOwned(source, old, edit, limits);
+  return rebuildDiagnosticManifestLocallyOwned(source, old, edit, limits, hashBytes);
 }
 
 export function snapshotMatchingLocalParameters(

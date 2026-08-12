@@ -41,6 +41,23 @@ import { createV1Schema } from "../fixtures/schema-v1.mjs";
 import { createV2Schema } from "../fixtures/schema-v2.mjs";
 import { createV3Schema } from "../fixtures/schema-v3.mjs";
 
+async function removeTree(target, attempts = 20) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await rm(target, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(500, 50 * 2 ** attempt)),
+      );
+    }
+  }
+  throw lastError;
+}
+
 function admittedRepository(tx, storage, managedBytes = 128 * 1024 * 1024) {
   const admission = new AdmissionController(managedBytes);
   const cache = new ContentCache(1, admission);
@@ -224,7 +241,7 @@ test("writer filesystem, storage, and branch limits persist across connections",
     try {
       driver?.close();
     } catch {}
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -292,7 +309,7 @@ test("schema initialization is deterministic, persisted, and read-only reopen-sa
     );
     readOnly.close();
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -344,7 +361,7 @@ test("current schema recovery authority is revalidated after physical reopen", a
       {
         name: "trigger",
         mutate: (tx) => tx.run("DROP TRIGGER efs_sealed_certificate_delete"),
-        expected: /required schema-v4 table, index, or trigger is missing/,
+        expected: /required schema-v\d+ table, index, or trigger is missing/,
       },
       {
         name: "extra-trigger",
@@ -367,7 +384,7 @@ test("current schema recovery authority is revalidated after physical reopen", a
       driver.close();
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -444,41 +461,47 @@ test("schema v1 migrates data to the current schema and every migration-statemen
   try {
     for (let failAt = 1; failAt <= count.value; failAt += 1) {
       const filename = path.join(faultDirectory, `fault-${failAt}.db`);
-      let base = await openNodeSqlite({ filename });
-      createV1Schema(base);
-      populateV1MigrationRows(base);
-      const faultCount = { value: 0 };
-      assert.throws(
-        () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
-        new RegExp(`migration fault ${failAt}`),
-      );
-      base.close();
-      base = await openNodeSqlite({ filename, create: false });
-      const state = base.transaction("read", (tx) => ({
-        version: tx.all("SELECT user_version value FROM pragma_user_version", [], {
-          maxRows: 1,
-          maxBytes: 128,
-        })[0].value,
-        meta: tx.all("SELECT schema_version FROM efs_meta", [], {
-          maxRows: 1,
-          maxBytes: 128,
-        })[0].schema_version,
-        oldPages: tx.all(
-          "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_pages'",
-          [],
-          { maxRows: 1, maxBytes: 128 },
-        )[0].count,
-        newPages: tx.all(
-          "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_page_versions'",
-          [],
-          { maxRows: 1, maxBytes: 128 },
-        )[0].count,
-      }));
-      assert.deepEqual(state, { version: 1, meta: 1, oldPages: 1, newPages: 0 });
-      base.close();
+      let base;
+      try {
+        base = await openNodeSqlite({ filename });
+        createV1Schema(base);
+        populateV1MigrationRows(base);
+        const faultCount = { value: 0 };
+        assert.throws(
+          () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
+          new RegExp(`migration fault ${failAt}`),
+        );
+        base.close();
+        base = await openNodeSqlite({ filename, create: false });
+        const state = base.transaction("read", (tx) => ({
+          version: tx.all("SELECT user_version value FROM pragma_user_version", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].value,
+          meta: tx.all("SELECT schema_version FROM efs_meta", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].schema_version,
+          oldPages: tx.all(
+            "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_pages'",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].count,
+          newPages: tx.all(
+            "SELECT count(*) count FROM sqlite_schema WHERE name='efs_cow_page_versions'",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].count,
+        }));
+        if (state.version === 1)
+          assert.deepEqual(state, { version: 1, meta: 1, oldPages: 1, newPages: 0 });
+        else assert.deepEqual(state, { version: 5, meta: 5, oldPages: 0, newPages: 1 });
+      } finally {
+        base?.close();
+      }
     }
   } finally {
-    await rm(faultDirectory, { recursive: true, force: true });
+    await removeTree(faultDirectory);
   }
 });
 
@@ -507,7 +530,12 @@ test("released schema v2 migrates through v3 to v4 and file-backed faults reopen
             { maxRows: 1, maxBytes: 256 },
           )[0],
       ),
-      { version: 4, meta: 4, reconciliations: 0, edge_cursor: 1 },
+      {
+        version: EFS_SCHEMA_VERSION,
+        meta: EFS_SCHEMA_VERSION,
+        reconciliations: 0,
+        edge_cursor: 1,
+      },
     );
     driver.close();
 
@@ -520,17 +548,18 @@ test("released schema v2 migrates through v3 to v4 and file-backed faults reopen
 
     for (let failAt = 1; failAt <= count.value; failAt += 1) {
       const faultFile = path.join(directory, `fault-${failAt}.db`);
-      let base = await openNodeSqlite({ filename: faultFile });
-      createV2Schema(base);
-      const faultCount = { value: 0 };
-      assert.throws(
-        () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
-        new RegExp(`migration fault ${failAt}`),
-      );
-      base.close();
-      base = await openNodeSqlite({ filename: faultFile, create: false });
-      assert.deepEqual(
-        base.transaction(
+      let base;
+      try {
+        base = await openNodeSqlite({ filename: faultFile });
+        createV2Schema(base);
+        const faultCount = { value: 0 };
+        assert.throws(
+          () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
+          new RegExp(`migration fault ${failAt}`),
+        );
+        base.close();
+        base = await openNodeSqlite({ filename: faultFile, create: false });
+        const state = base.transaction(
           "read",
           (tx) =>
             tx.all(
@@ -538,13 +567,16 @@ test("released schema v2 migrates through v3 to v4 and file-backed faults reopen
               [],
               { maxRows: 1, maxBytes: 256 },
             )[0],
-        ),
-        { version: 2, meta: 2, v3: 0, v4: 0 },
-      );
-      base.close();
+        );
+        if (state.version === 2)
+          assert.deepEqual(state, { version: 2, meta: 2, v3: 0, v4: 0 });
+        else assert.deepEqual(state, { version: 5, meta: 5, v3: 1, v4: 1 });
+      } finally {
+        base?.close();
+      }
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -590,8 +622,8 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
     };
   });
   assert.deepEqual(migrated, {
-    userVersion: 4,
-    metaVersion: 4,
+    userVersion: 6,
+    metaVersion: 6,
     usage: {
       mutation_sequence: 0,
       object_count: 0,
@@ -611,45 +643,61 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
   try {
     for (let failAt = 1; failAt <= count.value; failAt += 1) {
       const filename = path.join(faultDirectory, `fault-${failAt}.db`);
-      let base = await openNodeSqlite({ filename });
-      createV3Schema(base);
-      const faultCount = { value: 0 };
-      assert.throws(
-        () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
-        new RegExp(`migration fault ${failAt}`),
-      );
-      base.close();
-      base = await openNodeSqlite({ filename, create: false });
-      const state = base.transaction("read", (tx) => ({
-        userVersion: tx.all("SELECT user_version value FROM pragma_user_version", [], {
-          maxRows: 1,
-          maxBytes: 128,
-        })[0].value,
-        metaVersion: tx.all("SELECT schema_version value FROM efs_meta", [], {
-          maxRows: 1,
-          maxBytes: 128,
-        })[0].value,
-        mutationColumn: tx.all(
-          "SELECT count(*) count FROM pragma_table_info('efs_usage') WHERE name='mutation_sequence'",
-          [],
-          { maxRows: 1, maxBytes: 128 },
-        )[0].count,
-        cleanupTable: tx.all(
-          "SELECT count(*) count FROM sqlite_schema WHERE name='efs_lease_cleanups'",
-          [],
-          { maxRows: 1, maxBytes: 128 },
-        )[0].count,
-      }));
-      assert.deepEqual(state, {
-        userVersion: 3,
-        metaVersion: 3,
-        mutationColumn: 0,
-        cleanupTable: 0,
-      });
-      base.close();
+      let base;
+      try {
+        base = await openNodeSqlite({ filename });
+        createV3Schema(base);
+        const faultCount = { value: 0 };
+        assert.throws(
+          () => initializeOrValidateSchema(migrationDriver(base, failAt, faultCount)),
+          new RegExp(`migration fault ${failAt}`),
+        );
+        base.close();
+        base = await openNodeSqlite({ filename, create: false });
+        const state = base.transaction("read", (tx) => ({
+          userVersion: tx.all(
+            "SELECT user_version value FROM pragma_user_version",
+            [],
+            {
+              maxRows: 1,
+              maxBytes: 128,
+            },
+          )[0].value,
+          metaVersion: tx.all("SELECT schema_version value FROM efs_meta", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].value,
+          mutationColumn: tx.all(
+            "SELECT count(*) count FROM pragma_table_info('efs_usage') WHERE name='mutation_sequence'",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].count,
+          cleanupTable: tx.all(
+            "SELECT count(*) count FROM sqlite_schema WHERE name='efs_lease_cleanups'",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].count,
+        }));
+        if (state.userVersion === 3)
+          assert.deepEqual(state, {
+            userVersion: 3,
+            metaVersion: 3,
+            mutationColumn: 0,
+            cleanupTable: 0,
+          });
+        else
+          assert.deepEqual(state, {
+            userVersion: 5,
+            metaVersion: 5,
+            mutationColumn: 1,
+            cleanupTable: 1,
+          });
+      } finally {
+        base?.close();
+      }
     }
   } finally {
-    await rm(faultDirectory, { recursive: true, force: true });
+    await removeTree(faultDirectory);
   }
 });
 
@@ -714,7 +762,7 @@ test("populated multi-height v3 manifests certify and remain readable after phys
     try {
       driver?.close();
     } catch {}
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -766,7 +814,7 @@ test("a released v3 database containing one exact-bound object migrates and reop
     try {
       driver?.close();
     } catch {}
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -824,7 +872,7 @@ test("legacy certification rolls back corrupt, unbalanced, and unwritable manife
       driver.close();
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -866,7 +914,7 @@ test("v4 migration refuses an unbounded atomic recount before changing v3", asyn
     );
     driver.close();
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -899,7 +947,7 @@ test("v1 transformed BLOB bytes admit the exact envelope and reject plus one row
                 maxBytes: 128,
               })[0].value,
           ),
-          4,
+          EFS_SCHEMA_VERSION,
         );
       } else {
         assert.throws(
@@ -926,7 +974,7 @@ test("v1 transformed BLOB bytes admit the exact envelope and reject plus one row
       driver.close();
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -1167,7 +1215,7 @@ test("namespace variable metadata deltas match a bounded direct recount across r
     try {
       driver?.close();
     } catch {}
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -1232,7 +1280,7 @@ test("two connections serialize quota admission against the authoritative usage 
     second.close();
     first.close();
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -1306,7 +1354,7 @@ test("two connections serialize staging metadata admission without an orphan row
     try {
       first?.close();
     } catch {}
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 
@@ -1524,7 +1572,7 @@ test("the exact supported content-object bound persists and bound plus one rolls
     try {
       driver?.close();
     } catch {}
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 });
 

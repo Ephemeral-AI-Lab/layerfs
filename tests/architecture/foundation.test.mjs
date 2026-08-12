@@ -90,16 +90,23 @@ test("milestone gates select only their owned suites and sequential predecessors
           ? "pnpm validate:m1:pre-evidence && pnpm check:evidence"
           : Number(milestone) === 2
             ? "pnpm validate:m2:pre-evidence && pnpm check:evidence"
-            : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
+            : Number(milestone) === 3
+              ? "pnpm validate:m3:pre-evidence && pnpm check:evidence"
+              : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
     assert.equal(scripts[`validate:m${milestone}`], expectedValidation);
     assert.doesNotMatch(
       scripts[`validate:m${milestone}`],
       /test:unit|test:smoke:built|test:fault:built|test:performance:built/,
     );
-    if (Number(milestone) > 2)
+    if (Number(milestone) > 3)
       assert.match(
         scripts[`validate:m${milestone}`],
         new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `),
+      );
+    if (Number(milestone) === 3)
+      assert.match(
+        scripts["validate:m3:pre-evidence"],
+        /^pnpm validate:m2:pre-evidence && /,
       );
   }
   assert.equal(

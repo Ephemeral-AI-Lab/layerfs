@@ -21,6 +21,9 @@ export interface SQLiteManifestContentSource {
     destinationOffset: number,
     length: number,
   ): boolean;
+  batchFetchObjects(
+    requests: readonly { readonly hash: Uint8Array; readonly expectedSize: number }[],
+  ): void;
   withManifestRoot<T>(
     hash: Uint8Array,
     consume: (encoded: Uint8Array) => T,
@@ -34,7 +37,7 @@ export interface SQLiteManifestContentSource {
 }
 
 export class SQLiteAuthenticatedManifestCursor {
-  readonly #source: SQLiteManifestContentSource;
+  #source: SQLiteManifestContentSource;
   readonly #cursor: ManifestSequentialCursor;
   readonly fileSize: number;
   #release: (() => void) | undefined;
@@ -67,6 +70,7 @@ export class SQLiteAuthenticatedManifestCursor {
         "cursor retained state",
       ),
     );
+    this.#source = source;
     let initialized:
       | {
           readonly cursor: ManifestSequentialCursor;
@@ -89,7 +93,7 @@ export class SQLiteAuthenticatedManifestCursor {
             effectiveOffset,
             {
               withNode: <T>(hash: Uint8Array, consume: (encoded: Uint8Array) => T) =>
-                source.withManifestNode(copyBytes(hash), consume),
+                this.#source.withManifestNode(copyBytes(hash), consume),
             },
             manifestHash,
             maxDepth,
@@ -105,7 +109,6 @@ export class SQLiteAuthenticatedManifestCursor {
       throw error;
     }
     this.#release = release;
-    this.#source = source;
     this.#cursor = initialized.cursor;
     this.fileSize = initialized.fileSize;
     this.#position = initialized.effectiveOffset;
@@ -113,6 +116,11 @@ export class SQLiteAuthenticatedManifestCursor {
 
   get position(): number {
     return this.#position;
+  }
+
+  bindSource(source: SQLiteManifestContentSource): void {
+    this.#assertOpen();
+    this.#source = source;
   }
 
   close(): void {
@@ -156,6 +164,12 @@ export class SQLiteAuthenticatedManifestCursor {
     )
       throw new RangeError("invalid authenticated manifest destination range");
     const available = Math.min(length, this.fileSize - this.#position);
+    const ops: {
+      readonly hash: Uint8Array;
+      readonly expectedSize: number;
+      readonly sourceOffset: number;
+      readonly take: number;
+    }[] = [];
     let written = 0;
     while (written < available) {
       const selected = this.#cursor.peek();
@@ -166,20 +180,31 @@ export class SQLiteAuthenticatedManifestCursor {
         throw new Error("ECORRUPT: manifest cursor position is outside its entry");
       const objectOffset = this.#position - selected.offset;
       const take = Math.min(available - written, selected.entry.length - objectOffset);
-      if (
-        !this.#source.readObjectInto(
-          copyBytes(selected.entry.hash),
-          selected.entry.length,
-          objectOffset,
-          destination,
-          destinationOffset + written,
-          take,
-        )
-      )
-        throw new Error("ECORRUPT: missing CAS object");
+      ops.push({
+        hash: copyBytes(selected.entry.hash),
+        expectedSize: selected.entry.length,
+        sourceOffset: objectOffset,
+        take,
+      });
       written += take;
       this.#position = checkedAdd(this.#position, take);
       if (this.#position === entryEnd) this.nextEntry();
+    }
+    if (ops.length) this.#source.batchFetchObjects(ops);
+    let copied = 0;
+    for (const op of ops) {
+      if (
+        !this.#source.readObjectInto(
+          op.hash,
+          op.expectedSize,
+          op.sourceOffset,
+          destination,
+          destinationOffset + copied,
+          op.take,
+        )
+      )
+        throw new Error("ECORRUPT: missing CAS object");
+      copied += op.take;
     }
     return written;
   }

@@ -29,6 +29,9 @@ export function createSqliteOperationsStorage(
       journalSizeLimitIsHard: false,
     }),
     hashBytes,
+    ...(driver.hashBytesAsync === undefined
+      ? {}
+      : { hashBytesAsync: driver.hashBytesAsync }),
     initialize: (options = {}) => initializeOrValidateSchema(driver, options),
     transaction: <T>(
       mode: "read" | "write" | "exclusive",

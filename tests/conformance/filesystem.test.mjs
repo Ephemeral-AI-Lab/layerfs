@@ -189,13 +189,20 @@ test("memory and transaction ceilings reject without a visible partial mutation"
       // constrains the transaction without advertising an impossible runtime.
       maxManagedResidentBytes: 128 * 1024 * 1024,
       maxCacheBytes: 256 * 1024,
-      maxPendingWriteBytes: 256 * 1024,
+      maxPendingWriteBytes: 1024 * 1024,
       maxWriteSessionBytes: 64 * 1024,
       maxPrefetchBytes: 64 * 1024,
       maxQueryBatchBytes: 64 * 1024,
       maxPreparedResultBytes: 512 * 1024,
     },
-    storage: { maxFinalTransactionRows: 64, maxFinalTransactionBytes: 256 * 1024 },
+    storage: {
+      maxFinalTransactionRows: 64,
+      // The durable envelope must still persist the default FastCDC maximum
+      // (512 KiB) plus transaction overhead; 1 MiB keeps the ceiling tight
+      // while remaining a valid storage profile.
+      maxFinalTransactionBytes: 1024 * 1024,
+      maxWriteBytes: 256 * 1024,
+    },
   });
   try {
     await assert.rejects(

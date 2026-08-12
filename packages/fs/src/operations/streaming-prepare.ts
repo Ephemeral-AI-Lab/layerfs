@@ -42,6 +42,29 @@ interface PreparedNode {
   readonly entryCount: number;
 }
 
+/** Bounded-parallelism async hasher: at most `concurrency` digests in flight. */
+async function hashChunkBatch(
+  chunks: readonly Uint8Array[],
+  hashBytesAsync: (bytes: Uint8Array) => Promise<Uint8Array>,
+  concurrency = 16,
+): Promise<Uint8Array[]> {
+  const hashes = new Array<Uint8Array>(chunks.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, chunks.length) },
+    async () => {
+      while (true) {
+        const index = next;
+        next += 1;
+        if (index >= chunks.length) return;
+        hashes[index] = await hashBytesAsync(chunks[index]!);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return hashes;
+}
+
 function durableWriteBatchLimit(storage: StorageLimits): number {
   // A retained item may change physical content, a staging record, membership,
   // certificate/reservation state, and the usage authority. Keep fixed
@@ -121,7 +144,7 @@ export function metadataReservationBytes(
   const rows = checkedAdd(
     checkedMultiply(entries, 4, "declared content metadata envelope"),
     checkedAdd(
-      checkedMultiply(manifestRecords, 5, "declared manifest metadata envelope"),
+      checkedMultiply(manifestRecords, 6, "declared manifest metadata envelope"),
       8,
       "declared fixed metadata envelope",
     ),
@@ -208,17 +231,27 @@ export async function prepareContentStreaming(
   let sourceBytes = 0;
   let entryIndex = 0;
   let pendingBytes = 0;
-  const pending: ContentObjectInput[] = [];
+  const pending: Uint8Array[] = [];
   const durableBatchLimit = durableWriteBatchLimit(storage);
-  const flushObjects = (): void => {
+  const flushObjects = async (): Promise<void> => {
     if (!pending.length) return;
     const batch = pending.splice(0);
     pendingBytes = 0;
+    // M3.3: hash the chunk batch with the host's async hasher (WebCrypto on
+    // workerd) under bounded parallelism when available; otherwise the
+    // synchronous seam hashes in order. The pipeline computed these digests
+    // from its own detached chunk copies, so the durable put trusts them.
+    const hashes = port.hashBytesAsync
+      ? await hashChunkBatch(batch, port.hashBytesAsync)
+      : batch.map((chunk) => port.hashBytes(chunk));
+    const items: ContentObjectInput[] = batch.map((chunk, index) =>
+      Object.freeze({ hash: hashes[index]!, bytes: chunk }),
+    );
+    const unique = [
+      ...new Map(items.map((item) => [bytesToHex(item.hash), item])).values(),
+    ];
     port.transaction("write", workBudget, (tx) => {
       const staging = tx.staging(storage, cache);
-      const unique = [
-        ...new Map(batch.map((item) => [bytesToHex(item.hash), item])).values(),
-      ];
       staging.consumeIngestReservation(
         leaseId,
         ownerNonce,
@@ -232,10 +265,10 @@ export async function prepareContentStreaming(
         ownerNonce,
         unique.length * DURABLE_METADATA_ROW_BYTES,
       );
-      tx.content(storage, cache).putObjectsBatch(batch);
+      tx.content(storage, cache).putObjectsBatch(items, true);
       staging.putEntriesBatch(
         leaseId,
-        batch.map((item) =>
+        items.map((item) =>
           Object.freeze({
             entryIndex: entryIndex++,
             objectHash: item.hash,
@@ -262,29 +295,25 @@ export async function prepareContentStreaming(
     const chunkLength = intrinsicByteLength(chunk);
     total = checkedAdd(total, chunkLength);
     if (total > storage.maxFileBytes) throw new RangeError("file exceeds maxFileBytes");
-    if (
-      pending.length >= durableBatchLimit ||
-      checkedAdd(pendingBytes, chunkLength) > pendingLimit
-    )
-      flushObjects();
-    pending.push(Object.freeze({ hash: port.hashBytes(chunk), bytes: chunk }));
+    pending.push(chunk);
     pendingBytes = checkedAdd(pendingBytes, chunkLength);
   };
-  const feed = (bytes: Uint8Array): void => {
+  const feed = async (bytes: Uint8Array): Promise<void> => {
     bytes = intrinsicByteRange(bytes);
-    for (
-      let offset = 0;
-      offset < intrinsicByteLength(bytes);
-      offset += runtime.maxWriteSessionBytes
-    )
+    const byteLength = intrinsicByteLength(bytes);
+    // The chunker drain is synchronous, so the async batch hashing can only
+    // happen between drains; slice the input so one drain never accumulates
+    // more than the pending admission envelope. The pending batch flushes
+    // once it crosses its byte or row threshold.
+    const windowBytes = Math.min(runtime.maxWriteSessionBytes, pendingLimit);
+    for (let offset = 0; offset < byteLength; offset += windowBytes) {
       chunker.drain(
-        intrinsicByteRange(
-          bytes,
-          offset,
-          Math.min(intrinsicByteLength(bytes), offset + runtime.maxWriteSessionBytes),
-        ),
+        intrinsicByteRange(bytes, offset, Math.min(byteLength, offset + windowBytes)),
         acceptChunk,
       );
+      if (pendingBytes >= pendingLimit || pending.length >= durableBatchLimit)
+        await flushObjects();
+    }
   };
   try {
     cache?.makeRoom(reservationBytes);
@@ -308,7 +337,7 @@ export async function prepareContentStreaming(
     });
     leaseBegun = true;
     chunker = new StreamingFastCdc(DEFAULT_FASTCDC);
-    if (bufferedInput) feed(bufferedInput);
+    if (bufferedInput) await feed(bufferedInput);
     else {
       const reader = streamInput!.getReader();
       let completed = false;
@@ -336,7 +365,7 @@ export async function prepareContentStreaming(
           const releaseInput = admission.reserve(valueLength);
           try {
             const ownedValue = copyBytes(value);
-            feed(ownedValue);
+            await feed(ownedValue);
           } finally {
             releaseInput();
           }
@@ -353,7 +382,7 @@ export async function prepareContentStreaming(
       }
     }
     chunker.drain(new Uint8Array(), acceptChunk, true);
-    flushObjects();
+    await flushObjects();
     return finalizeStagedManifest(
       port,
       storage,
@@ -749,11 +778,14 @@ function buildManifestLevels(
           staging.consumeMetadataReservation(
             leaseId,
             ownerNonce,
-            nodes.length * DURABLE_METADATA_ROW_BYTES,
+            nodes.length * 2 * DURABLE_METADATA_ROW_BYTES,
           );
-        tx.content(storage, cache).putManifestNodesBatch(
-          nodes.map((node) => ({ hash: node.hash, encoded: node.encoded })),
-        );
+        const encodedNodes = nodes.map((node) => ({
+          hash: node.hash,
+          encoded: node.encoded,
+        }));
+        tx.content(storage, cache).putManifestNodesBatch(encodedNodes);
+        tx.manifestTree(storage, cache).recordSubtreeSummaries(encodedNodes);
         staging.putLevelRecordsBatch(
           leaseId,
           level,

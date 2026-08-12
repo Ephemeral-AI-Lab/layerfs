@@ -34,12 +34,17 @@ import { copyBytes, intrinsicByteLength, intrinsicByteRange } from "../cas/bytes
 import {
   decodeManifestRoot,
   validateSupportedManifestParameters,
+  type ManifestParameters,
 } from "../manifests/codec.js";
 import {
+  durableEditReadSnapshotBudget,
+  tryLoadBoundedManifestStateInTransaction,
   prepareDurableEditedContent,
   type DurableContentEdit,
+  type DurableEditReadSnapshot,
   type DurableEditSource,
 } from "./durable-edit-prepare.js";
+
 import {
   abortError,
   FilesystemError,
@@ -69,14 +74,18 @@ import { BranchManager } from "./branch-engine.js";
 import type { Branches } from "../branches/types.js";
 import { MaintenanceManager } from "./maintenance.js";
 import { ContentCache } from "../cache/content-cache.js";
+import { DEFAULT_LOCAL_REBUILD_LIMITS } from "./local-rebuild.js";
 import type {
+  AuthenticatedManifestCursor,
   ClosureCertificate,
+  ContentStore,
   InodeRow,
   NamespaceStore,
   OperationsStorage,
   ResolvedPath,
   StorageTransactionMode,
   StorageTransactionPorts,
+  ValidatedSealedLease,
 } from "./storage-ports.js";
 
 function inodeType(value: number): FileType {
@@ -114,6 +123,32 @@ function fileStat(inode: InodeRow, name: string): FileStat {
     ...predicates(type),
   });
 }
+const editSourceInodes = new WeakMap<
+  DurableEditSource,
+  {
+    readonly inode: InodeRow;
+    readonly mainRevision?: number;
+    readonly rootMutationGeneration?: number;
+  }
+>();
+
+interface MutationSourceSelection {
+  readonly manifestHash: Uint8Array;
+  readonly root: Uint8Array;
+  readonly size: number;
+  readonly inodeSnapshot: InodeRow;
+  readonly parameters: ManifestParameters;
+  readonly token: number;
+  readonly mainRevision?: number;
+  readonly rootMutationGeneration?: number;
+}
+
+interface PreparedMutationSelection {
+  readonly source: DurableEditSource;
+  readonly token: number;
+  readonly edit?: DurableContentEdit;
+  readonly readSnapshot?: DurableEditReadSnapshot;
+}
 function directoryEntry(
   name: string,
   parentPath: string,
@@ -147,6 +182,7 @@ export class EphemeralFS implements EphemeralFilesystem {
   readonly #branchLimits: BranchConfiguration;
   readonly #admission: AdmissionController;
   readonly #cache: ContentCache;
+  readonly #readWindowBytes: number;
   readonly #pending = new Set<Promise<unknown>>();
   readonly #streams = new Map<
     string,
@@ -174,6 +210,10 @@ export class EphemeralFS implements EphemeralFilesystem {
       this.#runtimeLimits.maxManagedResidentBytes,
     );
     this.#cache = new ContentCache(this.#runtimeLimits.maxCacheBytes, this.#admission);
+    this.#readWindowBytes = Math.max(
+      this.#filesystemLimits.preferredStreamChunkBytes,
+      this.#runtimeLimits.maxQueryBatchBytes - 100 * 1024,
+    );
     this.branches = new BranchManager(
       this.#storagePort,
       this.#filesystemLimits,
@@ -433,12 +473,31 @@ export class EphemeralFS implements EphemeralFilesystem {
       let released = false;
       let queuedRelease: (() => void) | undefined;
       let controllerReference: ReadableStreamDefaultController<Uint8Array> | undefined;
+      let cursor: AuthenticatedManifestCursor | undefined;
+      const startedAt = performance.now();
       const release = async (): Promise<void> => {
         if (released) return;
         released = true;
+        cursor?.close();
+        cursor = undefined;
         queuedRelease?.();
         queuedRelease = undefined;
         this.#streams.delete(leaseId);
+        const cache = this.#cache.metrics();
+        this.#observe({
+          type: "operation",
+          operation: "readStream",
+          outcome: "success",
+          elapsedMs: performance.now() - startedAt,
+          counters: Object.freeze({
+            managedResidentBytes: this.#admission.usedBytes,
+            peakManagedResidentBytes: this.#admission.peakBytes,
+            cacheBytes: cache.bytes,
+            cacheHits: cache.hits,
+            cacheMisses: cache.misses,
+            cacheEvictions: cache.evictions,
+          }),
+        });
         try {
           this.#transaction("write", (tx) => {
             tx.staging(this.#storageLimits).releaseReadLease(leaseId, owner);
@@ -474,24 +533,31 @@ export class EphemeralFS implements EphemeralFilesystem {
               controller.close();
               return;
             }
-            const length = Math.min(
-              this.#filesystemLimits.preferredStreamChunkBytes,
-              end - position,
-            );
+            const length = Math.min(this.#readWindowBytes, end - position);
             const free = this.#admission.reserve(length);
             try {
-              const bytes = this.#transaction("read", (tx) =>
-                readManifestRange(
-                  tx.content(this.#storageLimits, this.#cache),
-                  selected.manifestHash,
-                  position,
-                  length,
-                  this.#admission,
-                  this.#cache,
-                ),
-              );
+              const bytes = this.#transaction("read", (tx) => {
+                const content = tx.content(this.#storageLimits, this.#cache);
+                if (!cursor) {
+                  cursor = content.openManifestCursor(selected.manifestHash, position);
+                } else {
+                  cursor.bindSource(content);
+                }
+                this.#cache.makeRoom(length);
+                const output = new Uint8Array(length);
+                const written = cursor.readInto(output, 0, output.byteLength);
+                return output.subarray(0, written);
+              });
               position += bytes.byteLength;
-              controller.enqueue(bytes);
+              let enqueued = 0;
+              while (enqueued < bytes.byteLength) {
+                const chunkEnd = Math.min(
+                  bytes.byteLength,
+                  enqueued + this.#filesystemLimits.preferredStreamChunkBytes,
+                );
+                controller.enqueue(bytes.subarray(enqueued, chunkEnd));
+                enqueued = chunkEnd;
+              }
               queuedRelease = free;
             } catch (error) {
               free();
@@ -508,6 +574,8 @@ export class EphemeralFS implements EphemeralFilesystem {
       this.#streams.set(leaseId, {
         release,
         error: () => {
+          cursor?.close();
+          cursor = undefined;
           try {
             controllerReference?.error(
               fsError("EBADF", "readStream", canonical.value, "filesystem is closing"),
@@ -690,33 +758,21 @@ export class EphemeralFS implements EphemeralFilesystem {
       const releaseInput = this.#admission.reserve(inputLength);
       try {
         const frozen = copyBytes(content);
-        const selected = this.#selectMutationSource(canonical.value, "writeRange");
-        if (!frozen.byteLength) return;
-        const size = Math.max(
-          selected.source.size,
-          checkedAdd(offset, frozen.byteLength),
-        );
-        if (size > this.#storageLimits.maxFileBytes)
-          throw fsError(
-            "EFBIG",
-            "writeRange",
-            canonical.value,
-            "result exceeds maxFileBytes",
-          );
-        const editOffset = Math.min(offset, selected.source.size);
-        const gap = Math.max(0, offset - selected.source.size);
-        const deleteLength = Math.min(
-          frozen.byteLength,
-          selected.source.size - editOffset,
-        );
-        const edit = this.#bufferedInsertionEdit(editOffset, deleteLength, gap, frozen);
-        await this.#replaceExisting(
-          canonical.value,
-          selected.source,
-          edit,
-          selected.token,
-          "writeRange",
-        );
+        await this.#replaceExistingAtPath(canonical.value, "writeRange", (source) => {
+          if (!frozen.byteLength) return undefined;
+          const size = Math.max(source.size, checkedAdd(offset, frozen.byteLength));
+          if (size > this.#storageLimits.maxFileBytes)
+            throw fsError(
+              "EFBIG",
+              "writeRange",
+              canonical.value,
+              "result exceeds maxFileBytes",
+            );
+          const editOffset = Math.min(offset, source.size);
+          const gap = Math.max(0, offset - source.size);
+          const deleteLength = Math.min(frozen.byteLength, source.size - editOffset);
+          return this.#bufferedInsertionEdit(editOffset, deleteLength, gap, frozen);
+        });
       } finally {
         releaseInput();
       }
@@ -742,33 +798,25 @@ export class EphemeralFS implements EphemeralFilesystem {
       const releaseInput = this.#admission.reserve(inputLength);
       try {
         const frozen = copyBytes(insertBytes);
-        const selected = this.#selectMutationSource(canonical.value, "replaceRange");
-        if (
-          offset > selected.source.size ||
-          deleteLength > selected.source.size - offset
-        )
-          throw fsError(
-            "EINVAL",
-            "replaceRange",
-            canonical.value,
-            "replacement range is outside file",
-          );
-        if (!deleteLength && !frozen.byteLength) return;
-        const finalSize = selected.source.size - deleteLength + frozen.byteLength;
-        if (finalSize > this.#storageLimits.maxFileBytes)
-          throw fsError(
-            "EFBIG",
-            "replaceRange",
-            canonical.value,
-            "result exceeds maxFileBytes",
-          );
-        await this.#replaceExisting(
-          canonical.value,
-          selected.source,
-          this.#bufferedInsertionEdit(offset, deleteLength, 0, frozen),
-          selected.token,
-          "replaceRange",
-        );
+        await this.#replaceExistingAtPath(canonical.value, "replaceRange", (source) => {
+          if (offset > source.size || deleteLength > source.size - offset)
+            throw fsError(
+              "EINVAL",
+              "replaceRange",
+              canonical.value,
+              "replacement range is outside file",
+            );
+          if (!deleteLength && !frozen.byteLength) return undefined;
+          const finalSize = source.size - deleteLength + frozen.byteLength;
+          if (finalSize > this.#storageLimits.maxFileBytes)
+            throw fsError(
+              "EFBIG",
+              "replaceRange",
+              canonical.value,
+              "result exceeds maxFileBytes",
+            );
+          return this.#bufferedInsertionEdit(offset, deleteLength, 0, frozen);
+        });
       } finally {
         releaseInput();
       }
@@ -779,29 +827,22 @@ export class EphemeralFS implements EphemeralFilesystem {
     return this.#operation("truncate", path, undefined, async () => {
       checkedInteger(size, "size", this.#storageLimits.maxFileBytes);
       const canonical = canonicalizePath(path, this.#filesystemLimits, "truncate");
-      const selected = this.#selectMutationSource(canonical.value, "truncate");
-      if (size === selected.source.size) return;
-      const edit: DurableContentEdit =
-        size < selected.source.size
+      await this.#replaceExistingAtPath(canonical.value, "truncate", (source) => {
+        if (size === source.size) return undefined;
+        return size < source.size
           ? Object.freeze({
               offset: size,
-              deleteLength: selected.source.size - size,
+              deleteLength: source.size - size,
               insertLength: 0,
               readInsert: (_offset: number, length: number) => new Uint8Array(length),
             })
           : Object.freeze({
-              offset: selected.source.size,
+              offset: source.size,
               deleteLength: 0,
-              insertLength: size - selected.source.size,
+              insertLength: size - source.size,
               readInsert: (_offset: number, length: number) => new Uint8Array(length),
             });
-      await this.#replaceExisting(
-        canonical.value,
-        selected.source,
-        edit,
-        selected.token,
-        "truncate",
-      );
+      });
     });
   }
 
@@ -1196,60 +1237,232 @@ export class EphemeralFS implements EphemeralFilesystem {
       });
     });
   }
-  #selectMutationSource(
+  #readMutationSourceSelection(
+    tx: StorageTransactionPorts,
     path: string,
     syscall: string,
-  ): { source: DurableEditSource; token: number } {
-    const selected = this.#transaction("read", (tx) => {
-      const selected = tx
-        .namespace(this.#filesystemLimits, this.#storageLimits, syscall)
-        .resolve(path, true);
-      const inode = this.#requireFile(selected, syscall);
-      const manifestHash = copyBytes(inode.manifest_hash!);
-      const root = tx
-        .content(this.#storageLimits, this.#cache)
-        .withManifestRoot(manifestHash, (rootBytes) =>
-          decodeManifestRoot(rootBytes, manifestHash),
-        );
-      if (!root) throw new Error("ECORRUPT: missing manifest root");
-      validateSupportedManifestParameters(root.parameters);
-      if (root.fileSize !== inode.size)
-        throw new Error("ECORRUPT: inode size disagrees with manifest root");
-      return {
-        manifestHash,
-        size: inode.size!,
-        parameters: root.parameters,
-        token: inode.token,
-      };
+  ): MutationSourceSelection {
+    const selected = tx
+      .namespace(this.#filesystemLimits, this.#storageLimits, syscall)
+      .resolve(path, true);
+    const inode = this.#requireFile(selected, syscall);
+    const manifestHash = copyBytes(inode.manifest_hash!);
+    const rootBytes = tx
+      .content(this.#storageLimits, this.#cache)
+      .withManifestRoot(manifestHash, (encoded) => copyBytes(encoded));
+    if (!rootBytes) throw new Error("ECORRUPT: missing manifest root");
+    const root = decodeManifestRoot(rootBytes, manifestHash);
+    validateSupportedManifestParameters(root.parameters);
+    if (root.fileSize !== inode.size)
+      throw new Error("ECORRUPT: inode size disagrees with manifest root");
+    return Object.freeze({
+      manifestHash,
+      root: rootBytes,
+      size: inode.size!,
+      inodeSnapshot: Object.freeze({
+        ...inode,
+        manifest_hash: inode.manifest_hash ? copyBytes(inode.manifest_hash) : null,
+      }),
+      parameters: root.parameters,
+      token: inode.token,
+      ...(selected.mainRevision === undefined
+        ? {}
+        : { mainRevision: selected.mainRevision }),
+      ...(selected.rootMutationGeneration === undefined
+        ? {}
+        : { rootMutationGeneration: selected.rootMutationGeneration }),
     });
+  }
+
+  #createMutationSource(selected: MutationSourceSelection): {
+    source: DurableEditSource;
+    token: number;
+  } {
+    const maxReadWindowBytes = Math.max(
+      1,
+      Math.min(
+        1024 * 1024,
+        this.#runtimeLimits.maxQueryBatchBytes,
+        this.#runtimeLimits.maxWriteSessionBytes,
+      ),
+    );
+    let readTransactions = 0;
+    let cachedWindow:
+      | {
+          readonly offset: number;
+          readonly bytes: Uint8Array;
+          readonly release: () => void;
+        }
+      | undefined;
+    const releaseReadWindow = (): void => {
+      cachedWindow?.release();
+      cachedWindow = undefined;
+    };
+    const readSlice = (
+      offset: number,
+      length: number,
+      content?: ContentStore,
+      copyOutput = true,
+    ): Uint8Array => {
+      checkedInteger(offset, "manifest read offset");
+      checkedInteger(length, "manifest read length");
+      if (length === 0) return new Uint8Array(0);
+      const end = checkedAdd(offset, length, "manifest read end");
+      const cachedEnd = cachedWindow
+        ? checkedAdd(cachedWindow.offset, cachedWindow.bytes.byteLength)
+        : -1;
+      if (!cachedWindow || offset < cachedWindow.offset || end > cachedEnd) {
+        releaseReadWindow();
+        const windowLength = Math.max(length, maxReadWindowBytes);
+        // Center the first bounded window around the requested slice. Local
+        // rebuilds commonly ask for the bytes immediately before and after
+        // the edit; anchoring at the first request made those two reads
+        // unnecessarily open separate SQLite read transactions.
+        const maxOffset = Math.max(0, selected.size - windowLength);
+        const centeredOffset = Math.max(
+          0,
+          offset - Math.floor((windowLength - length) / 2),
+        );
+        const windowOffset = Math.min(centeredOffset, maxOffset);
+        const available = Math.min(windowLength, selected.size - windowOffset);
+        const bytes = content
+          ? readManifestRange(
+              content,
+              selected.manifestHash,
+              windowOffset,
+              available,
+              this.#admission,
+              this.#cache,
+            )
+          : this.#storagePort.transaction(
+              "read",
+              {
+                maxRows: this.#storageLimits.maxFinalTransactionRows,
+                maxBytes: this.#runtimeLimits.maxQueryBatchBytes,
+              },
+              (tx) =>
+                readManifestRange(
+                  tx.content(this.#storageLimits, this.#cache),
+                  selected.manifestHash,
+                  windowOffset,
+                  available,
+                  this.#admission,
+                  this.#cache,
+                ),
+            );
+        if (!content) readTransactions += 1;
+        // `readManifestRange` releases its temporary output reservation before
+        // returning. Keep the retained edit window accounted for until the
+        // durable edit has finished, so source batching cannot bypass the
+        // managed-resident admission limit.
+        const release = this.#admission.reserve(bytes.byteLength);
+        cachedWindow = Object.freeze({ offset: windowOffset, bytes, release });
+      }
+      const current = cachedWindow!;
+      const relativeOffset = offset - current.offset;
+      const range = intrinsicByteRange(
+        current.bytes,
+        relativeOffset,
+        checkedAdd(relativeOffset, length, "manifest cached read end"),
+      );
+      return copyOutput ? copyBytes(range) : range;
+    };
     const source: DurableEditSource = Object.freeze({
       manifestHash: copyBytes(selected.manifestHash),
+      rootBytes: copyBytes(selected.root),
+      ...(selected.rootMutationGeneration === undefined
+        ? {}
+        : { rootMutationGeneration: selected.rootMutationGeneration }),
       size: selected.size,
       parameters: selected.parameters,
       readStorageTransactions: 1,
+      getReadStorageTransactions: () => readTransactions,
       // Public durable-edit routing remains M3, but this storage prerequisite keeps
       // fallback reads practical without pinning a long SQLite read transaction.
-      maxReadWindowBytes: Math.max(
-        1,
-        Math.min(
-          32 * 1024,
-          this.#runtimeLimits.maxQueryBatchBytes,
-          Math.floor(this.#storageLimits.maxFinalTransactionBytes / 2),
-        ),
-      ),
-      read: (offset: number, length: number): Uint8Array =>
-        this.#transaction("read", (tx) =>
-          readManifestRange(
-            tx.content(this.#storageLimits, this.#cache),
-            selected.manifestHash,
-            offset,
-            length,
-            this.#admission,
-            this.#cache,
-          ),
-        ),
+      maxReadWindowBytes,
+      releaseReadWindow,
+      read: (offset: number, length: number): Uint8Array => readSlice(offset, length),
+      readInTransaction: (
+        content: ContentStore,
+        offset: number,
+        length: number,
+      ): Uint8Array => readSlice(offset, length, content, false),
+    });
+    editSourceInodes.set(source, {
+      inode: selected.inodeSnapshot,
+      ...(selected.mainRevision === undefined
+        ? {}
+        : { mainRevision: selected.mainRevision }),
+      ...(selected.rootMutationGeneration === undefined
+        ? {}
+        : { rootMutationGeneration: selected.rootMutationGeneration }),
     });
     return Object.freeze({ source, token: selected.token });
+  }
+
+  #selectMutationSourceWithSnapshot(
+    path: string,
+    syscall: string,
+    makeEdit: (source: DurableEditSource) => DurableContentEdit | undefined,
+  ): PreparedMutationSelection {
+    const maxReadWindowBytes = Math.max(
+      1,
+      Math.min(
+        2 * 1024 * 1024,
+        this.#runtimeLimits.maxQueryBatchBytes,
+        this.#runtimeLimits.maxWriteSessionBytes,
+      ),
+    );
+    let sourceForCleanup: DurableEditSource | undefined;
+    try {
+      return this.#storagePort.transaction(
+        "read",
+        durableEditReadSnapshotBudget(maxReadWindowBytes, this.#storageLimits),
+        (tx) => {
+          const sourceSelection = this.#readMutationSourceSelection(tx, path, syscall);
+          const selected = this.#createMutationSource(sourceSelection);
+          sourceForCleanup = selected.source;
+          const edit = makeEdit(selected.source);
+          if (!edit) return selected;
+          const state = tryLoadBoundedManifestStateInTransaction(
+            tx,
+            selected.source,
+            selected.source.manifestHash,
+            { offset: edit.offset, deleteLength: edit.deleteLength },
+            this.#storageLimits,
+            DEFAULT_LOCAL_REBUILD_LIMITS,
+            this.#cache,
+            edit.insertLength === edit.deleteLength,
+            sourceSelection.root,
+          );
+          return {
+            ...selected,
+            edit,
+            ...(state ? { readSnapshot: Object.freeze({ state }) } : {}),
+          };
+        },
+      );
+    } catch (error) {
+      sourceForCleanup?.releaseReadWindow?.();
+      throw error;
+    }
+  }
+
+  async #replaceExistingAtPath(
+    path: string,
+    syscall: string,
+    makeEdit: (source: DurableEditSource) => DurableContentEdit | undefined,
+  ): Promise<void> {
+    const selected = this.#selectMutationSourceWithSnapshot(path, syscall, makeEdit);
+    if (!selected.edit) return;
+    await this.#replaceExisting(
+      path,
+      selected.source,
+      selected.edit,
+      selected.token,
+      syscall,
+      selected.readSnapshot,
+    );
   }
   #bufferedInsertionEdit(
     offset: number,
@@ -1288,43 +1501,59 @@ export class EphemeralFS implements EphemeralFilesystem {
     edit: DurableContentEdit,
     expectedToken: number,
     syscall: string,
+    readSnapshot?: DurableEditReadSnapshot,
   ): Promise<void> {
-    const prepared = await prepareDurableEditedContent(
-      this.#storagePort,
-      source,
-      edit,
-      this.#storageLimits,
-      this.#runtimeLimits,
-      this.#admission,
-      this.#cache,
-      this.#clock,
-      true,
-    );
-    try {
-      this.#transaction("write", (tx) => {
+    let finalizedInPersistence = false;
+    let inlineFinalizeMs = 0;
+    const finalizePrepared = (
+      tx: StorageTransactionPorts,
+      certificate: ClosureCertificate,
+      hash: Uint8Array,
+      size: number,
+      sealedLease?: ValidatedSealedLease & { readonly expiresAtMs?: number },
+    ): void => {
+      const started = performance.now();
+      try {
         const ns = tx.namespace(this.#filesystemLimits, this.#storageLimits, syscall);
-        const selected = ns.resolve(path, true);
-        const inode = this.#requireFile(selected, syscall);
-        if (inode.token !== expectedToken)
+        const inodeSnapshot = editSourceInodes.get(source);
+        const inodeId = inodeSnapshot?.inode.id;
+        const inode = inodeId
+          ? undefined
+          : this.#requireFile(ns.resolve(path, true), syscall);
+        if (inode && inode.token !== expectedToken)
           throw fsError(
             "EAGAIN",
             syscall,
             path,
             "file changed while content was prepared",
           );
-        const now = Math.max(this.#now(), inode.mtime_ms, inode.ctime_ms);
-        this.#validatePrepared(tx, prepared.certificate, now);
-        const revision = ns.nextRevision(now, 1);
+        const targetId = inodeId ?? inode!.id;
+        const now = Math.max(
+          this.#now(),
+          inodeSnapshot?.inode.mtime_ms ?? inode?.mtime_ms ?? 0,
+          inodeSnapshot?.inode.ctime_ms ?? inode?.ctime_ms ?? 0,
+        );
+        const validatedLease =
+          sealedLease &&
+          (sealedLease.expiresAtMs === undefined || sealedLease.expiresAtMs >= now)
+            ? sealedLease
+            : this.#validatePrepared(tx, certificate, now);
+        const revision =
+          inodeSnapshot?.mainRevision !== undefined &&
+          inodeSnapshot.rootMutationGeneration !== undefined &&
+          ns.nextRevisionFromSnapshot
+            ? ns.nextRevisionFromSnapshot(
+                now,
+                1,
+                inodeSnapshot.mainRevision,
+                // The durable edit has already journaled its staging lease
+                // once in the persistence transaction.
+                inodeSnapshot.rootMutationGeneration + 1,
+              )
+            : ns.nextRevision(now, 1);
         if (
-          ns.setFileContent(
-            inode.id,
-            prepared.size,
-            prepared.hash,
-            now,
-            now,
-            revision,
-            expectedToken,
-          ) !== 1
+          ns.setFileContent(targetId, size, hash, now, now, revision, expectedToken) !==
+          1
         )
           throw fsError(
             "EAGAIN",
@@ -1332,12 +1561,60 @@ export class EphemeralFS implements EphemeralFilesystem {
             path,
             "file changed while content was prepared",
           );
-        ns.recordInode(revision, inode.id);
-        this.#releasePrepared(tx, prepared.certificate);
-      });
+        const updatedInode = inodeSnapshot
+          ? Object.freeze({
+              ...inodeSnapshot.inode,
+              size,
+              manifest_hash: copyBytes(hash),
+              mtime_ms: now,
+              ctime_ms: now,
+              token: revision,
+            })
+          : undefined;
+        if (updatedInode && ns.recordFileContentRevision)
+          ns.recordFileContentRevision(revision, updatedInode);
+        else ns.recordInode(revision, targetId);
+        this.#releasePrepared(tx, certificate, validatedLease);
+        finalizedInPersistence = true;
+      } finally {
+        inlineFinalizeMs += performance.now() - started;
+      }
+    };
+    let prepared: Awaited<ReturnType<typeof prepareDurableEditedContent>> | undefined;
+    try {
+      prepared = await prepareDurableEditedContent(
+        this.#storagePort,
+        source,
+        edit,
+        this.#storageLimits,
+        this.#runtimeLimits,
+        this.#admission,
+        this.#cache,
+        this.#clock,
+        true,
+        finalizePrepared,
+        readSnapshot,
+      );
+      if (inlineFinalizeMs > 0 && prepared.localRebuildMetrics?.phaseMs)
+        prepared.localRebuildMetrics.phaseMs.finalizeMs += inlineFinalizeMs;
+      const finalizeStarted = performance.now();
+      try {
+        const current = prepared;
+        if (!current) throw new Error("durable edit preparation returned no result");
+        if (!finalizedInPersistence)
+          this.#transaction("write", (tx) =>
+            finalizePrepared(tx, current.certificate, current.hash, current.size),
+          );
+      } finally {
+        prepared.localRebuildMetrics?.phaseMs &&
+          (prepared.localRebuildMetrics.phaseMs.finalizeMs +=
+            performance.now() - finalizeStarted);
+      }
     } catch (error) {
-      this.#abandonPrepared(prepared.certificate);
+      if (prepared) this.#abandonPrepared(prepared.certificate);
       throw error;
+    } finally {
+      source.releaseReadWindow?.();
     }
   }
   #requireFile(selected: ResolvedPath, syscall: string): InodeRow {
@@ -1506,14 +1783,18 @@ export class EphemeralFS implements EphemeralFilesystem {
     tx: StorageTransactionPorts,
     certificate: ClosureCertificate,
     now: number,
-  ): void {
-    tx.staging(this.#storageLimits).validateSealed(certificate, now);
+  ) {
+    return tx.staging(this.#storageLimits).validateSealed(certificate, now);
   }
-  #releasePrepared(tx: StorageTransactionPorts, certificate: ClosureCertificate): void {
+  #releasePrepared(
+    tx: StorageTransactionPorts,
+    certificate: ClosureCertificate,
+    validatedLease?: ValidatedSealedLease,
+  ): void {
     if (
       !tx
         .staging(this.#storageLimits)
-        .release(certificate.leaseId, certificate.ownerNonce, true)
+        .release(certificate.leaseId, certificate.ownerNonce, true, validatedLease)
     )
       throw new Error("ECORRUPT: staging lease could not be released");
   }

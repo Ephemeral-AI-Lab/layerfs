@@ -604,6 +604,11 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             : "BEGIN EXCLUSIVE",
       );
       begun = true;
+      // Capture the trigger-aware counter once per transaction.  Reading
+      // total_changes() before and after every statement doubles the native
+      // statement traffic on the durable write path; the counter is monotonic
+      // for this connection, and SELECT/PRAGMA statements do not change it.
+      let lastTotalChanges = mode === "read" ? 0 : this.#totalChanges();
       let journalEstimate =
         mode === "read" || this.#filename === ":memory:"
           ? 0
@@ -620,13 +625,17 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
             throw new Error(
               "ENOSPC: WAL backpressure exceeds the configured soft transaction estimate",
             );
-          const beforeChanges = this.#totalChanges();
           const result = statement.run(
             ...bindings.map((value) => binding(value, this.capabilities)),
           );
-          const totalChanges = this.#totalChanges() - beforeChanges;
           const changes = Number(result.changes);
           const rowid = Number(result.lastInsertRowid);
+          let totalChanges = changes;
+          if (mode !== "read") {
+            const currentTotalChanges = this.#totalChanges();
+            totalChanges = currentTotalChanges - lastTotalChanges;
+            lastTotalChanges = currentTotalChanges;
+          }
           if (
             !Number.isSafeInteger(totalChanges) ||
             totalChanges < 0 ||
@@ -667,12 +676,13 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
           const result: Row[] = [];
           let bytes = 0;
           let resultQueryOnly = false;
+          let iterator: ReturnType<StatementSync["iterate"]> | undefined;
           try {
             if (mode !== "read") {
               this.#database.exec("PRAGMA query_only=ON");
               resultQueryOnly = true;
             }
-            const iterator = statement.iterate(
+            iterator = statement.iterate(
               ...bindings.map((value) => binding(value, this.capabilities)),
             );
             for (const raw of iterator) {
@@ -691,6 +701,7 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
               result.push(Object.freeze(normalized));
             }
           } finally {
+            iterator?.return?.();
             if (resultQueryOnly) this.#database.exec("PRAGMA query_only=OFF");
           }
           return Object.freeze(result);
@@ -734,6 +745,12 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
     this.#closeAttempted = true;
     this.#closed = true;
     try {
+      // Release the JS-owned statement cache before closing the native
+      // database handle. node:sqlite does not expose StatementSync.finalize;
+      // retaining evicted statements can otherwise delay Windows file-handle
+      // release until a later GC cycle.
+      this.#statementCache.clear();
+      this.#totalChangesStatement = undefined as unknown as StatementSync;
       this.#database.close();
     } catch (error) {
       this.#closeError = error;

@@ -50,6 +50,43 @@ export interface ResolvedPath {
   readonly name: string;
   readonly nameSort: Uint8Array | null;
   readonly entryToken: number | null;
+  readonly mainRevision: number;
+  readonly rootMutationGeneration: number;
+}
+
+const rootMutationGenerations = new WeakMap<FilesystemSQLiteTransaction, number>();
+
+export function advanceRootMutationGeneration(tx: FilesystemSQLiteTransaction): number {
+  let current = rootMutationGenerations.get(tx);
+  if (current === undefined) {
+    current = tx.all<{ root_mutation_generation: number } & SqliteRow>(
+      "SELECT root_mutation_generation FROM efs_meta WHERE singleton=1",
+      [],
+      { maxRows: 1, maxBytes: 128 },
+    )[0]?.root_mutation_generation;
+    if (!Number.isSafeInteger(current))
+      throw new Error("ECORRUPT: invalid root mutation generation");
+  }
+  const next = current! + 1;
+  if (!Number.isSafeInteger(next))
+    throw new Error("ENOSPC: root mutation generation space exhausted");
+  const updated = tx.run(
+    "UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1 AND root_mutation_generation=?",
+    [next, current!],
+  );
+  if (updated.changes !== 1)
+    throw new Error("ECORRUPT: root mutation generation changed unexpectedly");
+  rootMutationGenerations.set(tx, next);
+  return next;
+}
+
+export function noteRootMutationGeneration(
+  tx: FilesystemSQLiteTransaction,
+  generation: number,
+): void {
+  if (!Number.isSafeInteger(generation) || generation < 0)
+    throw new RangeError("invalid root mutation generation");
+  rootMutationGenerations.set(tx, generation);
 }
 
 export class NamespaceRepository {
@@ -106,6 +143,8 @@ export class NamespaceRepository {
         return Object.freeze({
           path,
           inode: root,
+          mainRevision: meta.main_revision,
+          rootMutationGeneration: meta.root_mutation_generation,
           parentInode: null,
           name: "",
           nameSort: null,
@@ -152,6 +191,8 @@ export class NamespaceRepository {
           return Object.freeze({
             path,
             inode,
+            mainRevision: meta.main_revision,
+            rootMutationGeneration: meta.root_mutation_generation,
             parentInode: parent.id,
             name,
             nameSort,
@@ -218,6 +259,54 @@ export class NamespaceRepository {
       "UPDATE efs_meta SET main_revision=?,root_mutation_generation=? WHERE singleton=1 AND main_revision=? AND root_mutation_generation=?",
       [revision, generation, meta.main_revision, meta.root_mutation_generation],
     );
+    noteRootMutationGeneration(this.#tx, generation);
+    this.#tx.run(
+      "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,0,?)",
+      [generation, rootId],
+    );
+    return revision;
+  }
+
+  nextRevisionFromSnapshot(
+    now: number,
+    changeCount: number,
+    mainRevision: number,
+    rootMutationGeneration: number,
+    writer = "filesystem",
+  ): number {
+    validateDurableIdentifier(writer, "revision writer identifier");
+    if (
+      !Number.isSafeInteger(mainRevision) ||
+      mainRevision < 0 ||
+      !Number.isSafeInteger(rootMutationGeneration) ||
+      rootMutationGeneration < 0
+    )
+      throw new RangeError("invalid namespace revision snapshot");
+    const revision = mainRevision + 1;
+    const generation = rootMutationGeneration + 1;
+    if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(generation))
+      throw new Error("ENOSPC: revision or generation space exhausted");
+    const updated = this.#tx.run(
+      "UPDATE efs_meta SET main_revision=?,root_mutation_generation=? WHERE singleton=1 AND main_revision=? AND root_mutation_generation=?",
+      [revision, generation, mainRevision, rootMutationGeneration],
+    );
+    if (updated.changes !== 1)
+      return this.nextRevision(now, changeCount, writer);
+    const rootId = encodeUtf8(String(revision));
+    const writerBytes = intrinsicByteLength(encodeUtf8(writer));
+    new UsageRepository(this.#tx, this.#storage).apply(
+      {
+        maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId),
+        charged_metadata_bytes: CHARGED_ROW_BYTES + writerBytes,
+      },
+      "namespace root journal",
+      { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
+    );
+    this.#tx.run(
+      "INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(?,?,?,?,?)",
+      [revision, mainRevision, now, writer, changeCount],
+    );
+    noteRootMutationGeneration(this.#tx, generation);
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,0,?)",
       [generation, rootId],
@@ -267,6 +356,33 @@ export class NamespaceRepository {
         "INSERT INTO efs_revision_manifest_roots(revision,inode_id,manifest_hash) VALUES(?,?,?)",
         [revision, inodeId, inode.manifest_hash],
       );
+  }
+
+  recordFileContentRevision(revision: number, inode: InodeRow): void {
+    validateDurableIdentifier(inode.id, "inode identifier");
+    if (inode.type !== 0 || inode.size === null || inode.manifest_hash === null)
+      throw new Error("EINVAL: fresh file revision requires regular-file content");
+    const encoded = encodeUtf8(
+      JSON.stringify({
+        ...inode,
+        manifest_hash: bytesToHex(inode.manifest_hash),
+      }),
+    );
+    this.#changeMetadata(
+      2 * CHARGED_ROW_BYTES + intrinsicByteLength(encoded),
+      "fresh file inode revision metadata",
+    );
+    // nextRevision() has just allocated this revision, so these two rows
+    // cannot exist unless the durable revision sequence is corrupt. Avoid the
+    // generic prior-row probes and replacement delete on this local path.
+    this.#tx.run(
+      "INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(?,?,0,?)",
+      [revision, inode.id, encoded],
+    );
+    this.#tx.run(
+      "INSERT INTO efs_revision_manifest_roots(revision,inode_id,manifest_hash) VALUES(?,?,?)",
+      [revision, inode.id, inode.manifest_hash],
+    );
   }
   recordEntry(
     revision: number,
@@ -517,16 +633,13 @@ export class NamespaceRepository {
   }
   bumpRoot(kind: number, id: string): void {
     validateDurableIdentifier(id, "root journal identifier");
-    const generation = this.meta().root_mutation_generation + 1;
+    const generation = advanceRootMutationGeneration(this.#tx);
     const rootId = encodeUtf8(id);
     new UsageRepository(this.#tx, this.#storage).apply(
       { maintenance_bytes: CHARGED_ROW_BYTES + intrinsicByteLength(rootId) },
       "namespace root journal",
       { preserveMaintenanceBytes: MAINTENANCE_TOTAL_EMERGENCY_BYTES },
     );
-    this.#tx.run("UPDATE efs_meta SET root_mutation_generation=? WHERE singleton=1", [
-      generation,
-    ]);
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
       [generation, kind, rootId],

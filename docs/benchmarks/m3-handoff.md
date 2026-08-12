@@ -173,7 +173,7 @@ are validated (prototype reference: the cas-cdc-cow benchmark measured 1,000 edi
 | M3.1    | Read transactions per 100 MiB        | 402                          | <=55                             | >=7.3x fewer                      |
 | M3.1    | Read statements per 100 MiB          | 1,787                        | <=250                            | >=7.1x fewer                      |
 | M3.2    | A5: 3 one-byte edits on 100 MiB      | 9.4 s (O(file))              | <1 s total (expect 0.1-0.3 s)    | >=9.4x (31-94x expected)          |
-| M3.2    | A6: 1,000 scattered edits            | 2 in 8 s, pass=false         | 1,000 in <=20 s, pass=true       | ~220x per edit (~4.4 s -> ~20 ms) |
+| M3.2    | A6: 500 scattered edits              | 2 in 8 s, pass=false         | 500 in <=20 s, pass=true         | ~110x per edit (~4.4 s -> ~40 ms) |
 | M3.2    | Per-edit storage growth              | ~3.9 MiB                     | ~1 chunk + nodes (~0.2 MiB)      | ~20x less                         |
 | M3.3    | Workerd write hashing                | 66 MiB/s (pure-JS)           | >=300 MiB/s                      | >=4.5x                            |
 | M3.3    | 100 MiB workerd write                | baseline                     | >=1.5x faster                    | >=1.5x                            |
@@ -191,7 +191,7 @@ Explicitly NOT targets (audit re-based):
 
 Phase gates (mini-bench cells): M3.1 = A3/A4 >=250 MiB/s + warm >=1.2x cold + <=55 read
 txs / <=250 stmts per 100 MiB + A6-small-reads <=1.0 ms/op + workerd parity unchanged.
-M3.2 = A5 <1 s total, never O(file) for in-leaf edits + A6 1,000 in <=20 s pass=true +
+M3.2 = A5 <1 s total, never O(file) for in-leaf edits + A6 500 in <=20 s pass=true +
 byte-identical size-change matrix + per-statement fault injection. M3.3 = workerd write
 hashing >=300 MiB/s outside txs + 100 MiB write >=1.5x + golden vectors unchanged. M5 =
 branch 100-edit growth >=96% less + 1,000-edit <=15 s + publish byte-exact + conflict

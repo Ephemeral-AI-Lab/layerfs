@@ -1,7 +1,8 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "C1-mixed-script",
-  "commit": "9875004dd57377b5604df88ce45e85507f91e144",
+  "commit": "7678194e8ebc2913570a3b8850ce0a7ce090c820",
+  "worktreeDirty": true,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
   "fixture": {
@@ -14,30 +15,29 @@
   },
   "trials": 1,
   "latencyMs": {
-    "p50": 2283.94,
-    "p95": 2283.94,
-    "p99": 2283.94
+    "p50": 1402.858,
+    "p95": 1402.858,
+    "p99": 1402.858
   },
   "counters": {
-    "wallMs": 2283.94,
+    "wallMs": 1402.858,
     "phaseCount": 9,
-    "dbBytesAtPhase0": 4944008,
-    "dbBytesAtPhase1": 15017408,
-    "dbBytesAtPhase2": 27913008,
-    "dbBytesAtPhase3": 30599248,
-    "dbBytesAtPhase4": 31756968,
-    "dbBytesAtPhase5": 31756968,
-    "dbBytesAtPhase6": 31756968,
-    "dbBytesAtPhase7": 33458528,
-    "dbBytesAtPhase8": 33512088,
-    "dbGrowthBytes": 33178360,
-    "transactions": 771,
-    "statements": 13132,
-    "peakManagedResidentBytes": 51237241,
-    "peakHarnessHeapBytes": 52005648,
-    "overheadBasisPoints": null,
+    "dbBytesAtPhase0": 4956368,
+    "dbBytesAtPhase1": 15165728,
+    "dbBytesAtPhase2": 22346888,
+    "dbBytesAtPhase3": 23797128,
+    "dbBytesAtPhase4": 24654088,
+    "dbBytesAtPhase5": 24654088,
+    "dbBytesAtPhase6": 24654088,
+    "dbBytesAtPhase7": 26116688,
+    "dbBytesAtPhase8": 26170248,
+    "dbGrowthBytes": 25824160,
+    "transactions": 484,
+    "statements": 5394,
+    "peakManagedResidentBytes": 45496710,
+    "peakHarnessHeapBytes": 24660392,
     "nativePayloadBytes": 14188544,
-    "nativeRatioBasisPoints": 23384
+    "nativeRatioBasisPoints": 18201
   },
   "pass": true
 }

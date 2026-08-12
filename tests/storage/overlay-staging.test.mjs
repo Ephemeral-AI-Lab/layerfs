@@ -21,11 +21,13 @@ import { prepareContentEntriesStreaming } from "../../packages/fs/dist/operation
 import { MaintenanceManager } from "../../packages/fs/dist/operations/maintenance.js";
 import { BranchRepository } from "../../packages/fs/dist/sqlite/branch-repository.js";
 import { ContentRepository } from "../../packages/fs/dist/sqlite/content-repository.js";
+import { ManifestTreeRepository } from "../../packages/fs/dist/sqlite/manifest-tree-repository.js";
 import { OverlayRepository } from "../../packages/fs/dist/sqlite/overlay-repository.js";
 import { initializeOrValidateSchema } from "../../packages/fs/dist/sqlite/schema.js";
 import { StagingRepository } from "../../packages/fs/dist/sqlite/staging-repository.js";
 import {
   CHARGED_ROW_BYTES,
+  DIRECT_STAGING_BYTES_SQL,
   USAGE_COUNTER_COLUMNS,
   USAGE_RECOUNT_PHASE_COUNT,
   UsageRepository,
@@ -84,6 +86,92 @@ function verifyKeysetUsage(tx, storage) {
     ),
   );
 }
+
+test("local fresh appends reject duplicates while generic appends retain probes", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  try {
+    initializeOrValidateSchema(driver);
+    const storage = limits(driver);
+    const bytes = Uint8Array.of(1, 2, 3, 4);
+    const hash = sha256(bytes);
+    driver.transaction("write", (tx) =>
+      new ContentRepository(tx, storage).putObject(hash, bytes),
+    );
+
+    const freshNonce = Uint8Array.from({ length: 16 }, (_, index) => index + 1);
+    driver.transaction("write", (tx) => {
+      const staging = new StagingRepository(tx, storage);
+      staging.begin({
+        leaseId: "fresh-append",
+        ownerId: "fresh-append-owner",
+        ownerNonce: freshNonce,
+        now: 1,
+        expiresAt: 100,
+      });
+      const member = { kind: "object", hash, size: bytes.length };
+      staging.appendFreshBatch("fresh-append", freshNonce, [member]);
+      assert.throws(
+        () => staging.appendFreshBatch("fresh-append", freshNonce, [member]),
+        /staging membership changed during batched insert/,
+      );
+      assert.throws(
+        () =>
+          staging.appendFreshBatch("fresh-append", freshNonce, [
+            { ...member, counted: true },
+          ]),
+        /fresh local batch cannot contain count-only members/,
+      );
+    });
+
+    const genericNonce = Uint8Array.from({ length: 16 }, (_, index) => index + 20);
+    driver.transaction("write", (tx) => {
+      const staging = new StagingRepository(tx, storage);
+      staging.begin({
+        leaseId: "generic-append",
+        ownerId: "generic-append-owner",
+        ownerNonce: genericNonce,
+        now: 1,
+        expiresAt: 100,
+      });
+      const member = { kind: "object", hash, size: bytes.length };
+      staging.appendBatch("generic-append", genericNonce, [member]);
+      staging.appendBatch("generic-append", genericNonce, [member]);
+    });
+    assert.equal(
+      driver.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT count(*) count FROM efs_lease_objects WHERE lease_id=?",
+            ["generic-append"],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].count,
+      ),
+      1,
+    );
+
+    const invalidNonce = Uint8Array.from({ length: 16 }, (_, index) => index + 40);
+    driver.transaction("write", (tx) => {
+      const staging = new StagingRepository(tx, storage);
+      staging.begin({
+        leaseId: "generic-invalid",
+        ownerId: "generic-invalid-owner",
+        ownerNonce: invalidNonce,
+        now: 1,
+        expiresAt: 100,
+      });
+      assert.throws(
+        () =>
+          staging.appendBatch("generic-invalid", invalidNonce, [
+            { kind: "object", hash, size: bytes.length + 1 },
+          ]),
+        /staged membership does not match immutable content/,
+      );
+    });
+  } finally {
+    driver.close();
+  }
+});
 
 test("immutable COW heads retain one current page and atomically cross boundaries at every page size", async () => {
   for (const pageBytes of [4096, 8192, 16384]) {
@@ -1850,6 +1938,313 @@ test("sealed recovery rows reject raw mutation until tombstoned cleanup", async 
   }
   assert.equal(admission.usedBytes, 0);
   await port.close();
+});
+
+test("count-only closure members seal across shared leaves, survive GC, and release exactly", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const port = createSqliteOperationsStorage(driver);
+  initializeOrValidateSchema(driver);
+  const storage = limits(driver);
+  const budget = {
+    maxRows: storage.maxFinalTransactionRows,
+    maxBytes: storage.maxFinalTransactionBytes,
+  };
+  const cache = maintenanceCache();
+  const sharedBytes = Uint8Array.of(23);
+  const sharedHash = sha256(sharedBytes);
+  const levels = new Map();
+  const workspace = {
+    writeNode(record) {
+      const rows = levels.get(record.level) ?? [];
+      rows.push(record);
+      levels.set(record.level, rows);
+    },
+    readLevel(level, afterIndex, limit) {
+      return (levels.get(level) ?? [])
+        .filter((record) => record.index > afterIndex)
+        .slice(0, limit);
+    },
+  };
+  const built = buildManifestFromEntries(
+    Array.from({ length: 300 }, () => ({ hash: sharedHash, length: 1 })),
+    { minimum: 1, average: 1, maximum: 1 },
+    workspace,
+    { maxDepth: 8, readBatchRecords: 17 },
+  );
+  const nodeValues = [...levels.values()].flatMap((records) =>
+    records.map((record) => record.value),
+  );
+  assert.ok(nodeValues.filter((node) => node.node.kind === "leaf").length > 1);
+  driver.transaction("write", (tx) => {
+    const content = new ContentRepository(tx, storage);
+    content.putObject(sharedHash, sharedBytes);
+    for (const node of nodeValues) content.putManifestNode(node.hash, node.encoded);
+    content.putManifestRoot(built.rootHash, built.root);
+    tx.run(
+      "INSERT INTO efs_manifest_validations(manifest_hash,tree_depth) VALUES(?,?)",
+      [built.rootHash, built.depth],
+    );
+    new UsageRepository(tx, storage).apply(
+      { charged_metadata_bytes: CHARGED_ROW_BYTES },
+      "count-only fixture validation certificate",
+    );
+  });
+  const stagingBytes = () =>
+    driver.transaction("read", (tx) => ({
+      counter: tx.all("SELECT staging_bytes FROM efs_usage", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].staging_bytes,
+      direct: tx.all(DIRECT_STAGING_BYTES_SQL, [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].value,
+    }));
+  const assertStagingExact = () => {
+    const state = stagingBytes();
+    assert.equal(state.counter, state.direct);
+  };
+  const cleanupLease = (leaseId) => {
+    let batches = 0;
+    while (
+      driver.transaction("read", (tx) =>
+        tx.all("SELECT 1 FROM efs_leases WHERE id=?", [leaseId], {
+          maxRows: 1,
+          maxBytes: 128,
+        }),
+      ).length
+    ) {
+      driver.transaction("write", (tx) =>
+        new StagingRepository(tx, storage).cleanupBatch(64),
+      );
+      assert.ok(++batches < 32, `${leaseId} cleanup made no progress`);
+    }
+  };
+  const appendManifestLease = (
+    leaseId,
+    nonce,
+    counted,
+    expiresAt = 100_000,
+    complete = true,
+  ) => {
+    let certificate;
+    runUnitOfWork(driver, "write", budget, (tx) => {
+      const staging = new StagingRepository(tx, storage, cache);
+      staging.begin({
+        leaseId,
+        ownerId: `${leaseId}-owner`,
+        ownerNonce: nonce,
+        now: 1,
+        expiresAt,
+      });
+      new ManifestTreeRepository(tx, storage, cache).protectSourceManifest(
+        leaseId,
+        nonce,
+        built.rootHash,
+      );
+      if (counted)
+        staging.appendCountedBatch(leaseId, nonce, [
+          { kind: "object", hash: sharedHash, size: sharedBytes.length, counted: true },
+        ]);
+      for (const node of nodeValues)
+        staging.appendBatch(leaseId, nonce, [
+          { kind: "manifest-node", hash: node.hash, size: node.encoded.length },
+        ]);
+      staging.appendBatch(leaseId, nonce, [
+        { kind: "manifest-root", hash: built.rootHash, size: built.root.length },
+      ]);
+      if (complete) staging.beginReconciliation(leaseId, nonce, built.rootHash);
+      certificate = {
+        ...staging.snapshot(leaseId, nonce),
+        manifestHash: built.rootHash,
+      };
+    });
+    if (!complete) return certificate;
+    let reconciled = false;
+    while (!reconciled)
+      reconciled = runUnitOfWork(
+        driver,
+        "write",
+        budget,
+        (tx) =>
+          new StagingRepository(tx, storage, cache).reconcileBatch(
+            leaseId,
+            nonce,
+            storage.maxQueryBatchSize,
+          ).complete,
+      );
+    return certificate;
+  };
+
+  const baseline = stagingBytes();
+  const nonce = Uint8Array.from({ length: 16 }, (_, index) => index + 1);
+  const certificate = appendManifestLease("count-only", nonce, true);
+  assert.equal(certificate.objectCount, 1);
+  assert.equal(certificate.objectBytes, sharedBytes.length);
+  assert.equal(certificate.membershipCount, certificate.nodeCount + 1);
+  runUnitOfWork(driver, "write", budget, (tx) =>
+    new StagingRepository(tx, storage).seal(certificate),
+  );
+  runUnitOfWork(driver, "read", budget, (tx) =>
+    new StagingRepository(tx, storage).validateSealed(certificate, 2),
+  );
+  const rows = driver.transaction(
+    "read",
+    (tx) =>
+      tx.all(
+        "SELECT (SELECT count(*) FROM efs_lease_objects WHERE lease_id=?) object_rows,(SELECT count(*) FROM efs_lease_staged_manifests WHERE lease_id=?) node_rows",
+        [certificate.leaseId, certificate.leaseId],
+        { maxRows: 1, maxBytes: 128 },
+      )[0],
+  );
+  assert.deepEqual(rows, { object_rows: 0, node_rows: certificate.nodeCount });
+  assertStagingExact();
+  assert.equal(
+    stagingBytes().counter,
+    baseline.counter +
+      nodeValues.reduce((sum, node) => sum + node.encoded.length, 0) +
+      built.root.length,
+  );
+  driver.transaction("read", (tx) => verifyKeysetUsage(tx, storage));
+
+  const gcWhileCounted = await new MaintenanceManager(
+    port,
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    () => 3,
+    maintenanceCache(),
+  ).collectGarbage({ runId: "count-only-protected" });
+  assert.equal(gcWhileCounted.deletedObjectCount, 0);
+  assert.equal(
+    driver.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT count(*) count FROM efs_cas_objects WHERE hash=?",
+          [sharedHash],
+          {
+            maxRows: 1,
+            maxBytes: 128,
+          },
+        )[0].count,
+    ),
+    1,
+  );
+
+  const expiringNonce = Uint8Array.from({ length: 16 }, (_, index) => index + 20);
+  runUnitOfWork(driver, "write", budget, (tx) => {
+    const staging = new StagingRepository(tx, storage);
+    staging.begin({
+      leaseId: "count-only-expiring",
+      ownerId: "count-only-expiring-owner",
+      ownerNonce: expiringNonce,
+      now: 1,
+      expiresAt: 2,
+    });
+    staging.appendCountedBatch("count-only-expiring", expiringNonce, [
+      { kind: "object", hash: sharedHash, size: sharedBytes.length, counted: true },
+    ]);
+  });
+  const beforeExpiry = stagingBytes();
+  runUnitOfWork(driver, "write", budget, (tx) =>
+    new StagingRepository(tx, storage).expireBatch(3, 10),
+  );
+  cleanupLease("count-only-expiring");
+  assert.deepEqual(stagingBytes(), beforeExpiry);
+  assertStagingExact();
+
+  const duplicateNonce = Uint8Array.from({ length: 16 }, (_, index) => index + 40);
+  const duplicateCertificate = appendManifestLease(
+    "count-only-duplicate",
+    duplicateNonce,
+    true,
+    100_000,
+    false,
+  );
+  runUnitOfWork(driver, "write", budget, (tx) => {
+    const staging = new StagingRepository(tx, storage, cache);
+    staging.appendBatch("count-only-duplicate", duplicateNonce, [
+      { kind: "object", hash: sharedHash, size: sharedBytes.length },
+    ]);
+    staging.beginReconciliation("count-only-duplicate", duplicateNonce, built.rootHash);
+  });
+  assert.throws(() => {
+    let complete = false;
+    while (!complete)
+      complete = runUnitOfWork(
+        driver,
+        "write",
+        budget,
+        (tx) =>
+          new StagingRepository(tx, storage, cache).reconcileBatch(
+            "count-only-duplicate",
+            duplicateNonce,
+            storage.maxQueryBatchSize,
+          ).complete,
+      );
+  }, /complete manifest closure differs/);
+  runUnitOfWork(driver, "write", budget, (tx) =>
+    new StagingRepository(tx, storage).release(
+      duplicateCertificate.leaseId,
+      duplicateNonce,
+      false,
+    ),
+  );
+  cleanupLease(duplicateCertificate.leaseId);
+
+  const fullFirstNonce = Uint8Array.from({ length: 16 }, (_, index) => index + 60);
+  runUnitOfWork(driver, "write", budget, (tx) => {
+    const staging = new StagingRepository(tx, storage);
+    staging.begin({
+      leaseId: "count-only-full-first",
+      ownerId: "count-only-full-first-owner",
+      ownerNonce: fullFirstNonce,
+      now: 1,
+      expiresAt: 100_000,
+    });
+    staging.appendBatch("count-only-full-first", fullFirstNonce, [
+      { kind: "object", hash: sharedHash, size: sharedBytes.length },
+    ]);
+    assert.throws(
+      () =>
+        staging.appendBatch("count-only-full-first", fullFirstNonce, [
+          { kind: "object", hash: sharedHash, size: sharedBytes.length, counted: true },
+        ]),
+      /counted closure member is already a full staged member/,
+    );
+    assert.throws(
+      () =>
+        staging.appendBatch("count-only-full-first", fullFirstNonce, [
+          { kind: "object", hash: sharedHash, size: sharedBytes.length, counted: true },
+          { kind: "object", hash: sharedHash, size: sharedBytes.length, counted: true },
+        ]),
+      /duplicate staging member/,
+    );
+  });
+  runUnitOfWork(driver, "write", budget, (tx) =>
+    new StagingRepository(tx, storage).release(
+      "count-only-full-first",
+      fullFirstNonce,
+      false,
+    ),
+  );
+  cleanupLease("count-only-full-first");
+
+  runUnitOfWork(driver, "write", budget, (tx) =>
+    new StagingRepository(tx, storage).release(certificate.leaseId, nonce, true),
+  );
+  cleanupLease(certificate.leaseId);
+  assertStagingExact();
+  driver.transaction("read", (tx) => verifyKeysetUsage(tx, storage));
+  const gcAfterRelease = await new MaintenanceManager(
+    port,
+    storage,
+    DEFAULT_RUNTIME_LIMITS,
+    () => 4,
+    maintenanceCache(),
+  ).collectGarbage({ runId: "count-only-released" });
+  assert.ok(gcAfterRelease.deletedObjectCount >= 1);
+  driver.close();
 });
 
 test(

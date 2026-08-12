@@ -15,7 +15,7 @@ const acceptedMatch = /^pnpm validate:(m\d+)$/u.exec(acceptedValidation ?? "");
 if (!acceptedMatch)
   throw new Error("validate:accepted must select one milestone validation command");
 const activeAcceptedMilestone = acceptedMatch[1];
-if (!new Set(["m0", "m1", "m2"]).has(activeAcceptedMilestone))
+if (!new Set(["m0", "m1", "m2", "m3"]).has(activeAcceptedMilestone))
   throw new Error(
     `evidence checker has no validation schema for ${activeAcceptedMilestone}`,
   );
@@ -74,13 +74,18 @@ function ownedByMilestone(milestone, filename) {
     filename.startsWith("docs/testing/") ||
     filename === "docs/implementation/implementation-plan.md";
   if (milestone === "m1") return m1;
-  return (
+  const m2 =
     m1 ||
     filename.startsWith("packages/fs/src/") ||
     filename.startsWith("packages/sqlite-node/src/") ||
     filename.startsWith("tests/storage/") ||
     filename.startsWith("tests/node-integration/") ||
-    filename.startsWith("tests/maintenance/")
+    filename.startsWith("tests/maintenance/");
+  if (milestone === "m2") return m2;
+  return (
+    m2 ||
+    filename.startsWith("tests/conformance/") ||
+    filename.startsWith("packages/sqlite-cloudflare/src/")
   );
 }
 const m1SourceEntrypoints = [
@@ -258,8 +263,8 @@ async function validateMilestone(
 if (process.argv[2] === "--owned-tree-digest") {
   const milestone = process.argv[3];
   const commit = process.argv[4] ?? "HEAD";
-  if (!new Set(["m0", "m1", "m2"]).has(milestone))
-    throw new Error("owned-tree digest milestone must be m0, m1, or m2");
+  if (!new Set(["m0", "m1", "m2", "m3"]).has(milestone))
+    throw new Error("owned-tree digest milestone must be m0, m1, m2, or m3");
   console.log(await ownedTreeDigest(milestone, commit));
   process.exit(0);
 }
@@ -344,6 +349,44 @@ const m2Predecessor = m2.exit.match(
 )?.[1];
 if (m2Predecessor !== m1.candidate)
   throw new Error("m2 sequential predecessor differs from the accepted m1 candidate");
+
+const m3 = await validateMilestone(
+  "m3",
+  [
+    "operatingSystems",
+    "nodeVersions",
+    "matrixRuns",
+    "nodeAlgorithmTests",
+    "workerdChecks",
+    "nodeStorageTests",
+    "maintenanceTests",
+    "conformanceTests",
+    "readMiBPerSecondCold",
+    "readMiBPerSecondWarm",
+    "readTransactionsPerHundredMiB",
+    "readStatementsPerHundredMiB",
+    "smallReadMicrosPerOp",
+    "localEditMsTotal",
+    "scatteredEditCompleted",
+    "workerdWriteHashingMiBPerSecond",
+    "workerdWriteHashingSpeedupPercent",
+  ],
+  { requireCurrentDigest: activeAcceptedMilestone === "m3" },
+);
+if (
+  m3.artifact.passed !==
+  m3.artifact.metrics.nodeAlgorithmTests +
+    m3.artifact.metrics.workerdChecks +
+    m3.artifact.metrics.nodeStorageTests +
+    m3.artifact.metrics.maintenanceTests +
+    m3.artifact.metrics.conformanceTests
+)
+  throw new Error("m3 passed count differs from the recorded suite checks");
+const m3Predecessor = m3.exit.match(
+  /Sequential predecessor:[\s\S]*?`([0-9a-f]{40})`/u,
+)?.[1];
+if (m3Predecessor !== m2.candidate)
+  throw new Error("m3 sequential predecessor differs from the accepted m2 candidate");
 
 console.log(
   `evidence: preserved predecessor candidates and current ${activeAcceptedMilestone.toUpperCase()} schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,

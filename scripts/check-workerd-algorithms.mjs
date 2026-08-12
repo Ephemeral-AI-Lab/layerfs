@@ -21,6 +21,7 @@ const requiredChecks = new Set([
   "diagnostic-local-rebuild",
   "streamed-rebuild-sink-ownership",
   "runtime-progress-bound",
+  "write-path-hashing",
 ]);
 
 async function reserveEphemeralPort() {
@@ -159,6 +160,16 @@ try {
   const progress = observed.get("runtime-progress-bound");
   if (progress.requiredBytes !== 102_273_024)
     throw new Error(`workerd resource metric is invalid: ${body}`);
+  const hashing = observed.get("write-path-hashing");
+  if (
+    hashing.hashedBytes < 32 * 1024 * 1024 ||
+    hashing.mibPerSec < 300 ||
+    hashing.baselineMibPerSec <= 0 ||
+    hashing.speedup < 1.5
+  )
+    throw new Error(
+      `workerd write-path hashing is below the M3.3 gates (${hashing.mibPerSec} MiB/s, ${hashing.speedup}x over pure-JS): ${body}`,
+    );
   output = JSON.stringify(result);
 } catch (error) {
   failure = error;

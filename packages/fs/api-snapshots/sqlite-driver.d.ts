@@ -14,6 +14,13 @@ export interface FilesystemSQLiteDriver {
      * fall back to the byte-identical pure-JS implementation.
      */
     readonly hashBytes?: SqliteHashFunction;
+    /**
+     * Optional asynchronous SHA-256 hasher for write-path chunk hashing
+     * (WebCrypto on workerd). When present, the streaming write pipeline hashes
+     * its chunk batches concurrently with bounded parallelism; digests are
+     * byte-identical to the synchronous implementations.
+     */
+    readonly hashBytesAsync?: SqliteAsyncHashFunction;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     physicalStorage?(): SQLitePhysicalStorage;
     checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
@@ -34,6 +41,10 @@ export interface QueryBudget {
     readonly maxRows: number;
     readonly maxBytes: number;
 }
+
+/* export: SqliteAsyncHashFunction; kinds: type */
+/* source: packages/fs/dist/sqlite/driver.d.ts */
+export type SqliteAsyncHashFunction = (bytes: Uint8Array) => Promise<Uint8Array>;
 
 /* export: SqliteBindings; kinds: type */
 /* source: packages/fs/dist/sqlite/driver.d.ts */

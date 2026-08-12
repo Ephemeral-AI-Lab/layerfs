@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { bytesToHex } from "../../packages/fs/dist/cas/bytes.js";
 import { sha256 } from "../../packages/fs/dist/cas/sha256.js";
-import { findFastCdcBoundary } from "../../packages/fs/dist/cdc/fastcdc.js";
+import {
+  findFastCdcBoundary,
+  StreamingFastCdc,
+} from "../../packages/fs/dist/cdc/fastcdc.js";
 import {
   buildManifest,
   MAX_DIAGNOSTIC_CONTENT_BYTES,
@@ -35,6 +38,12 @@ import {
   LocalRebuildLimitError,
   rebuildDiagnosticManifestLocally,
 } from "../../packages/fs/dist/operations/local-rebuild.js";
+import {
+  BoundedRebuildFallbackError,
+  boundedPathAtOffset,
+  buildBoundedManifestState,
+  rebuildManifestBoundedOwned,
+} from "../../packages/fs/dist/operations/bounded-local-rebuild.js";
 import {
   rebuildEditedContentStreaming,
   rebuildManifestLocallyOrStream,
@@ -133,6 +142,14 @@ class MemoryManifestWorkspace {
       .filter((record) => record.index > afterIndex)
       .slice(0, limit);
   }
+}
+
+function workspaceNodes(workspace) {
+  const nodes = new Map();
+  for (const records of workspace.levels.values())
+    for (const record of records)
+      nodes.set(bytesToHex(record.value.hash), record.value);
+  return nodes;
 }
 
 function mutableDiagnosticCopy(manifest) {
@@ -1903,9 +1920,19 @@ test("diagnostic local rebuild authenticates cached entries and the complete cap
   );
 });
 
-test("diagnostic local rebuild enforces its exact content cap before source work", () => {
-  const original = new Uint8Array(MAX_DIAGNOSTIC_CONTENT_BYTES);
-  const before = buildManifest(original, defaults);
+test("diagnostic local rebuild enforces its retained limits before source work", () => {
+  // M3.2 contract change: the fixed 16 MiB content cap is lifted; the
+  // retained-entry ceiling is now the pre-source-work guard. With maximum=1
+  // every byte is one entry, so lowering maxRetainedEntries below the source
+  // entry count provably rejects before any source read.
+  const parameters = { minimum: 1, average: 1, maximum: 1 };
+  const original = new Uint8Array(200);
+  const before = buildManifest(original, parameters);
+  const limits = {
+    ...DEFAULT_LOCAL_REBUILD_LIMITS,
+    maxRetainedEntries: 100,
+    maxAffectedEntries: 100,
+  };
   const source = {
     size: original.length,
     reads: 0,
@@ -1914,21 +1941,18 @@ test("diagnostic local rebuild enforces its exact content cap before source work
       return original.slice(offset, offset + length);
     },
   };
-  const exact = rebuildDiagnosticManifestLocally(source, before, {
-    offset: 1,
-    deleteLength: 1,
-    insertBytes: Uint8Array.of(1),
-  });
-  assert.equal(exact.fileSize, MAX_DIAGNOSTIC_CONTENT_BYTES);
-
-  source.reads = 0;
   assert.throws(
     () =>
-      rebuildDiagnosticManifestLocally(source, before, {
-        offset: original.length,
-        deleteLength: 0,
-        insertBytes: Uint8Array.of(1),
-      }),
+      rebuildDiagnosticManifestLocally(
+        source,
+        before,
+        {
+          offset: original.length,
+          deleteLength: 0,
+          insertBytes: Uint8Array.of(1),
+        },
+        limits,
+      ),
     (error) => {
       assert.ok(error instanceof LocalRebuildLimitError);
       assert.deepEqual(error.attemptMetrics, {
@@ -1954,18 +1978,54 @@ test("diagnostic local rebuild enforces its exact content cap before source work
       deleteLength: 0,
       insertBytes: Uint8Array.of(1),
     },
+    parameters,
+    workspace,
+    { putObject() {} },
+    limits,
+    { readWindowBytes: parameters.maximum, manifestReadBatchRecords: 17 },
+  );
+  assert.equal(streamed.mode, "streamed-fallback");
+  assert.equal(
+    decodeManifestRoot(streamed.manifest.root, streamed.manifest.rootHash).fileSize,
+    original.length + 1,
+  );
+  assert.ok(streamed.metrics.peakPendingEntries <= 256);
+});
+
+test("diagnostic local rebuild handles appends beyond the lifted 16 MiB diagnostic cap", () => {
+  // M3.2 contract change: the fixed 16 MiB per-file cap is lifted. An append
+  // past the old boundary now reconnects locally; the streamed rebuild is the
+  // byte-identical reference.
+  const original = new Uint8Array(MAX_DIAGNOSTIC_CONTENT_BYTES).fill(0x5a);
+  const before = buildManifest(original, defaults);
+  const source = {
+    size: original.length,
+    reads: 0,
+    read(offset, length) {
+      this.reads += 1;
+      return original.slice(offset, offset + length);
+    },
+  };
+  const edit = {
+    offset: original.length,
+    deleteLength: 0,
+    insertBytes: Uint8Array.of(1),
+  };
+  const local = rebuildDiagnosticManifestLocally(source, before, edit);
+  assert.equal(local.fileSize, MAX_DIAGNOSTIC_CONTENT_BYTES + 1);
+  assert.equal(local.metrics.fellBackToEnd, false);
+  const workspace = new MemoryManifestWorkspace();
+  const streamed = rebuildManifestLocallyOrStream(
+    source,
+    before,
+    edit,
     defaults,
     workspace,
     { putObject() {} },
     undefined,
     { readWindowBytes: defaults.maximum, manifestReadBatchRecords: 17 },
   );
-  assert.equal(streamed.mode, "streamed-fallback");
-  assert.equal(
-    decodeManifestRoot(streamed.manifest.root, streamed.manifest.rootHash).fileSize,
-    MAX_DIAGNOSTIC_CONTENT_BYTES + 1,
-  );
-  assert.ok(streamed.metrics.peakPendingEntries <= 256);
+  assert.equal(bytesToHex(local.rootHash), bytesToHex(streamed.manifest.rootHash));
 });
 
 test("diagnostic local limits are fixed lowering-only caps", () => {
@@ -2021,7 +2081,7 @@ test("diagnostic local limits are fixed lowering-only caps", () => {
         maxRetainedEntries: 2,
         maxAffectedEntries: 2,
       }),
-    /local result exceeds its retained-entry limit/,
+    /retained-entry/,
   );
 
   class SpoofedOversizedInsertion extends Uint8Array {
@@ -2729,4 +2789,420 @@ test("seeded local rebuild property cases match full rebuilds at boundaries and 
       `iteration ${iteration} remained local`,
     );
   }
+});
+
+test("bounded Merkle rebuild golden vectors match the full path across file sizes and edit shapes", () => {
+  const parameters = defaults;
+  const sizes = [1, 20, 100].map((mib) => mib * 1024 * 1024);
+  for (const size of sizes) {
+    const original = fixture(size, 0x5eed0000 ^ size);
+    const workspace = new MemoryManifestWorkspace();
+    const chunked = [];
+    new StreamingFastCdc(parameters).drain(
+      original,
+      (chunk) => {
+        chunked.push({ hash: sha256(chunk), length: chunk.length });
+      },
+      true,
+    );
+    const built = buildManifestFromEntries(chunked, parameters, workspace, {
+      maxDepth: 8,
+    });
+    const before = {
+      id: bytesToHex(built.rootHash),
+      rootHash: built.rootHash,
+      root: built.root,
+      nodes: workspaceNodes(workspace),
+      entries: chunked,
+    };
+    const entryOffsets = [0];
+    for (const entry of before.entries)
+      entryOffsets.push(entryOffsets.at(-1) + entry.length);
+    const atEntry = (index, inside = 0) =>
+      entryOffsets[index] + Math.min(inside, before.entries[index].length - 1);
+    const edits = [
+      {
+        name: "prepend",
+        offset: 0,
+        deleteLength: 0,
+        insertBytes: Uint8Array.of(1, 2, 3),
+      },
+      {
+        name: "append",
+        offset: size,
+        deleteLength: 0,
+        insertBytes: Uint8Array.of(4, 5, 6),
+      },
+      {
+        name: "truncate",
+        offset: Math.floor(size * 0.75),
+        deleteLength: size - Math.floor(size * 0.75),
+        insertBytes: new Uint8Array(),
+      },
+      {
+        name: "mid-leaf-delete",
+        offset: atEntry(Math.floor(before.entries.length / 2), 1),
+        deleteLength: 1,
+        insertBytes: Uint8Array.of(7),
+      },
+      {
+        name: "eof-replace",
+        offset: size - 1,
+        deleteLength: 1,
+        insertBytes: Uint8Array.of(8),
+      },
+    ];
+    if (before.entries.length > 256) {
+      const crossStart = atEntry(255, 1);
+      const crossEnd = entryOffsets[258];
+      edits.push({
+        name: "cross-leaf-delete",
+        offset: crossStart,
+        deleteLength: crossEnd - crossStart,
+        insertBytes: Uint8Array.of(9, 10),
+      });
+    }
+    for (const edit of edits) {
+      const source = {
+        size,
+        read(offset, length) {
+          return original.slice(offset, offset + length);
+        },
+      };
+      const full = rebuildDiagnosticManifestLocally(source, before, edit);
+      const state = buildBoundedManifestState(
+        before,
+        edit.offset,
+        edit.deleteLength,
+        DEFAULT_LOCAL_REBUILD_LIMITS,
+        edit.insertBytes.length === edit.deleteLength,
+      );
+      const dirtyPath = boundedPathAtOffset(before, edit.offset + edit.deleteLength);
+      assert.deepEqual(
+        state.dirtyEndLeaf.path,
+        dirtyPath.frames.at(-1).path,
+        `${size} MiB ${edit.name} dirty-end path`,
+      );
+      assert.equal(
+        state.boundary.get(state.dirtyEndLeaf.leafOffset),
+        state.dirtyEndLeaf.startEntryIndex,
+        `${size} MiB ${edit.name} dirty-end boundary`,
+      );
+      const bounded = rebuildManifestBoundedOwned(
+        state,
+        source,
+        edit,
+        DEFAULT_LOCAL_REBUILD_LIMITS,
+        sha256,
+      );
+      assert.equal(
+        bytesToHex(bounded.rootHash),
+        bytesToHex(full.rootHash),
+        `${size} MiB ${edit.name} root`,
+      );
+      assert.deepEqual(
+        bounded.root,
+        full.root,
+        `${size} MiB ${edit.name} encoded root`,
+      );
+      assert.deepEqual(
+        bounded.entrySplice,
+        full.entrySplice,
+        `${size} MiB ${edit.name} splice`,
+      );
+      assert.deepEqual(
+        applyEntrySplice(before.entries, bounded.entrySplice),
+        applyEntrySplice(before.entries, full.entrySplice),
+        `${size} MiB ${edit.name} entry stream`,
+      );
+      assert.equal(
+        bounded.metrics.reconnectOldOffset,
+        full.metrics.reconnectOldOffset,
+        `${size} MiB ${edit.name} reconnect offset`,
+      );
+      assert.ok(
+        state.boundary.has(full.metrics.reconnectOldOffset),
+        `${size} MiB ${edit.name} reconnect is in the loaded boundary map`,
+      );
+      if (before.nodes.size > 1)
+        assert.ok(
+          state.levelWindows.slice(1).some((window) => window?.fringe.length >= 0),
+          `${size} MiB ${edit.name} has level windows`,
+        );
+    }
+  }
+});
+
+test("bounded local rebuild falls back when its retained window is too small", () => {
+  const parameters = { minimum: 1, average: 1, maximum: 1 };
+  const original = fixture(4096, 0xfeed1234);
+  const before = buildManifest(original, parameters);
+  assert.throws(
+    () =>
+      buildBoundedManifestState(before, 0, 0, {
+        ...DEFAULT_LOCAL_REBUILD_LIMITS,
+        maxAffectedEntries: 1,
+      }),
+    (error) => error instanceof BoundedRebuildFallbackError,
+  );
+});
+
+test("bounded local rebuild is byte-identical to the full-state rebuild across the edit-shape corpus", () => {
+  const parameters = { minimum: 32768, average: 131072, maximum: 524288 };
+  const MIB = 1024 * 1024;
+  const shapes = (size, leafCount) => [
+    {
+      name: "append",
+      edit: { offset: size, deleteLength: 0, insertBytes: Uint8Array.of(1, 2, 3) },
+    },
+    {
+      name: "prepend",
+      edit: { offset: 0, deleteLength: 0, insertBytes: Uint8Array.of(9, 8, 7, 6, 5) },
+    },
+    {
+      name: "truncate",
+      edit: {
+        offset: Math.floor(size * 0.75),
+        deleteLength: Math.floor(size * 0.25),
+        insertBytes: new Uint8Array(),
+      },
+    },
+    {
+      name: "replace-mid",
+      edit: {
+        offset: Math.floor(size / 2),
+        deleteLength: 1,
+        insertBytes: Uint8Array.of(7, 7),
+      },
+    },
+    {
+      name: "delete-mid",
+      edit: {
+        offset: Math.floor(size / 2),
+        deleteLength: 17,
+        insertBytes: new Uint8Array(),
+      },
+    },
+    {
+      name: "replace-eof",
+      edit: { offset: size - 1, deleteLength: 1, insertBytes: Uint8Array.of(3) },
+    },
+    ...(leafCount > 1
+      ? [
+          {
+            name: "cross-leaf-delete",
+            edit: {
+              offset: Math.floor(size * 0.4),
+              deleteLength: Math.floor((size / leafCount) * 2.2),
+              insertBytes: new Uint8Array(),
+            },
+          },
+        ]
+      : []),
+  ];
+  for (const size of [1 * MIB, 20 * MIB, 100 * MIB]) {
+    const original = fixture(size, 0x5eed ^ size);
+    const workspace = new MemoryManifestWorkspace();
+    const chunked = [];
+    new StreamingFastCdc(parameters).drain(
+      original,
+      (chunk) => {
+        chunked.push({ hash: sha256(chunk), length: chunk.length });
+      },
+      true,
+    );
+    const built = buildManifestFromEntries(chunked, parameters, workspace, {
+      maxDepth: 8,
+    });
+    const before = {
+      id: bytesToHex(built.rootHash),
+      rootHash: built.rootHash,
+      root: built.root,
+      nodes: workspaceNodes(workspace),
+      entries: chunked,
+    };
+    const leafCount = [...workspaceNodes(workspace).values()].filter(
+      (n) => n.node.kind === "leaf",
+    ).length;
+    const source = {
+      size: original.length,
+      read: (offset, length) => original.slice(offset, offset + length),
+    };
+    for (const shape of shapes(size, leafCount)) {
+      const edit = shape.edit;
+      const full = rebuildDiagnosticManifestLocally(source, before, {
+        offset: edit.offset,
+        deleteLength: edit.deleteLength,
+        insertBytes: edit.insertBytes,
+      });
+      const state = buildBoundedManifestState(
+        before,
+        edit.offset,
+        edit.deleteLength,
+        DEFAULT_LOCAL_REBUILD_LIMITS,
+      );
+      let bounded;
+      try {
+        bounded = rebuildManifestBoundedOwned(
+          state,
+          source,
+          {
+            offset: edit.offset,
+            deleteLength: edit.deleteLength,
+            insertBytes: edit.insertBytes,
+          },
+          DEFAULT_LOCAL_REBUILD_LIMITS,
+          sha256,
+        );
+      } catch (error) {
+        assert.ok(
+          error instanceof BoundedRebuildFallbackError,
+          `${size / MIB}MiB ${shape.name} fell back for an unexpected reason`,
+        );
+        continue;
+      }
+      assert.equal(
+        bytesToHex(bounded.rootHash),
+        bytesToHex(full.rootHash),
+        `${size / MIB}MiB ${shape.name} root hash`,
+      );
+      assert.equal(
+        bytesToHex(bounded.root),
+        bytesToHex(full.root),
+        `${size / MIB}MiB ${shape.name} root bytes`,
+      );
+      assert.equal(
+        bounded.entrySplice.start,
+        full.entrySplice.start,
+        `${size / MIB}MiB ${shape.name} splice start`,
+      );
+      assert.equal(
+        bounded.entrySplice.deleteCount,
+        full.entrySplice.deleteCount,
+        `${size / MIB}MiB ${shape.name} splice delete count`,
+      );
+      assert.deepEqual(
+        bounded.entrySplice.entries.map((entry) => [
+          bytesToHex(entry.hash),
+          entry.length,
+        ]),
+        full.entrySplice.entries.map((entry) => [bytesToHex(entry.hash), entry.length]),
+        `${size / MIB}MiB ${shape.name} splice entries`,
+      );
+      assert.equal(
+        bounded.fileSize,
+        full.fileSize,
+        `${size / MIB}MiB ${shape.name} file size`,
+      );
+      assert.equal(
+        bounded.entryCount,
+        full.entryCount,
+        `${size / MIB}MiB ${shape.name} entry count`,
+      );
+      // The dirty-end-leaf map binds the chunker reconnect: the reconnect
+      // offset is an entry boundary inside the loaded leaves, and the
+      // reconnect entry equals the splice end.
+      const metrics = bounded.metrics;
+      assert.ok(
+        state.boundary.has(metrics.reconnectOldOffset),
+        `${size / MIB}MiB ${shape.name} reconnect offset in the loaded boundary map`,
+      );
+      assert.equal(
+        state.boundary.get(metrics.reconnectOldOffset),
+        bounded.entrySplice.start + bounded.entrySplice.deleteCount,
+        `${size / MIB}MiB ${shape.name} reconnect entry equals the splice end`,
+      );
+      // The reconnect window stays bounded: the loaded fringe never exceeds
+      // the retained-entry budget.
+      assert.ok(
+        state.fringeLeaves.length * 256 <=
+          DEFAULT_LOCAL_REBUILD_LIMITS.maxRetainedEntries,
+      );
+    }
+  }
+});
+
+test("bounded local rebuild matches the full-state rebuild on a seeded random corpus", () => {
+  const parameters = { minimum: 32768, average: 131072, maximum: 524288 };
+  const MIB = 1024 * 1024;
+  const original = fixture(40 * MIB, 0xabcd);
+  const workspace = new MemoryManifestWorkspace();
+  const chunked = [];
+  new StreamingFastCdc(parameters).drain(
+    original,
+    (chunk) => {
+      chunked.push({ hash: sha256(chunk), length: chunk.length });
+    },
+    true,
+  );
+  const built = buildManifestFromEntries(chunked, parameters, workspace, {
+    maxDepth: 8,
+  });
+  const before = {
+    id: bytesToHex(built.rootHash),
+    rootHash: built.rootHash,
+    root: built.root,
+    nodes: workspaceNodes(workspace),
+    entries: chunked,
+  };
+  const source = {
+    size: original.length,
+    read: (offset, length) => original.slice(offset, offset + length),
+  };
+  let state = 0x91e10da5;
+  const random = () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return state >>> 0;
+  };
+  let matched = 0;
+  let fellBack = 0;
+  for (let iteration = 0; iteration < 16; iteration += 1) {
+    const offset = random() % (original.length + 1);
+    const deleteLength = Math.min(random() % 33, original.length - offset);
+    const insert = fixture(random() % 33, random());
+    const edit = { offset, deleteLength, insertBytes: insert };
+    const full = rebuildDiagnosticManifestLocally(source, before, edit);
+    const stateBounded = buildBoundedManifestState(
+      before,
+      offset,
+      deleteLength,
+      DEFAULT_LOCAL_REBUILD_LIMITS,
+    );
+    let bounded;
+    try {
+      bounded = rebuildManifestBoundedOwned(
+        stateBounded,
+        source,
+        edit,
+        DEFAULT_LOCAL_REBUILD_LIMITS,
+        sha256,
+      );
+    } catch (error) {
+      assert.ok(
+        error instanceof BoundedRebuildFallbackError,
+        `iteration ${iteration} fell back unexpectedly`,
+      );
+      fellBack += 1;
+      continue;
+    }
+    matched += 1;
+    assert.equal(
+      bytesToHex(bounded.rootHash),
+      bytesToHex(full.rootHash),
+      `iteration ${iteration} root`,
+    );
+    assert.equal(
+      bounded.entrySplice.start,
+      full.entrySplice.start,
+      `iteration ${iteration} splice`,
+    );
+    assert.equal(
+      bounded.entrySplice.deleteCount,
+      full.entrySplice.deleteCount,
+      `iteration ${iteration} splice`,
+    );
+  }
+  assert.ok(matched >= 8, `bounded matched ${matched} of 16 random edits`);
 });

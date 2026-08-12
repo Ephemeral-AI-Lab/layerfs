@@ -47,6 +47,7 @@ export interface SQLiteCheckpointResult {
     readonly walBytes?: number;
 }
 export type SqliteHashFunction = (bytes: Uint8Array) => Uint8Array;
+export type SqliteAsyncHashFunction = (bytes: Uint8Array) => Promise<Uint8Array>;
 export interface FilesystemSQLiteDriver {
     readonly kind: "sqlite";
     readonly readOnly: boolean;
@@ -58,6 +59,13 @@ export interface FilesystemSQLiteDriver {
      * fall back to the byte-identical pure-JS implementation.
      */
     readonly hashBytes?: SqliteHashFunction;
+    /**
+     * Optional asynchronous SHA-256 hasher for write-path chunk hashing
+     * (WebCrypto on workerd). When present, the streaming write pipeline hashes
+     * its chunk batches concurrently with bounded parallelism; digests are
+     * byte-identical to the synchronous implementations.
+     */
+    readonly hashBytesAsync?: SqliteAsyncHashFunction;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     physicalStorage?(): SQLitePhysicalStorage;
     checkpoint?(mode?: "passive" | "restart" | "truncate"): SQLiteCheckpointResult;
@@ -90,6 +98,12 @@ export declare class CloudflareSQLiteDriver implements FilesystemSQLiteDriver {
     readonly readOnly = false;
     readonly capabilities: SQLiteDriverCapabilities;
     constructor(options: OpenCloudflareSqliteOptions);
+    /**
+     * WebCrypto SHA-256 for the streaming write pipeline. Digest output is
+     * byte-identical to the pure-JS fallback (`cas/sha256.ts`), so golden
+     * vectors and workerd parity are unaffected.
+     */
+    readonly hashBytesAsync: (bytes: Uint8Array) => Promise<Uint8Array>;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;
     get databaseSize(): number;

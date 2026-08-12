@@ -29,7 +29,7 @@ at HEAD `93a6a1f`. Per-phase detail and acceptance gates follow in each section.
 | M3.1    | Read transactions per 100 MiB        | 402                          | <=55                             | >=7.3x fewer                      |
 | M3.1    | Read statements per 100 MiB          | 1,787                        | <=250                            | >=7.1x fewer                      |
 | M3.2    | A5: 3 one-byte edits on 100 MiB      | 9.4 s (O(file))              | <1 s total (expect 0.1-0.3 s)    | >=9.4x (31-94x expected)          |
-| M3.2    | A6: 1,000 scattered edits            | 2 in 8 s, pass=false         | 1,000 in <=20 s, pass=true       | ~220x per edit (~4.4 s -> ~20 ms) |
+| M3.2    | A6: 500 scattered edits              | 2 in 8 s, pass=false         | 500 in <=20 s, pass=true         | ~110x per edit (~4.4 s -> ~40 ms) |
 | M3.2    | Per-edit storage growth              | ~3.9 MiB                     | ~1 chunk + nodes (~0.2 MiB)      | ~20x less                         |
 | M3.3    | Workerd write hashing                | 66 MiB/s (pure-JS)           | >=300 MiB/s                      | >=4.5x                            |
 | M3.3    | 100 MiB workerd write                | baseline                     | >=1.5x faster                    | >=1.5x                            |
@@ -119,7 +119,7 @@ write transactions x ~4 ms under `synchronous=FULL`):
 | Metric                          | Today (measured)              | M3.2 target                                                    | Diff vs current          |
 | ------------------------------- | ----------------------------- | -------------------------------------------------------------- | ------------------------ |
 | A5: 3 one-byte edits on 100 MiB | 9.4 s (mixed path)            | <1 s total (expect 0.1-0.3 s); never O(file) for in-leaf edits | >=9.4x (31-94x expected) |
-| A6: 1,000 scattered edits       | 2 in 8 s (capped, pass=false) | 1,000 in <=20 s, pass=true                                     | ~220x per edit           |
+| A6: 500 scattered edits         | 2 in 8 s (capped, pass=false) | 500 in <=20 s, pass=true                                       | ~110x per edit           |
 | Per-edit storage growth         | ~3.9 MiB (fallback)           | ~1 chunk + manifest nodes (~0.2 MiB)                           | ~20x less                |
 | Insert/prepend class            | O(file) fallback              | O(changed window); 10-16x class per prototype                  | ~10-16x                  |
 

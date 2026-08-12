@@ -1,7 +1,8 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "C3-storage-evolution",
-  "commit": "9875004dd57377b5604df88ce45e85507f91e144",
+  "commit": "7678194e8ebc2913570a3b8850ce0a7ce090c820",
+  "worktreeDirty": true,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
   "fixture": {
@@ -12,21 +13,19 @@
     "seed": 1592614637,
     "sizeBytes": 4194304
   },
-  "trials": 1,
-  "latencyMs": {},
   "counters": {
     "nativePayloadBytes": 14188544,
-    "finalDbBytes": 33512088,
-    "ratioBasisPoints": 23619,
-    "dbBytesAtPhase0": 4944008,
-    "dbBytesAtPhase1": 15017408,
-    "dbBytesAtPhase2": 27913008,
-    "dbBytesAtPhase3": 30599248,
-    "dbBytesAtPhase4": 31756968,
-    "dbBytesAtPhase5": 31756968,
-    "dbBytesAtPhase6": 31756968,
-    "dbBytesAtPhase7": 33458528,
-    "dbBytesAtPhase8": 33512088
+    "finalDbBytes": 26170248,
+    "ratioBasisPoints": 18445,
+    "dbBytesAtPhase0": 4956368,
+    "dbBytesAtPhase1": 15165728,
+    "dbBytesAtPhase2": 22346888,
+    "dbBytesAtPhase3": 23797128,
+    "dbBytesAtPhase4": 24654088,
+    "dbBytesAtPhase5": 24654088,
+    "dbBytesAtPhase6": 24654088,
+    "dbBytesAtPhase7": 26116688,
+    "dbBytesAtPhase8": 26170248
   },
   "pass": true
 }

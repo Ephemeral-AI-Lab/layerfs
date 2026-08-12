@@ -3,6 +3,122 @@ import { bytesToHex, hexToBytes } from "../cas/bytes.js";
 import { DURABLE_METADATA_ROW_BYTES, type StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteTransaction, SqliteRow, SqliteValue } from "./driver.js";
 
+interface MetadataChargeBatch {
+  bytes: number;
+}
+
+interface UsageMutationBatch {
+  readonly base: UsageSnapshot;
+  readonly delta: Partial<Record<UsageCounter, number>>;
+  touched: boolean;
+}
+
+/**
+ * A local durable edit already holds one IMMEDIATE write transaction. Metadata
+ * rows created by its staging, summary, and authenticated-claim phases can
+ * therefore publish one usage mutation at the transaction boundary instead of
+ * one mutation per row family. The batch is transaction-scoped and is never
+ * enabled for generic callers.
+ */
+const metadataChargeBatches = new WeakMap<
+  FilesystemSQLiteTransaction,
+  MetadataChargeBatch
+>();
+
+const usageMutationBatches = new WeakMap<
+  FilesystemSQLiteTransaction,
+  UsageMutationBatch
+>();
+
+export function beginMetadataChargeBatch(tx: FilesystemSQLiteTransaction): void {
+  if (!metadataChargeBatches.has(tx)) metadataChargeBatches.set(tx, { bytes: 0 });
+}
+
+export function applyChargedMetadata(
+  tx: FilesystemSQLiteTransaction,
+  limits: StorageLimits,
+  bytes: number,
+  reason: string,
+): void {
+  if (bytes === 0) return;
+  const batch = metadataChargeBatches.get(tx);
+  if (batch) {
+    batch.bytes = checkedAdd(batch.bytes, bytes, "batched charged metadata");
+    return;
+  }
+  new UsageRepository(tx, limits).apply({ charged_metadata_bytes: bytes }, reason);
+}
+
+export function flushMetadataChargeBatch(
+  tx: FilesystemSQLiteTransaction,
+  limits: StorageLimits,
+): void {
+  const batch = metadataChargeBatches.get(tx);
+  if (!batch) return;
+  metadataChargeBatches.delete(tx);
+  if (batch.bytes !== 0)
+    new UsageRepository(tx, limits).apply(
+      { charged_metadata_bytes: batch.bytes },
+      "durable local-rebuild metadata accounting",
+    );
+}
+
+export function beginUsageMutationBatch(
+  tx: FilesystemSQLiteTransaction,
+  limits: StorageLimits,
+): void {
+  if (!usageMutationBatches.has(tx))
+    usageMutationBatches.set(tx, {
+      base: new UsageRepository(tx, limits).snapshot(),
+      delta: {},
+      touched: false,
+    });
+}
+
+function batchedUsageSnapshot(batch: UsageMutationBatch): UsageSnapshot {
+  const next = {} as Record<UsageCounter, number>;
+  for (const column of USAGE_COUNTER_COLUMNS)
+    next[column] = add(
+      batch.base[column],
+      batch.delta[column] ?? 0,
+      `batched ${column}`,
+    );
+  const changed = USAGE_COUNTER_COLUMNS.some(
+    (column) => (batch.delta[column] ?? 0) !== 0,
+  );
+  const mutationSequence = checkedAdd(
+    batch.base.mutation_sequence,
+    changed || batch.touched ? 1 : 0,
+    "batched usage mutation sequence",
+  );
+  return Object.freeze({
+    ...next,
+    mutation_sequence: mutationSequence,
+    integrity_token: usageIntegrityToken({
+      ...next,
+      mutation_sequence: mutationSequence,
+    }),
+  }) as UsageSnapshot;
+}
+
+export function flushUsageMutationBatch(
+  tx: FilesystemSQLiteTransaction,
+  limits: StorageLimits,
+): void {
+  const batch = usageMutationBatches.get(tx);
+  if (!batch) return;
+  usageMutationBatches.delete(tx);
+  const changed = USAGE_COUNTER_COLUMNS.some(
+    (column) => (batch.delta[column] ?? 0) !== 0,
+  );
+  if (changed)
+    new UsageRepository(tx, limits).apply(
+      batch.delta,
+      "durable local-rebuild usage accounting",
+    );
+  else if (batch.touched) new UsageRepository(tx, limits).touch();
+}
+
 /** Conservative fixed metadata envelope; variable payload classes are charged separately. */
 export const CHARGED_ROW_BYTES = DURABLE_METADATA_ROW_BYTES;
 /** Logical per-content-row reservation that is exchanged for one live GC mark. */
@@ -12,6 +128,7 @@ export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_cas_objects",
   "efs_manifest_roots",
   "efs_manifest_nodes",
+  "efs_manifest_subtree_summaries",
   "efs_manifest_validations",
   "efs_revisions",
   "efs_inodes",
@@ -60,6 +177,11 @@ const DIRECT_VARIABLE_METADATA_TERMS = Object.freeze([
 export const DIRECT_CHARGED_METADATA_EXPRESSION = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
   (table) => `(SELECT count(*) FROM ${table})`,
 ).join("+")})+${DIRECT_VARIABLE_METADATA_TERMS.join("+")}`;
+export const DIRECT_CHARGED_METADATA_EXPRESSION_LEGACY = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.filter(
+  (table) => table !== "efs_manifest_subtree_summaries",
+)
+  .map((table) => `(SELECT count(*) FROM ${table})`)
+  .join("+")})+${DIRECT_VARIABLE_METADATA_TERMS.join("+")}`;
 export const DIRECT_CHARGED_METADATA_SQL = `SELECT ${DIRECT_CHARGED_METADATA_EXPRESSION} value`;
 export const DIRECT_STAGING_BYTES_SQL =
   "SELECT (SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o JOIN efs_leases l ON l.id=o.lease_id WHERE l.state IN (0,1))+(SELECT coalesce(sum(m.size),0) FROM efs_lease_staged_manifests m JOIN efs_leases l ON l.id=m.lease_id WHERE l.state IN (0,1)) value";
@@ -122,6 +244,8 @@ export type UsageSnapshot = SqliteRow &
     readonly mutation_sequence: number;
     readonly integrity_token: string;
   };
+
+const usageSnapshots = new WeakMap<FilesystemSQLiteTransaction, UsageSnapshot>();
 
 export function usageIntegrityToken(
   usage: Readonly<Record<UsageCounter, number>> & {
@@ -189,6 +313,11 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
       manifest_node_bytes: "length(t.encoded)",
       maintenance_bytes: String(GC_MARK_RESERVATION_BYTES),
     }),
+  },
+  {
+    table: "efs_manifest_subtree_summaries",
+    keys: [key("node_hash", "blob")],
+    contributions: metadataContributions(),
   },
   {
     table: "efs_manifest_validations",
@@ -532,6 +661,10 @@ export class UsageRepository {
   }
 
   snapshot(): UsageSnapshot {
+    const batch = usageMutationBatches.get(this.#tx);
+    if (batch) return batchedUsageSnapshot(batch);
+    const cached = usageSnapshots.get(this.#tx);
+    if (cached) return cached;
     const row = this.#tx.all<UsageSnapshot>(
       `SELECT ${USAGE_COUNTER_COLUMNS.join(",")},mutation_sequence,integrity_token FROM efs_usage WHERE singleton=1`,
       [],
@@ -546,7 +679,9 @@ export class UsageRepository {
       row.integrity_token !== usageIntegrityToken(row)
     )
       throw new Error("ECORRUPT: usage integrity token mismatch");
-    return row;
+    const snapshot = Object.freeze(row) as UsageSnapshot;
+    usageSnapshots.set(this.#tx, snapshot);
+    return snapshot;
   }
 
   apply(
@@ -614,6 +749,18 @@ export class UsageRepository {
       (column) => (delta[column] ?? 0) !== 0,
     );
     if (!changed.length) return current;
+    const batch = usageMutationBatches.get(this.#tx);
+    if (batch) {
+      for (const column of changed) {
+        const prior = batch.delta[column] ?? 0;
+        const change = delta[column] ?? 0;
+        const nextDelta = prior + change;
+        if (!Number.isSafeInteger(nextDelta))
+          throw new RangeError(`usage ${column} batch exceeds safe integer range`);
+        batch.delta[column] = nextDelta;
+      }
+      return batchedUsageSnapshot(batch);
+    }
     const mutationSequence = checkedAdd(
       current.mutation_sequence,
       1,
@@ -637,14 +784,21 @@ export class UsageRepository {
     );
     if (result.changes !== 1)
       throw new Error("ECORRUPT: concurrent or missing usage singleton update");
-    return Object.freeze({
+    const snapshot = Object.freeze({
       ...next,
       mutation_sequence: mutationSequence,
       integrity_token: integrityToken,
     }) as UsageSnapshot;
+    usageSnapshots.set(this.#tx, snapshot);
+    return snapshot;
   }
 
   touch(reason = "durable usage contributor transfer"): void {
+    const batch = usageMutationBatches.get(this.#tx);
+    if (batch) {
+      batch.touched = true;
+      return;
+    }
     const current = this.snapshot();
     const mutationSequence = checkedAdd(
       current.mutation_sequence,
@@ -661,6 +815,12 @@ export class UsageRepository {
     );
     if (changed.changes !== 1)
       throw new Error(`ECORRUPT: ${reason} lost the usage authority`);
+    const snapshot = Object.freeze({
+      ...current,
+      mutation_sequence: mutationSequence,
+      integrity_token: integrityToken,
+    }) as UsageSnapshot;
+    usageSnapshots.set(this.#tx, snapshot);
   }
 
   recountBatch(

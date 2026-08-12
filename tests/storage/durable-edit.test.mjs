@@ -204,6 +204,12 @@ test("durable path-copy is authenticated and bounded on a 65,537-entry, three-le
     for (const node of workspace.nodes.values())
       content.putManifestNode(node.hash, node.encoded);
     content.putManifestRoot(old.rootHash, old.root);
+    tx.manifestTree(storage).recordSubtreeSummaries(
+      [...workspace.nodes.values()].map((node) => ({
+        hash: node.hash,
+        encoded: node.encoded,
+      })),
+    );
   });
   certifyRoot(rawDriver, storage, old.rootHash, old.depth);
 
@@ -465,6 +471,12 @@ test("repeated reused hashes retain the stronger non-final authenticated source 
     content.putObject(originalHash, originalObject);
     content.putManifestNodesBatch([...workspace.nodes.values()]);
     content.putManifestRoot(old.rootHash, old.root);
+    tx.manifestTree(storage).recordSubtreeSummaries(
+      [...workspace.nodes.values()].map((node) => ({
+        hash: node.hash,
+        encoded: node.encoded,
+      })),
+    );
   });
   certifyRoot(rawDriver, storage, old.rootHash, old.depth);
   let sourceBytesRead = 0;
@@ -812,6 +824,10 @@ test("a 100 MiB fallback reports bounded windows and its full source-transaction
   let requestedBytes = 0;
   let largestRead = 0;
   const editOffset = 50 * 1024 * 1024;
+  // M3.2: size-changing in-leaf edits now use the bounded local rebuild, so
+  // this test forces the O(file) streamed fallback with an insertion larger
+  // than the local rebuild's 16 MiB affected-byte window.
+  const insertLength = 17 * 1024 * 1024 + 1;
   const prepared = await prepareDurableEditedContent(
     port,
     Object.freeze({
@@ -830,8 +846,12 @@ test("a 100 MiB fallback reports bounded windows and its full source-transaction
     Object.freeze({
       offset: editOffset,
       deleteLength: 1,
-      insertLength: 1,
-      readInsert: () => Uint8Array.of(0x42),
+      insertLength,
+      readInsert: (offset, length) => {
+        const out = new Uint8Array(length);
+        out.fill(0x42);
+        return out;
+      },
     }),
     storage,
     DEFAULT_RUNTIME_LIMITS,
@@ -840,7 +860,14 @@ test("a 100 MiB fallback reports bounded windows and its full source-transaction
     () => 3000,
   );
   assert.equal(prepared.mode, "streamed-fallback");
-  assert.match(prepared.pathCopyReason, /authenticated leaf exceeds/);
+  assert.match(
+    prepared.pathCopyReason,
+    /equal-length replacement|authenticated leaf exceeds/,
+  );
+  assert.match(
+    prepared.localRebuildReason,
+    /affected-byte window|working set cannot be admitted/,
+  );
   assert.equal(requestedBytes, built.fileSize - 1);
   assert.ok(reads <= 3201, `fallback made ${reads} source reads`);
   assert.ok(largestRead <= 32 * 1024, `fallback requested ${largestRead} bytes`);
@@ -860,9 +887,9 @@ test("a 100 MiB fallback reports bounded windows and its full source-transaction
   );
   const reportedTransactions = prepared.fallbackMetrics.storageTransactions;
   const expected = deterministicRange(editOffset - 16, 33);
-  expected[16] = 0x42;
+  expected.fill(0x42, 16);
   assert.deepEqual(
-    port.transaction("read", { maxRows: 1024, maxBytes: 1024 * 1024 }, (tx) =>
+    port.transaction("read", { maxRows: 10_000, maxBytes: 4 * 1024 * 1024 }, (tx) =>
       readManifestRange(tx, storage, prepared.hash, editOffset - 16, 33),
     ),
     expected,
@@ -882,7 +909,7 @@ test("a 100 MiB fallback reports bounded windows and its full source-transaction
   await port.close();
 });
 
-test("durable edits authenticate empty, singleton, and every manifest height before fallback", async () => {
+test("durable edits authenticate a three-level manifest before the retained-entry fallback", async () => {
   const driver = await openNodeSqlite({ filename: ":memory:" });
   const observed = {
     transactions: 0,
@@ -906,9 +933,8 @@ test("durable edits authenticate empty, singleton, and every manifest height bef
   );
   const cache = new ContentCache(1, admission);
   const shapes = [
-    { count: 0, depth: 1, label: "empty" },
-    { count: 1, depth: 1, label: "singleton" },
-    { count: 257, depth: 2, label: "two-level" },
+    // M3.2: only the three-level shape exceeds the local rebuild's retained
+    // entry budget; empty/singleton/two-level edits now reconnect locally.
     { count: 65_537, depth: 3, label: "three-level" },
   ];
   for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex += 1) {
@@ -968,6 +994,107 @@ test("durable edits authenticate empty, singleton, and every manifest height bef
     assert.ok(
       sourceReads <= Math.ceil(shape.count / (32 * 1024)) + 1,
       `${shape.label} fallback made ${sourceReads} source reads`,
+    );
+    const expected = new Uint8Array(shape.count + 1);
+    expected[editOffset] = marker;
+    assert.deepEqual(
+      port.transaction("read", { maxRows: 1024, maxBytes: 1024 * 1024 }, (tx) =>
+        readManifestRange(tx, storage, prepared.hash, 0, expected.length),
+      ),
+      expected,
+      shape.label,
+    );
+    assert.ok(observed.transactions < 32, shape.label);
+  }
+  assert.equal(admission.usedBytes, 0);
+  await port.close();
+});
+
+test("durable edits route empty, singleton, and two-level shapes to the local rebuild", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const observed = {
+    transactions: 0,
+    manifestNodeRows: 0,
+    manifestEntriesDecoded: 0,
+  };
+  const port = createSqliteOperationsStorage(countedDriver(driver, observed));
+  port.initialize();
+  const storage = constrainStorageLimits(
+    {
+      maxManagedPayloadBytes: 256 * 1024 * 1024,
+      maintenanceReserveBytes: 1024 * 1024,
+    },
+    driver.capabilities,
+  );
+  const parameters = Object.freeze({ minimum: 1, average: 1, maximum: 1 });
+  const object = Uint8Array.of(0);
+  const objectHash = sha256(object);
+  const admission = new AdmissionController(
+    DEFAULT_RUNTIME_LIMITS.maxManagedResidentBytes,
+  );
+  const cache = new ContentCache(1, admission);
+  const shapes = [
+    { count: 0, depth: 1, label: "empty" },
+    { count: 1, depth: 1, label: "singleton" },
+    { count: 257, depth: 2, label: "two-level" },
+  ];
+  for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex += 1) {
+    const shape = shapes[shapeIndex];
+    const workspace = new MemoryManifestWorkspace();
+    const built = buildManifestFromEntries(
+      repeatedEntries(shape.count, objectHash),
+      parameters,
+      workspace,
+      { maxDepth: storage.maxManifestDepth },
+    );
+    assert.equal(built.depth, shape.depth, shape.label);
+    port.transaction(
+      "write",
+      { maxRows: 1024, maxBytes: storage.maxFinalTransactionBytes },
+      (tx) => {
+        const content = tx.content(storage, cache);
+        if (shape.count) content.putObject(objectHash, object);
+        content.putManifestNodesBatch([...workspace.nodes.values()]);
+        content.putManifestRoot(built.rootHash, built.root);
+      },
+    );
+    certifyRoot(driver, storage, built.rootHash, built.depth);
+    const sourceBytes = new Uint8Array(shape.count);
+    const editOffset = Math.floor(shape.count / 2);
+    let sourceReads = 0;
+    observed.transactions = 0;
+    observed.manifestNodeRows = 0;
+    observed.manifestEntriesDecoded = 0;
+    const marker = 0x30 + shapeIndex;
+    const prepared = await prepareDurableEditedContent(
+      port,
+      Object.freeze({
+        manifestHash: built.rootHash,
+        size: built.fileSize,
+        parameters,
+        maxReadWindowBytes: 32 * 1024,
+        read(offset, length) {
+          sourceReads += 1;
+          return sourceBytes.slice(offset, offset + length);
+        },
+      }),
+      Object.freeze({
+        offset: editOffset,
+        deleteLength: 0,
+        insertLength: 1,
+        readInsert: () => Uint8Array.of(marker),
+      }),
+      storage,
+      DEFAULT_RUNTIME_LIMITS,
+      admission,
+      cache,
+      () => 4000 + shapeIndex,
+    );
+    assert.equal(prepared.mode, "local-rebuild", shape.label);
+    assert.ok(prepared.localRebuildMetrics.newObjectCount >= 1, shape.label);
+    assert.ok(
+      sourceReads <= 3,
+      `${shape.label} local rebuild made ${sourceReads} source reads`,
     );
     const expected = new Uint8Array(shape.count + 1);
     expected[editOffset] = marker;

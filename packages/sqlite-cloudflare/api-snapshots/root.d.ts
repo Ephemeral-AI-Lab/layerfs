@@ -9,6 +9,12 @@ export declare class CloudflareSQLiteDriver implements FilesystemSQLiteDriver {
     readonly readOnly = false;
     readonly capabilities: SQLiteDriverCapabilities;
     constructor(options: OpenCloudflareSqliteOptions);
+    /**
+     * WebCrypto SHA-256 for the streaming write pipeline. Digest output is
+     * byte-identical to the pure-JS fallback (`cas/sha256.ts`), so golden
+     * vectors and workerd parity are unaffected.
+     */
+    readonly hashBytesAsync: (bytes: Uint8Array) => Promise<Uint8Array>;
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;
     get databaseSize(): number;

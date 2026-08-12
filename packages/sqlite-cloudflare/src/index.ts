@@ -123,6 +123,20 @@ export class CloudflareSQLiteDriver implements FilesystemSQLiteDriver {
       physicalQuotaPolicy: "runtime-enforced",
     });
   }
+  /**
+   * WebCrypto SHA-256 for the streaming write pipeline. Digest output is
+   * byte-identical to the pure-JS fallback (`cas/sha256.ts`), so golden
+   * vectors and workerd parity are unaffected.
+   */
+  readonly hashBytesAsync = async (bytes: Uint8Array): Promise<Uint8Array> => {
+    // Engine-owned payloads are plain ArrayBuffer-backed Uint8Arrays; the
+    // cast only widens the view type for WebCrypto's BufferSource contract.
+    const digest = await globalThis.crypto.subtle.digest(
+      "SHA-256",
+      bytes as unknown as BufferSource,
+    );
+    return new Uint8Array(digest);
+  };
   transaction<T>(
     mode: TransactionMode,
     callback: (tx: FilesystemSQLiteTransaction) => T,

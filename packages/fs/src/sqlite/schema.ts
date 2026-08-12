@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   FilesystemSQLiteDriver,
   FilesystemSQLiteTransaction,
   SqliteRow,
@@ -13,6 +13,7 @@ import { certifyLegacyManifests } from "./legacy-manifest-certification.js";
 import {
   CHARGED_ROW_BYTES,
   DIRECT_CHARGED_METADATA_EXPRESSION,
+  DIRECT_CHARGED_METADATA_EXPRESSION_LEGACY,
   DIRECT_USAGE_TABLES,
   GC_MARK_RESERVATION_BYTES,
   USAGE_COUNTER_COLUMNS,
@@ -21,7 +22,7 @@ import {
 } from "./usage-repository.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
-export const EFS_SCHEMA_VERSION = 4;
+export const EFS_SCHEMA_VERSION = 6;
 const MAX_ATOMIC_MIGRATION_RECOUNT_ROWS = 100_000;
 const MAX_ATOMIC_LEGACY_TRANSFORM_BYTES =
   MAX_CONTENT_OBJECT_BYTES + CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES;
@@ -145,12 +146,23 @@ const SCHEMA_V4_STATEMENTS = Object.freeze([
   `UPDATE efs_usage SET object_count=(SELECT count(*) FROM efs_cas_objects),object_bytes=(SELECT coalesce(sum(size),0) FROM efs_cas_objects) WHERE singleton=1`,
   `UPDATE efs_usage SET manifest_root_count=(SELECT count(*) FROM efs_manifest_roots),manifest_root_bytes=(SELECT coalesce(sum(length(encoded)),0) FROM efs_manifest_roots),manifest_node_count=(SELECT count(*) FROM efs_manifest_nodes),manifest_node_bytes=(SELECT coalesce(sum(length(encoded)),0) FROM efs_manifest_nodes) WHERE singleton=1`,
   `UPDATE efs_usage SET page_count=(SELECT count(*) FROM efs_cow_page_versions),page_bytes=(SELECT coalesce(sum(length(bytes)),0) FROM efs_cow_page_versions),patch_count=(SELECT count(*) FROM efs_patches),patch_bytes=(SELECT coalesce(sum(length(bytes)),0) FROM efs_patch_segments) WHERE singleton=1`,
-  `UPDATE efs_usage SET charged_metadata_bytes=${DIRECT_CHARGED_METADATA_EXPRESSION} WHERE singleton=1`,
+  `UPDATE efs_usage SET charged_metadata_bytes=${DIRECT_CHARGED_METADATA_EXPRESSION_LEGACY} WHERE singleton=1`,
   `UPDATE efs_usage SET staging_bytes=(SELECT (SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o JOIN efs_leases l ON l.id=o.lease_id WHERE l.state IN (0,1))+(SELECT coalesce(sum(m.size),0) FROM efs_lease_staged_manifests m JOIN efs_leases l ON l.id=m.lease_id WHERE l.state IN (0,1))) WHERE singleton=1`,
   `UPDATE efs_usage SET ingest_reservation_bytes=0 WHERE singleton=1`,
   `UPDATE efs_usage SET result_bytes=(SELECT coalesce(sum(length(encoded)),0) FROM efs_operation_results),permanent_identifiers=(SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_operation_ids) WHERE singleton=1`,
   `UPDATE efs_usage SET maintenance_bytes=(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_cas_objects)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_roots)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_nodes)+(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs) WHERE singleton=1`,
   `UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL} WHERE singleton=1`,
+] as const);
+
+const SCHEMA_V5_STATEMENTS = Object.freeze([
+  `ALTER TABLE efs_staging_certificates ADD COLUMN chain_fold BLOB NOT NULL DEFAULT X'0000000000000000000000000000000000000000000000000000000000000000' CHECK(length(chain_fold)=32)`,
+  `ALTER TABLE efs_staging_reconciliations ADD COLUMN closure_fold BLOB NOT NULL DEFAULT X'0000000000000000000000000000000000000000000000000000000000000000' CHECK(length(closure_fold)=32)`,
+] as const);
+
+const SCHEMA_V6_STATEMENTS = Object.freeze([
+  `CREATE TABLE efs_manifest_subtree_summaries (node_hash BLOB PRIMARY KEY REFERENCES efs_manifest_nodes(hash) ON DELETE RESTRICT, object_count INTEGER NOT NULL CHECK(object_count>=0), object_bytes INTEGER NOT NULL CHECK(object_bytes>=0), node_count INTEGER NOT NULL CHECK(node_count>=0), node_bytes INTEGER NOT NULL CHECK(node_bytes>=0), membership_count INTEGER NOT NULL CHECK(membership_count>=0), closure_fold BLOB NOT NULL CHECK(length(closure_fold)=32), chain_digest BLOB NOT NULL CHECK(length(chain_digest)=32), object_bloom BLOB NOT NULL CHECK(length(object_bloom)=1024), node_bloom BLOB NOT NULL CHECK(length(node_bloom)=1024), object_members BLOB NOT NULL CHECK(length(object_members)%32=0), node_members BLOB NOT NULL CHECK(length(node_members)%32=0)) WITHOUT ROWID`,
+  `CREATE INDEX efs_manifest_subtree_summary_node_hash ON efs_manifest_subtree_summaries(node_hash)`,
+  `ALTER TABLE efs_staging_reused_subtrees ADD COLUMN summary_usable INTEGER NOT NULL DEFAULT 0 CHECK(summary_usable IN (0,1))`,
 ] as const);
 
 const REQUIRED_V4_SCHEMA_OBJECTS = Object.freeze(
@@ -159,8 +171,24 @@ const REQUIRED_V4_SCHEMA_OBJECTS = Object.freeze(
     return matched?.[1] ? [Object.freeze({ name: matched[1], sql })] : [];
   }),
 );
+const REQUIRED_V6_SCHEMA_OBJECTS = Object.freeze(
+  SCHEMA_V6_STATEMENTS.flatMap((sql) => {
+    const matched = /^CREATE (?:TABLE|INDEX|TRIGGER) ([a-z0-9_]+)/u.exec(sql);
+    return matched?.[1] ? [Object.freeze({ name: matched[1], sql })] : [];
+  }),
+);
+const REQUIRED_SCHEMA_OBJECTS = Object.freeze([
+  ...REQUIRED_V4_SCHEMA_OBJECTS.filter(
+    ({ name }) => name !== "efs_staging_reused_subtrees",
+  ),
+  ...REQUIRED_V6_SCHEMA_OBJECTS,
+]);
 const OWNED_TABLE_NAMES = Object.freeze(
-  [...EFS_SCHEMA_V3_CREATE_STATEMENTS, ...SCHEMA_V4_STATEMENTS].flatMap((sql) => {
+  [
+    ...EFS_SCHEMA_V3_CREATE_STATEMENTS,
+    ...SCHEMA_V4_STATEMENTS,
+    ...SCHEMA_V6_STATEMENTS,
+  ].flatMap((sql) => {
     const matched = /^CREATE TABLE ([a-z0-9_]+)/u.exec(sql);
     return matched?.[1] ? [matched[1]] : [];
   }),
@@ -333,12 +361,27 @@ function validateCurrent(
     throw new Error("ECORRUPT: metadata head references missing root or revision");
   const schemaMatches = oneNumber(
     tx,
-    `SELECT count(*) value FROM sqlite_schema WHERE ${REQUIRED_V4_SCHEMA_OBJECTS.map(
+    `SELECT count(*) value FROM sqlite_schema WHERE ${REQUIRED_SCHEMA_OBJECTS.map(
       ({ name, sql }) => `(name=${sqlText(name)} AND sql=${sqlText(sql)})`,
     ).join(" OR ")}`,
   );
-  if (schemaMatches !== REQUIRED_V4_SCHEMA_OBJECTS.length)
-    throw new Error("ECORRUPT: required schema-v4 table, index, or trigger is missing");
+  if (schemaMatches !== REQUIRED_SCHEMA_OBJECTS.length) {
+    const actual = new Set(
+      tx
+        .all<{ name: string; sql: string } & SqliteRow>(
+          "SELECT name,sql FROM sqlite_schema WHERE sql IS NOT NULL",
+          [],
+          { maxRows: 256, maxBytes: 128 * 1024 },
+        )
+        .map((row) => `${row.name}\u0000${row.sql}`),
+    );
+    const missing = REQUIRED_SCHEMA_OBJECTS.filter(
+      ({ name, sql }) => !actual.has(`${name}\u0000${sql}`),
+    ).map(({ name }) => name);
+    throw new Error(
+      `ECORRUPT: required schema-v6 table, index, or trigger is missing (${schemaMatches}/${REQUIRED_SCHEMA_OBJECTS.length}): ${missing.join(",")}`,
+    );
+  }
   const ownedTriggerCount = oneNumber(
     tx,
     `SELECT count(*) value FROM sqlite_schema WHERE type='trigger' AND tbl_name IN (${OWNED_TABLE_NAMES.map(sqlText).join(",")})`,
@@ -586,7 +629,7 @@ function migrateV3ToV4(
     );
     certifyLegacyManifests(tx, manifest);
     tx.run(
-      `UPDATE efs_usage SET charged_metadata_bytes=${DIRECT_CHARGED_METADATA_EXPRESSION} WHERE singleton=1`,
+      `UPDATE efs_usage SET charged_metadata_bytes=${DIRECT_CHARGED_METADATA_EXPRESSION_LEGACY} WHERE singleton=1`,
     );
     tx.run(`UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL}`);
   }
@@ -594,6 +637,55 @@ function migrateV3ToV4(
   tx.run("PRAGMA user_version=4");
   if (performance.now() > deadline)
     throw new Error("ESCHEMA: v4 atomic migration exceeds its time cap");
+}
+
+function migrateV4ToV5(tx: FilesystemSQLiteTransaction): void {
+  const state = inspect(tx);
+  if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 4)
+    throw new Error("ESCHEMA: schema v5 migration precondition failed");
+  const meta = tx.all<MetaRow>(
+    "SELECT schema_version,filesystem_id,main_revision,root_inode,cow_page_bytes FROM efs_meta WHERE singleton=1",
+    [],
+    { maxRows: 1, maxBytes: 4096 },
+  )[0];
+  if (!meta || meta.schema_version !== 4)
+    throw new Error("ECORRUPT: invalid schema v4 metadata");
+  const deadline = performance.now() + MAX_ATOMIC_MIGRATION_MS;
+  for (const statement of SCHEMA_V5_STATEMENTS) {
+    if (performance.now() > deadline)
+      throw new Error("ESCHEMA: v5 atomic migration exceeds its time cap");
+    tx.run(statement);
+  }
+  tx.run("UPDATE efs_meta SET schema_version=5 WHERE singleton=1");
+  tx.run("PRAGMA user_version=5");
+  if (performance.now() > deadline)
+    throw new Error("ESCHEMA: v5 atomic migration exceeds its time cap");
+}
+
+function migrateV5ToV6(tx: FilesystemSQLiteTransaction): void {
+  const state = inspect(tx);
+  if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 5)
+    throw new Error("ESCHEMA: schema v6 migration precondition failed");
+  const meta = tx.all<MetaRow>(
+    "SELECT schema_version,filesystem_id,main_revision,root_inode,cow_page_bytes FROM efs_meta WHERE singleton=1",
+    [],
+    { maxRows: 1, maxBytes: 4096 },
+  )[0];
+  if (!meta || meta.schema_version !== 5)
+    throw new Error("ECORRUPT: invalid schema v5 metadata");
+  const deadline = performance.now() + MAX_ATOMIC_MIGRATION_MS;
+  for (const statement of SCHEMA_V6_STATEMENTS) {
+    if (performance.now() > deadline)
+      throw new Error("ESCHEMA: v6 atomic migration exceeds its time cap");
+    tx.run(statement);
+  }
+  tx.run(
+    `UPDATE efs_usage SET charged_metadata_bytes=${DIRECT_CHARGED_METADATA_EXPRESSION} WHERE singleton=1`,
+  );
+  tx.run("UPDATE efs_meta SET schema_version=6 WHERE singleton=1");
+  tx.run("PRAGMA user_version=6");
+  if (performance.now() > deadline)
+    throw new Error("ESCHEMA: v6 atomic migration exceeds its time cap");
 }
 
 function assertBoundedLegacyTransformBytes(tx: FilesystemSQLiteTransaction): void {
@@ -718,6 +810,7 @@ export function initializeOrValidateSchema(
           throw new Error("ESCHEMA: legacy atomic migration exceeds its time cap");
         migrateV2ToV3(tx);
         migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
+        migrateV4ToV5(tx);
       });
     }
     const afterV1 = driver.transaction("read", (tx) => inspect(tx));
@@ -731,15 +824,29 @@ export function initializeOrValidateSchema(
         if (performance.now() > deadline)
           throw new Error("ESCHEMA: legacy atomic migration exceeds its time cap");
         migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
+        migrateV4ToV5(tx);
       });
     }
     const afterV2 = driver.transaction("read", (tx) => inspect(tx));
     if (afterV2.userVersion === 3) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v3 requires a writable migration");
-      driver.transaction("exclusive", (tx) =>
-        migrateV3ToV4(tx, requestedManifest, requestedWriterProfile),
-      );
+      driver.transaction("exclusive", (tx) => {
+        migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
+        migrateV4ToV5(tx);
+      });
+    }
+    const afterV3 = driver.transaction("read", (tx) => inspect(tx));
+    if (afterV3.userVersion === 4) {
+      if (driver.readOnly)
+        throw new Error("ESCHEMA: schema v4 requires a writable migration");
+      driver.transaction("exclusive", (tx) => migrateV4ToV5(tx));
+    }
+    const afterV4 = driver.transaction("read", (tx) => inspect(tx));
+    if (afterV4.userVersion === 5) {
+      if (driver.readOnly)
+        throw new Error("ESCHEMA: schema v5 requires a writable migration");
+      driver.transaction("exclusive", (tx) => migrateV5ToV6(tx));
     }
     const meta = driver.transaction("read", (tx) =>
       validateCurrent(
@@ -807,6 +914,8 @@ export function initializeOrValidateSchema(
     );
     tx.run("PRAGMA user_version=3");
     migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
+    migrateV4ToV5(tx);
+    migrateV5ToV6(tx);
     validateCurrent(tx, pageBytes, requestedManifest, requestedWriterProfile);
   });
   return Object.freeze({

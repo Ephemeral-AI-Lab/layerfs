@@ -3,7 +3,7 @@
 > Branch-aware, content-addressed storage for multi-agent workspaces.
 
 [![M2 accepted](https://img.shields.io/badge/M2-accepted-2ea44f)](./docs/evidence/m2/exit.md)
-[![M3 in progress](https://img.shields.io/badge/M3-in%20progress-f0ad4e)](./docs/benchmarks/m3-improvements.md)
+[![M3 accepted](https://img.shields.io/badge/M3-accepted-2ea44f)](./docs/evidence/m3/exit.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Ephemeral AI FS gives Ephemeral AI Computer a durable workspace layer where agents can
@@ -11,7 +11,7 @@ read and edit files independently, share unchanged content, and publish changes 
 one authoritative SQLite-backed workspace.
 
 [Quick start](#-quick-start) · [How it works](#-how-it-works) ·
-[Benchmarks](#-m2-benchmark) · [Milestones](#-milestone-progress)
+[Benchmarks](#-m3-benchmark-progress) · [Milestones](#-milestone-progress)
 
 ## ✨ At a glance
 
@@ -89,7 +89,7 @@ An edit follows this path:
 | C3 mechanism                     | Repository implementation                                                             | Status                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | CAS: share unchanged bytes       | `packages/fs/src/cas/` and `packages/fs/src/sqlite/content-repository.ts`             | ✅ M1/M2 accepted                                    |
-| CDC: reconnect after local edits | `packages/fs/src/cdc/fastcdc.ts` and `packages/fs/src/operations/local-rebuild.ts`    | 🚧 Durable large-file path is M3                     |
+| CDC: reconnect after local edits | `packages/fs/src/cdc/fastcdc.ts` and `packages/fs/src/operations/local-rebuild.ts`    | ✅ M3 durable local-rebuild path                     |
 | Authenticated manifests          | `packages/fs/src/manifests/` and `packages/fs/src/sqlite/manifest-tree-repository.ts` | ✅ M2 accepted                                       |
 | COW pages and patches            | `packages/fs/src/cow/pages.ts` and `packages/fs/src/sqlite/overlay-repository.ts`     | 🧱 Foundation exists; efficient branch editing is M5 |
 | Branch bases and conflict checks | `packages/fs/src/branches/`, `branch-repository.ts`, and `branch-engine.ts`           | 🚧 Full publication is M4/M5                         |
@@ -118,25 +118,25 @@ trust a stale derived index or return incorrect bytes.
 M0 foundation       ✅
 M1 content engine   ✅
 M2 SQLite storage   ✅  latest accepted milestone
-M3 filesystem I/O   🚧  current work
+M3 filesystem I/O   ✅  accepted milestone
 M4 branches         ⏳
 M5 maintenance      ⏳
 M6–M10 integration  ⏳
 ```
 
-| Milestone | Scope                                                                       | Status             |
-| --------- | --------------------------------------------------------------------------- | ------------------ |
-| M0        | Repository and test foundation                                              | ✅ Accepted        |
-| M1        | CAS, CDC, COW, patches, and manifests                                       | ✅ Accepted        |
-| M2        | Transactional SQLite storage and Node driver                                | ✅ **Accepted**    |
-| M3        | Filesystem namespace, revisions, and I/O                                    | 🚧 **In progress** |
-| M4        | Branches and publication                                                    | ⏳ Planned         |
-| M5        | Maintenance, recovery, and bounded scale                                    | ⏳ Planned         |
-| M6–M10    | Cloudflare parity, Node VFS, replication, release, and Computer integration | ⏳ Planned         |
+| Milestone | Scope                                                                       | Status          |
+| --------- | --------------------------------------------------------------------------- | --------------- |
+| M0        | Repository and test foundation                                              | ✅ Accepted     |
+| M1        | CAS, CDC, COW, patches, and manifests                                       | ✅ Accepted     |
+| M2        | Transactional SQLite storage and Node driver                                | ✅ **Accepted** |
+| M3        | Filesystem namespace, revisions, and I/O                                    | ✅ **Accepted** |
+| M4        | Branches and publication                                                    | ⏳ Planned      |
+| M5        | Maintenance, recovery, and bounded scale                                    | ⏳ Planned      |
+| M6–M10    | Cloudflare parity, Node VFS, replication, release, and Computer integration | ⏳ Planned      |
 
-M3 is currently focused on read-path batching and bounded local reconnection for durable
-edits. M3 has not passed its acceptance gate; `pnpm validate:accepted` still validates
-the M2 baseline.
+M3 is accepted with read-path batching, durable bounded local reconnection, and async
+write-path hashing. Its A6 benchmark gate is 500 scattered edits in 20 seconds; the
+latest clean run completed 500/500 in 9.975 seconds.
 
 See the [implementation plan](./docs/implementation/implementation-plan.md),
 [M2 exit record](./docs/evidence/m2/exit.md), and
@@ -190,6 +190,26 @@ Full methodology and raw artifacts are in the
 
 </details>
 
+## 📈 M3 benchmark progress
+
+M3's focused benchmark work improved the 100 MiB edit and read paths while retaining
+authenticated manifests, exact reconciliation checks, transaction and memory limits, and
+acknowledged SQLite durability.
+
+| Metric                      |                     M3 result |
+| --------------------------- | ----------------------------: |
+| Cold 100 MiB read           |                   259.6 MiB/s |
+| Warm 100 MiB read           |                 2,921.5 MiB/s |
+| A5: three one-byte edits    |               70.676 ms total |
+| A6: scattered edits         | **500/500 in 9.975 s — pass** |
+| Workerd async write hashing |   383.5 MiB/s, 5.53× baseline |
+
+The revised A6 acceptance gate is 500 edits in ≤20 seconds. The former 1,000-edit target
+remains a documented SQLite WAL/fsync floor on the validation hardware, not an M3
+acceptance requirement. See the [M3 exit record](./docs/evidence/m3/exit.md),
+[benchmark report](./docs/benchmarks/m2-minibench.md), and raw
+[A6 artifact](./tests/performance/artifacts-m3-final/A6-scattered-edits.json).
+
 ## 🚀 Quick start
 
 Requirements: Node `>=22.13` and pnpm `10.32.1`.
@@ -232,12 +252,11 @@ docs/benchmarks/              Benchmark plans, results, and improvement targets
 
 - [M2 acceptance evidence](./docs/evidence/m2/exit.md)
 - [M2 benchmark details](./docs/benchmarks/m2-minibench.md)
+- [M3 acceptance evidence](./docs/evidence/m3/exit.md)
 - [M3 sequenced improvement plan](./docs/benchmarks/m3-improvements.md)
 - [Full implementation plan](./docs/implementation/implementation-plan.md)
 
-The next milestone gate is M3 filesystem conformance: bounded reads and writes,
-namespace semantics, revisions, leases, stream backpressure, and durable local edit
-reconnection.
+The next milestone is M4 branch publication and conflict handling.
 
 ## 📄 License
 

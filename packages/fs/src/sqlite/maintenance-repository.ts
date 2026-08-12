@@ -315,7 +315,9 @@ export class MaintenanceRepository {
     const metadataRows =
       state === 1
         ? "1+CASE WHEN EXISTS(SELECT 1 FROM efs_manifest_validations v WHERE v.manifest_hash=efs_manifest_roots.hash) THEN 1 ELSE 0 END"
-        : "1";
+        : state === 2
+          ? "1+CASE WHEN EXISTS(SELECT 1 FROM efs_manifest_subtree_summaries s WHERE s.node_hash=efs_manifest_nodes.hash) THEN 1 ELSE 0 END"
+          : "1";
     const unreferenced =
       state === 1
         ? "NOT EXISTS(SELECT 1 FROM efs_inodes i WHERE i.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_revision_manifest_roots r WHERE r.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_branch_manifest_roots b WHERE b.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_manifests l WHERE l.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_staged_manifests m WHERE m.kind=0 AND m.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.source_manifest_hash=efs_manifest_roots.hash)"
@@ -367,6 +369,14 @@ export class MaintenanceRepository {
         );
         if (validation.changes !== 1)
           throw new Error("ECORRUPT: manifest validation certificate changed");
+      }
+      if (state === 2 && (row.metadata_rows ?? 1) === 2) {
+        const summary = this.#tx.run(
+          "DELETE FROM efs_manifest_subtree_summaries WHERE node_hash=?",
+          [row.hash],
+        );
+        if (summary.changes !== 1)
+          throw new Error("ECORRUPT: manifest subtree summary changed");
       }
       this.#tx.run(`DELETE FROM ${table} WHERE hash=?`, [row.hash]);
       bytes += row.size;

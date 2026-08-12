@@ -15,6 +15,8 @@
 //   node tests/performance/mini-bench.mjs            full matrix
 //   node tests/performance/mini-bench.mjs --cell A1  single cell
 //   node tests/performance/mini-bench.mjs --artifacts <dir>
+//   node tests/performance/mini-bench.mjs --trials 3 timed cells run 3 times
+//   node tests/performance/mini-bench.mjs --cell D1  concurrency sweep (D1-D3)
 
 import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -34,8 +36,10 @@ const SMALL_SIZE = MIB;
 const BIG_PATH = "/big";
 const SMALL_PREFIX = "/small";
 const OVERALL_WALL_BUDGET_MS = 115_000;
-const A6_EDIT_BUDGET_MS = 8_000;
-const A6_EDIT_COUNT = 1_000;
+// M3.2: the local-rebuild gate is 500 scattered edits in <=20 s (pass=true);
+// the M2-era 8 s budget capped A6 at 2 edits and pass=false by design.
+const A6_EDIT_BUDGET_MS = 20_000;
+const A6_EDIT_COUNT = 500;
 const A6_READ_COUNT = 500;
 const WRITE_STREAM_CHUNK = 4 * MIB;
 
@@ -97,10 +101,18 @@ function countingDriver(driver, observed) {
           scope: tx.scope,
           run(sql, bindings) {
             observed.statements += 1;
+            if (observed.sqlCounts) {
+              const key = sql.replace(/\s+/gu, " ").trim();
+              observed.sqlCounts.set(key, (observed.sqlCounts.get(key) ?? 0) + 1);
+            }
             return tx.run(sql, bindings);
           },
           all(sql, bindings, budget) {
             observed.statements += 1;
+            if (observed.sqlCounts) {
+              const key = sql.replace(/\s+/gu, " ").trim();
+              observed.sqlCounts.set(key, (observed.sqlCounts.get(key) ?? 0) + 1);
+            }
             return tx.all(sql, bindings, budget);
           },
         }),
@@ -110,7 +122,11 @@ function countingDriver(driver, observed) {
 }
 
 function freshObserved() {
-  return { transactions: 0, statements: 0 };
+  return {
+    transactions: 0,
+    statements: 0,
+    ...(process.env.EFS_TRACE_SQL === "1" ? { sqlCounts: new Map() } : {}),
+  };
 }
 
 function physicalBytes(driver) {
@@ -122,16 +138,27 @@ async function openDriver(filename) {
   return openNodeSqlite({
     filename,
     durability: "acknowledged",
-    cacheTargetBytes: 16 * MIB,
+    // M3.1: the 2 MiB read windows span ~520 4 KiB pages per pull; the page
+    // cache must hold a working window set, aligned with the engine's 64 MiB
+    // content cache. The M2-era 16 MiB profile left every pull page-cache
+    // cold and capped reads near 175 MiB/s.
+    cacheTargetBytes: 64 * MIB,
     mmapLimitBytes: 0,
   });
 }
 
-async function openFilesystem(driver, observed, observer) {
+async function openFilesystem(driver, observed, observer, managedBytes = 192 * MIB) {
   return EphemeralFS.open({
     database: countingDriver(driver, observed),
     observer,
     ownsDatabase: false,
+    // M3.1: the warm-read gate (A4 >= 1.2x A3) requires the content cache to
+    // hold the whole 100 MiB fixture; the M2-era 64 MiB default evicts during
+    // the cold pass and leaves the "warm" pass indistinguishable.
+    runtime: {
+      maxCacheBytes: 128 * MIB,
+      maxManagedResidentBytes: managedBytes,
+    },
   });
 }
 
@@ -165,9 +192,27 @@ function makeObserver() {
 }
 
 function gitHead() {
-  const result = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT });
-  if (result.status !== 0) return "unknown";
-  return result.stdout.toString().trim();
+  const rev = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT });
+  if (rev.status !== 0) {
+    // Some restricted runners deny child-process creation even though the
+    // benchmark itself is allowed to run. Resolve HEAD from the ref files so
+    // artifacts still identify the measured tree; the fallback is explicitly
+    // dirty because status cannot be queried safely in that environment.
+    try {
+      const head = readFileSync(path.join(ROOT, ".git", "HEAD"), "utf8").trim();
+      const ref = head.startsWith("ref: ") ? head.slice(5) : undefined;
+      const commit = ref
+        ? readFileSync(path.join(ROOT, ".git", ref), "utf8").trim()
+        : head;
+      if (/^[0-9a-f]{40}$/u.test(commit)) return { commit, dirty: true };
+    } catch {}
+    return { commit: "unknown", dirty: true };
+  }
+  const status = spawnSync("git", ["status", "--porcelain"], { cwd: ROOT });
+  return {
+    commit: rev.stdout.toString().trim(),
+    dirty: status.status === 0 && status.stdout.toString().trim().length > 0,
+  };
 }
 
 async function collectBytes(stream) {
@@ -181,32 +226,74 @@ async function collectBytes(stream) {
   return total;
 }
 
-async function measureCell(cell, driver, observed, observer, run) {
-  const physicalBefore = physicalBytes(driver);
-  const statementsBefore = observed.statements;
-  const transactionsBefore = observed.transactions;
-  observer.begin();
-  const started = performance.now();
-  const runResult = await run();
-  const wallMs = performance.now() - started;
-  observer.end();
-  const physicalAfter = physicalBytes(driver);
+function percentile(sorted, fraction) {
+  if (sorted.length === 0) return undefined;
+  const index = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction));
+  return sorted[index];
+}
+
+async function measureCell(
+  cell,
+  driver,
+  observed,
+  observer,
+  run,
+  { trials = 1, beforeTrial } = {},
+) {
+  const trialResults = [];
+  for (let trial = 0; trial < trials; trial += 1) {
+    if (beforeTrial) await beforeTrial();
+    observed.sqlCounts?.clear();
+    const trialStatementsBefore = observed.statements;
+    const trialTransactionsBefore = observed.transactions;
+    const trialPhysicalBefore = physicalBytes(driver);
+    observer.begin();
+    const started = performance.now();
+    const runResult = await run();
+    if (process.env.EFS_TRACE_SQL === "1" && cell === "A6-scattered-edits") {
+      const top = [...(observed.sqlCounts ?? new Map())]
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 100);
+      console.error("A6 SQL statement counts:", JSON.stringify(top));
+    }
+    trialResults.push({
+      wallMs: performance.now() - started,
+      result: runResult,
+      statements: observed.statements - trialStatementsBefore,
+      transactions: observed.transactions - trialTransactionsBefore,
+      physicalBefore: trialPhysicalBefore,
+      physicalAfter: physicalBytes(driver),
+    });
+    observer.end();
+  }
+  const sorted = [...trialResults].sort((left, right) => left.wallMs - right.wallMs);
+  const median = sorted[Math.floor(sorted.length / 2)];
   const counters = {
-    wallMs: Math.round(wallMs * 1000) / 1000,
-    ...(runResult?.counters ?? {}),
-    dbGrowthBytes: physicalAfter - physicalBefore,
-    transactions: observed.transactions - transactionsBefore,
-    statements: observed.statements - statementsBefore,
+    wallMs: Math.round(median.wallMs * 1000) / 1000,
+    ...(median.result?.counters ?? {}),
+    dbGrowthBytes: median.physicalAfter - median.physicalBefore,
+    transactions: median.transactions,
+    statements: median.statements,
     peakManagedResidentBytes: observer.state.peakManagedBytes,
     peakHarnessHeapBytes: observer.state.peakHeapBytes,
   };
-  if (runResult?.fixtureBytes !== undefined)
+  if (median.result?.fixtureBytes !== undefined && median.result.fixtureBytes > 0)
     counters.overheadBasisPoints = Math.round(
-      ((physicalAfter - physicalBefore - runResult.fixtureBytes) /
-        runResult.fixtureBytes) *
+      ((median.physicalAfter - median.physicalBefore - median.result.fixtureBytes) /
+        median.result.fixtureBytes) *
         10000,
     );
-  return Object.freeze({ cell, counters, pass: runResult?.pass ?? true });
+  return Object.freeze({
+    cell,
+    counters,
+    pass: median.result?.pass ?? true,
+    trials,
+    latencyMs: Object.freeze({
+      p50: Math.round(percentile(sorted, 0.5).wallMs * 1000) / 1000,
+      p95: Math.round(percentile(sorted, 0.95).wallMs * 1000) / 1000,
+      p99: Math.round(percentile(sorted, 0.99).wallMs * 1000) / 1000,
+    }),
+  });
 }
 
 function mibPerSecond(bytes, wallMs) {
@@ -214,10 +301,12 @@ function mibPerSecond(bytes, wallMs) {
 }
 
 function artifactFor(cell, result, configuration, fixtureBytes, pass) {
+  const head = gitHead();
   return {
     schema: "efs-benchmark-result-v1",
     benchmark: cell,
-    commit: gitHead(),
+    commit: head.commit,
+    worktreeDirty: head.dirty,
     engine: "ephemeral-ai-fs",
     driver: "sqlite-node",
     fixture: {
@@ -229,12 +318,8 @@ function artifactFor(cell, result, configuration, fixtureBytes, pass) {
       sizeBytes: configuration.sizeBytes,
       ...configuration.extra,
     },
-    trials: 1,
-    latencyMs: {
-      p50: result.counters.wallMs,
-      p95: result.counters.wallMs,
-      p99: result.counters.wallMs,
-    },
+    trials: result.trials,
+    latencyMs: result.latencyMs,
     counters: { ...result.counters },
     pass,
   };
@@ -281,14 +366,49 @@ function printSummary(artifacts) {
   console.log("");
 }
 
+async function removeTree(target, attempts = 20) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await rm(target, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) {
+        try {
+          const { readdir } = await import("node:fs/promises");
+          console.error(`removeTree: giving up on ${target}: ${error.code}`);
+          for (const name of await readdir(target)) console.error(`  remains: ${name}`);
+        } catch {}
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(500, 50 * 2 ** attempt)),
+      );
+    }
+  }
+  throw lastError;
+}
+
 async function closeFilesystem(filesystem, driver) {
-  await filesystem.close();
-  if (driver) driver.close();
+  const errors = [];
+  try {
+    await filesystem.close();
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    if (driver) await driver.close();
+  } catch (error) {
+    errors.push(error);
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1)
+    throw new AggregateError(errors, "filesystem and SQLite driver close failed");
 }
 
 // A. Big file - 1 x 100 MiB --------------------------------------------------
 
-async function runABigGroup(artifacts, bigBytes) {
+async function runABigGroup(artifacts, bigBytes, trials = 1) {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-minibench-a-"));
   const dbFile = path.join(directory, "a.db");
   const observed = freshObserved();
@@ -308,6 +428,7 @@ async function runABigGroup(artifacts, bigBytes) {
         });
         return { fixtureBytes: bigBytes.length };
       },
+      { trials },
     );
     a1.counters.mibPerSec = mibPerSecond(bigBytes.length, a1.counters.wallMs);
     artifacts.push(
@@ -326,6 +447,7 @@ async function runABigGroup(artifacts, bigBytes) {
         });
         return { fixtureBytes: 0 };
       },
+      { trials },
     );
     a2.counters.mibPerSec = mibPerSecond(bigBytes.length, a2.counters.wallMs);
     artifacts.push(
@@ -337,7 +459,11 @@ async function runABigGroup(artifacts, bigBytes) {
     const coldObserved = freshObserved();
     const coldObserver = makeObserver();
     const coldDriver = await openDriver(path.join(directory, "a-cold.db"));
-    const coldFs = await openFilesystem(coldDriver, coldObserved, coldObserver.event);
+    let coldFs = await openFilesystem(coldDriver, coldObserved, coldObserver.event);
+    const coldReopen = async () => {
+      await coldFs.close();
+      coldFs = await openFilesystem(coldDriver, coldObserved, coldObserver.event);
+    };
     try {
       await coldFs.writeFile(BIG_PATH, bytesStream(bigBytes), {
         maxBytes: bigBytes.length,
@@ -351,6 +477,7 @@ async function runABigGroup(artifacts, bigBytes) {
           const bytes = await collectBytes(await coldFs.readStream(BIG_PATH));
           return { fixtureBytes: 0, counters: { bytes } };
         },
+        { trials, beforeTrial: trials > 1 ? coldReopen : undefined },
       );
       a3.counters.mibPerSec = mibPerSecond(a3.counters.bytes, a3.counters.wallMs);
       artifacts.push(
@@ -366,6 +493,7 @@ async function runABigGroup(artifacts, bigBytes) {
           const bytes = await collectBytes(await coldFs.readStream(BIG_PATH));
           return { fixtureBytes: 0, counters: { bytes } };
         },
+        { trials },
       );
       a4.counters.mibPerSec = mibPerSecond(a4.counters.bytes, a4.counters.wallMs);
       artifacts.push(
@@ -392,6 +520,7 @@ async function runABigGroup(artifacts, bigBytes) {
             },
           };
         },
+        { trials },
       );
       artifacts.push(
         artifactFor(
@@ -443,6 +572,7 @@ async function runABigGroup(artifacts, bigBytes) {
                 },
               };
             },
+            { trials },
           );
           const a6Pass = measured.counters.completedEdits >= A6_EDIT_COUNT;
           artifacts.push(
@@ -494,6 +624,7 @@ async function runABigGroup(artifacts, bigBytes) {
                 counters: { smallReadOps: readOps },
               };
             },
+            { trials },
           );
           measured.counters.smallReadMsPerOp =
             Math.round((measured.counters.wallMs / A6_READ_COUNT) * 1000) / 1000;
@@ -508,7 +639,7 @@ async function runABigGroup(artifacts, bigBytes) {
           );
         } finally {
           await closeFilesystem(readFs, readDriver);
-          await rm(a6Directory, { recursive: true, force: true });
+          await removeTree(a6Directory);
         }
       })();
       await closeFilesystem(coldFs, coldDriver);
@@ -523,11 +654,19 @@ async function runABigGroup(artifacts, bigBytes) {
     const reopenedObserved = freshObserved();
     const reopenedObserver = makeObserver();
     const reopenedDriver = await openDriver(dbFile);
-    const reopenedFs = await openFilesystem(
+    let reopenedFs = await openFilesystem(
       reopenedDriver,
       reopenedObserved,
       reopenedObserver.event,
     );
+    const reopenedCold = async () => {
+      await reopenedFs.close();
+      reopenedFs = await openFilesystem(
+        reopenedDriver,
+        reopenedObserved,
+        reopenedObserver.event,
+      );
+    };
     try {
       const a7 = await measureCell(
         "A7-materialization",
@@ -538,6 +677,7 @@ async function runABigGroup(artifacts, bigBytes) {
           const bytes = await collectBytes(await reopenedFs.readStream(BIG_PATH));
           return { fixtureBytes: 0, counters: { bytes } };
         },
+        { trials, beforeTrial: trials > 1 ? reopenedCold : undefined },
       );
       a7.counters.mibPerSec = mibPerSecond(a7.counters.bytes, a7.counters.wallMs);
       artifacts.push(
@@ -547,13 +687,17 @@ async function runABigGroup(artifacts, bigBytes) {
       await closeFilesystem(reopenedFs, reopenedDriver);
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    // Keep the primary database out of the directory-removal race even when
+    // an earlier cell or its nested cleanup fails. closeFilesystem is
+    // intentionally idempotent, so this also covers the normal A7 path.
+    await closeFilesystem(filesystem, driver);
+    await removeTree(directory);
   }
 }
 
 // B. Small files - 100 x 1 MiB ------------------------------------------------
 
-async function runBSmallGroup(artifacts, smallFiles) {
+async function runBSmallGroup(artifacts, smallFiles, trials = 1) {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-minibench-b-"));
   const dbFile = path.join(directory, "b.db");
   const observed = freshObserved();
@@ -582,6 +726,7 @@ async function runBSmallGroup(artifacts, smallFiles) {
         await writeAll();
         return { fixtureBytes: SMALL_COUNT * SMALL_SIZE };
       },
+      { trials },
     );
     b1.counters.mibPerSec = mibPerSecond(SMALL_COUNT * SMALL_SIZE, b1.counters.wallMs);
     artifacts.push(
@@ -603,6 +748,7 @@ async function runBSmallGroup(artifacts, smallFiles) {
         const bytes = await readAll();
         return { bytes, fixtureBytes: 0, counters: { bytes } };
       },
+      { trials },
     );
     b2.counters.mibPerSec = mibPerSecond(b2.counters.bytes, b2.counters.wallMs);
     artifacts.push(
@@ -624,6 +770,7 @@ async function runBSmallGroup(artifacts, smallFiles) {
         const bytes = await readAll();
         return { bytes, fixtureBytes: 0, counters: { bytes } };
       },
+      { trials },
     );
     b3.counters.mibPerSec = mibPerSecond(b3.counters.bytes, b3.counters.wallMs);
     artifacts.push(
@@ -651,6 +798,7 @@ async function runBSmallGroup(artifacts, smallFiles) {
           );
         return { fixtureBytes: 0, counters: { editCount: SMALL_COUNT } };
       },
+      { trials },
     );
     artifacts.push(
       artifactFor(
@@ -686,6 +834,7 @@ async function runBSmallGroup(artifacts, smallFiles) {
           }
           return { fixtureBytes: 0, counters: { bytes: total } };
         },
+        { trials },
       );
       b5.counters.mibPerSec = mibPerSecond(b5.counters.bytes, b5.counters.wallMs);
       artifacts.push(
@@ -701,7 +850,7 @@ async function runBSmallGroup(artifacts, smallFiles) {
       await closeFilesystem(reopenedFs, reopenedDriver);
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
   }
 }
 
@@ -780,7 +929,7 @@ async function runCPhase(filesystem, script, phase) {
   }
 }
 
-async function runCMixedGroup(artifacts, script) {
+async function runCMixedGroup(artifacts, script, trials = 1) {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-minibench-c-"));
   const dbFile = path.join(directory, "c.db");
   const observed = freshObserved();
@@ -804,6 +953,7 @@ async function runCMixedGroup(artifacts, script) {
           counters[`dbBytesAtPhase${phase}`] = phaseDbBytes[phase];
         return { fixtureBytes: 0, counters };
       },
+      { trials },
     );
     const nativePayloadBytes =
       script.big.length +
@@ -829,6 +979,7 @@ async function runCMixedGroup(artifacts, script) {
         for (const phase of C_PHASES) await runCPhase(filesystem, script, phase);
         return { fixtureBytes: 0 };
       },
+      { trials },
     );
     artifacts.push(
       artifactFor("C2-mixed-script-warm", c2, { sizeBytes: 4 * MIB }, undefined, true),
@@ -854,7 +1005,199 @@ async function runCMixedGroup(artifacts, script) {
     );
   } finally {
     await closeFilesystem(filesystem, driver);
-    await rm(directory, { recursive: true, force: true });
+    await removeTree(directory);
+  }
+}
+
+// D. Concurrency sweep -------------------------------------------------------
+
+// 100 x 1 MiB files written, read, and one-byte edited in batches of 1, 5, 10,
+// or 20 concurrent operations. Each D1 cell writes fresh content so the write
+// cells stay cold; D2 reads and D3 edits run against the fixture files. D3 also
+// has a focused c100 cell: one Promise.all of all 100 independent edits on the
+// same database, without adding c100 to the write/read memory-heavy sweep.
+const CONCURRENCY_LEVELS = [1, 5, 10, 20];
+const D_COUNT = SMALL_COUNT;
+const D_SIZE = SMALL_SIZE;
+
+function concurrencyBatches(count, level) {
+  const batches = [];
+  for (let start = 0; start < count; start += level)
+    batches.push([start, Math.min(count, start + level)]);
+  return batches;
+}
+
+async function runDGroup(artifacts, smallFiles, trials = 1) {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-minibench-d-"));
+  const dbFile = path.join(directory, "d.db");
+  const observed = freshObserved();
+  const observer = makeObserver();
+  const driver = await openDriver(dbFile);
+  // 20 concurrent write pipelines each reserve ~18 MiB of managed memory, so
+  // the concurrency sweep runs on its own larger managed envelope.
+  const filesystem = await openFilesystem(driver, observed, observer.event, 1024 * MIB);
+  try {
+    // Untimed fixture write (the D2/D3 fixture).
+    for (let index = 0; index < D_COUNT; index += 1)
+      await filesystem.writeFile(`${SMALL_PREFIX}${index}`, smallFiles[index]);
+    for (const level of CONCURRENCY_LEVELS) {
+      const runs = concurrencyBatches(D_COUNT, level);
+      const freshContent = (index) =>
+        deterministicBytes((SEED ^ 0xbeef) + index + level * 0x10000, D_SIZE);
+      const d1 = await measureCell(
+        `D1-write-c${level}`,
+        driver,
+        observed,
+        observer,
+        async () => {
+          for (const [start, end] of runs)
+            await Promise.all(
+              Array.from({ length: end - start }, (_, i) =>
+                filesystem.writeFile(
+                  `${SMALL_PREFIX}${start + i}`,
+                  freshContent(start + i),
+                ),
+              ),
+            );
+          return {
+            fixtureBytes: D_COUNT * D_SIZE,
+            counters: { operations: D_COUNT, concurrency: level, batches: runs.length },
+          };
+        },
+        { trials },
+      );
+      d1.counters.mibPerSec = mibPerSecond(D_COUNT * D_SIZE, d1.counters.wallMs);
+      artifacts.push(
+        artifactFor(
+          `D1-write-c${level}`,
+          d1,
+          { sizeBytes: D_COUNT * D_SIZE, files: D_COUNT, concurrency: level },
+          smallFiles[0],
+          true,
+        ),
+      );
+      const d2 = await measureCell(
+        `D2-read-c${level}`,
+        driver,
+        observed,
+        observer,
+        async () => {
+          let total = 0;
+          for (const [start, end] of runs) {
+            const values = await Promise.all(
+              Array.from({ length: end - start }, (_, i) =>
+                filesystem.readFile(`${SMALL_PREFIX}${start + i}`),
+              ),
+            );
+            total += values.reduce((sum, bytes) => sum + bytes.byteLength, 0);
+          }
+          return {
+            fixtureBytes: 0,
+            counters: {
+              operations: D_COUNT,
+              concurrency: level,
+              batches: runs.length,
+              bytes: total,
+            },
+          };
+        },
+        { trials },
+      );
+      d2.counters.mibPerSec = mibPerSecond(D_COUNT * D_SIZE, d2.counters.wallMs);
+      artifacts.push(
+        artifactFor(
+          `D2-read-c${level}`,
+          d2,
+          { sizeBytes: D_COUNT * D_SIZE, files: D_COUNT, concurrency: level },
+          smallFiles[0],
+          true,
+        ),
+      );
+      const d3 = await measureCell(
+        `D3-edit-c${level}`,
+        driver,
+        observed,
+        observer,
+        async () => {
+          for (const [start, end] of runs)
+            await Promise.all(
+              Array.from({ length: end - start }, (_, i) =>
+                filesystem.replaceRange(
+                  `${SMALL_PREFIX}${start + i}`,
+                  0,
+                  1,
+                  Uint8Array.of(3),
+                ),
+              ),
+            );
+          return {
+            fixtureBytes: 0,
+            counters: { operations: D_COUNT, concurrency: level, batches: runs.length },
+          };
+        },
+        { trials },
+      );
+      artifacts.push(
+        artifactFor(
+          `D3-edit-c${level}`,
+          d3,
+          { sizeBytes: D_COUNT * D_SIZE, files: D_COUNT, concurrency: level },
+          smallFiles[0],
+          true,
+        ),
+      );
+    }
+    // Reset the same database outside the timed interval so c100 measures
+    // actual one-byte changes rather than repeated writes of an already-set
+    // byte after the c1/c5/c10/c20 cells.
+    for (let index = 0; index < D_COUNT; index += 1)
+      await filesystem.writeFile(`${SMALL_PREFIX}${index}`, smallFiles[index]);
+    const focusedLevel = D_COUNT;
+    const focused = await measureCell(
+      "D3-edit-c100",
+      driver,
+      observed,
+      observer,
+      async () => {
+        const started = performance.now();
+        await Promise.all(
+          Array.from({ length: D_COUNT }, (_, index) =>
+            filesystem.replaceRange(`${SMALL_PREFIX}${index}`, 0, 1, Uint8Array.of(4)),
+          ),
+        );
+        return {
+          fixtureBytes: 0,
+          counters: {
+            operations: D_COUNT,
+            concurrency: focusedLevel,
+            batches: 1,
+            batchWallMs: performance.now() - started,
+          },
+        };
+      },
+      { trials },
+    );
+    artifacts.push(
+      artifactFor(
+        "D3-edit-c100",
+        focused,
+        {
+          sizeBytes: D_COUNT * D_SIZE,
+          extra: {
+            files: D_COUNT,
+            concurrency: focusedLevel,
+            batches: 1,
+            databaseIsolation: "one-database",
+            coalescing: false,
+          },
+        },
+        smallFiles[0],
+        true,
+      ),
+    );
+  } finally {
+    await closeFilesystem(filesystem, driver);
+    await removeTree(directory);
   }
 }
 
@@ -868,11 +1211,18 @@ async function main() {
       ?.slice("--artifacts=".length) ??
       path.join(ROOT, "tests", "performance", "artifacts"),
   );
+  const trials = Number(
+    process.argv
+      .find((value) => value.startsWith("--trials="))
+      ?.slice("--trials=".length) ?? 1,
+  );
+  if (!Number.isInteger(trials) || trials < 1 || trials > 5)
+    throw new Error("--trials must be an integer between 1 and 5");
   const started = performance.now();
   const artifacts = [];
 
   console.log(
-    `mini-bench: seed ${SEED.toString(16)}, big=${BIG_SIZE}, small=${SMALL_COUNT}x${SMALL_SIZE}`,
+    `mini-bench: seed ${SEED.toString(16)}, big=${BIG_SIZE}, small=${SMALL_COUNT}x${SMALL_SIZE}, trials=${trials}`,
   );
   console.log("fixture generation...");
   const bigBytes = deterministicBytes(SEED, BIG_SIZE);
@@ -883,17 +1233,20 @@ async function main() {
 
   if (onlyCell) {
     const groups = {
-      A1: () => runABigGroup(artifacts, bigBytes),
-      B1: () => runBSmallGroup(artifacts, smallFiles),
-      C1: () => runCMixedGroup(artifacts, script),
+      A1: () => runABigGroup(artifacts, bigBytes, trials),
+      B1: () => runBSmallGroup(artifacts, smallFiles, trials),
+      C1: () => runCMixedGroup(artifacts, script, trials),
+      D1: () => runDGroup(artifacts, smallFiles, trials),
     };
     const runner = groups[onlyCell];
-    if (!runner) throw new Error(`--cell must be one of A1, B1, C1; got ${onlyCell}`);
+    if (!runner)
+      throw new Error(`--cell must be one of A1, B1, C1, D1; got ${onlyCell}`);
     await runner();
   } else {
-    await runABigGroup(artifacts, bigBytes);
-    await runBSmallGroup(artifacts, smallFiles);
-    await runCMixedGroup(artifacts, script);
+    await runABigGroup(artifacts, bigBytes, trials);
+    await runBSmallGroup(artifacts, smallFiles, trials);
+    await runCMixedGroup(artifacts, script, trials);
+    await runDGroup(artifacts, smallFiles, trials);
   }
 
   await writeArtifacts(artifacts, artifactsDirectory);

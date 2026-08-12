@@ -91,7 +91,7 @@ function diverseEntry(index) {
 }
 
 export default {
-  fetch() {
+  async fetch() {
     const checks = [];
     const check = (name, callback) => {
       const metrics = callback() ?? {};
@@ -1064,6 +1064,49 @@ export default {
       );
       return { requiredBytes: required, pageSizesTested: 3 };
     });
+
+    // M3.3: async write-path hashing — WebCrypto digest output must match the
+    // pure-JS golden hasher, and the bounded-parallelism batch pattern must
+    // clear the workerd throughput gate (>=300 MiB/s outside transactions).
+    const hashing = await (async () => {
+      const chunk = new Uint8Array(158 * 1024).fill(0x5a);
+      const digest = new Uint8Array(
+        await globalThis.crypto.subtle.digest("SHA-256", chunk),
+      );
+      assert(
+        bytesToHex(digest) === sha256Hex(chunk),
+        "WebCrypto SHA-256 diverges from the pure-JS golden hasher",
+      );
+      const chunks = 256;
+      let hashed = 0;
+      let next = 0;
+      const started = Date.now();
+      const workers = Array.from({ length: 16 }, async () => {
+        while (next < chunks) {
+          next += 1;
+          await globalThis.crypto.subtle.digest("SHA-256", chunk);
+          hashed += chunk.length;
+        }
+      });
+      await Promise.all(workers);
+      const elapsedMs = Math.max(1, Date.now() - started);
+      const mibPerSec = hashed / 1048576 / (elapsedMs / 1000);
+      // Baseline: the same payload hashed sequentially with the pure-JS
+      // golden hasher that workerd used before M3.3 (~66 MiB/s). The ratio
+      // is the write-path hashing speedup behind the >=1.5x write gate.
+      const baselineStarted = Date.now();
+      for (let index = 0; index < chunks; index += 1) sha256(chunk);
+      const baselineMs = Math.max(1, Date.now() - baselineStarted);
+      const baselineMibPerSec = (chunks * chunk.length) / 1048576 / (baselineMs / 1000);
+      return {
+        hashedBytes: hashed,
+        elapsedMs,
+        mibPerSec: Math.round(mibPerSec * 10) / 10,
+        baselineMibPerSec: Math.round(baselineMibPerSec * 10) / 10,
+        speedup: Math.round((mibPerSec / baselineMibPerSec) * 100) / 100,
+      };
+    })();
+    checks.push({ name: "write-path-hashing", ok: true, metrics: hashing });
 
     return Response.json({
       runtime: "workerd",

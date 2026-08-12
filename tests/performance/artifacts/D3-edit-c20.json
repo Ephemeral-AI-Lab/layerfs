@@ -1,0 +1,34 @@
+{
+  "schema": "efs-benchmark-result-v1",
+  "benchmark": "D3-edit-c20",
+  "commit": "7678194e8ebc2913570a3b8850ce0a7ce090c820",
+  "worktreeDirty": true,
+  "engine": "ephemeral-ai-fs",
+  "driver": "sqlite-node",
+  "fixture": {
+    "name": "deterministic-seed-5eed5eed",
+    "sha256": "89df50aba353fd979e35c98f0cc10fab43e0863647a3cf93bb67c86c80f2f256"
+  },
+  "configuration": {
+    "seed": 1592614637,
+    "sizeBytes": 104857600
+  },
+  "trials": 1,
+  "latencyMs": {
+    "p50": 3023.763,
+    "p95": 3023.763,
+    "p99": 3023.763
+  },
+  "counters": {
+    "wallMs": 3023.763,
+    "operations": 100,
+    "concurrency": 20,
+    "batches": 5,
+    "dbGrowthBytes": 16224256,
+    "transactions": 200,
+    "statements": 4600,
+    "peakManagedResidentBytes": 376234748,
+    "peakHarnessHeapBytes": 19159624
+  },
+  "pass": true
+}

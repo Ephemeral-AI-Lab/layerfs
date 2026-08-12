@@ -60,12 +60,35 @@ export interface ContentBatchResult {
   readonly deduplicated: number;
   readonly insertedBytes: number;
 }
+export interface AuthenticatedManifestCursorSource {
+  readObjectInto(
+    hash: Uint8Array,
+    expectedSize: number,
+    sourceOffset: number,
+    destination: Uint8Array,
+    destinationOffset: number,
+    length: number,
+  ): boolean;
+  batchFetchObjects(
+    requests: readonly { readonly hash: Uint8Array; readonly expectedSize: number }[],
+  ): void;
+  withManifestNode<T>(
+    hash: Uint8Array,
+    consume: (encoded: Uint8Array) => T,
+  ): T | undefined;
+}
 export interface AuthenticatedManifestCursor {
   readonly fileSize: number;
   readonly position: number;
   peekEntry(): AuthenticatedManifestEntry | null;
   nextEntry(): AuthenticatedManifestEntry | null;
   readInto(destination: Uint8Array, destinationOffset: number, length: number): number;
+  /**
+   * Rebind the cursor's content source to the current storage transaction.
+   * Carried cursors outlive any single transaction; every readInto call must
+   * run against a live transaction, so the stream rebinds before each pull.
+   */
+  bindSource(source: AuthenticatedManifestCursorSource): void;
   close(): void;
 }
 export interface AuthenticatedManifestEntry {
@@ -75,7 +98,10 @@ export interface AuthenticatedManifestEntry {
 }
 export interface ContentStore {
   putObject(hash: Uint8Array, bytes: Uint8Array): boolean;
-  putObjectsBatch(input: readonly ContentObjectInput[]): ContentBatchResult;
+  putObjectsBatch(
+    input: readonly ContentObjectInput[],
+    trustedDigests?: boolean,
+  ): ContentBatchResult;
   readObjectInto(
     hash: Uint8Array,
     expectedSize: number,
@@ -84,6 +110,9 @@ export interface ContentStore {
     destinationOffset: number,
     length: number,
   ): boolean;
+  batchFetchObjects(
+    requests: readonly { readonly hash: Uint8Array; readonly expectedSize: number }[],
+  ): void;
   verifyObject(
     hash: Uint8Array,
     expectedSize?: number,
@@ -129,6 +158,9 @@ export interface AuthenticatedManifestTreePath {
 }
 export interface ManifestTreeStore {
   pathAtOffset(manifestHash: Uint8Array, offset: number): AuthenticatedManifestTreePath;
+  recordSubtreeSummaries(
+    nodes: readonly { readonly hash: Uint8Array; readonly encoded: Uint8Array }[],
+  ): void;
   protectSourceManifest(
     leaseId: string,
     ownerNonce: Uint8Array,
@@ -144,7 +176,62 @@ export interface ManifestTreeStore {
       readonly span: number;
       readonly entryCount: number;
     }[],
-  ): void;
+    options?: {
+      readonly knownObjectHashes?: readonly Uint8Array[];
+      readonly knownNodeHashes?: readonly Uint8Array[];
+      /** The same transaction already called protectSourceManifest. */
+      readonly sourceManifestProtected?: boolean;
+      /** Disable summary aggregation when overlap state cannot span batches. */
+      readonly allowSummaries?: boolean;
+      readonly certificateState?: {
+        readonly chainDigest: Uint8Array;
+        readonly chainFold: Uint8Array;
+        readonly objectCount: number;
+        readonly objectBytes: number;
+        readonly nodeCount: number;
+        readonly nodeBytes: number;
+        readonly membershipCount: number;
+      };
+      readonly deferCertificateWrite?: boolean;
+      readonly certificatePatch?: {
+        value?: {
+          readonly chainDigest: Uint8Array;
+          readonly chainFold: Uint8Array;
+          readonly objectCount: number;
+          readonly objectBytes: number;
+          readonly nodeCount: number;
+          readonly nodeBytes: number;
+          readonly membershipCount: number;
+        };
+      };
+      /** Source-authenticated proof supplied by the bounded local path. */
+      readonly authenticatedClaims?: readonly {
+        readonly sourcePath: readonly number[];
+        readonly nodeHash: Uint8Array;
+        readonly span: number;
+        readonly entryCount: number;
+        readonly sourceFinalAtLevel: boolean;
+        readonly sourceLeafDelta: number;
+      }[];
+    },
+  ): readonly {
+    readonly nodeHash: Uint8Array;
+    readonly sourceManifestHash: Uint8Array;
+    readonly sourcePath: Uint8Array;
+    readonly span: number;
+    readonly entryCount: number;
+    readonly validatedNonfinalLeafDelta: number | null;
+    readonly validatedFinalLeafDelta: number | null;
+    readonly summaryUsable: boolean;
+    readonly summary?: {
+      readonly objectCount: number;
+      readonly objectBytes: number;
+      readonly nodeCount: number;
+      readonly nodeBytes: number;
+      readonly membershipCount: number;
+      readonly closureFold: Uint8Array;
+    };
+  }[];
 }
 
 export interface InodeRow {
@@ -181,6 +268,9 @@ export interface ResolvedPath {
   readonly name: string;
   readonly nameSort: Uint8Array | null;
   readonly entryToken: number | null;
+  /** Read-snapshot namespace state, when supplied by the SQLite resolver. */
+  readonly mainRevision?: number;
+  readonly rootMutationGeneration?: number;
 }
 export interface NamespaceStore {
   meta(): {
@@ -201,7 +291,17 @@ export interface NamespaceStore {
     readonly nameSort: Uint8Array;
   };
   nextRevision(now: number, changeCount: number, writer?: string): number;
+  /** Optimistic local-edit handoff; falls back internally if the snapshot is stale. */
+  nextRevisionFromSnapshot?(
+    now: number,
+    changeCount: number,
+    mainRevision: number,
+    rootMutationGeneration: number,
+    writer?: string,
+  ): number;
   recordInode(revision: number, inodeId: string, tombstone?: boolean): void;
+  /** Records a just-allocated file revision from its already-updated inode state. */
+  recordFileContentRevision?(revision: number, inode: InodeRow): void;
   recordEntry(
     revision: number,
     parentInode: string,
@@ -350,6 +450,12 @@ export interface StagingMember {
   readonly kind: StagingMemberKind;
   readonly hash: Uint8Array;
   readonly size: number;
+  /**
+   * Count-only members are already-durable objects referenced by the rebuilt
+   * closure: they extend the chain and the certificate counts, but they get
+   * no membership row, no metadata charge, and no staging-byte admission.
+   */
+  readonly counted?: boolean;
 }
 export interface StagingEntryRow {
   readonly entry_index: number;
@@ -367,11 +473,21 @@ export interface ClosureCertificate {
   readonly ownerNonce: Uint8Array;
   readonly manifestHash: Uint8Array;
   readonly chainDigest: Uint8Array;
+  /** Commutative XOR fold of every chain member hash (the closure binding). */
+  readonly chainFold: Uint8Array;
   readonly objectCount: number;
   readonly objectBytes: number;
   readonly nodeCount: number;
   readonly nodeBytes: number;
   readonly membershipCount: number;
+}
+
+export interface ValidatedSealedLease {
+  readonly leaseId: string;
+  readonly ownerNonce: Uint8Array;
+  readonly stagedBytes: number;
+  readonly ingestReservationBytes: number;
+  readonly metadataReservationBytes: number;
 }
 export interface ReconciliationProgress {
   readonly processed: number;
@@ -383,6 +499,19 @@ export interface LeaseCleanupProgress {
   readonly deletedLeases: number;
 }
 export interface StagingStore {
+  invalidateCertificateCache(leaseId?: string): void;
+  applyCertificatePatch(
+    leaseId: string,
+    patch: {
+      readonly chainDigest: Uint8Array;
+      readonly chainFold: Uint8Array;
+      readonly objectCount: number;
+      readonly objectBytes: number;
+      readonly nodeCount: number;
+      readonly nodeBytes: number;
+      readonly membershipCount: number;
+    },
+  ): void;
   begin(options: {
     readonly leaseId: string;
     readonly ownerId: string;
@@ -451,7 +580,12 @@ export interface StagingStore {
     maxBytes: number,
   ): readonly StagingLevelRow[];
   bumpRoot(kind: number, id: string): void;
-  release(leaseId: string, ownerNonce: Uint8Array, requireSealed: boolean): boolean;
+  release(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    requireSealed: boolean,
+    validated?: ValidatedSealedLease,
+  ): boolean;
   delete(leaseId: string, ownerNonce: Uint8Array): boolean;
   acquireReadLease(
     leaseId: string,
@@ -467,8 +601,49 @@ export interface StagingStore {
     ownerNonce: Uint8Array,
     members: readonly StagingMember[],
   ): ClosureCertificate;
+  /** Append source-manifest boundary objects whose durability was authenticated by the caller. */
+  appendCountedBatch(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    members: readonly StagingMember[],
+  ): ClosureCertificate;
+  /** Cache metadata for source-authenticated reused nodes registered in this transaction. */
+  cacheReusedSubtreeMetadata(
+    leaseId: string,
+    nodeHashes: readonly Uint8Array[],
+    metadata?: readonly {
+      readonly nodeHash: Uint8Array;
+      readonly sourceManifestHash: Uint8Array;
+      readonly sourcePath: Uint8Array;
+      readonly span: number;
+      readonly entryCount: number;
+      readonly validatedNonfinalLeafDelta: number | null;
+      readonly validatedFinalLeafDelta: number | null;
+      readonly summaryUsable: boolean;
+      readonly summary?: {
+        readonly objectCount: number;
+        readonly objectBytes: number;
+        readonly nodeCount: number;
+        readonly nodeBytes: number;
+        readonly membershipCount: number;
+        readonly closureFold: Uint8Array;
+      };
+    }[],
+    verifiedNodeSizes?: ReadonlyMap<string, number>,
+  ): void;
+  /** Register local-path objects already authenticated before reconciliation. */
+  registerTrustedObjects(
+    objects: readonly { readonly hash: Uint8Array; readonly length: number }[],
+  ): void;
+  flushBatchedCertificate(): void;
   snapshot(leaseId: string, ownerNonce: Uint8Array): ClosureCertificate;
   beginReconciliation(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    manifestHash: Uint8Array,
+  ): void;
+  /** Local merged rebuild fast path; generic callers retain queued validation. */
+  beginTrustedReconciliation?(
     leaseId: string,
     ownerNonce: Uint8Array,
     manifestHash: Uint8Array,
@@ -477,9 +652,19 @@ export interface StagingStore {
     leaseId: string,
     ownerNonce: Uint8Array,
     workLimit: number,
+    options?: { readonly skipObjectBackingCheck?: boolean },
+  ): ReconciliationProgress;
+  /** Complete a locally authenticated manifest without materializing queues. */
+  completeTrustedLocalReconciliation?(
+    leaseId: string,
+    ownerNonce: Uint8Array,
+    manifestHash: Uint8Array,
+    freshNodeHashes: readonly Uint8Array[],
+    rootSize: number,
+    leafDepth: number,
   ): ReconciliationProgress;
   seal(certificate: ClosureCertificate): void;
-  validateSealed(certificate: ClosureCertificate, now?: number): void;
+  validateSealed(certificate: ClosureCertificate, now?: number): ValidatedSealedLease;
 }
 
 export interface GcRunRow {
@@ -643,6 +828,12 @@ export interface OperationsStorage {
    * implementation in `cas/sha256.ts`, so digests never depend on the host.
    */
   readonly hashBytes: HashFunction;
+  /**
+   * Optional asynchronous SHA-256 hasher (WebCrypto on workerd) used by the
+   * streaming write pipeline to hash chunk batches concurrently with bounded
+   * parallelism. Digest output is byte-identical to `hashBytes`.
+   */
+  readonly hashBytesAsync?: (bytes: Uint8Array) => Promise<Uint8Array>;
   initialize(options?: {
     readonly cowPageBytes?: CowPageBytes;
     readonly now?: number;
