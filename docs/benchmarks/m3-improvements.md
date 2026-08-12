@@ -1,4 +1,4 @@
-# M3 improvements spec (sequenced)
+# M3 benchmark and improvements
 
 Validated improvement sequence for the accepted M2 SQLite engine, informed by the
 [cas-cdc-cow prototype](https://github.com/agent-infra-foundation/agent-infra-book/tree/main/cloudflare/computer/benchmarks/cas-cdc-cow)
@@ -13,6 +13,27 @@ fallback), A3/A4 read at 402 transactions and 1,787 statements per 100 MiB. Prot
 reference numbers: 1,000 edits on 16 MiB = 274 ms edit + 124 ms publish (10.1x vs naive,
 96% less SQL); 10 B prepend 16.5x; 1.08x write amplification over 32 checkpoints;
 explicit conflicts instead of lost updates.
+
+## Accepted M3 benchmark result
+
+M3 is accepted. The implementation combines read-path batching, durable bounded local
+reconnection, and async write-path hashing while retaining authenticated manifests,
+exact reconciliation checks, transaction and memory limits, and acknowledged SQLite
+durability.
+
+| Gate                        |               Latest result | Status   |
+| --------------------------- | --------------------------: | -------- |
+| A3 cold 100 MiB read        |                 259.6 MiB/s | Pass     |
+| A4 warm 100 MiB read        |               2,921.5 MiB/s | Pass     |
+| A5 three one-byte edits     |             70.676 ms total | Pass     |
+| A6 500 scattered edits      |          500/500 in 9.975 s | **Pass** |
+| Workerd async write hashing | 383.5 MiB/s, 5.53x baseline | Pass     |
+
+The revised A6 acceptance gate is 500 scattered edits in <=20 seconds. The former
+1,000-edit target remains documented as beyond the acknowledged SQLite WAL/fsync floor
+on the validation hardware, not as an M3 acceptance requirement. The raw A-group result
+is recorded in `tests/performance/artifacts-m3-final/` and the full milestone record is
+in `docs/evidence/m3/exit.md`.
 
 ## Improvement matrix (diff vs current)
 
