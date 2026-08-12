@@ -266,7 +266,7 @@ export class MaintenanceRepository {
     if (!run) throw new Error("ECORRUPT: missing active garbage-collection run");
     if (!Number.isSafeInteger(run.cursor_kind) || run.cursor_kind < 0)
       throw new Error("ECORRUPT: invalid garbage-collection root cursor");
-    if (run.cursor_kind >= 5) return this.#finishRootPass(runId, run.root_generation);
+    if (run.cursor_kind >= 6) return this.#finishRootPass(runId, run.root_generation);
     // A one-byte zero BLOB sorts before every 32-byte digest, while avoiding
     // runtimes that normalize reconstructed empty typed-array views to NULL.
     const after = run.cursor_value ?? Uint8Array.of(0);
@@ -276,6 +276,7 @@ export class MaintenanceRepository {
       "SELECT DISTINCT manifest_hash hash FROM efs_branch_manifest_roots WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
       "SELECT DISTINCT manifest_hash hash FROM efs_lease_manifests WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
       "SELECT DISTINCT manifest_hash hash FROM efs_lease_staged_manifests WHERE kind=0 AND manifest_hash>? ORDER BY manifest_hash LIMIT ?",
+      "SELECT DISTINCT manifest_hash hash FROM efs_checkpoint_manifest_roots WHERE manifest_hash>? ORDER BY manifest_hash LIMIT ?",
     ] as const;
     const rows = this.#tx.all<{ hash: Uint8Array } & SqliteRow>(
       queries[run.cursor_kind]!,
@@ -295,7 +296,7 @@ export class MaintenanceRepository {
       nextKind,
       runId,
     ]);
-    return nextKind >= 5 ? this.#finishRootPass(runId, run.root_generation) : false;
+    return false;
   }
   sweepCandidates(
     runId: string,
@@ -320,7 +321,7 @@ export class MaintenanceRepository {
           : "1";
     const unreferenced =
       state === 1
-        ? "NOT EXISTS(SELECT 1 FROM efs_inodes i WHERE i.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_revision_manifest_roots r WHERE r.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_branch_manifest_roots b WHERE b.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_manifests l WHERE l.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_staged_manifests m WHERE m.kind=0 AND m.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.source_manifest_hash=efs_manifest_roots.hash)"
+        ? "NOT EXISTS(SELECT 1 FROM efs_inodes i WHERE i.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_revision_manifest_roots r WHERE r.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_checkpoint_manifest_roots c WHERE c.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_branch_manifest_roots b WHERE b.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_manifests l WHERE l.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_lease_staged_manifests m WHERE m.kind=0 AND m.manifest_hash=efs_manifest_roots.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.source_manifest_hash=efs_manifest_roots.hash)"
         : state === 2
           ? "NOT EXISTS(SELECT 1 FROM efs_lease_staged_manifests m WHERE m.kind=1 AND m.manifest_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_level_records l WHERE l.node_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.node_hash=efs_manifest_nodes.hash)"
           : "NOT EXISTS(SELECT 1 FROM efs_lease_objects l WHERE l.object_hash=efs_cas_objects.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_entries s WHERE s.object_hash=efs_cas_objects.hash)";
@@ -510,7 +511,7 @@ export class MaintenanceRepository {
       return false;
     }
     this.#tx.run(
-      "UPDATE efs_gc_runs SET state=1,cursor_kind=5,cursor_value=NULL WHERE id=? AND state=0",
+      "UPDATE efs_gc_runs SET state=1,cursor_kind=6,cursor_value=NULL WHERE id=? AND state=0",
       [runId],
     );
     return true;

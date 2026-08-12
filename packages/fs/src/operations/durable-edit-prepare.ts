@@ -44,7 +44,6 @@ import {
 } from "./streaming-prepare.js";
 import type { DiagnosticBuiltManifest } from "./full-rebuild.js";
 import type { EncodedManifestNode } from "../manifests/builder.js";
-import type { SQLiteManifestTreePath } from "../sqlite/manifest-tree-repository.js";
 import {
   DEFAULT_LOCAL_REBUILD_LIMITS,
   LocalRebuildLimitError,
@@ -1069,12 +1068,7 @@ function persistCandidate(
           source.manifestHash,
           source.rootBytes,
         );
-      else
-        manifestTree.protectSourceManifest(
-          leaseId,
-          ownerNonce,
-          source.manifestHash,
-        );
+      else manifestTree.protectSourceManifest(leaseId, ownerNonce, source.manifestHash);
       const snapshotStaging = staging as typeof staging & {
         bumpRootFromSnapshot?: (
           kind: number,
@@ -1086,11 +1080,7 @@ function persistCandidate(
         source.rootMutationGeneration !== undefined &&
         snapshotStaging.bumpRootFromSnapshot
       )
-        snapshotStaging.bumpRootFromSnapshot(
-          5,
-          leaseId,
-          source.rootMutationGeneration,
-        );
+        snapshotStaging.bumpRootFromSnapshot(5, leaseId, source.rootMutationGeneration);
       else staging.bumpRoot(5, leaseId);
     },
   });
@@ -1262,9 +1252,7 @@ function persistCandidate(
         > & {
           preloadSubtreeSummaries?: (nodeHashes: readonly Uint8Array[]) => void;
         };
-        manifestTree.preloadSubtreeSummaries?.(
-          batch.map((claim) => claim.nodeHash),
-        );
+        manifestTree.preloadSubtreeSummaries?.(batch.map((claim) => claim.nodeHash));
         const registered = manifestTree.registerReusedSubtrees(
           leaseId,
           ownerNonce,
@@ -1298,7 +1286,8 @@ function persistCandidate(
                   })),
                 }
               : {}),
-          });
+          },
+        );
         if (verifiedReusedNodeSizes.size && registered.length)
           staging.cacheReusedSubtreeMetadata(
             leaseId,
@@ -1477,14 +1466,13 @@ export function boundedManifestStateReadBudget(
 }
 
 function pathAtOffsetWithinLeaf(
-  path: SQLiteManifestTreePath,
+  path: AuthenticatedManifestTreePath,
   offset: number,
-): SQLiteManifestTreePath {
+): AuthenticatedManifestTreePath {
   const leafFrame = path.nodes.at(-1);
   if (!leafFrame || leafFrame.node.kind !== "leaf")
     throw new Error("ECORRUPT: bounded path does not terminate at a leaf");
-  const selectedOffset =
-    path.fileSize === 0 ? 0 : Math.min(offset, path.fileSize - 1);
+  const selectedOffset = path.fileSize === 0 ? 0 : Math.min(offset, path.fileSize - 1);
   const leafEnd = checkedAdd(path.leafOffset, leafFrame.node.span);
   if (path.fileSize === 0 && path.leafOffset === 0 && leafEnd === 0)
     return Object.freeze({ ...path, entryIndex: -1, entryOffset: 0 });
@@ -2497,7 +2485,9 @@ function persistLocallyRebuilt(
     units: 1,
     run: (tx) => {
       const staging = stagingFor(tx);
-      (tx.content(storage, cache) as LocalFreshContentStore).reserveAllocationSequence?.(
+      (
+        tx.content(storage, cache) as LocalFreshContentStore
+      ).reserveAllocationSequence?.(
         checkedAdd(
           checkedAdd(putObjects.length, spine.newNodes.length),
           1,
@@ -2535,12 +2525,7 @@ function persistLocallyRebuilt(
           source.manifestHash,
           source.rootBytes,
         );
-      else
-        manifestTree.protectSourceManifest(
-          leaseId,
-          ownerNonce,
-          source.manifestHash,
-        );
+      else manifestTree.protectSourceManifest(leaseId, ownerNonce, source.manifestHash);
       const snapshotStaging = staging as typeof staging & {
         bumpRootFromSnapshot?: (
           kind: number,
@@ -2552,11 +2537,7 @@ function persistLocallyRebuilt(
         source.rootMutationGeneration !== undefined &&
         snapshotStaging.bumpRootFromSnapshot
       )
-        snapshotStaging.bumpRootFromSnapshot(
-          5,
-          leaseId,
-          source.rootMutationGeneration,
-        );
+        snapshotStaging.bumpRootFromSnapshot(5, leaseId, source.rootMutationGeneration);
       else staging.bumpRoot(5, leaseId);
     },
   });
@@ -2748,9 +2729,7 @@ function persistLocallyRebuilt(
         > & {
           preloadSubtreeSummaries?: (nodeHashes: readonly Uint8Array[]) => void;
         };
-        manifestTree.preloadSubtreeSummaries?.(
-          batch.map((claim) => claim.nodeHash),
-        );
+        manifestTree.preloadSubtreeSummaries?.(batch.map((claim) => claim.nodeHash));
         const registered = manifestTree.registerReusedSubtrees(
           leaseId,
           ownerNonce,
@@ -2782,7 +2761,8 @@ function persistLocallyRebuilt(
                   })),
                 }
               : {}),
-          });
+          },
+        );
         if (verifiedReusedNodeSizes.size && registered.length)
           staging.cacheReusedSubtreeMetadata(
             leaseId,
@@ -3500,7 +3480,11 @@ export async function prepareDurableEditedContent(
   finalizePrepared?: DurableEditFinalizer,
   readSnapshot?: DurableEditReadSnapshot,
 ): Promise<DurableEditPreparedManifest> {
-  cache ??= new ContentCache(1, admission);
+  const ownsCache = cache === undefined;
+  const operationCache =
+    cache ??
+    new ContentCache(Math.min(runtime.maxCacheBytes, 4 * 1024 ** 2), admission);
+  cache = operationCache;
   const newSize = validateInputs(source, edit);
   if (newSize > storage.maxFileBytes)
     throw new RangeError("edited file exceeds maxFileBytes");
@@ -3764,6 +3748,7 @@ export async function prepareDurableEditedContent(
       }),
     });
   } finally {
+    if (ownsCache) operationCache.clear();
     releaseRetained?.();
   }
 }

@@ -12,6 +12,7 @@ export interface BranchInfo {
     readonly generation: number;
     readonly createdAt: number;
     readonly terminalAt: number | null;
+    readonly mergedRevision: RevisionId | null;
 }
 export interface CreateBranchOptions {
     readonly id?: string;
@@ -449,6 +450,13 @@ export declare class AdmissionController {
     get usedBytes(): number;
     get peakBytes(): number;
     get limitBytes(): number;
+}
+/** Process-wide runtime admission shared by the main filesystem and branches. */
+export declare class RuntimeConcurrency {
+    #private;
+    constructor(limits: Pick<RuntimeLimits, "maxConcurrentOperations" | "maxConcurrentStreams">);
+    tryAcquireOperation(): (() => void) | undefined;
+    tryAcquireStream(): (() => void) | undefined;
 }
 
 /* ===== packages/fs/dist/sqlite/driver.d.ts ===== */

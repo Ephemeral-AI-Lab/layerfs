@@ -666,6 +666,9 @@ export interface ResolvedPath {
     readonly name: string;
     readonly nameSort: Uint8Array | null;
     readonly entryToken: number | null;
+    /** Read-snapshot namespace state, when supplied by the SQLite resolver. */
+    readonly mainRevision?: number;
+    readonly rootMutationGeneration?: number;
 }
 export interface NamespaceStore {
     meta(): {
@@ -683,6 +686,8 @@ export interface NamespaceStore {
         readonly nameSort: Uint8Array;
     };
     nextRevision(now: number, changeCount: number, writer?: string): number;
+    /** Optimistic local-edit handoff; falls back internally if the snapshot is stale. */
+    nextRevisionFromSnapshot?(now: number, changeCount: number, mainRevision: number, rootMutationGeneration: number, writer?: string): number;
     recordInode(revision: number, inodeId: string, tombstone?: boolean): void;
     /** Records a just-allocated file revision from its already-updated inode state. */
     recordFileContentRevision?(revision: number, inode: InodeRow): void;
@@ -731,6 +736,7 @@ export interface BranchRow {
     readonly generation: number;
     readonly created_at_ms: number;
     readonly terminal_at_ms: number | null;
+    readonly merged_revision: number | null;
 }
 export interface BranchHistoryRow {
     readonly tombstone: number;
@@ -750,6 +756,8 @@ export interface BranchChangeRow {
 export interface BranchResultRow {
     readonly branch_id: string;
     readonly generation: number;
+    readonly reservation_nonce: Uint8Array;
+    readonly outcome: number;
     readonly encoded: Uint8Array | null;
     readonly expires_at_ms: number | null;
 }
@@ -758,6 +766,7 @@ export interface BranchStore {
     historyEntries(parentInode: string, revision: number): readonly BranchHistoryEntryRow[];
     historicEntry(parentInode: string, nameSort: Uint8Array, revision: number): BranchHistoryRow | undefined;
     historicInode(inodeId: string, revision: number): BranchHistoryRow | undefined;
+    inodeOverlay(branchId: string, inodeId: string, maxBytes: number): Uint8Array | undefined;
     change(branchId: string, path: Uint8Array): BranchChangeRow | undefined;
     changes(branchId: string): readonly BranchChangeRow[];
     activeCount(): number;
@@ -766,15 +775,26 @@ export interface BranchStore {
     create(id: string, baseRevision: number, now: number): BranchRow;
     row(id: string): BranchRow | undefined;
     operationResult(operationId: string, maxBytes: number): BranchResultRow | undefined;
-    reserveOperation(operationId: string, branchId: string, generation: number, now: number): void;
+    reserveOperation(operationId: string, branchId: string, generation: number, now: number, reservationExpiresAt: number, reservationNonce: Uint8Array): void;
+    reclaimOperation(operationId: string, branchId: string, generation: number, now: number, reservationExpiresAt: number, reservationNonce: Uint8Array): boolean;
+    expireOperation(operationId: string, reservationNonce: Uint8Array, now: number): void;
+    releaseOperation(operationId: string, reservationNonce?: Uint8Array): void;
     putChange(branchId: string, path: Uint8Array, expectedToken: number | null, kind: number, encoded: Uint8Array | null): void;
     putInodeExpectation(branchId: string, inodeId: string, expectedToken: number | null): void;
     setManifestRoot(branchId: string, path: Uint8Array, manifestHash?: Uint8Array): void;
     changeCount(branchId: string): number;
+    changeBytes(branchId: string): number;
+    changePathBytes(branchId: string): number;
+    subtreeChanged(inodeId: string, baseRevision: number): boolean;
     incrementGeneration(branchId: string): void;
-    finish(branchId: string, state: 1 | 2, now: number): void;
+    putInodeOverlay(branchId: string, inodeId: string, expectedToken: number | null, encoded: Uint8Array): void;
+    finish(branchId: string, state: 1 | 2, now: number, mergedRevision?: number | null): void;
+    terminalCleanupRows(branchId: string): number;
     clearChanges(branchId: string): void;
-    storeResult(operationId: string, outcome: number, encoded: Uint8Array, expiresAt: number): void;
+    storeResult(operationId: string, outcome: number, encoded: Uint8Array, expiresAt: number, revision: number | null): void;
+    pruneExpiredResults(now: number, limit: number): number;
+    pruneTerminalBranches(now: number, retentionMs: number, limit: number): number;
+    maintainRevisionRetention(maxRetainedRevisions: number, now: number, limit: number): number;
 }
 export type StagingMemberKind = "object" | "manifest-root" | "manifest-node";
 export interface StagingMember {
@@ -871,8 +891,9 @@ export interface StagingStore {
     bumpRoot(kind: number, id: string): void;
     release(leaseId: string, ownerNonce: Uint8Array, requireSealed: boolean, validated?: ValidatedSealedLease): boolean;
     delete(leaseId: string, ownerNonce: Uint8Array): boolean;
-    acquireReadLease(leaseId: string, ownerId: string, manifestHash: Uint8Array, expiresAt: number): void;
-    releaseReadLease(leaseId: string, ownerId: string): boolean;
+    acquireReadLease(leaseId: string, ownerId: string, ownerNonce: Uint8Array, manifestHash: Uint8Array, expiresAt: number, branchId?: string, generation?: number): void;
+    renewReadLease(leaseId: string, ownerId: string, ownerNonce: Uint8Array, priorExpiresAt: number, now: number, expiresAt: number): boolean;
+    releaseReadLease(leaseId: string, ownerId: string, ownerNonce: Uint8Array): boolean;
     expireBatch(now: number, limit: number): number;
     cleanupBatch(limit: number): LeaseCleanupProgress;
     appendBatch(leaseId: string, ownerNonce: Uint8Array, members: readonly StagingMember[]): ClosureCertificate;
@@ -905,9 +926,13 @@ export interface StagingStore {
     flushBatchedCertificate(): void;
     snapshot(leaseId: string, ownerNonce: Uint8Array): ClosureCertificate;
     beginReconciliation(leaseId: string, ownerNonce: Uint8Array, manifestHash: Uint8Array): void;
+    /** Local merged rebuild fast path; generic callers retain queued validation. */
+    beginTrustedReconciliation?(leaseId: string, ownerNonce: Uint8Array, manifestHash: Uint8Array): void;
     reconcileBatch(leaseId: string, ownerNonce: Uint8Array, workLimit: number, options?: {
         readonly skipObjectBackingCheck?: boolean;
     }): ReconciliationProgress;
+    /** Complete a locally authenticated manifest without materializing queues. */
+    completeTrustedLocalReconciliation?(leaseId: string, ownerNonce: Uint8Array, manifestHash: Uint8Array, freshNodeHashes: readonly Uint8Array[], rootSize: number, leafDepth: number): ReconciliationProgress;
     seal(certificate: ClosureCertificate): void;
     validateSealed(certificate: ClosureCertificate, now?: number): ValidatedSealedLease;
 }
@@ -1001,8 +1026,29 @@ export interface MaintenanceStore {
     usageVerificationPhaseCount(): number;
     usageVerificationBatch(phase: number, afterKey: string | null, limit: number, maxBytes: number): UsageVerificationBatch;
 }
+export interface PersistedPatch {
+    readonly sequence: number;
+    readonly generation: number;
+    readonly offset: number;
+    readonly deleteLength: number;
+    readonly insertLength: number;
+    readonly segments: readonly Uint8Array[];
+}
 export interface OverlayStore {
     writePages(branchId: string, inodeId: string, fileSize: number, pages: readonly CowPage[], now: number): number;
+    headPages(branchId: string, inodeId: string, firstPage: number, lastPage: number): readonly CowPage[];
+    leasedPages(leaseId: string, branchId: string, inodeId: string, firstPage: number, lastPage: number, baseGeneration?: number, ownerNonce?: Uint8Array): readonly CowPage[];
+    leaseMembershipFits(branchId: string, inodeId: string, firstPage: number, lastPage: number, baseGeneration: number, includePages: boolean, includePatches: boolean): boolean;
+    pinHeads(leaseId: string, branchId: string, inodeId: string, firstPage: number, lastPage: number, ownerNonce: Uint8Array): number;
+    pinPatches(leaseId: string, branchId: string, inodeId: string, ownerNonce: Uint8Array, baseGeneration?: number): number;
+    leasedPatches(leaseId: string, branchId: string, inodeId: string, ownerNonce?: Uint8Array, baseGeneration?: number): readonly PersistedPatch[];
+    hasPages(branchId: string, inodeId: string): boolean;
+    hasPatchesAfter(branchId: string, inodeId: string, baseGeneration: number): boolean;
+    appendPatch(branchId: string, inodeId: string, currentSize: number, offset: number, deleteLength: number, segments: readonly Uint8Array[]): number;
+    patches(branchId: string, inodeId: string, minimumGeneration?: number, minimumSequence?: number): readonly PersistedPatch[];
+    clearPages(branchId: string, inodeId: string): void;
+    clearPatches(branchId: string, inodeId: string): void;
+    cleanupUnleased(limit: number): number;
 }
 export interface StorageTransactionPorts {
     content(limits: StorageLimits, cache?: ContentCache): ContentStore;
@@ -1161,6 +1207,13 @@ export declare class AdmissionController {
     get usedBytes(): number;
     get peakBytes(): number;
     get limitBytes(): number;
+}
+/** Process-wide runtime admission shared by the main filesystem and branches. */
+export declare class RuntimeConcurrency {
+    #private;
+    constructor(limits: Pick<RuntimeLimits, "maxConcurrentOperations" | "maxConcurrentStreams">);
+    tryAcquireOperation(): (() => void) | undefined;
+    tryAcquireStream(): (() => void) | undefined;
 }
 
 /* ===== packages/fs/dist/sqlite/driver.d.ts ===== */

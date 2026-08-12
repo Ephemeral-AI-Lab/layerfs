@@ -1,5 +1,7 @@
 import {
   maxPersistedContentObjectBytes,
+  type BranchConfiguration,
+  DEFAULT_BRANCH_CONFIGURATION,
   type RuntimeLimits,
   type StorageLimits,
 } from "../resources/limits.js";
@@ -23,6 +25,7 @@ import type {
 } from "./storage-ports.js";
 import type { ContentCache } from "../cache/content-cache.js";
 import { utf8ByteLength } from "../namespace/utf8.js";
+import type { CowPageBytes } from "../cow/pages.js";
 
 const CLEAN_MARKS = 4;
 const CLEAN_ROOT_JOURNAL = 5;
@@ -66,6 +69,8 @@ export class MaintenanceManager implements FilesystemMaintenance {
   readonly #runtime: RuntimeLimits;
   readonly #clock: () => number;
   readonly #cache: ContentCache;
+  readonly #pageBytes: CowPageBytes;
+  readonly #branch: BranchConfiguration;
   readonly #verificationSecret = globalThis.crypto.getRandomValues(new Uint8Array(32));
   constructor(
     port: OperationsStorage,
@@ -73,12 +78,16 @@ export class MaintenanceManager implements FilesystemMaintenance {
     runtime: RuntimeLimits,
     clock: () => number,
     cache: ContentCache,
+    pageBytes: CowPageBytes,
+    branch: BranchConfiguration = DEFAULT_BRANCH_CONFIGURATION,
   ) {
     this.#port = port;
     this.#storage = storage;
     this.#runtime = runtime;
     this.#clock = clock;
     this.#cache = cache;
+    this.#pageBytes = pageBytes;
+    this.#branch = branch;
   }
 
   async collectGarbage(
@@ -135,6 +144,22 @@ export class MaintenanceManager implements FilesystemMaintenance {
         this.#storage.maxFinalTransactionRows - 8,
       ),
     );
+    const resultLimit = Math.max(
+      1,
+      Math.min(
+        this.#storage.maxGcBatchSize,
+        this.#storage.maxQueryBatchSize,
+        this.#storage.maxFinalTransactionRows - 8,
+      ),
+    );
+    const retentionLimit = Math.max(
+      1,
+      Math.min(
+        this.#storage.maxGcBatchSize,
+        this.#storage.maxQueryBatchSize,
+        Math.floor((this.#storage.maxFinalTransactionRows - 16) / 2),
+      ),
+    );
     let batches = 0;
     try {
       while (batches < maxBatches) {
@@ -151,6 +176,46 @@ export class MaintenanceManager implements FilesystemMaintenance {
           tx.staging(this.#storage).cleanupBatch(cleanupLimit),
         );
         if (cleanup.worked) {
+          batches += 1;
+          continue;
+        }
+        const overlayCleanup = this.#write((tx) =>
+          tx.overlay(this.#storage, this.#pageBytes).cleanupUnleased(cleanupLimit),
+        );
+        if (overlayCleanup) {
+          batches += 1;
+          continue;
+        }
+        const expiredResults = this.#write((tx) =>
+          tx.branches(this.#storage).pruneExpiredResults(now, resultLimit),
+        );
+        if (expiredResults) {
+          batches += 1;
+          continue;
+        }
+        const terminalBranches = this.#write((tx) =>
+          tx
+            .branches(this.#storage)
+            .pruneTerminalBranches(
+              now,
+              this.#branch.terminalBranchRetentionMs,
+              resultLimit,
+            ),
+        );
+        if (terminalBranches) {
+          batches += 1;
+          continue;
+        }
+        const retained = this.#write((tx) =>
+          tx
+            .branches(this.#storage)
+            .maintainRevisionRetention(
+              this.#storage.maxRetainedRevisions,
+              now,
+              retentionLimit,
+            ),
+        );
+        if (retained) {
           batches += 1;
           continue;
         }

@@ -165,13 +165,13 @@ export const DEFAULT_RUNTIME_LIMITS: RuntimeLimits = Object.freeze({
   maxOpenNodeVfsSessions: 256,
 });
 export const DEFAULT_BRANCH_CONFIGURATION: BranchConfiguration = Object.freeze({
-  maxBranchIdBytes: 128,
-  maxOperationIdBytes: 128,
-  maxActiveBranches: 1_000,
+  maxBranchIdBytes: 200,
+  maxOperationIdBytes: 200,
+  maxActiveBranches: 10_000,
   maxChangedPathsPerBranch: 100_000,
   maxChangedPathBytes: 16 * 1024 ** 2,
-  maxConflictsPerPublication: 10_000,
-  maxConflictResultBytes: 4 * 1024 ** 2,
+  maxConflictsPerPublication: 100_000,
+  maxConflictResultBytes: 16 * 1024 ** 2,
   terminalBranchRetentionMs: 30 * 24 * 60 * 60 * 1000,
   publicationResultRetentionMs: 30 * 24 * 60 * 60 * 1000,
 });
@@ -397,6 +397,39 @@ export class AdmissionController {
   }
   get limitBytes(): number {
     return this.#limit;
+  }
+}
+
+/** Process-wide runtime admission shared by the main filesystem and branches. */
+export class RuntimeConcurrency {
+  readonly #operationLimit: number;
+  readonly #streamLimit: number;
+  #operations = 0;
+  #streams = 0;
+  constructor(
+    limits: Pick<RuntimeLimits, "maxConcurrentOperations" | "maxConcurrentStreams">,
+  ) {
+    this.#operationLimit = limits.maxConcurrentOperations;
+    this.#streamLimit = limits.maxConcurrentStreams;
+  }
+  tryAcquireOperation(): (() => void) | undefined {
+    if (this.#operations >= this.#operationLimit) return undefined;
+    this.#operations += 1;
+    return this.#release("operation");
+  }
+  tryAcquireStream(): (() => void) | undefined {
+    if (this.#streams >= this.#streamLimit) return undefined;
+    this.#streams += 1;
+    return this.#release("stream");
+  }
+  #release(kind: "operation" | "stream"): () => void {
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      if (kind === "operation") this.#operations -= 1;
+      else this.#streams -= 1;
+    };
   }
 }
 import { checkedAdd, checkedInteger, checkedMultiply } from "./safe-integers.js";

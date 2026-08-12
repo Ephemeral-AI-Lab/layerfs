@@ -140,7 +140,9 @@ export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_branch_ids",
   "efs_branch_changes",
   "efs_branch_inode_expectations",
+  "efs_branch_inode_overlays",
   "efs_branch_manifest_roots",
+  "efs_subtree_tokens",
   "efs_cow_page_versions",
   "efs_cow_page_heads",
   "efs_patches",
@@ -161,6 +163,10 @@ export const CHARGED_METADATA_TABLES = Object.freeze([
   "efs_staging_reused_subtrees",
   "efs_operation_ids",
   "efs_operation_results",
+  "efs_revision_checkpoints",
+  "efs_checkpoint_inodes",
+  "efs_checkpoint_entries",
+  "efs_checkpoint_manifest_roots",
 ] as const);
 
 const DIRECT_VARIABLE_METADATA_TERMS = Object.freeze([
@@ -170,18 +176,31 @@ const DIRECT_VARIABLE_METADATA_TERMS = Object.freeze([
   "(SELECT coalesce(sum(coalesce(length(encoded),0)),0) FROM efs_inode_revisions)",
   "(SELECT coalesce(sum(length(name_sort)+coalesce(length(encoded),0)),0) FROM efs_entry_revisions)",
   "(SELECT coalesce(sum(length(path)+coalesce(length(encoded),0)),0) FROM efs_branch_changes)",
+  "(SELECT coalesce(sum(length(encoded)),0) FROM efs_branch_inode_overlays)",
   "(SELECT coalesce(sum(length(path)),0) FROM efs_branch_manifest_roots)",
   "(SELECT coalesce(sum(coalesce(length(cdc_buffer),0)),0) FROM efs_staging_workspaces)",
   "(SELECT coalesce(sum(metadata_reservation_bytes),0) FROM efs_staging_certificates)",
+  "(SELECT coalesce(sum(coalesce(length(encoded),0)),0) FROM efs_checkpoint_inodes)",
+  "(SELECT coalesce(sum(length(name_sort)+coalesce(length(encoded),0)),0) FROM efs_checkpoint_entries)",
 ] as const);
 export const DIRECT_CHARGED_METADATA_EXPRESSION = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
   (table) => `(SELECT count(*) FROM ${table})`,
 ).join("+")})+${DIRECT_VARIABLE_METADATA_TERMS.join("+")}`;
 export const DIRECT_CHARGED_METADATA_EXPRESSION_LEGACY = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.filter(
-  (table) => table !== "efs_manifest_subtree_summaries",
+  (table) =>
+    table !== "efs_manifest_subtree_summaries" &&
+    table !== "efs_branch_inode_overlays" &&
+    table !== "efs_subtree_tokens" &&
+    table !== "efs_revision_checkpoints" &&
+    !table.startsWith("efs_checkpoint_"),
 )
   .map((table) => `(SELECT count(*) FROM ${table})`)
-  .join("+")})+${DIRECT_VARIABLE_METADATA_TERMS.join("+")}`;
+  .join("+")})+${DIRECT_VARIABLE_METADATA_TERMS.filter(
+  (term) =>
+    !term.includes("efs_branch_inode_overlays") &&
+    !term.includes("efs_subtree_tokens") &&
+    !term.includes("efs_checkpoint_"),
+).join("+")}`;
 export const DIRECT_CHARGED_METADATA_SQL = `SELECT ${DIRECT_CHARGED_METADATA_EXPRESSION} value`;
 export const DIRECT_STAGING_BYTES_SQL =
   "SELECT (SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o JOIN efs_leases l ON l.id=o.lease_id WHERE l.state IN (0,1))+(SELECT coalesce(sum(m.size),0) FROM efs_lease_staged_manifests m JOIN efs_leases l ON l.id=m.lease_id WHERE l.state IN (0,1)) value";
@@ -395,6 +414,11 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
     contributions: metadataContributions(),
   },
   {
+    table: "efs_branch_inode_overlays",
+    keys: [key("branch_id", "string"), key("inode_id", "string")],
+    contributions: metadataContributions({}, "length(t.encoded)"),
+  },
+  {
     table: "efs_branch_manifest_roots",
     keys: [
       key("branch_id", "string"),
@@ -402,6 +426,11 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
       key("manifest_hash", "blob"),
     ],
     contributions: metadataContributions({}, "length(t.path)"),
+  },
+  {
+    table: "efs_subtree_tokens",
+    keys: [key("inode_id", "string")],
+    contributions: metadataContributions(),
   },
   {
     table: "efs_cow_page_versions",
@@ -547,6 +576,37 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
     table: "efs_operation_results",
     keys: [key("operation_id", "string")],
     contributions: metadataContributions({ result_bytes: "length(t.encoded)" }),
+  },
+  {
+    table: "efs_revision_checkpoints",
+    keys: [key("target_revision", "number")],
+    contributions: metadataContributions(),
+  },
+  {
+    table: "efs_checkpoint_inodes",
+    keys: [key("target_revision", "number"), key("inode_id", "string")],
+    contributions: metadataContributions({}, "coalesce(length(t.encoded),0)"),
+  },
+  {
+    table: "efs_checkpoint_entries",
+    keys: [
+      key("target_revision", "number"),
+      key("parent_inode", "string"),
+      key("name_sort", "blob"),
+    ],
+    contributions: metadataContributions(
+      {},
+      "length(t.name_sort)+coalesce(length(t.encoded),0)",
+    ),
+  },
+  {
+    table: "efs_checkpoint_manifest_roots",
+    keys: [
+      key("target_revision", "number"),
+      key("inode_id", "string"),
+      key("manifest_hash", "blob"),
+    ],
+    contributions: metadataContributions(),
   },
   {
     table: "efs_root_journal",

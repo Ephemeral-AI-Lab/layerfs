@@ -495,7 +495,14 @@ test("schema v1 migrates data to the current schema and every migration-statemen
         }));
         if (state.version === 1)
           assert.deepEqual(state, { version: 1, meta: 1, oldPages: 1, newPages: 0 });
-        else assert.deepEqual(state, { version: 5, meta: 5, oldPages: 0, newPages: 1 });
+        else {
+          assert.ok(state.version >= 5 && state.version <= EFS_SCHEMA_VERSION);
+          assert.equal(state.meta, state.version);
+          assert.deepEqual(
+            { oldPages: state.oldPages, newPages: state.newPages },
+            { oldPages: 0, newPages: 1 },
+          );
+        }
       } finally {
         base?.close();
       }
@@ -570,7 +577,11 @@ test("released schema v2 migrates through v3 to v4 and file-backed faults reopen
         );
         if (state.version === 2)
           assert.deepEqual(state, { version: 2, meta: 2, v3: 0, v4: 0 });
-        else assert.deepEqual(state, { version: 5, meta: 5, v3: 1, v4: 1 });
+        else {
+          assert.ok(state.version >= 5 && state.version <= EFS_SCHEMA_VERSION);
+          assert.equal(state.meta, state.version);
+          assert.deepEqual({ v3: state.v3, v4: state.v4 }, { v3: 1, v4: 1 });
+        }
       } finally {
         base?.close();
       }
@@ -622,8 +633,8 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
     };
   });
   assert.deepEqual(migrated, {
-    userVersion: 6,
-    metaVersion: 6,
+    userVersion: EFS_SCHEMA_VERSION,
+    metaVersion: EFS_SCHEMA_VERSION,
     usage: {
       mutation_sequence: 0,
       object_count: 0,
@@ -685,13 +696,14 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
             mutationColumn: 0,
             cleanupTable: 0,
           });
-        else
-          assert.deepEqual(state, {
-            userVersion: 5,
-            metaVersion: 5,
-            mutationColumn: 1,
-            cleanupTable: 1,
-          });
+        else {
+          assert.ok(state.userVersion >= 5 && state.userVersion <= EFS_SCHEMA_VERSION);
+          assert.equal(state.metaVersion, state.userVersion);
+          assert.deepEqual(
+            { mutationColumn: state.mutationColumn, cleanupTable: state.cleanupTable },
+            { mutationColumn: 1, cleanupTable: 1 },
+          );
+        }
       } finally {
         base?.close();
       }

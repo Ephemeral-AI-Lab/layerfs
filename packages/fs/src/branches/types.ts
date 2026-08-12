@@ -9,6 +9,7 @@ export interface BranchInfo {
   readonly generation: number;
   readonly createdAt: number;
   readonly terminalAt: number | null;
+  readonly mergedRevision: RevisionId | null;
 }
 export interface CreateBranchOptions {
   readonly id?: string;

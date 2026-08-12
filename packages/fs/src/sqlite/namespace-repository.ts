@@ -54,19 +54,28 @@ export interface ResolvedPath {
   readonly rootMutationGeneration: number;
 }
 
-const rootMutationGenerations = new WeakMap<FilesystemSQLiteTransaction, number>();
+/**
+ * Durable subtree-token bookkeeping stays bounded per main mutation. The
+ * parent chain of every changed inode is a tree (directories have exactly one
+ * entry), so a walk visits at most depth directories per alias plus the alias
+ * fanout. If a pathological namespace still exceeds the cap, the walk marks
+ * the root, which makes every later subtree check conservative (extra
+ * conflicts, never lost data).
+ */
+const SUBTREE_WALK_BATCH = 256;
+const SUBTREE_WALK_CAP = 4096;
 
 export function advanceRootMutationGeneration(tx: FilesystemSQLiteTransaction): number {
-  let current = rootMutationGenerations.get(tx);
-  if (current === undefined) {
-    current = tx.all<{ root_mutation_generation: number } & SqliteRow>(
-      "SELECT root_mutation_generation FROM efs_meta WHERE singleton=1",
-      [],
-      { maxRows: 1, maxBytes: 128 },
-    )[0]?.root_mutation_generation;
-    if (!Number.isSafeInteger(current))
-      throw new Error("ECORRUPT: invalid root mutation generation");
-  }
+  // The durable row is authoritative. Other repositories may advance the
+  // root generation in the same transaction, so a transaction-local cache
+  // must never be used as the compare value for this update.
+  const current = tx.all<{ root_mutation_generation: number } & SqliteRow>(
+    "SELECT root_mutation_generation FROM efs_meta WHERE singleton=1",
+    [],
+    { maxRows: 1, maxBytes: 128 },
+  )[0]?.root_mutation_generation;
+  if (!Number.isSafeInteger(current))
+    throw new Error("ECORRUPT: invalid root mutation generation");
   const next = current! + 1;
   if (!Number.isSafeInteger(next))
     throw new Error("ENOSPC: root mutation generation space exhausted");
@@ -76,7 +85,6 @@ export function advanceRootMutationGeneration(tx: FilesystemSQLiteTransaction): 
   );
   if (updated.changes !== 1)
     throw new Error("ECORRUPT: root mutation generation changed unexpectedly");
-  rootMutationGenerations.set(tx, next);
   return next;
 }
 
@@ -86,7 +94,8 @@ export function noteRootMutationGeneration(
 ): void {
   if (!Number.isSafeInteger(generation) || generation < 0)
     throw new RangeError("invalid root mutation generation");
-  rootMutationGenerations.set(tx, generation);
+  void tx;
+  void generation;
 }
 
 export class NamespaceRepository {
@@ -290,8 +299,7 @@ export class NamespaceRepository {
       "UPDATE efs_meta SET main_revision=?,root_mutation_generation=? WHERE singleton=1 AND main_revision=? AND root_mutation_generation=?",
       [revision, generation, mainRevision, rootMutationGeneration],
     );
-    if (updated.changes !== 1)
-      return this.nextRevision(now, changeCount, writer);
+    if (updated.changes !== 1) return this.nextRevision(now, changeCount, writer);
     const rootId = encodeUtf8(String(revision));
     const writerBytes = intrinsicByteLength(encodeUtf8(writer));
     new UsageRepository(this.#tx, this.#storage).apply(
@@ -356,6 +364,7 @@ export class NamespaceRepository {
         "INSERT INTO efs_revision_manifest_roots(revision,inode_id,manifest_hash) VALUES(?,?,?)",
         [revision, inodeId, inode.manifest_hash],
       );
+    this.#bumpChangedInodeSubtrees(revision, inodeId);
   }
 
   recordFileContentRevision(revision: number, inode: InodeRow): void {
@@ -383,6 +392,7 @@ export class NamespaceRepository {
       "INSERT INTO efs_revision_manifest_roots(revision,inode_id,manifest_hash) VALUES(?,?,?)",
       [revision, inode.id, inode.manifest_hash],
     );
+    this.#bumpChangedInodeSubtrees(revision, inode.id);
   }
   recordEntry(
     revision: number,
@@ -410,6 +420,7 @@ export class NamespaceRepository {
       "INSERT INTO efs_entry_revisions(revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,?,?) ON CONFLICT(revision,parent_inode,name_sort) DO UPDATE SET tombstone=excluded.tombstone,encoded=excluded.encoded",
       [revision, parentInode, nameSort, tombstone ? 1 : 0, encoded],
     );
+    this.#bumpSubtreeTokens(revision, parentInode);
   }
   putEntry(
     parentInode: string,
@@ -651,5 +662,61 @@ export class NamespaceRepository {
       { charged_metadata_bytes: bytes },
       reason,
     );
+  }
+  #bumpChangedInodeSubtrees(revision: number, inodeId: string): void {
+    validateDurableIdentifier(inodeId, "inode identifier");
+    // The changed inode itself is a valid subtree root even when it has no
+    // descendants.  Recording it here also makes empty-directory deletes and
+    // renames participate in durable subtree conflict checks.
+    this.#setSubtreeToken(inodeId, revision);
+    for (const parent of this.#subtreeParents(inodeId))
+      this.#bumpSubtreeTokens(revision, parent);
+  }
+  #bumpSubtreeTokens(revision: number, startInodeId: string): void {
+    validateDurableIdentifier(startInodeId, "inode identifier");
+    const pending = [startInodeId];
+    const visited = new Set<string>();
+    let visitedCount = 0;
+    while (pending.length) {
+      const current = pending.pop()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      visitedCount += 1;
+      if (visitedCount > SUBTREE_WALK_CAP) {
+        this.#setSubtreeToken(this.meta().root_inode, revision);
+        break;
+      }
+      this.#setSubtreeToken(current, revision);
+      for (const parent of this.#subtreeParents(current)) pending.push(parent);
+    }
+  }
+  #setSubtreeToken(inodeId: string, revision: number): void {
+    validateDurableIdentifier(inodeId, "inode identifier");
+    const exists =
+      this.#tx.all(
+        "SELECT 1 present FROM efs_subtree_tokens WHERE inode_id=?",
+        [inodeId],
+        { maxRows: 1, maxBytes: 128 },
+      ).length !== 0;
+    if (!exists) this.#changeMetadata(CHARGED_ROW_BYTES, "subtree token");
+    this.#tx.run(
+      "INSERT INTO efs_subtree_tokens(inode_id,token) VALUES(?,?) ON CONFLICT(inode_id) DO UPDATE SET token=excluded.token WHERE excluded.token>token",
+      [inodeId, revision],
+    );
+  }
+  #subtreeParents(inodeId: string): string[] {
+    const parents: string[] = [];
+    let after = "";
+    while (true) {
+      const rows = this.#tx.all<{ parent_inode: string } & SqliteRow>(
+        "SELECT parent_inode FROM efs_entries WHERE inode_id=? AND parent_inode>? ORDER BY parent_inode LIMIT ?",
+        [inodeId, after, SUBTREE_WALK_BATCH],
+        { maxRows: SUBTREE_WALK_BATCH, maxBytes: SUBTREE_WALK_BATCH * 256 },
+      );
+      for (const row of rows) parents.push(row.parent_inode);
+      if (rows.length < SUBTREE_WALK_BATCH) break;
+      after = rows.at(-1)!.parent_inode;
+    }
+    return parents;
   }
 }

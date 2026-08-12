@@ -802,9 +802,7 @@ export class StagingRepository {
       [next, expectedGeneration],
     );
     const generation =
-      updated.changes === 1
-        ? next
-        : advanceRootMutationGeneration(this.#tx);
+      updated.changes === 1 ? next : advanceRootMutationGeneration(this.#tx);
     this.#tx.run(
       "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(?,?,?)",
       [generation, kind, rootId],
@@ -878,17 +876,29 @@ export class StagingRepository {
   acquireReadLease(
     leaseId: string,
     ownerId: string,
+    ownerNonce: Uint8Array,
     manifestHash: Uint8Array,
     expiresAt: number,
+    branchId?: string,
+    generation?: number,
   ): void {
     stagingId(leaseId, "read lease id");
     stagingId(ownerId, "read lease owner id");
+    if (branchId !== undefined) stagingId(branchId, "read lease branch id");
+    if (intrinsicByteLength(ownerNonce) !== 16)
+      throw new RangeError("read lease owner nonce must contain exactly 16 bytes");
     if (intrinsicByteLength(manifestHash) !== 32)
       throw new RangeError("read lease manifest hash must contain exactly 32 bytes");
+    if (
+      (branchId === undefined) !== (generation === undefined) ||
+      (generation !== undefined &&
+        (!Number.isSafeInteger(generation) || generation < 0))
+    )
+      throw new RangeError("read lease branch binding is invalid");
     this.#changeMetadataRows(2, "read lease and root link");
     this.#tx.run(
-      "INSERT INTO efs_leases(id,kind,owner_id,expires_at_ms,state) VALUES(?,0,?,?,1)",
-      [leaseId, ownerId, expiresAt],
+      "INSERT INTO efs_leases(id,kind,owner_id,owner_nonce,branch_id,generation,expires_at_ms,state) VALUES(?,0,?,?,?,?,?,1)",
+      [leaseId, ownerId, ownerNonce, branchId ?? null, generation ?? null, expiresAt],
     );
     this.#tx.run(
       "INSERT INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
@@ -896,10 +906,40 @@ export class StagingRepository {
     );
     this.bumpRoot(2, leaseId);
   }
-  releaseReadLease(leaseId: string, ownerId: string): boolean {
+  renewReadLease(
+    leaseId: string,
+    ownerId: string,
+    ownerNonce: Uint8Array,
+    priorExpiresAt: number,
+    now: number,
+    expiresAt: number,
+  ): boolean {
+    stagingId(leaseId, "read lease id");
+    stagingId(ownerId, "read lease owner id");
+    if (intrinsicByteLength(ownerNonce) !== 16)
+      throw new RangeError("read lease owner nonce must contain exactly 16 bytes");
+    if (
+      !Number.isSafeInteger(priorExpiresAt) ||
+      !Number.isSafeInteger(now) ||
+      !Number.isSafeInteger(expiresAt) ||
+      priorExpiresAt < now ||
+      expiresAt < priorExpiresAt
+    )
+      throw new RangeError("invalid read lease renewal interval");
+    const updated = this.#tx.run(
+      "UPDATE efs_leases SET expires_at_ms=?,last_renewal_at_ms=? WHERE id=? AND owner_id=? AND owner_nonce=? AND state=1 AND expires_at_ms=? AND expires_at_ms>=?",
+      [expiresAt, now, leaseId, ownerId, ownerNonce, priorExpiresAt, now],
+    );
+    if (updated.changes !== 1) return false;
+    this.bumpRoot(4, leaseId);
+    return true;
+  }
+  releaseReadLease(leaseId: string, ownerId: string, ownerNonce: Uint8Array): boolean {
+    if (intrinsicByteLength(ownerNonce) !== 16)
+      throw new RangeError("read lease owner nonce must contain exactly 16 bytes");
     const lease = this.#tx.all<{ owner_nonce: Uint8Array; state: number } & SqliteRow>(
-      "SELECT owner_nonce,state FROM efs_leases WHERE id=? AND owner_id=?",
-      [leaseId, ownerId],
+      "SELECT owner_nonce,state FROM efs_leases WHERE id=? AND owner_id=? AND owner_nonce=?",
+      [leaseId, ownerId, ownerNonce],
       { maxRows: 1, maxBytes: 256 },
     )[0];
     if (!lease) return false;
@@ -907,8 +947,8 @@ export class StagingRepository {
     if (releasable) {
       this.#scheduleCleanup(leaseId, lease.owner_nonce, 0, 0);
       const result = this.#tx.run(
-        "UPDATE efs_leases SET state=2 WHERE id=? AND owner_id=? AND state IN (0,1)",
-        [leaseId, ownerId],
+        "UPDATE efs_leases SET state=2 WHERE id=? AND owner_id=? AND owner_nonce=? AND state IN (0,1)",
+        [leaseId, ownerId, ownerNonce],
       );
       if (result.changes !== 1)
         throw new Error("ECORRUPT: read lease tombstone changed unexpectedly");
@@ -928,7 +968,7 @@ export class StagingRepository {
     )
       throw new RangeError("invalid expired-lease batch limit");
     const rows = this.#tx.all<ExpiredLeaseRow>(
-      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.node_bytes+(SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o WHERE o.lease_id=l.id),0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes,COALESCE(c.metadata_reservation_bytes,0) metadata_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id LEFT JOIN efs_lease_cleanups x ON x.lease_id=l.id WHERE x.lease_id IS NULL AND (l.expires_at_ms<? OR l.state=2) ORDER BY l.id LIMIT ?",
+      "SELECT l.id,l.state,l.owner_nonce,COALESCE(c.node_bytes+(SELECT coalesce(sum(o.size),0) FROM efs_lease_objects o WHERE o.lease_id=l.id),0) staged_bytes,COALESCE(c.ingest_reservation_bytes,0) ingest_reservation_bytes,COALESCE(c.metadata_reservation_bytes,0) metadata_reservation_bytes FROM efs_leases l LEFT JOIN efs_staging_certificates c ON c.lease_id=l.id LEFT JOIN efs_lease_cleanups x ON x.lease_id=l.id WHERE x.lease_id IS NULL AND (l.expires_at_ms<=? OR l.state=2) ORDER BY l.id LIMIT ?",
       [now, limit],
       { maxRows: limit, maxBytes: Math.max(1024, limit * 256) },
     );
@@ -944,7 +984,7 @@ export class StagingRepository {
         now,
       );
       const result = this.#tx.run(
-        "UPDATE efs_leases SET state=2 WHERE id=? AND (expires_at_ms<? OR state=2)",
+        "UPDATE efs_leases SET state=2 WHERE id=? AND (expires_at_ms<=? OR state=2)",
         [row.id, now],
       );
       if (result.changes) {
@@ -1118,12 +1158,7 @@ export class StagingRepository {
   ): ClosureCertificate & {
     readonly verifiedNodeSizes: ReadonlyMap<string, number>;
   } {
-    return this.#appendReusedManifestBatch(
-      leaseId,
-      ownerNonce,
-      nodeHashes,
-      false,
-    );
+    return this.#appendReusedManifestBatch(leaseId, ownerNonce, nodeHashes, false);
   }
 
   /**
@@ -1139,12 +1174,7 @@ export class StagingRepository {
   ): ClosureCertificate & {
     readonly verifiedNodeSizes: ReadonlyMap<string, number>;
   } {
-    return this.#appendReusedManifestBatch(
-      leaseId,
-      ownerNonce,
-      nodeHashes,
-      true,
-    );
+    return this.#appendReusedManifestBatch(leaseId, ownerNonce, nodeHashes, true);
   }
 
   #appendReusedManifestBatch(
@@ -1803,9 +1833,8 @@ export class StagingRepository {
         return queuedFallback();
     }
     // The fresh spine was already inserted and size-authenticated by the
-    // trusted staging path. Warm its immutable encoded rows in one bounded
-    // batch; visit() still decodes and canonical-validates every node.
-    this.#content.warmManifestNodeBatch(freshNodeHashes);
+    // trusted staging path. visit() still decodes and canonical-validates
+    // every node; the operation cache may satisfy those reads directly.
     const visitedFresh = new Set<string>();
     const visitedClaims = new Set<string>();
     const visitedObjects = new Set<string>();
@@ -1847,7 +1876,9 @@ export class StagingRepository {
         metadata.backing.stored_size !== size ||
         claim.summary_usable !== 1
       )
-        throw new RangeError("trusted reconciliation requires an authenticated reusable summary");
+        throw new RangeError(
+          "trusted reconciliation requires an authenticated reusable summary",
+        );
       const delta = finalAtLevel
         ? (claim.validated_nonfinal_leaf_delta ?? claim.validated_final_leaf_delta)
         : claim.validated_nonfinal_leaf_delta;
@@ -1873,10 +1904,22 @@ export class StagingRepository {
       nodeBytes = checkedAdd(nodeBytes, size, "trusted closure node bytes");
       membershipCount += 1;
       closureFold = foldHashes(closureFold, hash);
-      objectCount = checkedAdd(objectCount, summary.object_count, "trusted summary objects");
-      objectBytes = checkedAdd(objectBytes, summary.object_bytes, "trusted summary object bytes");
+      objectCount = checkedAdd(
+        objectCount,
+        summary.object_count,
+        "trusted summary objects",
+      );
+      objectBytes = checkedAdd(
+        objectBytes,
+        summary.object_bytes,
+        "trusted summary object bytes",
+      );
       nodeCount = checkedAdd(nodeCount, summary.node_count, "trusted summary nodes");
-      nodeBytes = checkedAdd(nodeBytes, summary.node_bytes, "trusted summary node bytes");
+      nodeBytes = checkedAdd(
+        nodeBytes,
+        summary.node_bytes,
+        "trusted summary node bytes",
+      );
       membershipCount = checkedAdd(
         membershipCount,
         summary.membership_count,
@@ -1918,11 +1961,20 @@ export class StagingRepository {
         (node.span !== expected.span || node.entryCount !== expected.entryCount)
       )
         throw new Error("ECORRUPT: trusted fresh node totals mismatch");
-      validateCanonicalManifestNode(node, decodeRoot.parameters, finalAtLevel, rootNode);
+      validateCanonicalManifestNode(
+        node,
+        decodeRoot.parameters,
+        finalAtLevel,
+        rootNode,
+      );
       if (!seenNodes.has(key)) {
         seenNodes.add(key);
         nodeCount += 1;
-        nodeBytes = checkedAdd(nodeBytes, freshNodeBytes.get(key)!, "trusted fresh node bytes");
+        nodeBytes = checkedAdd(
+          nodeBytes,
+          freshNodeBytes.get(key)!,
+          "trusted fresh node bytes",
+        );
         membershipCount += 1;
         closureFold = foldHashes(closureFold, hash);
       }
@@ -1953,10 +2005,12 @@ export class StagingRepository {
       throw new Error("ECORRUPT: trusted manifest leaf depth disagrees");
     if (observedLeafDepth === undefined && visitedClaims.size === 0)
       throw new Error("ECORRUPT: trusted manifest has no leaf proof");
-    for (const key of fresh) if (!seenNodes.has(key))
-      throw new Error("ECORRUPT: trusted fresh node is unreachable");
-    for (const key of claims) if (!visitedClaims.has(key))
-      throw new Error("ECORRUPT: trusted reused node is unreachable");
+    for (const key of fresh)
+      if (!seenNodes.has(key))
+        throw new Error("ECORRUPT: trusted fresh node is unreachable");
+    for (const key of claims)
+      if (!visitedClaims.has(key))
+        throw new Error("ECORRUPT: trusted reused node is unreachable");
     if (
       objectCount !== certificate.object_count ||
       objectBytes !== certificate.object_bytes ||
@@ -1966,12 +2020,18 @@ export class StagingRepository {
       membershipCount !== objectCount + nodeCount ||
       !equalBytes(closureFold, certificate.chain_fold)
     )
-      throw new Error("ECORRUPT: trusted manifest closure differs from staged membership");
+      throw new Error(
+        "ECORRUPT: trusted manifest closure differs from staged membership",
+      );
     const validation = this.#tx.run(
       "INSERT OR IGNORE INTO efs_manifest_validations(manifest_hash,tree_depth) VALUES(?,?)",
       [manifestHash, leafDepth],
     );
-    this.#changeMetadataRows(validation.changes, "manifest validation certificate", leaseId);
+    this.#changeMetadataRows(
+      validation.changes,
+      "manifest validation certificate",
+      leaseId,
+    );
     // A newly inserted certificate is already checked by SQLite's typed
     // binding and tree-depth constraint.  Only re-read when INSERT OR IGNORE
     // found an existing row, where its immutable value still needs to be
@@ -2043,13 +2103,10 @@ export class StagingRepository {
       [leaseId, queryLimit],
       { maxRows: queryLimit, maxBytes: Math.max(1024, queryLimit * 320) },
     );
-    const nodeHashes = queue
-      .filter((item) => item.kind === 2 && item.hash !== undefined)
-      .map((item) => item.hash!);
     // Fresh nodes still go through the full decode and canonical validation
-    // below. Warm their immutable encoded rows in one bounded IN query so the
-    // per-node validation loop does not reopen one SQLite read per node.
-    this.#content.warmManifestNodeBatch(nodeHashes);
+    // below. The operation-scoped cache may already contain these rows; when
+    // it cannot retain the batch, the bounded per-node reads avoid issuing a
+    // warm query that would be immediately reread by the validation loop.
     let remaining = workLimit;
     let processed = 0;
     const objects = queue.filter((item) => item.kind === 0);
@@ -3274,7 +3331,6 @@ export class StagingRepository {
         { maxRows: pageSize, maxBytes: Math.max(1024, pageSize * 512) },
       );
       pageIndex = 0;
-      this.#content.warmManifestNodeBatch(page.map((item) => item.node_hash));
     };
     while (processed < workLimit) {
       if (pageIndex >= page.length) loadPage();

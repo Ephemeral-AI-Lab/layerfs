@@ -2,7 +2,7 @@
 
 | Field               | Value                                              |
 | ------------------- | -------------------------------------------------- |
-| Status              | Planned                                            |
+| Status              | M4 complete; overall plan in progress              |
 | Target              | Version 0.1 integration candidate                  |
 | Delivery style      | Milestone exits with objective acceptance evidence |
 | Database foundation | SQLite remains authoritative                       |
@@ -151,70 +151,70 @@ transaction-only SQLite contract and a production-capable Node driver.
 
 ### M2 checklist
 
-- [ ] Implement `FilesystemSQLiteDriver` and callback-scoped transaction values.
-- [ ] Invalidate transaction values immediately after callback completion.
-- [ ] Implement the private SQLite unit of work.
-- [ ] Implement bounded statement, binding, BLOB, and result handling.
-- [ ] Implement schema identity, version metadata, migrations, and fixtures.
-- [ ] Implement CAS object, manifest-root, and manifest-node relations.
-- [ ] Implement an authenticated durable manifest cursor/path port whose root-to-leaf
+- [x] Implement `FilesystemSQLiteDriver` and callback-scoped transaction values.
+- [x] Invalidate transaction values immediately after callback completion.
+- [x] Implement the private SQLite unit of work.
+- [x] Implement bounded statement, binding, BLOB, and result handling.
+- [x] Implement schema identity, version metadata, migrations, and fixtures.
+- [x] Implement CAS object, manifest-root, and manifest-node relations.
+- [x] Implement an authenticated durable manifest cursor/path port whose root-to-leaf
       membership is verified against the selected root. Offset/group side indexes are
       non-authoritative and corruption or staleness may cause only rejection or a safe
       fallback, never redirect a splice.
-- [ ] Implement durable local manifest path-copy with explicit per-level and aggregate
+- [x] Implement durable local manifest path-copy with explicit per-level and aggregate
       record-read, emitted-node, retained-segment, byte, and transaction caps. Test
       full-scan equivalence, empty/single-leaf height growth, stale/corrupt indexes, and
       a tiny edit in a manifest with more than 16,384 entries.
-- [ ] Route `readManifestRange` and `readManifestInto` through the authenticated
+- [x] Route `readManifestRange` and `readManifestInto` through the authenticated
       sequential cursor (or an equivalent single validated traversal). Before exposing
       bytes, enforce supported materialization parameters, root totals, child span/count
       declarations, canonical grouping, and depth; remove the provisional double-decode
       path and add recomputed-digest corruption regressions.
-- [ ] Re-audit every provisional storage streaming/chunking caller, including
+- [x] Re-audit every provisional storage streaming/chunking caller, including
       `streaming-prepare`, against the M1 draining-consumer contract. No storage path
       may use collecting `push()` as an uncharged output buffer; admission and
       cancellation tests must cover prebuffered output and pending-entry metadata.
-- [ ] Implement namespace-head and immutable revision relations.
-- [ ] Implement lease, staged-membership, and closure-certificate relations.
-- [ ] Implement immutable COW page versions and mutable page heads.
-- [ ] Implement structural-patch and insertion-segment relations.
-- [ ] Enforce the canonical structural-patch sequence as contiguous integers beginning
+- [x] Implement namespace-head and immutable revision relations.
+- [x] Implement lease, staged-membership, and closure-certificate relations.
+- [x] Implement immutable COW page versions and mutable page heads.
+- [x] Implement structural-patch and insertion-segment relations.
+- [x] Enforce the canonical structural-patch sequence as contiguous integers beginning
       at zero in repository/schema transactions, with gap, duplicate, rollback, and
       reopen tests.
-- [ ] Implement exact `efs_usage` count and byte deltas.
-- [ ] Implement root-change journal and maintenance reserve accounting.
-- [ ] Own-test only the storage-safety maintenance prerequisites needed by M2: tombstone
+- [x] Implement exact `efs_usage` count and byte deltas.
+- [x] Implement root-change journal and maintenance reserve accounting.
+- [x] Own-test only the storage-safety maintenance prerequisites needed by M2: tombstone
       cleanup, root-generation checks before sweep deletion, bounded mark/run cleanup,
       and accounting recovery. Public maintenance orchestration and performance remain
       M5 acceptance work.
-- [ ] Implement bounded repositories requiring an active transaction.
-- [ ] Implement batched CAS insertion and collision verification.
-- [ ] Implement staged closure sealing and constant-row final validation.
-- [ ] Implement the file-backed Node SQLite driver.
-- [ ] Configure foreign keys, acknowledged durability, busy timeout, WAL, checkpointing,
+- [x] Implement bounded repositories requiring an active transaction.
+- [x] Implement batched CAS insertion and collision verification.
+- [x] Implement staged closure sealing and constant-row final validation.
+- [x] Implement the file-backed Node SQLite driver.
+- [x] Configure foreign keys, acknowledged durability, busy timeout, WAL, checkpointing,
       16 MiB cache target, and zero-byte mmap default.
-- [ ] Enforce the main-database page ceiling and report observable soft WAL
+- [x] Enforce the main-database page ceiling and report observable soft WAL
       checkpoint/backpressure behavior without claiming a hard journal ceiling.
-- [ ] Add initialization, reopen, read-only, second-connection, migration, corruption,
+- [x] Add initialization, reopen, read-only, second-connection, migration, corruption,
       and statement-fault tests.
 
 ### M2 acceptance criteria
 
-- [ ] The driver exposes no connection-level SQL execution.
-- [ ] A transaction value used after its callback fails before issuing SQL.
-- [ ] Failure after every statement leaves the complete old or complete new state after
+- [x] The driver exposes no connection-level SQL execution.
+- [x] A transaction value used after its callback fails before issuing SQL.
+- [x] Failure after every statement leaves the complete old or complete new state after
       reopen.
-- [ ] Schema creation and every migration are deterministic and restart-safe.
-- [ ] CAS deduplication retains one verified payload and detects corruption.
-- [ ] Manifest roots and nodes round-trip and traverse in bounded batches.
-- [ ] A staged file with more than 100,000 CAS entries finalizes from one sealed
+- [x] Schema creation and every migration are deterministic and restart-safe.
+- [x] CAS deduplication retains one verified payload and detects corruption.
+- [x] Manifest roots and nodes round-trip and traverse in bounded batches.
+- [x] A staged file with more than 100,000 CAS entries finalizes from one sealed
       certificate without rescanning every membership row.
-- [ ] Concurrent quota races cannot exceed hard payload, metadata, or main-database
+- [x] Concurrent quota races cannot exceed hard payload, metadata, or main-database
       ceilings; WAL overshoot remains observable and a pinned soft target backpressures
       the next writer.
-- [ ] `efs_usage` matches bounded direct recalculation after commit, rollback,
+- [x] `efs_usage` matches bounded direct recalculation after commit, rollback,
       replacement, expiry, and collection setup.
-- [ ] The Node driver passes the milestone's shared storage suite.
+- [x] The Node driver passes the milestone's shared storage suite.
 
 ## 6. Milestone 3: Filesystem namespace, revisions, and I/O
 
@@ -225,43 +225,43 @@ commits, bounded range I/O, and snapshot streams on Node SQLite.
 
 ### M3 checklist
 
-- [ ] Implement absolute POSIX path parsing and UTF-8 validation.
-- [ ] Implement inode and directory-entry resolution.
-- [ ] Implement `readFile`, `readRange`, and `readStream`.
-- [ ] Implement `writeFile`, `writeRange`, `replaceRange`, and `truncate`.
-- [ ] Route public range edits through persisted COW and the authenticated durable local
+- [x] Implement absolute POSIX path parsing and UTF-8 validation.
+- [x] Implement inode and directory-entry resolution.
+- [x] Implement `readFile`, `readRange`, and `readStream`.
+- [x] Implement `writeFile`, `writeRange`, `replaceRange`, and `truncate`.
+- [x] Route public range edits through persisted COW and the authenticated durable local
       manifest path-copy; a small edit MUST NOT read or rebuild the complete file, and a
       capped path-copy MUST fall back safely without trusting a derived side index.
-- [ ] Implement `mkdir`, `readdir`, `stat`, `lstat`, and `chmod`.
-- [ ] Implement symbolic links, hard links, link counts, and final-link rules.
-- [ ] Implement atomic rename, unlink, and recursive removal.
-- [ ] Implement timestamps using one nondecreasing clock sample per mutation.
-- [ ] Implement immutable revision deltas, checkpoints, and head projection.
-- [ ] Implement snapshot leases and bounded stream backpressure.
-- [ ] Select and pin the immutable root before any multi-transaction `readFile` or
+- [x] Implement `mkdir`, `readdir`, `stat`, `lstat`, and `chmod`.
+- [x] Implement symbolic links, hard links, link counts, and final-link rules.
+- [x] Implement atomic rename, unlink, and recursive removal.
+- [x] Implement timestamps using one nondecreasing clock sample per mutation.
+- [x] Implement immutable revision deltas, checkpoints, and head projection.
+- [x] Implement snapshot leases and bounded stream backpressure.
+- [x] Select and pin the immutable root before any multi-transaction `readFile` or
       `readRange` materialization; a concurrent writer and collector MUST NOT reclaim
       the selected closure between windows.
-- [ ] Implement shared resident-memory admission and byte-weighted caches.
-- [ ] Implement stable error codes, precedence, lifecycle, and idempotent close.
-- [ ] Implement capabilities, limits, observations, and operation counters.
-- [ ] Add filesystem conformance and fault-injection suites.
+- [x] Implement shared resident-memory admission and byte-weighted caches.
+- [x] Implement stable error codes, precedence, lifecycle, and idempotent close.
+- [x] Implement capabilities, limits, observations, and operation counters.
+- [x] Add filesystem conformance and fault-injection suites.
 
 ### M3 acceptance criteria
 
-- [ ] All portable namespace and I/O conformance cases pass on Node SQLite.
-- [ ] Links, rename, timestamps, revision history, and UTF-8 ordering survive reopen.
-- [ ] Every mutation is atomic under statement-level fault injection.
-- [ ] Reads return exact selected bytes and create no durable content state except a
+- [x] All portable namespace and I/O conformance cases pass on Node SQLite.
+- [x] Links, rename, timestamps, revision history, and UTF-8 ordering survive reopen.
+- [x] Every mutation is atomic under statement-level fault injection.
+- [x] Reads return exact selected bytes and create no durable content state except a
       required bounded lease.
-- [ ] A cold range lookup does not enumerate the complete manifest.
-- [ ] A one-byte edit in files with both fewer and more than 16,384 manifest entries
+- [x] A cold range lookup does not enumerate the complete manifest.
+- [x] A one-byte edit in files with both fewer and more than 16,384 manifest entries
       reads authenticated work bounded by manifest depth plus affected groups, or takes
       an explicitly reported safe fallback; stale/corrupt derived indexes cannot change
       the result.
-- [ ] Increasing a streamed fixture from 100 MiB to 1 GiB adds no more than one output
+- [x] Increasing a streamed fixture from 100 MiB to 1 GiB adds no more than one output
       chunk, one maximum CAS object, and one manifest node to managed memory high-water.
-- [ ] Cancellation, failure, and close release every lease and reservation.
-- [ ] The 60-second Node SQLite smoke profile passes.
+- [x] Cancellation, failure, and close release every lease and reservation.
+- [x] The 60-second Node SQLite smoke profile passes.
 
 ## 7. Milestone 4: Branches and publication
 
@@ -270,36 +270,45 @@ commits, bounded range I/O, and snapshot streams on Node SQLite.
 Deliver durable private branches, deterministic conflicts, atomic publication, and exact
 replay without copying whole workspaces.
 
+### M4 status
+
+Complete. All M4 checklist items and acceptance criteria below are verified. The final
+M4 suite passes 58/58 tests, including the 50-writer publication cases, fault-injected
+preparation and finalization, replay after physical reopen, stream and lease stability,
+COW cleanup, retention, and bounded publication preflight. The smaller branch benchmark
+passes 20/20 cells; see the repository README for the measured preparation and
+publication results.
+
 ### M4 checklist
 
-- [ ] Implement branch creation, open, info, discard, and handle close.
-- [ ] Implement branch namespace overlays and durable base expectations.
-- [ ] Implement immutable page versions with atomic page-head replacement.
-- [ ] Implement ordered structural patches and branch materialization.
-- [ ] Implement branch generation and write-set tracking.
-- [ ] Implement entry, inode, subtree, and ancestor conflict tokens.
-- [ ] Implement hard-link alias and parent-timestamp conflict behavior.
-- [ ] Implement deterministic exact changed paths and conflict records.
-- [ ] Implement operation-ID reservation and branch-generation binding.
-- [ ] Implement publication preparation and sealed staging.
-- [ ] Implement the constant-bounded final publication transaction.
-- [ ] Implement merged, conflict, replay, expired-result, and mismatch outcomes.
-- [ ] Implement terminal metadata and result retention.
-- [ ] Add branch lifecycle, conflict, replay, restart, and fault suites.
+- [x] Implement branch creation, open, info, discard, and handle close.
+- [x] Implement branch namespace overlays and durable base expectations.
+- [x] Implement immutable page versions with atomic page-head replacement.
+- [x] Implement ordered structural patches and branch materialization.
+- [x] Implement branch generation and write-set tracking.
+- [x] Implement entry, inode, subtree, and ancestor conflict tokens.
+- [x] Implement hard-link alias and parent-timestamp conflict behavior.
+- [x] Implement deterministic exact changed paths and conflict records.
+- [x] Implement operation-ID reservation and branch-generation binding.
+- [x] Implement publication preparation and sealed staging.
+- [x] Implement the constant-bounded final publication transaction.
+- [x] Implement merged, conflict, replay, expired-result, and mismatch outcomes.
+- [x] Implement terminal metadata and result retention.
+- [x] Add branch lifecycle, conflict, replay, restart, and fault suites.
 
 ### M4 acceptance criteria
 
-- [ ] Fifty independent writers publish into one valid parent chain.
-- [ ] Fifty same-inode writers produce one merge and 49 explicit conflicts.
-- [ ] A conflict changes neither main nor the active branch overlay.
-- [ ] Lost-response replay returns the original result after physical restart.
-- [ ] One operation ID can never publish another branch or generation.
-- [ ] Independent sibling publications succeed in either order with exact parent
+- [x] Fifty independent writers publish into one valid parent chain.
+- [x] Fifty same-inode writers produce one merge and 49 explicit conflicts.
+- [x] A conflict changes neither main nor the active branch overlay.
+- [x] Lost-response replay returns the original result after physical restart.
+- [x] One operation ID can never publish another branch or generation.
+- [x] Independent sibling publications succeed in either order with exact parent
       timestamps.
-- [ ] Hard-link aliases preserve inode identity and conflict as one node.
-- [ ] A branch stream retains its original bytes across later edit, materialization,
+- [x] Hard-link aliases preserve inode identity and conflict as one node.
+- [x] A branch stream retains its original bytes across later edit, materialization,
       publication or discard, collection, and restart.
-- [ ] Repeated same-page writes retain one current page plus only explicitly leased
+- [x] Repeated same-page writes retain one current page plus only explicitly leased
       predecessor versions.
 
 ## 8. Milestone 5: Maintenance, recovery, and bounded scale

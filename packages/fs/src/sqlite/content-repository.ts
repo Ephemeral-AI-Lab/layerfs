@@ -110,7 +110,10 @@ export class ContentRepository {
       )[0];
       if (!row || !Number.isSafeInteger(row.next_allocation_sequence))
         throw new Error("ECORRUPT: invalid allocation sequence");
-      state = { next: row.next_allocation_sequence, reservedEnd: row.next_allocation_sequence };
+      state = {
+        next: row.next_allocation_sequence,
+        reservedEnd: row.next_allocation_sequence,
+      };
       allocationSequenceCache.set(this.#tx, state);
     }
     const requiredEnd = checkedAdd(
@@ -1282,7 +1285,10 @@ export class ContentRepository {
       )[0];
       if (!row || !Number.isSafeInteger(row.next_allocation_sequence))
         throw new Error("ECORRUPT: invalid allocation sequence");
-      state = { next: row.next_allocation_sequence, reservedEnd: row.next_allocation_sequence };
+      state = {
+        next: row.next_allocation_sequence,
+        reservedEnd: row.next_allocation_sequence,
+      };
       allocationSequenceCache.set(this.#tx, state);
     }
     const end = checkedAdd(state.next, count, "allocation sequence range");

@@ -372,6 +372,7 @@ export interface BranchRow {
   readonly generation: number;
   readonly created_at_ms: number;
   readonly terminal_at_ms: number | null;
+  readonly merged_revision: number | null;
 }
 export interface BranchHistoryRow {
   readonly tombstone: number;
@@ -391,6 +392,8 @@ export interface BranchChangeRow {
 export interface BranchResultRow {
   readonly branch_id: string;
   readonly generation: number;
+  readonly reservation_nonce: Uint8Array;
+  readonly outcome: number;
   readonly encoded: Uint8Array | null;
   readonly expires_at_ms: number | null;
 }
@@ -406,6 +409,11 @@ export interface BranchStore {
     revision: number,
   ): BranchHistoryRow | undefined;
   historicInode(inodeId: string, revision: number): BranchHistoryRow | undefined;
+  inodeOverlay(
+    branchId: string,
+    inodeId: string,
+    maxBytes: number,
+  ): Uint8Array | undefined;
   change(branchId: string, path: Uint8Array): BranchChangeRow | undefined;
   changes(branchId: string): readonly BranchChangeRow[];
   activeCount(): number;
@@ -419,7 +427,19 @@ export interface BranchStore {
     branchId: string,
     generation: number,
     now: number,
+    reservationExpiresAt: number,
+    reservationNonce: Uint8Array,
   ): void;
+  reclaimOperation(
+    operationId: string,
+    branchId: string,
+    generation: number,
+    now: number,
+    reservationExpiresAt: number,
+    reservationNonce: Uint8Array,
+  ): boolean;
+  expireOperation(operationId: string, reservationNonce: Uint8Array, now: number): void;
+  releaseOperation(operationId: string, reservationNonce?: Uint8Array): void;
   putChange(
     branchId: string,
     path: Uint8Array,
@@ -434,15 +454,38 @@ export interface BranchStore {
   ): void;
   setManifestRoot(branchId: string, path: Uint8Array, manifestHash?: Uint8Array): void;
   changeCount(branchId: string): number;
+  changeBytes(branchId: string): number;
+  changePathBytes(branchId: string): number;
+  subtreeChanged(inodeId: string, baseRevision: number): boolean;
   incrementGeneration(branchId: string): void;
-  finish(branchId: string, state: 1 | 2, now: number): void;
+  putInodeOverlay(
+    branchId: string,
+    inodeId: string,
+    expectedToken: number | null,
+    encoded: Uint8Array,
+  ): void;
+  finish(
+    branchId: string,
+    state: 1 | 2,
+    now: number,
+    mergedRevision?: number | null,
+  ): void;
+  terminalCleanupRows(branchId: string): number;
   clearChanges(branchId: string): void;
   storeResult(
     operationId: string,
     outcome: number,
     encoded: Uint8Array,
     expiresAt: number,
+    revision: number | null,
   ): void;
+  pruneExpiredResults(now: number, limit: number): number;
+  pruneTerminalBranches(now: number, retentionMs: number, limit: number): number;
+  maintainRevisionRetention(
+    maxRetainedRevisions: number,
+    now: number,
+    limit: number,
+  ): number;
 }
 
 export type StagingMemberKind = "object" | "manifest-root" | "manifest-node";
@@ -590,10 +633,21 @@ export interface StagingStore {
   acquireReadLease(
     leaseId: string,
     ownerId: string,
+    ownerNonce: Uint8Array,
     manifestHash: Uint8Array,
     expiresAt: number,
+    branchId?: string,
+    generation?: number,
   ): void;
-  releaseReadLease(leaseId: string, ownerId: string): boolean;
+  renewReadLease(
+    leaseId: string,
+    ownerId: string,
+    ownerNonce: Uint8Array,
+    priorExpiresAt: number,
+    now: number,
+    expiresAt: number,
+  ): boolean;
+  releaseReadLease(leaseId: string, ownerId: string, ownerNonce: Uint8Array): boolean;
   expireBatch(now: number, limit: number): number;
   cleanupBatch(limit: number): LeaseCleanupProgress;
   appendBatch(
@@ -795,6 +849,15 @@ export interface MaintenanceStore {
   ): UsageVerificationBatch;
 }
 
+export interface PersistedPatch {
+  readonly sequence: number;
+  readonly generation: number;
+  readonly offset: number;
+  readonly deleteLength: number;
+  readonly insertLength: number;
+  readonly segments: readonly Uint8Array[];
+}
+
 export interface OverlayStore {
   writePages(
     branchId: string,
@@ -803,6 +866,71 @@ export interface OverlayStore {
     pages: readonly CowPage[],
     now: number,
   ): number;
+  headPages(
+    branchId: string,
+    inodeId: string,
+    firstPage: number,
+    lastPage: number,
+  ): readonly CowPage[];
+  leasedPages(
+    leaseId: string,
+    branchId: string,
+    inodeId: string,
+    firstPage: number,
+    lastPage: number,
+    baseGeneration?: number,
+    ownerNonce?: Uint8Array,
+  ): readonly CowPage[];
+  leaseMembershipFits(
+    branchId: string,
+    inodeId: string,
+    firstPage: number,
+    lastPage: number,
+    baseGeneration: number,
+    includePages: boolean,
+    includePatches: boolean,
+  ): boolean;
+  pinHeads(
+    leaseId: string,
+    branchId: string,
+    inodeId: string,
+    firstPage: number,
+    lastPage: number,
+    ownerNonce: Uint8Array,
+  ): number;
+  pinPatches(
+    leaseId: string,
+    branchId: string,
+    inodeId: string,
+    ownerNonce: Uint8Array,
+    baseGeneration?: number,
+  ): number;
+  leasedPatches(
+    leaseId: string,
+    branchId: string,
+    inodeId: string,
+    ownerNonce?: Uint8Array,
+    baseGeneration?: number,
+  ): readonly PersistedPatch[];
+  hasPages(branchId: string, inodeId: string): boolean;
+  hasPatchesAfter(branchId: string, inodeId: string, baseGeneration: number): boolean;
+  appendPatch(
+    branchId: string,
+    inodeId: string,
+    currentSize: number,
+    offset: number,
+    deleteLength: number,
+    segments: readonly Uint8Array[],
+  ): number;
+  patches(
+    branchId: string,
+    inodeId: string,
+    minimumGeneration?: number,
+    minimumSequence?: number,
+  ): readonly PersistedPatch[];
+  clearPages(branchId: string, inodeId: string): void;
+  clearPatches(branchId: string, inodeId: string): void;
+  cleanupUnleased(limit: number): number;
 }
 
 export interface StorageTransactionPorts {

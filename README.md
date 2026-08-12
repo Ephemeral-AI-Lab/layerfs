@@ -4,6 +4,7 @@
 
 [![M2 accepted](https://img.shields.io/badge/M2-accepted-2ea44f)](./docs/evidence/m2/exit.md)
 [![M3 accepted](https://img.shields.io/badge/M3-accepted-2ea44f)](./docs/evidence/m3/exit.md)
+[![M4 accepted](https://img.shields.io/badge/M4-accepted-2ea44f)](./docs/implementation/implementation-plan.md#7-milestone-4-branches-and-publication)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Ephemeral AI FS gives Ephemeral AI Computer a durable workspace layer where agents can
@@ -86,14 +87,14 @@ An edit follows this path:
 
 ### C3 mechanisms implemented here
 
-| C3 mechanism                     | Repository implementation                                                             | Status                                               |
-| -------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| CAS: share unchanged bytes       | `packages/fs/src/cas/` and `packages/fs/src/sqlite/content-repository.ts`             | ✅ M1/M2 accepted                                    |
-| CDC: reconnect after local edits | `packages/fs/src/cdc/fastcdc.ts` and `packages/fs/src/operations/local-rebuild.ts`    | ✅ M3 durable local-rebuild path                     |
-| Authenticated manifests          | `packages/fs/src/manifests/` and `packages/fs/src/sqlite/manifest-tree-repository.ts` | ✅ M2 accepted                                       |
-| COW pages and patches            | `packages/fs/src/cow/pages.ts` and `packages/fs/src/sqlite/overlay-repository.ts`     | 🧱 Foundation exists; efficient branch editing is M5 |
-| Branch bases and conflict checks | `packages/fs/src/branches/`, `branch-repository.ts`, and `branch-engine.ts`           | 🚧 Full publication is M4/M5                         |
-| One durable authority            | `packages/fs/src/sqlite/driver.ts` and transaction-scoped repositories                | ✅ M2 accepted                                       |
+| C3 mechanism                     | Repository implementation                                                             | Status                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------- |
+| CAS: share unchanged bytes       | `packages/fs/src/cas/` and `packages/fs/src/sqlite/content-repository.ts`             | ✅ M1/M2 accepted                             |
+| CDC: reconnect after local edits | `packages/fs/src/cdc/fastcdc.ts` and `packages/fs/src/operations/local-rebuild.ts`    | ✅ M3 durable local-rebuild path              |
+| Authenticated manifests          | `packages/fs/src/manifests/` and `packages/fs/src/sqlite/manifest-tree-repository.ts` | ✅ M2 accepted                                |
+| COW pages and patches            | `packages/fs/src/cow/pages.ts` and `packages/fs/src/sqlite/overlay-repository.ts`     | ✅ M4 branch overlays and bounded publication |
+| Branch bases and conflict checks | `packages/fs/src/branches/`, `branch-repository.ts`, and `branch-engine.ts`           | ✅ M4 accepted                                |
+| One durable authority            | `packages/fs/src/sqlite/driver.ts` and transaction-scoped repositories                | ✅ M2 accepted                                |
 
 The result is a filesystem foundation for C3-style execution: shared immutable data,
 private agent state, bounded edits, and explicit publication into one durable main view.
@@ -119,7 +120,7 @@ M0 foundation       ✅
 M1 content engine   ✅
 M2 SQLite storage   ✅  latest accepted milestone
 M3 filesystem I/O   ✅  accepted milestone
-M4 branches         ⏳
+M4 branches         ✅
 M5 maintenance      ⏳
 M6–M10 integration  ⏳
 ```
@@ -130,7 +131,7 @@ M6–M10 integration  ⏳
 | M1        | CAS, CDC, COW, patches, and manifests                                       | ✅ Accepted     |
 | M2        | Transactional SQLite storage and Node driver                                | ✅ **Accepted** |
 | M3        | Filesystem namespace, revisions, and I/O                                    | ✅ **Accepted** |
-| M4        | Branches and publication                                                    | ⏳ Planned      |
+| M4        | Branches and publication                                                    | ✅ **Accepted** |
 | M5        | Maintenance, recovery, and bounded scale                                    | ⏳ Planned      |
 | M6–M10    | Cloudflare parity, Node VFS, replication, release, and Computer integration | ⏳ Planned      |
 
@@ -176,6 +177,35 @@ The 100,001-entry closure test completed with 4,655 reconciliation statements, o
 statements per manifest entry. Exact quota accounting and deduplication behavior were
 preserved across M2 and M3.
 
+### M4 branch-engine benchmark
+
+The smaller branch benchmark is a non-gating public-API benchmark covering 1, 5, and 10
+branches, up to 1,000 changed paths, COW pages, structural patches, conflicts, replay,
+and limit rejection. Results below are from the local Windows x64 validation machine;
+preparation and publication are measured separately.
+
+| Workload                     | Preparation | Publication | Outcome                |
+| ---------------------------- | ----------: | ----------: | ---------------------- |
+| 5 branches × 100 paths       |      2.85 s |      0.58 s | 5 merges, 0 conflicts  |
+| 10 branches × 100 paths      |      5.78 s |      1.23 s | 10 merges, 0 conflicts |
+| 5 same-inode writers         |       43 ms |      6.4 ms | 1 merge, 4 conflicts   |
+| 10 same-inode writers        |       61 ms |      9.0 ms | 1 merge, 9 conflicts   |
+| 2 hard-link aliases          |       12 ms |     12.9 ms | 1 merge, 1 conflict    |
+| 500 COW edits                |      474 ms |       51 ms | 1 merge                |
+| 500 structural patches       |      4.21 s |      5.3 ms | 1 merge                |
+| Replay after physical reopen |     95.6 ms |      6.9 ms | 0.26 ms replay         |
+
+The complete reduced matrix finished with **20/20 cells passing in 18.5 seconds**; a
+three-trial conflict run passed **3/3 cells**. Run it with:
+
+```bash
+pnpm bench:branches
+```
+
+Most branch cells use an in-memory database for repeatability; the replay cell uses a
+file-backed database and physical reopen. These results supplement, but do not replace,
+the M4 correctness and fault suites.
+
 <details>
 <summary>🧪 Benchmark methodology and caveats</summary>
 
@@ -209,10 +239,16 @@ Run the M2 storage suite directly:
 pnpm test:m2
 ```
 
-Run the engine benchmark:
+Run the storage engine benchmark:
 
 ```bash
 node tests/performance/mini-bench.mjs
+```
+
+Run the smaller branch-engine benchmark:
+
+```bash
+pnpm bench:branches
 ```
 
 ## 🗂️ Repository map
@@ -226,7 +262,7 @@ packages/replication/         Replication package
 tests/algorithms/             M1 content and manifest tests
 tests/storage/                M2 SQLite storage tests
 tests/conformance/            M3 filesystem conformance tests
-tests/performance/            Mini-benchmark harness and artifacts
+tests/performance/            Storage and branch benchmark harnesses and artifacts
 docs/implementation/          Milestone plan and acceptance criteria
 docs/evidence/                Accepted milestone evidence
 docs/benchmarks/              Benchmark plans, results, and improvement targets
@@ -240,7 +276,7 @@ docs/benchmarks/              Benchmark plans, results, and improvement targets
 - [M3 sequenced improvement plan](./docs/benchmarks/m3-improvements.md)
 - [Full implementation plan](./docs/implementation/implementation-plan.md)
 
-The next milestone is M4 branch publication and conflict handling.
+The next milestone is M5 maintenance, recovery, and bounded scale.
 
 ## 📄 License
 

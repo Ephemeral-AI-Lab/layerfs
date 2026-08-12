@@ -30,6 +30,7 @@
     "test:fault:built": "node scripts/run-test-suite.mjs tests/fault",
     "test:performance": "pnpm build && pnpm test:performance:built",
     "test:performance:built": "node scripts/run-test-suite.mjs tests/performance",
+    "bench:branches": "pnpm build && node tests/performance/branch-bench.mjs",
     "test:workerd": "pnpm --filter @ephemeralai/fs build && node scripts/check-workerd-algorithms.mjs",
     "check:style": "prettier --check . --ignore-unknown && eslint . --max-warnings=0 && node scripts/check-style.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",

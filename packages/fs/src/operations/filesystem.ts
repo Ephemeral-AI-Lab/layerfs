@@ -3,6 +3,7 @@ import {
   DEFAULT_FILESYSTEM_LIMITS,
   DEFAULT_RUNTIME_LIMITS,
   AdmissionController,
+  RuntimeConcurrency,
   constrainStorageLimits,
   maxPersistedContentObjectBytes,
   persistedWriterProfile,
@@ -181,6 +182,7 @@ export class EphemeralFS implements EphemeralFilesystem {
   readonly #runtimeLimits: RuntimeLimits;
   readonly #branchLimits: BranchConfiguration;
   readonly #admission: AdmissionController;
+  readonly #concurrency: RuntimeConcurrency;
   readonly #cache: ContentCache;
   readonly #readWindowBytes: number;
   readonly #pending = new Set<Promise<unknown>>();
@@ -209,6 +211,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     this.#admission = new AdmissionController(
       this.#runtimeLimits.maxManagedResidentBytes,
     );
+    this.#concurrency = new RuntimeConcurrency(this.#runtimeLimits);
     this.#cache = new ContentCache(this.#runtimeLimits.maxCacheBytes, this.#admission);
     this.#readWindowBytes = Math.max(
       this.#filesystemLimits.preferredStreamChunkBytes,
@@ -222,7 +225,9 @@ export class EphemeralFS implements EphemeralFilesystem {
       this.#branchLimits,
       this.#clock,
       this.#admission,
+      this.#concurrency,
       this.#cache,
+      this.capabilities.format.cowPageBytes,
     );
     this.maintenance = new MaintenanceManager(
       this.#storagePort,
@@ -230,6 +235,8 @@ export class EphemeralFS implements EphemeralFilesystem {
       this.#runtimeLimits,
       this.#clock,
       this.#cache,
+      this.capabilities.format.cowPageBytes,
+      this.#branchLimits,
     );
   }
 
@@ -255,6 +262,20 @@ export class EphemeralFS implements EphemeralFilesystem {
       for (const [name, value] of Object.entries(values))
         if (!Number.isSafeInteger(value) || value <= 0)
           throw new RangeError(`${domain}.${name} must be a positive safe integer`);
+    const minimumRetentionMs = 7 * 24 * 60 * 60 * 1000;
+    if (branch.maxBranchIdBytes > 200 || branch.maxOperationIdBytes > 200)
+      throw new RangeError(
+        "branch and operation identifiers are capped at 200 UTF-8 bytes",
+      );
+    if (
+      branch.terminalBranchRetentionMs < minimumRetentionMs ||
+      branch.publicationResultRetentionMs < minimumRetentionMs
+    )
+      throw new RangeError("branch retention periods must be at least seven days");
+    if (branch.maxConflictsPerPublication < branch.maxChangedPathsPerBranch)
+      throw new RangeError(
+        "maxConflictsPerPublication must cover maxChangedPathsPerBranch",
+      );
     validateRuntimeLimits(
       filesystem,
       storage,
@@ -441,28 +462,39 @@ export class EphemeralFS implements EphemeralFilesystem {
       const requestedLength = options.length;
       checkedInteger(offset, "offset");
       if (requestedLength !== undefined) checkedInteger(requestedLength, "length");
-      if (this.#streams.size >= this.#runtimeLimits.maxConcurrentStreams)
+      const releaseStreamAdmission = this.#concurrency.tryAcquireStream();
+      if (!releaseStreamAdmission)
         throw fsError("EAGAIN", "readStream", path, "concurrent stream limit exceeded");
       const canonical = canonicalizePath(path, this.#filesystemLimits, "readStream");
       const leaseId = globalThis.crypto.randomUUID();
       const owner = globalThis.crypto.randomUUID();
-      const selected = this.#transaction("write", (tx) => {
-        const inode = this.#requireFile(
-          tx
-            .namespace(this.#filesystemLimits, this.#storageLimits, "readStream")
-            .resolve(canonical, true),
-          "readStream",
-        );
-        const manifestHash = copyBytes(inode.manifest_hash!);
-        const expires = this.#now() + this.#storageLimits.readLeaseMs;
-        tx.staging(this.#storageLimits).acquireReadLease(
-          leaseId,
-          owner,
-          manifestHash,
-          expires,
-        );
-        return { manifestHash, size: inode.size! };
-      });
+      const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
+      let selected: { manifestHash: Uint8Array; size: number };
+      try {
+        selected = this.#transaction("write", (tx) => {
+          const inode = this.#requireFile(
+            tx
+              .namespace(this.#filesystemLimits, this.#storageLimits, "readStream")
+              .resolve(canonical, true),
+            "readStream",
+          );
+          const manifestHash = copyBytes(inode.manifest_hash!);
+          const expires = this.#now() + this.#storageLimits.readLeaseMs;
+          tx.staging(this.#storageLimits).acquireReadLease(
+            leaseId,
+            owner,
+            ownerNonce,
+            manifestHash,
+            expires,
+            undefined,
+            undefined,
+          );
+          return { manifestHash, size: inode.size! };
+        });
+      } catch (error) {
+        releaseStreamAdmission();
+        throw error;
+      }
       const end = Math.min(
         selected.size,
         requestedLength === undefined
@@ -482,6 +514,7 @@ export class EphemeralFS implements EphemeralFilesystem {
         cursor = undefined;
         queuedRelease?.();
         queuedRelease = undefined;
+        releaseStreamAdmission();
         this.#streams.delete(leaseId);
         const cache = this.#cache.metrics();
         this.#observe({
@@ -500,7 +533,11 @@ export class EphemeralFS implements EphemeralFilesystem {
         });
         try {
           this.#transaction("write", (tx) => {
-            tx.staging(this.#storageLimits).releaseReadLease(leaseId, owner);
+            tx.staging(this.#storageLimits).releaseReadLease(
+              leaseId,
+              owner,
+              ownerNonce,
+            );
           });
         } catch (error) {
           if (!this.#closing) throw error;
@@ -1207,6 +1244,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     if (this.#closePromise) return this.#closePromise;
     this.#closing = true;
     this.#closePromise = (async () => {
+      await (this.branches as BranchManager).close();
       for (const stream of this.#streams.values()) stream.error();
       await Promise.allSettled(
         [...this.#streams.values()].map((stream) => stream.release()),
@@ -1875,7 +1913,8 @@ export class EphemeralFS implements EphemeralFilesystem {
         fsError("EBADF", operation, path, "filesystem is closed or closing"),
       );
     if (signal?.aborted) return Promise.reject(abortError());
-    if (this.#pending.size >= this.#runtimeLimits.maxConcurrentOperations)
+    const releaseOperation = this.#concurrency.tryAcquireOperation();
+    if (!releaseOperation)
       return Promise.reject(
         fsError("EAGAIN", operation, path, "concurrent operation limit exceeded"),
       );
@@ -1932,7 +1971,12 @@ export class EphemeralFS implements EphemeralFilesystem {
       }
     })();
     this.#pending.add(work);
-    void work.finally(() => this.#pending.delete(work)).catch(() => {});
+    void work
+      .finally(() => {
+        releaseOperation();
+        this.#pending.delete(work);
+      })
+      .catch(() => {});
     return work;
   }
   #observe(event: FilesystemObservation): void {
