@@ -24,6 +24,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import { format, resolveConfig } from "prettier";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { EphemeralFS } from "../../packages/fs/dist/index.js";
 import {
@@ -466,9 +467,14 @@ function artifactFor(cell, result, configuration, fixtureBytes, pass, filesystem
 
 async function writeArtifacts(artifacts, directory) {
   await mkdir(directory, { recursive: true });
+  const options = (await resolveConfig(path.join(ROOT, "package.json"))) ?? {};
   for (const artifact of artifacts) {
     const filename = path.join(directory, `${artifact.benchmark}.json`);
-    await writeFile(filename, `${JSON.stringify(artifact, null, 2)}\n`);
+    const contents = await format(JSON.stringify(artifact), {
+      ...options,
+      filepath: filename,
+    });
+    await writeFile(filename, contents);
   }
 }
 

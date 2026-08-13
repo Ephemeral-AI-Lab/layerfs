@@ -22,11 +22,7 @@
   "counters": {
     "wallMs": 70.676,
     "editCount": 3,
-    "perEditMs": [
-      31.492,
-      23.338,
-      15.617
-    ],
+    "perEditMs": [31.492, 23.338, 15.617],
     "dbGrowthBytes": 939360,
     "transactions": 6,
     "statements": 144,

@@ -36,6 +36,11 @@ test("CI invokes only the explicit highest accepted milestone gate", () => {
   );
   const parsed = parseYaml(workflow);
   assert.deepEqual(workflowPolicyErrors(parsed), []);
+  const checkoutSteps = parsed.jobs.validate.steps.filter((step) =>
+    /^actions\/checkout@/u.test(step.uses ?? ""),
+  );
+  assert.equal(checkoutSteps.length, 1);
+  assert.equal(checkoutSteps[0].with?.["fetch-depth"], 0);
   const runSteps = parsed.jobs.validate.steps
     .filter((step) => Object.hasOwn(step, "run"))
     .map((step) => step.run);
