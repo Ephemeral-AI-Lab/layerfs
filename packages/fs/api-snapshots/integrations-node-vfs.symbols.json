@@ -40,13 +40,73 @@
       ]
     },
     {
-      "name": "SyncPreparedContent",
+      "name": "NodeVfsManagedSlab",
       "kinds": [
         "type"
       ],
       "declarations": [
         {
           "file": "packages/fs/dist/operations/node-vfs-bridge.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsPinnedReadBridge",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/operations/node-vfs-bridge.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsPreparedContent",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/operations/node-vfs-bridge.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "openNodeVfsBridge",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/integrations/node-vfs.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "OpenNodeVfsBridgeResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/integrations/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SynchronousContentSource",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/operations/streaming-prepare.d.ts",
           "kind": "InterfaceDeclaration"
         }
       ]

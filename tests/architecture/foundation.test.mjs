@@ -51,6 +51,18 @@ test("CI invokes only the explicit highest accepted milestone gate", () => {
   assert.ok(runSteps.includes("pnpm install --frozen-lockfile"));
   assert.ok(!runSteps.includes("pnpm validate"));
 
+  const fuseJob = parsed.jobs["m7-real-fuse"];
+  assert.deepEqual(fuseJob["runs-on"], ["self-hosted", "linux", "x64", "fuse"]);
+  assert.equal(fuseJob["timeout-minutes"], 10);
+  const fuseRunSteps = fuseJob.steps
+    .filter((step) => Object.hasOwn(step, "run"))
+    .map((step) => step.run);
+  assert.deepEqual(fuseRunSteps, [
+    "pnpm install --frozen-lockfile",
+    "pnpm build",
+    "pnpm test:m7:fuse",
+  ]);
+
   for (const fixture of [
     "comment-spoof.yml",
     "disabled-job.yml",
@@ -63,6 +75,19 @@ test("CI invokes only the explicit highest accepted milestone gate", () => {
       readFileSync(path.join(root, "tests/fixtures/ci-bypasses", fixture), "utf8"),
     );
     assert.ok(workflowPolicyErrors(invalid).length > 0, fixture);
+  }
+
+  for (const mutate of [
+    (copy) => delete copy.jobs["m7-real-fuse"],
+    (copy) => (copy.jobs["m7-real-fuse"].if = "false"),
+    (copy) => (copy.jobs["m7-real-fuse"]["continue-on-error"] = true),
+    (copy) => (copy.jobs["m7-real-fuse"]["runs-on"] = ["ubuntu-latest"]),
+    (copy) => (copy.jobs["m7-real-fuse"]["timeout-minutes"] = 11),
+    (copy) => (copy.jobs["m7-real-fuse"].steps.at(-1).run = "pnpm test:m7:local"),
+  ]) {
+    const invalid = structuredClone(parsed);
+    mutate(invalid);
+    assert.ok(workflowPolicyErrors(invalid).length > 0);
   }
 });
 
@@ -78,7 +103,7 @@ test("milestone gates select only their owned suites and sequential predecessors
     4: "node scripts/run-test-suite.mjs tests/branches",
     5: "node scripts/run-test-suite.mjs tests/maintenance tests/fault",
     6: "node scripts/run-m6-local-gate.mjs",
-    7: "node scripts/run-test-suite.mjs tests/node-vfs",
+    7: "pnpm test:m7:local",
     8: "node scripts/run-test-suite.mjs tests/replication",
     9: "node scripts/run-test-suite.mjs tests/fault tests/smoke tests/performance",
     10: "node scripts/run-test-suite.mjs tests/computer-integration",
@@ -86,12 +111,12 @@ test("milestone gates select only their owned suites and sequential predecessors
   for (const [milestone, command] of Object.entries(testCommands)) {
     assert.equal(scripts[`test:m${milestone}`], command);
     const expectedValidation =
-      Number(milestone) <= 6
+      Number(milestone) <= 7
         ? `pnpm validate:m${milestone}:pre-evidence && pnpm check:evidence`
         : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
     assert.equal(scripts[`validate:m${milestone}`], expectedValidation);
     assert.doesNotMatch(scripts[`validate:m${milestone}`], /test:unit/);
-    if (Number(milestone) > 6)
+    if (Number(milestone) > 7)
       assert.match(
         scripts[`validate:m${milestone}`],
         new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `),
@@ -124,6 +149,10 @@ test("milestone gates select only their owned suites and sequential predecessors
   assert.equal(
     scripts["validate:m6:pre-evidence"],
     "pnpm validate:m5:pre-evidence && node scripts/run-m6-local-gate.mjs --skip-build",
+  );
+  assert.equal(
+    scripts["validate:m7:pre-evidence"],
+    "pnpm validate:m6 && pnpm test:m7:local && pnpm test:m7:fuse",
   );
   const acceptedNodeGate = readFileSync(
     path.join(root, "scripts", "run-accepted-node-gate.mjs"),

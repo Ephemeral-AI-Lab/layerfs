@@ -25,6 +25,12 @@ export interface NodeVfsFilesystemBridge {
     readonly storageLimits: Readonly<StorageLimits>;
     readonly runtimeLimits: Readonly<RuntimeLimits>;
     readonly cowPageBytes: 4096 | 8192 | 16384;
+    canonicalPathSync(path: string, syscall?: string): string;
+    resolvePathSync(path: string, followFinal?: boolean): NodeVfsResolvedPath;
+    openPinnedReadSync(path: string): NodeVfsPinnedReadBridge;
+    acquireSlabSync(source: Uint8Array, sourceOffset: number, length: number): NodeVfsManagedSlab | undefined;
+    reserveControlSync(bytes: number): (() => void) | undefined;
+    managedMemorySync(): NodeVfsManagedMemorySnapshot;
     existsSync(path: string): boolean;
     statSync(path: string, followFinal?: boolean): FileStat;
     readdirSync(path: string): DirectoryEntry[];
@@ -32,13 +38,19 @@ export interface NodeVfsFilesystemBridge {
     readIntoSync(path: string, destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
     readRangeSync(path: string, position: number, length: number): Uint8Array;
     readFileSync(path: string): Uint8Array;
-    prepareContentSync(bytes: Uint8Array): SyncPreparedContent;
-    readPreparedIntoSync(prepared: SyncPreparedContent, destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
-    commitPreparedSync(path: string, prepared: SyncPreparedContent, options?: {
+    prepareContentSync(bytes: Uint8Array): NodeVfsPreparedContent;
+    prepareContentSourceSync(source: SynchronousContentSource): NodeVfsPreparedContent;
+    prepareOverwriteSync(path: string, offset: number, source: SynchronousContentSource): NodeVfsPreparedContent | undefined;
+    prepareOverwritesSync(path: string, edits: readonly NodeVfsOverwriteEdit[]): NodeVfsPreparedContent | undefined;
+    abortPreparedSync(prepared: NodeVfsPreparedContent): void;
+    readPreparedIntoSync(prepared: NodeVfsPreparedContent, destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
+    commitPreparedSync(path: string, prepared: NodeVfsPreparedContent, options?: {
         create?: boolean;
         exclusive?: boolean;
         mode?: number;
-    }): void;
+        inodeId?: string;
+        aliases?: readonly string[];
+    }): NodeVfsCommitResult;
     writeFileSync(path: string, bytes: Uint8Array, options?: {
         create?: boolean;
         exclusive?: boolean;
@@ -56,10 +68,57 @@ export interface NodeVfsFilesystemBridge {
     rmdirSync(path: string): void;
 }
 
-/* export: SyncPreparedContent; kinds: type */
+/* export: NodeVfsManagedSlab; kinds: type */
 /* source: packages/fs/dist/operations/node-vfs-bridge.d.ts */
-export interface SyncPreparedContent {
-    readonly manifestHash: Uint8Array;
+export interface NodeVfsManagedSlab {
+    readonly bytes: Uint8Array;
+    release(): void;
+}
+
+/* export: NodeVfsPinnedReadBridge; kinds: type */
+/* source: packages/fs/dist/operations/node-vfs-bridge.d.ts */
+export interface NodeVfsPinnedReadBridge {
+    readonly canonicalPath: string;
+    readonly inodeId: string;
+    readonly stat: FileStat;
     readonly size: number;
-    readonly certificate: ClosureCertificate;
+    readIntoSync(destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
+    closeSync(): void;
+}
+
+/* export: NodeVfsPreparedContent; kinds: type */
+/* source: packages/fs/dist/operations/node-vfs-bridge.d.ts */
+/** Opaque durable content owned by the core bridge. */
+export interface NodeVfsPreparedContent {
+    readonly size: number;
+    /** Bounded source bytes read while applying page-local edits. */
+    readonly editSourceBytes?: number;
+}
+
+/* export: openNodeVfsBridge; kinds: value */
+/* source: packages/fs/dist/integrations/node-vfs.d.ts */
+/**
+ * Open the portable filesystem and its synchronous bridge as one core instance.
+ * This is the production Node VFS composition root: both views share limits,
+ * caches, concurrency, and the aggregate admission controller.
+ */
+export declare function openNodeVfsBridge(options: OpenFilesystemOptions): Promise<OpenNodeVfsBridgeResult>;
+
+/* export: OpenNodeVfsBridgeResult; kinds: type */
+/* source: packages/fs/dist/integrations/node-vfs.d.ts */
+export interface OpenNodeVfsBridgeResult {
+    readonly filesystem: PublicEphemeralFS;
+    readonly bridge: NodeVfsFilesystemBridge;
+}
+
+/* export: SynchronousContentSource; kinds: type */
+/* source: packages/fs/dist/operations/streaming-prepare.d.ts */
+/**
+ * Synchronous, bounded content source used by the Node VFS bridge. The source
+ * owns neither the destination nor any durable state and must fill exactly the
+ * requested range before returning.
+ */
+export interface SynchronousContentSource {
+    readonly size: number;
+    readInto(destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
 }

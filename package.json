@@ -21,7 +21,10 @@
     "test:m5": "node scripts/run-test-suite.mjs tests/maintenance tests/fault",
     "check:m6-preview": "node scripts/check-cloudflare-preview.mjs",
     "test:m6": "node scripts/run-m6-local-gate.mjs",
-    "test:m7": "node scripts/run-test-suite.mjs tests/node-vfs",
+    "test:m7": "pnpm test:m7:local",
+    "test:m7:local": "node scripts/run-m7-local-gate.mjs",
+    "test:m7:fuse": "node scripts/run-m7-fuse-gate.mjs",
+    "smoke:m7:fuse": "node scripts/run-m7-fuse-gate.mjs",
     "test:m8": "node scripts/run-test-suite.mjs tests/replication",
     "test:m9": "node scripts/run-test-suite.mjs tests/fault tests/smoke tests/performance",
     "test:m10": "node scripts/run-test-suite.mjs tests/computer-integration",
@@ -57,7 +60,8 @@
     "validate:m5": "pnpm validate:m5:pre-evidence && pnpm check:evidence",
     "validate:m6:pre-evidence": "pnpm validate:m5:pre-evidence && node scripts/run-m6-local-gate.mjs --skip-build",
     "validate:m6": "pnpm validate:m6:pre-evidence && pnpm check:evidence",
-    "validate:m7": "pnpm validate:m6 && pnpm test:m7",
+    "validate:m7:pre-evidence": "pnpm validate:m6 && pnpm test:m7:local && pnpm test:m7:fuse",
+    "validate:m7": "pnpm validate:m7:pre-evidence && pnpm check:evidence",
     "validate:m8": "pnpm validate:m7 && pnpm test:m8",
     "validate:m9": "pnpm validate:m8 && pnpm test:m9",
     "validate:m10": "pnpm validate:m9 && pnpm test:m10",
@@ -78,5 +82,8 @@
     "vitest": "4.1.10",
     "workerd": "1.20260810.1",
     "wrangler": "4.122.0"
+  },
+  "optionalDependencies": {
+    "fuse-native": "2.2.6"
   }
 }

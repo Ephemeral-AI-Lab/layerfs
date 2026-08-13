@@ -63,5 +63,49 @@ export function workflowPolicyErrors(workflow) {
   else {
     requireUnconditional(validationSteps[0], "validate:accepted");
   }
+  const fuseJob = workflow?.jobs?.["m7-real-fuse"];
+  if (!fuseJob) {
+    errors.push("m7-real-fuse job is missing");
+    return errors;
+  }
+  if (Object.hasOwn(fuseJob, "if")) errors.push("m7-real-fuse job must not have if");
+  if (fuseJob["continue-on-error"] !== undefined)
+    errors.push("m7-real-fuse job must not continue on error");
+  if (!same(fuseJob["runs-on"], ["self-hosted", "linux", "x64", "fuse"]))
+    errors.push("m7-real-fuse job must select the privileged FUSE runner labels");
+  if (fuseJob["timeout-minutes"] !== 10)
+    errors.push("m7-real-fuse job must retain the ten-minute selection deadline");
+  const fuseSteps = fuseJob.steps ?? [];
+  for (const [label, matcher, validate] of [
+    [
+      "m7-real-fuse checkout",
+      (step) => /^actions\/checkout@/u.test(step.uses ?? ""),
+      (step) => step.with?.["fetch-depth"] === 0,
+    ],
+    [
+      "m7-real-fuse pnpm setup",
+      (step) => /^pnpm\/action-setup@/u.test(step.uses ?? ""),
+      (step) => step.with?.version === "10.32.1",
+    ],
+    [
+      "m7-real-fuse Node setup",
+      (step) => /^actions\/setup-node@/u.test(step.uses ?? ""),
+      (step) => step.with?.["node-version"] === 22,
+    ],
+    [
+      "m7-real-fuse frozen install",
+      (step) => step.run === "pnpm install --frozen-lockfile",
+      () => true,
+    ],
+    ["m7-real-fuse build", (step) => step.run === "pnpm build", () => true],
+    ["m7-real-fuse gate", (step) => step.run === "pnpm test:m7:fuse", () => true],
+  ]) {
+    const selected = fuseSteps.filter(matcher);
+    if (selected.length !== 1) errors.push(`exactly one ${label} step is required`);
+    else {
+      requireUnconditional(selected[0], label);
+      if (!validate(selected[0])) errors.push(`${label} configuration differs`);
+    }
+  }
   return errors;
 }

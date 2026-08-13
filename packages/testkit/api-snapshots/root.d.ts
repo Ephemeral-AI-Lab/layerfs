@@ -107,6 +107,102 @@ export declare function createStatementFaultController(): StatementFaultControll
 /** Registers the normative shared filesystem suite with Vitest. */
 export declare function filesystemConformance(factory: ConformanceAdapterFactory): void;
 
+/* export: NodeVfsConformanceCaseId; kinds: type */
+/* source: packages/testkit/dist/node-vfs.d.ts */
+export type NodeVfsConformanceCaseId = "pinned-direct-reads" | "irregular-range-writes" | "three-session-orders" | "pending-namespace" | "hidden-staging" | "flush-close-abort" | "session-backpressure";
+
+/* export: NodeVfsConformanceFactory; kinds: type */
+/* source: packages/testkit/dist/node-vfs.d.ts */
+export interface NodeVfsConformanceFactory {
+    create(options?: {
+        readonly runtime?: Partial<RuntimeLimits>;
+        readonly cowPageBytes?: 4096 | 8192 | 16384;
+    }): Promise<NodeVfsConformanceHandle>;
+}
+
+/* export: NodeVfsConformanceHandle; kinds: type */
+/* source: packages/testkit/dist/node-vfs.d.ts */
+export interface NodeVfsConformanceHandle {
+    readonly provider: NodeVfsConformanceProvider;
+    readonly filesystem: EphemeralFS;
+    close(): Promise<void>;
+}
+
+/* export: NodeVfsConformanceMetrics; kinds: type */
+/* source: packages/testkit/dist/node-vfs.d.ts */
+export interface NodeVfsConformanceMetrics {
+    readonly openSessions: number;
+    readonly dirtySessions: number;
+    readonly residentWriteBytes: number;
+    readonly peakResidentWriteBytes: number;
+    readonly residentControlBytes: number;
+    readonly peakManagedResidentBytes: number;
+    readonly stagedLogicalBytes: number;
+    readonly admittedWriteBytes: number;
+    readonly flushedWriteBytes: number;
+    readonly flushCount: number;
+    readonly forcedFlushCount: number;
+    readonly failedFlushCount: number;
+    readonly rejectedWriteCount: number;
+    readonly directReadBytes: number;
+    readonly coreBatchCount: number;
+    readonly cowEditCount: number;
+    readonly cowEditSourceBytes: number;
+}
+
+/* export: NodeVfsConformanceProvider; kinds: type */
+/* source: packages/testkit/dist/node-vfs.d.ts */
+export interface NodeVfsConformanceProvider {
+    readonly capabilities: {
+        readonly cowPageBytes: 4096 | 8192 | 16384;
+        readonly runtime: Readonly<RuntimeLimits>;
+        readonly supportsDirectRangeIo: true;
+        readonly supportsWriteSessions: true;
+        readonly supportsDataSync: boolean;
+    };
+    readonly metrics: {
+        snapshot(): NodeVfsConformanceMetrics;
+    };
+    existsSync(path: string): boolean;
+    statSync(path: string): FileStat;
+    readRangeSync(path: string, position: number, length: number): Uint8Array;
+    openFileSync(path: string, options?: {
+        readonly writable?: boolean;
+        readonly create?: boolean;
+        readonly exclusive?: boolean;
+        readonly truncate?: boolean;
+        readonly mode?: number;
+    }): NodeVfsConformanceSession;
+    linkSync(existingPath: string, newPath: string): void;
+    symlinkSync(target: string, path: string): void;
+    readlinkSync(path: string): string;
+    renameSync(oldPath: string, newPath: string): void;
+    unlinkSync(path: string): void;
+    syncSync(): void;
+    closeSync(): void;
+}
+
+/* export: NodeVfsConformanceSession; kinds: type */
+/* source: packages/testkit/dist/node-vfs.d.ts */
+export interface NodeVfsConformanceSession {
+    readonly path: string;
+    readonly writable: boolean;
+    readIntoSync(destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
+    readRangeSync(position: number, length: number): Uint8Array;
+    writeSync(content: Uint8Array, position: number): number;
+    truncateSync(size: number): void;
+    statSync(): FileStat;
+    stagePrefixSync(): void;
+    commitVisibleSync(options?: {
+        readonly dataOnly?: boolean;
+    }): void;
+    flushSync(options?: {
+        readonly dataOnly?: boolean;
+    }): void;
+    closeSync(): void;
+    abortSync(): void;
+}
+
 /* export: PORTABLE_APPLICATION_ID; kinds: value */
 /* source: packages/testkit/dist/schema.d.ts */
 PORTABLE_APPLICATION_ID = 1161905747
@@ -832,6 +928,11 @@ export declare function runFilesystemSmoke(factory: ConformanceAdapterFactory): 
 /* source: packages/testkit/dist/maintenance.d.ts */
 /** Shared bounded maintenance, recovery, corruption, quota, and resource suite. */
 export declare function runMaintenanceConformance(factory: ConformanceAdapterFactory): Promise<readonly PortableMaintenanceCaseResult[]>;
+
+/* export: runNodeVfsConformance; kinds: value */
+/* source: packages/testkit/dist/node-vfs.d.ts */
+/** Run the host-neutral, synchronous Node VFS conformance scenario. */
+export declare function runNodeVfsConformance(factory: NodeVfsConformanceFactory): Promise<readonly NodeVfsConformanceCaseId[]>;
 
 /* export: runPortableInitializationIdentityAttempt; kinds: value */
 /* source: packages/testkit/dist/schema.d.ts */

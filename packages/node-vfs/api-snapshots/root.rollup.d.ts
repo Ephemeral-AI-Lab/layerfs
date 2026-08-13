@@ -577,7 +577,7 @@ export interface FilesystemSQLiteDriver {
 }
 
 /* ===== packages/node-vfs/dist/index.d.ts ===== */
-import { EphemeralFS, type FileStat, type RuntimeLimits } from "@ephemeralai/fs";
+import { type EphemeralFS, type FileStat, type RuntimeLimits } from "@ephemeralai/fs";
 import type { NodeSQLiteDriver } from "@ephemeralai/fs-sqlite-node";
 export type CowPageBytes = 4096 | 8192 | 16384;
 export interface OpenNodeVfsOptions {
@@ -650,6 +650,7 @@ export interface NodeVfsHandle {
 }
 export interface NodeVfsMetricsSnapshot {
     readonly openSessions: number;
+    readonly peakOpenSessions: number;
     readonly dirtySessions: number;
     readonly residentWriteBytes: number;
     readonly peakResidentWriteBytes: number;
@@ -664,6 +665,22 @@ export interface NodeVfsMetricsSnapshot {
     readonly rejectedWriteCount: number;
     readonly directReadBytes: number;
     readonly coreBatchCount: number;
+    readonly cowEditCount: number;
+    readonly cowEditSourceBytes: number;
+    readonly callbackSizeDistribution: Readonly<{
+        upTo4KiB: number;
+        upTo64KiB: number;
+        upTo1MiB: number;
+        over1MiB: number;
+    }>;
+    readonly contiguousRunBytes: number;
+    readonly peakContiguousRunBytes: number;
+    readonly flushReasonCounts: Readonly<{
+        explicitCommit: number;
+        flush: number;
+        close: number;
+        providerSync: number;
+    }>;
 }
 export interface NodeVfsMetrics {
     snapshot(): NodeVfsMetricsSnapshot;

@@ -90,6 +90,21 @@ export interface StagedManifestEntryInput {
   readonly bytes?: Uint8Array;
 }
 
+/**
+ * Synchronous, bounded content source used by the Node VFS bridge. The source
+ * owns neither the destination nor any durable state and must fill exactly the
+ * requested range before returning.
+ */
+export interface SynchronousContentSource {
+  readonly size: number;
+  readInto(
+    destination: Uint8Array,
+    destinationOffset: number,
+    position: number,
+    length: number,
+  ): number;
+}
+
 function randomNonce(): Uint8Array {
   return globalThis.crypto.getRandomValues(new Uint8Array(16));
 }
@@ -155,6 +170,194 @@ export function metadataReservationBytes(
     DURABLE_METADATA_ROW_BYTES,
     "declared metadata reservation",
   );
+}
+
+/**
+ * Prepare a complete manifest from a synchronous range source without ever
+ * materializing the complete value. This is the synchronous counterpart to
+ * prepareContentStreaming and deliberately shares its staging, reconciliation,
+ * admission, and manifest-building implementation.
+ */
+export function prepareContentSourceSync(
+  port: OperationsStorage,
+  source: SynchronousContentSource,
+  storage: StorageLimits,
+  runtime: RuntimeLimits,
+  admission: AdmissionController,
+  cache?: ContentCache,
+  clock: () => number = Date.now,
+): StreamPreparedManifest {
+  const declaredBytes = source.size;
+  if (
+    !Number.isSafeInteger(declaredBytes) ||
+    declaredBytes < 0 ||
+    declaredBytes > storage.maxFileBytes
+  )
+    throw new RangeError("synchronous content source size exceeds maxFileBytes");
+  cache ??= new ContentCache(1, admission);
+  const durableIngestReservation = ingestReservationBytes(declaredBytes, storage);
+  const durableMetadataReservation = metadataReservationBytes(declaredBytes, storage);
+  const leaseId = globalThis.crypto.randomUUID();
+  const ownerId = globalThis.crypto.randomUUID();
+  const ownerNonce = randomNonce();
+  const now = clock();
+  if (!Number.isSafeInteger(now) || now < 0)
+    throw new Error("clock must return a nonnegative safe integer");
+  const workBudget = {
+    maxRows: storage.maxFinalTransactionRows,
+    maxBytes: storage.maxFinalTransactionBytes,
+    maxStatements: storage.maxFinalTransactionRows * 4,
+    maxElapsedMs: 5_000,
+  };
+  const pendingLimit = Math.max(
+    DEFAULT_FASTCDC.maximum,
+    Math.min(
+      runtime.maxPendingWriteBytes,
+      runtime.maxWriteSessionBytes,
+      Math.floor(storage.maxFinalTransactionBytes / 2),
+    ),
+  );
+  const readWindowBytes = Math.max(
+    1,
+    Math.min(256 * 1024, runtime.maxWriteSessionBytes, pendingLimit),
+  );
+  const builderBudget = Math.min(
+    runtime.maxQueryBatchBytes + storage.maxManifestNodeBytes * 2,
+    runtime.maxManagedResidentBytes -
+      DEFAULT_FASTCDC.maximum -
+      pendingLimit -
+      readWindowBytes,
+  );
+  if (builderBudget <= 0)
+    throw new RangeError(
+      "managed resident memory limit cannot admit synchronous manifest construction",
+    );
+  const reservationBytes =
+    DEFAULT_FASTCDC.maximum + pendingLimit + builderBudget + readWindowBytes;
+  const releases: Array<() => void> = [];
+  let leaseBegun = false;
+  const chunker = new StreamingFastCdc(DEFAULT_FASTCDC);
+  const pending: Uint8Array[] = [];
+  let pendingBytes = 0;
+  let entryIndex = 0;
+  let total = 0;
+  const durableBatchLimit = durableWriteBatchLimit(storage);
+  const flushObjects = (): void => {
+    if (!pending.length) return;
+    const batch = pending.splice(0);
+    pendingBytes = 0;
+    const items: ContentObjectInput[] = batch.map((chunk) =>
+      Object.freeze({ hash: port.hashBytes(chunk), bytes: chunk }),
+    );
+    const unique = [
+      ...new Map(items.map((item) => [bytesToHex(item.hash), item])).values(),
+    ];
+    port.transaction("write", workBudget, (tx) => {
+      const staging = tx.staging(storage, cache);
+      staging.consumeIngestReservation(
+        leaseId,
+        ownerNonce,
+        unique.reduce(
+          (sum, item) => checkedAdd(sum, intrinsicByteLength(item.bytes)),
+          0,
+        ),
+      );
+      staging.consumeMetadataReservation(
+        leaseId,
+        ownerNonce,
+        unique.length * DURABLE_METADATA_ROW_BYTES,
+      );
+      tx.content(storage, cache).putObjectsBatch(items, true);
+      staging.putEntriesBatch(
+        leaseId,
+        items.map((item) =>
+          Object.freeze({
+            entryIndex: entryIndex++,
+            objectHash: item.hash,
+            length: intrinsicByteLength(item.bytes),
+          }),
+        ),
+      );
+      staging.appendBatch(
+        leaseId,
+        ownerNonce,
+        unique.map((item) =>
+          Object.freeze({
+            kind: "object" as const,
+            hash: item.hash,
+            size: intrinsicByteLength(item.bytes),
+          }),
+        ),
+      );
+    });
+  };
+  const acceptChunk = (chunk: Uint8Array): void => {
+    const length = intrinsicByteLength(chunk);
+    total = checkedAdd(total, length, "synchronous prepared bytes");
+    if (total > declaredBytes)
+      throw new Error("synchronous content source exceeded its declared size");
+    pending.push(chunk);
+    pendingBytes = checkedAdd(pendingBytes, length);
+    if (pendingBytes >= pendingLimit || pending.length >= durableBatchLimit)
+      flushObjects();
+  };
+  try {
+    cache.makeRoom(reservationBytes);
+    releases.push(admission.reserve(DEFAULT_FASTCDC.maximum));
+    releases.push(admission.reserve(pendingLimit));
+    releases.push(admission.reserve(builderBudget));
+    releases.push(admission.reserve(readWindowBytes));
+    port.transaction("write", workBudget, (tx) => {
+      const staging = tx.staging(storage, cache);
+      staging.begin({
+        leaseId,
+        ownerId,
+        ownerNonce,
+        now,
+        expiresAt: now + storage.stagingLeaseMs,
+        ingestReservationBytes: durableIngestReservation,
+        metadataReservationBytes: durableMetadataReservation,
+      });
+      staging.bumpRoot(5, leaseId, false);
+    });
+    leaseBegun = true;
+    const window = new Uint8Array(readWindowBytes);
+    for (let position = 0; position < declaredBytes;) {
+      const length = Math.min(readWindowBytes, declaredBytes - position);
+      const written = source.readInto(window, 0, position, length);
+      if (written !== length)
+        throw new Error("synchronous content source ended before its declared size");
+      chunker.drain(intrinsicByteRange(window, 0, length), acceptChunk);
+      position = checkedAdd(position, length, "synchronous source position");
+    }
+    chunker.drain(new Uint8Array(), acceptChunk, true);
+    flushObjects();
+    if (total !== declaredBytes)
+      throw new Error("synchronous content source size changed during preparation");
+    return finalizeStagedManifest(
+      port,
+      storage,
+      runtime,
+      leaseId,
+      ownerNonce,
+      workBudget,
+      DEFAULT_FASTCDC,
+      total,
+      entryIndex,
+      true,
+      cache,
+    );
+  } catch (error) {
+    if (leaseBegun)
+      try {
+        port.transaction("write", workBudget, (tx) => {
+          tx.staging(storage, cache).delete(leaseId, ownerNonce);
+        });
+      } catch {}
+    throw error;
+  } finally {
+    for (let index = releases.length - 1; index >= 0; index -= 1) releases[index]!();
+  }
 }
 
 export async function prepareContentStreaming(

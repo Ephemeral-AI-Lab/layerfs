@@ -445,32 +445,37 @@ and process ownership outside Ephemeral AI FS.
 
 ### M7 checklist
 
-- [ ] Implement the supported Node VFS integration bridge in the core.
-- [ ] Implement pinned read sessions and bounded manifest cursors.
-- [ ] Implement `readIntoSync` without an equal-sized intermediate allocation.
-- [ ] Implement writable file sessions and read-after-write visibility.
-- [ ] Implement provider-wide per-inode monotonic write admission.
-- [ ] Implement bounded pooled slab ownership and transfer.
-- [ ] Implement `stagePrefixSync` for hidden durable staging.
-- [ ] Implement `commitVisibleSync` for flush and fsync durability.
-- [ ] Implement provider sync, close, retry, abort, and error translation.
-- [ ] Implement shared backpressure across 1, 16, and 64 sessions.
-- [ ] Add real-FUSE test fixtures without adding FUSE to the core package.
-- [ ] Add the 60-second smoke profile on a privileged Linux runner with a real mounted
+- [x] Implement the supported Node VFS integration bridge in the core.
+- [x] Implement pinned read sessions and bounded manifest cursors.
+- [x] Implement `readIntoSync` without an equal-sized intermediate allocation.
+- [x] Implement writable file sessions and read-after-write visibility.
+- [x] Implement provider-wide per-inode monotonic write admission.
+- [x] Implement bounded pooled slab ownership and transfer.
+- [x] Implement `stagePrefixSync` for hidden durable staging.
+- [x] Implement `commitVisibleSync` for flush and fsync durability.
+- [x] Implement provider sync, close, retry, abort, and error translation.
+- [x] Implement shared backpressure across 1, 16, and 64 sessions.
+- [x] Add real-FUSE test fixtures without adding FUSE to the core package.
+- [x] Add the 60-second smoke profile on a privileged Linux runner with a real mounted
       FUSE filesystem.
 
 ### M7 acceptance criteria
 
-- [ ] Repeated reads on one handle reuse a pinned selection and return exact bytes.
-- [ ] Three sessions on one inode pass every commit order without lost updates.
-- [ ] Hidden staging never satisfies fsync or advances visible state.
+- [x] Repeated reads on one handle reuse a pinned selection and return exact bytes.
+- [x] Three sessions on one inode pass every commit order without lost updates.
+- [x] Hidden staging never satisfies fsync or advances visible state.
 - [ ] Successful commit, close, restart, unmount, and remount preserve digest.
-- [ ] Large reads and writes allocate no whole-file buffer.
-- [ ] Sixty-four sessions remain inside pending-write and aggregate memory limits with
+- [x] Large reads and writes allocate no whole-file buffer.
+- [x] Sixty-four sessions remain inside pending-write and aggregate memory limits with
       backpressure.
 - [ ] The real-mounted-FUSE smoke profile completes within 60 seconds; a shim or mocked
       binding does not count.
-- [ ] Computer needs only handle forwarding and no filesystem semantics.
+- [x] Computer needs only handle forwarding and no filesystem semantics.
+
+The implementation, shared conformance/fault suite, resource gates, and test-only real
+FUSE host are complete. M7 remains unaccepted until the exact candidate passes the
+privileged-Linux profile and its predecessor, local, and FUSE runs are bound in the
+constrained evidence commit; `validate:accepted` therefore continues to select M6.
 
 ## 11. Milestone 8: Replication
 

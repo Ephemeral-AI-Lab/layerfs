@@ -58,6 +58,7 @@ export interface NodeVfsMetrics {
 /* source: packages/node-vfs/dist/index.d.ts */
 export interface NodeVfsMetricsSnapshot {
     readonly openSessions: number;
+    readonly peakOpenSessions: number;
     readonly dirtySessions: number;
     readonly residentWriteBytes: number;
     readonly peakResidentWriteBytes: number;
@@ -72,6 +73,22 @@ export interface NodeVfsMetricsSnapshot {
     readonly rejectedWriteCount: number;
     readonly directReadBytes: number;
     readonly coreBatchCount: number;
+    readonly cowEditCount: number;
+    readonly cowEditSourceBytes: number;
+    readonly callbackSizeDistribution: Readonly<{
+        upTo4KiB: number;
+        upTo64KiB: number;
+        upTo1MiB: number;
+        over1MiB: number;
+    }>;
+    readonly contiguousRunBytes: number;
+    readonly peakContiguousRunBytes: number;
+    readonly flushReasonCounts: Readonly<{
+        explicitCommit: number;
+        flush: number;
+        close: number;
+        providerSync: number;
+    }>;
 }
 
 /* export: NodeVfsObservation; kinds: type */

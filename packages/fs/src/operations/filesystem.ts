@@ -41,6 +41,7 @@ import {
   durableEditReadSnapshotBudget,
   tryLoadBoundedManifestStateInTransaction,
   prepareDurableEditedContent,
+  tryPrepareDurableEditedContentSync,
   type DurableContentEdit,
   type DurableEditReadSnapshot,
   type DurableEditSource,
@@ -76,6 +77,10 @@ import type { Branches } from "../branches/types.js";
 import { MaintenanceManager } from "./maintenance.js";
 import { ContentCache } from "../cache/content-cache.js";
 import { DEFAULT_LOCAL_REBUILD_LIMITS } from "./local-rebuild.js";
+import {
+  createNodeVfsOperationsBridge,
+  type NodeVfsFilesystemBridge,
+} from "./node-vfs-bridge.js";
 import type {
   AuthenticatedManifestCursor,
   ClosureCertificate,
@@ -149,6 +154,18 @@ interface PreparedMutationSelection {
   readonly token: number;
   readonly edit?: DurableContentEdit;
   readonly readSnapshot?: DurableEditReadSnapshot;
+}
+interface NodeVfsOverwriteFragment {
+  readonly fileOffset: number;
+  readonly length: number;
+  readonly source: import("./streaming-prepare.js").SynchronousContentSource;
+  readonly sourceOffset: number;
+  readonly order: number;
+}
+interface NodeVfsOverwriteBatch {
+  readonly offset: number;
+  length: number;
+  readonly fragments: NodeVfsOverwriteFragment[];
 }
 function directoryEntry(
   name: string,
@@ -367,6 +384,340 @@ export class EphemeralFS implements EphemeralFilesystem {
       }),
       storagePort,
     );
+  }
+
+  /** Supported integration seam; it shares this instance's caches and admission. */
+  createNodeVfsBridge(): NodeVfsFilesystemBridge {
+    if (this.#closing || this.#closed)
+      throw fsError("EBADF", "openNodeVfs", undefined, "filesystem is closing");
+    return createNodeVfsOperationsBridge({
+      port: this.#storagePort,
+      clock: this.#clock,
+      shared: {
+        filesystemLimits: this.#filesystemLimits,
+        storageLimits: this.#storageLimits,
+        runtimeLimits: this.#runtimeLimits,
+        cowPageBytes: this.capabilities.format.cowPageBytes,
+        admission: this.#admission,
+        cache: this.#cache,
+      },
+      prepareOverwriteSync: (path, offset, source) =>
+        this.#prepareNodeVfsOverwriteSync(path, offset, source),
+      prepareOverwritesSync: (path, edits) =>
+        this.#prepareNodeVfsOverwritesSync(path, edits),
+    });
+  }
+
+  #prepareNodeVfsOverwritesSync(
+    path: string,
+    edits: readonly import("./node-vfs-bridge.js").NodeVfsOverwriteEdit[],
+  ): import("./node-vfs-bridge.js").SyncPreparedContent | undefined {
+    if (edits.length === 0) return undefined;
+    if (edits.length === 1)
+      return this.#prepareNodeVfsOverwriteSync(
+        path,
+        edits[0]!.offset,
+        edits[0]!.source,
+      );
+    const editReadWindowBytes = Math.max(
+      64 * 1024,
+      this.capabilities.format.cowPageBytes * 4,
+    );
+    const maximumBatchBytes = Math.max(
+      this.capabilities.format.cowPageBytes,
+      Math.min(1024 * 1024, this.#runtimeLimits.maxWriteSessionBytes),
+    );
+    const canonical = canonicalizePath(
+      path,
+      this.#filesystemLimits,
+      "commitVisibleSync",
+    );
+    let batches: readonly NodeVfsOverwriteBatch[] = [];
+    let batchSourceRead = 0;
+    let selected = this.#selectMutationSourceWithSnapshot(
+      canonical.value,
+      "commitVisibleSync",
+      (source) => {
+        batches = this.#nodeVfsOverwriteBatches(edits, source.size, maximumBatchBytes);
+        const first = batches[0];
+        return first
+          ? this.#nodeVfsOverwriteBatchEdit(first, source, (bytes) => {
+              batchSourceRead += bytes;
+            })
+          : undefined;
+      },
+      editReadWindowBytes,
+    );
+    if (!selected.edit) {
+      selected.source.releaseReadWindow?.();
+      return undefined;
+    }
+    let current: ReturnType<typeof tryPrepareDurableEditedContentSync> | undefined;
+    let sourceBytesRead = 0;
+    try {
+      for (let index = 0; index < batches.length; index += 1) {
+        const sourceReadBefore = batchSourceRead;
+        const edit =
+          index === 0
+            ? selected.edit
+            : this.#nodeVfsOverwriteBatchEdit(
+                batches[index]!,
+                selected.source,
+                (bytes) => {
+                  batchSourceRead += bytes;
+                },
+              );
+        const next = tryPrepareDurableEditedContentSync(
+          this.#storagePort,
+          selected.source,
+          edit!,
+          this.#storageLimits,
+          this.#runtimeLimits,
+          this.#admission,
+          this.#cache,
+          this.#clock,
+          true,
+          index === 0 ? selected.readSnapshot : undefined,
+        );
+        selected.source.releaseReadWindow?.();
+        if (!next || next.mode === "streamed-fallback") {
+          if (next) this.#abandonPrepared(next.certificate);
+          if (current) this.#abandonPrepared(current.certificate);
+          return undefined;
+        }
+        sourceBytesRead +=
+          next.localRebuildMetrics?.sourceBytesRead ??
+          next.pathCopyMetrics?.sourceBytesRead ??
+          0;
+        sourceBytesRead += batchSourceRead - sourceReadBefore;
+        if (current) this.#abandonPrepared(current.certificate);
+        current = next;
+        if (index + 1 === batches.length) break;
+        const rootBytes = this.#storagePort.transaction(
+          "read",
+          {
+            maxRows: this.#storageLimits.maxFinalTransactionRows,
+            maxBytes: this.#runtimeLimits.maxQueryBatchBytes,
+          },
+          (tx) =>
+            tx
+              .content(this.#storageLimits, this.#cache)
+              .withManifestRoot(next.hash, (encoded) => copyBytes(encoded)),
+        );
+        if (!rootBytes) throw new Error("ECORRUPT: missing staged manifest root");
+        const root = decodeManifestRoot(rootBytes, next.hash);
+        const sourceIdentity = editSourceInodes.get(selected.source);
+        if (!sourceIdentity) throw new Error("missing Node VFS edit source identity");
+        const recreated = this.#createMutationSource(
+          {
+            manifestHash: copyBytes(next.hash),
+            root: rootBytes,
+            size: next.size,
+            inodeSnapshot: sourceIdentity.inode,
+            parameters: root.parameters,
+            token: selected.token,
+            ...(sourceIdentity.mainRevision === undefined
+              ? {}
+              : { mainRevision: sourceIdentity.mainRevision }),
+            ...(sourceIdentity.rootMutationGeneration === undefined
+              ? {}
+              : {
+                  rootMutationGeneration: sourceIdentity.rootMutationGeneration,
+                }),
+          },
+          editReadWindowBytes,
+        );
+        selected = {
+          ...recreated,
+          edit: this.#nodeVfsOverwriteBatchEdit(
+            batches[index + 1]!,
+            recreated.source,
+            (bytes) => {
+              batchSourceRead += bytes;
+            },
+          ),
+        };
+      }
+      if (!current) return undefined;
+      return Object.freeze({
+        manifestHash: current.hash,
+        size: current.size,
+        certificate: current.certificate,
+        expectedToken: selected.token,
+        preparationMode:
+          current.mode === "local-rebuild" ? "local-rebuild" : "durable-path-copy",
+        sourceBytesRead,
+      });
+    } catch (error) {
+      selected.source.releaseReadWindow?.();
+      if (current) this.#abandonPrepared(current.certificate);
+      throw error;
+    }
+  }
+
+  #nodeVfsOverwriteBatches(
+    edits: readonly import("./node-vfs-bridge.js").NodeVfsOverwriteEdit[],
+    fileSize: number,
+    maximumBatchBytes: number,
+  ): readonly NodeVfsOverwriteBatch[] {
+    const pageBytes = this.capabilities.format.cowPageBytes;
+    const pages = new Map<number, NodeVfsOverwriteFragment[]>();
+    for (const [order, edit] of edits.entries()) {
+      checkedInteger(edit.offset, "offset");
+      checkedInteger(edit.source.size, "source size");
+      if (edit.source.size === 0) continue;
+      if (edit.offset > fileSize || edit.source.size > fileSize - edit.offset)
+        return [];
+      let sourceOffset = 0;
+      while (sourceOffset < edit.source.size) {
+        const fileOffset = edit.offset + sourceOffset;
+        const pageIndex = Math.floor(fileOffset / pageBytes);
+        const pageEnd = Math.min(fileSize, (pageIndex + 1) * pageBytes);
+        const length = Math.min(edit.source.size - sourceOffset, pageEnd - fileOffset);
+        const fragments = pages.get(pageIndex) ?? [];
+        fragments.push(
+          Object.freeze({
+            fileOffset,
+            length,
+            source: edit.source,
+            sourceOffset,
+            order,
+          }),
+        );
+        pages.set(pageIndex, fragments);
+        sourceOffset += length;
+      }
+    }
+    const sortedPages = [...pages.entries()].sort(([left], [right]) => left - right);
+    const batches: NodeVfsOverwriteBatch[] = [];
+    for (const [pageIndex, fragments] of sortedPages) {
+      const pageStart = pageIndex * pageBytes;
+      const pageEnd = Math.min(fileSize, pageStart + pageBytes);
+      const prior = batches.at(-1);
+      if (prior && pageEnd - prior.offset <= maximumBatchBytes) {
+        prior.length = pageEnd - prior.offset;
+        prior.fragments.push(...fragments);
+      } else {
+        batches.push({
+          offset: pageStart,
+          length: pageEnd - pageStart,
+          fragments: [...fragments],
+        });
+      }
+    }
+    for (const batch of batches)
+      batch.fragments.sort((left, right) => left.order - right.order);
+    return batches;
+  }
+
+  #nodeVfsOverwriteBatchEdit(
+    batch: NodeVfsOverwriteBatch,
+    source: DurableEditSource,
+    sourceRead: (bytes: number) => void,
+  ): DurableContentEdit {
+    return Object.freeze({
+      offset: batch.offset,
+      deleteLength: batch.length,
+      insertLength: batch.length,
+      retainedBytes: batch.fragments.reduce(
+        (sum, fragment) => checkedAdd(sum, fragment.length),
+        0,
+      ),
+      readInsert: (position: number, length: number) => {
+        const output = source.read(batch.offset + position, length);
+        sourceRead(length);
+        const requestStart = batch.offset + position;
+        const requestEnd = requestStart + length;
+        for (const fragment of batch.fragments) {
+          const start = Math.max(requestStart, fragment.fileOffset);
+          const end = Math.min(requestEnd, fragment.fileOffset + fragment.length);
+          if (end <= start) continue;
+          const read = fragment.source.readInto(
+            output,
+            start - requestStart,
+            fragment.sourceOffset + start - fragment.fileOffset,
+            end - start,
+          );
+          if (read !== end - start)
+            throw new Error("Node VFS overwrite source returned an incomplete range");
+        }
+        return output;
+      },
+    });
+  }
+
+  #prepareNodeVfsOverwriteSync(
+    path: string,
+    offset: number,
+    insertion: import("./streaming-prepare.js").SynchronousContentSource,
+  ): import("./node-vfs-bridge.js").SyncPreparedContent | undefined {
+    checkedInteger(offset, "offset");
+    const canonical = canonicalizePath(
+      path,
+      this.#filesystemLimits,
+      "commitVisibleSync",
+    );
+    const selected = this.#selectMutationSourceWithSnapshot(
+      canonical.value,
+      "commitVisibleSync",
+      (source) => {
+        if (
+          insertion.size === 0 ||
+          offset > source.size ||
+          insertion.size > source.size - offset
+        )
+          return undefined;
+        return Object.freeze({
+          offset,
+          deleteLength: insertion.size,
+          insertLength: insertion.size,
+          retainedBytes: insertion.size,
+          readInsert: (position: number, length: number) => {
+            const output = new Uint8Array(length);
+            const read = insertion.readInto(output, 0, position, length);
+            if (read !== length)
+              throw new Error("Node VFS overwrite source returned an incomplete range");
+            return output;
+          },
+        });
+      },
+    );
+    if (!selected.edit) {
+      selected.source.releaseReadWindow?.();
+      return undefined;
+    }
+    try {
+      const prepared = tryPrepareDurableEditedContentSync(
+        this.#storagePort,
+        selected.source,
+        selected.edit,
+        this.#storageLimits,
+        this.#runtimeLimits,
+        this.#admission,
+        this.#cache,
+        this.#clock,
+        true,
+        selected.readSnapshot,
+      );
+      if (!prepared) return undefined;
+      if (prepared.mode === "streamed-fallback") {
+        this.#abandonPrepared(prepared.certificate);
+        return undefined;
+      }
+      return Object.freeze({
+        manifestHash: prepared.hash,
+        size: prepared.size,
+        certificate: prepared.certificate,
+        expectedToken: selected.token,
+        preparationMode: prepared.mode,
+        sourceBytesRead:
+          prepared.localRebuildMetrics?.sourceBytesRead ??
+          prepared.pathCopyMetrics?.sourceBytesRead ??
+          0,
+      });
+    } finally {
+      selected.source.releaseReadWindow?.();
+    }
   }
 
   readFile(path: string): Promise<Uint8Array>;
@@ -1319,14 +1670,17 @@ export class EphemeralFS implements EphemeralFilesystem {
     });
   }
 
-  #createMutationSource(selected: MutationSourceSelection): {
+  #createMutationSource(
+    selected: MutationSourceSelection,
+    preferredReadWindowBytes = 1024 * 1024,
+  ): {
     source: DurableEditSource;
     token: number;
   } {
     const maxReadWindowBytes = Math.max(
       1,
       Math.min(
-        1024 * 1024,
+        preferredReadWindowBytes,
         this.#runtimeLimits.maxQueryBatchBytes,
         this.#runtimeLimits.maxWriteSessionBytes,
       ),
@@ -1449,6 +1803,7 @@ export class EphemeralFS implements EphemeralFilesystem {
     path: string,
     syscall: string,
     makeEdit: (source: DurableEditSource) => DurableContentEdit | undefined,
+    preferredReadWindowBytes?: number,
   ): PreparedMutationSelection {
     const maxReadWindowBytes = Math.max(
       1,
@@ -1465,7 +1820,10 @@ export class EphemeralFS implements EphemeralFilesystem {
         durableEditReadSnapshotBudget(maxReadWindowBytes, this.#storageLimits),
         (tx) => {
           const sourceSelection = this.#readMutationSourceSelection(tx, path, syscall);
-          const selected = this.#createMutationSource(sourceSelection);
+          const selected = this.#createMutationSource(
+            sourceSelection,
+            preferredReadWindowBytes,
+          );
           sourceForCleanup = selected.source;
           const edit = makeEdit(selected.source);
           if (!edit) return selected;

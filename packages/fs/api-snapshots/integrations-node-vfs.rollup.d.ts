@@ -90,6 +90,14 @@ export declare function mergeDirtyRanges(ranges: readonly DirtyRange[], maxRange
 export declare function writeCowPages(base: Uint8Array, offset: number, content: Uint8Array, pageBytes: CowPageBytes): CowPage[];
 export declare function overlayCowPages(base: Uint8Array, pages: readonly CowPage[], pageBytes: CowPageBytes, logicalSize?: number, maxPages?: number): Uint8Array;
 
+/* ===== packages/fs/dist/filesystem/ephemeral-fs.d.ts ===== */
+import type { OpenFilesystemOptions } from "./types.js";
+/** Public composition root: injects the private SQLite storage-port adapter. */
+export declare class EphemeralFS {
+    private constructor();
+    static open(options: OpenFilesystemOptions): Promise<EphemeralFS>;
+}
+
 /* ===== packages/fs/dist/filesystem/errors.d.ts ===== */
 export type FilesystemErrorCode = "EINVAL" | "ENOENT" | "ENOTDIR" | "EISDIR" | "EEXIST" | "ENOTEMPTY" | "ELOOP" | "EPERM" | "EROFS" | "EBADF" | "EAGAIN" | "EBUSY" | "EFBIG" | "ENOSPC" | "ECORRUPT" | "ESCHEMA" | "EIO";
 export declare class FilesystemError extends Error {
@@ -335,8 +343,9 @@ export interface EphemeralFilesystemAdministration {
 }
 
 /* ===== packages/fs/dist/integrations/node-vfs.d.ts ===== */
-import type { StorageFormatOptions } from "../filesystem/types.js";
-import { type NodeVfsFilesystemBridge, type SyncPreparedContent } from "../operations/node-vfs-bridge.js";
+import type { OpenFilesystemOptions, StorageFormatOptions } from "../filesystem/types.js";
+import type { EphemeralFS as PublicEphemeralFS } from "../filesystem/ephemeral-fs.js";
+import { type NodeVfsFilesystemBridge, type NodeVfsManagedSlab, type NodeVfsPreparedContent, type NodeVfsPinnedReadBridge, type SynchronousContentSource } from "../operations/node-vfs-bridge.js";
 import type { FilesystemLimits, RuntimeLimits, StorageLimits } from "../resources/limits.js";
 import type { FilesystemSQLiteDriver } from "../sqlite/driver.js";
 /** Public composition-root options for the synchronous Node VFS bridge. */
@@ -348,9 +357,19 @@ export interface CreateNodeVfsBridgeOptions {
     readonly format?: StorageFormatOptions;
     readonly clock?: () => number;
 }
+export interface OpenNodeVfsBridgeResult {
+    readonly filesystem: PublicEphemeralFS;
+    readonly bridge: NodeVfsFilesystemBridge;
+}
+/**
+ * Open the portable filesystem and its synchronous bridge as one core instance.
+ * This is the production Node VFS composition root: both views share limits,
+ * caches, concurrency, and the aggregate admission controller.
+ */
+export declare function openNodeVfsBridge(options: OpenFilesystemOptions): Promise<OpenNodeVfsBridgeResult>;
 /** Compose the public bridge with the private SQLite storage implementation. */
 export declare function createNodeVfsBridge(options: CreateNodeVfsBridgeOptions): NodeVfsFilesystemBridge;
-export type { NodeVfsFilesystemBridge, SyncPreparedContent };
+export type { NodeVfsFilesystemBridge, NodeVfsManagedSlab, NodeVfsPreparedContent, NodeVfsPinnedReadBridge, SynchronousContentSource, };
 
 /* ===== packages/fs/dist/manifests/codec.d.ts ===== */
 export declare const ROOT_ENVELOPE_BYTES = 68;
@@ -418,13 +437,53 @@ export declare function compareUtf8(left: string, right: string): number;
 export declare function assertCanonicalNameBytes(name: string, bytes: Uint8Array): void;
 
 /* ===== packages/fs/dist/operations/node-vfs-bridge.d.ts ===== */
-import { type FilesystemLimits, type RuntimeLimits, type StorageLimits } from "../resources/limits.js";
+import { AdmissionController, type FilesystemLimits, type RuntimeLimits, type StorageLimits } from "../resources/limits.js";
+import { ContentCache } from "../cache/content-cache.js";
 import type { DirectoryEntry, FileStat, StorageFormatOptions } from "../filesystem/types.js";
+import { type SynchronousContentSource } from "./streaming-prepare.js";
 import type { ClosureCertificate, OperationsStorage } from "./storage-ports.js";
+/** Opaque durable content owned by the core bridge. */
+export interface NodeVfsPreparedContent {
+    readonly size: number;
+    /** Bounded source bytes read while applying page-local edits. */
+    readonly editSourceBytes?: number;
+}
+export interface NodeVfsOverwriteEdit {
+    readonly offset: number;
+    readonly source: SynchronousContentSource;
+}
+export interface NodeVfsCommitResult {
+    readonly pinned: NodeVfsPinnedReadBridge;
+}
 export interface SyncPreparedContent {
     readonly manifestHash: Uint8Array;
     readonly size: number;
     readonly certificate: ClosureCertificate;
+    /** Source token captured by a bounded edit preparation. */
+    readonly expectedToken?: number;
+    readonly preparationMode?: "local-rebuild" | "durable-path-copy";
+    readonly sourceBytesRead?: number;
+}
+export interface NodeVfsPinnedReadBridge {
+    readonly canonicalPath: string;
+    readonly inodeId: string;
+    readonly stat: FileStat;
+    readonly size: number;
+    readIntoSync(destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
+    closeSync(): void;
+}
+export interface NodeVfsManagedSlab {
+    readonly bytes: Uint8Array;
+    release(): void;
+}
+export interface NodeVfsManagedMemorySnapshot {
+    readonly usedBytes: number;
+    readonly peakBytes: number;
+    readonly limitBytes: number;
+}
+export interface NodeVfsResolvedPath {
+    readonly canonicalPath: string;
+    readonly stat: FileStat;
 }
 export interface NodeVfsOperationsBridgeOptions {
     readonly port: OperationsStorage;
@@ -433,12 +492,30 @@ export interface NodeVfsOperationsBridgeOptions {
     readonly runtime?: Partial<RuntimeLimits>;
     readonly format?: StorageFormatOptions;
     readonly clock?: () => number;
+    /** Core-owned bounded COW preparation; never exposed outside this bridge. */
+    readonly prepareOverwriteSync?: (path: string, offset: number, source: SynchronousContentSource) => SyncPreparedContent | undefined;
+    readonly prepareOverwritesSync?: (path: string, edits: readonly NodeVfsOverwriteEdit[]) => SyncPreparedContent | undefined;
+    /** Existing filesystem resources supplied by the core composition root. */
+    readonly shared?: {
+        readonly filesystemLimits: Readonly<FilesystemLimits>;
+        readonly storageLimits: Readonly<StorageLimits>;
+        readonly runtimeLimits: Readonly<RuntimeLimits>;
+        readonly cowPageBytes: 4096 | 8192 | 16384;
+        readonly admission: AdmissionController;
+        readonly cache: ContentCache;
+    };
 }
 export interface NodeVfsFilesystemBridge {
     readonly filesystemLimits: Readonly<FilesystemLimits>;
     readonly storageLimits: Readonly<StorageLimits>;
     readonly runtimeLimits: Readonly<RuntimeLimits>;
     readonly cowPageBytes: 4096 | 8192 | 16384;
+    canonicalPathSync(path: string, syscall?: string): string;
+    resolvePathSync(path: string, followFinal?: boolean): NodeVfsResolvedPath;
+    openPinnedReadSync(path: string): NodeVfsPinnedReadBridge;
+    acquireSlabSync(source: Uint8Array, sourceOffset: number, length: number): NodeVfsManagedSlab | undefined;
+    reserveControlSync(bytes: number): (() => void) | undefined;
+    managedMemorySync(): NodeVfsManagedMemorySnapshot;
     existsSync(path: string): boolean;
     statSync(path: string, followFinal?: boolean): FileStat;
     readdirSync(path: string): DirectoryEntry[];
@@ -446,13 +523,19 @@ export interface NodeVfsFilesystemBridge {
     readIntoSync(path: string, destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
     readRangeSync(path: string, position: number, length: number): Uint8Array;
     readFileSync(path: string): Uint8Array;
-    prepareContentSync(bytes: Uint8Array): SyncPreparedContent;
-    readPreparedIntoSync(prepared: SyncPreparedContent, destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
-    commitPreparedSync(path: string, prepared: SyncPreparedContent, options?: {
+    prepareContentSync(bytes: Uint8Array): NodeVfsPreparedContent;
+    prepareContentSourceSync(source: SynchronousContentSource): NodeVfsPreparedContent;
+    prepareOverwriteSync(path: string, offset: number, source: SynchronousContentSource): NodeVfsPreparedContent | undefined;
+    prepareOverwritesSync(path: string, edits: readonly NodeVfsOverwriteEdit[]): NodeVfsPreparedContent | undefined;
+    abortPreparedSync(prepared: NodeVfsPreparedContent): void;
+    readPreparedIntoSync(prepared: NodeVfsPreparedContent, destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
+    commitPreparedSync(path: string, prepared: NodeVfsPreparedContent, options?: {
         create?: boolean;
         exclusive?: boolean;
         mode?: number;
-    }): void;
+        inodeId?: string;
+        aliases?: readonly string[];
+    }): NodeVfsCommitResult;
     writeFileSync(path: string, bytes: Uint8Array, options?: {
         create?: boolean;
         exclusive?: boolean;
@@ -470,6 +553,7 @@ export interface NodeVfsFilesystemBridge {
     rmdirSync(path: string): void;
 }
 export declare function createNodeVfsOperationsBridge(options: NodeVfsOperationsBridgeOptions): NodeVfsFilesystemBridge;
+export type { SynchronousContentSource } from "./streaming-prepare.js";
 
 /* ===== packages/fs/dist/operations/storage-ports.d.ts ===== */
 import type { BranchConfiguration, FilesystemLimits, RuntimeLimits, StorageLimits } from "../resources/limits.js";
@@ -1222,6 +1306,48 @@ export interface OperationsContext {
     readonly runtime: RuntimeLimits;
     readonly branches: BranchConfiguration;
 }
+
+/* ===== packages/fs/dist/operations/streaming-prepare.d.ts ===== */
+import { type ManifestParameters } from "../manifests/codec.js";
+import { AdmissionController, type RuntimeLimits, type StorageLimits } from "../resources/limits.js";
+import { ContentCache } from "../cache/content-cache.js";
+import type { ClosureCertificate, OperationsStorage } from "./storage-ports.js";
+export interface StreamPreparedManifest {
+    readonly hash: Uint8Array;
+    readonly size: number;
+    readonly certificate: ClosureCertificate;
+}
+export interface StagedManifestEntryInput {
+    readonly hash: Uint8Array;
+    readonly length: number;
+    /** Present only for newly chunked content. Existing CAS entries omit it. */
+    readonly bytes?: Uint8Array;
+}
+/**
+ * Synchronous, bounded content source used by the Node VFS bridge. The source
+ * owns neither the destination nor any durable state and must fill exactly the
+ * requested range before returning.
+ */
+export interface SynchronousContentSource {
+    readonly size: number;
+    readInto(destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
+}
+export declare function ingestReservationBytes(declaredBytes: number, storage: StorageLimits, minimumChunkBytes?: number): number;
+export declare function metadataReservationBytes(declaredBytes: number, storage: StorageLimits, minimumChunkBytes?: number): number;
+/**
+ * Prepare a complete manifest from a synchronous range source without ever
+ * materializing the complete value. This is the synchronous counterpart to
+ * prepareContentStreaming and deliberately shares its staging, reconciliation,
+ * admission, and manifest-building implementation.
+ */
+export declare function prepareContentSourceSync(port: OperationsStorage, source: SynchronousContentSource, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, cache?: ContentCache, clock?: () => number): StreamPreparedManifest;
+export declare function prepareContentStreaming(port: OperationsStorage, input: Uint8Array | ReadableStream<Uint8Array>, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, signal?: AbortSignal, cache?: ContentCache, clock?: () => number, declaredMaxBytes?: number): Promise<StreamPreparedManifest>;
+/**
+ * Persists an authenticated entry stream without materializing the file. Entries
+ * without `bytes` reuse an existing CAS object; entries with `bytes` are verified
+ * and inserted before their durable staging reference is recorded.
+ */
+export declare function prepareContentEntriesStreaming(port: OperationsStorage, entries: Iterable<StagedManifestEntryInput>, parameters: ManifestParameters, expectedSize: number, storage: StorageLimits, runtime: RuntimeLimits, admission: AdmissionController, cache?: ContentCache, clock?: () => number): Promise<StreamPreparedManifest>;
 
 /* ===== packages/fs/dist/resources/limits.d.ts ===== */
 export interface FilesystemLimits {

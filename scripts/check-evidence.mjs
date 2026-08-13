@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { load as parseYaml } from "js-yaml";
 import ts from "typescript";
+import { workflowPolicyErrors } from "./workflow-policy.mjs";
 
 const execute = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
@@ -15,7 +17,11 @@ const acceptedMatch = /^pnpm validate:(m\d+)$/u.exec(acceptedValidation ?? "");
 if (!acceptedMatch)
   throw new Error("validate:accepted must select one milestone validation command");
 const activeAcceptedMilestone = acceptedMatch[1];
-if (!new Set(["m0", "m1", "m2", "m3", "m4", "m5", "m6"]).has(activeAcceptedMilestone))
+if (
+  !new Set(["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7"]).has(
+    activeAcceptedMilestone,
+  )
+)
   throw new Error(
     `evidence checker has no validation schema for ${activeAcceptedMilestone}`,
   );
@@ -46,6 +52,36 @@ function requireScalarRecord(value, name) {
       throw new Error(`${name}.${key || "<empty>"} must be a scalar`);
   }
   return record;
+}
+function logLineObject(source, schema, name) {
+  const values = source
+    .split(/\r?\n/u)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return undefined;
+      }
+    })
+    .filter((value) => value?.schema === schema);
+  if (values.length !== 1)
+    throw new Error(`${name} must contain exactly one ${schema} record`);
+  return requireObject(values[0], `${name}.${schema}`);
+}
+function m7LogMeta(source, name) {
+  const matches = [
+    ...source.matchAll(
+      /^M7_LOG_META exitCode=(\d+) elapsedMs=(\d+) candidate=([0-9a-f]{40}) command=([a-z0-9_]+)$/gmu,
+    ),
+  ];
+  if (matches.length !== 1)
+    throw new Error(`${name} must contain one exact M7_LOG_META`);
+  return {
+    exitCode: Number(matches[0][1]),
+    elapsedMs: Number(matches[0][2]),
+    candidate: matches[0][3],
+    command: matches[0][4],
+  };
 }
 function validateM6ResultContexts(artifact) {
   const profiles = requireObject(artifact.contextProfiles, "m6.contextProfiles");
@@ -290,12 +326,56 @@ function ownedByMilestone(milestone, filename) {
     filename.startsWith("tests/fault/") ||
     filename === "docs/implementation/m5-handoff.md";
   if (milestone === "m5") return m5;
-  return (
+  const m6 =
     m5 ||
     filename.startsWith("tests/durable-object-integration/") ||
     filename.startsWith("examples/durable-object-workspace/") ||
-    filename === "docs/implementation/m6-handoff.md"
+    filename === "docs/implementation/m6-handoff.md";
+  if (milestone === "m6") return m6;
+  return (
+    m6 ||
+    filename.startsWith("packages/node-vfs/src/") ||
+    filename.startsWith("tests/node-vfs/") ||
+    filename === "scripts/run-m7-local-gate.mjs" ||
+    filename === "scripts/run-m7-fuse-gate.mjs" ||
+    filename === "README.md" ||
+    filename === "docs/implementation/m7-handoff.md"
   );
+}
+function ownedByM7Candidate(filename) {
+  return new Set([
+    ".github/workflows/ci.yml",
+    "README.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "docs/implementation/implementation-plan.md",
+    "docs/implementation/m7-handoff.md",
+    "packages/fs/api-snapshots/integrations-node-vfs.d.ts",
+    "packages/fs/api-snapshots/integrations-node-vfs.rollup.d.ts",
+    "packages/fs/api-snapshots/integrations-node-vfs.symbols.json",
+    "packages/fs/src/integrations/node-vfs.ts",
+    "packages/fs/src/operations/durable-edit-prepare.ts",
+    "packages/fs/src/operations/filesystem.ts",
+    "packages/fs/src/operations/node-vfs-bridge.ts",
+    "packages/fs/src/operations/streaming-prepare.ts",
+    "packages/node-vfs/api-snapshots/root.d.ts",
+    "packages/node-vfs/api-snapshots/root.rollup.d.ts",
+    "packages/node-vfs/src/index.ts",
+    "packages/testkit/api-snapshots/root.d.ts",
+    "packages/testkit/api-snapshots/root.rollup.d.ts",
+    "packages/testkit/api-snapshots/root.symbols.json",
+    "packages/testkit/src/index.ts",
+    "packages/testkit/src/node-vfs.ts",
+    "scripts/check-evidence.mjs",
+    "scripts/run-m7-fuse-gate.mjs",
+    "scripts/run-m7-local-gate.mjs",
+    "scripts/workflow-policy.mjs",
+    "tests/architecture/foundation.test.mjs",
+    "tests/node-vfs/node-vfs-regression.test.mjs",
+    "tests/node-vfs/node-vfs.test.mjs",
+    "tests/node-vfs/real-fuse-server.mjs",
+    "tests/node-vfs/real-fuse-smoke.mjs",
+  ]).has(filename);
 }
 const m1SourceEntrypoints = [
   "packages/fs/src/cas/sha256.ts",
@@ -377,7 +457,7 @@ async function ownedTreeDigest(milestone, commit) {
   ).stdout;
   const records = output
     .trim()
-    .split("\n")
+    .split(/\r?\n/u)
     .map((line) => {
       const match = line.match(/^\d+ blob ([0-9a-f]{40})\t(.+)$/u);
       return match ? { hash: match[1], filename: match[2] } : undefined;
@@ -1007,7 +1087,7 @@ const m6 = await validateMilestone(
     "durableObjectTargetDeadlineMs",
   ],
   {
-    requireCurrentDigest: activeAcceptedMilestone === "m6",
+    requireCurrentDigest: false,
     requireStructuredContext: true,
   },
 );
@@ -1110,6 +1190,689 @@ const m6Predecessor = m6.exit.match(
 )?.[1];
 if (m6Predecessor !== m5.candidate)
   throw new Error("m6 sequential predecessor differs from the accepted m5 candidate");
+
+async function validateM6CurrentOrM7Descendant() {
+  if (activeAcceptedMilestone !== "m6") return;
+  const currentDigest = await ownedTreeDigest("m6", "HEAD");
+  if (currentDigest === m6.artifact.ownedTreeDigest) return;
+  const head = (
+    await execute("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })
+  ).stdout.trim();
+  const headParent = (
+    await execute("git", ["show", "-s", "--format=%P", head], {
+      cwd: root,
+      windowsHide: true,
+    })
+  ).stdout.trim();
+  let candidate = head;
+  if (headParent !== m6.recordCommit) {
+    if (!/^[0-9a-f]{40}$/u.test(headParent))
+      throw new Error("unaccepted M7 evidence must have exactly one candidate parent");
+    candidate = headParent;
+    const candidateParent = (
+      await execute("git", ["show", "-s", "--format=%P", candidate], {
+        cwd: root,
+        windowsHide: true,
+      })
+    ).stdout.trim();
+    if (candidateParent !== m6.recordCommit)
+      throw new Error(
+        "unaccepted M7 candidate is not directly parented by M6 evidence",
+      );
+    const evidenceChanges = (
+      await execute("git", ["diff", "--name-only", `${candidate}..${head}`], {
+        cwd: root,
+        windowsHide: true,
+      })
+    ).stdout
+      .trim()
+      .split(/\r?\n/u)
+      .filter(Boolean);
+    if (
+      !evidenceChanges.length ||
+      evidenceChanges.some((filename) => !filename.startsWith("docs/evidence/m7/"))
+    )
+      throw new Error("unaccepted M7 evidence commit changes non-evidence files");
+  }
+  const candidateChanges = (
+    await execute("git", ["diff", "--name-only", `${m6.recordCommit}..${candidate}`], {
+      cwd: root,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  ).stdout
+    .trim()
+    .split(/\r?\n/u)
+    .filter(Boolean);
+  if (
+    !candidateChanges.length ||
+    candidateChanges.some((name) => !ownedByM7Candidate(name))
+  )
+    throw new Error("current tree has drift outside the exact unaccepted M7 candidate");
+}
+
+await validateM6CurrentOrM7Descendant();
+
+async function validateOptionalM7Evidence() {
+  const directory = path.join(root, "docs", "evidence", "m7");
+  const jsonFilename = path.join(directory, "correctness.json");
+  let artifact;
+  try {
+    artifact = requireObject(
+      JSON.parse(await readFile(jsonFilename, "utf8")),
+      "m7 correctness artifact",
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT" && activeAcceptedMilestone !== "m7") return;
+    throw error;
+  }
+  if (artifact.schema !== "efs-m7-evidence-v1")
+    throw new Error("m7 correctness artifact has an invalid schema");
+  if (!new Set(["blocked", "passed"]).has(artifact.status))
+    throw new Error("m7 correctness artifact has an invalid status");
+  if (activeAcceptedMilestone === "m7" && artifact.status !== "passed")
+    throw new Error("accepted M7 evidence cannot be blocked");
+  if (artifact.passed !== 23 || artifact.failed !== 0)
+    throw new Error("m7 evidence must record all 23 local tests with zero failures");
+  for (const [name, value] of [
+    ["candidate", artifact.candidate],
+    ["predecessorCandidate", artifact.predecessorCandidate],
+    ["candidateParent", artifact.candidateParent],
+  ])
+    if (!/^[0-9a-f]{40}$/u.test(value ?? ""))
+      throw new Error(`m7.${name} must be an exact commit`);
+  if (artifact.predecessorCandidate !== m6.candidate)
+    throw new Error("m7 predecessor differs from the accepted M6 candidate");
+  if (artifact.candidateParent !== m6.recordCommit)
+    throw new Error("m7 candidate parent differs from the M6 evidence commit");
+  const candidateParents = (
+    await execute("git", ["show", "-s", "--format=%P", artifact.candidate], {
+      cwd: root,
+      windowsHide: true,
+    })
+  ).stdout.trim();
+  if (candidateParents !== artifact.candidateParent)
+    throw new Error("m7 candidate is not a single-parent child of M6 evidence");
+  const changed = (
+    await execute(
+      "git",
+      ["diff", "--name-only", `${artifact.candidateParent}..${artifact.candidate}`],
+      { cwd: root, windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
+    )
+  ).stdout
+    .trim()
+    .split(/\r?\n/u)
+    .filter(Boolean);
+  for (const filename of changed)
+    if (!ownedByM7Candidate(filename))
+      throw new Error(`m7 candidate changes non-M7-owned path ${filename}`);
+  const ownedDigest = await ownedTreeDigest("m7", artifact.candidate);
+  if (artifact.candidateOwnedTreeDigest !== ownedDigest)
+    throw new Error("m7 candidate owned-tree digest differs");
+  if (
+    JSON.stringify(artifact.commands) !==
+    JSON.stringify(["pnpm validate:m6", "pnpm test:m7:local", "pnpm test:m7:fuse"])
+  )
+    throw new Error("m7 evidence does not identify the exact required commands");
+  const capabilities = requireObject(artifact.capabilities, "m7.capabilities");
+  for (const name of [
+    "supportsDirectRangeIo",
+    "supportsWriteSessions",
+    "sharedAdmissionController",
+    "sharedContentCache",
+    "durablePinnedReadLease",
+    "boundedManifestCursor",
+    "realMountedFuseRequired",
+  ])
+    if (capabilities[name] !== true)
+      throw new Error(`m7.capabilities.${name} must be true`);
+
+  const limits = requireObject(artifact.limits, "m7.limits");
+  if (
+    limits.maxWriteSessionBytes !== 16 * 1024 * 1024 ||
+    limits.maxPendingWriteBytes !== 64 * 1024 * 1024 ||
+    limits.maxManagedResidentBytes !== 128 * 1024 * 1024 ||
+    limits.maxOpenNodeVfsSessions !== 256
+  )
+    throw new Error("m7 evidence does not retain the normative default limits");
+  if (JSON.stringify(artifact.cowPageBytes) !== JSON.stringify([4096, 8192, 16384]))
+    throw new Error("m7 evidence does not cover all persisted COW page formats");
+  const metrics = requireObject(artifact.metrics, "m7.metrics");
+  for (const name of [
+    "localElapsedMs",
+    "localDeadlineMs",
+    "nodeVfsTests",
+    "faultStagePositions",
+    "faultCommitPositions",
+    "largeFixtureBytes",
+    "largeEditSourceBytes",
+    "peakManagedResidentBytes",
+  ])
+    requirePositiveInteger(metrics[name], `m7.metrics.${name}`);
+  if (
+    metrics.localElapsedMs >= metrics.localDeadlineMs ||
+    metrics.localDeadlineMs !== 600_000 ||
+    metrics.nodeVfsTests !== 23 ||
+    metrics.faultStagePositions < 20 ||
+    metrics.faultCommitPositions < 20 ||
+    metrics.largeFixtureBytes < 100 * 1024 * 1024 ||
+    metrics.largeEditSourceBytes !==
+      Math.ceil(metrics.totalCowEditSourceBytes / metrics.cowEditCount) ||
+    metrics.largeEditSourceBytes >= metrics.largeFixtureBytes ||
+    metrics.peakManagedResidentBytes > limits.maxManagedResidentBytes
+  )
+    throw new Error("m7 local evidence misses a correctness or resource threshold");
+  const environment = requireScalarRecord(artifact.environment, "m7.environment");
+  for (const name of ["platform", "architecture", "node", "pnpm", "sqlite"])
+    requireNonemptyString(environment[name], `m7.environment.${name}`);
+  if (!Array.isArray(artifact.logs) || artifact.logs.length !== 3)
+    throw new Error("m7 evidence must record predecessor, local, and FUSE logs");
+  const expectedLogs = [
+    {
+      name: "accepted-m6-predecessor",
+      command: "pnpm validate:m6",
+      path: "docs/evidence/m7/logs/predecessor-m6.log",
+      metaCommand: "pnpm_validate_m6",
+    },
+    {
+      name: "m7-local",
+      command: "pnpm test:m7:local",
+      path: "docs/evidence/m7/logs/m7-local.log",
+      metaCommand: "pnpm_test_m7_local",
+    },
+    {
+      name: "m7-real-fuse-selection",
+      command: "pnpm test:m7:fuse",
+      path: "docs/evidence/m7/logs/m7-real-fuse.log",
+      metaCommand: "pnpm_test_m7_fuse",
+    },
+  ];
+  const logSources = [];
+  for (const [index, value] of artifact.logs.entries()) {
+    const log = requireObject(value, `m7.logs[${index}]`);
+    const expected = expectedLogs[index];
+    if (
+      log.name !== expected.name ||
+      log.command !== expected.command ||
+      log.path !== expected.path
+    )
+      throw new Error(`m7.logs[${index}] does not identify the required exact gate`);
+    if (!/^[0-9a-f]{64}$/u.test(log.sha256 ?? ""))
+      throw new Error(`m7.logs[${index}].sha256 is invalid`);
+    const expectedExitCode = index === 2 && artifact.status === "blocked" ? 2 : 0;
+    if (log.exitCode !== expectedExitCode)
+      throw new Error(`m7.logs[${index}].exitCode differs from its gate status`);
+    requirePositiveInteger(log.elapsedMs, `m7.logs[${index}].elapsedMs`);
+    const bytes = await readFile(path.join(root, log.path));
+    if (createHash("sha256").update(bytes).digest("hex") !== log.sha256)
+      throw new Error(`m7 log integrity differs for ${log.path}`);
+    const source = bytes.toString("utf8");
+    const meta = m7LogMeta(source, `m7.logs[${index}]`);
+    if (
+      meta.exitCode !== expectedExitCode ||
+      meta.elapsedMs !== log.elapsedMs ||
+      meta.candidate !== artifact.candidate ||
+      meta.command !== expected.metaCommand
+    )
+      throw new Error(`m7.logs[${index}] metadata differs from its evidence record`);
+    logSources.push(source);
+  }
+  if (
+    !logSources[0].includes("accepted-node-gate: PASS") ||
+    !logSources[0].includes("m6-local-gate: PASS") ||
+    !logSources[0].includes("evidence: preserved predecessor candidates")
+  )
+    throw new Error("m7 predecessor log lacks a complete passing M6 selection");
+  const predecessorNodeElapsed = Number(
+    /accepted-node-gate: PASS \((\d+) ms\)/u.exec(logSources[0])?.[1],
+  );
+  const predecessorM6Elapsed = Number(
+    /m6-local-gate: PASS \((\d+) ms\)/u.exec(logSources[0])?.[1],
+  );
+  const localGateElapsed = Number(
+    /^m7-local-gate: PASS \((\d+) ms\)$/mu.exec(logSources[1])?.[1],
+  );
+  const localTargetElapsed = Number(
+    /m7-local-gate: PASS node-vfs-correctness-fault-resource \((\d+) ms\)/u.exec(
+      logSources[1],
+    )?.[1],
+  );
+  if (
+    artifact.logs[0].elapsedMs !== metrics.predecessorElapsedMs ||
+    predecessorNodeElapsed !== metrics.predecessorNodeTargetElapsedMs ||
+    predecessorM6Elapsed !== metrics.predecessorM6TargetElapsedMs ||
+    localTargetElapsed !== metrics.localElapsedMs ||
+    localGateElapsed !== metrics.localGateElapsedMs
+  )
+    throw new Error("m7 predecessor or local elapsed evidence differs from its log");
+  if (
+    !/m7-local-gate: PASS \(\d+ ms\)/u.test(logSources[1]) ||
+    !logSources[1].includes("ℹ pass 23") ||
+    !logSources[1].includes("ℹ fail 0")
+  )
+    throw new Error("m7 local log lacks its complete zero-failure PASS markers");
+  const conformance = logLineObject(
+    logSources[1],
+    "efs-m7-conformance-v1",
+    "m7 local log",
+  );
+  const pressure = logLineObject(
+    logSources[1],
+    "efs-m7-default-pressure-v1",
+    "m7 local log",
+  );
+  const cow = logLineObject(logSources[1], "efs-m7-cow-resource-v1", "m7 local log");
+  const fault = logLineObject(logSources[1], "efs-m7-fault-matrix-v1", "m7 local log");
+  if (
+    !Array.isArray(conformance.cases) ||
+    conformance.cases.length !== metrics.sharedConformanceCases ||
+    conformance.commitCloseOrders !== metrics.threeSessionCommitCloseOrders ||
+    JSON.stringify(conformance.sessionCounts) !== JSON.stringify([1, 16, 64]) ||
+    pressure.sessions !== 64 ||
+    pressure.residentBoundaryBytes !== metrics.defaultPressureResidentBytes ||
+    pressure.aggregateLimitBytes !== limits.maxManagedResidentBytes ||
+    pressure.peakManagedResidentBytes !==
+      metrics.defaultPressurePeakManagedResidentBytes ||
+    cow.fixtureBytes !== metrics.largeFixtureBytes ||
+    cow.fixtureDigest !== artifact.fixtureDigest ||
+    cow.edits !== metrics.cowEditCount ||
+    cow.cowEditCount !== metrics.cowEditCount ||
+    cow.sourceBytesRead !== metrics.totalCowEditSourceBytes ||
+    cow.peakManagedResidentBytes !== metrics.peakManagedResidentBytes ||
+    fault.faultPoint !== artifact.faultPoint ||
+    fault.stagingPositions !== metrics.faultStagePositions ||
+    fault.commitPositions !== metrics.faultCommitPositions
+  )
+    throw new Error("m7 local structured log differs from its evidence metrics");
+  const fuse = requireObject(artifact.realFuse, "m7.realFuse");
+  if (fuse.required !== true || fuse.selectionDeadlineMs !== 600_000)
+    throw new Error("m7 evidence weakens the mandatory real-FUSE selection");
+  if (artifact.status === "blocked") {
+    if (
+      fuse.available !== false ||
+      fuse.smokePassed !== false ||
+      fuse.blocker !== "non-linux-host" ||
+      !logSources[2].includes("M7_FUSE_BLOCKED") ||
+      logSources[2].includes("m7-real-fuse-gate: PASS") ||
+      packageManifest.scripts?.["validate:accepted"] !== "pnpm validate:m6"
+    )
+      throw new Error("blocked M7 evidence or accepted-milestone selection is invalid");
+  } else {
+    const fuseLog = logSources[2];
+    const fuseGateMatch = /^m7-real-fuse-gate: PASS \((\d+) ms\)$/mu.exec(fuseLog);
+    if (!fuseGateMatch)
+      throw new Error("passed M7 FUSE log lacks the gate PASS marker");
+    const smoke = logLineObject(
+      fuseLog,
+      "efs-m7-real-fuse-smoke-v2",
+      "m7 real FUSE log",
+    );
+    const requiredSmokeEnvironment = [
+      "candidate",
+      "platform",
+      "architecture",
+      "node",
+      "pnpm",
+      "kernel",
+      "cpu",
+      "storage",
+      "sqlite",
+      "fuseVersion",
+      "device",
+      "fusermount",
+      "manifestFormat",
+    ];
+    for (const name of requiredSmokeEnvironment)
+      requireNonemptyString(smoke[name], `m7.realFuse.log.${name}`);
+    const active = requireObject(
+      smoke.activeDurableState,
+      "m7.realFuse.log.activeDurableState",
+    );
+    const sqliteCapabilities = requireObject(
+      smoke.sqliteCapabilities,
+      "m7.realFuse.log.sqliteCapabilities",
+    );
+    const filesystemCapabilities = requireObject(
+      smoke.filesystemCapabilities,
+      "m7.realFuse.log.filesystemCapabilities",
+    );
+    const providerCapabilities = requireObject(
+      smoke.providerCapabilities,
+      "m7.realFuse.log.providerCapabilities",
+    );
+    const providerRuntime = requireObject(
+      providerCapabilities.runtime,
+      "m7.realFuse.log.providerCapabilities.runtime",
+    );
+    const fastCdc = requireObject(smoke.fastCdc, "m7.realFuse.log.fastCdc");
+    const storageSnapshot = requireObject(
+      smoke.storageSnapshot,
+      "m7.realFuse.log.storageSnapshot",
+    );
+    const physicalStorage = requireObject(
+      smoke.physicalStorage,
+      "m7.realFuse.log.physicalStorage",
+    );
+    const usage = requireScalarRecord(smoke.usage, "m7.realFuse.log.usage");
+    const providerMetrics = requireObject(
+      smoke.providerMetrics,
+      "m7.realFuse.log.providerMetrics",
+    );
+    const editBatchProof = requireObject(
+      smoke.editBatchProof,
+      "m7.realFuse.log.editBatchProof",
+    );
+    const processPids = smoke.processPids;
+    const mounts = smoke.mountIdentity;
+    const mountCycleIds = smoke.mountCycleIds;
+    const expectedFinalPayloadDigest =
+      "3238fa53923434d162289488f802739eecc4a45303799b7ca4c4b38fddba5d1a";
+    if (
+      fuse.available !== true ||
+      fuse.smokePassed !== true ||
+      fuse.device !== "/dev/fuse" ||
+      fuse.smokeDeadlineMs !== 60_000 ||
+      fuse.platform !== "linux" ||
+      smoke.candidate !== artifact.candidate ||
+      smoke.platform !== "linux" ||
+      smoke.device !== "/dev/fuse" ||
+      smoke.deviceIsCharacter !== true ||
+      smoke.fixtureBytes !== 16 * 1024 * 1024 ||
+      smoke.seed !== 0x5eed5eed ||
+      smoke.oneByteEditCount !== 5_000 ||
+      smoke.mountedPayloadOneByteWriteCallbacks !== 5_000 ||
+      editBatchProof.callbackCount !== 5_000 ||
+      editBatchProof.flushCountDelta !== 1 ||
+      editBatchProof.failedFlushCountDelta !== 0 ||
+      editBatchProof.cowEditCountDelta !== 1 ||
+      !Number.isSafeInteger(editBatchProof.cowEditSourceBytesDelta) ||
+      editBatchProof.cowEditSourceBytesDelta <= 0 ||
+      editBatchProof.cowEditSourceBytesDelta > smoke.fixtureBytes + 524_288 ||
+      !Number.isSafeInteger(editBatchProof.coreBatchCountDelta) ||
+      editBatchProof.coreBatchCountDelta <= 0 ||
+      !Number.isSafeInteger(smoke.providerCowEditCount) ||
+      smoke.providerCowEditCount < 0 ||
+      !Number.isSafeInteger(smoke.transactionCount) ||
+      smoke.transactionCount <= 0 ||
+      !Number.isSafeInteger(providerMetrics.coreBatchCount) ||
+      providerMetrics.coreBatchCount <= 0 ||
+      !Number.isSafeInteger(providerMetrics.flushCount) ||
+      providerMetrics.flushCount <= 0 ||
+      providerMetrics.failedFlushCount !== 0 ||
+      smoke.namespaceOperationCount !== 2_000 ||
+      smoke.readerActors !== 16 ||
+      smoke.writerActors !== 16 ||
+      smoke.operationsPerActor !== 64 ||
+      smoke.completedOperationCount !== 9_056 ||
+      smoke.processRestarts !== 3 ||
+      smoke.restartUnmounts !== 3 ||
+      smoke.finalUnmounted !== true ||
+      smoke.fsyncCrashVerified !== true ||
+      smoke.fsyncCloseNoopVerified !== true ||
+      smoke.closeDurabilityVerified !== true ||
+      smoke.collectionInterrupted !== true ||
+      smoke.collectionResumed !== true ||
+      smoke.finalCollectionComplete !== true ||
+      !Number.isSafeInteger(smoke.finalCollectionCommittedBatches) ||
+      smoke.finalCollectionCommittedBatches <= 0 ||
+      smoke.verificationComplete !== true ||
+      smoke.usageVerified !== true ||
+      active.leases !== 0 ||
+      active.staging !== 0 ||
+      active.reservations !== 0 ||
+      !Array.isArray(processPids) ||
+      processPids.length !== 4 ||
+      processPids.some((value) => !Number.isSafeInteger(value) || value <= 0) ||
+      new Set(processPids).size !== processPids.length ||
+      JSON.stringify(mountCycleIds) !== JSON.stringify([1, 2, 3, 4]) ||
+      !Array.isArray(mounts) ||
+      mounts.length !== 4 ||
+      mounts.some((value) => !/ - fuse(?:\.[^ ]+)? \/dev\/fuse /u.test(value)) ||
+      smoke.smokeDeadlineMs !== 60_000 ||
+      !Number.isSafeInteger(smoke.elapsedMs) ||
+      smoke.elapsedMs <= 0 ||
+      smoke.elapsedMs >= 60_000 ||
+      smoke.fixtureDigest !== fuse.fixtureDigest ||
+      smoke.finalPayloadDigest !== expectedFinalPayloadDigest ||
+      smoke.expectedFinalPayloadDigest !== expectedFinalPayloadDigest ||
+      !/^[0-9a-f]{64}$/u.test(smoke.namespaceDigest ?? "") ||
+      !Array.isArray(smoke.slowestOperations) ||
+      smoke.slowestOperations.length === 0 ||
+      !Number.isSafeInteger(smoke.peakManagedResidentBytes) ||
+      smoke.peakManagedResidentBytes <= 0 ||
+      smoke.peakManagedResidentBytes > limits.maxManagedResidentBytes ||
+      smoke.aggregateLimitBytes !== limits.maxManagedResidentBytes ||
+      !Number.isSafeInteger(smoke.peakRssBytes) ||
+      smoke.peakRssBytes <= 0 ||
+      !Number.isSafeInteger(smoke.totalMemoryBytes) ||
+      smoke.totalMemoryBytes <= 0 ||
+      smoke.operatingSystemCacheDropAttempted !== false ||
+      smoke.operatingSystemCacheDropSucceeded !== false ||
+      sqliteCapabilities.journalMode !== "wal" ||
+      sqliteCapabilities.cacheTargetBytes !== 16 * 1024 * 1024 ||
+      sqliteCapabilities.mmapLimitBytes !== 0 ||
+      sqliteCapabilities.maxPhysicalDatabaseBytes <= 0 ||
+      sqliteCapabilities.maxJournalBytes <= 0 ||
+      filesystemCapabilities.format?.cowPageBytes !== 8192 ||
+      filesystemCapabilities.format?.manifestFormat !== "efs-merkle-manifest-v1" ||
+      providerRuntime.maxWriteSessionBytes !== limits.maxWriteSessionBytes ||
+      providerRuntime.maxPendingWriteBytes !== limits.maxPendingWriteBytes ||
+      providerRuntime.maxManagedResidentBytes !== limits.maxManagedResidentBytes ||
+      providerRuntime.maxOpenNodeVfsSessions !== limits.maxOpenNodeVfsSessions ||
+      fastCdc.minimumBytes !== 32_768 ||
+      fastCdc.averageBytes !== 131_072 ||
+      fastCdc.maximumBytes !== 524_288 ||
+      storageSnapshot.state !== "complete" ||
+      !Number.isSafeInteger(storageSnapshot.reclaimablePayloadBytes) ||
+      storageSnapshot.reclaimablePayloadBytes < 0 ||
+      Object.keys(usage).length === 0 ||
+      !Number.isSafeInteger(physicalStorage.mainFileBytes) ||
+      physicalStorage.mainFileBytes <= 0 ||
+      !Number.isSafeInteger(fuse.elapsedMs) ||
+      fuse.elapsedMs <= 0 ||
+      fuse.elapsedMs >= 60_000 ||
+      fuse.elapsedMs !== smoke.elapsedMs ||
+      fuse.fixtureBytes !== smoke.fixtureBytes ||
+      fuse.fixtureDigest !== smoke.fixtureDigest ||
+      fuse.finalPayloadDigest !== smoke.finalPayloadDigest ||
+      fuse.namespaceDigest !== smoke.namespaceDigest ||
+      JSON.stringify(fuse.processPids) !== JSON.stringify(processPids) ||
+      JSON.stringify(fuse.mountIdentity) !== JSON.stringify(mounts) ||
+      JSON.stringify(fuse.mountCycleIds) !== JSON.stringify(mountCycleIds) ||
+      fuse.processRestarts !== 3 ||
+      fuse.completedOperationCount !== 9_056 ||
+      fuse.namespaceOperationCount !== 2_000 ||
+      fuse.oneByteEditCount !== 5_000 ||
+      fuse.mountedPayloadOneByteWriteCallbacks !== 5_000 ||
+      JSON.stringify(fuse.editBatchProof) !== JSON.stringify(editBatchProof) ||
+      fuse.providerCowEditCount !== smoke.providerCowEditCount ||
+      fuse.transactionCount !== smoke.transactionCount ||
+      fuse.readerActors !== 16 ||
+      fuse.writerActors !== 16 ||
+      fuse.operationsPerActor !== 64 ||
+      fuse.fsyncCrashVerified !== true ||
+      fuse.fsyncCloseNoopVerified !== true ||
+      fuse.closeDurabilityVerified !== true ||
+      fuse.collectionInterrupted !== true ||
+      fuse.collectionResumed !== true ||
+      fuse.finalCollectionComplete !== true ||
+      fuse.finalCollectionCommittedBatches !== smoke.finalCollectionCommittedBatches ||
+      fuse.usageVerified !== true ||
+      fuse.platform !== smoke.platform ||
+      fuse.architecture !== smoke.architecture ||
+      fuse.kernel !== smoke.kernel ||
+      fuse.node !== smoke.node ||
+      fuse.fuseVersion !== smoke.fuseVersion ||
+      fuse.device !== smoke.device ||
+      fuse.fusermount !== smoke.fusermount ||
+      fuse.storage !== smoke.storage ||
+      fuse.uid !== smoke.uid ||
+      fuse.schemaVersion !== smoke.schemaVersion ||
+      fuse.sqlite !== smoke.sqlite ||
+      fuse.gateElapsedMs !== Number(fuseGateMatch[1]) ||
+      fuse.selectionElapsedMs !== artifact.logs[2].elapsedMs ||
+      fuse.gateElapsedMs >= 60_000 ||
+      !Number.isSafeInteger(fuse.gateElapsedMs) ||
+      fuse.gateElapsedMs <= 0 ||
+      !Number.isSafeInteger(fuse.selectionElapsedMs) ||
+      fuse.selectionElapsedMs <= 0 ||
+      fuse.selectionElapsedMs >= fuse.selectionDeadlineMs ||
+      fuse.peakManagedResidentBytes > limits.maxManagedResidentBytes
+    )
+      throw new Error(
+        "passed M7 evidence lacks a real mounted-FUSE identity or threshold",
+      );
+  }
+  const exitFilename = path.join(directory, "exit.md");
+  const exit = await readFile(exitFilename, "utf8");
+  if (
+    candidateFromExit(exit, "m7") !== artifact.candidate ||
+    !exit.includes(
+      `- Sequential predecessor: accepted M6 candidate \`${m6.candidate}\``,
+    ) ||
+    !exit.includes(`- M7 status: ${artifact.status}`)
+  )
+    throw new Error("m7 exit record differs from its structured artifact");
+  const recordCommit = await evidenceCommit(path.relative(root, jsonFilename));
+  if ((await evidenceCommit(path.relative(root, exitFilename))) !== recordCommit)
+    throw new Error("m7 exit and correctness files must be atomic");
+  const evidenceParents = (
+    await execute("git", ["show", "-s", "--format=%P", recordCommit], {
+      cwd: root,
+      windowsHide: true,
+    })
+  ).stdout.trim();
+  if (evidenceParents !== artifact.candidate)
+    throw new Error("m7 evidence commit is not the direct child of its candidate");
+  const evidenceChanges = (
+    await execute(
+      "git",
+      ["diff", "--name-only", `${artifact.candidate}..${recordCommit}`],
+      {
+        cwd: root,
+        windowsHide: true,
+      },
+    )
+  ).stdout
+    .trim()
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .sort();
+  const exactEvidenceFiles = [
+    "docs/evidence/m7/correctness.json",
+    "docs/evidence/m7/exit.md",
+    "docs/evidence/m7/logs/m7-local.log",
+    "docs/evidence/m7/logs/m7-real-fuse.log",
+    "docs/evidence/m7/logs/predecessor-m6.log",
+  ];
+  if (JSON.stringify(evidenceChanges) !== JSON.stringify(exactEvidenceFiles))
+    throw new Error(
+      "m7 evidence commit does not contain the exact atomic evidence set",
+    );
+  for (const log of artifact.logs)
+    if ((await evidenceCommit(log.path)) !== recordCommit)
+      throw new Error(`m7 log ${log.path} was not committed atomically with evidence`);
+  if (activeAcceptedMilestone === "m7") {
+    const head = (
+      await execute("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })
+    ).stdout.trim();
+    const acceptanceParents = (
+      await execute("git", ["show", "-s", "--format=%P", head], {
+        cwd: root,
+        windowsHide: true,
+      })
+    ).stdout.trim();
+    if (acceptanceParents !== recordCommit)
+      throw new Error(
+        "accepted M7 HEAD is not the single direct child of its evidence",
+      );
+    const acceptanceChanges = (
+      await execute("git", ["diff", "--name-only", `${recordCommit}..${head}`], {
+        cwd: root,
+        windowsHide: true,
+      })
+    ).stdout
+      .trim()
+      .split(/\r?\n/u)
+      .filter(Boolean);
+    const acceptanceAllowlist = new Set([
+      ".github/workflows/ci.yml",
+      "README.md",
+      "docs/implementation/implementation-plan.md",
+      "docs/implementation/m7-handoff.md",
+      "package.json",
+      "tests/architecture/foundation.test.mjs",
+    ]);
+    if (
+      acceptanceChanges.length === 0 ||
+      acceptanceChanges.some((filename) => !acceptanceAllowlist.has(filename))
+    )
+      throw new Error(
+        "accepted M7 HEAD changes files outside its acceptance allowlist",
+      );
+    const candidateRuntimePaths = [
+      "packages/fs/src",
+      "packages/node-vfs/src",
+      "packages/testkit/src",
+      "scripts/check-evidence.mjs",
+      "scripts/run-m7-fuse-gate.mjs",
+      "scripts/run-m7-local-gate.mjs",
+      "tests/node-vfs",
+    ];
+    const runtimeDrift = (
+      await execute(
+        "git",
+        [
+          "diff",
+          "--name-only",
+          artifact.candidate,
+          head,
+          "--",
+          ...candidateRuntimePaths,
+        ],
+        { cwd: root, windowsHide: true },
+      )
+    ).stdout.trim();
+    if (runtimeDrift)
+      throw new Error("accepted M7 HEAD drifts from its validated candidate runtime");
+    const candidatePackage = JSON.parse(
+      await gitFile(artifact.candidate, "package.json"),
+    );
+    if (
+      packageManifest.scripts?.["validate:accepted"] !== "pnpm validate:m7" ||
+      packageManifest.scripts?.["validate:m7"] !==
+        "pnpm validate:m6 && pnpm test:m7:local && pnpm check:evidence" ||
+      packageManifest.scripts?.["validate:m7:pre-evidence"] !==
+        "pnpm validate:m6 && pnpm test:m7:local && pnpm test:m7:fuse" ||
+      packageManifest.scripts?.["test:m7:fuse"] !== "node scripts/run-m7-fuse-gate.mjs"
+    )
+      throw new Error("accepted M7 package selectors differ from the exact gate");
+    for (const manifest of [candidatePackage, packageManifest]) {
+      delete manifest.scripts["validate:accepted"];
+      delete manifest.scripts["validate:m7"];
+    }
+    if (JSON.stringify(candidatePackage) !== JSON.stringify(packageManifest))
+      throw new Error("accepted M7 package manifest changes more than its selectors");
+    const candidateWorkflow = parseYaml(
+      await gitFile(artifact.candidate, ".github/workflows/ci.yml"),
+    );
+    const currentWorkflow = parseYaml(
+      await readFile(path.join(root, ".github", "workflows", "ci.yml"), "utf8"),
+    );
+    const workflowErrors = workflowPolicyErrors(currentWorkflow);
+    if (workflowErrors.length)
+      throw new Error(`accepted M7 CI policy differs: ${workflowErrors.join("; ")}`);
+    if (currentWorkflow.jobs.validate["timeout-minutes"] !== 30)
+      throw new Error("accepted M7 portable matrix lacks its thirty-minute deadline");
+    delete candidateWorkflow.jobs.validate["timeout-minutes"];
+    delete currentWorkflow.jobs.validate["timeout-minutes"];
+    if (JSON.stringify(candidateWorkflow) !== JSON.stringify(currentWorkflow))
+      throw new Error("accepted M7 workflow changes more than its portable timeout");
+  }
+  await assertOwnedWorktreeClean("m7");
+}
+
+await validateOptionalM7Evidence();
 
 console.log(
   `evidence: preserved predecessor candidates and current ${activeAcceptedMilestone.toUpperCase()} schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,

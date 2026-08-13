@@ -1,11 +1,8 @@
-import { buildManifest } from "./full-rebuild.js";
-import { DEFAULT_FASTCDC } from "../cdc/fastcdc.js";
 import {
   DEFAULT_BRANCH_CONFIGURATION,
   DEFAULT_FILESYSTEM_LIMITS,
   DEFAULT_RUNTIME_LIMITS,
   AdmissionController,
-  DURABLE_METADATA_ROW_BYTES,
   constrainStorageLimits,
   maxPersistedContentObjectBytes,
   persistedWriterProfile,
@@ -16,21 +13,31 @@ import {
   type StorageLimits,
 } from "../resources/limits.js";
 import { ContentCache } from "../cache/content-cache.js";
-import { canonicalizePath, type CanonicalPath } from "../namespace/paths.js";
-import { readManifestInto, readManifestRange } from "../operations/manifest-io.js";
+import {
+  canonicalizePath,
+  validateSymlinkTarget,
+  type CanonicalPath,
+} from "../namespace/paths.js";
+import { readManifestInto } from "../operations/manifest-io.js";
 import type {
   DirectoryEntry,
   FileStat,
   StorageFormatOptions,
 } from "../filesystem/types.js";
-import { fsError } from "../filesystem/errors.js";
+import { fsError, mapStorageError } from "../filesystem/errors.js";
 import { encodeUtf8 } from "../namespace/utf8.js";
-import { intrinsicByteLength } from "../cas/bytes.js";
 import {
-  ingestReservationBytes,
-  metadataReservationBytes,
+  copyBytes,
+  equalBytes,
+  intrinsicByteLength,
+  intrinsicByteRange,
+} from "../cas/bytes.js";
+import {
+  prepareContentSourceSync,
+  type SynchronousContentSource,
 } from "./streaming-prepare.js";
 import type {
+  AuthenticatedManifestCursor,
   ClosureCertificate,
   InodeRow,
   NamespaceStore,
@@ -38,10 +45,53 @@ import type {
   StorageTransactionPorts,
 } from "./storage-ports.js";
 
+/** Opaque durable content owned by the core bridge. */
+export interface NodeVfsPreparedContent {
+  readonly size: number;
+  /** Bounded source bytes read while applying page-local edits. */
+  readonly editSourceBytes?: number;
+}
+export interface NodeVfsOverwriteEdit {
+  readonly offset: number;
+  readonly source: SynchronousContentSource;
+}
+export interface NodeVfsCommitResult {
+  readonly pinned: NodeVfsPinnedReadBridge;
+}
 export interface SyncPreparedContent {
   readonly manifestHash: Uint8Array;
   readonly size: number;
   readonly certificate: ClosureCertificate;
+  /** Source token captured by a bounded edit preparation. */
+  readonly expectedToken?: number;
+  readonly preparationMode?: "local-rebuild" | "durable-path-copy";
+  readonly sourceBytesRead?: number;
+}
+export interface NodeVfsPinnedReadBridge {
+  readonly canonicalPath: string;
+  readonly inodeId: string;
+  readonly stat: FileStat;
+  readonly size: number;
+  readIntoSync(
+    destination: Uint8Array,
+    destinationOffset: number,
+    position: number,
+    length: number,
+  ): number;
+  closeSync(): void;
+}
+export interface NodeVfsManagedSlab {
+  readonly bytes: Uint8Array;
+  release(): void;
+}
+export interface NodeVfsManagedMemorySnapshot {
+  readonly usedBytes: number;
+  readonly peakBytes: number;
+  readonly limitBytes: number;
+}
+export interface NodeVfsResolvedPath {
+  readonly canonicalPath: string;
+  readonly stat: FileStat;
 }
 export interface NodeVfsOperationsBridgeOptions {
   readonly port: OperationsStorage;
@@ -50,12 +100,41 @@ export interface NodeVfsOperationsBridgeOptions {
   readonly runtime?: Partial<RuntimeLimits>;
   readonly format?: StorageFormatOptions;
   readonly clock?: () => number;
+  /** Core-owned bounded COW preparation; never exposed outside this bridge. */
+  readonly prepareOverwriteSync?: (
+    path: string,
+    offset: number,
+    source: SynchronousContentSource,
+  ) => SyncPreparedContent | undefined;
+  readonly prepareOverwritesSync?: (
+    path: string,
+    edits: readonly NodeVfsOverwriteEdit[],
+  ) => SyncPreparedContent | undefined;
+  /** Existing filesystem resources supplied by the core composition root. */
+  readonly shared?: {
+    readonly filesystemLimits: Readonly<FilesystemLimits>;
+    readonly storageLimits: Readonly<StorageLimits>;
+    readonly runtimeLimits: Readonly<RuntimeLimits>;
+    readonly cowPageBytes: 4096 | 8192 | 16384;
+    readonly admission: AdmissionController;
+    readonly cache: ContentCache;
+  };
 }
 export interface NodeVfsFilesystemBridge {
   readonly filesystemLimits: Readonly<FilesystemLimits>;
   readonly storageLimits: Readonly<StorageLimits>;
   readonly runtimeLimits: Readonly<RuntimeLimits>;
   readonly cowPageBytes: 4096 | 8192 | 16384;
+  canonicalPathSync(path: string, syscall?: string): string;
+  resolvePathSync(path: string, followFinal?: boolean): NodeVfsResolvedPath;
+  openPinnedReadSync(path: string): NodeVfsPinnedReadBridge;
+  acquireSlabSync(
+    source: Uint8Array,
+    sourceOffset: number,
+    length: number,
+  ): NodeVfsManagedSlab | undefined;
+  reserveControlSync(bytes: number): (() => void) | undefined;
+  managedMemorySync(): NodeVfsManagedMemorySnapshot;
   existsSync(path: string): boolean;
   statSync(path: string, followFinal?: boolean): FileStat;
   readdirSync(path: string): DirectoryEntry[];
@@ -69,9 +148,20 @@ export interface NodeVfsFilesystemBridge {
   ): number;
   readRangeSync(path: string, position: number, length: number): Uint8Array;
   readFileSync(path: string): Uint8Array;
-  prepareContentSync(bytes: Uint8Array): SyncPreparedContent;
+  prepareContentSync(bytes: Uint8Array): NodeVfsPreparedContent;
+  prepareContentSourceSync(source: SynchronousContentSource): NodeVfsPreparedContent;
+  prepareOverwriteSync(
+    path: string,
+    offset: number,
+    source: SynchronousContentSource,
+  ): NodeVfsPreparedContent | undefined;
+  prepareOverwritesSync(
+    path: string,
+    edits: readonly NodeVfsOverwriteEdit[],
+  ): NodeVfsPreparedContent | undefined;
+  abortPreparedSync(prepared: NodeVfsPreparedContent): void;
   readPreparedIntoSync(
-    prepared: SyncPreparedContent,
+    prepared: NodeVfsPreparedContent,
     destination: Uint8Array,
     destinationOffset: number,
     position: number,
@@ -79,9 +169,15 @@ export interface NodeVfsFilesystemBridge {
   ): number;
   commitPreparedSync(
     path: string,
-    prepared: SyncPreparedContent,
-    options?: { create?: boolean; exclusive?: boolean; mode?: number },
-  ): void;
+    prepared: NodeVfsPreparedContent,
+    options?: {
+      create?: boolean;
+      exclusive?: boolean;
+      mode?: number;
+      inodeId?: string;
+      aliases?: readonly string[];
+    },
+  ): NodeVfsCommitResult;
   writeFileSync(
     path: string,
     bytes: Uint8Array,
@@ -131,6 +227,18 @@ function stat(inode: InodeRow, name: string): FileStat {
   });
 }
 
+function validatedMode(mode: number | undefined, fallback: number): number {
+  const value = mode ?? fallback;
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw fsError(
+      "EINVAL",
+      "nodeVfs",
+      undefined,
+      "mode must be a nonnegative safe integer",
+    );
+  return value & 0o7777;
+}
+
 class Bridge implements NodeVfsFilesystemBridge {
   readonly filesystemLimits: Readonly<FilesystemLimits>;
   readonly storageLimits: Readonly<StorageLimits>;
@@ -140,9 +248,34 @@ class Bridge implements NodeVfsFilesystemBridge {
   readonly #clock: () => number;
   readonly #admission: AdmissionController;
   readonly #cache: ContentCache;
+  readonly #prepareOverwriteSync:
+    | ((
+        path: string,
+        offset: number,
+        source: SynchronousContentSource,
+      ) => SyncPreparedContent | undefined)
+    | undefined;
+  readonly #prepareOverwritesSync:
+    | ((
+        path: string,
+        edits: readonly NodeVfsOverwriteEdit[],
+      ) => SyncPreparedContent | undefined)
+    | undefined;
+  readonly #prepared = new WeakMap<NodeVfsPreparedContent, SyncPreparedContent>();
   constructor(options: NodeVfsOperationsBridgeOptions) {
     this.#port = options.port;
     this.#clock = options.clock ?? Date.now;
+    this.#prepareOverwriteSync = options.prepareOverwriteSync;
+    this.#prepareOverwritesSync = options.prepareOverwritesSync;
+    if (options.shared) {
+      this.filesystemLimits = options.shared.filesystemLimits;
+      this.storageLimits = options.shared.storageLimits;
+      this.runtimeLimits = options.shared.runtimeLimits;
+      this.cowPageBytes = options.shared.cowPageBytes;
+      this.#admission = options.shared.admission;
+      this.#cache = options.shared.cache;
+      return;
+    }
     this.filesystemLimits = resolveLimits(
       DEFAULT_FILESYSTEM_LIMITS,
       options.filesystem,
@@ -191,6 +324,127 @@ class Bridge implements NodeVfsFilesystemBridge {
       this.runtimeLimits,
       this.cowPageBytes,
     );
+  }
+  canonicalPathSync(path: string, syscall = "nodeVfs"): string {
+    return canonicalizePath(path, this.filesystemLimits, syscall).value;
+  }
+  resolvePathSync(path: string, followFinal = true): NodeVfsResolvedPath {
+    const canonical = canonicalizePath(path, this.filesystemLimits, "resolvePathSync");
+    return this.#read(
+      (tx) => {
+        const selected = tx
+          .namespace(this.filesystemLimits, this.storageLimits, "resolvePathSync")
+          .resolve(canonical, followFinal);
+        return Object.freeze({
+          canonicalPath: canonical.value,
+          stat: stat(selected.inode, canonical.segments.at(-1) ?? ""),
+        });
+      },
+      "resolvePathSync",
+      canonical.value,
+    );
+  }
+  openPinnedReadSync(path: string): NodeVfsPinnedReadBridge {
+    const canonical = canonicalizePath(path, this.filesystemLimits, "openFileSync");
+    const leaseId = globalThis.crypto.randomUUID();
+    const ownerId = globalThis.crypto.randomUUID();
+    const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    let expiresAt = 0;
+    const selected = this.#write(
+      (tx) => {
+        const inode = tx
+          .namespace(this.filesystemLimits, this.storageLimits, "openFileSync")
+          .resolve(canonical, true).inode;
+        if (inode.type !== 0 || !inode.manifest_hash)
+          throw fsError(
+            inode.type === 1 ? "EISDIR" : "EINVAL",
+            "openFileSync",
+            canonical.value,
+            "path is not a regular file",
+          );
+        const manifestHash = copyBytes(inode.manifest_hash);
+        expiresAt = this.#now() + this.storageLimits.readLeaseMs;
+        tx.staging(this.storageLimits).acquireReadLease(
+          leaseId,
+          ownerId,
+          ownerNonce,
+          manifestHash,
+          expiresAt,
+        );
+        return Object.freeze({
+          inodeId: inode.id,
+          manifestHash,
+          size: inode.size!,
+          stat: stat(inode, canonical.segments.at(-1) ?? ""),
+        });
+      },
+      "openFileSync",
+      canonical.value,
+    );
+    return this.#makePinnedRead(canonical.value, {
+      ...selected,
+      leaseId,
+      ownerId,
+      ownerNonce,
+      expiresAt,
+    });
+  }
+  acquireSlabSync(
+    source: Uint8Array,
+    sourceOffset: number,
+    length: number,
+  ): NodeVfsManagedSlab | undefined {
+    source = intrinsicByteRange(source);
+    if (
+      !Number.isSafeInteger(sourceOffset) ||
+      sourceOffset < 0 ||
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      sourceOffset + length > source.byteLength
+    )
+      throw new RangeError("invalid Node VFS slab source range");
+    this.#cache.makeRoom(length);
+    let release: (() => void) | undefined;
+    try {
+      release = this.#admission.reserve(length);
+    } catch (error) {
+      if (error instanceof RangeError) return undefined;
+      throw error;
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = copyBytes(source, sourceOffset, sourceOffset + length);
+    } catch (error) {
+      release();
+      throw error;
+    }
+    let active = true;
+    return Object.freeze({
+      bytes,
+      release: () => {
+        if (!active) return;
+        active = false;
+        release!();
+      },
+    });
+  }
+  reserveControlSync(bytes: number): (() => void) | undefined {
+    if (!Number.isSafeInteger(bytes) || bytes < 0)
+      throw new RangeError("invalid Node VFS control reservation");
+    this.#cache.makeRoom(bytes);
+    try {
+      return this.#admission.reserve(bytes);
+    } catch (error) {
+      if (error instanceof RangeError) return undefined;
+      throw error;
+    }
+  }
+  managedMemorySync(): NodeVfsManagedMemorySnapshot {
+    return Object.freeze({
+      usedBytes: this.#admission.usedBytes,
+      peakBytes: this.#admission.peakBytes,
+      limitBytes: this.#admission.limitBytes,
+    });
   }
   existsSync(path: string): boolean {
     try {
@@ -265,35 +519,49 @@ class Bridge implements NodeVfsFilesystemBridge {
     length: number,
   ): number {
     const canonical = canonicalizePath(path, this.filesystemLimits, "readIntoSync");
-    return this.#read((tx) => {
-      const inode = tx
-        .namespace(this.filesystemLimits, this.storageLimits, "readIntoSync")
-        .resolve(canonical, true).inode;
-      if (inode.type !== 0 || !inode.manifest_hash)
-        throw fsError(
-          inode.type === 1 ? "EISDIR" : "EINVAL",
-          "readIntoSync",
-          canonical.value,
-          "path is not a file",
+    destination = intrinsicByteRange(destination);
+    this.#validateReadRange(
+      destination,
+      destinationOffset,
+      position,
+      length,
+      "readIntoSync",
+      canonical.value,
+    );
+    return this.#read(
+      (tx) => {
+        const inode = tx
+          .namespace(this.filesystemLimits, this.storageLimits, "readIntoSync")
+          .resolve(canonical, true).inode;
+        if (inode.type !== 0 || !inode.manifest_hash)
+          throw fsError(
+            inode.type === 1 ? "EISDIR" : "EINVAL",
+            "readIntoSync",
+            canonical.value,
+            "path is not a file",
+          );
+        return readManifestInto(
+          tx.content(this.storageLimits, this.#cache),
+          inode.manifest_hash,
+          position,
+          destination,
+          destinationOffset,
+          length,
         );
-      return readManifestInto(
-        tx.content(this.storageLimits, this.#cache),
-        inode.manifest_hash,
-        position,
-        destination,
-        destinationOffset,
-        length,
-      );
-    });
+      },
+      "readIntoSync",
+      canonical.value,
+    );
   }
   readRangeSync(path: string, position: number, length: number): Uint8Array {
+    this.#validateMaterializedRange(position, length, "readRangeSync", path);
     const output = new Uint8Array(length);
     const read = this.readIntoSync(path, output, 0, position, length);
     return read === length ? output : output.slice(0, read);
   }
   readFileSync(path: string): Uint8Array {
     const size = this.statSync(path).size;
-    if (size > this.runtimeLimits.maxManagedResidentBytes)
+    if (size > this.filesystemLimits.maxMaterializedBytes)
       throw fsError(
         "EFBIG",
         "readFileSync",
@@ -302,161 +570,121 @@ class Bridge implements NodeVfsFilesystemBridge {
       );
     return this.readRangeSync(path, 0, size);
   }
-  prepareContentSync(bytes: Uint8Array): SyncPreparedContent {
-    const manifest = buildManifest(bytes, DEFAULT_FASTCDC);
-    const leaseId = globalThis.crypto.randomUUID();
-    const ownerId = globalThis.crypto.randomUUID();
-    const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
-    const now = this.#now();
-    let begun = false;
+  prepareContentSync(bytes: Uint8Array): NodeVfsPreparedContent {
+    bytes = intrinsicByteRange(bytes);
+    return this.prepareContentSourceSync({
+      size: intrinsicByteLength(bytes),
+      readInto: (destination, destinationOffset, position, length) => {
+        destination.set(
+          intrinsicByteRange(bytes, position, position + length),
+          destinationOffset,
+        );
+        return length;
+      },
+    });
+  }
+  prepareContentSourceSync(source: SynchronousContentSource): NodeVfsPreparedContent {
     try {
-      this.#write((tx) => {
-        const staging = tx.staging(this.storageLimits, this.#cache);
-        staging.begin({
-          leaseId,
-          ownerId,
-          ownerNonce,
-          now,
-          expiresAt: now + this.storageLimits.stagingLeaseMs,
-          ingestReservationBytes: ingestReservationBytes(
-            intrinsicByteLength(bytes),
-            this.storageLimits,
-          ),
-          metadataReservationBytes: metadataReservationBytes(
-            intrinsicByteLength(bytes),
-            this.storageLimits,
-          ),
-        });
-        staging.bumpRoot(5, leaseId, false);
-      });
-      begun = true;
-      for (const [hash, object] of manifest.objects) {
-        const objectHash = BufferlessHex(hash);
-        const objectBytes = intrinsicByteLength(object);
-        this.#write((tx) => {
-          const staging = tx.staging(this.storageLimits, this.#cache);
-          staging.consumeIngestReservation(leaseId, ownerNonce, objectBytes);
-          staging.consumeMetadataReservation(
-            leaseId,
-            ownerNonce,
-            DURABLE_METADATA_ROW_BYTES,
-          );
-          tx.content(this.storageLimits, this.#cache).putObject(objectHash, object);
-          staging.appendBatch(leaseId, ownerNonce, [
-            { kind: "object", hash: objectHash, size: objectBytes },
-          ]);
-        });
-      }
-      for (const node of manifest.nodes.values()) {
-        const nodeBytes = intrinsicByteLength(node.encoded);
-        this.#write((tx) => {
-          const staging = tx.staging(this.storageLimits, this.#cache);
-          staging.consumeIngestReservation(leaseId, ownerNonce, nodeBytes);
-          staging.consumeMetadataReservation(
-            leaseId,
-            ownerNonce,
-            DURABLE_METADATA_ROW_BYTES,
-          );
-          tx.content(this.storageLimits, this.#cache).putManifestNode(
-            node.hash,
-            node.encoded,
-          );
-          staging.appendBatch(leaseId, ownerNonce, [
-            { kind: "manifest-node", hash: node.hash, size: nodeBytes },
-          ]);
-        });
-      }
-      const rootBytes = intrinsicByteLength(manifest.root);
-      const certificate = this.#write((tx) => {
-        const staging = tx.staging(this.storageLimits, this.#cache);
-        staging.consumeIngestReservation(leaseId, ownerNonce, rootBytes);
-        staging.consumeMetadataReservation(
-          leaseId,
-          ownerNonce,
-          DURABLE_METADATA_ROW_BYTES,
-        );
-        tx.content(this.storageLimits, this.#cache).putManifestRoot(
-          manifest.rootHash,
-          manifest.root,
-        );
-        staging.appendBatch(leaseId, ownerNonce, [
-          {
-            kind: "manifest-root",
-            hash: manifest.rootHash,
-            size: rootBytes,
-          },
-        ]);
-        staging.beginReconciliation(leaseId, ownerNonce, manifest.rootHash);
-        return Object.freeze({
-          ...staging.snapshot(leaseId, ownerNonce),
-          manifestHash: manifest.rootHash,
-        });
-      });
-      let complete = false;
-      while (!complete)
-        complete = this.#write(
-          (tx) =>
-            tx
-              .staging(this.storageLimits, this.#cache)
-              .reconcileBatch(
-                leaseId,
-                ownerNonce,
-                Math.max(
-                  1,
-                  Math.min(
-                    this.storageLimits.maxQueryBatchSize,
-                    Math.floor((this.storageLimits.maxFinalTransactionRows - 8) / 4),
-                    Math.floor(
-                      (this.storageLimits.maxFinalTransactionRows * 4 - 16) /
-                        (this.storageLimits.maxManifestDepth * 2 + 12),
-                    ),
-                  ),
-                ),
-              ).complete,
-        );
-      this.#write((tx) =>
-        tx.staging(this.storageLimits, this.#cache).seal(certificate),
+      const prepared = prepareContentSourceSync(
+        this.#port,
+        source,
+        this.storageLimits,
+        this.runtimeLimits,
+        this.#admission,
+        this.#cache,
+        this.#clock,
       );
-      return Object.freeze({
-        manifestHash: manifest.rootHash,
-        size: intrinsicByteLength(bytes),
-        certificate,
-      });
+      return this.#wrapPrepared(
+        Object.freeze({
+          manifestHash: prepared.hash,
+          size: prepared.size,
+          certificate: prepared.certificate,
+        }),
+      );
     } catch (error) {
-      if (begun)
-        try {
-          this.#write((tx) =>
-            tx
-              .staging(this.storageLimits, this.#cache)
-              .release(leaseId, ownerNonce, false),
-          );
-        } catch {}
-      throw error;
+      if (
+        error instanceof RangeError &&
+        /managed resident|memory limit|admit synchronous/i.test(error.message)
+      )
+        throw fsError(
+          "EAGAIN",
+          "stagePrefixSync",
+          undefined,
+          "aggregate managed-memory pressure could not be relieved",
+          error,
+        );
+      mapStorageError(error, "stagePrefixSync");
     }
   }
+  prepareOverwriteSync(
+    path: string,
+    offset: number,
+    source: SynchronousContentSource,
+  ): NodeVfsPreparedContent | undefined {
+    if (!this.#prepareOverwriteSync) return undefined;
+    const prepared = this.#prepareOverwriteSync(path, offset, source);
+    return prepared ? this.#wrapPrepared(prepared) : undefined;
+  }
+  prepareOverwritesSync(
+    path: string,
+    edits: readonly NodeVfsOverwriteEdit[],
+  ): NodeVfsPreparedContent | undefined {
+    if (!this.#prepareOverwritesSync) return undefined;
+    const prepared = this.#prepareOverwritesSync(path, edits);
+    return prepared ? this.#wrapPrepared(prepared) : undefined;
+  }
+  abortPreparedSync(handle: NodeVfsPreparedContent): void {
+    const prepared = this.#requirePrepared(handle);
+    this.#write((tx) => {
+      tx.staging(this.storageLimits, this.#cache).release(
+        prepared.certificate.leaseId,
+        prepared.certificate.ownerNonce,
+        false,
+      );
+    }, "abortSync");
+    this.#prepared.delete(handle);
+  }
   readPreparedIntoSync(
-    prepared: SyncPreparedContent,
+    handle: NodeVfsPreparedContent,
     destination: Uint8Array,
     destinationOffset: number,
     position: number,
     length: number,
   ): number {
-    return this.#read((tx) =>
-      readManifestInto(
-        tx.content(this.storageLimits, this.#cache),
-        prepared.manifestHash,
-        position,
-        destination,
-        destinationOffset,
-        length,
-      ),
+    const prepared = this.#requirePrepared(handle);
+    destination = intrinsicByteRange(destination);
+    this.#validateReadRange(
+      destination,
+      destinationOffset,
+      position,
+      length,
+      "readIntoSync",
+    );
+    return this.#read(
+      (tx) =>
+        readManifestInto(
+          tx.content(this.storageLimits, this.#cache),
+          prepared.manifestHash,
+          position,
+          destination,
+          destinationOffset,
+          length,
+        ),
+      "readIntoSync",
     );
   }
   commitPreparedSync(
     path: string,
-    prepared: SyncPreparedContent,
-    options: { create?: boolean; exclusive?: boolean; mode?: number } = {},
-  ): void {
+    handle: NodeVfsPreparedContent,
+    options: {
+      create?: boolean;
+      exclusive?: boolean;
+      mode?: number;
+      inodeId?: string;
+      aliases?: readonly string[];
+    } = {},
+  ): NodeVfsCommitResult {
+    const prepared = this.#requirePrepared(handle);
     const canonical = canonicalizePath(
       path,
       this.filesystemLimits,
@@ -469,94 +697,193 @@ class Bridge implements NodeVfsFilesystemBridge {
         canonical.value,
         "root is a directory",
       );
+    const aliases = (options.aliases ?? []).map((alias) =>
+      canonicalizePath(alias, this.filesystemLimits, "commitVisibleSync"),
+    );
+    const mode = validatedMode(options.mode, 0o644);
+    const leaseId = globalThis.crypto.randomUUID();
+    const ownerId = globalThis.crypto.randomUUID();
+    const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    let selected;
     try {
-      this.#write((tx) => {
-        tx.staging(this.storageLimits, this.#cache).validateSealed(
-          prepared.certificate,
-          this.#now(),
-        );
-        const ns = tx.namespace(
-          this.filesystemLimits,
-          this.storageLimits,
-          "commitVisibleSync",
-        );
-        const existing = ns.resolveOptional(canonical, true);
-        if (options.exclusive && existing)
-          throw fsError(
-            "EEXIST",
+      selected = this.#write(
+        (tx) => {
+          const ns = tx.namespace(
+            this.filesystemLimits,
+            this.storageLimits,
             "commitVisibleSync",
-            canonical.value,
-            "destination exists",
           );
-        if (!existing && options.create === false)
-          throw fsError(
-            "ENOENT",
-            "commitVisibleSync",
-            canonical.value,
-            "file does not exist",
+          const existing = ns.resolveOptional(canonical, true);
+          const alreadyCommitted =
+            existing?.inode.type === 0 &&
+            existing.inode.id === options.inodeId &&
+            existing.inode.size === prepared.size &&
+            existing.inode.manifest_hash !== null &&
+            equalBytes(existing.inode.manifest_hash, prepared.manifestHash);
+          if (!alreadyCommitted)
+            tx.staging(this.storageLimits, this.#cache).validateSealed(
+              prepared.certificate,
+              this.#now(),
+            );
+          if (
+            options.inodeId !== undefined &&
+            existing?.inode.id !== options.inodeId &&
+            !(options.create && !existing)
+          )
+            throw fsError(
+              "EBUSY",
+              "commitVisibleSync",
+              canonical.value,
+              "open inode identity no longer matches the commit path",
+            );
+          if (options.exclusive && existing && !alreadyCommitted)
+            throw fsError(
+              "EEXIST",
+              "commitVisibleSync",
+              canonical.value,
+              "destination exists",
+            );
+          if (!existing && options.create === false)
+            throw fsError(
+              "ENOENT",
+              "commitVisibleSync",
+              canonical.value,
+              "file does not exist",
+            );
+          if (existing?.inode.type === 1)
+            throw fsError(
+              "EISDIR",
+              "commitVisibleSync",
+              canonical.value,
+              "destination is a directory",
+            );
+          const now = this.#now();
+          let revision: number | undefined;
+          let committedInodeId: string;
+          if (alreadyCommitted) {
+            committedInodeId = existing!.inode.id;
+          } else if (existing) {
+            revision = ns.nextRevision(now, 1, "node-vfs");
+            committedInodeId = existing.inode.id;
+            if (
+              ns.setFileContent(
+                existing.inode.id,
+                prepared.size,
+                prepared.manifestHash,
+                now,
+                now,
+                revision,
+                prepared.expectedToken,
+              ) !== 1
+            )
+              throw fsError(
+                "EAGAIN",
+                "commitVisibleSync",
+                canonical.value,
+                "file changed while content was prepared",
+              );
+            ns.recordInode(revision, existing.inode.id);
+          } else {
+            const parent = ns.resolveParent(canonical);
+            revision = ns.nextRevision(now, 3 + aliases.length * 3, "node-vfs");
+            const id = options.inodeId ?? globalThis.crypto.randomUUID();
+            committedInodeId = id;
+            ns.createInode({
+              id,
+              type: 0,
+              mode,
+              now,
+              revision: revision!,
+              size: prepared.size,
+              manifestHash: prepared.manifestHash,
+            });
+            ns.putEntry(
+              parent.parent.inode.id,
+              parent.nameSort,
+              parent.name,
+              id,
+              revision!,
+            );
+            ns.recordEntry(revision, parent.parent.inode.id, parent.nameSort);
+            ns.recordInode(revision, id);
+            this.#touch(tx, ns, parent.parent.inode, now, revision);
+          }
+          for (const alias of alreadyCommitted ? [] : aliases) {
+            if (alias.value === canonical.value) continue;
+            if (ns.resolveOptional(alias, false))
+              throw fsError(
+                "EEXIST",
+                "commitVisibleSync",
+                alias.value,
+                "pending hard-link alias already exists",
+              );
+            const parent = ns.resolveParent(alias);
+            ns.putEntry(
+              parent.parent.inode.id,
+              parent.nameSort,
+              parent.name,
+              committedInodeId,
+              revision!,
+            );
+            ns.incrementLinks(committedInodeId, now, revision!);
+            ns.recordEntry(revision!, parent.parent.inode.id, parent.nameSort);
+            ns.recordInode(revision!, committedInodeId);
+            this.#touch(tx, ns, parent.parent.inode, now, revision!);
+          }
+          tx.staging(this.storageLimits, this.#cache).release(
+            prepared.certificate.leaseId,
+            prepared.certificate.ownerNonce,
+            true,
           );
-        if (existing?.inode.type === 1)
-          throw fsError(
-            "EISDIR",
-            "commitVisibleSync",
-            canonical.value,
-            "destination is a directory",
+          const committed = ns.inode(committedInodeId);
+          if (!committed?.manifest_hash)
+            throw new Error("ECORRUPT: committed Node VFS inode is missing content");
+          const expiresAt = now + this.storageLimits.readLeaseMs;
+          tx.staging(this.storageLimits).acquireReadLease(
+            leaseId,
+            ownerId,
+            ownerNonce,
+            committed.manifest_hash,
+            expiresAt,
           );
-        const now = this.#now();
-        const revision = ns.nextRevision(now, existing ? 1 : 3, "node-vfs");
-        if (existing) {
-          ns.setFileContent(
-            existing.inode.id,
-            prepared.size,
-            prepared.manifestHash,
-            now,
-            now,
-            revision,
-          );
-          ns.recordInode(revision, existing.inode.id);
-        } else {
-          const parent = ns.resolveParent(canonical);
-          const id = globalThis.crypto.randomUUID();
-          ns.createInode({
-            id,
-            type: 0,
-            mode: (options.mode ?? 0o666) & 0o7777,
-            now,
-            revision,
-            size: prepared.size,
-            manifestHash: prepared.manifestHash,
+          return Object.freeze({
+            inodeId: committed.id,
+            manifestHash: copyBytes(committed.manifest_hash),
+            size: committed.size!,
+            stat: stat(committed, canonical.segments.at(-1) ?? ""),
+            leaseId,
+            ownerId,
+            ownerNonce,
+            expiresAt,
           });
-          ns.putEntry(
-            parent.parent.inode.id,
-            parent.nameSort,
-            parent.name,
-            id,
-            revision,
-          );
-          ns.recordEntry(revision, parent.parent.inode.id, parent.nameSort);
-          ns.recordInode(revision, id);
-          this.#touch(tx, ns, parent.parent.inode, now, revision);
-        }
-        tx.staging(this.storageLimits, this.#cache).release(
-          prepared.certificate.leaseId,
-          prepared.certificate.ownerNonce,
-          true,
-        );
-      });
+        },
+        "commitVisibleSync",
+        canonical.value,
+      );
     } catch (error) {
-      try {
-        this.#write((tx) =>
-          tx
-            .staging(this.storageLimits, this.#cache)
-            .release(
-              prepared.certificate.leaseId,
-              prepared.certificate.ownerNonce,
-              false,
-            ),
-        );
-      } catch {}
-      throw error;
+      const visible = this.#read(
+        (tx) => {
+          const inode = tx
+            .namespace(this.filesystemLimits, this.storageLimits, "commitVisibleSync")
+            .resolveOptional(canonical, true)?.inode;
+          return Boolean(
+            inode?.type === 0 &&
+            (options.inodeId === undefined || inode.id === options.inodeId) &&
+            inode.size === prepared.size &&
+            inode.manifest_hash !== null &&
+            equalBytes(inode.manifest_hash, prepared.manifestHash),
+          );
+        },
+        "commitVisibleSync",
+        canonical.value,
+      );
+      if (!visible) throw error;
+      // Resolve an ambiguous adapter outcome through the same inode/content
+      // identity and acquire the replacement pin before reporting success.
+      return this.commitPreparedSync(path, handle, options);
     }
+    this.#prepared.delete(handle);
+    return Object.freeze({ pinned: this.#makePinnedRead(canonical.value, selected) });
   }
   writeFileSync(
     path: string,
@@ -566,6 +893,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     this.commitPreparedSync(path, this.prepareContentSync(bytes), options);
   }
   mkdirSync(path: string, options: { recursive?: boolean; mode?: number } = {}): void {
+    const mode = validatedMode(options.mode, 0o755);
     const canonical = canonicalizePath(path, this.filesystemLimits, "mkdirSync");
     if (canonical.value === "/") {
       if (options.recursive) return;
@@ -593,7 +921,7 @@ class Bridge implements NodeVfsFilesystemBridge {
         ns.createInode({
           id,
           type: 1,
-          mode: (options.mode ?? 0o777) & 0o7777,
+          mode,
           now,
           revision,
         });
@@ -605,6 +933,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   chmodSync(path: string, mode: number): void {
+    mode = validatedMode(mode, 0);
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "chmodSync");
       const value = ns.resolve(path, true);
@@ -615,6 +944,13 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   linkSync(existingPath: string, newPath: string): void {
+    const checkedDestination = canonicalizePath(
+      newPath,
+      this.filesystemLimits,
+      "linkSync",
+    );
+    if (checkedDestination.value === "/")
+      throw fsError("EPERM", "linkSync", "/", "root cannot be replaced");
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "linkSync");
       const source = ns.resolve(existingPath, true);
@@ -625,7 +961,7 @@ class Bridge implements NodeVfsFilesystemBridge {
           existingPath,
           "only files can be hard linked",
         );
-      const destination = canonicalizePath(newPath, this.filesystemLimits, "linkSync");
+      const destination = checkedDestination;
       if (ns.resolveOptional(destination, false))
         throw fsError("EEXIST", "linkSync", destination.value, "destination exists");
       const parent = ns.resolveParent(destination);
@@ -645,9 +981,17 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   symlinkSync(target: string, path: string): void {
+    validateSymlinkTarget(target, this.filesystemLimits, "symlinkSync");
+    const checkedDestination = canonicalizePath(
+      path,
+      this.filesystemLimits,
+      "symlinkSync",
+    );
+    if (checkedDestination.value === "/")
+      throw fsError("EPERM", "symlinkSync", "/", "root cannot be replaced");
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "symlinkSync");
-      const destination = canonicalizePath(path, this.filesystemLimits, "symlinkSync");
+      const destination = checkedDestination;
       if (ns.resolveOptional(destination, false))
         throw fsError("EEXIST", "symlinkSync", destination.value, "destination exists");
       const parent = ns.resolveParent(destination);
@@ -671,27 +1015,86 @@ class Bridge implements NodeVfsFilesystemBridge {
   renameSync(oldPath: string, newPath: string): void {
     const sourcePath = canonicalizePath(oldPath, this.filesystemLimits, "renameSync");
     const destination = canonicalizePath(newPath, this.filesystemLimits, "renameSync");
+    if (sourcePath.value === "/" || destination.value === "/")
+      throw fsError(
+        "EPERM",
+        "renameSync",
+        sourcePath.value,
+        "root cannot be renamed or replaced",
+      );
     if (sourcePath.value === destination.value) return;
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "renameSync");
       const source = ns.resolve(sourcePath, false);
       const target = ns.resolveOptional(destination, false);
-      if (target)
-        this.#unlink(tx, ns, target.path, target.inode.type === 1, "renameSync");
       const parent = ns.resolveParent(destination);
+      if (source.inode.type === 1) {
+        for (let index = 1; index < destination.segments.length; index += 1) {
+          const prefix = `/${destination.segments.slice(0, index).join("/")}`;
+          if (ns.resolve(prefix, true).inode.id === source.inode.id)
+            throw fsError(
+              "EINVAL",
+              "renameSync",
+              sourcePath.value,
+              "directory cannot be moved into itself",
+            );
+        }
+      }
+      if (target) {
+        if (source.inode.type === 1 && target.inode.type !== 1)
+          throw fsError(
+            "ENOTDIR",
+            "renameSync",
+            destination.value,
+            "cannot replace non-directory with directory",
+          );
+        if (source.inode.type !== 1 && target.inode.type === 1)
+          throw fsError(
+            "EISDIR",
+            "renameSync",
+            destination.value,
+            "cannot replace directory with non-directory",
+          );
+        if (target.inode.type === 1 && ns.childCount(target.inode.id) > 0)
+          throw fsError(
+            "ENOTEMPTY",
+            "renameSync",
+            destination.value,
+            "destination directory is not empty",
+          );
+      }
       const now = this.#now();
-      const revision = ns.nextRevision(now, 4, "node-vfs");
+      const revision = ns.nextRevision(now, 7, "node-vfs");
       ns.putEntry(source.parentInode!, source.nameSort!, null, null, revision);
-      ns.putEntry(
-        parent.parent.inode.id,
-        parent.nameSort,
-        parent.name,
-        source.inode.id,
-        revision,
-      );
       ns.recordEntry(revision, source.parentInode!, source.nameSort!, true);
-      ns.recordEntry(revision, parent.parent.inode.id, parent.nameSort);
-      this.#touch(tx, ns, parent.parent.inode, now, revision);
+      if (target?.inode.id === source.inode.id) {
+        ns.decrementLinks(source.inode.id, now, revision);
+        ns.recordInode(revision, source.inode.id);
+      } else {
+        if (target) {
+          ns.putEntry(target.parentInode!, target.nameSort!, null, null, revision);
+          ns.recordEntry(revision, target.parentInode!, target.nameSort!, true);
+          if (target.inode.type !== 1 && target.inode.nlink > 1) {
+            ns.decrementLinks(target.inode.id, now, revision);
+            ns.recordInode(revision, target.inode.id);
+          } else {
+            ns.deleteInode(target.inode.id);
+            ns.recordInode(revision, target.inode.id, true);
+          }
+        }
+        ns.putEntry(
+          parent.parent.inode.id,
+          parent.nameSort,
+          parent.name,
+          source.inode.id,
+          revision,
+        );
+        ns.recordEntry(revision, parent.parent.inode.id, parent.nameSort);
+      }
+      const sourceParent = ns.inode(source.parentInode!);
+      if (sourceParent) this.#touch(tx, ns, sourceParent, now, revision);
+      if (parent.parent.inode.id !== source.parentInode)
+        this.#touch(tx, ns, parent.parent.inode, now, revision);
     });
   }
   unlinkSync(path: string): void {
@@ -745,25 +1148,198 @@ class Bridge implements NodeVfsFilesystemBridge {
     ns.touch(inode.id, now, now, revision);
     ns.recordInode(revision, inode.id);
   }
-  #read<T>(callback: (tx: StorageTransactionPorts) => T): T {
-    return this.#port.transaction(
-      "read",
-      {
-        maxRows: this.storageLimits.maxFinalTransactionRows,
-        maxBytes: this.storageLimits.maxFinalTransactionBytes,
-      },
-      callback,
-    );
+  #wrapPrepared(prepared: SyncPreparedContent): NodeVfsPreparedContent {
+    const handle = Object.freeze({
+      size: prepared.size,
+      ...(prepared.sourceBytesRead === undefined
+        ? {}
+        : { editSourceBytes: prepared.sourceBytesRead }),
+    });
+    this.#prepared.set(handle, prepared);
+    return handle;
   }
-  #write<T>(callback: (tx: StorageTransactionPorts) => T): T {
-    return this.#port.transaction(
-      "write",
-      {
-        maxRows: this.storageLimits.maxFinalTransactionRows,
-        maxBytes: this.storageLimits.maxFinalTransactionBytes,
+  #requirePrepared(handle: NodeVfsPreparedContent): SyncPreparedContent {
+    const prepared = this.#prepared.get(handle);
+    if (!prepared)
+      throw fsError(
+        "EINVAL",
+        "nodeVfs",
+        undefined,
+        "unknown or consumed prepared content",
+      );
+    return prepared;
+  }
+  #makePinnedRead(
+    canonicalPath: string,
+    selected: {
+      readonly inodeId: string;
+      readonly manifestHash: Uint8Array;
+      readonly size: number;
+      readonly stat: FileStat;
+      readonly leaseId: string;
+      readonly ownerId: string;
+      readonly ownerNonce: Uint8Array;
+      readonly expiresAt: number;
+    },
+  ): NodeVfsPinnedReadBridge {
+    let expiresAt = selected.expiresAt;
+    let cursor: AuthenticatedManifestCursor | undefined;
+    let closed = false;
+    const renewIfNeeded = (): void => {
+      const now = this.#now();
+      if (now + Math.floor(this.storageLimits.readLeaseMs / 3) < expiresAt) return;
+      const next = Math.max(now, expiresAt) + this.storageLimits.readLeaseMs;
+      const renewed = this.#write(
+        (tx) =>
+          tx
+            .staging(this.storageLimits)
+            .renewReadLease(
+              selected.leaseId,
+              selected.ownerId,
+              selected.ownerNonce,
+              expiresAt,
+              now,
+              next,
+            ),
+        "readIntoSync",
+        canonicalPath,
+      );
+      if (!renewed)
+        throw fsError(
+          "EBUSY",
+          "readIntoSync",
+          canonicalPath,
+          "pinned read lease expired or changed owner",
+        );
+      expiresAt = next;
+    };
+    return Object.freeze({
+      canonicalPath,
+      inodeId: selected.inodeId,
+      stat: selected.stat,
+      size: selected.size,
+      readIntoSync: (
+        destination: Uint8Array,
+        destinationOffset: number,
+        position: number,
+        length: number,
+      ): number => {
+        if (closed)
+          throw fsError(
+            "EBADF",
+            "readIntoSync",
+            canonicalPath,
+            "pinned read session is closed",
+          );
+        destination = intrinsicByteRange(destination);
+        this.#validateReadRange(
+          destination,
+          destinationOffset,
+          position,
+          length,
+          "readIntoSync",
+          canonicalPath,
+        );
+        renewIfNeeded();
+        return this.#read(
+          (tx) => {
+            const content = tx.content(this.storageLimits, this.#cache);
+            if (!cursor || cursor.position !== Math.min(position, selected.size)) {
+              cursor?.close();
+              cursor = content.openManifestCursor(selected.manifestHash, position);
+            } else cursor.bindSource(content);
+            return cursor.readInto(destination, destinationOffset, length);
+          },
+          "readIntoSync",
+          canonicalPath,
+        );
       },
-      callback,
-    );
+      closeSync: (): void => {
+        if (closed) return;
+        cursor?.close();
+        cursor = undefined;
+        this.#write(
+          (tx) => {
+            tx.staging(this.storageLimits).releaseReadLease(
+              selected.leaseId,
+              selected.ownerId,
+              selected.ownerNonce,
+            );
+          },
+          "closeSync",
+          canonicalPath,
+        );
+        closed = true;
+      },
+    });
+  }
+  #read<T>(
+    callback: (tx: StorageTransactionPorts) => T,
+    syscall = "nodeVfsRead",
+    path?: string,
+  ): T {
+    try {
+      return this.#port.transaction(
+        "read",
+        {
+          maxRows: this.storageLimits.maxFinalTransactionRows,
+          maxBytes: this.storageLimits.maxFinalTransactionBytes,
+        },
+        callback,
+      );
+    } catch (error) {
+      mapStorageError(error, syscall, path);
+    }
+  }
+  #write<T>(
+    callback: (tx: StorageTransactionPorts) => T,
+    syscall = "nodeVfsWrite",
+    path?: string,
+  ): T {
+    try {
+      return this.#port.transaction(
+        "write",
+        {
+          maxRows: this.storageLimits.maxFinalTransactionRows,
+          maxBytes: this.storageLimits.maxFinalTransactionBytes,
+        },
+        callback,
+      );
+    } catch (error) {
+      mapStorageError(error, syscall, path);
+    }
+  }
+  #validateMaterializedRange(
+    position: number,
+    length: number,
+    syscall: string,
+    path?: string,
+  ): void {
+    if (
+      !Number.isSafeInteger(position) ||
+      position < 0 ||
+      !Number.isSafeInteger(length) ||
+      length < 0
+    )
+      throw fsError("EINVAL", syscall, path, "invalid read position or length");
+    if (length > this.filesystemLimits.maxMaterializedBytes)
+      throw fsError("EFBIG", syscall, path, "read exceeds materialization limit");
+  }
+  #validateReadRange(
+    destination: Uint8Array,
+    destinationOffset: number,
+    position: number,
+    length: number,
+    syscall: string,
+    path?: string,
+  ): void {
+    this.#validateMaterializedRange(position, length, syscall, path);
+    if (
+      !Number.isSafeInteger(destinationOffset) ||
+      destinationOffset < 0 ||
+      destinationOffset + length > destination.byteLength
+    )
+      throw fsError("EINVAL", syscall, path, "invalid destination range");
   }
   #now(): number {
     const now = this.#clock();
@@ -771,15 +1347,9 @@ class Bridge implements NodeVfsFilesystemBridge {
     return now;
   }
 }
-
-function BufferlessHex(value: string): Uint8Array {
-  const bytes = new Uint8Array(32);
-  for (let index = 0; index < 32; index += 1)
-    bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
-  return bytes;
-}
 export function createNodeVfsOperationsBridge(
   options: NodeVfsOperationsBridgeOptions,
 ): NodeVfsFilesystemBridge {
   return new Bridge(options);
 }
+export type { SynchronousContentSource } from "./streaming-prepare.js";

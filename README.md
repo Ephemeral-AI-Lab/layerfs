@@ -125,19 +125,21 @@ M3 filesystem I/O   ✅
 M4 branches         ✅
 M5 maintenance      ✅
 M6 Cloudflare parity ✅  latest accepted milestone
-M7–M10 integration  ⏳
+M7 Node VFS         ⚠️  candidate-ready; evidence pending
+M8–M10 integration  ⏳
 ```
 
-| Milestone | Scope                                                         | Status                 |
-| --------- | ------------------------------------------------------------- | ---------------------- |
-| M0        | Repository and test foundation                                | ✅ Accepted            |
-| M1        | CAS, CDC, COW, patches, and manifests                         | ✅ Accepted            |
-| M2        | Transactional SQLite storage and Node driver                  | ✅ Accepted            |
-| M3        | Filesystem namespace, revisions, and I/O                      | ✅ Accepted            |
-| M4        | Branches and publication                                      | ✅ Accepted            |
-| M5        | Maintenance, recovery, and bounded scale                      | ✅ Accepted            |
-| M6        | Cloudflare Durable Object SQLite parity                       | ✅ **Latest accepted** |
-| M7–M10    | Node VFS/FUSE, replication, release, and Computer integration | ⏳ In progress         |
+| Milestone | Scope                                          | Status                 |
+| --------- | ---------------------------------------------- | ---------------------- |
+| M0        | Repository and test foundation                 | ✅ Accepted            |
+| M1        | CAS, CDC, COW, patches, and manifests          | ✅ Accepted            |
+| M2        | Transactional SQLite storage and Node driver   | ✅ Accepted            |
+| M3        | Filesystem namespace, revisions, and I/O       | ✅ Accepted            |
+| M4        | Branches and publication                       | ✅ Accepted            |
+| M5        | Maintenance, recovery, and bounded scale       | ✅ Accepted            |
+| M6        | Cloudflare Durable Object SQLite parity        | ✅ **Latest accepted** |
+| M7        | Node VFS and real mounted FUSE                 | ⚠️ Evidence pending    |
+| M8–M10    | Replication, release, and Computer integration | ⏳ In progress         |
 
 M6 adds the faithful local Cloudflare Durable Object adapter and runtime suite using
 `ctx.storage.sql` and `transactionSync`, including real runtime eviction,
@@ -149,6 +151,12 @@ Cloudflare credentials, deployment, network access, or external state.
 See the [implementation plan](./docs/implementation/implementation-plan.md),
 [M6 exit record](./docs/evidence/m6/exit.md), and
 [M6 handoff](./docs/implementation/m6-handoff.md).
+
+The M7 Node VFS implementation and local conformance/fault/resource selection are
+complete. Acceptance still requires the exact candidate to pass the privileged-Linux
+real mounted-FUSE profile and record candidate-bound predecessor, local, and FUSE logs
+in a constrained evidence commit; M6 remains the latest accepted milestone. See the
+[M7 handoff](./docs/implementation/m7-handoff.md).
 
 ## 📊 Benchmark progress
 
@@ -246,6 +254,14 @@ Run the accepted local Durable Object suite directly:
 pnpm test:m6
 ```
 
+Run the M7 local selection, or the mandatory real-FUSE target on a qualifying Linux
+host:
+
+```bash
+pnpm test:m7:local
+pnpm test:m7:fuse
+```
+
 Run the storage engine benchmark:
 
 ```bash
@@ -285,10 +301,11 @@ docs/benchmarks/              Benchmark plans, results, and improvement targets
 - [M5 acceptance evidence](./docs/evidence/m5/exit.md)
 - [M6 acceptance evidence](./docs/evidence/m6/exit.md)
 - [M6 implementation handoff](./docs/implementation/m6-handoff.md)
+- [M7 implementation handoff](./docs/implementation/m7-handoff.md)
 - [Full implementation plan](./docs/implementation/implementation-plan.md)
 
-The next milestone is M7 Node VFS readiness and real mounted-FUSE validation on
-privileged Linux.
+The next milestone action is binding the M7 predecessor, local, and privileged-Linux
+real-FUSE runs to the exact candidate and completing the constrained acceptance commit.
 
 ## 📄 License
 

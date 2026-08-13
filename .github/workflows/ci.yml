@@ -25,3 +25,22 @@ jobs:
       # Advance this only when the next sequential milestone gate is accepted.
       # Later smoke/fault/performance suites intentionally fail when empty.
       - run: pnpm validate:accepted
+  m7-real-fuse:
+    # This label contract denotes a privileged Linux host with a writable
+    # /dev/fuse and fusermount. Hosted or userspace-only shims do not qualify.
+    runs-on: [self-hosted, linux, x64, fuse]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:m7:fuse
