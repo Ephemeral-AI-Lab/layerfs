@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  bytesToHex,
   intrinsicByteLength as casIntrinsicByteLength,
   intrinsicByteRange as casIntrinsicByteRange,
 } from "../../packages/fs/dist/cas/bytes.js";
@@ -50,6 +51,53 @@ function fixture(length, seed = 0x12345678) {
   }
   return bytes;
 }
+
+test("bytesToHex is lowercase, zero-padded, and respects intrinsic byte ranges", () => {
+  const expectedHex = (bytes) =>
+    Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+
+  assert.equal(bytesToHex(new Uint8Array()), "");
+  assert.equal(
+    bytesToHex(Uint8Array.of(0x00, 0x01, 0x0f, 0x10, 0xab, 0xff)),
+    "00010f10abff",
+  );
+
+  const allBytes = Uint8Array.from({ length: 256 }, (_, value) => value);
+  assert.equal(bytesToHex(allBytes), expectedHex(allBytes));
+  assert.equal(bytesToHex(Buffer.from([0x00, 0x0f, 0x80, 0xff])), "000f80ff");
+
+  class AdversarialBytes extends Uint8Array {
+    get byteLength() {
+      return 1;
+    }
+    get byteOffset() {
+      return 0;
+    }
+    get buffer() {
+      return new ArrayBuffer(1);
+    }
+    subarray() {
+      return Uint8Array.of(0xff);
+    }
+    [Symbol.iterator]() {
+      return Uint8Array.of(0xee)[Symbol.iterator]();
+    }
+  }
+  const adversarial = new AdversarialBytes(4);
+  adversarial.set([0x00, 0x0f, 0x10, 0xff]);
+  assert.equal(bytesToHex(adversarial), "000f10ff");
+
+  let state = 0x9e3779b9;
+  for (let iteration = 0; iteration < 128; iteration += 1) {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    const bytes = new Uint8Array(state % 1025);
+    for (let index = 0; index < bytes.byteLength; index += 1) {
+      state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+      bytes[index] = state >>> 24;
+    }
+    assert.equal(bytesToHex(bytes), expectedHex(bytes), `iteration ${iteration}`);
+  }
+});
 
 test("CAS SHA-256 matches golden vectors and freezes inputs", () => {
   assert.equal(
