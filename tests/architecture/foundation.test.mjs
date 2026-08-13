@@ -6,6 +6,7 @@ import { createRecordingFactory } from "../../packages/testkit/dist/index.js";
 import { load as parseYaml } from "js-yaml";
 import { documentationLinkErrors } from "../../scripts/documentation-links.mjs";
 import { workflowPolicyErrors } from "../../scripts/workflow-policy.mjs";
+import { evidenceMilestonesThrough } from "../../scripts/evidence-milestones.mjs";
 import eslintConfig from "../../eslint.config.js";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -36,6 +37,11 @@ test("CI invokes only the explicit highest accepted milestone gate", () => {
   );
   const parsed = parseYaml(workflow);
   assert.deepEqual(workflowPolicyErrors(parsed), []);
+  const checkoutSteps = parsed.jobs.validate.steps.filter((step) =>
+    /^actions\/checkout@/u.test(step.uses ?? ""),
+  );
+  assert.equal(checkoutSteps.length, 1);
+  assert.equal(checkoutSteps[0].with?.["fetch-depth"], 0);
   const runSteps = parsed.jobs.validate.steps
     .filter((step) => Object.hasOwn(step, "run"))
     .map((step) => step.run);
@@ -122,6 +128,14 @@ test("milestone gates select only their owned suites and sequential predecessors
     "pnpm validate:m1:pre-evidence && pnpm test:m2",
   );
   assert.equal(scripts["validate:accepted"], "pnpm validate:m2");
+});
+
+test("evidence validation stops at the active accepted milestone", () => {
+  assert.deepEqual(evidenceMilestonesThrough("m0"), ["m0"]);
+  assert.deepEqual(evidenceMilestonesThrough("m1"), ["m0", "m1"]);
+  assert.deepEqual(evidenceMilestonesThrough("m2"), ["m0", "m1", "m2"]);
+  assert.deepEqual(evidenceMilestonesThrough("m3"), ["m0", "m1", "m2", "m3"]);
+  assert.throws(() => evidenceMilestonesThrough("m4"), /no validation schema for m4/u);
 });
 
 test("documentation links resolve inline and reference-style targets", async () => {

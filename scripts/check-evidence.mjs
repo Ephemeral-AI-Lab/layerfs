@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import ts from "typescript";
+import { evidenceMilestonesThrough } from "./evidence-milestones.mjs";
 
 const execute = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
@@ -15,10 +16,7 @@ const acceptedMatch = /^pnpm validate:(m\d+)$/u.exec(acceptedValidation ?? "");
 if (!acceptedMatch)
   throw new Error("validate:accepted must select one milestone validation command");
 const activeAcceptedMilestone = acceptedMatch[1];
-if (!new Set(["m0", "m1", "m2", "m3"]).has(activeAcceptedMilestone))
-  throw new Error(
-    `evidence checker has no validation schema for ${activeAcceptedMilestone}`,
-  );
+const evidenceMilestones = new Set(evidenceMilestonesThrough(activeAcceptedMilestone));
 
 function requireObject(value, name) {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -269,6 +267,12 @@ if (process.argv[2] === "--owned-tree-digest") {
   process.exit(0);
 }
 
+function reportValidationSuccess() {
+  console.log(
+    `evidence: preserved predecessor candidates through current ${activeAcceptedMilestone.toUpperCase()} with schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics internally consistent`,
+  );
+}
+
 const m0 = await validateMilestone(
   "m0",
   [
@@ -292,6 +296,10 @@ if (
   m0.artifact.metrics.matrixRuns * m0.artifact.metrics.architectureTestsPerCell
 )
   throw new Error("m0 passed count differs from the recorded tests per matrix cell");
+if (!evidenceMilestones.has("m1")) {
+  reportValidationSuccess();
+  process.exit(0);
+}
 
 const m1 = await validateMilestone(
   "m1",
@@ -317,6 +325,10 @@ const predecessor = m1.exit.match(
 )?.[1];
 if (predecessor !== m0.candidate)
   throw new Error("m1 sequential predecessor differs from the accepted m0 candidate");
+if (!evidenceMilestones.has("m2")) {
+  reportValidationSuccess();
+  process.exit(0);
+}
 
 const m2 = await validateMilestone(
   "m2",
@@ -349,6 +361,10 @@ const m2Predecessor = m2.exit.match(
 )?.[1];
 if (m2Predecessor !== m1.candidate)
   throw new Error("m2 sequential predecessor differs from the accepted m1 candidate");
+if (!evidenceMilestones.has("m3")) {
+  reportValidationSuccess();
+  process.exit(0);
+}
 
 const m3 = await validateMilestone(
   "m3",
@@ -388,6 +404,4 @@ const m3Predecessor = m3.exit.match(
 if (m3Predecessor !== m2.candidate)
   throw new Error("m3 sequential predecessor differs from the accepted m2 candidate");
 
-console.log(
-  `evidence: preserved predecessor candidates and current ${activeAcceptedMilestone.toUpperCase()} schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,
-);
+reportValidationSuccess();
