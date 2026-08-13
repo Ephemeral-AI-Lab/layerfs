@@ -4,7 +4,9 @@
 
 [![M2 accepted](https://img.shields.io/badge/M2-accepted-2ea44f)](./docs/evidence/m2/exit.md)
 [![M3 accepted](https://img.shields.io/badge/M3-accepted-2ea44f)](./docs/evidence/m3/exit.md)
-[![M4 accepted](https://img.shields.io/badge/M4-accepted-2ea44f)](./docs/implementation/implementation-plan.md#7-milestone-4-branches-and-publication)
+[![M4 accepted](https://img.shields.io/badge/M4-accepted-2ea44f)](./docs/evidence/m4/exit.md)
+[![M5 accepted](https://img.shields.io/badge/M5-accepted-2ea44f)](./docs/evidence/m5/exit.md)
+[![M6 accepted](https://img.shields.io/badge/M6-accepted-2ea44f)](./docs/evidence/m6/exit.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Ephemeral AI FS gives Ephemeral AI Computer a durable workspace layer where agents can
@@ -118,30 +120,35 @@ trust a stale derived index or return incorrect bytes.
 ```text
 M0 foundation       ✅
 M1 content engine   ✅
-M2 SQLite storage   ✅  latest accepted milestone
-M3 filesystem I/O   ✅  accepted milestone
+M2 SQLite storage   ✅
+M3 filesystem I/O   ✅
 M4 branches         ✅
-M5 maintenance      ⏳
-M6–M10 integration  ⏳
+M5 maintenance      ✅
+M6 Cloudflare parity ✅  latest accepted milestone
+M7–M10 integration  ⏳
 ```
 
-| Milestone | Scope                                                                       | Status          |
-| --------- | --------------------------------------------------------------------------- | --------------- |
-| M0        | Repository and test foundation                                              | ✅ Accepted     |
-| M1        | CAS, CDC, COW, patches, and manifests                                       | ✅ Accepted     |
-| M2        | Transactional SQLite storage and Node driver                                | ✅ **Accepted** |
-| M3        | Filesystem namespace, revisions, and I/O                                    | ✅ **Accepted** |
-| M4        | Branches and publication                                                    | ✅ **Accepted** |
-| M5        | Maintenance, recovery, and bounded scale                                    | ⏳ Planned      |
-| M6–M10    | Cloudflare parity, Node VFS, replication, release, and Computer integration | ⏳ Planned      |
+| Milestone | Scope                                                         | Status                 |
+| --------- | ------------------------------------------------------------- | ---------------------- |
+| M0        | Repository and test foundation                                | ✅ Accepted            |
+| M1        | CAS, CDC, COW, patches, and manifests                         | ✅ Accepted            |
+| M2        | Transactional SQLite storage and Node driver                  | ✅ Accepted            |
+| M3        | Filesystem namespace, revisions, and I/O                      | ✅ Accepted            |
+| M4        | Branches and publication                                      | ✅ Accepted            |
+| M5        | Maintenance, recovery, and bounded scale                      | ✅ Accepted            |
+| M6        | Cloudflare Durable Object SQLite parity                       | ✅ **Latest accepted** |
+| M7–M10    | Node VFS/FUSE, replication, release, and Computer integration | ⏳ In progress         |
 
-M3 is accepted with read-path batching, durable bounded local reconnection, and async
-write-path hashing. Its A6 benchmark gate is 500 scattered edits in 20 seconds; the
-latest clean run completed 500/500 in 9.975 seconds.
+M6 adds the faithful local Cloudflare Durable Object adapter and runtime suite using
+`ctx.storage.sql` and `transactionSync`, including real runtime eviction,
+released-schema migration, exhaustive filesystem/publication/maintenance fault matrices,
+the unchanged 100,000-row scale fixture, and an exact deployable preview bundle. Both
+accepted target selections complete within their independent 600-second budgets without
+Cloudflare credentials, deployment, network access, or external state.
 
 See the [implementation plan](./docs/implementation/implementation-plan.md),
-[M2 exit record](./docs/evidence/m2/exit.md), and
-[M3 improvement plan](./docs/benchmarks/m3-improvements.md).
+[M6 exit record](./docs/evidence/m6/exit.md), and
+[M6 handoff](./docs/implementation/m6-handoff.md).
 
 ## 📊 Benchmark progress
 
@@ -233,10 +240,10 @@ pnpm install
 pnpm validate:accepted
 ```
 
-Run the M2 storage suite directly:
+Run the accepted local Durable Object suite directly:
 
 ```bash
-pnpm test:m2
+pnpm test:m6
 ```
 
 Run the storage engine benchmark:
@@ -274,9 +281,14 @@ docs/benchmarks/              Benchmark plans, results, and improvement targets
 - [M2 benchmark details](./docs/benchmarks/m2-minibench.md)
 - [M3 acceptance evidence](./docs/evidence/m3/exit.md)
 - [M3 sequenced improvement plan](./docs/benchmarks/m3-improvements.md)
+- [M4 acceptance evidence](./docs/evidence/m4/exit.md)
+- [M5 acceptance evidence](./docs/evidence/m5/exit.md)
+- [M6 acceptance evidence](./docs/evidence/m6/exit.md)
+- [M6 implementation handoff](./docs/implementation/m6-handoff.md)
 - [Full implementation plan](./docs/implementation/implementation-plan.md)
 
-The next milestone is M5 maintenance, recovery, and bounded scale.
+The next milestone is M7 Node VFS readiness and real mounted-FUSE validation on
+privileged Linux.
 
 ## 📄 License
 
