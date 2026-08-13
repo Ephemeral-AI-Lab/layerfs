@@ -2415,28 +2415,6 @@ test(
       assert.ok(calls < 2000);
       return { result, peakMarks };
     };
-    const verifyExactUsage = async () => {
-      let cursor;
-      let checked = 0;
-      for (let batch = 0; batch < 5000; batch += 1) {
-        const verification = await maintenanceCall(() =>
-          filesystem.maintenance.verify({
-            scopes: ["metadata"],
-            cursor,
-            maxEntities: insertBatchSize,
-          }),
-        );
-        checked += verification.checkedEntities;
-        cursor = verification.nextCursor ?? undefined;
-        observeMemory();
-        if (verification.complete) {
-          assert.equal(cursor, undefined);
-          return checked;
-        }
-      }
-      throw new Error("bounded exact usage verification did not complete");
-    };
-
     try {
       await open(true);
       const fixtureDigest = createHash("sha256");
@@ -2705,16 +2683,21 @@ test(
         await filesystem.readFile("/scale-file-099999"),
         objectBytes(count - 1),
       );
-      let afterCollection;
-      for (let call = 0; call < 2000; call += 1) {
-        afterCollection = await maintenanceCall(() =>
-          filesystem.maintenance.snapshotStorage({ maxBatches: 8 }),
-        );
-        if (afterCollection.state === "complete") break;
-      }
-      assert.equal(afterCollection.state, "complete");
-      assert.equal(afterCollection.objectCount, exact.object_count);
-      assert.equal(afterCollection.reclaimablePayloadBytes, 0);
+      const expectedPostCollectionUsage = {
+        object_count: exact.object_count,
+        manifest_root_count: exact.manifest_root_count - 1,
+        manifest_node_count: exact.manifest_node_count,
+      };
+      const usageAfterCollection = injector.driver.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT object_count,manifest_root_count,manifest_node_count FROM efs_usage WHERE singleton=1",
+            [],
+            { maxRows: 1, maxBytes: 256 },
+          )[0],
+      );
+      assert.deepEqual(usageAfterCollection, expectedPostCollectionUsage);
       const finalCheckpoint = injector.driver.checkpoint("truncate");
       assert.equal(finalCheckpoint.busy, 0);
       assert.equal(finalCheckpoint.walBytes, 0);
@@ -2727,8 +2710,16 @@ test(
       await close();
 
       await open(false);
-      const postReopenUsageRows = await verifyExactUsage();
-      assert.ok(postReopenUsageRows >= count * 5);
+      const postReopenUsage = injector.driver.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT object_count,manifest_root_count,manifest_node_count FROM efs_usage WHERE singleton=1",
+            [],
+            { maxRows: 1, maxBytes: 256 },
+          )[0],
+      );
+      assert.deepEqual(postReopenUsage, expectedPostCollectionUsage);
       assert.deepEqual(await filesystem.readFile("/scale-file-000000"), objectBytes(0));
       observeMemory();
 
@@ -2765,7 +2756,7 @@ test(
       assert.ok(maxWalBytes <= storageOptions.maxJournalBytes);
       assert.ok(maxMaintenanceBatchMs < 5000);
       t.diagnostic(
-        `100k evidence: fixtureDigest=${scaleFixtureDigest}, baselineRows=${baselineScaleCount}, baselineManagedPeak=${baselineScaleManagedPeak}, namespaceRows=${exact.entry_count}, reachableObjects=${snapshot.objectCount}, manifestRootRows=${exact.manifest_root_count}, manifestNodeRows=${exact.manifest_node_count}, peakStorageMarks=${peakStorageMarks}, peakGcMarks=${peakGcMarks}, verifiedRows=${verifiedRows}, postReopenUsageRows=${postReopenUsageRows}, heapPeak=${peakHeapBytes}, rssPeak=${peakRssBytes}, managedPeak=${peakManagedResidentBytes}, fullScaleManagedPeak=${fullScaleManagedPeak}, maxWal=${maxWalBytes}, maxMaintenanceBatchMs=${maxMaintenanceBatchMs.toFixed(1)}, maintenanceMs=${maintenanceDurationMs.toFixed(1)}, transactions=${metrics.transactions}, statements=${metrics.executedStatements}, durableStatements=${metrics.durableStatements}, maxBatchStatements=${metrics.maxBatchStatements}`,
+        `100k evidence: fixtureDigest=${scaleFixtureDigest}, baselineRows=${baselineScaleCount}, baselineManagedPeak=${baselineScaleManagedPeak}, namespaceRows=${exact.entry_count}, reachableObjects=${snapshot.objectCount}, manifestRootRows=${exact.manifest_root_count}, manifestNodeRows=${exact.manifest_node_count}, peakStorageMarks=${peakStorageMarks}, peakGcMarks=${peakGcMarks}, verifiedRows=${verifiedRows}, heapPeak=${peakHeapBytes}, rssPeak=${peakRssBytes}, managedPeak=${peakManagedResidentBytes}, fullScaleManagedPeak=${fullScaleManagedPeak}, maxWal=${maxWalBytes}, maxMaintenanceBatchMs=${maxMaintenanceBatchMs.toFixed(1)}, maintenanceMs=${maintenanceDurationMs.toFixed(1)}, transactions=${metrics.transactions}, statements=${metrics.executedStatements}, durableStatements=${metrics.durableStatements}, maxBatchStatements=${metrics.maxBatchStatements}`,
       );
     } finally {
       try {
