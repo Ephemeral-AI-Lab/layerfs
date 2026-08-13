@@ -2,7 +2,7 @@
 
 | Field               | Value                                              |
 | ------------------- | -------------------------------------------------- |
-| Status              | M5 complete; overall plan in progress              |
+| Status              | M6 complete; overall plan in progress              |
 | Target              | Version 0.1 integration candidate                  |
 | Delivery style      | Milestone exits with objective acceptance evidence |
 | Database foundation | SQLite remains authoritative                       |

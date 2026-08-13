@@ -5,7 +5,9 @@ import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import {
   PORTABLE_CURRENT_SCHEMA_VERSION,
   PORTABLE_RELEASED_SCHEMA_VERSIONS,
+  runPortableInitializationIdentityAttempt,
   runPortableMigrationAttempt,
+  verifyPortableEmptyInitialization,
   verifyPortableRecoverableMigrationState,
 } from "../../packages/testkit/dist/index.js";
 import { createV1Schema } from "../fixtures/schema-v1.mjs";
@@ -72,3 +74,41 @@ test(
     );
   },
 );
+
+test("Node initialization rolls back before and after every header identity write", async () => {
+  let observedBoundaries = 0;
+  let identityWrites = 0;
+  for (let boundary = 1; boundary <= 64; boundary += 1) {
+    const directory = await mkdtemp(path.join(tmpdir(), "efs-m6-node-identity-"));
+    const filename = path.join(directory, "filesystem.db");
+    let adapter = await openNodeSqlite({ filename });
+    try {
+      const attempt = await runPortableInitializationIdentityAttempt(adapter, boundary);
+      observedBoundaries = Math.max(observedBoundaries, attempt.observedBoundaries);
+      identityWrites = Math.max(identityWrites, attempt.identityWrites);
+      adapter.close();
+      adapter = await openNodeSqlite({ filename, create: false });
+      if (!attempt.injected) {
+        expect(boundary).toBe(attempt.observedBoundaries + 1);
+        break;
+      }
+      verifyPortableEmptyInitialization(adapter);
+    } finally {
+      try {
+        adapter.close();
+      } catch {}
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+  expect(observedBoundaries).toBeGreaterThan(0);
+  expect(identityWrites).toBeGreaterThan(0);
+  console.log(
+    `m6-initialization-identity-evidence ${JSON.stringify({
+      adapter: "node-sqlite",
+      identityMode: "sqlite-header",
+      identityWrites,
+      beforeAfterBoundaries: observedBoundaries,
+      restart: "physical-driver-reopen",
+    })}`,
+  );
+});

@@ -4,7 +4,9 @@ import {
   PORTABLE_CURRENT_SCHEMA_VERSION,
   PORTABLE_DURABLE_MIGRATION_STATEMENT_COUNTS,
   PORTABLE_RELEASED_SCHEMA_VERSIONS,
+  runPortableInitializationIdentityAttempt,
   runPortableMigrationAttempt,
+  verifyPortableEmptyInitialization,
   verifyPortableRecoverableMigrationState,
 } from "../../packages/testkit/dist/index.js";
 import { createV1Schema } from "../fixtures/schema-v1.mjs";
@@ -137,6 +139,10 @@ const hasChunk = PORTABLE_RELEASED_SCHEMA_VERSIONS.includes(selectedVersion);
         "malformed-identity",
         "DROP TABLE efs_schema_identity; CREATE TABLE efs_schema_identity(singleton INTEGER PRIMARY KEY,application_id INTEGER,user_version INTEGER); INSERT INTO efs_schema_identity VALUES(1,1161905747,13)",
       ],
+      [
+        "missing-version-column",
+        "DROP TABLE efs_schema_identity; CREATE TABLE efs_schema_identity(singleton INTEGER PRIMARY KEY,application_id INTEGER); INSERT INTO efs_schema_identity VALUES(1,1161905747)",
+      ],
       ["absent-identity", "DROP TABLE efs_schema_identity"],
     ] as const);
     for (const [name, mutation] of mutations) {
@@ -164,5 +170,51 @@ const hasChunk = PORTABLE_RELEASED_SCHEMA_VERSIONS.includes(selectedVersion);
       });
       expect(result).toMatch(/ESCHEMA/);
     }
+  },
+);
+
+(hasChunk ? test.skip : test)(
+  "durable initialization rolls back before and after every table identity write",
+  async () => {
+    let observedBoundaries = 0;
+    let identityWrites = 0;
+    for (let boundary = 1; boundary <= 64; boundary += 1) {
+      const stub = env.FILESYSTEM.getByName(`identity-initialization-${boundary}`);
+      const attempt = await runInDurableObject(stub, async (_instance, state) => {
+        const adapter = await openCloudflareSqlite({ storage: state.storage });
+        try {
+          return await runPortableInitializationIdentityAttempt(adapter, boundary);
+        } finally {
+          adapter.close();
+        }
+      });
+      observedBoundaries = Math.max(observedBoundaries, attempt.observedBoundaries);
+      identityWrites = Math.max(identityWrites, attempt.identityWrites);
+      await evictDurableObject(stub);
+      if (!attempt.injected) {
+        expect(boundary).toBe(attempt.observedBoundaries + 1);
+        break;
+      }
+      await runInDurableObject(stub, async (_instance, state) => {
+        const adapter = await openCloudflareSqlite({ storage: state.storage });
+        try {
+          verifyPortableEmptyInitialization(adapter);
+        } finally {
+          adapter.close();
+        }
+      });
+      await reset();
+    }
+    expect(observedBoundaries).toBeGreaterThan(0);
+    expect(identityWrites).toBeGreaterThan(0);
+    console.log(
+      `m6-initialization-identity-evidence ${JSON.stringify({
+        adapter: "cloudflare-durable-object",
+        identityMode: "durable-table",
+        identityWrites,
+        beforeAfterBoundaries: observedBoundaries,
+        restart: "evictDurableObject",
+      })}`,
+    );
   },
 );

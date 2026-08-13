@@ -8,7 +8,7 @@ if (!process.env.EFS_M6_PREVIEW_BUNDLE)
     "run-m6-cloudflare-migrations requires the exact EFS_M6_PREVIEW_BUNDLE",
   );
 
-const statementCounts = Object.freeze({ 1: 337, 2: 312, 3: 266 });
+const statementCounts = Object.freeze({ 1: 365, 2: 339, 3: 292 });
 const chunkSize = 48;
 const concurrency = 4;
 const deadlineMs = 300_000;

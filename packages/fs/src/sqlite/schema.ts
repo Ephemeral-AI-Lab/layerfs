@@ -330,6 +330,13 @@ function inspectIdentity(
   );
   if (exists === 0) return { applicationId: 0, userVersion: 0 };
   if (exists !== 1) throw new Error("ESCHEMA: invalid durable schema identity table");
+  if (
+    oneNumber(
+      tx,
+      `SELECT count(*) AS value FROM sqlite_schema WHERE type='table' AND name=${sqlText(EFS_DURABLE_IDENTITY_TABLE)} AND sql=${sqlText(EFS_DURABLE_IDENTITY_DDL)}`,
+    ) !== 1
+  )
+    throw new Error("ESCHEMA: durable schema identity table definition is invalid");
   const rows = tx.all<{ application_id: number; user_version: number } & SqliteRow>(
     `SELECT application_id,user_version FROM ${EFS_DURABLE_IDENTITY_TABLE} WHERE singleton=1`,
     [],
@@ -431,14 +438,6 @@ function validateCurrent(
     throw new Error("ESCHEMA: wrong SQLite application_id");
   if (state.userVersion !== EFS_SCHEMA_VERSION)
     throw new Error("ESCHEMA: unsupported or mismatched schema version");
-  if (
-    identityMode === "durable-table" &&
-    oneNumber(
-      tx,
-      `SELECT count(*) AS value FROM sqlite_schema WHERE type='table' AND name=${sqlText(EFS_DURABLE_IDENTITY_TABLE)} AND sql=${sqlText(EFS_DURABLE_IDENTITY_DDL)}`,
-    ) !== 1
-  )
-    throw new Error("ESCHEMA: durable schema identity table definition is invalid");
   const rows = tx.all<MetaRow>(
     "SELECT schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,last_root_removal_generation,next_allocation_sequence,cow_page_bytes,max_manifest_entries,max_manifest_depth,max_file_bytes,writer_profile FROM efs_meta WHERE singleton=1",
     [],

@@ -340,6 +340,42 @@
       ]
     },
     {
+      "name": "PORTABLE_RELEASED_FIXTURE_BRANCH",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_RELEASED_FIXTURE_BYTES",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_RELEASED_FIXTURE_FILE",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
       "name": "PORTABLE_RELEASED_SCHEMA_VERSIONS",
       "kinds": [
         "value"
@@ -660,6 +696,18 @@
         {
           "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
           "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableInitializationIdentityAttemptResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "InterfaceDeclaration"
         }
       ]
     },
@@ -1087,6 +1135,18 @@
       ]
     },
     {
+      "name": "runPortableInitializationIdentityAttempt",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
       "name": "runPortableMaintenanceFaultAttempt",
       "kinds": [
         "value"
@@ -1196,6 +1256,18 @@
     },
     {
       "name": "verifyPortableCurrentSchema",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyPortableEmptyInitialization",
       "kinds": [
         "value"
       ],

@@ -2,6 +2,7 @@ import {
   EFS_APPLICATION_ID,
   EFS_DURABLE_IDENTITY_DDL,
 } from "../../packages/fs/dist/sqlite/schema.js";
+import { seedReleasedSchemaData } from "./released-schema-data.mjs";
 
 function initializeIdentity(driver, tx, version) {
   if (driver.capabilities.schemaIdentityMode === "durable-table") {
@@ -52,12 +53,11 @@ export function createV1Schema(driver) {
   driver.transaction("exclusive", (tx) => {
     initializeIdentity(driver, tx, 1);
     for (const statement of TABLES) tx.run(statement);
-    tx.run("INSERT INTO efs_revisions VALUES(0,NULL,1,'bootstrap',1)");
-    tx.run("INSERT INTO efs_meta VALUES(1,1,'v1-fixture',0,'root',0,1,4096,1)");
-    tx.run("INSERT INTO efs_usage VALUES(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,256)");
-    tx.run("INSERT INTO efs_inodes VALUES('root',1,493,1,1,1,1,NULL,NULL,NULL,0)");
-    tx.run("INSERT INTO efs_inode_revisions VALUES(0,'root',0,?)", [
-      new TextEncoder().encode("{}"),
+    const seeded = seedReleasedSchemaData(tx);
+    tx.run("INSERT INTO efs_meta VALUES(1,1,'v1-fixture',1,'root',0,4,4096,1)");
+    tx.run("INSERT INTO efs_usage VALUES(1,1,4,1,?,1,?,0,0,0,0,0,0,0,1,4096)", [
+      seeded.rootBytes,
+      seeded.nodeBytes,
     ]);
   });
 }

@@ -192,9 +192,9 @@ PORTABLE_DRIVER_CASE_IDS: readonly [
 /* export: PORTABLE_DURABLE_MIGRATION_STATEMENT_COUNTS; kinds: value */
 /* source: packages/testkit/dist/schema.d.ts */
 PORTABLE_DURABLE_MIGRATION_STATEMENT_COUNTS: Readonly<{
-    readonly 1: 337;
-    readonly 2: 312;
-    readonly 3: 266;
+    readonly 1: 365;
+    readonly 2: 339;
+    readonly 3: 292;
 }>
 
 /* export: PORTABLE_FAULT_OPERATION_POSITIONS; kinds: value */
@@ -280,9 +280,9 @@ PORTABLE_MAINTENANCE_FAULT_TOPOLOGY: Readonly<{
 /* export: PORTABLE_MIGRATION_STATEMENT_COUNTS; kinds: value */
 /* source: packages/testkit/dist/schema.d.ts */
 PORTABLE_MIGRATION_STATEMENT_COUNTS: Readonly<{
-    readonly 1: 335;
-    readonly 2: 310;
-    readonly 3: 265;
+    readonly 1: 339;
+    readonly 2: 314;
+    readonly 3: 269;
 }>
 
 /* export: PORTABLE_PUBLICATION_FAULT_POSITIONS; kinds: value */
@@ -291,6 +291,18 @@ PORTABLE_PUBLICATION_FAULT_POSITIONS: Readonly<{
     readonly direct: 95;
     readonly prepared: 91;
 }>
+
+/* export: PORTABLE_RELEASED_FIXTURE_BRANCH; kinds: value */
+/* source: packages/testkit/dist/schema.d.ts */
+PORTABLE_RELEASED_FIXTURE_BRANCH = "fixture-branch"
+
+/* export: PORTABLE_RELEASED_FIXTURE_BYTES; kinds: value */
+/* source: packages/testkit/dist/schema.d.ts */
+PORTABLE_RELEASED_FIXTURE_BYTES: Uint8Array<ArrayBuffer>
+
+/* export: PORTABLE_RELEASED_FIXTURE_FILE; kinds: value */
+/* source: packages/testkit/dist/schema.d.ts */
+PORTABLE_RELEASED_FIXTURE_FILE = "fixture-file"
 
 /* export: PORTABLE_RELEASED_SCHEMA_VERSIONS; kinds: value */
 /* source: packages/testkit/dist/schema.d.ts */
@@ -468,6 +480,16 @@ export interface PortableFilesystemFaultAttemptResult {
 /* export: PortableFilesystemFaultOperation; kinds: type */
 /* source: packages/testkit/dist/filesystem-fault-attempt.d.ts */
 export type PortableFilesystemFaultOperation = keyof typeof PORTABLE_FAULT_OPERATION_POSITIONS;
+
+/* export: PortableInitializationIdentityAttemptResult; kinds: type */
+/* source: packages/testkit/dist/schema.d.ts */
+export interface PortableInitializationIdentityAttemptResult {
+    readonly schema: "efs-portable-initialization-identity-attempt-v1";
+    readonly boundary: number;
+    readonly observedBoundaries: number;
+    readonly identityWrites: number;
+    readonly injected: boolean;
+}
 
 /* export: PortableMaintenanceCaseId; kinds: type */
 /* source: packages/testkit/dist/maintenance.d.ts */
@@ -791,6 +813,11 @@ export declare function runFilesystemSmoke(factory: ConformanceAdapterFactory): 
 /** Shared bounded maintenance, recovery, corruption, quota, and resource suite. */
 export declare function runMaintenanceConformance(factory: ConformanceAdapterFactory): Promise<readonly PortableMaintenanceCaseResult[]>;
 
+/* export: runPortableInitializationIdentityAttempt; kinds: value */
+/* source: packages/testkit/dist/schema.d.ts */
+/** Fault before and after every selected schema-identity write during initialization. */
+export declare function runPortableInitializationIdentityAttempt(adapter: FilesystemSQLiteDriver, boundary: number): Promise<PortableInitializationIdentityAttemptResult>;
+
 /* export: runPortableMaintenanceFaultAttempt; kinds: value */
 /* source: packages/testkit/dist/maintenance-fault.d.ts */
 /** Run one fresh post-commit maintenance fault attempt. */
@@ -850,6 +877,11 @@ export declare function verifyPortableCowPageSize(adapter: FilesystemSQLiteDrive
 /* source: packages/testkit/dist/schema.d.ts */
 /** Validate a freshly initialized or migrated current schema through public behavior. */
 export declare function verifyPortableCurrentSchema(adapter: FilesystemSQLiteDriver): Promise<void>;
+
+/* export: verifyPortableEmptyInitialization; kinds: value */
+/* source: packages/testkit/dist/schema.d.ts */
+/** Prove an interrupted empty-database initialization retained no identity or schema. */
+export declare function verifyPortableEmptyInitialization(adapter: FilesystemSQLiteDriver): void;
 
 /* export: verifyPortableMaintenanceFaultRecovery; kinds: value */
 /* source: packages/testkit/dist/maintenance-fault.d.ts */

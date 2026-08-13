@@ -267,7 +267,7 @@ async function scanRawFixture(
         baselineDatabaseBytes: baseline.databaseSize,
         fullDatabaseBytes: recovered.databaseSize,
         restart: "evictDurableObject",
-        filesystemImported: false,
+        filesystemCachesInstantiated: false,
       })}`,
     );
   },

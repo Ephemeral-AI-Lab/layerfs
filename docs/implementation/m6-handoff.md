@@ -77,10 +77,12 @@ records the accepted boundary for M7 and M8.
   61/33 statement/batch boundaries on each adapter. Every injected position is followed
   by physical driver destruction or runtime eviction and comparison with the complete
   old state; the first non-injected position must expose the complete new state.
-- Released schemas 1, 2, and 3 run through 915 Durable Object migration-statement
-  positions with eviction and recovery. Durable-table identity refusal covers wrong,
-  newer, too-old, absent-with-user-objects, malformed, extra-row, and relational-version
-  mismatch states without writes.
+- Released schemas 1, 2, and 3 retain namespace, content, branches, revisions, and
+  accounting through 996 Durable Object migration-statement positions with eviction and
+  recovery. Empty initialization also faults before and after every identity write on
+  both adapters. Durable-table identity refusal covers wrong, newer, too-old,
+  absent-with-user-objects, malformed, extra-row, and relational-version mismatch states
+  without writes.
 - Both adapters construct 100,000 distinct CAS objects, manifest roots, manifest nodes,
   and namespace rows under 256-row, 256-KiB query-result envelopes and a 4-MiB cache.
   Snapshot, verification, collection, durable marks, managed-memory comparison, and five

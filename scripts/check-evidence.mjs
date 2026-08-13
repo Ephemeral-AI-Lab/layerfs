@@ -47,6 +47,132 @@ function requireScalarRecord(value, name) {
   }
   return record;
 }
+function validateM6ResultContexts(artifact) {
+  const profiles = requireObject(artifact.contextProfiles, "m6.contextProfiles");
+  for (const required of ["node", "durableObject", "durableObjectScale", "workerd"])
+    if (!(required in profiles))
+      throw new Error(`m6.contextProfiles.${required} is required`);
+  for (const [name, value] of Object.entries(profiles)) {
+    const profile = requireObject(value, `m6.contextProfiles.${name}`);
+    requireNonemptyString(profile.driver, `m6.contextProfiles.${name}.driver`);
+    const capabilities = requireScalarRecord(
+      profile.capabilities,
+      `m6.contextProfiles.${name}.capabilities`,
+    );
+    if (!Object.keys(capabilities).length)
+      throw new Error(`m6.contextProfiles.${name}.capabilities must not be empty`);
+    const limits = requireObject(profile.limits, `m6.contextProfiles.${name}.limits`);
+    if (!Object.keys(limits).length)
+      throw new Error(`m6.contextProfiles.${name}.limits must not be empty`);
+    for (const [key, item] of Object.entries(limits))
+      requirePositiveInteger(item, `m6.contextProfiles.${name}.limits.${key}`);
+    const environment = requireScalarRecord(
+      profile.environment,
+      `m6.contextProfiles.${name}.environment`,
+    );
+    for (const key of [
+      "platform",
+      "architecture",
+      "node",
+      "pnpm",
+      "cpu",
+      "storage",
+      "sqlite",
+    ])
+      requireNonemptyString(
+        environment[key],
+        `m6.contextProfiles.${name}.environment.${key}`,
+      );
+  }
+  if (
+    profiles.node.driver !== "sqlite-node" ||
+    profiles.node.capabilities.schemaIdentityMode !== "sqlite-header" ||
+    profiles.node.environment.sqlite !== "3.50.4" ||
+    profiles.durableObject.driver !== "sqlite-cloudflare" ||
+    profiles.durableObject.capabilities.schemaIdentityMode !== "durable-table" ||
+    profiles.durableObject.environment.sqlite !== "3.47.0" ||
+    profiles.durableObjectScale.driver !== "sqlite-cloudflare" ||
+    profiles.durableObjectScale.capabilities.schemaIdentityMode !== "durable-table" ||
+    profiles.durableObjectScale.capabilities.maxPhysicalDatabaseBytes !==
+      512 * 1024 * 1024 ||
+    profiles.durableObjectScale.capabilities.maxJournalBytes !== 512 * 1024 * 1024
+  )
+    throw new Error("m6 result context profiles do not identify the exact target");
+
+  const requiredNames = new Set([
+    "workerd-algorithms",
+    "node-portable",
+    "durable-object-portable",
+    "node-schema-migration",
+    "durable-object-schema-migration",
+    "node-initialization-identity",
+    "durable-object-initialization-identity",
+    "node-cow",
+    "durable-object-cow",
+    "node-restart",
+    "durable-object-restart",
+    "node-filesystem-fault",
+    "durable-object-filesystem-fault",
+    "node-publication-fault",
+    "durable-object-publication-fault",
+    "node-maintenance-fault",
+    "durable-object-maintenance-fault",
+    "node-scale",
+    "durable-object-scale",
+    "durable-object-smoke",
+    "durable-object-raw-resource-control",
+    "preview-bundle",
+  ]);
+  if (!Array.isArray(artifact.resultContexts))
+    throw new Error("m6.resultContexts must be an array");
+  const contexts = new Map();
+  for (const [index, value] of artifact.resultContexts.entries()) {
+    const context = requireObject(value, `m6.resultContexts[${index}]`);
+    requireNonemptyString(context.name, `m6.resultContexts[${index}].name`);
+    if (contexts.has(context.name))
+      throw new Error(`m6 result context ${context.name} is duplicated`);
+    requireNonemptyString(context.profile, `m6.resultContexts[${index}].profile`);
+    const profile = profiles[context.profile];
+    if (!profile)
+      throw new Error(`m6 result context ${context.name} names an absent profile`);
+    if (context.commit !== artifact.commit)
+      throw new Error(`m6 result context ${context.name} has a different commit`);
+    if (context.schemaVersion !== artifact.schemaVersion)
+      throw new Error(`m6 result context ${context.name} has a different schema`);
+    if (context.formatVersion !== artifact.formatVersion)
+      throw new Error(`m6 result context ${context.name} has a different format`);
+    if (context.driver !== profile.driver)
+      throw new Error(`m6 result context ${context.name} has a different driver`);
+    if (!Number.isSafeInteger(context.seed) || context.seed < 0)
+      throw new Error(`m6 result context ${context.name} has an invalid seed`);
+    if (!/^[0-9a-f]{64}$/u.test(context.fixtureDigest ?? ""))
+      throw new Error(`m6 result context ${context.name} lacks a fixture digest`);
+    requireNonemptyString(context.faultPoint, `m6.resultContexts[${index}].faultPoint`);
+    contexts.set(context.name, context);
+    requiredNames.delete(context.name);
+  }
+  if (requiredNames.size)
+    throw new Error(
+      `m6 result contexts are incomplete: ${[...requiredNames].join(", ")}`,
+    );
+  return { profiles, contexts };
+}
+function validateStructuredDeviations(artifact, name) {
+  if (!Array.isArray(artifact.deviations))
+    throw new Error(`${name}.deviations must be an array`);
+  for (const [index, value] of artifact.deviations.entries()) {
+    const deviation = requireObject(value, `${name}.deviations[${index}]`);
+    requireNonemptyString(
+      deviation.description,
+      `${name}.deviations[${index}].description`,
+    );
+    requireNonemptyString(deviation.owner, `${name}.deviations[${index}].owner`);
+    requireNonemptyString(
+      deviation.followUpMilestone,
+      `${name}.deviations[${index}].followUpMilestone`,
+    );
+  }
+}
 function candidateFromExit(source, milestone) {
   const match = source.match(/^- Candidate commit: `([0-9a-f]{40})`$/mu);
   if (!match) throw new Error(`${milestone} exit is missing an exact candidate commit`);
@@ -820,9 +946,18 @@ const m6 = await validateMilestone(
     "scaleBaselineManagedBytes",
     "scaleManagedPeakBytes",
     "scalePhysicalRestarts",
+    "scaleMainFileBytes",
+    "scaleMaxMaintenanceCallMs",
+    "workerdControlRssGrowthBytes",
+    "workerdRssGrowthBytes",
     "workerdPeakRssBytes",
     "workerdProcessRssLimitBytes",
     "previewBundleBytes",
+    "nodeInitializationIdentityWrites",
+    "nodeInitializationIdentityBoundaries",
+    "durableObjectInitializationIdentityWrites",
+    "durableObjectInitializationIdentityBoundaries",
+    "nodeTargetElapsedMs",
     "durableObjectTargetElapsedMs",
     "nodeTargetDeadlineMs",
     "durableObjectTargetDeadlineMs",
@@ -832,6 +967,10 @@ const m6 = await validateMilestone(
     requireStructuredContext: true,
   },
 );
+const m6Context = validateM6ResultContexts(m6.artifact);
+validateStructuredDeviations(m6.artifact, "m6");
+const m6Preview = requireObject(m6.artifact.preview, "m6.preview");
+const m6Resource = requireObject(m6.artifact.resourceEvidence, "m6.resourceEvidence");
 const m6LogicalChecks =
   m6.artifact.metrics.workerdChecks +
   m6.artifact.metrics.nodePortableTests +
@@ -851,11 +990,11 @@ if (m6.artifact.independentAudit !== "approved")
 if (
   m6.artifact.metrics.cumulativePredecessorChecks !== m5.artifact.passed ||
   m6.artifact.metrics.workerdChecks !== 12 ||
-  m6.artifact.metrics.nodePortableTests < 15 ||
-  m6.artifact.metrics.durableObjectPortableTests < 22 ||
+  m6.artifact.metrics.nodePortableTests !== 16 ||
+  m6.artifact.metrics.durableObjectPortableTests !== 23 ||
   m6.artifact.metrics.durableObjectScaleTests !== 1 ||
   m6.artifact.metrics.releasedSchemaVersions !== 3 ||
-  m6.artifact.metrics.migrationStatementPositions !== 915 ||
+  m6.artifact.metrics.migrationStatementPositions !== 996 ||
   m6.artifact.metrics.filesystemFaultFamilies !== 12 ||
   m6.artifact.metrics.nodeFilesystemFaultPositions !== 1218 ||
   m6.artifact.metrics.durableObjectFilesystemFaultPositions !== 1218 ||
@@ -883,8 +1022,13 @@ if (
   m6.artifact.metrics.scaleManagedPeakBytes >
     m6.artifact.metrics.scaleBaselineManagedBytes + 512 * 1024 ||
   m6.artifact.metrics.scalePhysicalRestarts < 5 ||
+  m6.artifact.metrics.scaleMainFileBytes >
+    m6Context.profiles.durableObjectScale.capabilities.maxPhysicalDatabaseBytes ||
+  m6.artifact.metrics.scaleMaxMaintenanceCallMs >= 5_000 ||
+  m6.artifact.metrics.workerdControlRssGrowthBytes < 32 * 1024 * 1024 ||
   m6.artifact.metrics.workerdPeakRssBytes >=
     m6.artifact.metrics.workerdProcessRssLimitBytes ||
+  m6.artifact.metrics.nodeTargetElapsedMs >= m6.artifact.metrics.nodeTargetDeadlineMs ||
   m6.artifact.metrics.durableObjectTargetElapsedMs >=
     m6.artifact.metrics.durableObjectTargetDeadlineMs ||
   m6.artifact.metrics.nodeTargetDeadlineMs !== 600_000 ||
@@ -895,6 +1039,25 @@ if (
   m6.artifact.capabilities.maxJournalBytes !== 1_000_000_000 ||
   m6.artifact.capabilities.hostedDeployment !== false ||
   m6.artifact.capabilities.exactProcessBoundAvailable !== false ||
+  m6Resource.filesystemCachesInstantiated !== false ||
+  m6Resource.rawRuntimeEffectReproduced !== true ||
+  m6Resource.exactIsolateAttributionAvailable !== false ||
+  m6Preview.dryRun !== true ||
+  m6Preview.deployed !== false ||
+  m6Preview.compatibilityDate !== "2026-08-10" ||
+  m6Preview.bindingName !== "FILESYSTEM" ||
+  m6Preview.className !== "FilesystemObject" ||
+  m6Preview.migrationTag !== "v1" ||
+  m6Preview.newSqliteClass !== "FilesystemObject" ||
+  m6Preview.bundleBytes !== m6.artifact.metrics.previewBundleBytes ||
+  m6Preview.bundleSha256 !== m6.artifact.metrics.previewBundleSha256 ||
+  m6.artifact.metrics.nodeInitializationIdentityWrites !== 12 ||
+  m6.artifact.metrics.nodeInitializationIdentityBoundaries !== 24 ||
+  m6.artifact.metrics.durableObjectInitializationIdentityWrites !== 13 ||
+  m6.artifact.metrics.durableObjectInitializationIdentityBoundaries !== 26 ||
+  !/^[0-9a-f]{64}$/u.test(m6.artifact.metrics.smokeFixtureDigest ?? "") ||
+  m6Context.contexts.get("durable-object-smoke").fixtureDigest !==
+    m6.artifact.metrics.smokeFixtureDigest ||
   !/^[0-9a-f]{64}$/u.test(m6.artifact.metrics.previewBundleSha256 ?? "")
 )
   throw new Error("m6 evidence metrics miss a parity, restart, or resource threshold");

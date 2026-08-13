@@ -970,15 +970,18 @@ export declare const PORTABLE_RELEASED_SCHEMA_VERSIONS: readonly [1, 2, 3];
 export declare const PORTABLE_CURRENT_SCHEMA_VERSION = 13;
 export declare const PORTABLE_APPLICATION_ID = 1161905747;
 export declare const PORTABLE_MIGRATION_STATEMENT_COUNTS: Readonly<{
-    readonly 1: 335;
-    readonly 2: 310;
-    readonly 3: 265;
+    readonly 1: 339;
+    readonly 2: 314;
+    readonly 3: 269;
 }>;
 export declare const PORTABLE_DURABLE_MIGRATION_STATEMENT_COUNTS: Readonly<{
-    readonly 1: 337;
-    readonly 2: 312;
-    readonly 3: 266;
+    readonly 1: 365;
+    readonly 2: 339;
+    readonly 3: 292;
 }>;
+export declare const PORTABLE_RELEASED_FIXTURE_FILE = "fixture-file";
+export declare const PORTABLE_RELEASED_FIXTURE_BRANCH = "fixture-branch";
+export declare const PORTABLE_RELEASED_FIXTURE_BYTES: Uint8Array<ArrayBuffer>;
 export interface PortableMigrationAttemptResult {
     readonly schema: "efs-portable-migration-attempt-v1";
     readonly sourceVersion: 1 | 2 | 3;
@@ -987,6 +990,17 @@ export interface PortableMigrationAttemptResult {
     readonly injected: boolean;
     readonly finalVersion: number;
 }
+export interface PortableInitializationIdentityAttemptResult {
+    readonly schema: "efs-portable-initialization-identity-attempt-v1";
+    readonly boundary: number;
+    readonly observedBoundaries: number;
+    readonly identityWrites: number;
+    readonly injected: boolean;
+}
+/** Fault before and after every selected schema-identity write during initialization. */
+export declare function runPortableInitializationIdentityAttempt(adapter: FilesystemSQLiteDriver, boundary: number): Promise<PortableInitializationIdentityAttemptResult>;
+/** Prove an interrupted empty-database initialization retained no identity or schema. */
+export declare function verifyPortableEmptyInitialization(adapter: FilesystemSQLiteDriver): void;
 /**
  * Run one fresh released-schema migration with a fault after the selected statement.
  * A caught fault must leave the exact source version usable; the first out-of-range

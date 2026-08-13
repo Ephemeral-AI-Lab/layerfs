@@ -211,7 +211,8 @@ if (exit.code !== 0)
 if (
   !testEvidence ||
   (controlMode
-    ? testEvidence.fullRows !== 100_000 || testEvidence.filesystemImported !== false
+    ? testEvidence.fullRows !== 100_000 ||
+      testEvidence.filesystemCachesInstantiated !== false
     : testEvidence.rows !== 100_000)
 )
   throw new Error("M6 Workerd resource test did not emit exact scale evidence");
