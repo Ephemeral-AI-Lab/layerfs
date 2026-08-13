@@ -236,7 +236,11 @@ async function assertOwnedWorktreeClean(milestone) {
 async function validateMilestone(
   name,
   requiredMetrics,
-  { requireCurrentDigest = false, requireStructuredContext = false } = {},
+  {
+    requireCurrentDigest = false,
+    requireStructuredContext = false,
+    allowLegacyExitFollowups = false,
+  } = {},
 ) {
   const directory = path.join(root, "docs", "evidence", name);
   const jsonFilename = path.join(directory, "correctness.json");
@@ -298,8 +302,21 @@ async function validateMilestone(
   });
   const recordCommit = await evidenceCommit(path.relative(root, jsonFilename));
   const exitRecordCommit = await evidenceCommit(path.relative(root, exitFilename));
-  if (exitRecordCommit !== recordCommit)
-    throw new Error(`${name} exit and correctness artifacts have different commits`);
+  if (exitRecordCommit !== recordCommit) {
+    if (!allowLegacyExitFollowups)
+      throw new Error(`${name} exit and correctness artifacts have different commits`);
+    try {
+      await execute(
+        "git",
+        ["merge-base", "--is-ancestor", recordCommit, exitRecordCommit],
+        { cwd: root, windowsHide: true },
+      );
+    } catch {
+      throw new Error(
+        `${name} legacy exit follow-up is not descended from its correctness record`,
+      );
+    }
+  }
   const parents = (
     await execute("git", ["show", "-s", "--format=%P", recordCommit], {
       cwd: root,
@@ -462,7 +479,13 @@ const m2 = await validateMilestone(
     "sealedManifestEntries",
     "finalCertificateValidationStatements",
   ],
-  { requireCurrentDigest: activeAcceptedMilestone === "m2" },
+  {
+    requireCurrentDigest: activeAcceptedMilestone === "m2",
+    // The accepted M2 correctness record was committed directly after its candidate;
+    // two later documentation-only commits repaired its benchmark link and restored
+    // the M1 predecessor. M3 and later evidence is required to remain atomic.
+    allowLegacyExitFollowups: true,
+  },
 );
 if (
   m2.artifact.passed !==
