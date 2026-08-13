@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "M4-limit",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "worktreeDirty": false,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
@@ -104,7 +104,7 @@
     "mean": 0
   },
   "counters": {
-    "preparationMs": 61.808499999999185,
+    "preparationMs": 60.400000000001455,
     "publicationMs": 0,
     "replayMs": 0,
     "merged": 0,
@@ -114,7 +114,7 @@
   },
   "samples": [
     {
-      "preparationMs": 61.808499999999185,
+      "preparationMs": 60.400000000001455,
       "publicationMs": 0,
       "merged": 0,
       "conflicts": 0,

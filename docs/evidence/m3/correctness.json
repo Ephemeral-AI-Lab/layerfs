@@ -1,6 +1,6 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "adapter": "node-sqlite-storage-smoke-benchmark-suite",
   "driver": "sqlite-node-and-workerd",
   "capabilities": {
@@ -39,7 +39,8 @@
   "commands": [
     "pnpm validate:m5:pre-evidence",
     "node tests/performance/mini-bench.mjs --cell=A1 --trials=5 --artifacts=C:\\Users\\yifan\\code\\Ephemeral-AI-Lab\\ephemeral-ai-fs\\docs\\evidence\\m3\\benchmarks",
-    "$env:EFS_SMOKE_RESULT_PATH='C:\\Users\\yifan\\code\\Ephemeral-AI-Lab\\ephemeral-ai-fs\\docs\\evidence\\m3\\node-smoke.json'; node scripts/run-test-suite.mjs tests/smoke"
+    "$env:EFS_SMOKE_RESULT_PATH='C:\\Users\\yifan\\code\\Ephemeral-AI-Lab\\ephemeral-ai-fs\\docs\\evidence\\m3\\node-smoke.json'; node scripts/run-test-suite.mjs tests/smoke",
+    "pnpm test:workerd"
   ],
   "environment": {
     "platform": "win32",
@@ -61,8 +62,8 @@
   },
   "passed": 181,
   "failed": 0,
-  "elapsedMs": 571294,
-  "ownedTreeDigest": "a88b5d3fc110cef2feed7438efd3d448ebf1e1c74d82bf1248da4c8851964c2f",
+  "elapsedMs": 578686,
+  "ownedTreeDigest": "f8bbfd3285bee3530cedb423732321f8f6832e12cc576e0c3471f8ac7b9b895a",
   "independentAudit": "approved",
   "metrics": {
     "operatingSystems": 1,
@@ -74,28 +75,28 @@
     "maintenanceTests": 31,
     "conformanceTests": 5,
     "nodeSmokeTests": 1,
-    "readMiBPerSecondCold": 301,
-    "readMiBPerSecondWarm": 826,
+    "readMiBPerSecondCold": 306,
+    "readMiBPerSecondWarm": 841,
     "readTransactionsPerHundredMiB": 55,
     "readStatementsPerHundredMiB": 84,
-    "smallReadMicrosPerOp": 838,
-    "localEditMsTotal": 50,
+    "smallReadMicrosPerOp": 816,
+    "localEditMsTotal": 51,
     "localEditOperationsPerTrial": 100,
     "scatteredEditCompleted": 500,
-    "workerdWriteHashingMiBPerSecond": 391,
-    "workerdWriteHashingSpeedupPercent": 497,
-    "nodeSmokeElapsedMs": 52332,
+    "workerdWriteHashingMiBPerSecond": 403,
+    "workerdWriteHashingSpeedupPercent": 458,
+    "nodeSmokeElapsedMs": 52417,
     "nodeSmokeCompletedOperations": 9056,
     "nodeSmokeNamespaceOperations": 2000,
     "nodeSmokePeakManagedResidentBytes": 45532768,
-    "retainedMiniBenchmarkElapsedMs": 111543,
-    "defaultNodeGateElapsedMs": 571294
+    "retainedMiniBenchmarkElapsedMs": 112361,
+    "defaultNodeGateElapsedMs": 578686
   },
   "deviations": [
     "No hosted GitHub Actions run exists because the branch has not been pushed; this record claims only the clean Windows x64, Node 24.11.1 local validation cell.",
-    "The exact Node smoke uses its own 16 MiB fixture digest 488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8 and completed in 52,332 ms. Its separately retained correctness artifact records all 9,056 measured operations, exactly 2,000 namespace operations, the full namespace and final payload digests, zero live leases, staging certificates, and operation reservations, complete limits and environment, and slowest-operation diagnostics.",
+    "The exact Node smoke uses its own 16 MiB fixture digest 488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8 and completed in 52,417 ms. Its separately retained correctness artifact records all 9,056 measured operations, exactly 2,000 namespace operations, the full namespace and final payload digests, zero live leases, staging certificates, and operation reservations, complete limits and environment, and slowest-operation diagnostics.",
     "The finite SQLite benchmark page-cache target is 128 MiB. Clean 64 MiB and 96 MiB trials truthfully exposed cold-read misses without changing the 250 MiB/s threshold; the accepted profile changes only the cache allocation needed to contain the approximately 115 MiB measured read working set.",
-    "Every retained A-group sample owns a fresh isolated database, starts from an equivalent fixture, records min, max, mean, p50, p95, and p99, and verifies a separately computed final digest. The five-trial medians completed the canonical three of 100 guaranteed-different one-byte edits in 49.609 ms, all 500 guaranteed-different scattered edits in 9,587.797 ms, and small reads at 0.838 ms per operation.",
-    "The exact default-gate Workerd cell measured write-path hashing at 391.1 MiB/s versus a 65.5 MiB/s baseline, a 5.97x result or 497% improvement."
+    "Every retained A-group sample owns a fresh isolated database, starts from an equivalent fixture, records min, max, mean, p50, p95, and p99, and verifies a separately computed final digest. The five-trial medians completed the canonical three of 100 guaranteed-different one-byte edits in 50.504 ms, all 500 guaranteed-different scattered edits in 9,581.867 ms, and small reads at 0.816 ms per operation.",
+    "A supplementary clean exact-candidate Workerd rerun measured write-path hashing at 403.1 MiB/s versus a 72.2 MiB/s baseline, a 5.58x result or 458% improvement."
   ]
 }

@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "A6-scattered-edits",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "worktreeDirty": false,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
@@ -105,141 +105,141 @@
   },
   "trials": 5,
   "latencyMs": {
-    "p50": 9587.797,
-    "p95": 9923.532,
-    "p99": 9923.532,
-    "min": 9468.428,
-    "max": 9923.532,
-    "mean": 9627.122
+    "p50": 9581.867,
+    "p95": 9642.665,
+    "p99": 9642.665,
+    "min": 9401.603,
+    "max": 9642.665,
+    "mean": 9549.106
   },
   "counters": {
-    "wallMs": 9587.797,
+    "wallMs": 9581.867,
     "completedEdits": 500,
     "scaledEdits": 0,
-    "dbGrowthBytes": 278652080,
+    "dbGrowthBytes": 279228880,
     "transactions": 1002,
     "statements": 40484,
     "peakManagedResidentBytes": 170266712,
-    "peakHarnessHeapBytes": 69643592,
+    "peakHarnessHeapBytes": 77631328,
     "verifiedDigest": "113c63d77e977c9bf837b0302efa11fe543c89831b32edce21294eb07b5243a3"
   },
   "samples": [
     {
       "trial": 1,
-      "wallMs": 9923.532,
+      "wallMs": 9642.665,
       "statements": 40484,
       "transactions": 1002,
       "physicalBefore": 111742648,
-      "physicalAfter": 389801448,
+      "physicalAfter": 390402968,
       "counters": {
         "completedEdits": 500,
         "scaledEdits": 0
       },
       "measuredCounters": {
-        "wallMs": 9923.532,
+        "wallMs": 9642.665,
         "completedEdits": 500,
         "scaledEdits": 0,
-        "dbGrowthBytes": 278058800,
+        "dbGrowthBytes": 278660320,
         "transactions": 1002,
         "statements": 40484,
         "peakManagedResidentBytes": 170266712,
-        "peakHarnessHeapBytes": 67281824,
+        "peakHarnessHeapBytes": 66997520,
         "verifiedDigest": "113c63d77e977c9bf837b0302efa11fe543c89831b32edce21294eb07b5243a3"
       },
       "pass": true
     },
     {
       "trial": 2,
-      "wallMs": 9521.743,
+      "wallMs": 9581.867,
       "statements": 40484,
       "transactions": 1002,
       "physicalBefore": 111742648,
-      "physicalAfter": 390551288,
+      "physicalAfter": 390971528,
       "counters": {
         "completedEdits": 500,
         "scaledEdits": 0
       },
       "measuredCounters": {
-        "wallMs": 9521.743,
+        "wallMs": 9581.867,
         "completedEdits": 500,
         "scaledEdits": 0,
-        "dbGrowthBytes": 278808640,
+        "dbGrowthBytes": 279228880,
         "transactions": 1002,
         "statements": 40484,
         "peakManagedResidentBytes": 170266712,
-        "peakHarnessHeapBytes": 72059424,
+        "peakHarnessHeapBytes": 77631328,
         "verifiedDigest": "113c63d77e977c9bf837b0302efa11fe543c89831b32edce21294eb07b5243a3"
       },
       "pass": true
     },
     {
       "trial": 3,
-      "wallMs": 9468.428,
+      "wallMs": 9401.603,
       "statements": 40484,
       "transactions": 1002,
       "physicalBefore": 111742648,
-      "physicalAfter": 389834408,
+      "physicalAfter": 390786128,
       "counters": {
         "completedEdits": 500,
         "scaledEdits": 0
       },
       "measuredCounters": {
-        "wallMs": 9468.428,
+        "wallMs": 9401.603,
         "completedEdits": 500,
         "scaledEdits": 0,
-        "dbGrowthBytes": 278091760,
+        "dbGrowthBytes": 279043480,
         "transactions": 1002,
         "statements": 40484,
         "peakManagedResidentBytes": 170266712,
-        "peakHarnessHeapBytes": 93853104,
+        "peakHarnessHeapBytes": 70220896,
         "verifiedDigest": "113c63d77e977c9bf837b0302efa11fe543c89831b32edce21294eb07b5243a3"
       },
       "pass": true
     },
     {
       "trial": 4,
-      "wallMs": 9634.108,
+      "wallMs": 9526.649,
       "statements": 40484,
       "transactions": 1002,
       "physicalBefore": 111742648,
-      "physicalAfter": 390229928,
+      "physicalAfter": 391128088,
       "counters": {
         "completedEdits": 500,
         "scaledEdits": 0
       },
       "measuredCounters": {
-        "wallMs": 9634.108,
+        "wallMs": 9526.649,
         "completedEdits": 500,
         "scaledEdits": 0,
-        "dbGrowthBytes": 278487280,
+        "dbGrowthBytes": 279385440,
         "transactions": 1002,
         "statements": 40484,
         "peakManagedResidentBytes": 170266712,
-        "peakHarnessHeapBytes": 69100728,
+        "peakHarnessHeapBytes": 67814664,
         "verifiedDigest": "113c63d77e977c9bf837b0302efa11fe543c89831b32edce21294eb07b5243a3"
       },
       "pass": true
     },
     {
       "trial": 5,
-      "wallMs": 9587.797,
+      "wallMs": 9592.745,
       "statements": 40484,
       "transactions": 1002,
       "physicalBefore": 111742648,
-      "physicalAfter": 390394728,
+      "physicalAfter": 389480088,
       "counters": {
         "completedEdits": 500,
         "scaledEdits": 0
       },
       "measuredCounters": {
-        "wallMs": 9587.797,
+        "wallMs": 9592.745,
         "completedEdits": 500,
         "scaledEdits": 0,
-        "dbGrowthBytes": 278652080,
+        "dbGrowthBytes": 277737440,
         "transactions": 1002,
         "statements": 40484,
         "peakManagedResidentBytes": 170266712,
-        "peakHarnessHeapBytes": 69643592,
+        "peakHarnessHeapBytes": 86578008,
         "verifiedDigest": "113c63d77e977c9bf837b0302efa11fe543c89831b32edce21294eb07b5243a3"
       },
       "pass": true

@@ -1,6 +1,6 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "adapter": "node-sqlite-maintenance-fault-suite",
   "driver": "sqlite-node",
   "capabilities": {
@@ -100,8 +100,8 @@
   },
   "passed": 273,
   "failed": 0,
-  "elapsedMs": 571294,
-  "ownedTreeDigest": "c83d962d7db4a0ffb507bf988e1fc3371b4608752938a934e831e068f59f6303",
+  "elapsedMs": 578686,
+  "ownedTreeDigest": "de396d9a98fc97535c4654d3d708f57c73e8270b78b01090625330e61f966434",
   "independentAudit": "approved",
   "metrics": {
     "operatingSystems": 1,
@@ -122,19 +122,19 @@
     "peakStorageMarks": 300003,
     "peakGcMarks": 300003,
     "maxWalBytes": 203359112,
-    "maxMaintenanceBatchMs": 1188,
-    "maxMaintenanceBatchTenthsMs": 11875,
+    "maxMaintenanceBatchMs": 2128,
+    "maxMaintenanceBatchTenthsMs": 21277,
     "peakManagedResidentBytes": 9315643,
-    "heapHighWaterBytes": 184810696,
-    "rssHighWaterBytes": 380272640,
+    "heapHighWaterBytes": 184742160,
+    "rssHighWaterBytes": 378531840,
     "verifiedRows": 1000066,
     "postReopenUsageRows": 600024,
     "transactions": 57811,
     "executedStatements": 8526101,
     "durableStatements": 5524479,
     "maxBatchStatements": 1543,
-    "maintenanceElapsedMs": 290529,
-    "defaultNodeGateElapsedMs": 571294,
+    "maintenanceElapsedMs": 292574,
+    "defaultNodeGateElapsedMs": 578686,
     "nodeCoreCorrectnessTests": 201,
     "workerdChecks": 12,
     "nodeSmokeTests": 1,
@@ -145,8 +145,8 @@
     "No hosted GitHub Actions run exists because the branch has not been pushed; this record claims only the clean Windows x64, Node 24.11.1 local validation cell.",
     "The optional 10 GiB logical-manifest and millions-of-rows diagnostics were not run; the authoritative specifications mark them as extended non-gating profiles.",
     "Heap and RSS are absolute process high-water measurements, not deltas. Identical read, write, and snapshot workloads measured 9,274,632 managed bytes at 10,240 rows and 9,315,643 at 100,000 rows, a 41,011-byte non-proportional difference under the asserted 512 KiB comparison ceiling.",
-    "The maximum observed WAL was 203,359,112 bytes under the explicit 536,870,912-byte limit. Every bounded maintenance call was below 5 seconds; the exact maximum was 1,187.5 ms and the required integer millisecond field is conservatively rounded up to 1,188.",
+    "The maximum observed WAL was 203,359,112 bytes under the explicit 536,870,912-byte limit. Every bounded maintenance call was below 5 seconds; the exact maximum was 2,127.7 ms and the required integer millisecond field is conservatively rounded up to 2,128.",
     "The scale fixture digest is computed incrementally from every object, manifest node, manifest root, and namespace name in the actual 100,000-record fixture.",
-    "The complete clean default Node target selection, including build, predecessor static gates, uncontended retained M3 and M4 benchmarks, smoke, and concurrent correctness groups, completed in 571,294 ms under its executable 600,000 ms deadline."
+    "The complete clean default Node target selection, including build, predecessor static gates, uncontended retained M3 and M4 benchmarks, smoke, and concurrent correctness groups, completed in 578,686 ms under its executable 600,000 ms deadline."
   ]
 }

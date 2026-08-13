@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "A4-warm-read",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "worktreeDirty": false,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
@@ -103,30 +103,30 @@
   },
   "trials": 5,
   "latencyMs": {
-    "p50": 121.01,
-    "p95": 121.117,
-    "p99": 121.117,
-    "min": 117.597,
-    "max": 121.117,
-    "mean": 120.332
+    "p50": 118.978,
+    "p95": 121.981,
+    "p99": 121.981,
+    "min": 117.939,
+    "max": 121.981,
+    "mean": 119.365
   },
   "counters": {
-    "wallMs": 121.01,
+    "wallMs": 118.978,
     "bytes": 104857600,
     "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
     "dbGrowthBytes": 53560,
     "transactions": 55,
     "statements": 24,
     "peakManagedResidentBytes": 115765303,
-    "peakHarnessHeapBytes": 15721832,
-    "mibPerSec": 826.4,
+    "peakHarnessHeapBytes": 10924296,
+    "mibPerSec": 840.5,
     "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-    "warmToColdRatio": 2.748
+    "warmToColdRatio": 2.872
   },
   "samples": [
     {
       "trial": 1,
-      "wallMs": 117.597,
+      "wallMs": 118.978,
       "statements": 24,
       "transactions": 55,
       "physicalBefore": 111796208,
@@ -136,23 +136,23 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 117.597,
+        "wallMs": 118.978,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 24,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 10004704,
-        "mibPerSec": 850.4,
+        "peakHarnessHeapBytes": 10924296,
+        "mibPerSec": 840.5,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "warmToColdRatio": 2.831
+        "warmToColdRatio": 2.872
       },
       "pass": true
     },
     {
       "trial": 2,
-      "wallMs": 120.833,
+      "wallMs": 117.939,
       "statements": 24,
       "transactions": 55,
       "physicalBefore": 111796208,
@@ -162,23 +162,23 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 120.833,
+        "wallMs": 117.939,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 24,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 15219616,
-        "mibPerSec": 827.6,
+        "peakHarnessHeapBytes": 15827560,
+        "mibPerSec": 847.9,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "warmToColdRatio": 2.708
+        "warmToColdRatio": 2.687
       },
       "pass": true
     },
     {
       "trial": 3,
-      "wallMs": 121.103,
+      "wallMs": 121.981,
       "statements": 24,
       "transactions": 55,
       "physicalBefore": 111796208,
@@ -188,23 +188,23 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 121.103,
+        "wallMs": 121.981,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 24,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 15522144,
-        "mibPerSec": 825.7,
+        "peakHarnessHeapBytes": 16102144,
+        "mibPerSec": 819.8,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "warmToColdRatio": 2.752
+        "warmToColdRatio": 2.717
       },
       "pass": true
     },
     {
       "trial": 4,
-      "wallMs": 121.01,
+      "wallMs": 119.201,
       "statements": 24,
       "transactions": 55,
       "physicalBefore": 111796208,
@@ -214,23 +214,23 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 121.01,
+        "wallMs": 119.201,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 24,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 15721832,
-        "mibPerSec": 826.4,
+        "peakHarnessHeapBytes": 16222920,
+        "mibPerSec": 838.9,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "warmToColdRatio": 2.748
+        "warmToColdRatio": 2.739
       },
       "pass": true
     },
     {
       "trial": 5,
-      "wallMs": 121.117,
+      "wallMs": 118.728,
       "statements": 24,
       "transactions": 55,
       "physicalBefore": 111796208,
@@ -240,17 +240,17 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 121.117,
+        "wallMs": 118.728,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 24,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 15271832,
-        "mibPerSec": 825.6,
+        "peakHarnessHeapBytes": 16239208,
+        "mibPerSec": 842.3,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "warmToColdRatio": 2.681
+        "warmToColdRatio": 2.726
       },
       "pass": true
     }

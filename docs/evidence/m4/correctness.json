@@ -1,6 +1,6 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "adapter": "node-sqlite-branch-suite",
   "driver": "sqlite-node",
   "capabilities": {
@@ -55,8 +55,8 @@
   },
   "passed": 239,
   "failed": 0,
-  "elapsedMs": 571294,
-  "ownedTreeDigest": "e3c0db361cef1aebd3c93d42ea1687b1a99a2eed3bc538b6de8d0e20d3dd13f5",
+  "elapsedMs": 578686,
+  "ownedTreeDigest": "8d4001739991be404e2a0243b4cae5cc47a6b1d506e1898fb3f3f12503134ff3",
   "independentAudit": "approved",
   "metrics": {
     "operatingSystems": 1,
@@ -67,8 +67,8 @@
     "independentWriterCount": 50,
     "sameInodeWriterCount": 50,
     "branchBenchmarkCells": 20,
-    "branchBenchmarkElapsedMs": 19740,
-    "defaultNodeGateElapsedMs": 571294
+    "branchBenchmarkElapsedMs": 19780,
+    "defaultNodeGateElapsedMs": 578686
   },
   "deviations": [
     "No hosted GitHub Actions run exists because the branch has not been pushed; this record claims only the clean Windows x64, Node 24.11.1 local validation cell.",

@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "M4-independent",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "worktreeDirty": false,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
@@ -98,16 +98,16 @@
   },
   "trials": 1,
   "latencyMs": {
-    "p50": 600.5361999999996,
-    "p95": 600.5361999999996,
-    "p99": 600.5361999999996,
-    "min": 600.5361999999996,
-    "max": 600.5361999999996,
-    "mean": 600.5361999999996
+    "p50": 579.9921999999997,
+    "p95": 579.9921999999997,
+    "p99": 579.9921999999997,
+    "min": 579.9921999999997,
+    "max": 579.9921999999997,
+    "mean": 579.9921999999997
   },
   "counters": {
-    "preparationMs": 3107.9413,
-    "publicationMs": 600.5361999999996,
+    "preparationMs": 3111.0981,
+    "publicationMs": 579.9921999999997,
     "replayMs": 0,
     "merged": 5,
     "conflicts": 0,
@@ -116,7 +116,7 @@
   },
   "samples": [
     {
-      "preparationMs": 3107.9413,
+      "preparationMs": 3111.0981,
       "results": [
         {
           "outcome": "merged",
@@ -674,10 +674,10 @@
           "conflicts": []
         }
       ],
-      "publicationMs": 600.5361999999996,
+      "publicationMs": 579.9921999999997,
       "publicationSamplesMs": [
-        600.5108, 600.4996000000001, 600.4969000000001, 600.4958999999999,
-        600.4942000000001
+        579.9587000000001, 579.9479000000001, 579.9458999999997, 579.9454999999998,
+        579.9443000000001
       ],
       "merged": 5,
       "conflicts": 0,

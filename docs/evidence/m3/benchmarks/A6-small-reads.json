@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "A6-small-reads",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "worktreeDirty": false,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
@@ -104,28 +104,28 @@
   },
   "trials": 5,
   "latencyMs": {
-    "p50": 418.933,
-    "p95": 434.968,
-    "p99": 434.968,
-    "min": 407.216,
-    "max": 434.968,
-    "mean": 421.146
+    "p50": 408.163,
+    "p95": 434.859,
+    "p99": 434.859,
+    "min": 405.506,
+    "max": 434.859,
+    "mean": 415.031
   },
   "counters": {
-    "wallMs": 418.933,
+    "wallMs": 408.163,
     "smallReadOps": 500,
     "dbGrowthBytes": 0,
     "transactions": 1000,
     "statements": 2825,
     "peakManagedResidentBytes": 63534222,
-    "peakHarnessHeapBytes": 73295416,
+    "peakHarnessHeapBytes": 73700424,
     "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-    "smallReadMsPerOp": 0.838
+    "smallReadMsPerOp": 0.816
   },
   "samples": [
     {
       "trial": 1,
-      "wallMs": 418.933,
+      "wallMs": 407.515,
       "statements": 2825,
       "transactions": 1000,
       "physicalBefore": 111742648,
@@ -134,21 +134,21 @@
         "smallReadOps": 500
       },
       "measuredCounters": {
-        "wallMs": 418.933,
+        "wallMs": 407.515,
         "smallReadOps": 500,
         "dbGrowthBytes": 0,
         "transactions": 1000,
         "statements": 2825,
         "peakManagedResidentBytes": 63534222,
-        "peakHarnessHeapBytes": 73295416,
+        "peakHarnessHeapBytes": 73212808,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "smallReadMsPerOp": 0.838
+        "smallReadMsPerOp": 0.815
       },
       "pass": true
     },
     {
       "trial": 2,
-      "wallMs": 417.361,
+      "wallMs": 405.506,
       "statements": 2825,
       "transactions": 1000,
       "physicalBefore": 111742648,
@@ -157,21 +157,21 @@
         "smallReadOps": 500
       },
       "measuredCounters": {
-        "wallMs": 417.361,
+        "wallMs": 405.506,
         "smallReadOps": 500,
         "dbGrowthBytes": 0,
         "transactions": 1000,
         "statements": 2825,
         "peakManagedResidentBytes": 63534222,
-        "peakHarnessHeapBytes": 73696192,
+        "peakHarnessHeapBytes": 73706688,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "smallReadMsPerOp": 0.835
+        "smallReadMsPerOp": 0.811
       },
       "pass": true
     },
     {
       "trial": 3,
-      "wallMs": 407.216,
+      "wallMs": 408.163,
       "statements": 2825,
       "transactions": 1000,
       "physicalBefore": 111742648,
@@ -180,21 +180,21 @@
         "smallReadOps": 500
       },
       "measuredCounters": {
-        "wallMs": 407.216,
+        "wallMs": 408.163,
         "smallReadOps": 500,
         "dbGrowthBytes": 0,
         "transactions": 1000,
         "statements": 2825,
         "peakManagedResidentBytes": 63534222,
-        "peakHarnessHeapBytes": 73126512,
+        "peakHarnessHeapBytes": 73700424,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "smallReadMsPerOp": 0.814
+        "smallReadMsPerOp": 0.816
       },
       "pass": true
     },
     {
       "trial": 4,
-      "wallMs": 434.968,
+      "wallMs": 434.859,
       "statements": 2825,
       "transactions": 1000,
       "physicalBefore": 111742648,
@@ -203,13 +203,13 @@
         "smallReadOps": 500
       },
       "measuredCounters": {
-        "wallMs": 434.968,
+        "wallMs": 434.859,
         "smallReadOps": 500,
         "dbGrowthBytes": 0,
         "transactions": 1000,
         "statements": 2825,
         "peakManagedResidentBytes": 63534222,
-        "peakHarnessHeapBytes": 73441512,
+        "peakHarnessHeapBytes": 73716704,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "smallReadMsPerOp": 0.87
       },
@@ -217,7 +217,7 @@
     },
     {
       "trial": 5,
-      "wallMs": 427.25,
+      "wallMs": 419.114,
       "statements": 2825,
       "transactions": 1000,
       "physicalBefore": 111742648,
@@ -226,15 +226,15 @@
         "smallReadOps": 500
       },
       "measuredCounters": {
-        "wallMs": 427.25,
+        "wallMs": 419.114,
         "smallReadOps": 500,
         "dbGrowthBytes": 0,
         "transactions": 1000,
         "statements": 2825,
         "peakManagedResidentBytes": 63534222,
-        "peakHarnessHeapBytes": 73639144,
+        "peakHarnessHeapBytes": 73965176,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "smallReadMsPerOp": 0.855
+        "smallReadMsPerOp": 0.838
       },
       "pass": true
     }

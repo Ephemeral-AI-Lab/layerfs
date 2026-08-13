@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "A1-cold-write",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "worktreeDirty": false,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
@@ -103,122 +103,122 @@
   },
   "trials": 5,
   "latencyMs": {
-    "p50": 1294.521,
-    "p95": 1484.414,
-    "p99": 1484.414,
-    "min": 1177.524,
-    "max": 1484.414,
-    "mean": 1310.362
+    "p50": 1292.362,
+    "p95": 1384.916,
+    "p99": 1384.916,
+    "min": 1203.629,
+    "max": 1384.916,
+    "mean": 1287.852
   },
   "counters": {
-    "wallMs": 1294.521,
+    "wallMs": 1292.362,
     "dbGrowthBytes": 111334760,
     "transactions": 27,
     "statements": 1250,
     "peakManagedResidentBytes": 15245312,
-    "peakHarnessHeapBytes": 65969352,
+    "peakHarnessHeapBytes": 66040864,
     "overheadBasisPoints": 618,
     "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-    "mibPerSec": 77.2
+    "mibPerSec": 77.4
   },
   "samples": [
     {
       "trial": 1,
-      "wallMs": 1302.513,
+      "wallMs": 1328.352,
       "statements": 1250,
       "transactions": 27,
       "physicalBefore": 407888,
       "physicalAfter": 111742648,
       "measuredCounters": {
-        "wallMs": 1302.513,
+        "wallMs": 1328.352,
         "dbGrowthBytes": 111334760,
         "transactions": 27,
         "statements": 1250,
         "peakManagedResidentBytes": 15245312,
-        "peakHarnessHeapBytes": 15004472,
+        "peakHarnessHeapBytes": 10864784,
         "overheadBasisPoints": 618,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "mibPerSec": 76.8
+        "mibPerSec": 75.3
       },
       "pass": true
     },
     {
       "trial": 2,
-      "wallMs": 1294.521,
+      "wallMs": 1292.362,
       "statements": 1250,
       "transactions": 27,
       "physicalBefore": 407888,
       "physicalAfter": 111742648,
       "measuredCounters": {
-        "wallMs": 1294.521,
+        "wallMs": 1292.362,
         "dbGrowthBytes": 111334760,
         "transactions": 27,
         "statements": 1250,
         "peakManagedResidentBytes": 15245312,
-        "peakHarnessHeapBytes": 65969352,
+        "peakHarnessHeapBytes": 66040864,
         "overheadBasisPoints": 618,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "mibPerSec": 77.2
+        "mibPerSec": 77.4
       },
       "pass": true
     },
     {
       "trial": 3,
-      "wallMs": 1177.524,
+      "wallMs": 1203.629,
       "statements": 1250,
       "transactions": 27,
       "physicalBefore": 407888,
       "physicalAfter": 111742648,
       "measuredCounters": {
-        "wallMs": 1177.524,
+        "wallMs": 1203.629,
         "dbGrowthBytes": 111334760,
         "transactions": 27,
         "statements": 1250,
         "peakManagedResidentBytes": 15245312,
-        "peakHarnessHeapBytes": 66378640,
+        "peakHarnessHeapBytes": 66435256,
         "overheadBasisPoints": 618,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "mibPerSec": 84.9
+        "mibPerSec": 83.1
       },
       "pass": true
     },
     {
       "trial": 4,
-      "wallMs": 1484.414,
+      "wallMs": 1384.916,
       "statements": 1250,
       "transactions": 27,
       "physicalBefore": 407888,
       "physicalAfter": 111742648,
       "measuredCounters": {
-        "wallMs": 1484.414,
+        "wallMs": 1384.916,
         "dbGrowthBytes": 111334760,
         "transactions": 27,
         "statements": 1250,
         "peakManagedResidentBytes": 15245312,
-        "peakHarnessHeapBytes": 66211752,
+        "peakHarnessHeapBytes": 66732560,
         "overheadBasisPoints": 618,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "mibPerSec": 67.4
+        "mibPerSec": 72.2
       },
       "pass": true
     },
     {
       "trial": 5,
-      "wallMs": 1292.837,
+      "wallMs": 1230.003,
       "statements": 1250,
       "transactions": 27,
       "physicalBefore": 407888,
       "physicalAfter": 111742648,
       "measuredCounters": {
-        "wallMs": 1292.837,
+        "wallMs": 1230.003,
         "dbGrowthBytes": 111334760,
         "transactions": 27,
         "statements": 1250,
         "peakManagedResidentBytes": 15245312,
-        "peakHarnessHeapBytes": 66117296,
+        "peakHarnessHeapBytes": 66459064,
         "overheadBasisPoints": 618,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
-        "mibPerSec": 77.3
+        "mibPerSec": 81.3
       },
       "pass": true
     }

@@ -1,7 +1,7 @@
 {
   "schema": "efs-benchmark-result-v1",
   "benchmark": "A3-cold-read",
-  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "commit": "710ddf3f05d85ad3264b4f2046c631a6fded9c14",
   "worktreeDirty": false,
   "engine": "ephemeral-ai-fs",
   "driver": "sqlite-node",
@@ -103,29 +103,29 @@
   },
   "trials": 5,
   "latencyMs": {
-    "p50": 332.588,
-    "p95": 333.339,
-    "p99": 333.339,
-    "min": 324.637,
-    "max": 333.339,
-    "mean": 330.141
+    "p50": 326.472,
+    "p95": 341.66,
+    "p99": 341.66,
+    "min": 316.905,
+    "max": 341.66,
+    "mean": 328.007
   },
   "counters": {
-    "wallMs": 332.588,
+    "wallMs": 326.472,
     "bytes": 104857600,
     "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
     "dbGrowthBytes": 53560,
     "transactions": 55,
     "statements": 84,
     "peakManagedResidentBytes": 115765303,
-    "peakHarnessHeapBytes": 67878760,
-    "mibPerSec": 300.7,
+    "peakHarnessHeapBytes": 68369920,
+    "mibPerSec": 306.3,
     "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
   },
   "samples": [
     {
       "trial": 1,
-      "wallMs": 332.94,
+      "wallMs": 341.66,
       "statements": 84,
       "transactions": 55,
       "physicalBefore": 111742648,
@@ -135,22 +135,22 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 332.94,
+        "wallMs": 341.66,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 84,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 25184120,
-        "mibPerSec": 300.4,
+        "peakHarnessHeapBytes": 19276928,
+        "mibPerSec": 292.7,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "pass": true
     },
     {
       "trial": 2,
-      "wallMs": 327.203,
+      "wallMs": 316.905,
       "statements": 84,
       "transactions": 55,
       "physicalBefore": 111742648,
@@ -160,22 +160,22 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 327.203,
+        "wallMs": 316.905,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 84,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 67802264,
-        "mibPerSec": 305.6,
+        "peakHarnessHeapBytes": 67916536,
+        "mibPerSec": 315.6,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "pass": true
     },
     {
       "trial": 3,
-      "wallMs": 333.339,
+      "wallMs": 331.406,
       "statements": 84,
       "transactions": 55,
       "physicalBefore": 111742648,
@@ -185,22 +185,22 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 333.339,
+        "wallMs": 331.406,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 84,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 68035416,
-        "mibPerSec": 300,
+        "peakHarnessHeapBytes": 68038360,
+        "mibPerSec": 301.7,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "pass": true
     },
     {
       "trial": 4,
-      "wallMs": 332.588,
+      "wallMs": 326.472,
       "statements": 84,
       "transactions": 55,
       "physicalBefore": 111742648,
@@ -210,22 +210,22 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 332.588,
+        "wallMs": 326.472,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 84,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 67878760,
-        "mibPerSec": 300.7,
+        "peakHarnessHeapBytes": 68369920,
+        "mibPerSec": 306.3,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "pass": true
     },
     {
       "trial": 5,
-      "wallMs": 324.637,
+      "wallMs": 323.594,
       "statements": 84,
       "transactions": 55,
       "physicalBefore": 111742648,
@@ -235,15 +235,15 @@
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "measuredCounters": {
-        "wallMs": 324.637,
+        "wallMs": 323.594,
         "bytes": 104857600,
         "digest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7",
         "dbGrowthBytes": 53560,
         "transactions": 55,
         "statements": 84,
         "peakManagedResidentBytes": 115765303,
-        "peakHarnessHeapBytes": 68221944,
-        "mibPerSec": 308,
+        "peakHarnessHeapBytes": 68528888,
+        "mibPerSec": 309,
         "verifiedDigest": "1e9037da68fb04127addf5eff024517bb7af2bdf7f3f202c82b28437e21f00a7"
       },
       "pass": true
