@@ -62,10 +62,15 @@ export function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   return different === 0;
 }
 
+const HEX_TABLE: readonly string[] = Array.from({ length: 256 }, (_, value) =>
+  value.toString(16).padStart(2, "0"),
+);
+
 export function bytesToHex(bytes: Uint8Array): string {
   bytes = intrinsicByteRange(bytes);
   let result = "";
-  for (const byte of bytes) result += byte.toString(16).padStart(2, "0");
+  for (let index = 0; index < bytes.byteLength; index += 1)
+    result += HEX_TABLE[bytes[index]!]!;
   return result;
 }
 
