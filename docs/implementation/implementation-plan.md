@@ -2,7 +2,7 @@
 
 | Field               | Value                                              |
 | ------------------- | -------------------------------------------------- |
-| Status              | M6 complete; overall plan in progress              |
+| Status              | M7 complete; overall plan in progress              |
 | Target              | Version 0.1 integration candidate                  |
 | Delivery style      | Milestone exits with objective acceptance evidence |
 | Database foundation | SQLite remains authoritative                       |
@@ -464,18 +464,18 @@ and process ownership outside Ephemeral AI FS.
 - [x] Repeated reads on one handle reuse a pinned selection and return exact bytes.
 - [x] Three sessions on one inode pass every commit order without lost updates.
 - [x] Hidden staging never satisfies fsync or advances visible state.
-- [ ] Successful commit, close, restart, unmount, and remount preserve digest.
+- [x] Successful commit, close, restart, unmount, and remount preserve digest.
 - [x] Large reads and writes allocate no whole-file buffer.
 - [x] Sixty-four sessions remain inside pending-write and aggregate memory limits with
       backpressure.
-- [ ] The real-mounted-FUSE smoke profile completes within 60 seconds; a shim or mocked
+- [x] The real-mounted-FUSE smoke profile completes within 60 seconds; a shim or mocked
       binding does not count.
 - [x] Computer needs only handle forwarding and no filesystem semantics.
 
 The implementation, shared conformance/fault suite, resource gates, and test-only real
-FUSE host are complete. M7 remains unaccepted until the exact candidate passes the
-privileged-Linux profile and its predecessor, local, and FUSE runs are bound in the
-constrained evidence commit; `validate:accepted` therefore continues to select M6.
+FUSE host are complete. The candidate-bound profile completed in 24,815 ms with all
+9,056 operations, exact digests, three restarts, resumed collection, and zero active
+durable state. M7 is accepted and `validate:accepted` selects it.
 
 ## 11. Milestone 8: Replication
 

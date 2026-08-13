@@ -111,9 +111,11 @@ test("milestone gates select only their owned suites and sequential predecessors
   for (const [milestone, command] of Object.entries(testCommands)) {
     assert.equal(scripts[`test:m${milestone}`], command);
     const expectedValidation =
-      Number(milestone) <= 7
-        ? `pnpm validate:m${milestone}:pre-evidence && pnpm check:evidence`
-        : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
+      Number(milestone) === 7
+        ? "pnpm validate:m6 && pnpm test:m7:local && pnpm check:evidence"
+        : Number(milestone) < 7
+          ? `pnpm validate:m${milestone}:pre-evidence && pnpm check:evidence`
+          : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
     assert.equal(scripts[`validate:m${milestone}`], expectedValidation);
     assert.doesNotMatch(scripts[`validate:m${milestone}`], /test:unit/);
     if (Number(milestone) > 7)
@@ -199,7 +201,7 @@ test("milestone gates select only their owned suites and sequential predecessors
       m6LocalGate.includes(requiredSelection),
       `M6 local gate omitted ${requiredSelection}`,
     );
-  assert.equal(scripts["validate:accepted"], "pnpm validate:m6");
+  assert.equal(scripts["validate:accepted"], "pnpm validate:m7");
 });
 
 test("documentation links resolve inline and reference-style targets", async () => {

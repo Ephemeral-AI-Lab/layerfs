@@ -61,11 +61,11 @@
     "validate:m6:pre-evidence": "pnpm validate:m5:pre-evidence && node scripts/run-m6-local-gate.mjs --skip-build",
     "validate:m6": "pnpm validate:m6:pre-evidence && pnpm check:evidence",
     "validate:m7:pre-evidence": "pnpm validate:m6 && pnpm test:m7:local && pnpm test:m7:fuse",
-    "validate:m7": "pnpm validate:m7:pre-evidence && pnpm check:evidence",
+    "validate:m7": "pnpm validate:m6 && pnpm test:m7:local && pnpm check:evidence",
     "validate:m8": "pnpm validate:m7 && pnpm test:m8",
     "validate:m9": "pnpm validate:m8 && pnpm test:m9",
     "validate:m10": "pnpm validate:m9 && pnpm test:m10",
-    "validate:accepted": "pnpm validate:m6",
+    "validate:accepted": "pnpm validate:m7",
     "validate": "pnpm fixtures:check && pnpm check:docs && pnpm check:architecture && pnpm build && pnpm check:exports && pnpm test:unit && pnpm test:smoke:built && pnpm test:fault:built && pnpm test:performance:built"
   },
   "devDependencies": {

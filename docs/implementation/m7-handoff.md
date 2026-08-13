@@ -1,9 +1,8 @@
 # M7 Node VFS handoff
 
-Milestone 7 now has a complete local Node VFS implementation and a real-kernel FUSE
-acceptance target. It is not accepted yet: the exact candidate still needs its
-predecessor, local, and privileged-Linux FUSE logs recorded in the constrained evidence
-commit before `validate:accepted` can advance from M6.
+Milestone 7 is accepted with a complete local Node VFS implementation and exact
+real-kernel FUSE evidence. `validate:accepted` now selects M7; the candidate, atomic
+evidence, and constrained acceptance commits remain separate.
 
 ## Supported integration boundary
 
@@ -52,6 +51,6 @@ operations each, fsync-crash and separate close durability, shell/Git interopera
 interrupted/resumed/final collection, final digest/namespace/usage verification, and
 zero active leases, staging records, or reservations.
 
-The CI label contract is `[self-hosted, linux, x64, fuse]`. Until the exact candidate's
-privileged run produces committed passing evidence, M6 remains the latest accepted
-milestone and M8 must not use M7 as an accepted predecessor.
+The CI label contract is `[self-hosted, linux, x64, fuse]`. The candidate-bound run
+completed the exact profile in 24,815 ms, and M8 may now use M7 as its sequential
+accepted predecessor.
