@@ -1,0 +1,158 @@
+{
+  "schema": "efs-benchmark-result-v1",
+  "benchmark": "M4-hard-link",
+  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "worktreeDirty": false,
+  "engine": "ephemeral-ai-fs",
+  "driver": "sqlite-node",
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.11.1",
+    "pnpm": "10.32.1",
+    "cpu": "AMD Ryzen Threadripper 7960X 24-Cores",
+    "logicalCpuCount": 48,
+    "totalMemoryBytes": 137438953472,
+    "storage": "Samsung SSD 980 PRO 1TB [Fixed hard disk media, 1000202273280 bytes] CT2000T705SSD5 [Fixed hard disk media, 2000396321280 bytes]",
+    "sqlite": "3.50.4"
+  },
+  "fixture": {
+    "name": "small-branch-matrix",
+    "sha256": "3b3c043456f4b7be4f716ad5abbfbc8d263ba1b76e4439a29d5eba52a55804aa"
+  },
+  "configuration": {
+    "seed": 1592614637,
+    "databaseIsolation": "fresh-database-per-trial",
+    "sqlitePageSize": 4096,
+    "journalMode": "wal",
+    "cacheTargetBytes": 16777216,
+    "mmapLimitBytes": 0,
+    "manifestFormat": "efs-merkle-manifest-v1",
+    "operatingSystemCacheDropAttempted": false,
+    "operatingSystemCacheDropSucceeded": false,
+    "resourceLimits": {
+      "filesystem": {
+        "maxPathBytes": 4096,
+        "maxNameBytes": 255,
+        "maxSymlinkTargetBytes": 4096,
+        "maxSymlinkTraversals": 40,
+        "maxMaterializedBytes": 67108864,
+        "preferredStreamChunkBytes": 262144,
+        "maxAtomicTreeEntries": 10000,
+        "maxReaddirEntries": 10000
+      },
+      "storage": {
+        "maxManifestEntries": 4294967295,
+        "maxManifestNodeBytes": 16384,
+        "maxManifestDepth": 8,
+        "maxFileBytes": 17179869184,
+        "maxWriteBytes": 67108864,
+        "maxManagedPayloadBytes": 8589934592,
+        "maxChargedMetadataBytes": 1073741824,
+        "maxPhysicalDatabaseBytes": 10737418240,
+        "maxJournalBytes": 1073741824,
+        "maxStagingPayloadBytes": 536870912,
+        "maxBranchOverlayBytes": 1073741824,
+        "maxMaintenanceBytes": 67108864,
+        "maintenanceReserveBytes": 67108864,
+        "maxPermanentIdentifiers": 10000000,
+        "maxFinalTransactionRows": 100000,
+        "maxFinalTransactionBytes": 16793600,
+        "maxRevisionReplaySteps": 1000,
+        "maxPatchesPerFile": 256,
+        "maxPatchBytesPerFile": 16777216,
+        "maxQueryBatchSize": 256,
+        "maxGcBatchSize": 1000,
+        "maxRetainedRevisions": 1000,
+        "readLeaseMs": 300000,
+        "stagingLeaseMs": 900000
+      },
+      "runtime": {
+        "maxManagedResidentBytes": 134217728,
+        "maxCacheBytes": 67108864,
+        "maxPendingWriteBytes": 67108864,
+        "maxWriteSessionBytes": 16777216,
+        "maxPrefetchBytes": 1048576,
+        "maxQueryBatchBytes": 2097152,
+        "maxPreparedResultBytes": 67108864,
+        "maxConcurrentStreams": 64,
+        "maxConcurrentOperations": 256,
+        "maxOpenBranchHandles": 1024,
+        "maxOpenNodeVfsSessions": 256
+      },
+      "branch": {
+        "maxBranchIdBytes": 200,
+        "maxOperationIdBytes": 200,
+        "maxActiveBranches": 10000,
+        "maxChangedPathsPerBranch": 100000,
+        "maxChangedPathBytes": 16777216,
+        "maxConflictsPerPublication": 100000,
+        "maxConflictResultBytes": 16777216,
+        "terminalBranchRetentionMs": 2592000000,
+        "publicationResultRetentionMs": 2592000000
+      }
+    },
+    "name": "hard-link",
+    "branchCount": 2
+  },
+  "trials": 1,
+  "latencyMs": {
+    "p50": 12.970100000000457,
+    "p95": 12.970100000000457,
+    "p99": 12.970100000000457,
+    "min": 12.970100000000457,
+    "max": 12.970100000000457,
+    "mean": 12.970100000000457
+  },
+  "counters": {
+    "preparationMs": 11.153000000000247,
+    "publicationMs": 12.970100000000457,
+    "replayMs": 0,
+    "merged": 1,
+    "conflicts": 1,
+    "changedPaths": 1,
+    "conflictCount": 1
+  },
+  "samples": [
+    {
+      "preparationMs": 11.153000000000247,
+      "results": [
+        {
+          "outcome": "merged",
+          "branchId": "bench-alias-0-first",
+          "operationId": "bench-alias-0-0",
+          "baseRevision": "2",
+          "parentRevision": "2",
+          "revision": "3",
+          "changedPaths": ["/source"],
+          "conflicts": []
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-alias-0-second",
+          "operationId": "bench-alias-0-1",
+          "baseRevision": "2",
+          "headRevision": "3",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/alias",
+              "reason": "node-changed",
+              "expectedRevision": "2",
+              "actualRevision": "3"
+            }
+          ]
+        }
+      ],
+      "publicationMs": 12.970100000000457,
+      "publicationSamplesMs": [12.962000000001353, 12.960900000000038],
+      "merged": 1,
+      "conflicts": 1,
+      "changedPaths": 1,
+      "conflictCount": 1,
+      "maxResultBytes": 260
+    }
+  ],
+  "pass": true
+}

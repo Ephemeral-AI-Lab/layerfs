@@ -1,0 +1,298 @@
+{
+  "schema": "efs-benchmark-result-v1",
+  "benchmark": "M4-same-inode",
+  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "worktreeDirty": false,
+  "engine": "ephemeral-ai-fs",
+  "driver": "sqlite-node",
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.11.1",
+    "pnpm": "10.32.1",
+    "cpu": "AMD Ryzen Threadripper 7960X 24-Cores",
+    "logicalCpuCount": 48,
+    "totalMemoryBytes": 137438953472,
+    "storage": "Samsung SSD 980 PRO 1TB [Fixed hard disk media, 1000202273280 bytes] CT2000T705SSD5 [Fixed hard disk media, 2000396321280 bytes]",
+    "sqlite": "3.50.4"
+  },
+  "fixture": {
+    "name": "small-branch-matrix",
+    "sha256": "3b3c043456f4b7be4f716ad5abbfbc8d263ba1b76e4439a29d5eba52a55804aa"
+  },
+  "configuration": {
+    "seed": 1592614637,
+    "databaseIsolation": "fresh-database-per-trial",
+    "sqlitePageSize": 4096,
+    "journalMode": "wal",
+    "cacheTargetBytes": 16777216,
+    "mmapLimitBytes": 0,
+    "manifestFormat": "efs-merkle-manifest-v1",
+    "operatingSystemCacheDropAttempted": false,
+    "operatingSystemCacheDropSucceeded": false,
+    "resourceLimits": {
+      "filesystem": {
+        "maxPathBytes": 4096,
+        "maxNameBytes": 255,
+        "maxSymlinkTargetBytes": 4096,
+        "maxSymlinkTraversals": 40,
+        "maxMaterializedBytes": 67108864,
+        "preferredStreamChunkBytes": 262144,
+        "maxAtomicTreeEntries": 10000,
+        "maxReaddirEntries": 10000
+      },
+      "storage": {
+        "maxManifestEntries": 4294967295,
+        "maxManifestNodeBytes": 16384,
+        "maxManifestDepth": 8,
+        "maxFileBytes": 17179869184,
+        "maxWriteBytes": 67108864,
+        "maxManagedPayloadBytes": 8589934592,
+        "maxChargedMetadataBytes": 1073741824,
+        "maxPhysicalDatabaseBytes": 10737418240,
+        "maxJournalBytes": 1073741824,
+        "maxStagingPayloadBytes": 536870912,
+        "maxBranchOverlayBytes": 1073741824,
+        "maxMaintenanceBytes": 67108864,
+        "maintenanceReserveBytes": 67108864,
+        "maxPermanentIdentifiers": 10000000,
+        "maxFinalTransactionRows": 100000,
+        "maxFinalTransactionBytes": 16793600,
+        "maxRevisionReplaySteps": 1000,
+        "maxPatchesPerFile": 256,
+        "maxPatchBytesPerFile": 16777216,
+        "maxQueryBatchSize": 256,
+        "maxGcBatchSize": 1000,
+        "maxRetainedRevisions": 1000,
+        "readLeaseMs": 300000,
+        "stagingLeaseMs": 900000
+      },
+      "runtime": {
+        "maxManagedResidentBytes": 134217728,
+        "maxCacheBytes": 67108864,
+        "maxPendingWriteBytes": 67108864,
+        "maxWriteSessionBytes": 16777216,
+        "maxPrefetchBytes": 1048576,
+        "maxQueryBatchBytes": 2097152,
+        "maxPreparedResultBytes": 67108864,
+        "maxConcurrentStreams": 64,
+        "maxConcurrentOperations": 256,
+        "maxOpenBranchHandles": 1024,
+        "maxOpenNodeVfsSessions": 256
+      },
+      "branch": {
+        "maxBranchIdBytes": 200,
+        "maxOperationIdBytes": 200,
+        "maxActiveBranches": 10000,
+        "maxChangedPathsPerBranch": 100000,
+        "maxChangedPathBytes": 16777216,
+        "maxConflictsPerPublication": 100000,
+        "maxConflictResultBytes": 16777216,
+        "terminalBranchRetentionMs": 2592000000,
+        "publicationResultRetentionMs": 2592000000
+      }
+    },
+    "name": "same-inode",
+    "branchCount": 10
+  },
+  "trials": 1,
+  "latencyMs": {
+    "p50": 9.260200000000623,
+    "p95": 9.260200000000623,
+    "p99": 9.260200000000623,
+    "min": 9.260200000000623,
+    "max": 9.260200000000623,
+    "mean": 9.260200000000623
+  },
+  "counters": {
+    "preparationMs": 64.17710000000079,
+    "publicationMs": 9.260200000000623,
+    "replayMs": 0,
+    "merged": 1,
+    "conflicts": 9,
+    "changedPaths": 1,
+    "conflictCount": 9
+  },
+  "samples": [
+    {
+      "preparationMs": 64.17710000000079,
+      "results": [
+        {
+          "outcome": "merged",
+          "branchId": "bench-conflict-10-0-0",
+          "operationId": "bench-conflict-10-0-0",
+          "baseRevision": "1",
+          "parentRevision": "1",
+          "revision": "2",
+          "changedPaths": ["/shared"],
+          "conflicts": []
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-1",
+          "operationId": "bench-conflict-10-0-1",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-2",
+          "operationId": "bench-conflict-10-0-2",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-3",
+          "operationId": "bench-conflict-10-0-3",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-4",
+          "operationId": "bench-conflict-10-0-4",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-5",
+          "operationId": "bench-conflict-10-0-5",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-6",
+          "operationId": "bench-conflict-10-0-6",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-7",
+          "operationId": "bench-conflict-10-0-7",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-8",
+          "operationId": "bench-conflict-10-0-8",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        },
+        {
+          "outcome": "conflict",
+          "branchId": "bench-conflict-10-0-9",
+          "operationId": "bench-conflict-10-0-9",
+          "baseRevision": "1",
+          "headRevision": "2",
+          "revision": null,
+          "changedPaths": [],
+          "conflicts": [
+            {
+              "path": "/shared",
+              "reason": "node-changed",
+              "expectedRevision": "1",
+              "actualRevision": "2"
+            }
+          ]
+        }
+      ],
+      "publicationMs": 9.260200000000623,
+      "publicationSamplesMs": [
+        9.241799999999785, 9.240700000000288, 9.241100000001097, 9.241299999999683,
+        9.24159999999938, 9.241899999999077, 9.241900000000896, 9.240799999999581,
+        9.239600000000792, 9.239400000000387
+      ],
+      "merged": 1,
+      "conflicts": 9,
+      "changedPaths": 1,
+      "conflictCount": 9,
+      "maxResultBytes": 268
+    }
+  ],
+  "pass": true
+}

@@ -1,0 +1,77 @@
+{
+  "schema": "efs-correctness-result-v1",
+  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "adapter": "node-sqlite-branch-suite",
+  "driver": "sqlite-node",
+  "capabilities": {
+    "maxBlobBytes": 67108864,
+    "maxBindings": 32766,
+    "durability": "acknowledged",
+    "journalMode": "wal",
+    "branchPublication": true,
+    "physicalReopen": true
+  },
+  "limits": {
+    "defaultNodeGateDeadlineMs": 600000,
+    "maxActiveBranches": 10000,
+    "maxChangedPathsPerBranch": 100000,
+    "maxChangedPathBytes": 16777216,
+    "maxConflictsPerPublication": 100000,
+    "maxConflictResultBytes": 16777216,
+    "maxBranchOverlayBytes": 1073741824,
+    "maxManagedResidentBytes": 134217728,
+    "maxCacheBytes": 67108864,
+    "maxQueryBatchBytes": 2097152,
+    "independentWriters": 50,
+    "sameInodeWriters": 50,
+    "benchmarkCells": 20,
+    "trialsPerCell": 1
+  },
+  "schemaVersion": 4,
+  "formatVersion": "efs-merkle-manifest-v1",
+  "seed": 1592614637,
+  "fixtureDigest": "3b3c043456f4b7be4f716ad5abbfbc8d263ba1b76e4439a29d5eba52a55804aa",
+  "faultPoint": "every-branch-publication-and-preparation-statement-plus-independent-and-same-inode-writer-conflict-matrices",
+  "commands": [
+    "pnpm validate:m5:pre-evidence",
+    "node tests/performance/branch-bench.mjs --artifacts=C:\\Users\\yifan\\code\\Ephemeral-AI-Lab\\ephemeral-ai-fs\\docs\\evidence\\m4\\benchmarks"
+  ],
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.11.1",
+    "pnpm": "10.32.1",
+    "cpu": "AMD Ryzen Threadripper 7960X 24-Cores",
+    "logicalCpuCount": 48,
+    "totalMemoryBytes": 137438953472,
+    "storage": "Samsung SSD 980 PRO 1TB [Fixed hard disk media, 1000202273280 bytes] CT2000T705SSD5 [Fixed hard disk media, 2000396321280 bytes]",
+    "sqlite": "3.50.4",
+    "sqlitePageSize": 4096,
+    "journalMode": "wal",
+    "cacheTargetBytes": 16777216,
+    "mmapLimitBytes": 0,
+    "operatingSystemCacheDropAttempted": false,
+    "operatingSystemCacheDropSucceeded": false
+  },
+  "passed": 239,
+  "failed": 0,
+  "elapsedMs": 571294,
+  "ownedTreeDigest": "e3c0db361cef1aebd3c93d42ea1687b1a99a2eed3bc538b6de8d0e20d3dd13f5",
+  "independentAudit": "approved",
+  "metrics": {
+    "operatingSystems": 1,
+    "nodeVersions": 1,
+    "matrixRuns": 1,
+    "cumulativePredecessorChecks": 181,
+    "branchTests": 58,
+    "independentWriterCount": 50,
+    "sameInodeWriterCount": 50,
+    "branchBenchmarkCells": 20,
+    "branchBenchmarkElapsedMs": 19740,
+    "defaultNodeGateElapsedMs": 571294
+  },
+  "deviations": [
+    "No hosted GitHub Actions run exists because the branch has not been pushed; this record claims only the clean Windows x64, Node 24.11.1 local validation cell.",
+    "The retained branch benchmark is correctness and bounded-scaling evidence with one raw trial for each of 20 mandatory cells; it is not presented as a release-latency claim. Every cell records the exact candidate, clean-worktree state, hardware, SQLite and cache configuration, all effective filesystem, storage, runtime, and branch limits, and its raw trial."
+  ]
+}

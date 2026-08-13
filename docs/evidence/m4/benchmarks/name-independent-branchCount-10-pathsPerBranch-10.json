@@ -1,0 +1,347 @@
+{
+  "schema": "efs-benchmark-result-v1",
+  "benchmark": "M4-independent",
+  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "worktreeDirty": false,
+  "engine": "ephemeral-ai-fs",
+  "driver": "sqlite-node",
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.11.1",
+    "pnpm": "10.32.1",
+    "cpu": "AMD Ryzen Threadripper 7960X 24-Cores",
+    "logicalCpuCount": 48,
+    "totalMemoryBytes": 137438953472,
+    "storage": "Samsung SSD 980 PRO 1TB [Fixed hard disk media, 1000202273280 bytes] CT2000T705SSD5 [Fixed hard disk media, 2000396321280 bytes]",
+    "sqlite": "3.50.4"
+  },
+  "fixture": {
+    "name": "small-branch-matrix",
+    "sha256": "3b3c043456f4b7be4f716ad5abbfbc8d263ba1b76e4439a29d5eba52a55804aa"
+  },
+  "configuration": {
+    "seed": 1592614637,
+    "databaseIsolation": "fresh-database-per-trial",
+    "sqlitePageSize": 4096,
+    "journalMode": "wal",
+    "cacheTargetBytes": 16777216,
+    "mmapLimitBytes": 0,
+    "manifestFormat": "efs-merkle-manifest-v1",
+    "operatingSystemCacheDropAttempted": false,
+    "operatingSystemCacheDropSucceeded": false,
+    "resourceLimits": {
+      "filesystem": {
+        "maxPathBytes": 4096,
+        "maxNameBytes": 255,
+        "maxSymlinkTargetBytes": 4096,
+        "maxSymlinkTraversals": 40,
+        "maxMaterializedBytes": 67108864,
+        "preferredStreamChunkBytes": 262144,
+        "maxAtomicTreeEntries": 10000,
+        "maxReaddirEntries": 10000
+      },
+      "storage": {
+        "maxManifestEntries": 4294967295,
+        "maxManifestNodeBytes": 16384,
+        "maxManifestDepth": 8,
+        "maxFileBytes": 17179869184,
+        "maxWriteBytes": 67108864,
+        "maxManagedPayloadBytes": 8589934592,
+        "maxChargedMetadataBytes": 1073741824,
+        "maxPhysicalDatabaseBytes": 10737418240,
+        "maxJournalBytes": 1073741824,
+        "maxStagingPayloadBytes": 536870912,
+        "maxBranchOverlayBytes": 1073741824,
+        "maxMaintenanceBytes": 67108864,
+        "maintenanceReserveBytes": 67108864,
+        "maxPermanentIdentifiers": 10000000,
+        "maxFinalTransactionRows": 100000,
+        "maxFinalTransactionBytes": 16793600,
+        "maxRevisionReplaySteps": 1000,
+        "maxPatchesPerFile": 256,
+        "maxPatchBytesPerFile": 16777216,
+        "maxQueryBatchSize": 256,
+        "maxGcBatchSize": 1000,
+        "maxRetainedRevisions": 1000,
+        "readLeaseMs": 300000,
+        "stagingLeaseMs": 900000
+      },
+      "runtime": {
+        "maxManagedResidentBytes": 134217728,
+        "maxCacheBytes": 67108864,
+        "maxPendingWriteBytes": 67108864,
+        "maxWriteSessionBytes": 16777216,
+        "maxPrefetchBytes": 1048576,
+        "maxQueryBatchBytes": 2097152,
+        "maxPreparedResultBytes": 67108864,
+        "maxConcurrentStreams": 64,
+        "maxConcurrentOperations": 256,
+        "maxOpenBranchHandles": 1024,
+        "maxOpenNodeVfsSessions": 256
+      },
+      "branch": {
+        "maxBranchIdBytes": 200,
+        "maxOperationIdBytes": 200,
+        "maxActiveBranches": 10000,
+        "maxChangedPathsPerBranch": 100000,
+        "maxChangedPathBytes": 16777216,
+        "maxConflictsPerPublication": 100000,
+        "maxConflictResultBytes": 16777216,
+        "terminalBranchRetentionMs": 2592000000,
+        "publicationResultRetentionMs": 2592000000
+      }
+    },
+    "name": "independent",
+    "branchCount": 10,
+    "pathsPerBranch": 10
+  },
+  "trials": 1,
+  "latencyMs": {
+    "p50": 129.59559999999965,
+    "p95": 129.59559999999965,
+    "p99": 129.59559999999965,
+    "min": 129.59559999999965,
+    "max": 129.59559999999965,
+    "mean": 129.59559999999965
+  },
+  "counters": {
+    "preparationMs": 530.5379999999996,
+    "publicationMs": 129.59559999999965,
+    "replayMs": 0,
+    "merged": 10,
+    "conflicts": 0,
+    "changedPaths": 100,
+    "conflictCount": 0
+  },
+  "samples": [
+    {
+      "preparationMs": 530.5379999999996,
+      "results": [
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-0",
+          "operationId": "bench-independent-10-10-0-0",
+          "baseRevision": "0",
+          "parentRevision": "0",
+          "revision": "1",
+          "changedPaths": [
+            "/independent-0-0",
+            "/independent-0-1",
+            "/independent-0-2",
+            "/independent-0-3",
+            "/independent-0-4",
+            "/independent-0-5",
+            "/independent-0-6",
+            "/independent-0-7",
+            "/independent-0-8",
+            "/independent-0-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-1",
+          "operationId": "bench-independent-10-10-0-1",
+          "baseRevision": "0",
+          "parentRevision": "1",
+          "revision": "2",
+          "changedPaths": [
+            "/independent-1-0",
+            "/independent-1-1",
+            "/independent-1-2",
+            "/independent-1-3",
+            "/independent-1-4",
+            "/independent-1-5",
+            "/independent-1-6",
+            "/independent-1-7",
+            "/independent-1-8",
+            "/independent-1-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-2",
+          "operationId": "bench-independent-10-10-0-2",
+          "baseRevision": "0",
+          "parentRevision": "2",
+          "revision": "3",
+          "changedPaths": [
+            "/independent-2-0",
+            "/independent-2-1",
+            "/independent-2-2",
+            "/independent-2-3",
+            "/independent-2-4",
+            "/independent-2-5",
+            "/independent-2-6",
+            "/independent-2-7",
+            "/independent-2-8",
+            "/independent-2-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-3",
+          "operationId": "bench-independent-10-10-0-3",
+          "baseRevision": "0",
+          "parentRevision": "3",
+          "revision": "4",
+          "changedPaths": [
+            "/independent-3-0",
+            "/independent-3-1",
+            "/independent-3-2",
+            "/independent-3-3",
+            "/independent-3-4",
+            "/independent-3-5",
+            "/independent-3-6",
+            "/independent-3-7",
+            "/independent-3-8",
+            "/independent-3-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-4",
+          "operationId": "bench-independent-10-10-0-4",
+          "baseRevision": "0",
+          "parentRevision": "4",
+          "revision": "5",
+          "changedPaths": [
+            "/independent-4-0",
+            "/independent-4-1",
+            "/independent-4-2",
+            "/independent-4-3",
+            "/independent-4-4",
+            "/independent-4-5",
+            "/independent-4-6",
+            "/independent-4-7",
+            "/independent-4-8",
+            "/independent-4-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-5",
+          "operationId": "bench-independent-10-10-0-5",
+          "baseRevision": "0",
+          "parentRevision": "5",
+          "revision": "6",
+          "changedPaths": [
+            "/independent-5-0",
+            "/independent-5-1",
+            "/independent-5-2",
+            "/independent-5-3",
+            "/independent-5-4",
+            "/independent-5-5",
+            "/independent-5-6",
+            "/independent-5-7",
+            "/independent-5-8",
+            "/independent-5-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-6",
+          "operationId": "bench-independent-10-10-0-6",
+          "baseRevision": "0",
+          "parentRevision": "6",
+          "revision": "7",
+          "changedPaths": [
+            "/independent-6-0",
+            "/independent-6-1",
+            "/independent-6-2",
+            "/independent-6-3",
+            "/independent-6-4",
+            "/independent-6-5",
+            "/independent-6-6",
+            "/independent-6-7",
+            "/independent-6-8",
+            "/independent-6-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-7",
+          "operationId": "bench-independent-10-10-0-7",
+          "baseRevision": "0",
+          "parentRevision": "7",
+          "revision": "8",
+          "changedPaths": [
+            "/independent-7-0",
+            "/independent-7-1",
+            "/independent-7-2",
+            "/independent-7-3",
+            "/independent-7-4",
+            "/independent-7-5",
+            "/independent-7-6",
+            "/independent-7-7",
+            "/independent-7-8",
+            "/independent-7-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-8",
+          "operationId": "bench-independent-10-10-0-8",
+          "baseRevision": "0",
+          "parentRevision": "8",
+          "revision": "9",
+          "changedPaths": [
+            "/independent-8-0",
+            "/independent-8-1",
+            "/independent-8-2",
+            "/independent-8-3",
+            "/independent-8-4",
+            "/independent-8-5",
+            "/independent-8-6",
+            "/independent-8-7",
+            "/independent-8-8",
+            "/independent-8-9"
+          ],
+          "conflicts": []
+        },
+        {
+          "outcome": "merged",
+          "branchId": "bench-independent-10-10-0-9",
+          "operationId": "bench-independent-10-10-0-9",
+          "baseRevision": "0",
+          "parentRevision": "9",
+          "revision": "10",
+          "changedPaths": [
+            "/independent-9-0",
+            "/independent-9-1",
+            "/independent-9-2",
+            "/independent-9-3",
+            "/independent-9-4",
+            "/independent-9-5",
+            "/independent-9-6",
+            "/independent-9-7",
+            "/independent-9-8",
+            "/independent-9-9"
+          ],
+          "conflicts": []
+        }
+      ],
+      "publicationMs": 129.59559999999965,
+      "publicationSamplesMs": [
+        129.5720999999994, 129.5703999999996, 129.5702000000001, 129.5698999999995,
+        129.5689999999995, 129.5685999999996, 129.5676999999996, 129.567,
+        129.5667999999996, 129.5663999999997
+      ],
+      "merged": 10,
+      "conflicts": 0,
+      "changedPaths": 100,
+      "conflictCount": 0,
+      "maxResultBytes": 383,
+      "expectedPaths": 100
+    }
+  ],
+  "pass": true
+}

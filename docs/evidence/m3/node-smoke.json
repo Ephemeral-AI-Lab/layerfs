@@ -1,0 +1,162 @@
+{
+  "schema": "efs-correctness-result-v1",
+  "commit": "11fc61d2ed0bab979bd8d0cd468e024f35b8bbea",
+  "adapter": "node-sqlite-smoke",
+  "driver": "sqlite-node",
+  "capabilities": {
+    "maxBlobBytes": 67108864,
+    "maxBindings": 32766,
+    "durability": "acknowledged",
+    "journalMode": "wal",
+    "memoryPolicy": "configured",
+    "cacheTargetBytes": 16777216,
+    "mmapLimitBytes": 0,
+    "maxPhysicalDatabaseBytes": 10737418240,
+    "maxJournalBytes": 1073741824,
+    "physicalQuotaPolicy": "driver-enforced",
+    "journalQuotaPolicy": "checkpoint-backpressure",
+    "journalSizeLimitIsHard": false
+  },
+  "limits": {
+    "maxPathBytes": 4096,
+    "maxNameBytes": 255,
+    "maxSymlinkTargetBytes": 4096,
+    "maxSymlinkTraversals": 40,
+    "maxMaterializedBytes": 67108864,
+    "preferredStreamChunkBytes": 262144,
+    "maxAtomicTreeEntries": 10000,
+    "maxReaddirEntries": 10000,
+    "maxManifestEntries": 4294967295,
+    "maxManifestNodeBytes": 16384,
+    "maxManifestDepth": 8,
+    "maxFileBytes": 17179869184,
+    "maxWriteBytes": 67108864,
+    "maxManagedPayloadBytes": 8589934592,
+    "maxChargedMetadataBytes": 1073741824,
+    "maxPhysicalDatabaseBytes": 10737418240,
+    "maxJournalBytes": 1073741824,
+    "maxStagingPayloadBytes": 536870912,
+    "maxBranchOverlayBytes": 1073741824,
+    "maxMaintenanceBytes": 67108864,
+    "maintenanceReserveBytes": 67108864,
+    "maxPermanentIdentifiers": 10000000,
+    "maxFinalTransactionRows": 100000,
+    "maxFinalTransactionBytes": 16793600,
+    "maxRevisionReplaySteps": 1000,
+    "maxPatchesPerFile": 256,
+    "maxPatchBytesPerFile": 16777216,
+    "maxQueryBatchSize": 256,
+    "maxGcBatchSize": 64,
+    "maxRetainedRevisions": 1000,
+    "readLeaseMs": 300000,
+    "stagingLeaseMs": 900000,
+    "maxManagedResidentBytes": 134217728,
+    "maxCacheBytes": 67108864,
+    "maxPendingWriteBytes": 67108864,
+    "maxWriteSessionBytes": 16777216,
+    "maxPrefetchBytes": 1048576,
+    "maxQueryBatchBytes": 2097152,
+    "maxPreparedResultBytes": 67108864,
+    "maxConcurrentStreams": 64,
+    "maxConcurrentOperations": 256,
+    "maxOpenBranchHandles": 1024,
+    "maxOpenNodeVfsSessions": 256,
+    "maxBranchIdBytes": 200,
+    "maxOperationIdBytes": 200,
+    "maxActiveBranches": 10000,
+    "maxChangedPathsPerBranch": 100000,
+    "maxChangedPathBytes": 16777216,
+    "maxConflictsPerPublication": 100000,
+    "maxConflictResultBytes": 16777216,
+    "terminalBranchRetentionMs": 2592000000,
+    "publicationResultRetentionMs": 2592000000,
+    "cowPageBytes": 8192,
+    "fastCdcMinimumBytes": 32768,
+    "fastCdcAverageBytes": 131072,
+    "fastCdcMaximumBytes": 524288,
+    "payloadBytes": 16777216,
+    "cowEdits": 5000,
+    "namespaceOperations": 2000,
+    "readers": 16,
+    "writers": 16,
+    "operationsPerActor": 64,
+    "restarts": 3
+  },
+  "schemaVersion": 4,
+  "formatVersion": "efs-merkle-manifest-v1",
+  "seed": 1592614637,
+  "fixtureDigest": "488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8",
+  "faultPoint": "bounded-collection-after-first-committed-batch",
+  "commands": ["pnpm test:smoke:built"],
+  "environment": {
+    "platform": "win32",
+    "architecture": "x64",
+    "node": "v24.11.1",
+    "pnpm": "10.32.1",
+    "cpu": "AMD Ryzen Threadripper 7960X 24-Cores",
+    "logicalCpuCount": 48,
+    "totalMemoryBytes": 137438953472,
+    "storage": "Samsung SSD 980 PRO 1TB [Fixed hard disk media, 1000202273280 bytes] CT2000T705SSD5 [Fixed hard disk media, 2000396321280 bytes]",
+    "sqlite": "3.50.4",
+    "sqlitePageSize": 4096,
+    "journalMode": "wal",
+    "cacheTargetBytes": 16777216,
+    "mmapLimitBytes": 0,
+    "operatingSystemCacheDropAttempted": false,
+    "operatingSystemCacheDropSucceeded": false
+  },
+  "passed": 1,
+  "failed": 0,
+  "elapsedMs": 52332,
+  "metrics": {
+    "peakManagedResidentBytes": 45532768,
+    "objectCount": 372,
+    "manifestCount": 540,
+    "completedOperationCount": 9056,
+    "namespaceOperationCount": 2000,
+    "namespaceDigest": "50d1e2037d66a96b718950f08232eac9b86e9ddd0939f3e2541ba805cce8f8d2",
+    "finalPayloadDigest": "5dcf868d1e469d1298c5f00b42870a5d393a891cb118871f2b72a6b3b92936a9",
+    "slowestOperations": [
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.985
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.978
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.975
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.971
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.968
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.965
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.962
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.959
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.957
+      },
+      {
+        "name": "concurrent-writer",
+        "elapsedMs": 387.953
+      }
+    ]
+  }
+}
