@@ -124,39 +124,51 @@ try {
       previewEnvironment,
     ),
   ]);
-  const durableObjectPortable = await runPnpm(
-    "durable-object-portable",
-    [
-      "exec",
-      "vitest",
-      "run",
-      "--config",
-      "tests/durable-object-integration/vitest.config.ts",
-      "--exclude",
-      "tests/durable-object-integration/cloudflare-scale.test.ts",
-    ],
-    previewEnvironment,
-  );
-  const migrations = await run(
-    "durable-object-migration-faults",
-    ["scripts/run-m6-cloudflare-migrations.mjs"],
-    previewEnvironment,
-  );
-  const filesystemFaults = await run(
-    "durable-object-filesystem-faults",
-    ["scripts/run-m6-cloudflare-filesystem-faults.mjs"],
-    previewEnvironment,
-  );
-  const publicationFaults = await run(
-    "durable-object-publication-faults",
-    ["scripts/run-m6-cloudflare-publication-faults.mjs"],
-    previewEnvironment,
-  );
-  const maintenanceFaults = await run(
-    "node-and-durable-object-maintenance-faults",
-    ["scripts/run-m6-maintenance-faults.mjs"],
-    previewEnvironment,
-  );
+  const [serialFaultResults, maintenanceFaults] = await requireAll([
+    (async () => {
+      const durableObjectPortable = await runPnpm(
+        "durable-object-portable",
+        [
+          "exec",
+          "vitest",
+          "run",
+          "--config",
+          "tests/durable-object-integration/vitest.config.ts",
+          "--exclude",
+          "tests/durable-object-integration/cloudflare-scale.test.ts",
+        ],
+        previewEnvironment,
+      );
+      const migrations = await run(
+        "durable-object-migration-faults",
+        ["scripts/run-m6-cloudflare-migrations.mjs"],
+        previewEnvironment,
+      );
+      const filesystemFaults = await run(
+        "durable-object-filesystem-faults",
+        ["scripts/run-m6-cloudflare-filesystem-faults.mjs"],
+        previewEnvironment,
+      );
+      const publicationFaults = await run(
+        "durable-object-publication-faults",
+        ["scripts/run-m6-cloudflare-publication-faults.mjs"],
+        previewEnvironment,
+      );
+      return {
+        durableObjectPortable,
+        migrations,
+        filesystemFaults,
+        publicationFaults,
+      };
+    })(),
+    run(
+      "node-and-durable-object-maintenance-faults",
+      ["scripts/run-m6-maintenance-faults.mjs"],
+      previewEnvironment,
+    ),
+  ]);
+  const { durableObjectPortable, migrations, filesystemFaults, publicationFaults } =
+    serialFaultResults;
   results = [
     preview,
     workerdAlgorithms,
