@@ -84,7 +84,11 @@ function admittedRepository(tx, storage, managedBytes = 128 * 1024 * 1024) {
 
 function insertLegacyV3Manifest(driver, manifest, inodeId = "legacy-file") {
   driver.transaction("write", (tx) => {
-    let sequence = 1;
+    let sequence = tx.all(
+      "SELECT next_allocation_sequence value FROM efs_meta WHERE singleton=1",
+      [],
+      { maxRows: 1, maxBytes: 128 },
+    )[0].value;
     for (const [hash, bytes] of manifest.objects) {
       tx.run(
         "INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,?)",
@@ -760,13 +764,13 @@ test("schema v3 migrates forward to v4 and every v4 statement fault preserves us
     metaVersion: EFS_SCHEMA_VERSION,
     usage: {
       mutation_sequence: 0,
-      object_count: 0,
-      object_bytes: 0,
+      object_count: 1,
+      object_bytes: 4,
       page_count: 0,
       page_bytes: 0,
       result_bytes: 0,
-      permanent_identifiers: 0,
-      maintenance_bytes: 1033,
+      permanent_identifiers: 1,
+      maintenance_bytes: 3145,
     },
     v4Tables: 3,
   });
@@ -911,11 +915,18 @@ test("a released v3 database containing one exact-bound object migrates and reop
     driver = await openNodeSqlite({ filename });
     createV3Schema(driver);
     driver.transaction("write", (tx) => {
+      const sequence = tx.all(
+        "SELECT next_allocation_sequence value FROM efs_meta WHERE singleton=1",
+        [],
+        { maxRows: 1, maxBytes: 128 },
+      )[0].value;
       tx.run(
-        "INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,1)",
-        [hash, bytes.length, bytes],
+        "INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,?)",
+        [hash, bytes.length, bytes, sequence],
       );
-      tx.run("UPDATE efs_meta SET next_allocation_sequence=2 WHERE singleton=1");
+      tx.run("UPDATE efs_meta SET next_allocation_sequence=? WHERE singleton=1", [
+        sequence + 1,
+      ]);
     });
     driver.close();
     driver = await openNodeSqlite({ filename, create: false });
