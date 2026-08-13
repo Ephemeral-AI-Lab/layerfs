@@ -15,6 +15,7 @@ import {
   DEFAULT_STORAGE_LIMITS,
   constrainStorageLimits,
 } from "../../packages/fs/dist/resources/limits.js";
+import { EFS_SCHEMA_VERSION } from "../../packages/fs/dist/sqlite/schema.js";
 import { UsageRepository } from "../../packages/fs/dist/sqlite/usage-repository.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import { runtimeEnvironment } from "../helpers/runtime-environment.mjs";
@@ -428,7 +429,7 @@ test(
           operationsPerActor: OPERATIONS_PER_ACTOR,
           restarts,
         },
-        schemaVersion: 4,
+        schemaVersion: EFS_SCHEMA_VERSION,
         formatVersion: "efs-merkle-manifest-v1",
         seed: SEED,
         fixtureDigest: expectedDigest,
