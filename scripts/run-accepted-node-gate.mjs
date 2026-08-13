@@ -80,12 +80,18 @@ async function requireAll(promises) {
 }
 
 const buildResult = await runPnpm("workspace-build", ["build"]);
-const staticResults = await requireAll([
-  runPnpm("fixtures-check", ["fixtures:check"]),
-  runPnpm("docs-check", ["check:docs"]),
-  runPnpm("style-check", ["check:style"]),
-  runPnpm("architecture-check", ["check:architecture"]),
-  runPnpm("exports-check", ["check:exports"]),
+// The operation-count smoke has an independent 60-second correctness ceiling and an
+// isolated database. Let it overlap the read-only static checks while preserving fully
+// uncontended execution for the latency-sensitive benchmark cells below.
+const [staticResults, smokeResult] = await Promise.all([
+  requireAll([
+    runPnpm("fixtures-check", ["fixtures:check"]),
+    runPnpm("docs-check", ["check:docs"]),
+    runPnpm("style-check", ["check:style"]),
+    runPnpm("architecture-check", ["check:architecture"]),
+    runPnpm("exports-check", ["check:exports"]),
+  ]),
+  run("node-smoke", ["scripts/run-test-suite.mjs", "tests/smoke"]),
 ]);
 
 // Performance cells run without competing test I/O so their latency and throughput
@@ -101,10 +107,6 @@ benchmarkResults.push(
 benchmarkResults.push(
   await run("m4-branch-benchmarks", ["tests/performance/branch-bench.mjs"]),
 );
-const smokeResult = await run("node-smoke", [
-  "scripts/run-test-suite.mjs",
-  "tests/smoke",
-]);
 
 // The independent correctness suites use isolated databases. Running them together
 // removes predecessor duplication while keeping every mandatory Node check selected.
