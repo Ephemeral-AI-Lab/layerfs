@@ -8,6 +8,7 @@ import {
   PORTABLE_MAINTENANCE_CASE_IDS,
   PORTABLE_RESTART_CASE_IDS,
   PORTABLE_STORAGE_CONFORMANCE_CASE_IDS,
+  type PortableFixtureContext,
   PortableStagingCrashSession,
   PortableSmokeSession,
   preparePortableRestart,
@@ -26,6 +27,12 @@ import { afterEach, expect, test } from "vitest";
 afterEach(async () => {
   await reset();
 });
+
+function fixtureContextEvidence(adapter: string) {
+  return (context: PortableFixtureContext): void => {
+    console.log(`m6-suite-context-evidence ${JSON.stringify({ adapter, ...context })}`);
+  };
+}
 
 function object(name: string) {
   return env.FILESYSTEM.getByName(name);
@@ -122,6 +129,7 @@ test("the shared SQLite driver contract passes in the faithful runtime", async (
   const results = await runInDurableObject(stub, async (_instance, state) =>
     runSQLiteDriverConformance({
       name: "cloudflare-durable-object-driver",
+      recordFixtureContext: fixtureContextEvidence("sqlite-cloudflare"),
       async create() {
         let current = await openCloudflareSqlite({ storage: state.storage });
         return {
@@ -536,6 +544,7 @@ test(
       runStorageConformance(
         {
           name: "cloudflare-durable-object-storage",
+          recordFixtureContext: fixtureContextEvidence("sqlite-cloudflare"),
           async create() {
             const adapter = await openCloudflareSqlite({ storage: state.storage });
             return {
@@ -583,6 +592,7 @@ test("the shared portable suite passes against the real Durable Object adapter",
   const results = await runInDurableObject(stub, async (_instance, state) =>
     runFilesystemConformance({
       name: "cloudflare-durable-object",
+      recordFixtureContext: fixtureContextEvidence("sqlite-cloudflare"),
       async create() {
         let current = await openCloudflareSqlite({ storage: state.storage });
         return {
@@ -623,6 +633,7 @@ test("the shared branch suite passes in the faithful runtime", async () => {
   const results = await runInDurableObject(stub, async (_instance, state) =>
     runBranchConformance({
       name: "cloudflare-durable-object-branches",
+      recordFixtureContext: fixtureContextEvidence("sqlite-cloudflare"),
       async create() {
         let current = await openCloudflareSqlite({ storage: state.storage });
         return {
@@ -649,6 +660,7 @@ test("the shared maintenance suite passes in the faithful runtime", async () => 
   const results = await runInDurableObject(stub, async (_instance, state) =>
     runMaintenanceConformance({
       name: "cloudflare-durable-object-maintenance",
+      recordFixtureContext: fixtureContextEvidence("sqlite-cloudflare"),
       async create() {
         let current = await openCloudflareSqlite({ storage: state.storage });
         return {

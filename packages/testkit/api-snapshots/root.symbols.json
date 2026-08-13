@@ -292,6 +292,18 @@
       ]
     },
     {
+      "name": "PORTABLE_FIXTURE_CONTEXT_SCHEMA",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fixture-context.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
       "name": "PORTABLE_MAINTENANCE_CASE_IDS",
       "kinds": [
         "value"
@@ -700,6 +712,18 @@
       ]
     },
     {
+      "name": "PortableFixtureContext",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fixture-context.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "PortableInitializationIdentityAttemptResult",
       "kinds": [
         "type"
@@ -1071,6 +1095,18 @@
         {
           "file": "packages/testkit/dist/index.d.ts",
           "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "recordPortableFixtureContext",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fixture-context.d.ts",
+          "kind": "FunctionDeclaration"
         }
       ]
     },

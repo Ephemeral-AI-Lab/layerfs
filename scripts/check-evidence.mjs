@@ -101,8 +101,20 @@ function validateM6ResultContexts(artifact) {
 
   const requiredNames = new Set([
     "workerd-algorithms",
-    "node-portable",
-    "durable-object-portable",
+    "node-storage",
+    "node-filesystem",
+    "node-driver",
+    "node-branch",
+    "node-maintenance-restart",
+    "node-maintenance-corruption",
+    "node-maintenance-quota",
+    "durable-object-storage",
+    "durable-object-filesystem",
+    "durable-object-driver",
+    "durable-object-branch",
+    "durable-object-maintenance-restart",
+    "durable-object-maintenance-corruption",
+    "durable-object-maintenance-quota",
     "node-schema-migration",
     "durable-object-schema-migration",
     "node-initialization-identity",
@@ -155,6 +167,38 @@ function validateM6ResultContexts(artifact) {
     throw new Error(
       `m6 result contexts are incomplete: ${[...requiredNames].join(", ")}`,
     );
+  const portableFixtures = {
+    "node-storage": ["portable-storage", 0x57a61e],
+    "node-filesystem": ["portable-m6", 0x5eedc0de],
+    "node-driver": ["portable-driver", 0xd21e],
+    "node-branch": ["portable-branches", 0xb2a6c4],
+    "node-maintenance-restart": ["portable-maintenance-restart", 0x6d61696e],
+    "node-maintenance-corruption": ["portable-maintenance-corruption", 0xc011ec7],
+    "node-maintenance-quota": ["portable-maintenance-quota", 0x71756f74],
+    "durable-object-storage": ["portable-storage", 0x57a61e],
+    "durable-object-filesystem": ["portable-m6", 0x5eedc0de],
+    "durable-object-driver": ["portable-driver", 0xd21e],
+    "durable-object-branch": ["portable-branches", 0xb2a6c4],
+    "durable-object-maintenance-restart": ["portable-maintenance-restart", 0x6d61696e],
+    "durable-object-maintenance-corruption": [
+      "portable-maintenance-corruption",
+      0xc011ec7,
+    ],
+    "durable-object-maintenance-quota": ["portable-maintenance-quota", 0x71756f74],
+  };
+  for (const [name, [label, seed]] of Object.entries(portableFixtures)) {
+    const context = contexts.get(name);
+    const expectedDigest = createHash("sha256")
+      .update(`efs-portable-fixture-context-v1\n${label}\n${seed}\n`)
+      .digest("hex");
+    if (
+      context.fixtureLabel !== label ||
+      context.seed !== seed ||
+      context.fixtureDigest !== expectedDigest ||
+      context.fixtureDigestBasis !== "sha256-utf8-canonical-fixture-descriptor"
+    )
+      throw new Error(`m6 result context ${name} has an invalid fixture identity`);
+  }
   return { profiles, contexts };
 }
 function validateStructuredDeviations(artifact, name) {

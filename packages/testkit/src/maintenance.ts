@@ -4,6 +4,7 @@ import type {
   SqliteValue,
 } from "@ephemeralai/fs/sqlite-driver";
 import type { ConformanceAdapterFactory } from "./index.js";
+import { recordPortableFixtureContext } from "./fixture-context.js";
 
 export const PORTABLE_MAINTENANCE_CASE_IDS = Object.freeze([
   "maintenance-snapshot-restart",
@@ -142,10 +143,10 @@ export async function runMaintenanceConformance(
   };
 
   {
-    const fixture = await factory.create({
-      label: "portable-maintenance-restart",
-      seed: 0x6d61696e,
-    });
+    const label = "portable-maintenance-restart";
+    const seed = 0x6d61696e;
+    const fixture = await factory.create({ label, seed });
+    await recordPortableFixtureContext(factory, fixture.adapter, label, seed);
     let adapter = fixture.adapter;
     let filesystem: EphemeralFS | undefined;
     try {
@@ -255,10 +256,10 @@ export async function runMaintenanceConformance(
   }
 
   {
-    const fixture = await factory.create({
-      label: "portable-maintenance-corruption",
-      seed: 0xc011ec7,
-    });
+    const label = "portable-maintenance-corruption";
+    const seed = 0xc011ec7;
+    const fixture = await factory.create({ label, seed });
+    await recordPortableFixtureContext(factory, fixture.adapter, label, seed);
     let adapter = fixture.adapter;
     let filesystem: EphemeralFS | undefined;
     try {
@@ -363,10 +364,10 @@ export async function runMaintenanceConformance(
   }
 
   {
-    const fixture = await factory.create({
-      label: "portable-maintenance-quota",
-      seed: 0x71756f74,
-    });
+    const label = "portable-maintenance-quota";
+    const seed = 0x71756f74;
+    const fixture = await factory.create({ label, seed });
+    await recordPortableFixtureContext(factory, fixture.adapter, label, seed);
     let adapter = fixture.adapter;
     let filesystem: EphemeralFS | undefined;
     try {

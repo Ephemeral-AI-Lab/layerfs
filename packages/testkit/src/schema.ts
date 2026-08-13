@@ -220,16 +220,23 @@ export function verifyPortableEmptyInitialization(
   const state = adapter.transaction(
     "read",
     (tx) =>
-      tx.all<{ readonly objects: number; readonly application_id: number }>(
+      tx.all<{
+        readonly objects: number;
+        readonly application_id: number;
+        readonly user_version: number;
+      }>(
         mode === "durable-table"
-          ? "SELECT (SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%') objects,0 application_id"
-          : "SELECT (SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%') objects,(SELECT application_id FROM pragma_application_id) application_id",
+          ? "SELECT (SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%') objects,0 application_id,0 user_version"
+          : "SELECT (SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%') objects,(SELECT application_id FROM pragma_application_id) application_id,(SELECT user_version FROM pragma_user_version) user_version",
         [],
         { maxRows: 1, maxBytes: 128 },
       )[0],
   );
   invariant(
-    state !== undefined && state.objects === 0 && state.application_id === 0,
+    state !== undefined &&
+      state.objects === 0 &&
+      state.application_id === 0 &&
+      state.user_version === 0,
     "interrupted initialization retained partial identity or schema",
   );
 }

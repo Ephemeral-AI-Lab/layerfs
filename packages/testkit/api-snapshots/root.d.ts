@@ -28,6 +28,7 @@ export interface BenchmarkResult {
 /* source: packages/testkit/dist/index.d.ts */
 export interface ConformanceAdapterFactory {
     readonly name: string;
+    recordFixtureContext?(context: PortableFixtureContext): void | Promise<void>;
     create(options?: ConformanceFixtureOptions): Promise<ConformanceDatabase>;
 }
 
@@ -246,6 +247,10 @@ PORTABLE_FILESYSTEM_RESTART_FAULT_OPERATION_POSITIONS: Readonly<{
 /* export: PORTABLE_FILESYSTEM_RESTART_FAULT_POSITIONS; kinds: value */
 /* source: packages/testkit/dist/filesystem-fault-attempt.d.ts */
 PORTABLE_FILESYSTEM_RESTART_FAULT_POSITIONS = 1218
+
+/* export: PORTABLE_FIXTURE_CONTEXT_SCHEMA; kinds: value */
+/* source: packages/testkit/dist/fixture-context.d.ts */
+PORTABLE_FIXTURE_CONTEXT_SCHEMA: "efs-portable-fixture-context-v1"
 
 /* export: PORTABLE_MAINTENANCE_CASE_IDS; kinds: value */
 /* source: packages/testkit/dist/maintenance.d.ts */
@@ -480,6 +485,16 @@ export interface PortableFilesystemFaultAttemptResult {
 /* export: PortableFilesystemFaultOperation; kinds: type */
 /* source: packages/testkit/dist/filesystem-fault-attempt.d.ts */
 export type PortableFilesystemFaultOperation = keyof typeof PORTABLE_FAULT_OPERATION_POSITIONS;
+
+/* export: PortableFixtureContext; kinds: type */
+/* source: packages/testkit/dist/fixture-context.d.ts */
+export interface PortableFixtureContext {
+    readonly schema: typeof PORTABLE_FIXTURE_CONTEXT_SCHEMA;
+    readonly label: string;
+    readonly seed: number;
+    readonly fixtureDigest: string;
+    readonly digestBasis: "sha256-utf8-canonical-fixture-descriptor";
+}
 
 /* export: PortableInitializationIdentityAttemptResult; kinds: type */
 /* source: packages/testkit/dist/schema.d.ts */
@@ -780,6 +795,11 @@ export type RecordingEvent = Readonly<{
 }> | Readonly<{
     type: "dispose";
 }>;
+
+/* export: recordPortableFixtureContext; kinds: value */
+/* source: packages/testkit/dist/fixture-context.d.ts */
+/** Record the exact deterministic descriptor used to create one portable fixture. */
+export declare function recordPortableFixtureContext(recorder: FixtureContextRecorder, adapter: FilesystemSQLiteDriver, label: string, seed: number): Promise<void>;
 
 /* export: runBranchConformance; kinds: value */
 /* source: packages/testkit/dist/branch.d.ts */

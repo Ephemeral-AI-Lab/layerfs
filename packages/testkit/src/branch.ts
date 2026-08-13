@@ -1,5 +1,6 @@
 import { EphemeralFS, type EphemeralBranch } from "@ephemeralai/fs";
 import type { ConformanceAdapterFactory } from "./index.js";
+import { recordPortableFixtureContext } from "./fixture-context.js";
 
 export const PORTABLE_BRANCH_CASE_IDS = Object.freeze([
   "branch-frozen-base",
@@ -90,7 +91,10 @@ async function expectRejection(
 export async function runBranchConformance(
   factory: ConformanceAdapterFactory,
 ): Promise<readonly PortableBranchCaseResult[]> {
-  const fixture = await factory.create({ label: "portable-branches", seed: 0xb2a6c4 });
+  const label = "portable-branches";
+  const seed = 0xb2a6c4;
+  const fixture = await factory.create({ label, seed });
+  await recordPortableFixtureContext(factory, fixture.adapter, label, seed);
   const results: PortableBranchCaseResult[] = [];
   let adapter = fixture.adapter;
   let filesystem: EphemeralFS | undefined;

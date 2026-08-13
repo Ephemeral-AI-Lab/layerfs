@@ -3,6 +3,7 @@ import type {
   FilesystemSQLiteTransaction,
 } from "@ephemeralai/fs/sqlite-driver";
 import type { ConformanceAdapterFactory } from "./index.js";
+import { recordPortableFixtureContext } from "./fixture-context.js";
 
 export type PortableDriverCaseId =
   | "driver-capabilities"
@@ -55,7 +56,10 @@ function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
 export async function runSQLiteDriverConformance(
   factory: ConformanceAdapterFactory,
 ): Promise<readonly PortableDriverCaseResult[]> {
-  const fixture = await factory.create({ label: "portable-driver", seed: 0xd21e });
+  const label = "portable-driver";
+  const seed = 0xd21e;
+  const fixture = await factory.create({ label, seed });
+  await recordPortableFixtureContext(factory, fixture.adapter, label, seed);
   const results: PortableDriverCaseResult[] = [];
   let adapter = fixture.adapter;
   const passed = (id: PortableDriverCaseId): void => {

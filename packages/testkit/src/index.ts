@@ -9,6 +9,10 @@ import {
 } from "@ephemeralai/fs";
 import type { FilesystemSQLiteDriver } from "@ephemeralai/fs/sqlite-driver";
 import { test } from "vitest";
+import {
+  recordPortableFixtureContext,
+  type PortableFixtureContext,
+} from "./fixture-context.js";
 
 export * from "./smoke.js";
 export * from "./fault.js";
@@ -23,6 +27,7 @@ export * from "./maintenance-fault.js";
 export * from "./filesystem-fault-attempt.js";
 export * from "./cow.js";
 export * from "./storage.js";
+export * from "./fixture-context.js";
 
 export type ConformanceCapability =
   | "read-only-reopen"
@@ -64,6 +69,7 @@ export interface ConformanceDatabase {
 }
 export interface ConformanceAdapterFactory {
   readonly name: string;
+  recordFixtureContext?(context: PortableFixtureContext): void | Promise<void>;
   create(options?: ConformanceFixtureOptions): Promise<ConformanceDatabase>;
 }
 export interface CorrectnessResult {
@@ -287,7 +293,10 @@ async function verifyMetadataUsage(
 export async function runFilesystemConformance(
   factory: ConformanceAdapterFactory,
 ): Promise<readonly PortableConformanceCaseResult[]> {
-  const fixture = await factory.create({ label: "portable-m6", seed: 0x5eedc0de });
+  const label = "portable-m6";
+  const seed = 0x5eedc0de;
+  const fixture = await factory.create({ label, seed });
+  await recordPortableFixtureContext(factory, fixture.adapter, label, seed);
   const results: PortableConformanceCaseResult[] = [];
   let adapter = fixture.adapter;
   let filesystem: PortableFilesystem | undefined;

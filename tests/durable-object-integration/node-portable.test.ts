@@ -9,6 +9,7 @@ import {
   PORTABLE_MAINTENANCE_CASE_IDS,
   PORTABLE_RESTART_CASE_IDS,
   PORTABLE_STORAGE_CONFORMANCE_CASE_IDS,
+  type PortableFixtureContext,
   PortableStagingCrashSession,
   preparePortableRestart,
   runBranchConformance,
@@ -21,6 +22,12 @@ import {
 import { portableStorageInternals } from "./portable-storage-internals.js";
 import { expect, test } from "vitest";
 
+function fixtureContextEvidence(adapter: string) {
+  return (context: PortableFixtureContext): void => {
+    console.log(`m6-suite-context-evidence ${JSON.stringify({ adapter, ...context })}`);
+  };
+}
+
 test(
   "the shared M2 storage suite passes against file-backed Node",
   { timeout: 120_000 },
@@ -28,6 +35,7 @@ test(
     const results = await runStorageConformance(
       {
         name: "node-sqlite-storage",
+        recordFixtureContext: fixtureContextEvidence("node-sqlite"),
         async create() {
           const directory = await mkdtemp(path.join(tmpdir(), "efs-m6-node-storage-"));
           const filename = path.join(directory, "filesystem.db");
@@ -107,6 +115,7 @@ test("the shared restart suite survives physical Node SQLite destruction", async
 test("the shared portable suite passes against the file-backed Node adapter", async () => {
   const results = await runFilesystemConformance({
     name: "node-sqlite-file-backed",
+    recordFixtureContext: fixtureContextEvidence("node-sqlite"),
     async create() {
       const directory = await mkdtemp(path.join(tmpdir(), "efs-m6-node-portable-"));
       const filename = path.join(directory, "filesystem.db");
@@ -153,6 +162,7 @@ test("the shared portable suite passes against the file-backed Node adapter", as
 test("the shared SQLite driver contract passes against file-backed Node", async () => {
   const results = await runSQLiteDriverConformance({
     name: "node-sqlite-driver",
+    recordFixtureContext: fixtureContextEvidence("node-sqlite"),
     async create() {
       const directory = await mkdtemp(path.join(tmpdir(), "efs-m6-node-driver-"));
       const filename = path.join(directory, "driver.db");
@@ -184,6 +194,7 @@ test("the shared SQLite driver contract passes against file-backed Node", async 
 test("the shared branch suite passes against file-backed Node", async () => {
   const results = await runBranchConformance({
     name: "node-sqlite-branches",
+    recordFixtureContext: fixtureContextEvidence("node-sqlite"),
     async create() {
       const directory = await mkdtemp(path.join(tmpdir(), "efs-m6-node-branches-"));
       const filename = path.join(directory, "filesystem.db");
@@ -215,6 +226,7 @@ test("the shared branch suite passes against file-backed Node", async () => {
 test("the shared maintenance suite passes against file-backed Node", async () => {
   const results = await runMaintenanceConformance({
     name: "node-sqlite-maintenance",
+    recordFixtureContext: fixtureContextEvidence("node-sqlite"),
     async create({ label = "fixture" } = {}) {
       const directory = await mkdtemp(path.join(tmpdir(), `efs-m6-node-${label}-`));
       const filename = path.join(directory, "filesystem.db");

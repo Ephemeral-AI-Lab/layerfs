@@ -705,9 +705,27 @@ export declare function prepareFilesystemFaultAttempt(adapter: FilesystemSQLiteD
 /** Verify complete old/new state after the caller has physically restarted storage. */
 export declare function verifyFilesystemFaultAttempt(adapter: FilesystemSQLiteDriver, operation: PortableFilesystemFaultOperation, committed: boolean): Promise<void>;
 
+/* ===== packages/testkit/dist/fixture-context.d.ts ===== */
+import type { FilesystemSQLiteDriver } from "@ephemeralai/fs/sqlite-driver";
+export declare const PORTABLE_FIXTURE_CONTEXT_SCHEMA: "efs-portable-fixture-context-v1";
+export interface PortableFixtureContext {
+    readonly schema: typeof PORTABLE_FIXTURE_CONTEXT_SCHEMA;
+    readonly label: string;
+    readonly seed: number;
+    readonly fixtureDigest: string;
+    readonly digestBasis: "sha256-utf8-canonical-fixture-descriptor";
+}
+interface FixtureContextRecorder {
+    recordFixtureContext?(context: PortableFixtureContext): void | Promise<void>;
+}
+/** Record the exact deterministic descriptor used to create one portable fixture. */
+export declare function recordPortableFixtureContext(recorder: FixtureContextRecorder, adapter: FilesystemSQLiteDriver, label: string, seed: number): Promise<void>;
+export {};
+
 /* ===== packages/testkit/dist/index.d.ts ===== */
 import { EphemeralFS, type GarbageCollectionOptions, type GarbageCollectionResult } from "@ephemeralai/fs";
 import type { FilesystemSQLiteDriver } from "@ephemeralai/fs/sqlite-driver";
+import { type PortableFixtureContext } from "./fixture-context.js";
 export * from "./smoke.js";
 export * from "./fault.js";
 export * from "./driver.js";
@@ -721,6 +739,7 @@ export * from "./maintenance-fault.js";
 export * from "./filesystem-fault-attempt.js";
 export * from "./cow.js";
 export * from "./storage.js";
+export * from "./fixture-context.js";
 export type ConformanceCapability = "read-only-reopen" | "second-connection" | "schema-fixtures" | "fault-injection" | "garbage-collection" | "physical-reopen" | "crash-recovery" | "ownership";
 export interface ConformanceFaultController {
     arm(point: string, occurrence?: number): void;
@@ -750,6 +769,7 @@ export interface ConformanceDatabase {
 }
 export interface ConformanceAdapterFactory {
     readonly name: string;
+    recordFixtureContext?(context: PortableFixtureContext): void | Promise<void>;
     create(options?: ConformanceFixtureOptions): Promise<ConformanceDatabase>;
 }
 export interface CorrectnessResult {

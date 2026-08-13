@@ -1,6 +1,7 @@
 import { EphemeralFS } from "@ephemeralai/fs";
 import type { FilesystemSQLiteDriver } from "@ephemeralai/fs/sqlite-driver";
 import type { ConformanceAdapterFactory } from "./index.js";
+import { recordPortableFixtureContext } from "./fixture-context.js";
 
 export const PORTABLE_STORAGE_CONFORMANCE_CASE_IDS = Object.freeze([
   "storage-staging-closure-100001",
@@ -196,10 +197,10 @@ export async function runStorageConformance(
   factory: ConformanceAdapterFactory,
   internals: PortableStorageInternals,
 ): Promise<readonly PortableStorageCaseResult[]> {
-  const fixture = await factory.create({
-    label: "portable-storage",
-    seed: 0x57a61e,
-  });
+  const label = "portable-storage";
+  const seed = 0x57a61e;
+  const fixture = await factory.create({ label, seed });
+  await recordPortableFixtureContext(factory, fixture.adapter, label, seed);
   try {
     const evidence = await internals.runStagingClosure(fixture.adapter);
     invariant(evidence.manifestEntries === 100_001, "large closure was reduced");
