@@ -17,7 +17,6 @@ use crate::identity::{
     SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
 use crate::limits::OperationReservationV1;
-#[cfg(test)]
 use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
@@ -364,7 +363,6 @@ impl CowTreeMutationV1 {
     }
 }
 
-#[cfg(test)]
 pub fn build_canonical_directory_v1<S: PreparedTreeSinkV1 + ?Sized>(
     mode: DirectoryBuildModeV1,
     entries: &[CanonicalTreeEntryV1<'_>],

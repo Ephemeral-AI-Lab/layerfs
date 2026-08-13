@@ -13,9 +13,9 @@ mod error;
 pub(crate) mod cas;
 pub mod cdc;
 #[allow(dead_code)]
-pub(crate) mod content;
+pub mod content;
 #[allow(dead_code)]
-pub(crate) mod cow;
+pub mod cow;
 pub mod format;
 pub mod identity;
 #[cfg(feature = "operation-polymorphism")]
@@ -24,6 +24,14 @@ pub(crate) mod lifecycle;
 #[allow(dead_code)]
 pub(crate) mod limits;
 pub mod object;
+/// Bounded resource observations for the default integration owners.
+pub mod resources {
+    pub use crate::limits::resources::{
+        base_ledger_bytes_v1, observe_forbidden_work_v1, observe_memory_plan_v1,
+        observe_memory_profile_v1, operation_slot_bytes_v1, ForbiddenWorkObservationV1,
+        MemoryBudgetV1, MemoryPlanObservationV1, MemoryProfileObservationV1, MemoryResourceKindV1,
+    };
+}
 #[allow(dead_code)]
 pub(crate) mod pack;
 pub mod profile;
@@ -33,41 +41,49 @@ pub(crate) mod read;
 
 pub use error::{CoreError, CoreResult, OutcomeCode};
 
-// These accepted storage tests exercise private production boundaries from
-// inside this crate. Keeping them internal prevents test plumbing from turning
-// concrete FsCas, pack, COW, resource, or complete-operation machinery into a dependent-crate
-// SDK.
-#[cfg(test)]
-extern crate self as layerfs_storage;
-
-#[cfg(test)]
-#[path = "../tests/support/mod.rs"]
-mod test_support;
-
-#[cfg(all(test, feature = "operation-polymorphism"))]
-#[path = "../tests/c3_fscas.rs"]
-mod c3_fscas_tests;
-#[cfg(all(test, feature = "operation-polymorphism"))]
-#[path = "../tests/c3_mutation.rs"]
-mod c3_mutation_tests;
-#[cfg(all(test, feature = "operation-polymorphism"))]
-#[path = "../tests/c3_operation.rs"]
-mod c3_operation_tests;
-#[cfg(all(test, feature = "operation-polymorphism"))]
-#[path = "../tests/l1_cas.rs"]
-mod l1_cas_tests;
-#[cfg(test)]
-#[path = "../tests/l1_content.rs"]
-mod l1_content_tests;
-#[cfg(all(test, feature = "operation-polymorphism"))]
-#[path = "../tests/l1_pack.rs"]
-mod l1_pack_tests;
-#[cfg(test)]
-#[path = "../tests/l1_resources.rs"]
-mod l1_resources_tests;
-#[cfg(test)]
-#[path = "../tests/l1_tree.rs"]
-mod l1_tree_tests;
-#[cfg(test)]
-#[path = "../tests/l1_update.rs"]
-mod l1_update_tests;
+/// The single doc-hidden semantic operation surface used by integration
+/// owners.  It contains bounded requests and immutable observations only;
+/// production module families remain private behind this facade.
+#[cfg(feature = "operation-polymorphism")]
+#[doc(hidden)]
+pub mod qualification {
+    pub mod cas {
+        #[cfg(feature = "operation-polymorphism")]
+        pub mod semantic {
+            pub use crate::cas::semantic::*;
+        }
+    }
+    pub mod content {
+        pub mod semantic {
+            pub use crate::content::semantic::*;
+        }
+        pub mod update {
+            pub mod semantic {
+                pub use crate::content::update::semantic::*;
+            }
+        }
+    }
+    pub mod cow {
+        pub mod semantic {
+            pub use crate::cow::semantic::*;
+        }
+    }
+    pub mod lifecycle {
+        #[cfg(feature = "operation-polymorphism")]
+        pub mod semantic {
+            pub use crate::lifecycle::semantic::*;
+        }
+    }
+    pub mod object {
+        pub use crate::object::semantic::*;
+    }
+    pub mod pack {
+        #[cfg(feature = "operation-polymorphism")]
+        pub mod semantic {
+            pub use crate::pack::semantic::*;
+        }
+    }
+    pub mod resources {
+        pub use crate::limits::resources::*;
+    }
+}

@@ -7,7 +7,7 @@
 use crate::content::ContentSourceV1;
 use crate::{CoreError, CoreResult};
 
-pub(crate) trait SourceSupplierV1 {
+pub trait SourceSupplierV1 {
     type Source: ContentSourceV1;
 
     /// Side-effect-free bound queried only after the root grant is held.
@@ -18,7 +18,7 @@ pub(crate) trait SourceSupplierV1 {
 /// One file in a bounded, canonically ordered private complete tree operation.
 /// The source is retained by the caller and is not read until the complete
 /// manifest has passed path, type, count, and memory preflight.
-pub(crate) struct TreeFileV1<'path, S> {
+pub struct TreeFileV1<'path, S> {
     path: &'path [u8],
     mode: u16,
     declared_len: u64,
@@ -26,7 +26,7 @@ pub(crate) struct TreeFileV1<'path, S> {
 }
 
 impl<'path, S> TreeFileV1<'path, S> {
-    pub(crate) const fn new(path: &'path [u8], mode: u16, declared_len: u64, source: S) -> Self {
+    pub const fn new(path: &'path [u8], mode: u16, declared_len: u64, source: S) -> Self {
         Self {
             path,
             mode,

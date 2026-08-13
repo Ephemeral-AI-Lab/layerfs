@@ -1,4 +1,11 @@
-#![allow(dead_code)]
+#[cfg(feature = "operation-polymorphism")]
+pub mod counting_sink;
+#[cfg(feature = "operation-polymorphism")]
+pub mod counting_source;
+#[cfg(feature = "operation-polymorphism")]
+pub mod fault_injection;
+#[cfg(feature = "operation-polymorphism")]
+pub mod temp_fs_cas;
 
 pub fn fastcdc_golden_input(len: usize) -> Vec<u8> {
     let mut output = Vec::with_capacity(len);

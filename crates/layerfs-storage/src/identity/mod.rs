@@ -64,7 +64,7 @@ macro_rules! typed_id {
             }
 
             #[allow(dead_code)]
-            pub(crate) const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
+            pub const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
                 Self(bytes)
             }
         }

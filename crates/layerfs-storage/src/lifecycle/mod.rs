@@ -69,6 +69,6731 @@ use crate::pack::{
 };
 use crate::{CoreError, CoreResult};
 
+/// The only cross-crate lifecycle observation needed by the subprocess
+/// ownership check.  The opened CAS handle never crosses this boundary.
+#[cfg(feature = "operation-polymorphism")]
+pub mod semantic {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::Arc;
+
+    use super::{
+        request_create_operation_v1, run_create_tree_v1, run_complete_replace_v1, run_create_v1,
+        request_tree_operation_v1, LifecycleControlV1,
+        FsCasBoundaryV1, FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1,
+        FsCasV1, FsOperationKindV1, FsStorageEnvelopeV1,
+        OperationBuffersV1, OperationErrorV1,
+    };
+    use crate::cas::semantic::{
+        publication_causes_v1, publication_error_v1, PublicationCauseV1,
+        PublicationCleanupTargetV1, PublicationErrorV1,
+    };
+    use crate::cas::{
+        FsCasFailureCauseV1, FsCasFilesystemBoundaryV1, FsCasFilesystemFailureV1,
+    };
+    use crate::cdc::{CdcAlgorithmV1, CdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES};
+    use crate::content::{ContentSourceErrorV1, ContentSourceV1, SourceSupplierV1, TreeFileV1};
+    use crate::cow::semantic::with_replacement_evidence_v1;
+    use crate::cow::{
+        CanonicalTreeChildV1, CanonicalTreeEntryV1, DirectoryBuildModeV1, TreePageSummaryV1,
+        MAX_TREE_OBJECT_BYTES, MAX_TREE_PAGE_SUMMARIES,
+    };
+    use crate::format::ValidatedComponent;
+    use crate::identity::{
+        derive_file_node_v1, derive_logical_chunk_v1, derive_logical_file_v1,
+        derive_physical_chunk_id_v1, derive_physical_file_id_v1, LogicalChunkRefV1,
+        LogicalFileIdentityV1, PhysicalFileIdV1, COMPARISON_WINDOW_BYTES,
+    };
+    use crate::limits::OperationCountersV1;
+    use crate::pack::PACK_HEADER_BYTES;
+    use crate::profile::ProfileSpecV1;
+    use crate::CoreError;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum OpenExistingObservationV1 {
+        Opened,
+        Busy,
+        Invalidated,
+        Rejected,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct SubprocessObservationV1 {
+        child_succeeded: bool,
+        child_reports: u32,
+        child_busy_reports: u32,
+    }
+
+    impl SubprocessObservationV1 {
+        pub const fn child_succeeded(self) -> bool {
+            self.child_succeeded
+        }
+
+        pub const fn child_reports(self) -> u32 {
+            self.child_reports
+        }
+
+        pub const fn child_busy_reports(self) -> u32 {
+            self.child_busy_reports
+        }
+    }
+
+    /// The named filesystem fault points retained by the historical fault
+    /// owner.  The concrete boundary and failure enums stay below this
+    /// feature-gated semantic port.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum FilesystemFaultCaseV1 {
+        PreparationCreateNoSpace,
+        PreparationResizeQuota,
+        PermissionChangeDenied,
+        PreparationWriteShortWrite,
+        PrivatePackCreateInodeExhaustion,
+        PrivatePackWriteShortWrite,
+        PrivatePackFlushWriteFailure,
+        CarrierHardLinkUnsupported,
+        MarkerCreateInodeExhaustion,
+        MarkerWriteNoSpace,
+        MarkerFlushWriteFailure,
+        MarkerHardLinkUnsupported,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum FilesystemFaultFailureV1 {
+        NoSpace,
+        Quota,
+        InodeExhaustion,
+        ReadFailure,
+        WriteFailure,
+        ShortRead,
+        ShortWrite,
+        PermissionDenied,
+        Unsupported,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum FilesystemFaultErrorV1 {
+        Filesystem(FilesystemFaultFailureV1),
+        Unsupported,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct FilesystemFaultObservationV1 {
+        error: Option<FilesystemFaultErrorV1>,
+        fired: bool,
+        bound_invoked: bool,
+        supply_invoked: bool,
+        source_read_calls: u64,
+        preparation_entries: u64,
+        immutable_entries: u64,
+        storage_bytes_committed: u64,
+        storage_bytes_retained: u64,
+        storage_inodes_committed: u64,
+        storage_inodes_retained: u64,
+        operation_slots: u64,
+        operation_active: u64,
+        storage_active_operations: u64,
+        storage_active_bytes: u64,
+        storage_active_inodes: u64,
+        root_usable: bool,
+        stale_usable: bool,
+        zero_forbidden_work: bool,
+    }
+
+    impl FilesystemFaultObservationV1 {
+        pub const fn error(self) -> Option<FilesystemFaultErrorV1> {
+            self.error
+        }
+
+        pub const fn fired(self) -> bool {
+            self.fired
+        }
+
+        pub const fn bound_invoked(self) -> bool {
+            self.bound_invoked
+        }
+
+        pub const fn supply_invoked(self) -> bool {
+            self.supply_invoked
+        }
+
+        pub const fn source_read_calls(self) -> u64 {
+            self.source_read_calls
+        }
+
+        pub const fn preparation_entries(self) -> u64 {
+            self.preparation_entries
+        }
+
+        pub const fn immutable_entries(self) -> u64 {
+            self.immutable_entries
+        }
+
+        pub const fn storage_bytes_committed(self) -> u64 {
+            self.storage_bytes_committed
+        }
+
+        pub const fn storage_bytes_retained(self) -> u64 {
+            self.storage_bytes_retained
+        }
+
+        pub const fn storage_inodes_committed(self) -> u64 {
+            self.storage_inodes_committed
+        }
+
+        pub const fn storage_inodes_retained(self) -> u64 {
+            self.storage_inodes_retained
+        }
+
+        pub const fn operation_slots(self) -> u64 {
+            self.operation_slots
+        }
+
+        pub const fn operation_active(self) -> u64 {
+            self.operation_active
+        }
+
+        pub const fn storage_active_operations(self) -> u64 {
+            self.storage_active_operations
+        }
+
+        pub const fn storage_active_bytes(self) -> u64 {
+            self.storage_active_bytes
+        }
+
+        pub const fn storage_active_inodes(self) -> u64 {
+            self.storage_active_inodes
+        }
+
+        pub const fn root_usable(self) -> bool {
+            self.root_usable
+        }
+
+        pub const fn stale_usable(self) -> bool {
+            self.stale_usable
+        }
+
+        pub const fn zero_forbidden_work(self) -> bool {
+            self.zero_forbidden_work
+        }
+    }
+
+    static NEXT_SUBPROCESS_ROOT: AtomicU64 = AtomicU64::new(1);
+    const CHILD_ROOT_ENV: &str = "LAYERFS_LIFECYCLE_OPEN_EXISTING_ROOT";
+    const CHILD_SENTINEL_ENV: &str = "LAYERFS_LIFECYCLE_OPEN_EXISTING_CHILD";
+
+    /// Hold a real root owner while an exact integration-test child probes it.
+    /// Only the process result crosses the facade; the FsCAS owner never does.
+    pub fn run_open_existing_subprocess_v1(selector: &str) -> SubprocessObservationV1 {
+        let sequence = NEXT_SUBPROCESS_ROOT.fetch_add(1, Ordering::Relaxed);
+        let parent = fs::canonicalize(std::env::temp_dir()).expect("canonical temporary root");
+        let root: PathBuf = parent.join(format!(
+            "layerfs-lifecycle-subprocess-{}-{sequence:016x}",
+            std::process::id()
+        ));
+        let owner = FsCasV1::create_new(&root).expect("create subprocess ownership fixture");
+        let output = Command::new(
+            std::env::current_exe().expect("current integration-test executable"),
+        )
+        .args(["--exact", selector, "--nocapture"])
+        .env(CHILD_ROOT_ENV, &root)
+        .env(CHILD_SENTINEL_ENV, "1")
+        .output()
+        .expect("spawn exact open-existing child");
+        let output_lines = [
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        ]
+        .into_iter()
+        .flat_map(|stream| stream.lines().map(str::to_owned).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+        let reports = output_lines
+            .iter()
+            .filter(|line| line.starts_with("LAYERFS_CHILD_RESULT="))
+            .count() as u32;
+        let busy_reports = output_lines
+            .iter()
+            .filter(|line| line.as_str() == "LAYERFS_CHILD_RESULT=Busy")
+            .count() as u32;
+        drop(owner);
+        let _ = fs::remove_dir_all(&root);
+        SubprocessObservationV1 {
+            child_succeeded: output.status.success(),
+            child_reports: reports,
+            child_busy_reports: busy_reports,
+        }
+    }
+
+    pub fn open_existing_subprocess_child_v1() -> Option<OpenExistingObservationV1> {
+        let root = std::env::var_os(CHILD_ROOT_ENV)?;
+        if std::env::var_os(CHILD_SENTINEL_ENV).as_deref() != Some(std::ffi::OsStr::new("1")) {
+            return None;
+        }
+        let observation = open_existing_v1(Path::new(&root));
+        println!("LAYERFS_CHILD_RESULT={observation:?}");
+        Some(observation)
+    }
+
+    pub fn open_existing_v1(root: &Path) -> OpenExistingObservationV1 {
+        match FsCasV1::open_existing(root) {
+            Ok(_) => OpenExistingObservationV1::Opened,
+            Err(FsCasErrorV1::Busy) => OpenExistingObservationV1::Busy,
+            Err(FsCasErrorV1::Invalidated) => OpenExistingObservationV1::Invalidated,
+            Err(_) => OpenExistingObservationV1::Rejected,
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct CreateFaultObservationV1 {
+        error: Option<PublicationErrorV1>,
+        filesystem_failure: Option<FilesystemFaultFailureV1>,
+        first_cause: Option<PublicationCauseV1>,
+        dominant_cause: Option<PublicationCauseV1>,
+        panicked: bool,
+        panic_payload: Option<&'static str>,
+        control_fired: bool,
+        cleanup_calls: u32,
+        carrier_installed: bool,
+        poisoned: bool,
+        bound_invoked: bool,
+        supply_invoked: bool,
+        followup_succeeded: bool,
+        terminal_hook_calls: u32,
+        invalidation_attempts: u32,
+        global_seen_injected: bool,
+        preparation_bytes: u64,
+        preparation_entries: u64,
+        immutable_bytes: u64,
+        immutable_entries: u64,
+        residue_bytes: u64,
+        mutable_preparation_residue_bytes: u64,
+        mutable_preparation_residue_inodes: u64,
+        source_read_calls: u64,
+        source_bytes_read: u64,
+        global_seen_lookups: u64,
+        global_seen_probes: u64,
+        global_seen_maximum_probe: u64,
+        global_seen_entries: u64,
+        global_seen_table_bytes: u64,
+        global_seen_metadata_bytes_read: u64,
+        global_seen_metadata_read_calls: u64,
+        global_seen_metadata_bytes_written: u64,
+        storage_bytes_requested: u64,
+        storage_bytes_reserved: u64,
+        storage_bytes_released: u64,
+        storage_bytes_committed: u64,
+        storage_bytes_retained: u64,
+        storage_inodes_requested: u64,
+        storage_inodes_reserved: u64,
+        storage_inodes_released: u64,
+        storage_inodes_committed: u64,
+        storage_inodes_retained: u64,
+        operation_slots: u64,
+        operation_active: u64,
+        storage_active_operations: u64,
+        storage_active_bytes: u64,
+        storage_active_inodes: u64,
+        invalidated: bool,
+        stale_invalidated: bool,
+        reopen_invalidated: bool,
+        zero_forbidden_work: bool,
+    }
+
+    macro_rules! create_fault_getters {
+        ($($name:ident: $field:ident => $ty:ty),* $(,)?) => {
+            impl CreateFaultObservationV1 {
+                $(pub const fn $name(self) -> $ty { self.$field })*
+            }
+        };
+    }
+
+    create_fault_getters! {
+        error: error => Option<PublicationErrorV1>,
+        filesystem_failure: filesystem_failure => Option<FilesystemFaultFailureV1>,
+        first_cause: first_cause => Option<PublicationCauseV1>,
+        dominant_cause: dominant_cause => Option<PublicationCauseV1>,
+        panicked: panicked => bool,
+        panic_payload: panic_payload => Option<&'static str>,
+        control_fired: control_fired => bool,
+        cleanup_calls: cleanup_calls => u32,
+        carrier_installed: carrier_installed => bool,
+        poisoned: poisoned => bool,
+        bound_invoked: bound_invoked => bool,
+        supply_invoked: supply_invoked => bool,
+        followup_succeeded: followup_succeeded => bool,
+        terminal_hook_calls: terminal_hook_calls => u32,
+        invalidation_attempts: invalidation_attempts => u32,
+        global_seen_injected: global_seen_injected => bool,
+        preparation_bytes: preparation_bytes => u64,
+        preparation_entries: preparation_entries => u64,
+        immutable_bytes: immutable_bytes => u64,
+        immutable_entries: immutable_entries => u64,
+        residue_bytes: residue_bytes => u64,
+        mutable_preparation_residue_bytes: mutable_preparation_residue_bytes => u64,
+        mutable_preparation_residue_inodes: mutable_preparation_residue_inodes => u64,
+        source_read_calls: source_read_calls => u64,
+        source_bytes_read: source_bytes_read => u64,
+        global_seen_lookups: global_seen_lookups => u64,
+        global_seen_probes: global_seen_probes => u64,
+        global_seen_maximum_probe: global_seen_maximum_probe => u64,
+        global_seen_entries: global_seen_entries => u64,
+        global_seen_table_bytes: global_seen_table_bytes => u64,
+        global_seen_metadata_bytes_read: global_seen_metadata_bytes_read => u64,
+        global_seen_metadata_read_calls: global_seen_metadata_read_calls => u64,
+        global_seen_metadata_bytes_written: global_seen_metadata_bytes_written => u64,
+        storage_bytes_requested: storage_bytes_requested => u64,
+        storage_bytes_reserved: storage_bytes_reserved => u64,
+        storage_bytes_released: storage_bytes_released => u64,
+        storage_bytes_committed: storage_bytes_committed => u64,
+        storage_bytes_retained: storage_bytes_retained => u64,
+        storage_inodes_requested: storage_inodes_requested => u64,
+        storage_inodes_reserved: storage_inodes_reserved => u64,
+        storage_inodes_released: storage_inodes_released => u64,
+        storage_inodes_committed: storage_inodes_committed => u64,
+        storage_inodes_retained: storage_inodes_retained => u64,
+        operation_slots: operation_slots => u64,
+        operation_active: operation_active => u64,
+        storage_active_operations: storage_active_operations => u64,
+        storage_active_bytes: storage_active_bytes => u64,
+        storage_active_inodes: storage_active_inodes => u64,
+        invalidated: invalidated => bool,
+        stale_invalidated: stale_invalidated => bool,
+        reopen_invalidated: reopen_invalidated => bool,
+        zero_forbidden_work: zero_forbidden_work => bool,
+    }
+
+    struct CreateFaultAttempt {
+        error: Option<FsCasErrorV1>,
+        panicked: bool,
+        panic_payload: Option<&'static str>,
+    }
+
+    #[derive(Clone, Copy, Default)]
+    struct CreateFaultControlObservation {
+        control_fired: bool,
+        cleanup_calls: u32,
+        carrier_installed: bool,
+        poisoned: bool,
+    }
+
+    struct CounterSource {
+        len: u64,
+        offset: u64,
+    }
+
+    impl ContentSourceV1 for CounterSource {
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<Self>() as u64)
+        }
+
+        fn read(&mut self, destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
+            let remaining = usize::try_from(self.len - self.offset).unwrap_or(usize::MAX);
+            let take = destination.len().min(remaining);
+            for (relative, byte) in destination[..take].iter_mut().enumerate() {
+                let position = self.offset + relative as u64;
+                let block = position / 8;
+                let lane = usize::try_from(position % 8).unwrap();
+                let mut mixed = block ^ 0x6a09_e667_f3bc_c909;
+                mixed ^= mixed >> 30;
+                mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+                mixed ^= mixed >> 27;
+                mixed = mixed.wrapping_mul(0x94d0_49bb_1331_11eb);
+                mixed ^= mixed >> 31;
+                *byte = mixed.to_le_bytes()[lane];
+            }
+            self.offset += take as u64;
+            Ok(take)
+        }
+    }
+
+    struct CallbackSupplier {
+        bound_invoked: Arc<AtomicBool>,
+        supply_invoked: Arc<AtomicBool>,
+        len: u64,
+    }
+
+    impl SourceSupplierV1 for CallbackSupplier {
+        type Source = CounterSource;
+
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            self.bound_invoked.store(true, Ordering::Release);
+            Ok(core::mem::size_of::<CounterSource>() as u64)
+        }
+
+        fn supply(self) -> crate::CoreResult<Self::Source> {
+            self.supply_invoked.store(true, Ordering::Release);
+            Ok(CounterSource {
+                len: self.len,
+                offset: 0,
+            })
+        }
+    }
+
+    struct PanicDuringPreparationFreeSupplier {
+        cas_to_poison: Option<FsCasV1>,
+        bound_invoked: Arc<AtomicBool>,
+        supply_invoked: Arc<AtomicBool>,
+    }
+
+    impl SourceSupplierV1 for PanicDuringPreparationFreeSupplier {
+        type Source = CounterSource;
+
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            self.bound_invoked.store(true, Ordering::Release);
+            if let Some(cas) = self.cas_to_poison.as_ref() {
+                cas.poison_storage_admission_for_test_v1();
+            }
+            panic!("injected preparation-free supplier-bound unwind");
+        }
+
+        fn supply(self) -> crate::CoreResult<Self::Source> {
+            self.supply_invoked.store(true, Ordering::Release);
+            Ok(CounterSource { len: 1, offset: 0 })
+        }
+    }
+
+    struct FailingPreparationFreeSupplier {
+        bound_invoked: Arc<AtomicBool>,
+        supply_invoked: Arc<AtomicBool>,
+    }
+
+    impl SourceSupplierV1 for FailingPreparationFreeSupplier {
+        type Source = CounterSource;
+
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            self.bound_invoked.store(true, Ordering::Release);
+            Err(CoreError::ResourceRefused)
+        }
+
+        fn supply(self) -> crate::CoreResult<Self::Source> {
+            self.supply_invoked.store(true, Ordering::Release);
+            Ok(CounterSource { len: 1, offset: 0 })
+        }
+    }
+
+    struct FailingBodySource;
+
+    impl ContentSourceV1 for FailingBodySource {
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<Self>() as u64)
+        }
+
+        fn read(&mut self, _destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
+            Err(ContentSourceErrorV1::Failure)
+        }
+    }
+
+    struct FailingBodySupplier;
+
+    impl SourceSupplierV1 for FailingBodySupplier {
+        type Source = FailingBodySource;
+
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<FailingBodySource>() as u64)
+        }
+
+        fn supply(self) -> crate::CoreResult<Self::Source> {
+            Ok(FailingBodySource)
+        }
+    }
+
+    struct FailingAfterBytesSource {
+        remaining: u64,
+    }
+
+    impl ContentSourceV1 for FailingAfterBytesSource {
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<Self>() as u64)
+        }
+
+        fn read(&mut self, destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
+            if self.remaining == 0 {
+                return Err(ContentSourceErrorV1::Failure);
+            }
+            let take = usize::try_from(self.remaining.min(destination.len() as u64))
+                .map_err(|_| ContentSourceErrorV1::Failure)?;
+            destination[..take].fill(0x5a);
+            self.remaining -= take as u64;
+            Ok(take)
+        }
+    }
+
+    struct FailingAfterBytesSupplier {
+        bytes_before_failure: u64,
+    }
+
+    impl SourceSupplierV1 for FailingAfterBytesSupplier {
+        type Source = FailingAfterBytesSource;
+
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<FailingAfterBytesSource>() as u64)
+        }
+
+        fn supply(self) -> crate::CoreResult<Self::Source> {
+            Ok(FailingAfterBytesSource {
+                remaining: self.bytes_before_failure,
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct ContinueFaultControl;
+
+    impl CdcControlV1 for ContinueFaultControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for ContinueFaultControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    struct FailFilesystemBoundaryOnce {
+        boundary: FsCasFilesystemBoundaryV1,
+        error: FsCasErrorV1,
+        fired: bool,
+    }
+
+    impl CdcControlV1 for FailFilesystemBoundaryOnce {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for FailFilesystemBoundaryOnce {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.fired && boundary == self.boundary {
+                self.fired = true;
+                Some(self.error)
+            } else {
+                None
+            }
+        }
+    }
+
+    fn filesystem_fault_spec(
+        case: FilesystemFaultCaseV1,
+    ) -> (FsCasFilesystemBoundaryV1, FsCasErrorV1, bool, u64) {
+        match case {
+            FilesystemFaultCaseV1::PreparationCreateNoSpace => (
+                FsCasFilesystemBoundaryV1::PreparationCreate,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
+                true,
+                0x800,
+            ),
+            FilesystemFaultCaseV1::PreparationResizeQuota => (
+                FsCasFilesystemBoundaryV1::PreparationResize,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::Quota),
+                true,
+                0x801,
+            ),
+            FilesystemFaultCaseV1::PermissionChangeDenied => (
+                FsCasFilesystemBoundaryV1::PermissionChange,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied),
+                true,
+                0x802,
+            ),
+            FilesystemFaultCaseV1::PreparationWriteShortWrite => (
+                FsCasFilesystemBoundaryV1::PreparationWrite,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortWrite),
+                false,
+                0x803,
+            ),
+            FilesystemFaultCaseV1::PrivatePackCreateInodeExhaustion => (
+                FsCasFilesystemBoundaryV1::PrivatePackCreate,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::InodeExhaustion),
+                false,
+                0x804,
+            ),
+            FilesystemFaultCaseV1::PrivatePackWriteShortWrite => (
+                FsCasFilesystemBoundaryV1::PrivatePackWrite,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortWrite),
+                false,
+                0x805,
+            ),
+            FilesystemFaultCaseV1::PrivatePackFlushWriteFailure => (
+                FsCasFilesystemBoundaryV1::PrivatePackFlush,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::WriteFailure),
+                false,
+                0x806,
+            ),
+            FilesystemFaultCaseV1::CarrierHardLinkUnsupported => (
+                FsCasFilesystemBoundaryV1::CarrierHardLink,
+                FsCasErrorV1::Unsupported,
+                false,
+                0x807,
+            ),
+            FilesystemFaultCaseV1::MarkerCreateInodeExhaustion => (
+                FsCasFilesystemBoundaryV1::MarkerCreate,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::InodeExhaustion),
+                false,
+                0x808,
+            ),
+            FilesystemFaultCaseV1::MarkerWriteNoSpace => (
+                FsCasFilesystemBoundaryV1::MarkerWrite,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
+                false,
+                0x809,
+            ),
+            FilesystemFaultCaseV1::MarkerFlushWriteFailure => (
+                FsCasFilesystemBoundaryV1::MarkerFlush,
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::WriteFailure),
+                false,
+                0x80a,
+            ),
+            FilesystemFaultCaseV1::MarkerHardLinkUnsupported => (
+                FsCasFilesystemBoundaryV1::MarkerHardLink,
+                FsCasErrorV1::Unsupported,
+                false,
+                0x80b,
+            ),
+        }
+    }
+
+    fn map_filesystem_fault_error(error: Option<FsCasErrorV1>) -> Option<FilesystemFaultErrorV1> {
+        error.map(|error| match error {
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace) => {
+                FilesystemFaultErrorV1::Filesystem(FilesystemFaultFailureV1::NoSpace)
+            }
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::Quota) => {
+                FilesystemFaultErrorV1::Filesystem(FilesystemFaultFailureV1::Quota)
+            }
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::InodeExhaustion) => {
+                FilesystemFaultErrorV1::Filesystem(FilesystemFaultFailureV1::InodeExhaustion)
+            }
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::WriteFailure) => {
+                FilesystemFaultErrorV1::Filesystem(FilesystemFaultFailureV1::WriteFailure)
+            }
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::ShortWrite) => {
+                FilesystemFaultErrorV1::Filesystem(FilesystemFaultFailureV1::ShortWrite)
+            }
+            FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied) => {
+                FilesystemFaultErrorV1::Filesystem(FilesystemFaultFailureV1::PermissionDenied)
+            }
+            FsCasErrorV1::Unsupported => FilesystemFaultErrorV1::Unsupported,
+            unexpected => panic!("unexpected filesystem fault result: {unexpected:?}"),
+        })
+    }
+
+    pub fn filesystem_fault_v1(
+        root: &Path,
+        case: FilesystemFaultCaseV1,
+    ) -> FilesystemFaultObservationV1 {
+        let (boundary, expected_error, before_supply, cancellation_key) =
+            filesystem_fault_spec(case);
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = FailFilesystemBoundaryOnce {
+            boundary,
+            error: expected_error,
+            fired: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            cancellation_key,
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        let (preparation_bytes, preparation_entries) =
+            directory_usage(&root.join("preparation"));
+        let (_, immutable_entries) = immutable_usage(root);
+        let (storage_active_operations, storage_active_bytes, storage_active_inodes) =
+            cas.storage_admission_active_for_test_v1();
+        let _ = preparation_bytes;
+        FilesystemFaultObservationV1 {
+            error: map_filesystem_fault_error(attempt.error),
+            fired: control.fired,
+            bound_invoked: bound_invoked.load(Ordering::Acquire),
+            supply_invoked: supply_invoked.load(Ordering::Acquire),
+            source_read_calls: counters.source_read_calls,
+            preparation_entries,
+            immutable_entries,
+            storage_bytes_committed: counters.storage_bytes_committed,
+            storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_committed: counters.storage_inodes_committed,
+            storage_inodes_retained: counters.storage_inodes_retained,
+            operation_slots: cas.operation_admitted_slots_v1(),
+            operation_active: cas.operation_admission_active_for_test_v1(),
+            storage_active_operations,
+            storage_active_bytes,
+            storage_active_inodes,
+            root_usable: cas.occupied().is_ok(),
+            stale_usable: stale.occupied().is_ok(),
+            zero_forbidden_work: counters.has_zero_forbidden_work()
+                && (before_supply || supply_invoked.load(Ordering::Acquire)),
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum CarrierLinkFaultFailureV1 {
+        Unsupported,
+        WriteFailure,
+    }
+
+    struct PoisonStorageAtCarrierLink {
+        cas: FsCasV1,
+        error: FsCasErrorV1,
+        fired: bool,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for PoisonStorageAtCarrierLink {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PoisonStorageAtCarrierLink {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.fired && boundary == FsCasFilesystemBoundaryV1::CarrierHardLink {
+                self.fired = true;
+                self.cas.poison_storage_admission_for_test_v1();
+                Some(self.error)
+            } else {
+                None
+            }
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    fn carrier_link_fault_error(failure: CarrierLinkFaultFailureV1) -> FsCasErrorV1 {
+        match failure {
+            CarrierLinkFaultFailureV1::Unsupported => FsCasErrorV1::Unsupported,
+            CarrierLinkFaultFailureV1::WriteFailure => {
+                FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::WriteFailure)
+            }
+        }
+    }
+
+    pub fn carrier_link_fault_v1(
+        root: &Path,
+        failure: CarrierLinkFaultFailureV1,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PoisonStorageAtCarrierLink {
+            cas: cas.clone(),
+            error: carrier_link_fault_error(failure),
+            fired: false,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x820,
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.fired,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: control.fired,
+            },
+            &counters,
+        )
+    }
+
+    struct InstallCarrierAndPoisonStorage {
+        cas: FsCasV1,
+        installed: bool,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for InstallCarrierAndPoisonStorage {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for InstallCarrierAndPoisonStorage {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if !self.installed && boundary == FsCasBoundaryV1::BeforeCarrierInstall {
+                self.cas
+                    .install_single_prepared_carrier_for_test_v1()
+                    .expect("independent carrier install must win the test race");
+                self.installed = true;
+                self.cas.poison_storage_admission_for_test_v1();
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    pub fn carrier_exists_fault_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = InstallCarrierAndPoisonStorage {
+            cas: cas.clone(),
+            installed: false,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x821,
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.installed,
+                cleanup_calls: 0,
+                carrier_installed: control.installed,
+                poisoned: control.installed,
+            },
+            &counters,
+        )
+    }
+
+    #[derive(Default)]
+    struct FailPreparationCreateAndCleanup {
+        preparation_creates: u32,
+        create_failed: bool,
+        cleanup_failed: bool,
+    }
+
+    impl CdcControlV1 for FailPreparationCreateAndCleanup {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for FailPreparationCreateAndCleanup {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary != FsCasFilesystemBoundaryV1::PreparationCreate {
+                return None;
+            }
+            self.preparation_creates += 1;
+            if self.preparation_creates == 2 {
+                self.create_failed = true;
+                Some(FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace))
+            } else {
+                None
+            }
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::PreparationSpool && !self.cleanup_failed {
+                self.cleanup_failed = true;
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    pub fn preparation_create_cleanup_fault_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = FailPreparationCreateAndCleanup::default();
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x8ff,
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.create_failed,
+                cleanup_calls: u32::from(control.cleanup_failed),
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    fn lifecycle_filesystem_error(failure: FilesystemFaultFailureV1) -> FsCasErrorV1 {
+        let failure = match failure {
+            FilesystemFaultFailureV1::NoSpace => FsCasFilesystemFailureV1::NoSpace,
+            FilesystemFaultFailureV1::Quota => FsCasFilesystemFailureV1::Quota,
+            FilesystemFaultFailureV1::InodeExhaustion => {
+                FsCasFilesystemFailureV1::InodeExhaustion
+            }
+            FilesystemFaultFailureV1::ReadFailure => FsCasFilesystemFailureV1::ReadFailure,
+            FilesystemFaultFailureV1::WriteFailure => FsCasFilesystemFailureV1::WriteFailure,
+            FilesystemFaultFailureV1::ShortRead => FsCasFilesystemFailureV1::ShortRead,
+            FilesystemFaultFailureV1::ShortWrite => FsCasFilesystemFailureV1::ShortWrite,
+            FilesystemFaultFailureV1::PermissionDenied => {
+                FsCasFilesystemFailureV1::PermissionDenied
+            }
+            FilesystemFaultFailureV1::Unsupported => {
+                return FsCasErrorV1::Unsupported;
+            }
+        };
+        FsCasErrorV1::Filesystem(failure)
+    }
+
+    struct PreparationPermissionCleanupControl {
+        first_error: FsCasErrorV1,
+        permission_failed: bool,
+        cleanup_calls: u32,
+        cleanup_panicked: bool,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for PreparationPermissionCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationPermissionCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::PermissionChange && !self.permission_failed {
+                self.permission_failed = true;
+                Some(self.first_error)
+            } else {
+                None
+            }
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool => {
+                    self.cleanup_calls += 1;
+                    if !self.cleanup_panicked {
+                        self.cleanup_panicked = true;
+                        panic!("injected partial preparation cleanup unwind");
+                    }
+                    false
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    pub fn preparation_permission_cleanup_fault_v1(
+        root: &Path,
+        failure: FilesystemFaultFailureV1,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreparationPermissionCleanupControl {
+            first_error: lifecycle_filesystem_error(failure),
+            permission_failed: false,
+            cleanup_calls: 0,
+            cleanup_panicked: false,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x900 + u64::from(fail_invalidation),
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.permission_failed,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum PreparationConstructionCaseV1 {
+        CleanupFails,
+        CleanupUnwinds,
+        PreCreateAccountingReleaseFails,
+    }
+
+    struct PreparationConstructionControl {
+        cas: FsCasV1,
+        case: PreparationConstructionCaseV1,
+        construction_panicked: bool,
+        cleanup_calls: u32,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for PreparationConstructionControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationConstructionControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            let target = match self.case {
+                PreparationConstructionCaseV1::CleanupFails
+                | PreparationConstructionCaseV1::CleanupUnwinds => {
+                    FsCasFilesystemBoundaryV1::PermissionChange
+                }
+                PreparationConstructionCaseV1::PreCreateAccountingReleaseFails => {
+                    FsCasFilesystemBoundaryV1::PreparationCreate
+                }
+            };
+            if boundary == target && !self.construction_panicked {
+                self.construction_panicked = true;
+                if self.case == PreparationConstructionCaseV1::PreCreateAccountingReleaseFails {
+                    self.cas.fail_next_preparation_remove_for_test_v1();
+                }
+                panic!("injected partial preparation construction unwind");
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool
+                    if self.case != PreparationConstructionCaseV1::PreCreateAccountingReleaseFails =>
+                {
+                    self.cleanup_calls += 1;
+                    match self.case {
+                        PreparationConstructionCaseV1::CleanupFails => true,
+                        PreparationConstructionCaseV1::CleanupUnwinds => {
+                            panic!("injected partial preparation construction cleanup unwind");
+                        }
+                        PreparationConstructionCaseV1::PreCreateAccountingReleaseFails => {
+                            unreachable!()
+                        }
+                    }
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    pub fn preparation_construction_unwind_fault_v1(
+        root: &Path,
+        case: PreparationConstructionCaseV1,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreparationConstructionControl {
+            cas: cas.clone(),
+            case,
+            construction_panicked: false,
+            cleanup_calls: 0,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x901 + u64::from(fail_invalidation),
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.construction_panicked,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    struct PreparationInitializationUnwindControl {
+        construction_panicked: bool,
+        cleanup_calls: u32,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for PreparationInitializationUnwindControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationInitializationUnwindControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::PreparationResize
+                && !self.construction_panicked
+            {
+                self.construction_panicked = true;
+                panic!("injected preparation initialization unwind");
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool if self.cleanup_calls < 4 => {
+                    self.cleanup_calls += 1;
+                    self.cleanup_calls == 1
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    pub fn preparation_initialization_cleanup_fault_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreparationInitializationUnwindControl {
+            construction_panicked: false,
+            cleanup_calls: 0,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x902 + u64::from(fail_invalidation),
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.construction_panicked,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    struct PreparationInitializationPoisonControl {
+        cas: FsCasV1,
+        construction_panicked: bool,
+        cleanup_calls: u32,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+        poison_terminal: bool,
+    }
+
+    impl CdcControlV1 for PreparationInitializationPoisonControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationInitializationPoisonControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::PreparationResize
+                && !self.construction_panicked
+            {
+                self.construction_panicked = true;
+                if self.poison_terminal {
+                    self.cas.poison_storage_admission_for_test_v1();
+                }
+                panic!("injected preparation initialization unwind before outer terminal");
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool => {
+                    self.cleanup_calls += 1;
+                    false
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    pub fn preparation_initialization_unwind_fault_v1(
+        root: &Path,
+        poison_terminal: bool,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreparationInitializationPoisonControl {
+            cas: cas.clone(),
+            construction_panicked: false,
+            cleanup_calls: 0,
+            invalidation_attempts: 0,
+            fail_invalidation,
+            poison_terminal,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x903 + u64::from(poison_terminal) + u64::from(fail_invalidation),
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        let (attempt, followup_succeeded) = if poison_terminal {
+            (attempt, false)
+        } else {
+            let mut followup_counters = OperationCountersV1::default();
+            let followup = run_create_fault_attempt(
+                &cas,
+                0x904,
+                1,
+                CallbackSupplier {
+                    bound_invoked: Arc::clone(&bound_invoked),
+                    supply_invoked: Arc::clone(&supply_invoked),
+                    len: 1,
+                },
+                &mut control,
+                &mut followup_counters,
+            );
+            let followup_succeeded = followup.error.is_none() && !followup.panicked;
+            let error = attempt.error.or(followup.error);
+            (
+                CreateFaultAttempt {
+                    error,
+                    panicked: attempt.panicked,
+                    panic_payload: attempt.panic_payload,
+                },
+                followup_succeeded,
+            )
+        };
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            followup_succeeded,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.construction_panicked,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: poison_terminal,
+            },
+            &counters,
+        )
+    }
+
+    struct ClosureUnwindControl {
+        cas: FsCasV1,
+        closure_panicked: bool,
+        cleanup_calls: u32,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+        poison_terminal: bool,
+    }
+
+    impl CdcControlV1 for ClosureUnwindControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for ClosureUnwindControl {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::BeforeClosureMarkerPublication
+                && !self.closure_panicked
+            {
+                self.closure_panicked = true;
+                if self.poison_terminal {
+                    self.cas.poison_storage_admission_for_test_v1();
+                }
+                panic!("injected closure-fence unwind before outer terminal");
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool => {
+                    self.cleanup_calls += 1;
+                    false
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    pub fn closure_unwind_fault_v1(
+        root: &Path,
+        poison_terminal: bool,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = ClosureUnwindControl {
+            cas: cas.clone(),
+            closure_panicked: false,
+            cleanup_calls: 0,
+            invalidation_attempts: 0,
+            fail_invalidation,
+            poison_terminal,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x905 + u64::from(poison_terminal) + u64::from(fail_invalidation),
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.closure_panicked,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: poison_terminal,
+            },
+            &counters,
+        )
+    }
+
+    struct PreparationAccountingPoisonControl {
+        cas: FsCasV1,
+        poisoned: bool,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for PreparationAccountingPoisonControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationAccountingPoisonControl {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::VisibilityLockAcquired && !self.poisoned {
+                self.poisoned = true;
+                self.cas.poison_storage_admission_for_test_v1();
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                self.fail_invalidation
+            } else {
+                false
+            }
+        }
+    }
+
+    pub fn preparation_accounting_poison_fault_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreparationAccountingPoisonControl {
+            cas: cas.clone(),
+            poisoned: false,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x906 + u64::from(fail_invalidation),
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.poisoned,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: control.poisoned,
+            },
+            &counters,
+        )
+    }
+
+    struct PreparationOpenAccountingControl {
+        cas: FsCasV1,
+        fired: bool,
+    }
+
+    impl CdcControlV1 for PreparationOpenAccountingControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationOpenAccountingControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::PreparationCreate && !self.fired {
+                self.fired = true;
+                self.cas.remove_active_preparation_inode_for_test_v1();
+                Some(FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace))
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn preparation_open_accounting_fault_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreparationOpenAccountingControl {
+            cas: cas.clone(),
+            fired: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x907,
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.fired,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    struct PreparationFreeTerminalControl {
+        fail_invalidation: bool,
+        invalidation_attempts: u32,
+    }
+
+    impl CdcControlV1 for PreparationFreeTerminalControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreparationFreeTerminalControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    struct PanicAfterOperationTerminalReleaseControl {
+        unwind_pending: bool,
+        terminal_hook_calls: u32,
+    }
+
+    impl CdcControlV1 for PanicAfterOperationTerminalReleaseControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PanicAfterOperationTerminalReleaseControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
+            self.terminal_hook_calls += 1;
+            core::mem::take(&mut self.unwind_pending)
+        }
+    }
+
+    #[derive(Default)]
+    struct GlobalSeenCounterOverflowControl {
+        injected: bool,
+    }
+
+    impl CdcControlV1 for GlobalSeenCounterOverflowControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for GlobalSeenCounterOverflowControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_global_seen_counter_accumulation_overflow(&mut self) -> bool {
+            if self.injected {
+                false
+            } else {
+                self.injected = true;
+                true
+            }
+        }
+    }
+
+    struct FailBodyCleanupTerminalControl {
+        preparation_cleanup_injected: bool,
+        fail_invalidation: bool,
+        invalidation_attempts: u32,
+    }
+
+    impl CdcControlV1 for FailBodyCleanupTerminalControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for FailBodyCleanupTerminalControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::PreparationSpool
+                && !self.preparation_cleanup_injected
+            {
+                self.preparation_cleanup_injected = true;
+                return true;
+            }
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    struct CancelBeforeCandidateValidationAndFailPrivatePackCleanup {
+        cancelled: bool,
+        cleanup_calls: u32,
+        invalidation_attempts: u32,
+    }
+
+    impl CdcControlV1 for CancelBeforeCandidateValidationAndFailPrivatePackCleanup {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for CancelBeforeCandidateValidationAndFailPrivatePackCleanup {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::BeforeCandidateValidation {
+                self.cancelled = true;
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PrivatePack if self.cleanup_calls == 0 => {
+                    self.cleanup_calls = 1;
+                    true
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    false
+                }
+                _ => false,
+            }
+        }
+    }
+
+    struct CancelAfterCarrierInstallAndFailCleanup {
+        cancelled: bool,
+        carrier_installed: bool,
+        cleanup_calls: u32,
+        invalidation_attempts: u32,
+    }
+
+    impl CdcControlV1 for CancelAfterCarrierInstallAndFailCleanup {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for CancelAfterCarrierInstallAndFailCleanup {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::AfterCarrierInstall {
+                self.carrier_installed = true;
+                self.cancelled = true;
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::Carrier if self.cleanup_calls == 0 => {
+                    self.cleanup_calls = 1;
+                    true
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    false
+                }
+                _ => false,
+            }
+        }
+    }
+
+    struct PoisonStorageAndCancelAfterCarrierInstall {
+        cas: FsCasV1,
+        cancelled: bool,
+        carrier_installed: bool,
+        poisoned: bool,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for PoisonStorageAndCancelAfterCarrierInstall {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PoisonStorageAndCancelAfterCarrierInstall {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::AfterCarrierInstall {
+                self.carrier_installed = true;
+                self.cancelled = true;
+                self.cas.poison_storage_admission_for_test_v1();
+                self.poisoned = true;
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancelled
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    fn run_create_fault_attempt<C, S>(
+        cas: &FsCasV1,
+        cancellation_key: u64,
+        declared_len: u64,
+        supplier: S,
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+    ) -> CreateFaultAttempt
+    where
+        C: LifecycleControlV1 + ?Sized,
+        S: SourceSupplierV1,
+    {
+        let mut scratch = OperationScratch::new();
+        let terminal = catch_unwind(AssertUnwindSafe(|| {
+            let grant = request_create_operation_v1(cas, cancellation_key, counters, control)
+                .map_err(OperationErrorV1::FsCas)?;
+            run_create_v1(
+                grant,
+                CdcAlgorithmV1::FastCdc,
+                b"payload.bin",
+                0o644,
+                declared_len,
+                supplier,
+                scratch.borrow(),
+                control,
+                counters,
+            )
+        }));
+        match terminal {
+            Ok(Ok(_)) => CreateFaultAttempt {
+                error: None,
+                panicked: false,
+                panic_payload: None,
+            },
+            Ok(Err(error)) => CreateFaultAttempt {
+                error: Some(match error {
+                    OperationErrorV1::Core(error) => FsCasErrorV1::Core(error),
+                    OperationErrorV1::FsCas(error) => error,
+                }),
+                panicked: false,
+                panic_payload: None,
+            },
+            Err(payload) => CreateFaultAttempt {
+                error: None,
+                panicked: true,
+                panic_payload: payload.downcast_ref::<&'static str>().copied(),
+            },
+        }
+    }
+
+    fn observe_create_fault(
+        root: &Path,
+        cas: &FsCasV1,
+        stale: &FsCasV1,
+        attempt: CreateFaultAttempt,
+        bound_invoked: bool,
+        supply_invoked: bool,
+        followup_succeeded: bool,
+        terminal_hook_calls: u32,
+        invalidation_attempts: u32,
+        global_seen_injected: bool,
+        counters: &OperationCountersV1,
+    ) -> CreateFaultObservationV1 {
+        observe_create_fault_with_control(
+            root,
+            cas,
+            stale,
+            attempt,
+            bound_invoked,
+            supply_invoked,
+            followup_succeeded,
+            terminal_hook_calls,
+            invalidation_attempts,
+            global_seen_injected,
+            CreateFaultControlObservation::default(),
+            counters,
+        )
+    }
+
+    fn filesystem_failure_v1(error: Option<FsCasErrorV1>) -> Option<FilesystemFaultFailureV1> {
+        let error = error?;
+        let (first, _) = error.failure_causes_v1();
+        match first {
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::NoSpace) => {
+                Some(FilesystemFaultFailureV1::NoSpace)
+            }
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::Quota) => {
+                Some(FilesystemFaultFailureV1::Quota)
+            }
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::InodeExhaustion) => {
+                Some(FilesystemFaultFailureV1::InodeExhaustion)
+            }
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::ReadFailure) => {
+                Some(FilesystemFaultFailureV1::ReadFailure)
+            }
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::WriteFailure) => {
+                Some(FilesystemFaultFailureV1::WriteFailure)
+            }
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::ShortRead) => {
+                Some(FilesystemFaultFailureV1::ShortRead)
+            }
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::ShortWrite) => {
+                Some(FilesystemFaultFailureV1::ShortWrite)
+            }
+            FsCasFailureCauseV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied) => {
+                Some(FilesystemFaultFailureV1::PermissionDenied)
+            }
+            _ => None,
+        }
+    }
+
+    fn observe_create_fault_with_control(
+        root: &Path,
+        cas: &FsCasV1,
+        stale: &FsCasV1,
+        attempt: CreateFaultAttempt,
+        bound_invoked: bool,
+        supply_invoked: bool,
+        followup_succeeded: bool,
+        terminal_hook_calls: u32,
+        invalidation_attempts: u32,
+        global_seen_injected: bool,
+        control: CreateFaultControlObservation,
+        counters: &OperationCountersV1,
+    ) -> CreateFaultObservationV1 {
+        let (preparation_bytes, preparation_entries) = directory_usage(&root.join("preparation"));
+        let (immutable_bytes, immutable_entries) = immutable_usage(root);
+        let (first_cause, dominant_cause) = attempt
+            .error
+            .map(publication_causes_v1)
+            .map(|(first, dominant)| (Some(first), Some(dominant)))
+            .unwrap_or((None, None));
+        let (storage_active_operations, storage_active_bytes, storage_active_inodes) =
+            cas.storage_admission_active_for_test_v1();
+        CreateFaultObservationV1 {
+            error: attempt.error.map(publication_error_v1),
+            filesystem_failure: filesystem_failure_v1(attempt.error),
+            first_cause,
+            dominant_cause,
+            panicked: attempt.panicked,
+            panic_payload: attempt.panic_payload,
+            control_fired: control.control_fired,
+            cleanup_calls: control.cleanup_calls,
+            carrier_installed: control.carrier_installed,
+            poisoned: control.poisoned,
+            bound_invoked,
+            supply_invoked,
+            followup_succeeded,
+            terminal_hook_calls,
+            invalidation_attempts,
+            global_seen_injected,
+            preparation_bytes,
+            preparation_entries,
+            immutable_bytes,
+            immutable_entries,
+            residue_bytes: counters.unreachable_installed_residue_bytes,
+            mutable_preparation_residue_bytes: counters.mutable_preparation_residue_bytes,
+            mutable_preparation_residue_inodes: counters.mutable_preparation_residue_inodes,
+            source_read_calls: counters.source_read_calls,
+            source_bytes_read: counters.source_bytes_read,
+            global_seen_lookups: counters.global_seen_lookups,
+            global_seen_probes: counters.global_seen_probes,
+            global_seen_maximum_probe: counters.global_seen_maximum_probe,
+            global_seen_entries: counters.global_seen_entries,
+            global_seen_table_bytes: counters.global_seen_table_bytes,
+            global_seen_metadata_bytes_read: counters.global_seen_metadata_bytes_read,
+            global_seen_metadata_read_calls: counters.global_seen_metadata_read_calls,
+            global_seen_metadata_bytes_written: counters.global_seen_metadata_bytes_written,
+            storage_bytes_requested: counters.storage_bytes_requested,
+            storage_bytes_reserved: counters.storage_bytes_reserved,
+            storage_bytes_released: counters.storage_bytes_released,
+            storage_bytes_committed: counters.storage_bytes_committed,
+            storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_requested: counters.storage_inodes_requested,
+            storage_inodes_reserved: counters.storage_inodes_reserved,
+            storage_inodes_released: counters.storage_inodes_released,
+            storage_inodes_committed: counters.storage_inodes_committed,
+            storage_inodes_retained: counters.storage_inodes_retained,
+            operation_slots: cas.operation_admitted_slots_v1(),
+            operation_active: cas.operation_admission_active_for_test_v1(),
+            storage_active_operations,
+            storage_active_bytes,
+            storage_active_inodes,
+            invalidated: matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)),
+            stale_invalidated: matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
+            reopen_invalidated: matches!(
+                FsCasV1::open_existing(root),
+                Err(FsCasErrorV1::Invalidated)
+            ),
+            zero_forbidden_work: counters.has_zero_forbidden_work(),
+        }
+    }
+
+    fn new_fault_root(root: &Path) -> (FsCasV1, FsCasV1) {
+        let cas = FsCasV1::create_new(root).expect("create lifecycle fault root");
+        let stale = FsCasV1::open_existing(root).expect("open lifecycle fault stale owner");
+        (cas, stale)
+    }
+
+    #[derive(Default)]
+    struct MarkerWriteAndCleanupControl {
+        marker_write_failed: bool,
+        cleanup_failed: bool,
+    }
+
+    impl CdcControlV1 for MarkerWriteAndCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for MarkerWriteAndCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::MarkerWrite && !self.marker_write_failed {
+                self.marker_write_failed = true;
+                return Some(FsCasErrorV1::Filesystem(
+                    FsCasFilesystemFailureV1::NoSpace,
+                ));
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::PreparationSpool && !self.cleanup_failed {
+                self.cleanup_failed = true;
+                return true;
+            }
+            false
+        }
+    }
+
+    struct PreLinkTerminalCleanupControl {
+        first_error: Option<FsCasErrorV1>,
+        cleanup_calls: u32,
+        invalidation_calls: u32,
+        fail_invalidation: bool,
+    }
+
+    impl FsCasControlV1 for PreLinkTerminalCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            (boundary == FsCasFilesystemBoundaryV1::MarkerWrite)
+                .then(|| self.first_error.take())
+                .flatten()
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool => {
+                    self.cleanup_calls += 1;
+                    panic!("injected pre-link marker terminal cleanup unwind")
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_calls += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    struct PreLinkCallbackCleanupControl {
+        cleanup_unwinds: bool,
+        preparation_panicked: bool,
+        cleanup_calls: u32,
+        invalidation_calls: u32,
+        fail_invalidation: bool,
+    }
+
+    impl FsCasControlV1 for PreLinkCallbackCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::MarkerWrite && !self.preparation_panicked {
+                self.preparation_panicked = true;
+                panic!("injected pre-link marker preparation unwind")
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool => {
+                    self.cleanup_calls += 1;
+                    if self.cleanup_unwinds {
+                        panic!("injected pre-link marker cleanup unwind")
+                    }
+                    true
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_calls += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    struct BoundaryFailureControl {
+        boundary: FsCasFilesystemBoundaryV1,
+        error: FsCasErrorV1,
+        fired: bool,
+    }
+
+    impl CdcControlV1 for BoundaryFailureControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for BoundaryFailureControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.fired && boundary == self.boundary {
+                self.fired = true;
+                return Some(self.error.clone());
+            }
+            None
+        }
+    }
+
+    struct CarrierAliasInvalidationControl {
+        alias_failed: bool,
+        invalidation_write_failed: bool,
+        invalidation_marker_failed: bool,
+    }
+
+    impl CdcControlV1 for CarrierAliasInvalidationControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for CarrierAliasInvalidationControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            match boundary {
+                FsCasFilesystemBoundaryV1::CarrierAliasUnlink if !self.alias_failed => {
+                    self.alias_failed = true;
+                    Some(FsCasErrorV1::Filesystem(
+                        FsCasFilesystemFailureV1::NoSpace,
+                    ))
+                }
+                FsCasFilesystemBoundaryV1::InvalidationWrite
+                    if !self.invalidation_write_failed =>
+                {
+                    self.invalidation_write_failed = true;
+                    Some(FsCasErrorV1::Filesystem(
+                        FsCasFilesystemFailureV1::WriteFailure,
+                    ))
+                }
+                FsCasFilesystemBoundaryV1::InvalidationMarkerCreate
+                    if !self.invalidation_marker_failed =>
+                {
+                    self.invalidation_marker_failed = true;
+                    Some(FsCasErrorV1::Filesystem(
+                        FsCasFilesystemFailureV1::InodeExhaustion,
+                    ))
+                }
+                _ => None,
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum PostLinkMarkerTargetV1 {
+        ObjectLocator,
+        Catalog,
+        Closure,
+    }
+
+    impl PostLinkMarkerTargetV1 {
+        fn boundary(self) -> FsCasBoundaryV1 {
+            match self {
+                Self::ObjectLocator => FsCasBoundaryV1::AfterObjectLocatorMarkerLink,
+                Self::Catalog => FsCasBoundaryV1::AfterCatalogMarkerLink,
+                Self::Closure => FsCasBoundaryV1::AfterClosureMarkerLink,
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum PostLinkAliasCleanupV1 {
+        Succeeds,
+        Fails,
+        Unwinds,
+    }
+
+    struct PostLinkMarkerCleanupControl {
+        target: FsCasBoundaryV1,
+        boundary_unwind: bool,
+        alias_cleanup: PostLinkAliasCleanupV1,
+        fail_invalidation: bool,
+        current: Option<FsCasBoundaryV1>,
+        boundary_panicked: bool,
+        alias_cleanup_calls: u32,
+        invalidation_calls: u32,
+    }
+
+    impl CdcControlV1 for PostLinkMarkerCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PostLinkMarkerCleanupControl {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            self.current = Some(boundary);
+            if self.boundary_unwind && !self.boundary_panicked && boundary == self.target {
+                self.boundary_panicked = true;
+                panic!("injected post-link marker boundary unwind")
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_calls += 1;
+                return self.fail_invalidation;
+            }
+            if target != FsCasCleanupTargetV1::PublishedMarkerAlias
+                || self.current != Some(self.target)
+            {
+                return false;
+            }
+            self.alias_cleanup_calls += 1;
+            match self.alias_cleanup {
+                PostLinkAliasCleanupV1::Succeeds => false,
+                PostLinkAliasCleanupV1::Fails => true,
+                PostLinkAliasCleanupV1::Unwinds => {
+                    panic!("injected post-link alias cleanup unwind")
+                }
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum PreLinkMarkerPanicPointV1 {
+        MarkerWrite,
+        MarkerFlush,
+        VisibilityRequest,
+        MarkerHardLink,
+    }
+
+    struct PreLinkMarkerUnwindControl {
+        target: PreLinkMarkerPanicPointV1,
+        marker_started: bool,
+        injected: bool,
+        retain_marker: bool,
+        cleanup_injected: bool,
+    }
+
+    impl CdcControlV1 for PreLinkMarkerUnwindControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PreLinkMarkerUnwindControl {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if !self.injected
+                && self.marker_started
+                && self.target == PreLinkMarkerPanicPointV1::VisibilityRequest
+                && boundary == FsCasBoundaryV1::VisibilityLockRequested
+            {
+                self.injected = true;
+                panic!("injected pre-link marker visibility unwind")
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if self.retain_marker
+                && !self.cleanup_injected
+                && target == FsCasCleanupTargetV1::PreparationSpool
+            {
+                self.cleanup_injected = true;
+                return true;
+            }
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::MarkerWrite {
+                self.marker_started = true;
+            }
+            let matches = matches!(
+                (self.target, boundary),
+                (
+                    PreLinkMarkerPanicPointV1::MarkerWrite,
+                    FsCasFilesystemBoundaryV1::MarkerWrite
+                ) | (
+                    PreLinkMarkerPanicPointV1::MarkerFlush,
+                    FsCasFilesystemBoundaryV1::MarkerFlush
+                ) | (
+                    PreLinkMarkerPanicPointV1::MarkerHardLink,
+                    FsCasFilesystemBoundaryV1::MarkerHardLink
+                )
+            );
+            if !self.injected && matches {
+                self.injected = true;
+                panic!("injected pre-link marker filesystem unwind")
+            }
+            None
+        }
+    }
+
+    struct PublishedAliasFailureControl {
+        target: FsCasBoundaryV1,
+        current: Option<FsCasBoundaryV1>,
+        first_error: Option<FsCasErrorV1>,
+        fail_invalidation: bool,
+        injected: bool,
+    }
+
+    impl CdcControlV1 for PublishedAliasFailureControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PublishedAliasFailureControl {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            self.current = Some(boundary);
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation && self.fail_invalidation {
+                return true;
+            }
+            if self.first_error.is_none()
+                && !self.injected
+                && target == FsCasCleanupTargetV1::PublishedMarkerAlias
+                && self.current == Some(self.target)
+            {
+                self.injected = true;
+                return true;
+            }
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.injected
+                && boundary == FsCasFilesystemBoundaryV1::MarkerAliasUnlink
+                && self.current == Some(self.target)
+            {
+                self.injected = true;
+                return self.first_error.take();
+            }
+            None
+        }
+    }
+
+    struct MalformedClosureControl {
+        destination: PathBuf,
+        malformed_installed: bool,
+        cleanup_calls: u32,
+        cleanup_injected: bool,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for MalformedClosureControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for MalformedClosureControl {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::BeforeClosureMarkerPublication
+                && !self.malformed_installed
+            {
+                fs::write(&self.destination, [0_u8; 120])
+                    .expect("install deterministic malformed closure occupant");
+                self.malformed_installed = true;
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            match target {
+                FsCasCleanupTargetV1::PreparationSpool => {
+                    self.cleanup_calls += 1;
+                    if !self.cleanup_injected {
+                        self.cleanup_injected = true;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                FsCasCleanupTargetV1::RootInvalidation => {
+                    self.invalidation_attempts += 1;
+                    self.fail_invalidation
+                }
+                _ => false,
+            }
+        }
+    }
+
+    pub fn marker_write_cleanup_terminal_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = MarkerWriteAndCleanupControl::default();
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x8fe,
+            8,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 8,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.marker_write_failed && control.cleanup_failed,
+                cleanup_calls: u32::from(control.cleanup_failed),
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn pre_link_marker_terminal_cleanup_v1(
+        root: &Path,
+        equal_incumbent: bool,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let cas = FsCasV1::create_new(root).expect("pre-link marker terminal root");
+        let mut setup_counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        if equal_incumbent {
+            let mut setup = cas
+                .begin_operation_capability_v1(
+                    FsOperationKindV1::CompleteC3File,
+                    0x8ff,
+                    &mut setup_counters,
+                    &mut setup_control,
+                )
+                .expect("pre-link marker incumbent capability");
+            setup
+                .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 8, 1, 1).unwrap())
+                .expect("pre-link marker incumbent envelope");
+            let token = setup
+                .storage_token_v1()
+                .expect("pre-link marker incumbent token");
+            cas.publish_test_marker_borrowed_v1(token, &mut setup_control)
+                .expect("pre-link marker incumbent publication");
+            setup
+                .finish_terminal_v1(true, &mut setup_counters, &mut setup_control)
+                .expect("pre-link marker incumbent terminal");
+        }
+
+        let stale = FsCasV1::open_existing(root).expect("pre-link marker stale owner");
+        let mut counters = OperationCountersV1::default();
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x900,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("pre-link marker capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 8, 1, 1).unwrap())
+            .expect("pre-link marker envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("pre-link marker token");
+        let mut control = PreLinkTerminalCleanupControl {
+            first_error: (!equal_incumbent)
+                .then_some(FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace)),
+            cleanup_calls: 0,
+            invalidation_calls: 0,
+            fail_invalidation,
+        };
+        let operation_error = cas
+            .publish_test_marker_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.cleanup_calls > 0,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            control.invalidation_calls,
+            &counters,
+        )
+    }
+
+    pub fn pre_link_marker_callback_cleanup_v1(
+        root: &Path,
+        cleanup_unwinds: bool,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x901,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("pre-link callback capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 8, 1, 1).unwrap())
+            .expect("pre-link callback envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("pre-link callback token");
+        let mut control = PreLinkCallbackCleanupControl {
+            cleanup_unwinds,
+            preparation_panicked: false,
+            cleanup_calls: 0,
+            invalidation_calls: 0,
+            fail_invalidation,
+        };
+        let operation_error = match catch_unwind(AssertUnwindSafe(|| {
+            cas.publish_test_marker_borrowed_v1(token, &mut control)
+        })) {
+            Ok(result) => result.err(),
+            Err(_) => panic!("pre-link callback unwind escaped cleanup reconciliation"),
+        };
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.preparation_panicked,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            control.invalidation_calls,
+            &counters,
+        )
+    }
+
+    pub fn carrier_alias_unlink_cleanup_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = BoundaryFailureControl {
+            boundary: FsCasFilesystemBoundaryV1::CarrierAliasUnlink,
+            error: FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::NoSpace),
+            fired: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x900,
+            64 * 1024 + 17,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 64 * 1024 + 17,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.fired,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn published_locator_alias_unlink_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = BoundaryFailureControl {
+            boundary: FsCasFilesystemBoundaryV1::MarkerAliasUnlink,
+            error: FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::Quota),
+            fired: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x901,
+            64 * 1024 + 17,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 64 * 1024 + 17,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.fired,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn alias_cleanup_invalidation_double_fault_v1(
+        root: &Path,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = CarrierAliasInvalidationControl {
+            alias_failed: false,
+            invalidation_write_failed: false,
+            invalidation_marker_failed: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x902,
+            64 * 1024 + 17,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 64 * 1024 + 17,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.alias_failed
+                    && control.invalidation_write_failed
+                    && control.invalidation_marker_failed,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn post_link_marker_unwind_v1(
+        root: &Path,
+        target: PostLinkMarkerTargetV1,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PostLinkMarkerCleanupControl {
+            target: target.boundary(),
+            boundary_unwind: true,
+            alias_cleanup: PostLinkAliasCleanupV1::Succeeds,
+            fail_invalidation: false,
+            current: None,
+            boundary_panicked: false,
+            alias_cleanup_calls: 0,
+            invalidation_calls: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x710 + target as u64,
+            64 * 1024 + 17,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 64 * 1024 + 17,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_calls,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.boundary_panicked,
+                cleanup_calls: control.alias_cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn post_link_marker_secondary_v1(
+        root: &Path,
+        boundary_unwind: bool,
+        alias_cleanup: PostLinkAliasCleanupV1,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PostLinkMarkerCleanupControl {
+            target: FsCasBoundaryV1::AfterClosureMarkerLink,
+            boundary_unwind,
+            alias_cleanup,
+            fail_invalidation,
+            current: None,
+            boundary_panicked: false,
+            alias_cleanup_calls: 0,
+            invalidation_calls: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x711,
+            1,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 1,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_calls,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.boundary_panicked,
+                cleanup_calls: control.alias_cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn pre_link_marker_unwind_v1(
+        root: &Path,
+        point: PreLinkMarkerPanicPointV1,
+        retain_marker: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreLinkMarkerUnwindControl {
+            target: point,
+            marker_started: false,
+            injected: false,
+            retain_marker,
+            cleanup_injected: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x718,
+            64 * 1024 + 17,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 64 * 1024 + 17,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.injected,
+                cleanup_calls: u32::from(control.cleanup_injected),
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn post_link_alias_directional_failure_v1(
+        root: &Path,
+        target: PostLinkMarkerTargetV1,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PublishedAliasFailureControl {
+            target: target.boundary(),
+            current: None,
+            first_error: Some(FsCasErrorV1::Filesystem(
+                FsCasFilesystemFailureV1::PermissionDenied,
+            )),
+            fail_invalidation,
+            injected: false,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x719 + target as u64,
+            64 * 1024 + 17,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: 64 * 1024 + 17,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            0,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.injected,
+                cleanup_calls: 1,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct MalformedClosureObservationV1 {
+        error: Option<PublicationErrorV1>,
+        first_cause: Option<PublicationCauseV1>,
+        dominant_cause: Option<PublicationCauseV1>,
+        malformed_closure_installed: bool,
+        closure_bytes: u64,
+        cleanup_calls: u32,
+        invalidation_attempts: u32,
+        preparation_bytes: u64,
+        preparation_entries: u64,
+        immutable_bytes: u64,
+        immutable_entries: u64,
+        storage_bytes_committed: u64,
+        storage_inodes_committed: u64,
+        storage_bytes_retained: u64,
+        storage_inodes_retained: u64,
+        operation_slots: u64,
+        invalidated: bool,
+        stale_invalidated: bool,
+        reopen_invalidated: bool,
+        zero_forbidden_work: bool,
+    }
+
+    impl MalformedClosureObservationV1 {
+        pub const fn error(self) -> Option<PublicationErrorV1> {
+            self.error
+        }
+
+        pub const fn first_cause(self) -> Option<PublicationCauseV1> {
+            self.first_cause
+        }
+
+        pub const fn dominant_cause(self) -> Option<PublicationCauseV1> {
+            self.dominant_cause
+        }
+
+        pub const fn malformed_closure_installed(self) -> bool {
+            self.malformed_closure_installed
+        }
+
+        pub const fn closure_bytes(self) -> u64 {
+            self.closure_bytes
+        }
+
+        pub const fn cleanup_calls(self) -> u32 {
+            self.cleanup_calls
+        }
+
+        pub const fn invalidation_attempts(self) -> u32 {
+            self.invalidation_attempts
+        }
+
+        pub const fn preparation_bytes(self) -> u64 {
+            self.preparation_bytes
+        }
+
+        pub const fn preparation_entries(self) -> u64 {
+            self.preparation_entries
+        }
+
+        pub const fn immutable_bytes(self) -> u64 {
+            self.immutable_bytes
+        }
+
+        pub const fn immutable_entries(self) -> u64 {
+            self.immutable_entries
+        }
+
+        pub const fn storage_bytes_committed(self) -> u64 {
+            self.storage_bytes_committed
+        }
+
+        pub const fn storage_inodes_committed(self) -> u64 {
+            self.storage_inodes_committed
+        }
+
+        pub const fn storage_bytes_retained(self) -> u64 {
+            self.storage_bytes_retained
+        }
+
+        pub const fn storage_inodes_retained(self) -> u64 {
+            self.storage_inodes_retained
+        }
+
+        pub const fn operation_slots(self) -> u64 {
+            self.operation_slots
+        }
+
+        pub const fn invalidated(self) -> bool {
+            self.invalidated
+        }
+
+        pub const fn stale_invalidated(self) -> bool {
+            self.stale_invalidated
+        }
+
+        pub const fn reopen_invalidated(self) -> bool {
+            self.reopen_invalidated
+        }
+
+        pub const fn zero_forbidden_work(self) -> bool {
+            self.zero_forbidden_work
+        }
+    }
+
+    fn malformed_closure_attempt(
+        root: &Path,
+        fail_cleanup: bool,
+        fail_invalidation: bool,
+    ) -> MalformedClosureObservationV1 {
+        const BODY_BYTES: u64 = 64 * 1024 + 29;
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut first_counters = OperationCountersV1::default();
+        let mut first_control = ContinueFaultControl;
+        let first = run_create_fault_attempt(
+            &cas,
+            0x410,
+            BODY_BYTES,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: BODY_BYTES,
+            },
+            &mut first_control,
+            &mut first_counters,
+        );
+        assert!(!first.panicked, "malformed closure seed create unwound");
+        assert!(first.error.is_none(), "malformed closure seed create failed");
+        let mut closures = fs::read_dir(root.join("closures"))
+            .expect("read seeded closures");
+        let closure = closures
+            .next()
+            .expect("seeded closure")
+            .expect("seeded closure entry")
+            .path();
+        assert!(closures.next().is_none(), "seeded create produced extra closures");
+        fs::remove_file(&closure).expect("remove seeded closure for race");
+
+        let mut control = MalformedClosureControl {
+            destination: closure.clone(),
+            malformed_installed: false,
+            cleanup_calls: 0,
+            cleanup_injected: !fail_cleanup,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x411,
+            BODY_BYTES,
+            CallbackSupplier {
+                bound_invoked,
+                supply_invoked,
+                len: BODY_BYTES,
+            },
+            &mut control,
+            &mut counters,
+        );
+        let (first_cause, dominant_cause) = attempt
+            .error
+            .map(publication_causes_v1)
+            .map(|(first, dominant)| (Some(first), Some(dominant)))
+            .unwrap_or((None, None));
+        let (preparation_bytes, preparation_entries) = directory_usage(&root.join("preparation"));
+        let (immutable_bytes, immutable_entries) = immutable_usage(root);
+        MalformedClosureObservationV1 {
+            error: attempt.error.map(publication_error_v1),
+            first_cause,
+            dominant_cause,
+            malformed_closure_installed: control.malformed_installed,
+            closure_bytes: fs::metadata(&closure).map(|metadata| metadata.len()).unwrap_or(0),
+            cleanup_calls: control.cleanup_calls,
+            invalidation_attempts: control.invalidation_attempts,
+            preparation_bytes,
+            preparation_entries,
+            immutable_bytes,
+            immutable_entries,
+            storage_bytes_committed: counters.storage_bytes_committed,
+            storage_inodes_committed: counters.storage_inodes_committed,
+            storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_retained: counters.storage_inodes_retained,
+            operation_slots: cas.operation_admitted_slots_v1(),
+            invalidated: matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)),
+            stale_invalidated: matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
+            reopen_invalidated: matches!(
+                FsCasV1::open_existing(root),
+                Err(FsCasErrorV1::Invalidated)
+            ),
+            zero_forbidden_work: counters.has_zero_forbidden_work(),
+        }
+    }
+
+    pub fn atomic_closure_malformed_occupant_v1(root: &Path) -> MalformedClosureObservationV1 {
+        malformed_closure_attempt(root, false, false)
+    }
+
+    pub fn malformed_closure_cleanup_terminal_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> MalformedClosureObservationV1 {
+        malformed_closure_attempt(root, true, fail_invalidation)
+    }
+
+    #[derive(Default)]
+    struct DirectInvalidationControl {
+        fail: bool,
+        attempts: u32,
+    }
+
+    impl FsCasControlV1 for DirectInvalidationControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.attempts += 1;
+                return self.fail;
+            }
+            false
+        }
+    }
+
+    struct DirectPrivatePackCreateControl {
+        cas: FsCasV1,
+        error: FsCasErrorV1,
+        fired: bool,
+        fail_invalidation: bool,
+        invalidation_attempts: u32,
+    }
+
+    impl FsCasControlV1 for DirectPrivatePackCreateControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.fired && boundary == FsCasFilesystemBoundaryV1::PrivatePackCreate {
+                self.fired = true;
+                self.cas.remove_active_preparation_inode_for_test_v1();
+                Some(self.error)
+            } else {
+                None
+            }
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    struct DirectMarkerCreateControl {
+        cas: FsCasV1,
+        error: FsCasErrorV1,
+        break_accounting: bool,
+        fired: bool,
+        fail_invalidation: bool,
+        invalidation_attempts: u32,
+    }
+
+    impl FsCasControlV1 for DirectMarkerCreateControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.fired && boundary == FsCasFilesystemBoundaryV1::MarkerCreate {
+                self.fired = true;
+                if self.break_accounting {
+                    self.cas.remove_active_preparation_inode_for_test_v1();
+                }
+                Some(self.error)
+            } else {
+                None
+            }
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    struct DirectMarkerLengthControl {
+        cas: FsCasV1,
+        corrupted: bool,
+        restored_for_cleanup: bool,
+        payload_or_link_seen: bool,
+        fail_invalidation: bool,
+        invalidation_attempts: u32,
+    }
+
+    impl FsCasControlV1 for DirectMarkerLengthControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if !self.corrupted && boundary == FsCasFilesystemBoundaryV1::PermissionChange {
+                self.corrupted = true;
+                self.cas.inject_active_preparation_byte_for_test_v1();
+            } else if matches!(
+                boundary,
+                FsCasFilesystemBoundaryV1::MarkerWrite | FsCasFilesystemBoundaryV1::MarkerHardLink
+            ) {
+                self.payload_or_link_seen = true;
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                if !self.restored_for_cleanup {
+                    self.restored_for_cleanup = true;
+                    self.cas.clear_active_preparation_bytes_for_test_v1();
+                }
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    struct DirectMarkerImmutableControl {
+        marker_write_seen: bool,
+        marker_link_boundary_seen: bool,
+        fail_invalidation: bool,
+        invalidation_attempts: u32,
+    }
+
+    impl FsCasControlV1 for DirectMarkerImmutableControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            match boundary {
+                FsCasFilesystemBoundaryV1::MarkerWrite => self.marker_write_seen = true,
+                FsCasFilesystemBoundaryV1::MarkerHardLink => {
+                    self.marker_link_boundary_seen = true
+                }
+                _ => {}
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    struct RestoreMarkerCleanupAccountingControl {
+        cas: FsCasV1,
+        accounting_restored: bool,
+        fail_invalidation: bool,
+    }
+
+    impl FsCasControlV1 for RestoreMarkerCleanupAccountingControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation && !self.accounting_restored {
+                self.cas.restore_active_preparation_bytes_for_test_v1(9);
+                self.accounting_restored = true;
+            }
+            self.fail_invalidation && target == FsCasCleanupTargetV1::RootInvalidation
+        }
+    }
+
+    #[cfg(unix)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum MarkerCleanupUnlinkModeV1 {
+        PermissionDenied,
+        NonDirectory,
+        Injected,
+    }
+
+    #[cfg(unix)]
+    struct MarkerCleanupUnlinkControl {
+        preparation: PathBuf,
+        held_preparation: PathBuf,
+        mode: MarkerCleanupUnlinkModeV1,
+        armed: bool,
+        restored: bool,
+        fail_invalidation: bool,
+    }
+
+    #[cfg(unix)]
+    impl MarkerCleanupUnlinkControl {
+        fn restore_preparation(&mut self) {
+            if self.restored {
+                return;
+            }
+            match self.mode {
+                MarkerCleanupUnlinkModeV1::PermissionDenied => {
+                    use std::os::unix::fs::PermissionsExt;
+
+                    fs::set_permissions(&self.preparation, fs::Permissions::from_mode(0o700))
+                        .expect("restore marker cleanup permissions");
+                }
+                MarkerCleanupUnlinkModeV1::NonDirectory => {
+                    fs::remove_file(&self.preparation).expect("remove marker cleanup stand-in");
+                    fs::rename(&self.held_preparation, &self.preparation)
+                        .expect("restore marker cleanup directory");
+                }
+                MarkerCleanupUnlinkModeV1::Injected => {}
+            }
+            self.restored = true;
+        }
+    }
+
+    #[cfg(unix)]
+    impl FsCasControlV1 for MarkerCleanupUnlinkControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::PreparationSpool && !self.armed {
+                self.armed = true;
+                match self.mode {
+                    MarkerCleanupUnlinkModeV1::PermissionDenied => {
+                        use std::os::unix::fs::PermissionsExt;
+
+                        fs::set_permissions(&self.preparation, fs::Permissions::from_mode(0o500))
+                            .expect("arm marker cleanup permissions");
+                        return false;
+                    }
+                    MarkerCleanupUnlinkModeV1::NonDirectory => {
+                        fs::rename(&self.preparation, &self.held_preparation)
+                            .expect("hold marker cleanup directory");
+                        fs::write(&self.preparation, b"not-a-directory")
+                            .expect("install marker cleanup stand-in");
+                        return false;
+                    }
+                    MarkerCleanupUnlinkModeV1::Injected => return true,
+                }
+            }
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.restore_preparation();
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    #[cfg(unix)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum PreparationMetadataFaultModeV1 {
+        WrongType,
+        Missing,
+        PermissionDenied,
+        ReadFailure,
+    }
+
+    #[cfg(unix)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum PreparationUnlinkFaultModeV1 {
+        Missing,
+        PermissionDenied,
+        WriteFailure,
+        Injected,
+    }
+
+    #[cfg(unix)]
+    struct RestorePreparationMetadataAuthorityV1 {
+        preparation: PathBuf,
+        held_preparation: PathBuf,
+        mode: PreparationMetadataFaultModeV1,
+        restored: bool,
+        fail_invalidation: bool,
+    }
+
+    #[cfg(unix)]
+    impl RestorePreparationMetadataAuthorityV1 {
+        fn restore_v1(&mut self) {
+            if self.restored {
+                return;
+            }
+            match self.mode {
+                PreparationMetadataFaultModeV1::PermissionDenied => {
+                    use std::os::unix::fs::PermissionsExt;
+
+                    fs::set_permissions(&self.preparation, fs::Permissions::from_mode(0o700))
+                        .expect("restore preparation permissions");
+                }
+                PreparationMetadataFaultModeV1::ReadFailure => {
+                    fs::remove_file(&self.preparation).expect("remove preparation stand-in");
+                    fs::rename(&self.held_preparation, &self.preparation)
+                        .expect("restore preparation directory");
+                }
+                PreparationMetadataFaultModeV1::WrongType
+                | PreparationMetadataFaultModeV1::Missing => {}
+            }
+            self.restored = true;
+        }
+    }
+
+    #[cfg(unix)]
+    impl FsCasControlV1 for RestorePreparationMetadataAuthorityV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.restore_v1();
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    #[cfg(unix)]
+    struct FailPreparationUnlinkV1 {
+        preparation: PathBuf,
+        held_preparation: PathBuf,
+        spool_path: PathBuf,
+        mode: PreparationUnlinkFaultModeV1,
+        target: FsCasCleanupTargetV1,
+        armed: bool,
+        restored: bool,
+        fail_invalidation: bool,
+    }
+
+    #[cfg(unix)]
+    impl FailPreparationUnlinkV1 {
+        fn restore_v1(&mut self) {
+            if self.restored {
+                return;
+            }
+            match self.mode {
+                PreparationUnlinkFaultModeV1::PermissionDenied => {
+                    use std::os::unix::fs::PermissionsExt;
+
+                    fs::set_permissions(&self.preparation, fs::Permissions::from_mode(0o700))
+                        .expect("restore unlink permissions");
+                }
+                PreparationUnlinkFaultModeV1::WriteFailure => {
+                    fs::remove_file(&self.preparation).expect("remove unlink stand-in");
+                    fs::rename(&self.held_preparation, &self.preparation)
+                        .expect("restore unlink directory");
+                }
+                PreparationUnlinkFaultModeV1::Missing
+                | PreparationUnlinkFaultModeV1::Injected => {}
+            }
+            self.restored = true;
+        }
+    }
+
+    #[cfg(unix)]
+    impl FsCasControlV1 for FailPreparationUnlinkV1 {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == self.target && !self.armed {
+                self.armed = true;
+                match self.mode {
+                    PreparationUnlinkFaultModeV1::Missing => {
+                        fs::remove_file(&self.spool_path).expect("remove unlink target");
+                    }
+                    PreparationUnlinkFaultModeV1::PermissionDenied => {
+                        use std::os::unix::fs::PermissionsExt;
+
+                        fs::set_permissions(&self.preparation, fs::Permissions::from_mode(0o500))
+                            .expect("arm unlink permissions");
+                    }
+                    PreparationUnlinkFaultModeV1::WriteFailure => {
+                        fs::rename(&self.preparation, &self.held_preparation)
+                            .expect("hold unlink directory");
+                        fs::write(&self.preparation, b"not-a-directory")
+                            .expect("install unlink stand-in");
+                    }
+                    PreparationUnlinkFaultModeV1::Injected => return true,
+                }
+                return false;
+            }
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.restore_v1();
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct PackFaultObservationV1 {
+        operation_error: Option<PublicationErrorV1>,
+        cleanup_error: Option<PublicationErrorV1>,
+        operation_first_cause: Option<PublicationCauseV1>,
+        operation_dominant_cause: Option<PublicationCauseV1>,
+        cleanup_first_cause: Option<PublicationCauseV1>,
+        cleanup_dominant_cause: Option<PublicationCauseV1>,
+        logical_length: u64,
+        physical_length: Option<u64>,
+        accounted_length: u64,
+        preparation_bytes: u64,
+        preparation_entries: u64,
+        storage_bytes_released: u64,
+        storage_bytes_committed: u64,
+        storage_bytes_retained: u64,
+        storage_inodes_released: u64,
+        storage_inodes_committed: u64,
+        storage_inodes_retained: u64,
+        invalidated: bool,
+        stale_invalidated: bool,
+        reopen_invalidated: bool,
+        root_usable: bool,
+        zero_forbidden_work: bool,
+    }
+
+    macro_rules! pack_fault_getters {
+        ($($name:ident: $field:ident => $ty:ty),* $(,)?) => {
+            impl PackFaultObservationV1 {
+                $(pub const fn $name(self) -> $ty { self.$field })*
+            }
+        };
+    }
+
+    pack_fault_getters! {
+        operation_error: operation_error => Option<PublicationErrorV1>,
+        cleanup_error: cleanup_error => Option<PublicationErrorV1>,
+        operation_first_cause: operation_first_cause => Option<PublicationCauseV1>,
+        operation_dominant_cause: operation_dominant_cause => Option<PublicationCauseV1>,
+        cleanup_first_cause: cleanup_first_cause => Option<PublicationCauseV1>,
+        cleanup_dominant_cause: cleanup_dominant_cause => Option<PublicationCauseV1>,
+        logical_length: logical_length => u64,
+        physical_length: physical_length => Option<u64>,
+        accounted_length: accounted_length => u64,
+        preparation_bytes: preparation_bytes => u64,
+        preparation_entries: preparation_entries => u64,
+        storage_bytes_released: storage_bytes_released => u64,
+        storage_bytes_committed: storage_bytes_committed => u64,
+        storage_bytes_retained: storage_bytes_retained => u64,
+        storage_inodes_released: storage_inodes_released => u64,
+        storage_inodes_committed: storage_inodes_committed => u64,
+        storage_inodes_retained: storage_inodes_retained => u64,
+        invalidated: invalidated => bool,
+        stale_invalidated: stale_invalidated => bool,
+        reopen_invalidated: reopen_invalidated => bool,
+        root_usable: root_usable => bool,
+        zero_forbidden_work: zero_forbidden_work => bool,
+    }
+
+    fn lossy_preparation_usage(path: &Path) -> (u64, u64) {
+        let Ok(entries) = fs::read_dir(path) else {
+            return (0, 0);
+        };
+        entries
+            .filter_map(Result::ok)
+            .fold((0, 0), |(bytes, entries), entry| {
+                let next_entries = entries + 1;
+                let next_bytes = entry
+                    .metadata()
+                    .ok()
+                    .filter(|metadata| metadata.file_type().is_file())
+                    .map_or(bytes, |metadata| bytes.saturating_add(metadata.len()));
+                (next_bytes, next_entries)
+            })
+    }
+
+    fn regular_file_length(path: &Path) -> Option<u64> {
+        fs::symlink_metadata(path)
+            .ok()
+            .filter(|metadata| metadata.file_type().is_file())
+            .map(|metadata| metadata.len())
+    }
+
+    #[cfg(unix)]
+    fn apply_preparation_metadata_fault(
+        preparation: &Path,
+        path: &Path,
+        held_preparation: &Path,
+        mode: PreparationMetadataFaultModeV1,
+    ) {
+        match mode {
+            PreparationMetadataFaultModeV1::WrongType => {
+                fs::remove_file(path).expect("remove metadata fixture");
+                fs::create_dir(path).expect("replace metadata fixture");
+            }
+            PreparationMetadataFaultModeV1::Missing => {
+                fs::remove_file(path).expect("remove metadata fixture");
+            }
+            PreparationMetadataFaultModeV1::PermissionDenied => {
+                use std::os::unix::fs::PermissionsExt;
+
+                fs::set_permissions(preparation, fs::Permissions::from_mode(0o000))
+                    .expect("arm metadata permissions");
+            }
+            PreparationMetadataFaultModeV1::ReadFailure => {
+                fs::rename(preparation, held_preparation).expect("hold metadata directory");
+                fs::write(preparation, b"not-a-directory").expect("install metadata stand-in");
+            }
+        }
+    }
+
+    fn observe_pack_fault(
+        root: &Path,
+        cas: &FsCasV1,
+        stale: &FsCasV1,
+        operation_error: Option<FsCasErrorV1>,
+        cleanup_error: Option<FsCasErrorV1>,
+        logical_length: u64,
+        physical_length: Option<u64>,
+        accounted_length: u64,
+        counters: &OperationCountersV1,
+    ) -> PackFaultObservationV1 {
+        let (operation_first_cause, operation_dominant_cause) = operation_error
+            .map(publication_causes_v1)
+            .map(|(first, dominant)| (Some(first), Some(dominant)))
+            .unwrap_or((None, None));
+        let (cleanup_first_cause, cleanup_dominant_cause) = cleanup_error
+            .map(publication_causes_v1)
+            .map(|(first, dominant)| (Some(first), Some(dominant)))
+            .unwrap_or((None, None));
+        let (preparation_bytes, preparation_entries) =
+            lossy_preparation_usage(&root.join("preparation"));
+        PackFaultObservationV1 {
+            operation_error: operation_error.map(publication_error_v1),
+            cleanup_error: cleanup_error.map(publication_error_v1),
+            operation_first_cause,
+            operation_dominant_cause,
+            cleanup_first_cause,
+            cleanup_dominant_cause,
+            logical_length,
+            physical_length,
+            accounted_length,
+            preparation_bytes,
+            preparation_entries,
+            storage_bytes_released: counters.storage_bytes_released,
+            storage_bytes_committed: counters.storage_bytes_committed,
+            storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_released: counters.storage_inodes_released,
+            storage_inodes_committed: counters.storage_inodes_committed,
+            storage_inodes_retained: counters.storage_inodes_retained,
+            invalidated: matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)),
+            stale_invalidated: matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
+            reopen_invalidated: matches!(
+                FsCasV1::open_existing(root),
+                Err(FsCasErrorV1::Invalidated | FsCasErrorV1::Busy)
+            ),
+            root_usable: cas.occupied().is_ok(),
+            zero_forbidden_work: counters.has_zero_forbidden_work(),
+        }
+    }
+
+    #[cfg(unix)]
+    pub fn operation_spool_cleanup_accounting_fault_v1(
+        root: &Path,
+        before_unlink: bool,
+        fail_invalidation: bool,
+    ) -> PackFaultObservationV1 {
+        const SPOOL_BYTES: u64 = 17;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8fc,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("operation-spool cleanup accounting capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(SPOOL_BYTES, 0, 1, 0).unwrap(),
+            )
+            .expect("operation-spool cleanup accounting envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("operation-spool cleanup accounting token");
+        let mut spool = cas
+            .begin_operation_spool_borrowed_v1("cleanup-accounting", token, &mut setup_control)
+            .expect("operation-spool cleanup accounting handle");
+        spool
+            .initialize_zeroed_len_controlled_v1(SPOOL_BYTES, &mut setup_control)
+            .expect("operation-spool cleanup accounting initialization");
+        let spool_path = fs::read_dir(root.join("preparation"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        if before_unlink {
+            cas.clear_active_preparation_bytes_for_test_v1();
+        } else {
+            cas.remove_active_preparation_inode_for_test_v1();
+        }
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let cleanup_error = spool.cleanup_controlled_v1(&mut control).err();
+        assert_eq!(
+            spool.cleanup_controlled_v1(&mut control).err(),
+            cleanup_error,
+            "operation-spool accounting cleanup changed on retry"
+        );
+        let physical_length = regular_file_length(&spool_path);
+        drop(spool);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("operation-spool cleanup accounting terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            cleanup_error,
+            SPOOL_BYTES,
+            physical_length,
+            SPOOL_BYTES,
+            &counters,
+        )
+    }
+
+    #[cfg(unix)]
+    pub fn operation_spool_cleanup_metadata_fault_v1(
+        root: &Path,
+        mode: PreparationMetadataFaultModeV1,
+        fail_invalidation: bool,
+    ) -> PackFaultObservationV1 {
+        const SPOOL_BYTES: u64 = 19;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8f7,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("operation-spool cleanup metadata capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(SPOOL_BYTES, 0, 1, 0).unwrap(),
+            )
+            .expect("operation-spool cleanup metadata envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("operation-spool cleanup metadata token");
+        let mut spool = cas
+            .begin_operation_spool_borrowed_v1("cleanup-metadata", token, &mut setup_control)
+            .expect("operation-spool cleanup metadata handle");
+        spool
+            .initialize_zeroed_len_controlled_v1(SPOOL_BYTES, &mut setup_control)
+            .expect("operation-spool cleanup metadata initialization");
+        let preparation = root.join("preparation");
+        let spool_path = fs::read_dir(&preparation)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let held_preparation = root.join("preparation-held-for-read-failure");
+        apply_preparation_metadata_fault(&preparation, &spool_path, &held_preparation, mode);
+        let mut control = RestorePreparationMetadataAuthorityV1 {
+            preparation,
+            held_preparation,
+            mode,
+            restored: false,
+            fail_invalidation,
+        };
+        let cleanup_error = spool.cleanup_controlled_v1(&mut control).err();
+        assert_eq!(
+            spool.cleanup_controlled_v1(&mut control).err(),
+            cleanup_error,
+            "operation-spool metadata cleanup changed on retry"
+        );
+        let physical_length = regular_file_length(&spool_path);
+        drop(spool);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("operation-spool cleanup metadata terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            cleanup_error,
+            SPOOL_BYTES,
+            physical_length,
+            SPOOL_BYTES,
+            &counters,
+        )
+    }
+
+    #[cfg(unix)]
+    pub fn operation_spool_drop_metadata_fault_v1(
+        root: &Path,
+        mode: Option<PreparationMetadataFaultModeV1>,
+    ) -> PackFaultObservationV1 {
+        const LOGICAL_BYTES: u64 = 23;
+        const PHYSICAL_BYTES: u64 = 7;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x907,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("operation-spool drop metadata capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(LOGICAL_BYTES, 0, 1, 0).unwrap(),
+            )
+            .expect("operation-spool drop metadata envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("operation-spool drop metadata token");
+        let mut spool = cas
+            .begin_operation_spool_borrowed_v1("drop-metadata", token, &mut setup_control)
+            .expect("operation-spool drop metadata handle");
+        spool
+            .initialize_zeroed_len_controlled_v1(LOGICAL_BYTES, &mut setup_control)
+            .expect("operation-spool drop metadata initialization");
+        let preparation = root.join("preparation");
+        let spool_path = fs::read_dir(&preparation)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&spool_path)
+            .unwrap()
+            .set_len(PHYSICAL_BYTES)
+            .unwrap();
+        let held_preparation = root.join("preparation-held-for-drop-read");
+        if let Some(mode) = mode {
+            apply_preparation_metadata_fault(&preparation, &spool_path, &held_preparation, mode);
+        }
+        drop(spool);
+        if let Some(mode) = mode {
+            match mode {
+                PreparationMetadataFaultModeV1::PermissionDenied => {
+                    use std::os::unix::fs::PermissionsExt;
+
+                    fs::set_permissions(&preparation, fs::Permissions::from_mode(0o700))
+                        .unwrap();
+                }
+                PreparationMetadataFaultModeV1::ReadFailure => {
+                    fs::remove_file(&preparation).unwrap();
+                    fs::rename(&held_preparation, &preparation).unwrap();
+                }
+                PreparationMetadataFaultModeV1::WrongType
+                | PreparationMetadataFaultModeV1::Missing => {}
+            }
+        }
+        let physical_length = regular_file_length(&spool_path);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("operation-spool drop metadata terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            None,
+            LOGICAL_BYTES,
+            physical_length,
+            if mode.is_some() { LOGICAL_BYTES } else { 0 },
+            &counters,
+        )
+    }
+
+    #[cfg(unix)]
+    pub fn operation_spool_unlink_fault_v1(
+        root: &Path,
+        mode: PreparationUnlinkFaultModeV1,
+        fail_invalidation: bool,
+    ) -> PackFaultObservationV1 {
+        const SPOOL_BYTES: u64 = 23;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8f8,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("operation-spool unlink capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(SPOOL_BYTES, 0, 1, 0).unwrap(),
+            )
+            .expect("operation-spool unlink envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("operation-spool unlink token");
+        let mut spool = cas
+            .begin_operation_spool_borrowed_v1("cleanup-unlink", token, &mut setup_control)
+            .expect("operation-spool unlink handle");
+        spool
+            .initialize_zeroed_len_controlled_v1(SPOOL_BYTES, &mut setup_control)
+            .expect("operation-spool unlink initialization");
+        let preparation = root.join("preparation");
+        let spool_path = fs::read_dir(&preparation)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let mut control = FailPreparationUnlinkV1 {
+            preparation: preparation.clone(),
+            held_preparation: root.join("preparation-held-for-unlink"),
+            spool_path: spool_path.clone(),
+            mode,
+            target: FsCasCleanupTargetV1::PreparationSpool,
+            armed: false,
+            restored: false,
+            fail_invalidation,
+        };
+        let cleanup_error = spool.cleanup_controlled_v1(&mut control).err();
+        assert_eq!(
+            spool.cleanup_controlled_v1(&mut control).err(),
+            cleanup_error,
+            "operation-spool unlink cleanup changed on retry"
+        );
+        let physical_length = regular_file_length(&spool_path);
+        drop(spool);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("operation-spool unlink terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            cleanup_error,
+            SPOOL_BYTES,
+            physical_length,
+            SPOOL_BYTES,
+            &counters,
+        )
+    }
+
+    #[cfg(unix)]
+    pub fn private_pack_cleanup_metadata_fault_v1(
+        root: &Path,
+        mode: PreparationMetadataFaultModeV1,
+        fail_invalidation: bool,
+    ) -> PackFaultObservationV1 {
+        const PACK_CEILING: u64 = 128;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8f9,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("private-pack cleanup metadata capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(PACK_CEILING, 0, 1, 0).unwrap(),
+            )
+            .expect("private-pack cleanup metadata envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("private-pack cleanup metadata token");
+        let mut private_pack = cas
+            .begin_private_pack_borrowed_v1(token)
+            .expect("private-pack cleanup metadata handle");
+        private_pack
+            .begin_direct_controlled_v1(PACK_CEILING, &mut setup_control)
+            .expect("private-pack cleanup metadata initialization");
+        let preparation = root.join("preparation");
+        let pack_path = fs::read_dir(&preparation)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let held_preparation = root.join("preparation-held-for-private-read");
+        apply_preparation_metadata_fault(&preparation, &pack_path, &held_preparation, mode);
+        let mut control = RestorePreparationMetadataAuthorityV1 {
+            preparation,
+            held_preparation,
+            mode,
+            restored: false,
+            fail_invalidation,
+        };
+        let cleanup_error = private_pack.cleanup_controlled_v1(&mut control).err();
+        assert_eq!(
+            private_pack.cleanup_controlled_v1(&mut control).err(),
+            cleanup_error,
+            "private-pack metadata cleanup changed on retry"
+        );
+        let physical_length = regular_file_length(&pack_path);
+        drop(private_pack);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("private-pack cleanup metadata terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            cleanup_error,
+            PACK_CEILING,
+            physical_length,
+            PACK_HEADER_BYTES,
+            &counters,
+        )
+    }
+
+    #[cfg(unix)]
+    pub fn private_pack_drop_metadata_fault_v1(
+        root: &Path,
+        mode: Option<PreparationMetadataFaultModeV1>,
+    ) -> PackFaultObservationV1 {
+        const PACK_CEILING: u64 = 128;
+        const PHYSICAL_BYTES: u64 = 7;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x909,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("private-pack drop metadata capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(PACK_CEILING, 0, 1, 0).unwrap(),
+            )
+            .expect("private-pack drop metadata envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("private-pack drop metadata token");
+        let mut private_pack = cas
+            .begin_private_pack_borrowed_v1(token)
+            .expect("private-pack drop metadata handle");
+        private_pack
+            .begin_direct_controlled_v1(PACK_CEILING, &mut setup_control)
+            .expect("private-pack drop metadata initialization");
+        let preparation = root.join("preparation");
+        let pack_path = fs::read_dir(&preparation)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&pack_path)
+            .unwrap()
+            .set_len(PHYSICAL_BYTES)
+            .unwrap();
+        let held_preparation = root.join("preparation-held-for-private-drop");
+        if let Some(mode) = mode {
+            apply_preparation_metadata_fault(&preparation, &pack_path, &held_preparation, mode);
+        }
+        drop(private_pack);
+        if let Some(mode) = mode {
+            match mode {
+                PreparationMetadataFaultModeV1::PermissionDenied => {
+                    use std::os::unix::fs::PermissionsExt;
+
+                    fs::set_permissions(&preparation, fs::Permissions::from_mode(0o700))
+                        .unwrap();
+                }
+                PreparationMetadataFaultModeV1::ReadFailure => {
+                    fs::remove_file(&preparation).unwrap();
+                    fs::rename(&held_preparation, &preparation).unwrap();
+                }
+                PreparationMetadataFaultModeV1::WrongType
+                | PreparationMetadataFaultModeV1::Missing => {}
+            }
+        }
+        let physical_length = regular_file_length(&pack_path);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("private-pack drop metadata terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            None,
+            PACK_CEILING,
+            physical_length,
+            if mode.is_some() { PACK_HEADER_BYTES } else { 0 },
+            &counters,
+        )
+    }
+
+    #[cfg(unix)]
+    pub fn private_pack_unlink_fault_v1(
+        root: &Path,
+        mode: PreparationUnlinkFaultModeV1,
+        fail_invalidation: bool,
+    ) -> PackFaultObservationV1 {
+        const PACK_CEILING: u64 = 128;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8fa,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("private-pack unlink capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(PACK_CEILING, 0, 1, 0).unwrap(),
+            )
+            .expect("private-pack unlink envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("private-pack unlink token");
+        let mut private_pack = cas
+            .begin_private_pack_borrowed_v1(token)
+            .expect("private-pack unlink handle");
+        private_pack
+            .begin_direct_controlled_v1(PACK_CEILING, &mut setup_control)
+            .expect("private-pack unlink initialization");
+        let preparation = root.join("preparation");
+        let pack_path = fs::read_dir(&preparation)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let mut control = FailPreparationUnlinkV1 {
+            preparation: preparation.clone(),
+            held_preparation: root.join("preparation-held-for-private-unlink"),
+            spool_path: pack_path.clone(),
+            mode,
+            target: FsCasCleanupTargetV1::PrivatePack,
+            armed: false,
+            restored: false,
+            fail_invalidation,
+        };
+        let cleanup_error = private_pack.cleanup_controlled_v1(&mut control).err();
+        assert_eq!(
+            private_pack.cleanup_controlled_v1(&mut control).err(),
+            cleanup_error,
+            "private-pack unlink cleanup changed on retry"
+        );
+        let physical_length = regular_file_length(&pack_path);
+        drop(private_pack);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("private-pack unlink terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            cleanup_error,
+            PACK_CEILING,
+            physical_length,
+            PACK_HEADER_BYTES,
+            &counters,
+        )
+    }
+
+    pub fn private_pack_truncate_accounting_fault_v1(
+        root: &Path,
+        truncate: bool,
+        fail_invalidation: bool,
+    ) -> PackFaultObservationV1 {
+        const PACK_CEILING: u64 = 128;
+        const APPEND_BYTES: u64 = 16;
+        const TRUNCATED_BYTES: u64 = PACK_HEADER_BYTES + 6;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8ff,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("private-pack accounting capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(PACK_CEILING, 0, 1, 0).unwrap(),
+            )
+            .expect("private-pack accounting envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("private-pack accounting token");
+        let mut private_pack = cas
+            .begin_private_pack_borrowed_v1(token)
+            .expect("private-pack accounting handle");
+        private_pack
+            .begin_direct_controlled_v1(PACK_CEILING, &mut setup_control)
+            .expect("private-pack accounting initialization");
+        if truncate {
+            private_pack
+                .append_controlled_v1(&[0x5a; APPEND_BYTES as usize], &mut setup_control)
+                .expect("private-pack accounting seed");
+        }
+        cas.clear_active_preparation_bytes_for_test_v1();
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let operation = if truncate {
+            private_pack.truncate_direct_controlled_v1(TRUNCATED_BYTES, &mut control)
+        } else {
+            private_pack.append_controlled_v1(&[0x6b; 8], &mut control)
+        };
+        assert!(operation.is_err(), "private-pack accounting operation succeeded");
+        let operation_error = private_pack.take_first_error_typed_v1();
+        let (physical_length, accounted_length) = private_pack.direct_lengths_for_test_v1();
+        let cleanup_error = private_pack.cleanup_controlled_v1(&mut setup_control).err();
+        assert_eq!(
+            private_pack.cleanup_controlled_v1(&mut setup_control).err(),
+            cleanup_error,
+            "private-pack accounting cleanup changed on retry"
+        );
+        drop(private_pack);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("private-pack accounting terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            cleanup_error,
+            physical_length.unwrap_or_default(),
+            physical_length,
+            accounted_length,
+            &counters,
+        )
+    }
+
+    pub fn private_pack_cleanup_accounting_fault_v1(
+        root: &Path,
+        before_unlink: bool,
+        fail_invalidation: bool,
+    ) -> PackFaultObservationV1 {
+        const PACK_CEILING: u64 = 128;
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8fd,
+                &mut counters,
+                &mut setup_control,
+            )
+            .expect("private-pack cleanup accounting capability");
+        capability
+            .declare_storage_envelope_v1(
+                FsStorageEnvelopeV1::new(PACK_CEILING, 0, 1, 0).unwrap(),
+            )
+            .expect("private-pack cleanup accounting envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("private-pack cleanup accounting token");
+        let mut private_pack = cas
+            .begin_private_pack_borrowed_v1(token)
+            .expect("private-pack cleanup accounting handle");
+        private_pack
+            .begin_direct_controlled_v1(PACK_CEILING, &mut setup_control)
+            .expect("private-pack cleanup accounting initialization");
+        let pack_path = fs::read_dir(root.join("preparation"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        if before_unlink {
+            cas.clear_active_preparation_bytes_for_test_v1();
+        } else {
+            cas.remove_active_preparation_inode_for_test_v1();
+        }
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let cleanup_error = private_pack.cleanup_controlled_v1(&mut control).err();
+        assert_eq!(
+            private_pack.cleanup_controlled_v1(&mut control).err(),
+            cleanup_error,
+            "private-pack accounting cleanup changed on retry"
+        );
+        let physical_length = regular_file_length(&pack_path);
+        drop(private_pack);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut setup_control)
+            .expect("private-pack cleanup accounting terminal");
+        observe_pack_fault(
+            root,
+            &cas,
+            &stale,
+            None,
+            cleanup_error,
+            PACK_CEILING,
+            physical_length,
+            PACK_HEADER_BYTES,
+            &counters,
+        )
+    }
+
+    fn observe_direct_fault(
+        root: &Path,
+        cas: &FsCasV1,
+        stale: &FsCasV1,
+        operation_error: Option<FsCasErrorV1>,
+        terminal_error: Option<FsCasErrorV1>,
+        control: CreateFaultControlObservation,
+        invalidation_attempts: u32,
+        counters: &OperationCountersV1,
+    ) -> CreateFaultObservationV1 {
+        let error = match (operation_error, terminal_error) {
+            (Some(first), Some(later)) => Some(first.dominated_by_v1(later)),
+            (Some(error), None) | (None, Some(error)) => Some(error),
+            (None, None) => None,
+        };
+        observe_create_fault_with_control(
+            root,
+            cas,
+            stale,
+            CreateFaultAttempt {
+                error,
+                panicked: false,
+                panic_payload: None,
+            },
+            false,
+            false,
+            false,
+            0,
+            invalidation_attempts,
+            false,
+            control,
+            counters,
+        )
+    }
+
+    /// Scalar custody for the file-backed operation-spool fault owner.  The
+    /// spool handle and its control never cross the feature boundary.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct OperationSpoolFaultObservationV1 {
+        operation_error: Option<PublicationErrorV1>,
+        cleanup_error: Option<PublicationErrorV1>,
+        logical_length: u64,
+        physical_length: u64,
+        bytes_read: u64,
+        read_calls: u64,
+        bytes_written: u64,
+        preparation_bytes: u64,
+        preparation_entries: u64,
+        storage_bytes_released: u64,
+        storage_bytes_committed: u64,
+        storage_bytes_retained: u64,
+        storage_inodes_released: u64,
+        storage_inodes_committed: u64,
+        storage_inodes_retained: u64,
+        invalidated: bool,
+        stale_invalidated: bool,
+        reopen_invalidated: bool,
+        zero_forbidden_work: bool,
+    }
+
+    impl OperationSpoolFaultObservationV1 {
+        pub const fn operation_error(self) -> Option<PublicationErrorV1> {
+            self.operation_error
+        }
+
+        pub const fn cleanup_error(self) -> Option<PublicationErrorV1> {
+            self.cleanup_error
+        }
+
+        pub const fn logical_length(self) -> u64 {
+            self.logical_length
+        }
+
+        pub const fn physical_length(self) -> u64 {
+            self.physical_length
+        }
+
+        pub const fn direct_storage_observation(self) -> (u64, u64, u64) {
+            (self.bytes_read, self.read_calls, self.bytes_written)
+        }
+
+        pub const fn preparation_bytes(self) -> u64 {
+            self.preparation_bytes
+        }
+
+        pub const fn preparation_entries(self) -> u64 {
+            self.preparation_entries
+        }
+
+        pub const fn storage_bytes_released(self) -> u64 {
+            self.storage_bytes_released
+        }
+
+        pub const fn storage_bytes_committed(self) -> u64 {
+            self.storage_bytes_committed
+        }
+
+        pub const fn storage_bytes_retained(self) -> u64 {
+            self.storage_bytes_retained
+        }
+
+        pub const fn storage_inodes_released(self) -> u64 {
+            self.storage_inodes_released
+        }
+
+        pub const fn storage_inodes_committed(self) -> u64 {
+            self.storage_inodes_committed
+        }
+
+        pub const fn storage_inodes_retained(self) -> u64 {
+            self.storage_inodes_retained
+        }
+
+        pub const fn invalidated(self) -> bool {
+            self.invalidated
+        }
+
+        pub const fn stale_invalidated(self) -> bool {
+            self.stale_invalidated
+        }
+
+        pub const fn reopen_invalidated(self) -> bool {
+            self.reopen_invalidated
+        }
+
+        pub const fn zero_forbidden_work(self) -> bool {
+            self.zero_forbidden_work
+        }
+    }
+
+    fn preparation_file_length(root: &Path) -> u64 {
+        fs::read_dir(root.join("preparation"))
+            .expect("operation-spool preparation directory")
+            .next()
+            .expect("operation-spool preparation entry")
+            .expect("operation-spool preparation entry metadata")
+            .metadata()
+            .expect("operation-spool preparation metadata")
+            .len()
+    }
+
+    fn observe_operation_spool_fault(
+        root: &Path,
+        cas: &FsCasV1,
+        stale: &FsCasV1,
+        operation_error: Option<FsCasErrorV1>,
+        cleanup_error: Option<FsCasErrorV1>,
+        logical_length: u64,
+        physical_length: u64,
+        direct_storage: (u64, u64, u64),
+        counters: &OperationCountersV1,
+    ) -> OperationSpoolFaultObservationV1 {
+        let (preparation_bytes, preparation_entries) = directory_usage(&root.join("preparation"));
+        OperationSpoolFaultObservationV1 {
+            operation_error: operation_error.map(publication_error_v1),
+            cleanup_error: cleanup_error.map(publication_error_v1),
+            logical_length,
+            physical_length,
+            bytes_read: direct_storage.0,
+            read_calls: direct_storage.1,
+            bytes_written: direct_storage.2,
+            preparation_bytes,
+            preparation_entries,
+            storage_bytes_released: counters.storage_bytes_released,
+            storage_bytes_committed: counters.storage_bytes_committed,
+            storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_released: counters.storage_inodes_released,
+            storage_inodes_committed: counters.storage_inodes_committed,
+            storage_inodes_retained: counters.storage_inodes_retained,
+            invalidated: matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)),
+            stale_invalidated: matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
+            reopen_invalidated: matches!(
+                FsCasV1::open_existing(root),
+                Err(FsCasErrorV1::Invalidated | FsCasErrorV1::Busy)
+            ),
+            zero_forbidden_work: counters.has_zero_forbidden_work(),
+        }
+    }
+
+    #[derive(Default)]
+    struct OperationSpoolWriteObservationOverflowControl {
+        injected: bool,
+    }
+
+    impl CdcControlV1 for OperationSpoolWriteObservationOverflowControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for OperationSpoolWriteObservationOverflowControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
+            if self.injected {
+                false
+            } else {
+                self.injected = true;
+                true
+            }
+        }
+    }
+
+    pub fn operation_spool_resize_fault_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> OperationSpoolFaultObservationV1 {
+        const ORIGINAL_BYTES: u64 = 17;
+        const TRUNCATED_BYTES: u64 = 9;
+
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8fe,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("operation-spool resize capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(ORIGINAL_BYTES, 0, 1, 0).unwrap())
+            .expect("operation-spool resize envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("operation-spool resize token");
+        let mut spool = cas
+            .begin_operation_spool_borrowed_v1("resize-accounting", token, &mut admission_control)
+            .expect("operation-spool resize handle");
+        spool
+            .initialize_zeroed_len_controlled_v1(ORIGINAL_BYTES, &mut admission_control)
+            .expect("operation-spool resize initialization");
+        cas.clear_active_preparation_bytes_for_test_v1();
+
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let operation_error = spool
+            .set_len_controlled_v1(TRUNCATED_BYTES, &mut control)
+            .err();
+        let logical_length = spool.logical_len_for_test_v1();
+        let physical_length = preparation_file_length(root);
+        let cleanup_error = spool.cleanup_controlled_v1(&mut admission_control).err();
+        drop(spool);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .expect("operation-spool resize terminal");
+        observe_operation_spool_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            cleanup_error,
+            logical_length,
+            physical_length,
+            (0, 0, 0),
+            &counters,
+        )
+    }
+
+    pub fn operation_spool_write_observation_overflow_v1(
+        root: &Path,
+    ) -> OperationSpoolFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8ff,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("operation-spool write capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(1, 0, 1, 0).unwrap())
+            .expect("operation-spool write envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("operation-spool write token");
+        let mut spool = cas
+            .begin_operation_spool_borrowed_v1("write-observation", token, &mut admission_control)
+            .expect("operation-spool write handle");
+        spool
+            .initialize_zeroed_len_controlled_v1(1, &mut admission_control)
+            .expect("operation-spool write initialization");
+        let mut control = OperationSpoolWriteObservationOverflowControl::default();
+        let operation_error = spool
+            .write_exact_at_controlled_v1(0, &[0x5a], &mut control)
+            .err();
+        assert!(control.injected, "operation-spool write control did not fire");
+        let physical_length = preparation_file_length(root);
+        let direct_storage = spool.direct_storage_observation();
+        let cleanup_error = spool.cleanup_controlled_v1(&mut admission_control).err();
+        drop(spool);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .expect("operation-spool write terminal");
+        observe_operation_spool_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            cleanup_error,
+            1,
+            physical_length,
+            direct_storage,
+            &counters,
+        )
+    }
+
+    pub fn operation_spool_read_observation_overflow_v1(
+        root: &Path,
+    ) -> OperationSpoolFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x900,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("operation-spool read capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(1, 0, 1, 0).unwrap())
+            .expect("operation-spool read envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("operation-spool read token");
+        let mut spool = cas
+            .begin_operation_spool_borrowed_v1("read-observation", token, &mut admission_control)
+            .expect("operation-spool read handle");
+        spool
+            .initialize_zeroed_len_controlled_v1(1, &mut admission_control)
+            .expect("operation-spool read initialization");
+        spool
+            .write_exact_at_controlled_v1(0, &[0x5a], &mut admission_control)
+            .expect("operation-spool read seed");
+        cas.seed_next_operation_spool_read_observation_for_test_v1(73, u64::MAX);
+        let mut destination = [0_u8; 1];
+        let operation_error = spool.read_exact_at(0, &mut destination).err();
+        assert_eq!(destination, [0x5a], "operation-spool read lost committed byte");
+        let direct_storage = spool.direct_storage_observation();
+        let physical_length = preparation_file_length(root);
+        let cleanup_error = spool.cleanup_controlled_v1(&mut admission_control).err();
+        drop(spool);
+        capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .expect("operation-spool read terminal");
+        observe_operation_spool_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            cleanup_error,
+            1,
+            physical_length,
+            direct_storage,
+            &counters,
+        )
+    }
+
+    pub fn marker_cleanup_length_fault_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x906,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker cleanup length capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(9, 0, 1, 0).unwrap())
+            .expect("marker cleanup length envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("marker cleanup length token");
+        cas.prepare_test_marker_cleanup_mismatch_v1(token)
+            .expect("marker cleanup length fixture");
+        cas.clear_active_preparation_bytes_for_test_v1();
+        let mut control = RestoreMarkerCleanupAccountingControl {
+            cas: cas.clone(),
+            accounting_restored: false,
+            fail_invalidation,
+        };
+        let cleanup_error = cas
+            .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            cleanup_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.accounting_restored,
+                cleanup_calls: u32::from(control.accounting_restored),
+                carrier_installed: false,
+                poisoned: false,
+            },
+            u32::from(control.accounting_restored),
+            &counters,
+        )
+    }
+
+    pub fn marker_cleanup_metadata_fault_v1(
+        root: &Path,
+        wrong_type: bool,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x907,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker cleanup metadata capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 0, 1, 0).unwrap())
+            .expect("marker cleanup metadata envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("marker cleanup metadata token");
+        let temporary = cas
+            .prepare_test_marker_cleanup_file_v1(token, 8)
+            .expect("marker cleanup metadata fixture");
+        fs::remove_file(&temporary).expect("remove marker cleanup metadata fixture");
+        if wrong_type {
+            fs::create_dir(&temporary).expect("replace marker cleanup metadata fixture");
+        }
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let cleanup_error = cas
+            .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            cleanup_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: true,
+                cleanup_calls: 1,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            control.attempts,
+            &counters,
+        )
+    }
+
+    #[cfg(unix)]
+    pub fn marker_cleanup_unlink_fault_v1(
+        root: &Path,
+        mode: MarkerCleanupUnlinkModeV1,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x908,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker cleanup unlink capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 0, 1, 0).unwrap())
+            .expect("marker cleanup unlink envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("marker cleanup unlink token");
+        let temporary = cas
+            .prepare_test_marker_cleanup_file_v1(token, 8)
+            .expect("marker cleanup unlink fixture");
+        let preparation = root.join("preparation");
+        let mut control = MarkerCleanupUnlinkControl {
+            held_preparation: root.join("preparation-unlink-held"),
+            preparation,
+            mode,
+            armed: false,
+            restored: false,
+            fail_invalidation,
+        };
+        let cleanup_error = cas
+            .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        let _ = fs::metadata(&temporary);
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            cleanup_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.armed,
+                cleanup_calls: u32::from(control.armed),
+                carrier_installed: false,
+                poisoned: false,
+            },
+            u32::from(control.fail_invalidation && control.armed),
+            &counters,
+        )
+    }
+
+    pub fn marker_cleanup_post_unlink_fault_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x909,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker cleanup post-unlink capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 0, 1, 0).unwrap())
+            .expect("marker cleanup post-unlink envelope");
+        let token = capability
+            .storage_token_v1()
+            .expect("marker cleanup post-unlink token");
+        let temporary = cas
+            .prepare_test_marker_cleanup_file_v1(token, 8)
+            .expect("marker cleanup post-unlink fixture");
+        cas.fail_next_preparation_remove_for_test_v1();
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let cleanup_error = cas
+            .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        let _ = fs::symlink_metadata(&temporary);
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            cleanup_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: true,
+                cleanup_calls: 1,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            control.attempts,
+            &counters,
+        )
+    }
+
+    pub fn private_pack_precharge_poison_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8fa,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("private-pack precharge capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(0, 0, 1, 0).unwrap())
+            .expect("private-pack precharge envelope");
+        let token = capability.storage_token_v1().expect("private-pack token");
+        let mut private_pack = cas
+            .begin_private_pack_borrowed_v1(token)
+            .expect("private-pack handle");
+        cas.poison_storage_admission_for_test_v1();
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let operation_error = private_pack
+            .begin_direct_controlled_v1(128, &mut control)
+            .err()
+            .and_then(|_| private_pack.take_first_error_typed_v1());
+        let operation_error = operation_error.or_else(|| private_pack.take_first_error_typed_v1());
+        let _ = private_pack.cleanup_controlled_v1(&mut control);
+        drop(private_pack);
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: fail_invalidation,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: true,
+            },
+            control.attempts,
+            &counters,
+        )
+    }
+
+    pub fn private_pack_create_failure_v1(
+        root: &Path,
+        failure: FilesystemFaultFailureV1,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let error = FsCasErrorV1::Filesystem(match failure {
+            FilesystemFaultFailureV1::WriteFailure => FsCasFilesystemFailureV1::WriteFailure,
+            FilesystemFaultFailureV1::PermissionDenied => FsCasFilesystemFailureV1::PermissionDenied,
+            _ => panic!("private-pack adapter accepts only write or permission failures"),
+        });
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x8fb,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("private-pack create capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(0, 0, 1, 0).unwrap())
+            .expect("private-pack create envelope");
+        let token = capability.storage_token_v1().expect("private-pack create token");
+        let mut private_pack = cas
+            .begin_private_pack_borrowed_v1(token)
+            .expect("private-pack create handle");
+        let mut control = DirectPrivatePackCreateControl {
+            cas: cas.clone(),
+            error,
+            fired: false,
+            fail_invalidation,
+            invalidation_attempts: 0,
+        };
+        let operation_error = private_pack
+            .begin_direct_controlled_v1(128, &mut control)
+            .err()
+            .and_then(|_| private_pack.take_first_error_typed_v1());
+        let operation_error = operation_error.or_else(|| private_pack.take_first_error_typed_v1());
+        let _ = private_pack.cleanup_controlled_v1(&mut control);
+        drop(private_pack);
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.fired,
+                cleanup_calls: 1,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            control.invalidation_attempts,
+            &counters,
+        )
+    }
+
+    pub fn marker_create_fault_v1(
+        root: &Path,
+        failure: FilesystemFaultFailureV1,
+        break_accounting: bool,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let error = FsCasErrorV1::Filesystem(match failure {
+            FilesystemFaultFailureV1::WriteFailure => FsCasFilesystemFailureV1::WriteFailure,
+            FilesystemFaultFailureV1::PermissionDenied => FsCasFilesystemFailureV1::PermissionDenied,
+            _ => panic!("marker adapter accepts only write or permission failures"),
+        });
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x900,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker create capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(0, 0, 1, 0).unwrap())
+            .expect("marker create envelope");
+        let token = capability.storage_token_v1().expect("marker create token");
+        let mut control = DirectMarkerCreateControl {
+            cas: cas.clone(),
+            error,
+            break_accounting,
+            fired: false,
+            fail_invalidation,
+            invalidation_attempts: 0,
+        };
+        let operation_error = cas
+            .publish_test_marker_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.fired,
+                cleanup_calls: u32::from(break_accounting),
+                carrier_installed: false,
+                poisoned: break_accounting,
+            },
+            control.invalidation_attempts,
+            &counters,
+        )
+    }
+
+    pub fn marker_length_precharge_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x901,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker length capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 0, 1, 0).unwrap())
+            .expect("marker length envelope");
+        let token = capability.storage_token_v1().expect("marker length token");
+        let mut control = DirectMarkerLengthControl {
+            cas: cas.clone(),
+            corrupted: false,
+            restored_for_cleanup: false,
+            payload_or_link_seen: false,
+            fail_invalidation,
+            invalidation_attempts: 0,
+        };
+        let operation_error = cas
+            .publish_test_marker_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.corrupted && control.restored_for_cleanup,
+                cleanup_calls: u32::from(control.restored_for_cleanup),
+                carrier_installed: false,
+                poisoned: false,
+            },
+            control.invalidation_attempts,
+            &counters,
+        )
+    }
+
+    pub fn marker_immutable_precharge_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x902,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker immutable capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 0, 1, 0).unwrap())
+            .expect("marker immutable envelope");
+        let token = capability.storage_token_v1().expect("marker immutable token");
+        let mut control = DirectMarkerImmutableControl {
+            marker_write_seen: false,
+            marker_link_boundary_seen: false,
+            fail_invalidation,
+            invalidation_attempts: 0,
+        };
+        let operation_error = cas
+            .publish_test_marker_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: control.marker_write_seen && control.marker_link_boundary_seen,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            control.invalidation_attempts,
+            &counters,
+        )
+    }
+
+    pub fn equal_marker_incumbent_rollback_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let cas = FsCasV1::create_new(root).expect("marker incumbent root");
+        let mut setup_counters = OperationCountersV1::default();
+        let mut setup_control = ContinueFaultControl;
+        let mut setup = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x903,
+                &mut setup_counters,
+                &mut setup_control,
+            )
+            .expect("marker incumbent setup capability");
+        setup
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 8, 1, 1).unwrap())
+            .expect("marker incumbent setup envelope");
+        let setup_token = setup.storage_token_v1().expect("marker incumbent setup token");
+        cas.publish_test_marker_borrowed_v1(setup_token, &mut setup_control)
+            .expect("marker incumbent setup publication");
+        setup
+            .finish_terminal_v1(true, &mut setup_counters, &mut setup_control)
+            .expect("marker incumbent setup terminal");
+
+        let stale = FsCasV1::open_existing(root).expect("marker incumbent stale owner");
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x904,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker incumbent capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 8, 1, 1).unwrap())
+            .expect("marker incumbent envelope");
+        let token = capability.storage_token_v1().expect("marker incumbent token");
+        cas.poison_next_immutable_remove_for_test_v1();
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let operation_error = cas
+            .publish_test_marker_borrowed_v1(token, &mut control)
+            .err();
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: true,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: true,
+            },
+            control.attempts,
+            &counters,
+        )
+    }
+
+    pub fn marker_hard_link_fault_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut counters = OperationCountersV1::default();
+        let mut admission_control = ContinueFaultControl;
+        let mut capability = cas
+            .begin_operation_capability_v1(
+                FsOperationKindV1::CompleteC3File,
+                0x905,
+                &mut counters,
+                &mut admission_control,
+            )
+            .expect("marker hard-link capability");
+        capability
+            .declare_storage_envelope_v1(FsStorageEnvelopeV1::new(8, 8, 1, 1).unwrap())
+            .expect("marker hard-link envelope");
+        let token = capability.storage_token_v1().expect("marker hard-link token");
+        let closures = root.join("closures");
+        fs::remove_dir(&closures).expect("remove closures directory");
+        fs::write(&closures, b"not-a-directory").expect("replace closures directory");
+        cas.poison_next_immutable_remove_for_test_v1();
+        let mut control = DirectInvalidationControl {
+            fail: fail_invalidation,
+            attempts: 0,
+        };
+        let operation_error = cas
+            .publish_test_marker_borrowed_v1(token, &mut control)
+            .err();
+        fs::remove_file(&closures).expect("restore closures directory");
+        fs::create_dir(&closures).expect("recreate closures directory");
+        let terminal_error = capability
+            .finish_terminal_v1(false, &mut counters, &mut admission_control)
+            .err();
+        observe_direct_fault(
+            root,
+            &cas,
+            &stale,
+            operation_error,
+            terminal_error,
+            CreateFaultControlObservation {
+                control_fired: true,
+                cleanup_calls: 1,
+                carrier_installed: false,
+                poisoned: true,
+            },
+            control.attempts,
+            &counters,
+        )
+    }
+
+    pub fn preparation_free_unwind_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = ContinueFaultControl;
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x8fd,
+            1,
+            PanicDuringPreparationFreeSupplier {
+                cas_to_poison: None,
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+            },
+            &mut control,
+            &mut counters,
+        );
+        let followup_bound = Arc::new(AtomicBool::new(false));
+        let followup_supply = Arc::new(AtomicBool::new(false));
+        let mut followup_counters = OperationCountersV1::default();
+        let followup = run_create_fault_attempt(
+            &cas,
+            0x8fe,
+            1,
+            CallbackSupplier {
+                bound_invoked: followup_bound,
+                supply_invoked: followup_supply,
+                len: 1,
+            },
+            &mut control,
+            &mut followup_counters,
+        );
+        let followup_succeeded = followup.error.is_none() && !followup.panicked;
+        let error = attempt.error.or(followup.error);
+        observe_create_fault(
+            root,
+            &cas,
+            &stale,
+            CreateFaultAttempt {
+                error,
+                panicked: attempt.panicked,
+                panic_payload: attempt.panic_payload,
+            },
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            followup_succeeded,
+            0,
+            0,
+            false,
+            &counters,
+        )
+    }
+
+    pub fn preparation_free_terminalization_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PreparationFreeTerminalControl {
+            fail_invalidation,
+            invalidation_attempts: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x8ff + u64::from(fail_invalidation),
+            1,
+            PanicDuringPreparationFreeSupplier {
+                cas_to_poison: Some(cas.clone()),
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            &counters,
+        )
+    }
+
+    pub fn typed_preparation_free_error_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PanicAfterOperationTerminalReleaseControl {
+            unwind_pending: true,
+            terminal_hook_calls: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5520,
+            1,
+            FailingPreparationFreeSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            control.terminal_hook_calls,
+            0,
+            false,
+            &counters,
+        )
+    }
+
+    pub fn typed_complete_body_error_v1(root: &Path) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut control = PanicAfterOperationTerminalReleaseControl {
+            unwind_pending: true,
+            terminal_hook_calls: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5521,
+            1,
+            FailingBodySupplier,
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            false,
+            false,
+            false,
+            control.terminal_hook_calls,
+            0,
+            false,
+            &counters,
+        )
+    }
+
+    pub fn typed_complete_global_seen_error_v1(root: &Path) -> CreateFaultObservationV1 {
+        const BODY_BYTES: u64 = 64 * 1024;
+        let (cas, stale) = new_fault_root(root);
+        let mut control = GlobalSeenCounterOverflowControl::default();
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5524,
+            BODY_BYTES + 1,
+            FailingAfterBytesSupplier {
+                bytes_before_failure: BODY_BYTES,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            false,
+            false,
+            false,
+            0,
+            0,
+            control.injected,
+            &counters,
+        )
+    }
+
+    pub fn typed_complete_storage_counter_error_v1(root: &Path) -> CreateFaultObservationV1 {
+        const BODY_BYTES: u64 = 64 * 1024;
+        let (cas, stale) = new_fault_root(root);
+        let mut control = ContinueFaultControl;
+        let mut counters = OperationCountersV1 {
+            global_seen_metadata_bytes_written: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5525,
+            BODY_BYTES + 1,
+            FailingAfterBytesSupplier {
+                bytes_before_failure: BODY_BYTES,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            false,
+            false,
+            false,
+            0,
+            0,
+            false,
+            &counters,
+        )
+    }
+
+    pub fn typed_body_cleanup_dominance_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        let (cas, stale) = new_fault_root(root);
+        let mut control = FailBodyCleanupTerminalControl {
+            preparation_cleanup_injected: false,
+            fail_invalidation,
+            invalidation_attempts: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5526 + u64::from(fail_invalidation),
+            1,
+            FailingBodySupplier,
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            false,
+            false,
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            &counters,
+        )
+    }
+
+    pub fn private_pack_cleanup_failure_v1(root: &Path) -> CreateFaultObservationV1 {
+        const BODY_BYTES: u64 = 64 * 1024 + 17;
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = CancelBeforeCandidateValidationAndFailPrivatePackCleanup {
+            cancelled: false,
+            cleanup_calls: 0,
+            invalidation_attempts: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5571,
+            BODY_BYTES,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: BODY_BYTES,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.cancelled,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn carrier_cleanup_failure_v1(root: &Path) -> CreateFaultObservationV1 {
+        const BODY_BYTES: u64 = 64 * 1024 + 17;
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = CancelAfterCarrierInstallAndFailCleanup {
+            cancelled: false,
+            carrier_installed: false,
+            cleanup_calls: 0,
+            invalidation_attempts: 0,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5572,
+            BODY_BYTES,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: BODY_BYTES,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.carrier_installed,
+                cleanup_calls: control.cleanup_calls,
+                carrier_installed: control.carrier_installed,
+                poisoned: false,
+            },
+            &counters,
+        )
+    }
+
+    pub fn carrier_accounting_poison_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        const BODY_BYTES: u64 = 64 * 1024 + 17;
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = PoisonStorageAndCancelAfterCarrierInstall {
+            cas: cas.clone(),
+            cancelled: false,
+            carrier_installed: false,
+            poisoned: false,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5573 + u64::from(fail_invalidation),
+            BODY_BYTES,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: BODY_BYTES,
+            },
+            &mut control,
+            &mut counters,
+        );
+        observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.carrier_installed,
+                cleanup_calls: 0,
+                carrier_installed: control.carrier_installed,
+                poisoned: control.poisoned,
+            },
+            &counters,
+        )
+    }
+
+    #[derive(Clone, Copy)]
+    pub struct PostInstallCleanupRequestV1<'a> {
+        root: &'a Path,
+        name: &'a [u8],
+        base: &'a [u8],
+        replacement: &'a [u8],
+    }
+
+    impl<'a> PostInstallCleanupRequestV1<'a> {
+        pub const fn new(
+            root: &'a Path,
+            name: &'a [u8],
+            base: &'a [u8],
+            replacement: &'a [u8],
+        ) -> Self {
+            Self {
+                root,
+                name,
+                base,
+                replacement,
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct PostInstallCleanupObservationV1 {
+        error: Option<PublicationErrorV1>,
+        first_cause: Option<PublicationCauseV1>,
+        dominant_cause: Option<PublicationCauseV1>,
+        after_catalog_publication: bool,
+        publication_poll_passed: bool,
+        cleanup_panicked: bool,
+        operation_slots: u64,
+        operation_active: u64,
+        storage_active_operations: u64,
+        storage_active_bytes: u64,
+        storage_active_inodes: u64,
+        new_carrier_entries: u64,
+        new_carrier_bytes: u64,
+        preparation_bytes: u64,
+        preparation_inodes: u64,
+        locator_delta_bytes: u64,
+        locator_delta_inodes: u64,
+        catalog_delta_bytes: u64,
+        catalog_delta_inodes: u64,
+        closure_delta_bytes: u64,
+        closure_delta_inodes: u64,
+        immutable_delta_bytes: u64,
+        immutable_delta_inodes: u64,
+        residue_bytes: u64,
+        storage_bytes_requested: u64,
+        storage_bytes_reserved: u64,
+        storage_bytes_released: u64,
+        storage_bytes_committed: u64,
+        storage_bytes_retained: u64,
+        storage_inodes_requested: u64,
+        storage_inodes_reserved: u64,
+        storage_inodes_released: u64,
+        storage_inodes_committed: u64,
+        storage_inodes_retained: u64,
+        invalidated: bool,
+        stale_invalidated: bool,
+        reopen_invalidated: bool,
+        zero_forbidden_work: bool,
+    }
+
+    macro_rules! post_install_getters {
+        ($($name:ident: $field:ident => $ty:ty),* $(,)?) => {
+            impl PostInstallCleanupObservationV1 {
+                $(pub const fn $name(&self) -> $ty { self.$field })*
+            }
+        };
+    }
+
+    post_install_getters! {
+        error: error => Option<PublicationErrorV1>,
+        first_cause: first_cause => Option<PublicationCauseV1>,
+        dominant_cause: dominant_cause => Option<PublicationCauseV1>,
+        after_catalog_publication: after_catalog_publication => bool,
+        publication_poll_passed: publication_poll_passed => bool,
+        cleanup_panicked: cleanup_panicked => bool,
+        operation_slots: operation_slots => u64,
+        operation_active: operation_active => u64,
+        storage_active_operations: storage_active_operations => u64,
+        storage_active_bytes: storage_active_bytes => u64,
+        storage_active_inodes: storage_active_inodes => u64,
+        new_carrier_entries: new_carrier_entries => u64,
+        new_carrier_bytes: new_carrier_bytes => u64,
+        preparation_bytes: preparation_bytes => u64,
+        preparation_inodes: preparation_inodes => u64,
+        locator_delta_bytes: locator_delta_bytes => u64,
+        locator_delta_inodes: locator_delta_inodes => u64,
+        catalog_delta_bytes: catalog_delta_bytes => u64,
+        catalog_delta_inodes: catalog_delta_inodes => u64,
+        closure_delta_bytes: closure_delta_bytes => u64,
+        closure_delta_inodes: closure_delta_inodes => u64,
+        immutable_delta_bytes: immutable_delta_bytes => u64,
+        immutable_delta_inodes: immutable_delta_inodes => u64,
+        residue_bytes: residue_bytes => u64,
+        storage_bytes_requested: storage_bytes_requested => u64,
+        storage_bytes_reserved: storage_bytes_reserved => u64,
+        storage_bytes_released: storage_bytes_released => u64,
+        storage_bytes_committed: storage_bytes_committed => u64,
+        storage_bytes_retained: storage_bytes_retained => u64,
+        storage_inodes_requested: storage_inodes_requested => u64,
+        storage_inodes_reserved: storage_inodes_reserved => u64,
+        storage_inodes_released: storage_inodes_released => u64,
+        storage_inodes_committed: storage_inodes_committed => u64,
+        storage_inodes_retained: storage_inodes_retained => u64,
+        invalidated: invalidated => bool,
+        stale_invalidated: stale_invalidated => bool,
+        reopen_invalidated: reopen_invalidated => bool,
+        zero_forbidden_work: zero_forbidden_work => bool,
+    }
+
+    #[derive(Default)]
+    struct ContinueControl;
+
+    impl CdcControlV1 for ContinueControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for ContinueControl {
+        fn boundary_reached(&mut self, _boundary: FsCasBoundaryV1) {}
+
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    #[derive(Default)]
+    struct PanicPrivatePackCleanupControl {
+        after_catalog_publication: bool,
+        publication_poll_passed: bool,
+        cleanup_panicked: bool,
+    }
+
+    impl PanicPrivatePackCleanupControl {
+        fn cancellation_requested_v1(&mut self) -> bool {
+            if !self.after_catalog_publication {
+                return false;
+            }
+            if !self.publication_poll_passed {
+                self.publication_poll_passed = true;
+                return false;
+            }
+            true
+        }
+    }
+
+    impl CdcControlV1 for PanicPrivatePackCleanupControl {
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancellation_requested_v1()
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for PanicPrivatePackCleanupControl {
+        fn boundary_reached(&mut self, boundary: FsCasBoundaryV1) {
+            if boundary == FsCasBoundaryV1::AfterCatalogPublication {
+                self.after_catalog_publication = true;
+            }
+        }
+
+        fn cancellation_requested(&mut self) -> bool {
+            self.cancellation_requested_v1()
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::PrivatePack && !self.cleanup_panicked {
+                self.cleanup_panicked = true;
+                panic!("injected post-install private-pack cleanup unwind");
+            }
+            false
+        }
+    }
+
+    struct SliceSource<'a> {
+        bytes: &'a [u8],
+        offset: usize,
+    }
+
+    impl<'a> SliceSource<'a> {
+        const fn new(bytes: &'a [u8]) -> Self {
+            Self { bytes, offset: 0 }
+        }
+    }
+
+    impl ContentSourceV1 for SliceSource<'_> {
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<Self>() as u64)
+        }
+
+        fn read(&mut self, destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
+            let amount = destination.len().min(self.bytes.len() - self.offset);
+            destination[..amount].copy_from_slice(&self.bytes[self.offset..self.offset + amount]);
+            self.offset += amount;
+            Ok(amount)
+        }
+    }
+
+    struct SliceSupplier<'a> {
+        bytes: &'a [u8],
+    }
+
+    impl<'a> SourceSupplierV1 for SliceSupplier<'a> {
+        type Source = SliceSource<'a>;
+
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<SliceSource<'_>>() as u64)
+        }
+
+        fn supply(self) -> crate::CoreResult<Self::Source> {
+            Ok(SliceSource::new(self.bytes))
+        }
+    }
+
+    struct OperationScratch {
+        source: Box<[u8; MAXIMUM_CHUNK_BYTES]>,
+        cdc_ring: Box<[u8; MAXIMUM_CHUNK_BYTES]>,
+        incoming: Box<[u8; COMPARISON_WINDOW_BYTES]>,
+        occupied: Box<[u8; COMPARISON_WINDOW_BYTES]>,
+        tree_object: Box<[u8; MAX_TREE_OBJECT_BYTES]>,
+        tree_pages: Box<[Option<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES]>,
+        traversal: Vec<u8>,
+    }
+
+    impl OperationScratch {
+        fn new() -> Self {
+            Self {
+                source: boxed_zeroes(),
+                cdc_ring: boxed_zeroes(),
+                incoming: boxed_zeroes(),
+                occupied: boxed_zeroes(),
+                tree_object: boxed_zeroes(),
+                tree_pages: vec![None; MAX_TREE_PAGE_SUMMARIES]
+                    .into_boxed_slice()
+                    .try_into()
+                    .unwrap_or_else(|_| unreachable!("exact tree-page scratch length")),
+                traversal: vec![0; 4_096],
+            }
+        }
+
+        fn borrow(&mut self) -> OperationBuffersV1<'_> {
+            OperationBuffersV1 {
+                source: &mut self.source,
+                cdc_ring: &mut self.cdc_ring,
+                incoming_comparison: &mut self.incoming,
+                occupied_comparison: &mut self.occupied,
+                tree_object: &mut self.tree_object,
+                tree_pages: &mut self.tree_pages[..],
+                traversal_state: &mut self.traversal,
+            }
+        }
+    }
+
+    fn boxed_zeroes<const N: usize>() -> Box<[u8; N]> {
+        vec![0_u8; N]
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("exact boxed scratch length"))
+    }
+
+    fn canonical_object(kind: u8, payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(52 + payload.len());
+        bytes.extend_from_slice(b"ELSOBJ01");
+        bytes.extend_from_slice(&1_u16.to_be_bytes());
+        bytes.push(kind);
+        bytes.push(0);
+        bytes.extend_from_slice(ProfileSpecV1::frozen().id().as_bytes());
+        bytes.extend_from_slice(&(payload.len() as u64).to_be_bytes());
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+
+    fn expected_file(data: &[u8], mode: u16) -> crate::CoreResult<(LogicalFileIdentityV1, PhysicalFileIdV1)> {
+        let mut logical_refs = Vec::new();
+        let mut physical_refs = Vec::new();
+        let mut offset = 0_usize;
+        while offset < data.len() {
+            let cut = FastCdcV1::new().cut(&data[offset..])?;
+            let payload = &data[offset..offset + cut];
+            let logical = derive_logical_chunk_v1(payload)?;
+            let physical = derive_physical_chunk_id_v1(&canonical_object(0x05, payload))?;
+            logical_refs.push(LogicalChunkRefV1::from_identity(logical));
+            physical_refs.push((cut as u32, physical));
+            offset += cut;
+        }
+        let logical = derive_logical_file_v1(data.len() as u64, &logical_refs)?;
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&mode.to_be_bytes());
+        payload.extend_from_slice(&(data.len() as u64).to_be_bytes());
+        payload.extend_from_slice(&u32::from(!data.is_empty()).to_be_bytes());
+        if !data.is_empty() {
+            payload.push(0x02);
+            payload.extend_from_slice(&(data.len() as u64).to_be_bytes());
+            payload.extend_from_slice(&(physical_refs.len() as u32).to_be_bytes());
+            for (length, id) in physical_refs {
+                payload.extend_from_slice(&length.to_be_bytes());
+                payload.extend_from_slice(id.as_bytes());
+            }
+        }
+        let physical = derive_physical_file_id_v1(&canonical_object(0x03, &payload))?;
+        Ok((logical, physical))
+    }
+
+    fn directory_usage(path: &Path) -> (u64, u64) {
+        fs::read_dir(path)
+            .expect("semantic namespace directory")
+            .map(|entry| {
+                let entry = entry.expect("semantic namespace entry");
+                let metadata = fs::symlink_metadata(entry.path()).expect("semantic namespace metadata");
+                assert!(metadata.file_type().is_file());
+                (metadata.len(), 1_u64)
+            })
+            .fold((0, 0), |(bytes, inodes), (length, one)| {
+                (bytes + length, inodes + one)
+            })
+    }
+
+    fn immutable_usage(root: &Path) -> (u64, u64) {
+        ["carriers", "objects", "catalog", "closures"]
+            .into_iter()
+            .map(|name| directory_usage(&root.join(name)))
+            .fold((0, 0), |(bytes, inodes), (next_bytes, next_inodes)| {
+                (bytes + next_bytes, inodes + next_inodes)
+            })
+    }
+
+    /// Execute the historical two-phase replacement until the installed
+    /// carrier is followed by cancellation and private-pack cleanup failure.
+    /// Only scalar custody facts cross the qualification seam.
+    pub fn post_install_cleanup_v1(
+        request: PostInstallCleanupRequestV1<'_>,
+    ) -> PostInstallCleanupObservationV1 {
+        let cas = FsCasV1::create_new(request.root).expect("post-install semantic root");
+        let stale = FsCasV1::open_existing(request.root).expect("post-install stale owner");
+        let (base_logical, base_physical) =
+            expected_file(request.base, 0o644).expect("post-install base identity");
+        let base_component = ValidatedComponent::new(request.name).expect("post-install name");
+        let base_entry = CanonicalTreeEntryV1::new(
+            base_component,
+            CanonicalTreeChildV1::File {
+                logical: derive_file_node_v1(0o644, base_logical).expect("post-install file node"),
+                physical: base_physical,
+            },
+        );
+        let expected_root = with_replacement_evidence_v1(
+            DirectoryBuildModeV1::ImplicitRoot,
+            std::slice::from_ref(&base_entry),
+            0,
+            |tree, _| tree.physical(),
+        )
+        .expect("post-install base tree");
+
+        let mut manifest = [TreeFileV1::new(
+            request.name,
+            0o644,
+            request.base.len() as u64,
+            SliceSupplier { bytes: request.base },
+        )];
+        let mut scratch = OperationScratch::new();
+        let mut base_control = ContinueControl;
+        let mut base_counters = OperationCountersV1::default();
+        let base_operation = request_tree_operation_v1(
+            &cas,
+            0x515,
+            &mut base_counters,
+            &mut base_control,
+        )
+        .expect("post-install base grant");
+        let base_handoff = run_create_tree_v1(
+            base_operation,
+            CdcAlgorithmV1::FastCdc,
+            &mut manifest,
+            scratch.borrow(),
+            &mut base_control,
+            &mut base_counters,
+        )
+        .expect("post-install base handoff");
+        assert_eq!(base_handoff.root_tree(), expected_root);
+        let base_version = base_handoff.version_record();
+        let before_immutable = immutable_usage(request.root);
+        let before_preparation = directory_usage(&request.root.join("preparation"));
+        let before_carriers = directory_usage(&request.root.join("carriers"));
+        let before_objects = directory_usage(&request.root.join("objects"));
+        let before_catalog = directory_usage(&request.root.join("catalog"));
+        let before_closures = directory_usage(&request.root.join("closures"));
+
+        let mut replacement_source = SliceSource::new(request.replacement);
+        let mut replacement_scratch = OperationScratch::new();
+        let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
+        let mut control = PanicPrivatePackCleanupControl::default();
+        let mut counters = OperationCountersV1::default();
+        let terminal = catch_unwind(AssertUnwindSafe(|| {
+            with_replacement_evidence_v1(
+                DirectoryBuildModeV1::ImplicitRoot,
+                std::slice::from_ref(&base_entry),
+                0,
+                |base_tree, evidence| {
+                    run_complete_replace_v1(
+                        &cas,
+                        0x516,
+                        CdcAlgorithmV1::FastCdc,
+                        base_version,
+                        base_tree,
+                        evidence,
+                        0,
+                        request.name,
+                        0o600,
+                        request.replacement.len() as u64,
+                        &mut replacement_source,
+                        replacement_scratch.borrow(),
+                        &mut cow_logical,
+                        &mut control,
+                        &mut counters,
+                    )
+                },
+            )
+        }));
+        let raw_error = match terminal {
+            Ok(Ok(Err(OperationErrorV1::FsCas(error)))) => Some(error),
+            Ok(Ok(Err(OperationErrorV1::Core(error)))) => Some(FsCasErrorV1::Core(error)),
+            Ok(Ok(Ok(_))) | Ok(Err(_)) => None,
+            Err(_) => None,
+        };
+        let after_preparation = directory_usage(&request.root.join("preparation"));
+        let after_immutable = immutable_usage(request.root);
+        let after_carriers = directory_usage(&request.root.join("carriers"));
+        let after_objects = directory_usage(&request.root.join("objects"));
+        let after_catalog = directory_usage(&request.root.join("catalog"));
+        let after_closures = directory_usage(&request.root.join("closures"));
+        let (storage_active_operations, storage_active_bytes, storage_active_inodes) =
+            cas.storage_admission_active_for_test_v1();
+        let (first_cause, dominant_cause) = raw_error
+            .map(publication_causes_v1)
+            .map(|(first, dominant)| (Some(first), Some(dominant)))
+            .unwrap_or((None, None));
+        PostInstallCleanupObservationV1 {
+            error: raw_error.map(publication_error_v1),
+            first_cause,
+            dominant_cause,
+            after_catalog_publication: control.after_catalog_publication,
+            publication_poll_passed: control.publication_poll_passed,
+            cleanup_panicked: control.cleanup_panicked,
+            operation_slots: cas.operation_admitted_slots_v1(),
+            operation_active: cas.operation_admission_active_for_test_v1(),
+            storage_active_operations,
+            storage_active_bytes,
+            storage_active_inodes,
+            new_carrier_entries: after_carriers.1.saturating_sub(before_carriers.1),
+            new_carrier_bytes: after_carriers.0.saturating_sub(before_carriers.0),
+            preparation_bytes: after_preparation.0,
+            preparation_inodes: after_preparation.1,
+            locator_delta_bytes: after_objects.0.saturating_sub(before_objects.0),
+            locator_delta_inodes: after_objects.1.saturating_sub(before_objects.1),
+            catalog_delta_bytes: after_catalog.0.saturating_sub(before_catalog.0),
+            catalog_delta_inodes: after_catalog.1.saturating_sub(before_catalog.1),
+            closure_delta_bytes: after_closures.0.saturating_sub(before_closures.0),
+            closure_delta_inodes: after_closures.1.saturating_sub(before_closures.1),
+            immutable_delta_bytes: after_immutable.0.saturating_sub(before_immutable.0),
+            immutable_delta_inodes: after_immutable.1.saturating_sub(before_immutable.1),
+            residue_bytes: counters.unreachable_installed_residue_bytes,
+            storage_bytes_requested: counters.storage_bytes_requested,
+            storage_bytes_reserved: counters.storage_bytes_reserved,
+            storage_bytes_released: counters.storage_bytes_released,
+            storage_bytes_committed: counters.storage_bytes_committed,
+            storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_requested: counters.storage_inodes_requested,
+            storage_inodes_reserved: counters.storage_inodes_reserved,
+            storage_inodes_released: counters.storage_inodes_released,
+            storage_inodes_committed: counters.storage_inodes_committed,
+            storage_inodes_retained: counters.storage_inodes_retained,
+            invalidated: matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)),
+            stale_invalidated: matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
+            reopen_invalidated: matches!(
+                FsCasV1::open_existing(request.root),
+                Err(FsCasErrorV1::Invalidated)
+            ),
+            zero_forbidden_work: counters.has_zero_forbidden_work(),
+        }
+    }
+}
+
 const MUTATION_METADATA_RESERVATION_BYTES_V1: u64 = 1_048_576;
 const CHUNK_REFERENCE_PREPARATION_BYTES_V1: u64 = 68;
 const CLOSURE_OBJECT_PREPARATION_BYTES_V1: u64 = 48;
@@ -457,7 +7182,7 @@ pub(crate) fn admission_traversal_resident_bytes_v1() -> CoreResult<u64> {
 /// Lifecycle-level control contract. Content code does not depend on the
 /// concrete filesystem CAS control surface; the root lifecycle adapter is the
 /// sole bridge to both CDC and durable storage cancellation/fault boundaries.
-pub(crate) trait LifecycleControlV1: CdcControlV1 + FsCasControlV1 {}
+pub trait LifecycleControlV1: CdcControlV1 + FsCasControlV1 {}
 
 impl<T> LifecycleControlV1 for T where T: CdcControlV1 + FsCasControlV1 + ?Sized {}
 
@@ -505,7 +7230,7 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedOperationControlV1<'_,
         (**self.inner.borrow_mut()).inject_filesystem_failure(boundary)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_residue_accounting_failure(
         &mut self,
         boundary: crate::cas::FsCasResidueAccountingBoundaryV1,
@@ -513,12 +7238,12 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedOperationControlV1<'_,
         (**self.inner.borrow_mut()).inject_residue_accounting_failure(boundary)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn before_carrier_no_replace_transition_for_test_v1(&mut self) {
         (**self.inner.borrow_mut()).before_carrier_no_replace_transition_for_test_v1();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_carrier_receipt_transition_failure_v1(
         &mut self,
         check: crate::cas::CarrierReceiptTransitionCheckV1,
@@ -526,57 +7251,57 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for SharedOperationControlV1<'_,
         (**self.inner.borrow_mut()).inject_carrier_receipt_transition_failure_v1(check)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_operation_terminal_unwind_after_release()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_root_lock_observation_failure(&mut self) -> Option<CoreError> {
         (**self.inner.borrow_mut()).inject_root_lock_observation_failure()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_carrier_counter_accumulation_overflow(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_carrier_counter_accumulation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_global_seen_counter_accumulation_overflow(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_global_seen_counter_accumulation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_pack_object_disposition_overflow(&mut self, created: bool) -> bool {
         (**self.inner.borrow_mut()).inject_pack_object_disposition_overflow(created)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_operation_spool_write_observation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<crate::cas::FsCasErrorV1> {
         (**self.inner.borrow_mut()).inject_operation_spool_precharge_failure_v1()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_counted_pack_read_observation_overflow(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_counted_pack_read_observation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_same_carrier_comparison_observation_overflow(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_same_carrier_comparison_observation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_pending_unwind_retirement_failure(&mut self) -> Option<crate::cas::FsCasErrorV1> {
         (**self.inner.borrow_mut()).inject_pending_unwind_retirement_failure()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_root_lock_post_acquire_validation_failure(
         &mut self,
     ) -> Option<crate::cas::FsCasErrorV1> {
@@ -701,11 +7426,11 @@ pub(crate) trait StorageSessionPortV1 {
 
 /// Opaque, non-cloneable root-owned operation capability. Lifecycle is the
 /// only owner that can turn an admitted ticket into preparation and handoff.
-pub(crate) struct StorageOperationV1<'root> {
+pub struct StorageOperationV1<'root> {
     capability: FsOperationCapabilityV1<'root>,
 }
 
-pub(crate) struct CreateOperationGrantV1<'root> {
+pub struct CreateOperationGrantV1<'root> {
     operation: StorageOperationV1<'root>,
 }
 
@@ -757,7 +7482,7 @@ where
     })
 }
 
-pub(crate) fn request_create_operation_v1<'root, C>(
+pub fn request_create_operation_v1<'root, C>(
     cas: &'root FsCasV1,
     cancellation_key: u64,
     counters: &mut OperationCountersV1,
@@ -779,7 +7504,7 @@ where
     })
 }
 
-pub(crate) fn request_tree_operation_v1<'root, C>(
+pub fn request_tree_operation_v1<'root, C>(
     cas: &'root FsCasV1,
     cancellation_key: u64,
     counters: &mut OperationCountersV1,
@@ -1072,7 +7797,7 @@ impl StorageOperationV1<'_> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum OperationErrorV1 {
+pub enum OperationErrorV1 {
     Core(CoreError),
     FsCas(FsCasErrorV1),
 }
@@ -1139,7 +7864,7 @@ impl From<PreparationErrorV1> for OperationErrorV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct OperationHandoffV1 {
+pub struct OperationHandoffV1 {
     algorithm: CdcAlgorithmV1,
     version_record: PhysicalVersionRecordIdV1,
     root_tree: PhysicalTreeIdV1,
@@ -1156,67 +7881,67 @@ pub(crate) struct OperationHandoffV1 {
 }
 
 impl OperationHandoffV1 {
-    pub(crate) const fn algorithm(self) -> CdcAlgorithmV1 {
+    pub const fn algorithm(self) -> CdcAlgorithmV1 {
         self.algorithm
     }
 
-    pub(crate) const fn version_record(self) -> PhysicalVersionRecordIdV1 {
+    pub const fn version_record(self) -> PhysicalVersionRecordIdV1 {
         self.version_record
     }
 
-    pub(crate) const fn root_tree(self) -> PhysicalTreeIdV1 {
+    pub const fn root_tree(self) -> PhysicalTreeIdV1 {
         self.root_tree
     }
 
-    pub(crate) const fn pack(self) -> SealedPackV1 {
+    pub const fn pack(self) -> SealedPackV1 {
         self.pack
     }
 
-    pub(crate) const fn pack_outcome(self) -> FsPackAdmissionOutcomeV1 {
+    pub const fn pack_outcome(self) -> FsPackAdmissionOutcomeV1 {
         self.pack_outcome
     }
 
-    pub(crate) const fn carrier_count(self) -> u32 {
+    pub const fn carrier_count(self) -> u32 {
         self.carrier_count
     }
 
-    pub(crate) const fn carrier_rollovers(self) -> u32 {
+    pub const fn carrier_rollovers(self) -> u32 {
         self.carrier_rollovers
     }
 
-    pub(crate) const fn carriers_installed(self) -> u32 {
+    pub const fn carriers_installed(self) -> u32 {
         self.carriers_installed
     }
 
-    pub(crate) const fn carriers_reused(self) -> u32 {
+    pub const fn carriers_reused(self) -> u32 {
         self.carriers_reused
     }
 
-    pub(crate) const fn object_count(self) -> u64 {
+    pub const fn object_count(self) -> u64 {
         self.object_count
     }
 
-    pub(crate) const fn reference_spool_bytes(self) -> OptionalU64ObservationV1 {
+    pub const fn reference_spool_bytes(self) -> OptionalU64ObservationV1 {
         self.reference_spool_bytes
     }
 
-    pub(crate) const fn index_spool_bytes(self) -> OptionalU64ObservationV1 {
+    pub const fn index_spool_bytes(self) -> OptionalU64ObservationV1 {
         self.index_spool_bytes
     }
 
-    pub(crate) const fn terminal_optional_observations(self) -> TerminalOptionalObservationsV1 {
+    pub const fn terminal_optional_observations(self) -> TerminalOptionalObservationsV1 {
         self.terminal_optional_observations
     }
 }
 
-pub(crate) struct OperationBuffersV1<'a> {
-    pub(crate) source: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
-    pub(crate) cdc_ring: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
-    pub(crate) incoming_comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
-    pub(crate) occupied_comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
-    pub(crate) tree_object: &'a mut [u8; MAX_TREE_OBJECT_BYTES],
-    pub(crate) tree_pages: &'a mut [Option<TreePageSummaryV1>],
-    pub(crate) traversal_state: &'a mut [u8],
+pub struct OperationBuffersV1<'a> {
+    pub source: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
+    pub cdc_ring: &'a mut [u8; MAXIMUM_CHUNK_BYTES],
+    pub incoming_comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
+    pub occupied_comparison: &'a mut [u8; COMPARISON_WINDOW_BYTES],
+    pub tree_object: &'a mut [u8; MAX_TREE_OBJECT_BYTES],
+    pub tree_pages: &'a mut [Option<TreePageSummaryV1>],
+    pub traversal_state: &'a mut [u8],
 }
 
 /// Builder-visible buffers exclude the comparison and traversal storage held
@@ -1390,7 +8115,7 @@ fn global_seen_capacity_v1(maximum_objects: u64) -> CoreResult<u32> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_create_v1<S, C>(
+pub fn run_create_v1<S, C>(
     grant: CreateOperationGrantV1<'_>,
     algorithm: CdcAlgorithmV1,
     name: &[u8],
@@ -1945,7 +8670,7 @@ where
 /// zero or more files. All manifest validation and the sole operation-slot
 /// reservation happen before the first supplier is invoked.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_create_tree_v1<S, C>(
+pub fn run_create_tree_v1<S, C>(
     mut operation: StorageOperationV1<'_>,
     algorithm: CdcAlgorithmV1,
     files: &mut [TreeFileV1<'_, S>],
@@ -2210,7 +8935,7 @@ where
 /// request bound is inspected, and is borrowed through candidate closure,
 /// exact closure fencing, explicit cleanup, and handoff.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_complete_replace_v1<S, C>(
+pub fn run_complete_replace_v1<S, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     algorithm: CdcAlgorithmV1,
@@ -2386,7 +9111,7 @@ where
 /// accepted Phase-1 format; it has no Replace redispatch or full-base payload
 /// fallback path.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_complete_update_v1<S, B, E, C>(
+pub fn run_complete_update_v1<S, B, E, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -2602,7 +9327,7 @@ where
 /// COW, candidate-graph authentication, complete closure fencing, and one
 /// synchronous handoff under the same root-owned grant.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_complete_add_v1<S, T, C>(
+pub fn run_complete_add_v1<S, T, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -2803,7 +9528,7 @@ where
 /// accepted root, exact removed entry, result snapshot, new tree objects,
 /// candidate closure, cleanup, and handoff remain one indivisible operation.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_complete_remove_v1<T, C>(
+pub fn run_complete_remove_v1<T, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -2940,7 +9665,7 @@ where
 /// chunk-reference stream are authenticated before any preparation artifact
 /// is created; only the file-node mode and affected directory spine change.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_complete_metadata_v1<E, C>(
+pub fn run_complete_metadata_v1<E, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -3103,7 +9828,7 @@ where
 /// transformation. No intermediate removed tree is admitted, so every object
 /// written by a successful operation belongs to the final candidate graph.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_complete_move_v1<T, C>(
+pub fn run_complete_move_v1<T, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -3268,7 +9993,7 @@ fn explicit_directory_child_v1(
 /// receives a closure fence and handoff; no intermediate remove/add root can
 /// escape or acquire publication authority.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn complete_cross_directory_move_operation_v1<ST, DT, RT, C>(
+pub fn complete_cross_directory_move_operation_v1<ST, DT, RT, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,

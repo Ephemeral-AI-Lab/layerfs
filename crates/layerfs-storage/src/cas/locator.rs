@@ -12,7 +12,7 @@ use crate::identity::{ObjectChecksumV1, PackIdV1};
 use crate::object::TypedPhysicalObjectIdV1;
 use crate::pack::{PackIndexEntryV1, SealedPackV1};
 
-pub(crate) const PERSISTENT_LOCATOR_BYTES_V1: usize = 160;
+pub const PERSISTENT_LOCATOR_BYTES_V1: usize = 160;
 
 const PERSISTENT_LOCATOR_MAGIC_V1: &[u8; 8] = b"LFSOBJ01";
 

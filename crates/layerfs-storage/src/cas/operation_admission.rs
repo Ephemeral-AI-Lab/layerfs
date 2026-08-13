@@ -711,7 +711,7 @@ impl FsCasControlV1 for CandidateSharedControlV1<'_, '_> {
         (**self.inner.borrow_mut()).inject_filesystem_failure(boundary)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_residue_accounting_failure(
         &mut self,
         boundary: crate::cas::FsCasResidueAccountingBoundaryV1,
@@ -719,17 +719,17 @@ impl FsCasControlV1 for CandidateSharedControlV1<'_, '_> {
         (**self.inner.borrow_mut()).inject_residue_accounting_failure(boundary)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn before_carrier_no_replace_transition_for_test_v1(&mut self) {
         (**self.inner.borrow_mut()).before_carrier_no_replace_transition_for_test_v1();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
         (**self.inner.borrow_mut()).inject_operation_terminal_unwind_after_release()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_root_lock_observation_failure(&mut self) -> Option<CoreError> {
         (**self.inner.borrow_mut()).inject_root_lock_observation_failure()
     }

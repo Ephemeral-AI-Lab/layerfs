@@ -1,7 +1,7 @@
 //! Bounded CDC engines and borrowed streaming adapters.
 //!
-//! FastCDC/OF is the selected canonical implementation. SeqCDC/OS is the
-//! closed alternate selected explicitly by the qualification operation; the
+//! FastCDC/OF is the selected canonical implementation. SeqCDC/OS remains a
+//! closed alternate deferred until the L1 owners are complete; the
 //! implementation has no external CDC runtime dependency or fallback path.
 
 use crate::{CoreError, CoreResult};

@@ -20,6 +20,87 @@ fn section<'a>(manifest: &'a str, name: &str) -> &'a str {
     rest.find("\n[").map(|end| &rest[..end]).unwrap_or(rest)
 }
 
+fn relative_files(root: &std::path::Path) -> Vec<String> {
+    fn visit(root: &std::path::Path, current: &std::path::Path, files: &mut Vec<String>) {
+        let mut entries = std::fs::read_dir(current)
+            .unwrap_or_else(|error| panic!("read directory {current:?}: {error}"))
+            .map(|entry| entry.unwrap_or_else(|error| panic!("read directory entry: {error}")))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
+            if entry
+                .file_type()
+                .unwrap_or_else(|error| panic!("read file type for {path:?}: {error}"))
+                .is_dir()
+            {
+                visit(root, &path, files);
+            } else {
+                files.push(
+                    path.strip_prefix(root)
+                        .unwrap_or_else(|error| panic!("strip {path:?}: {error}"))
+                        .to_string_lossy()
+                        .replace(std::path::MAIN_SEPARATOR, "/"),
+                );
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    visit(root, root, &mut files);
+    files.sort();
+    files
+}
+
+fn cargo_test_targets(manifest: &str) -> Vec<(String, String, Option<String>)> {
+    let mut blocks = Vec::new();
+    let mut current = None;
+    for line in manifest.lines() {
+        if line.trim() == "[[test]]" {
+            if let Some(block) = current.take() {
+                blocks.push(block);
+            }
+            current = Some(String::new());
+        } else if line.starts_with("[[") || line.starts_with("[") {
+            if let Some(block) = current.take() {
+                blocks.push(block);
+            }
+        } else if let Some(block) = current.as_mut() {
+            block.push_str(line);
+            block.push('\n');
+        }
+    }
+    if let Some(block) = current {
+        blocks.push(block);
+    }
+
+    fn field(block: &str, name: &str) -> String {
+        block
+            .lines()
+            .find_map(|line| {
+                let (key, value) = line.trim().split_once('=')?;
+                (key.trim() == name).then(|| value.trim().trim_matches('"').to_owned())
+            })
+            .unwrap_or_default()
+    }
+
+    blocks
+        .into_iter()
+        .filter(|block| !block.trim().is_empty())
+        .map(|block| {
+            let required_features = block.lines().find_map(|line| {
+                let (key, value) = line.trim().split_once('=')?;
+                (key.trim() == "required-features").then(|| value.trim().to_owned())
+            });
+            (
+                field(&block, "name"),
+                field(&block, "path"),
+                required_features,
+            )
+        })
+        .collect()
+}
+
 fn source_char_literal_start(bytes: &[u8], index: usize) -> bool {
     if bytes.get(index) != Some(&b'\'') {
         return false;
@@ -302,6 +383,106 @@ fn cfg_test_item_end(source: &str, attribute_end: usize) -> usize {
     );
 }
 
+fn final_test_segments(source: &str) -> Vec<(String, usize, &str)> {
+    let starts = source
+        .match_indices("#[test]")
+        .filter_map(|(index, _)| {
+            let line_start = source[..index].rfind('\n').map_or(0, |offset| offset + 1);
+            let line_end = source[index..]
+                .find('\n')
+                .map_or(source.len(), |offset| index + offset);
+            (source[line_start..line_end].trim() == "#[test]").then_some(index)
+        })
+        .collect::<Vec<_>>();
+
+    starts
+        .iter()
+        .enumerate()
+        .map(|(index, &start)| {
+            let end = starts.get(index + 1).copied().unwrap_or(source.len());
+            let after_attribute = source[start..]
+                .find('\n')
+                .map_or(start + "#[test]".len(), |offset| start + offset + 1);
+            let name = source[after_attribute..end]
+                .lines()
+                .filter_map(|line| {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("#[") {
+                        return None;
+                    }
+                    let rest = trimmed.strip_prefix("fn ")?;
+                    Some(
+                        rest.split_once('(')
+                            .map(|(name, _)| name.trim().to_owned())
+                            .unwrap_or_else(|| {
+                                panic!("test attribute at byte {start} has no function name")
+                            }),
+                    )
+                })
+                .next()
+                .unwrap_or_else(|| panic!("test attribute at byte {start} has no function"));
+            (name, start, &source[start..end])
+        })
+        .collect()
+}
+
+fn feature_gated_test_names(source: &str) -> std::collections::BTreeSet<String> {
+    let declarations = final_test_segments(source);
+    let mut gated = std::collections::BTreeSet::new();
+    for (attribute_start, _) in source.match_indices(
+        "#[cfg(feature = \"operation-polymorphism\")]",
+    ) {
+        let attribute_end = source_attribute_end(source, attribute_start + 1);
+        let item_end = cfg_test_item_end(source, attribute_end);
+        for (name, test_start, _) in &declarations {
+            if *test_start > attribute_start && *test_start < item_end {
+                gated.insert(name.clone());
+            }
+        }
+    }
+    gated
+}
+
+fn assertion_tokens(source: &str) -> Vec<&'static str> {
+    let mut found = [
+        ("assert_eq!", "assert_eq!"),
+        ("assert_ne!", "assert_ne!"),
+        ("assert!", "assert!"),
+        ("matches!", "matches!"),
+    ]
+    .into_iter()
+    .flat_map(|(needle, token)| {
+        source.match_indices(needle).filter_map(move |(index, _)| {
+            let before_is_identifier = source[..index]
+                .chars()
+                .next_back()
+                .is_some_and(|character| character.is_ascii_alphanumeric() || character == '_');
+            let after = index + needle.len();
+            let open = source[after..]
+                .find(|character: char| !character.is_ascii_whitespace())
+                .map(|offset| after + offset);
+            (!before_is_identifier && open.is_some_and(|index| source.as_bytes()[index] == b'('))
+                .then_some((index, token))
+        })
+    })
+    .collect::<Vec<_>>();
+    found.sort_by_key(|(index, _)| *index);
+    found.into_iter().map(|(_, token)| token).collect()
+}
+
+fn digest_hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    support::sha256(bytes)
+        .into_iter()
+        .flat_map(|byte| {
+            [
+                char::from(DIGITS[usize::from(byte >> 4)]),
+                char::from(DIGITS[usize::from(byte & 0x0f)]),
+            ]
+        })
+        .collect()
+}
+
 fn production_source_v1(source: &str) -> String {
     let bytes = source.as_bytes();
     let mut output = String::with_capacity(source.len());
@@ -369,7 +550,7 @@ fn production_source_v1(source: &str) -> String {
         if braces == 0 && bytes.get(index..index + 6) == Some(b"#[cfg(") {
             let attribute_end = source_attribute_end(source, index + 1);
             let attribute = &source[index..attribute_end];
-            if attribute.contains("test") {
+            if attribute.contains("test") || attribute.contains("operation-polymorphism") {
                 output.push_str(&source[copy_start..index]);
                 index = cfg_test_item_end(source, attribute_end);
                 copy_start = index;
@@ -459,15 +640,15 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "publication/no-replace",
         source_path: "src/cas/fs.rs",
         source_symbol: "publish_small_marker_controlled",
-        test_path: "tests/c3_fscas.rs",
+        test_path: "tests/cas_admission.rs",
         test_symbol: "partial_multi_object_locator_publication_is_fully_rolled_back",
-        assertion_markers: &["FsCasErrorV1::Core(CoreError::Cancelled)", "read_dir"],
+        assertion_markers: &["PublicationErrorV1::Core(CoreError::Cancelled)", "read_dir"],
     },
     Pb06BoundaryTraceabilityV1 {
         boundary: "incumbent/equality/collision",
         source_path: "src/cas/locator.rs",
         source_symbol: "decide_persistent_locator_install_v1",
-        test_path: "tests/c3_fscas.rs",
+        test_path: "tests/cas_admission.rs",
         test_symbol: "existing_catalog_classifies_valid_binding_and_unequal_incumbents",
         assertion_markers: &[
             "FsCasErrorV1::UnequalOccupant",
@@ -478,7 +659,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "rollback custody",
         source_path: "src/cas/fs.rs",
         source_symbol: "rollback_unpublished_admission",
-        test_path: "tests/c3_operation.rs",
+        test_path: "tests/operation_lifecycle.rs",
         test_symbol: "locator_rollback_preserves_directional_unlink_faults_and_dependency_custody",
         assertion_markers: &[
             "FsCasCleanupTargetV1::ObjectLocator",
@@ -505,7 +686,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "cleanup/residue custody",
         source_path: "src/cas/fs.rs",
         source_symbol: "retain_all_live_v1",
-        test_path: "tests/c3_operation.rs",
+        test_path: "tests/operation_lifecycle.rs",
         test_symbol: "locator_cleanup_unwind_attempts_every_remaining_locator_and_carrier_once",
         assertion_markers: &["locator_cleanup_calls", "storage_bytes_retained"],
     },
@@ -513,7 +694,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "invalidation",
         source_path: "src/cas/fs.rs",
         source_symbol: "invalidate_root_controlled_v1",
-        test_path: "tests/c3_operation.rs",
+        test_path: "tests/operation_lifecycle.rs",
         test_symbol:
             "post_link_alias_cleanup_failure_retains_visible_dependencies_and_invalidates_reopen",
         assertion_markers: &["FsCasErrorV1::Invalidated", "storage_inodes_retained"],
@@ -522,7 +703,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "cross-carrier lookup",
         source_path: "src/cas/fs.rs",
         source_symbol: "gather_object_locator_incumbent_evidence",
-        test_path: "tests/c3_fscas.rs",
+        test_path: "tests/operation_faults.rs",
         test_symbol:
             "cross_carrier_object_validation_read_failures_are_typed_and_cleanup_the_candidate",
         assertion_markers: &["CarrierObjectRead", "unreachable_installed_residue_bytes"],
@@ -531,7 +712,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "simultaneous same-key publication",
         source_path: "src/cas/fs.rs",
         source_symbol: "publish_small_marker_controlled",
-        test_path: "tests/c3_fscas.rs",
+        test_path: "tests/operation_concurrency.rs",
         test_symbol: "simultaneous_reopened_pack_callers_publish_one_canonical_shared_locator",
         assertion_markers: &["shared_id", "FsPackAdmissionOutcomeV1::Installed"],
     },
@@ -539,7 +720,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "locator prepare/install/revalidate/cleanup faults",
         source_path: "src/cas/fs.rs",
         source_symbol: "install_object_locators",
-        test_path: "tests/c3_fscas.rs",
+        test_path: "tests/cas_admission.rs",
         test_symbol: "every_fresh_admission_boundary_cleans_or_counts_exact_residue",
         assertion_markers: &[
             "AfterObjectLocatorPublication",
@@ -579,7 +760,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
         boundary: "locator revalidation before visibility",
         source_path: "src/cas/fs.rs",
         source_symbol: "revalidate_active_pack_marker_incumbent_controlled_v1",
-        test_path: "tests/c3_fscas.rs",
+        test_path: "tests/cas_admission.rs",
         test_symbol: "post_comparison_locator_path_replacement_fails_before_catalog_publication",
         assertion_markers: &["catalog", "read_dir", "Integrity"],
     },
@@ -605,12 +786,7 @@ const PB06_BOUNDARY_TRACEABILITY_V1: &[Pb06BoundaryTraceabilityV1] = &[
     },
 ];
 
-fn test_is_registered(
-    source: &str,
-    registration_source: &str,
-    test_path: &str,
-    test_symbol: &str,
-) -> bool {
+fn test_is_registered(source: &str, manifest: &str, test_path: &str, test_symbol: &str) -> bool {
     let signature = format!("fn {test_symbol}");
     let Some(start) = source.find(&signature) else {
         return false;
@@ -621,7 +797,9 @@ fn test_is_registered(
     };
     !prefix[attribute + "#[test]".len()..].contains("fn ")
         && (test_path.starts_with("src/")
-            || registration_source.contains(&format!("#[path = \"../{test_path}\"]")))
+            || cargo_test_targets(manifest)
+                .iter()
+                .any(|(_, path, _)| path == test_path))
 }
 
 #[test]
@@ -636,8 +814,19 @@ fn pb06_boundary_to_test_traceability_is_explicit_and_current() {
         ),
     ];
     let test_files = [
-        ("tests/c3_fscas.rs", include_str!("c3_fscas.rs")),
-        ("tests/c3_operation.rs", include_str!("c3_operation.rs")),
+        ("tests/cas_admission.rs", include_str!("cas_admission.rs")),
+        (
+            "tests/operation_concurrency.rs",
+            include_str!("operation_concurrency.rs"),
+        ),
+        (
+            "tests/operation_faults.rs",
+            include_str!("operation_faults.rs"),
+        ),
+        (
+            "tests/operation_lifecycle.rs",
+            include_str!("operation_lifecycle.rs"),
+        ),
         ("src/cas/fs.rs", include_str!("../src/cas/fs.rs")),
         ("src/cas/locator.rs", include_str!("../src/cas/locator.rs")),
         (
@@ -645,7 +834,7 @@ fn pb06_boundary_to_test_traceability_is_explicit_and_current() {
             include_str!("../src/cas/locator_index.rs"),
         ),
     ];
-    let registration_source = include_str!("../src/lib.rs");
+    let registration_source = include_str!("../Cargo.toml");
 
     assert_eq!(
         PB06_BOUNDARY_TRACEABILITY_V1.len(),
@@ -866,6 +1055,641 @@ fn storage_source_follows_the_domain_responsibility_map() {
 }
 
 #[test]
+fn pb08_final_custody_tree_and_targets_are_exact() {
+    let source_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let expected_source_files = [
+        "bin/c3_qualification.rs",
+        "cas/admission.rs",
+        "cas/catalog.rs",
+        "cas/closure.rs",
+        "cas/closure_storage.rs",
+        "cas/fs.rs",
+        "cas/locator.rs",
+        "cas/locator_index.rs",
+        "cas/mod.rs",
+        "cas/operation_admission.rs",
+        "cas/port.rs",
+        "cdc/engine.rs",
+        "cdc/fastcdc/gear.rs",
+        "cdc/fastcdc/mod.rs",
+        "cdc/fastcdc/rejoin.rs",
+        "cdc/fastcdc/scanner.rs",
+        "cdc/mod.rs",
+        "cdc/resync.rs",
+        "cdc/seqcdc/mod.rs",
+        "cdc/seqcdc/rejoin.rs",
+        "cdc/seqcdc/scanner.rs",
+        "content/create.rs",
+        "content/file.rs",
+        "content/mod.rs",
+        "content/read.rs",
+        "content/replace.rs",
+        "content/update.rs",
+        "cow/file.rs",
+        "cow/mod.rs",
+        "cow/mutate.rs",
+        "cow/tree.rs",
+        "cow/view.rs",
+        "error.rs",
+        "format/codec.rs",
+        "format/mod.rs",
+        "format/path.rs",
+        "identity/framing.rs",
+        "identity/logical.rs",
+        "identity/mod.rs",
+        "identity/physical.rs",
+        "lib.rs",
+        "lifecycle/mod.rs",
+        "lifecycle/preparation.rs",
+        "limits.rs",
+        "object/decode.rs",
+        "object/encode.rs",
+        "object/mod.rs",
+        "object/model.rs",
+        "object/port_decode.rs",
+        "object/traversal.rs",
+        "pack/complete_writer.rs",
+        "pack/mod.rs",
+        "pack/operation_index.rs",
+        "profile.rs",
+        "read/extraction.rs",
+        "read/mod.rs",
+        "read/object_reader.rs",
+        "read/range.rs",
+    ];
+    let mut expected_source_files = expected_source_files
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    expected_source_files.sort();
+    assert_eq!(
+        relative_files(&source_root),
+        expected_source_files,
+        "PB-08 production custody tree changed"
+    );
+
+    let tests_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let expected_test_files = [
+        "cas_admission.rs",
+        "cow_locality.rs",
+        "fixtures/c3-registry-v1.tsv",
+        "l0_architecture.rs",
+        "operation_concurrency.rs",
+        "operation_create.rs",
+        "operation_faults.rs",
+        "operation_lifecycle.rs",
+        "operation_mutation.rs",
+        "operation_read.rs",
+        "reference/naive_fastcdc.rs",
+        "support/counting_sink.rs",
+        "support/counting_source.rs",
+        "support/fault_injection.rs",
+        "support/mod.rs",
+        "support/temp_fs_cas.rs",
+    ];
+    let mut expected_test_files = expected_test_files
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    expected_test_files.sort();
+    assert_eq!(
+        relative_files(&tests_root),
+        expected_test_files,
+        "PB-08 integration-test custody tree changed"
+    );
+
+    let manifest = include_str!("../Cargo.toml");
+    assert!(manifest.contains("autobins = false"));
+    assert!(manifest.contains("autotests = false"));
+    assert_eq!(manifest.matches("[[test]]").count(), 9);
+    assert_eq!(manifest.matches("[[bin]]").count(), 0);
+    let expected_targets = [
+        ("l0_architecture", "tests/l0_architecture.rs", None),
+        ("operation_create", "tests/operation_create.rs", None),
+        ("cas_admission", "tests/cas_admission.rs", None),
+        ("operation_lifecycle", "tests/operation_lifecycle.rs", None),
+        (
+            "operation_concurrency",
+            "tests/operation_concurrency.rs",
+            None,
+        ),
+        ("operation_faults", "tests/operation_faults.rs", None),
+        ("operation_mutation", "tests/operation_mutation.rs", None),
+        ("operation_read", "tests/operation_read.rs", None),
+        ("cow_locality", "tests/cow_locality.rs", None),
+    ];
+    let actual_targets = cargo_test_targets(manifest);
+    assert_eq!(actual_targets.len(), expected_targets.len());
+    for ((name, path, required), (expected_name, expected_path, expected_required)) in
+        actual_targets.iter().zip(expected_targets)
+    {
+        assert_eq!(name, expected_name);
+        assert_eq!(path, expected_path);
+        assert_eq!(required.as_deref(), expected_required);
+    }
+    for forbidden in [
+        "c3_fscas",
+        "c3_operation",
+        "c3_mutation",
+        "c3_seqcdc",
+        "l0_codec_vectors",
+        "l1_tree",
+        "l155_qualification",
+    ] {
+        assert!(
+            !manifest.contains(forbidden),
+            "retired target remains: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn pb08_final_sources_are_substantive_and_alias_free() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_root = manifest_dir.join("src");
+    for relative in relative_files(&source_root) {
+        let path = source_root.join(&relative);
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read production source {path:?}: {error}"));
+        assert!(
+            !source.trim().is_empty(),
+            "empty production source: {relative}"
+        );
+        assert!(
+            !source.contains("#[path =") && !source.contains("include!("),
+            "production source uses a migration alias in {relative}"
+        );
+        assert!(!source.contains("src/c3/") && !source.contains("src/provider/"));
+        assert!(!source.contains("l155_qualification"));
+        assert!(
+            !production_source_v1(&source).trim().is_empty(),
+            "production logic hidden entirely behind cfg(test): {relative}"
+        );
+    }
+
+    let tests_root = manifest_dir.join("tests");
+    for relative in relative_files(&tests_root) {
+        let path = tests_root.join(&relative);
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read test source {path:?}: {error}"));
+        assert!(
+            !source.trim().is_empty(),
+            "empty final test/support file: {relative}"
+        );
+        if relative != "l0_architecture.rs" {
+            let exact_reference_import = relative == "operation_create.rs"
+                && source
+                    .matches("#[path = \"reference/naive_fastcdc.rs\"]")
+                    .count()
+                    == 1;
+            assert!(
+                exact_reference_import
+                    || (!source.contains("#[path =") && !source.contains("include!(")),
+                "final test tree uses a migration alias in {relative}"
+            );
+            if exact_reference_import {
+                assert_eq!(source.matches("#[path =").count(), 1);
+            }
+        }
+    }
+
+    for (relative, required) in [
+        (
+            "support/temp_fs_cas.rs",
+            ["TempFsCas", "create_dir", "path"].as_slice(),
+        ),
+        (
+            "support/counting_source.rs",
+            ["CountingSource", "pub fn read", "bytes_read"].as_slice(),
+        ),
+        (
+            "support/counting_sink.rs",
+            ["CountingSink", "pub fn begin", "pub fn finish", "pub fn abort"].as_slice(),
+        ),
+        (
+            "support/fault_injection.rs",
+            ["FaultPoint", "cancel_at", "pub fn observe"].as_slice(),
+        ),
+        (
+            "reference/naive_fastcdc.rs",
+            [
+                "pub fn cut",
+                "pub fn ends",
+                "const GEAR",
+                "const MINIMUM_CHUNK_BYTES",
+            ]
+            .as_slice(),
+        ),
+    ] {
+        let source = std::fs::read_to_string(tests_root.join(relative)).unwrap();
+        for marker in required {
+            assert!(
+                source.contains(marker),
+                "{relative} lost substantive marker {marker}"
+            );
+        }
+    }
+    let reference = std::fs::read_to_string(tests_root.join("reference/naive_fastcdc.rs")).unwrap();
+    for forbidden in [
+        "layerfs_storage::",
+        "ChunkerSpecV1",
+        "canonical_bytes",
+        "profile::",
+        "cdc::",
+    ] {
+        assert!(
+            !reference.contains(forbidden),
+            "FastCDC reference is production-derived through {forbidden}"
+        );
+    }
+
+    let final_owners = [
+        "cas_admission.rs",
+        "cow_locality.rs",
+        "operation_concurrency.rs",
+        "operation_create.rs",
+        "operation_faults.rs",
+        "operation_lifecycle.rs",
+        "operation_mutation.rs",
+        "operation_read.rs",
+    ];
+    let owner_sources = final_owners
+        .into_iter()
+        .map(|relative| {
+            (
+                relative,
+                std::fs::read_to_string(tests_root.join(relative)).unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let create_source = owner_sources
+        .iter()
+        .find_map(|(relative, source)| (*relative == "operation_create.rs").then_some(source))
+        .expect("create owner source exists");
+    assert_eq!(
+        create_source
+            .matches("#[path = \"reference/naive_fastcdc.rs\"]")
+            .count(),
+        1,
+        "the exact independent FastCDC reference must be imported once"
+    );
+    assert_eq!(
+        create_source.matches("crate::naive_fastcdc::ends").count(),
+        2,
+        "the imported FastCDC reference must be exercised by frozen comparisons"
+    );
+    assert!(
+        create_source.contains("[16_688, 34_949, 52_688, 70_914, 90_807, 100_000]"),
+        "FastCDC comparison lost its pinned boundary corpus"
+    );
+    for (relative, expected_tests, expected_feature_gates) in [
+        ("cas_admission.rs", 50, 1),
+        ("cow_locality.rs", 16, 0),
+        ("operation_concurrency.rs", 23, 1),
+        ("operation_create.rs", 46, 1),
+        ("operation_faults.rs", 74, 1),
+        ("operation_lifecycle.rs", 31, 1),
+        ("operation_mutation.rs", 13, 1),
+        ("operation_read.rs", 9, 2),
+    ] {
+        let source = owner_sources
+            .iter()
+            .find_map(|(candidate, source)| (*candidate == relative).then_some(source))
+            .expect("final owner source exists");
+        assert_eq!(
+            source.matches("#[test]").count(),
+            expected_tests,
+            "final owner test custody count drifted: {relative}"
+        );
+        assert_eq!(
+            source
+                .matches("#[cfg(feature = \"operation-polymorphism\")]")
+                .count(),
+            expected_feature_gates,
+            "feature applicability gate count drifted: {relative}"
+        );
+    }
+    for (relative, source) in &owner_sources {
+        assert!(
+            source.contains("#[test]"),
+            "final owner has no tests: {relative}"
+        );
+        assert!(
+            source.contains("assert") || source.contains("panic!"),
+            "final owner has no semantic assertions: {relative}"
+        );
+        for forbidden in [
+            "qualification::run(",
+            "ScenarioV1",
+            "numeric_dispatch",
+            "mod c3_",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "final owner {relative} retained forwarding/dispatcher token {forbidden}"
+            );
+        }
+    }
+    for (support, owner) in [
+        ("TempFsCas", "cas_admission.rs"),
+        ("CountingSource", "operation_mutation.rs"),
+        ("CountingSink", "operation_read.rs"),
+        ("FaultPoint", "operation_faults.rs"),
+    ] {
+        let source = owner_sources
+            .iter()
+            .find_map(|(relative, source)| (*relative == owner).then_some(source))
+            .expect("owner source exists");
+        assert!(
+            source.contains(support),
+            "support helper {support} is not used by its substantive owner {owner}"
+        );
+    }
+    let lib = std::fs::read_to_string(source_root.join("lib.rs")).unwrap();
+    assert!(!lib.contains("#[test]"));
+    assert!(!lib.contains("ScenarioV1"));
+    assert!(!lib.contains("numeric_dispatch"));
+    assert!(
+        lib.lines().count() < 180,
+        "qualification facade grew into a test repository"
+    );
+    let create_source = owner_sources
+        .iter()
+        .find_map(|(relative, source)| {
+            (*relative == "operation_create.rs").then_some(source.as_str())
+        })
+        .expect("operation_create owner exists");
+    let resources_source = create_source
+        .split_once("mod l1_resources {")
+        .and_then(|(_, source)| source.split_once("\nmod l1_content {"))
+        .map(|(source, _)| source)
+        .expect("operation_create resource owner exists");
+    assert!(
+        resources_source.contains("layerfs_storage::resources"),
+        "resource owner lost its bounded semantic adapter"
+    );
+    for forbidden in [
+        "OperationCountersV1",
+        "OperationMemoryPlanV1",
+        "MemoryComponentV1",
+        "ResourceLedgerV1",
+        "limits::ResourceLedgerV1",
+    ] {
+        assert!(
+            !resources_source.contains(forbidden),
+            "resource owner reached through concrete/internal symbol {forbidden}"
+        );
+    }
+    assert!(!tests_root.join("reference/naive_seqcdc.rs").exists());
+}
+
+#[test]
+fn pb08_custody_inventory_is_executable_and_exact() {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let inventory_path = manifest_dir.join(
+        "../../../ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/l1.5.5/"
+            .to_owned()
+            + "pb08-custody-inventory.tsv",
+    );
+    let inventory = std::fs::read_to_string(&inventory_path)
+        .unwrap_or_else(|error| panic!("read custody inventory {inventory_path:?}: {error}"));
+    let mut lines = inventory.lines();
+    let expected_header = [
+        "old_file",
+        "old_function",
+        "final_owner",
+        "final_function",
+        "original_feature_applicability",
+        "assertion_count",
+        "assertion_sequence_sha256",
+        "fixture_support_ownership",
+        "fault_boundary_order",
+        "race_schedule",
+        "expected_typed_error",
+        "counter_forbidden_work_expectations",
+        "portability_qualifier",
+        "exact_command_result",
+    ];
+    let header = lines
+        .next()
+        .expect("custody inventory has a header")
+        .split('\t')
+        .collect::<Vec<_>>();
+    assert_eq!(header, expected_header.to_vec());
+
+    let rows = lines
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let fields = line.split('\t').collect::<Vec<_>>();
+            assert_eq!(fields.len(), expected_header.len(), "malformed inventory row");
+            fields
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 266);
+
+    let deferred_owner = "DEFERRED_UNTIL_L1_COMPLETE";
+    let deferred_names = [
+        "pinned_hand_vectors_freeze_unsigned_equal_threshold_jump_clamp_and_eof",
+        "optimized_seqcdc_matches_oracle_on_hostile_corpora",
+        "optimized_seqcdc_fragmentation_is_oracle_exact_and_wraps",
+        "optimized_seqcdc_pause_counters_and_terminal_errors_are_exact",
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    let deferred = rows
+        .iter()
+        .filter(|row| row[2] == deferred_owner)
+        .map(|row| row[3])
+        .collect::<BTreeSet<_>>();
+    assert_eq!(deferred, deferred_names);
+    assert_eq!(rows.iter().filter(|row| row[2] == deferred_owner).count(), 4);
+
+    let active = rows
+        .iter()
+        .filter(|row| row[2] != deferred_owner)
+        .collect::<Vec<_>>();
+    assert_eq!(active.len(), 262);
+    assert!(active.iter().all(|row| row[4] == "default" || row[4] == "operation-polymorphism"));
+
+    let old_keys = active
+        .iter()
+        .map(|row| (row[0], row[1]))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(old_keys.len(), 262, "duplicate historical custody row");
+    let final_claims = active
+        .iter()
+        .map(|row| (row[2], row[3]))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(final_claims.len(), 262, "duplicate final owner/function claim");
+
+    let owner_names = [
+        "cas_admission.rs",
+        "cow_locality.rs",
+        "operation_concurrency.rs",
+        "operation_create.rs",
+        "operation_faults.rs",
+        "operation_lifecycle.rs",
+        "operation_mutation.rs",
+        "operation_read.rs",
+    ];
+    let tests_root = manifest_dir.join("tests");
+    let mut current_names = BTreeMap::<&str, BTreeSet<String>>::new();
+    let mut current_sources = BTreeMap::<&str, String>::new();
+    for owner in owner_names {
+        let source = std::fs::read_to_string(tests_root.join(owner))
+            .unwrap_or_else(|error| panic!("read final owner {owner}: {error}"));
+        let declarations = final_test_segments(&source);
+        assert!(!declarations.is_empty(), "final owner has no tests: {owner}");
+        current_names.insert(
+            owner,
+            declarations
+                .iter()
+                .map(|(name, _, _)| name.to_owned())
+                .collect::<BTreeSet<_>>(),
+        );
+        current_sources.insert(owner, source);
+    }
+
+    let mut expected_names = BTreeMap::<&str, BTreeSet<String>>::new();
+    for row in &active {
+        expected_names
+            .entry(row[2])
+            .or_default()
+            .insert(row[3].to_owned());
+    }
+    for owner in owner_names {
+        assert_eq!(
+            current_names.get(owner).expect("current owner names"),
+            expected_names.get(owner).expect("inventory owner names"),
+            "inventory does not describe the exact registered tests in {owner}"
+        );
+    }
+
+    let mut expected_gated = BTreeMap::<&str, BTreeSet<String>>::new();
+    for row in &active {
+        if row[4] == "operation-polymorphism" {
+            expected_gated
+                .entry(row[2])
+                .or_default()
+                .insert(row[3].to_owned());
+        }
+    }
+    for owner in owner_names {
+        let actual = feature_gated_test_names(current_sources.get(owner).unwrap());
+        assert_eq!(
+            actual,
+            expected_gated.get(owner).cloned().unwrap_or_default(),
+            "feature applicability drifted in {owner}"
+        );
+    }
+
+    let mut baseline_assertions = BTreeMap::<&str, usize>::new();
+    let delegated_cleanup_rows = [
+        "private_pack_cleanup_unwind_terminalizes_storage_and_preparation_before_return",
+        "private_pack_cleanup_unwind_retains_invalidation_double_fault",
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    for row in &active {
+        let count = row[5]
+            .parse::<usize>()
+            .unwrap_or_else(|error| panic!("invalid assertion count in {}: {error}", row[3]));
+        if count == 0 {
+            assert!(
+                delegated_cleanup_rows.contains(row[3]),
+                "empty frozen assertion custody is not an approved delegated row: {}",
+                row[3]
+            );
+        }
+        assert_eq!(row[6].len(), 64, "invalid assertion fingerprint: {}", row[3]);
+        assert!(
+            row[6].bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "invalid assertion fingerprint: {}",
+            row[3]
+        );
+        assert!(!row[13].is_empty(), "missing exact command/result: {}", row[3]);
+        *baseline_assertions.entry(row[2]).or_default() += count;
+    }
+
+    for owner in owner_names {
+        let source = current_sources.get(owner).unwrap();
+        let declarations = final_test_segments(source);
+        let source_assertions = assertion_tokens(source);
+        assert!(
+            source_assertions.len() >= baseline_assertions[owner],
+            "assertion custody shrank in {owner}: {} < {}",
+            source_assertions.len(),
+            baseline_assertions[owner]
+        );
+        for row in active.iter().filter(|row| row[2] == owner) {
+            let (_, _, segment) = declarations
+                .iter()
+                .find(|(name, _, _)| name == row[3])
+                .expect("inventory test declaration");
+            let current = assertion_tokens(segment);
+            let digest = digest_hex(current.join("").as_bytes());
+            assert_eq!(digest.len(), 64);
+            assert!(
+                segment.contains("assert")
+                    || segment.contains("expect")
+                    || segment.contains("unwrap"),
+                "test lost executable assertion/error custody: {}",
+                row[3]
+            );
+        }
+    }
+
+    let subprocess_children = owner_names
+        .iter()
+        .map(|owner| {
+            current_sources
+                .get(owner)
+                .unwrap()
+                .matches("fn subprocess_open_existing_probe")
+                .count()
+        })
+        .sum::<usize>();
+    assert_eq!(subprocess_children, 1, "subprocess child custody is duplicated or absent");
+}
+
+#[test]
+fn pb08_default_object_reader_applicability_is_frozen() {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/operation_read.rs"),
+    )
+    .expect("read operation_read owner");
+    assert!(
+        !source.contains("#[cfg(feature = \"operation-polymorphism\")]\nmod l1_object_read"),
+        "default l1_object custody was gated behind operation-polymorphism"
+    );
+    let object_source = source
+        .split_once("mod l1_object_read")
+        .map(|(_, suffix)| suffix)
+        .expect("l1_object_read owner exists");
+    for name in [
+        "all_five_exact_object_kinds_decode_and_hash_in_separate_domains",
+        "bounded_random_read_decoder_matches_borrowed_decoder_and_never_requests_a_large_buffer",
+        "hostile_envelopes_fail_before_visiting_edges",
+        "hostile_payloads_abort_provisional_edges_and_reject_bad_order",
+        "loop_counts_are_preflighted_against_declared_payload_bytes",
+        "typed_edges_stream_in_wire_order_without_decoder_edge_storage",
+    ] {
+        assert_eq!(
+            object_source.matches(&format!("fn {name}")).count(),
+            1,
+            "default object-reader custody missing or duplicated: {name}"
+        );
+    }
+    assert_eq!(
+        object_source.matches("#[test]").count(),
+        6,
+        "operation_read default object-reader owner lost exact discovery"
+    );
+}
+
+#[test]
 fn concrete_storage_modules_and_c3_grants_are_not_a_dependent_crate_sdk() {
     use std::fs;
     use std::path::PathBuf;
@@ -897,30 +1721,22 @@ fn concrete_storage_modules_and_c3_grants_are_not_a_dependent_crate_sdk() {
     fs::write(
         source_dir.join("main.rs"),
         r#"
-use layerfs_storage::cas::{FsCasV1, FsOperationCapabilityV1};
-use layerfs_storage::content::{
-    request_create_operation_v1, run_create_v1,
-    CreateOperationGrantV1,
+use layerfs_storage::qualification::{
+    CanonicalDirectoryTreeV1 as QualifiedTreeV1,
+    FsCasV1 as QualifiedFsCasV1,
+    OperationHandoffV1 as QualifiedHandoffV1,
+    ReadSinkV1 as QualifiedReadSinkV1,
+    ResourceLedgerV1 as QualifiedLedgerV1,
+    SealedPackV1 as QualifiedPackV1,
 };
-use layerfs_storage::cow::CanonicalDirectoryTreeV1;
-use layerfs_storage::lifecycle::{StorageOperationV1, StorageResidentPlanV1};
-use layerfs_storage::limits::{OperationReservationV1, ResourceLedgerV1};
-use layerfs_storage::pack::SealedPackV1;
-use layerfs_storage::read::extraction::ReadResultV1;
 
 fn main() {
-    let _ = core::mem::size_of::<FsCasV1>();
-    let _ = core::mem::size_of::<FsOperationCapabilityV1<'static>>();
-    let _ = core::mem::size_of::<CreateOperationGrantV1<'static>>();
-    let _ = request_create_operation_v1::<()>;
-    let _ = run_create_v1::<(), ()>;
-    let _ = core::mem::size_of::<CanonicalDirectoryTreeV1>();
-    let _ = core::mem::size_of::<StorageOperationV1<'static>>();
-    let _ = core::mem::size_of::<StorageResidentPlanV1>();
-    let _ = core::mem::size_of::<OperationReservationV1<'static>>();
-    let _ = core::mem::size_of::<ResourceLedgerV1>();
-    let _ = core::mem::size_of::<SealedPackV1>();
-    let _ = core::mem::size_of::<ReadResultV1>();
+    let _ = core::mem::size_of::<QualifiedFsCasV1>();
+    let _ = core::mem::size_of::<QualifiedTreeV1>();
+    let _ = core::mem::size_of::<QualifiedHandoffV1>();
+    let _ = core::mem::size_of::<QualifiedLedgerV1>();
+    let _ = core::mem::size_of::<QualifiedPackV1>();
+    let _sink: Option<&dyn QualifiedReadSinkV1> = None;
 }
 "#,
     )
@@ -941,22 +1757,18 @@ fn main() {
         "dependent crate unexpectedly compiled concrete L1.5.5 storage internals"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("E0603"),
-        "unexpected compiler failure: {stderr}"
-    );
-    for private_module in [
-        "cas",
-        "content",
-        "cow",
-        "lifecycle",
-        "limits",
-        "pack",
-        "read",
+    for forbidden_symbol in [
+        "CanonicalDirectoryTreeV1",
+        "FsCasV1",
+        "OperationHandoffV1",
+        "ReadSinkV1",
+        "ResourceLedgerV1",
+        "SealedPackV1",
     ] {
         assert!(
-            stderr.contains(&format!("module `{private_module}` is private")),
-            "compiler did not enforce private {private_module} module: {stderr}"
+            stderr.contains(&format!("no {forbidden_symbol} in"))
+                || stderr.contains(&format!("no `{forbidden_symbol}` in")),
+            "qualification facade unexpectedly exposes {forbidden_symbol}: {stderr}"
         );
     }
 }
@@ -1793,6 +2605,7 @@ fn historical_c3_source_is_immutable_and_not_a_current_target() {
     let cow = include_str!("../src/cow/mod.rs");
     let create = include_str!("../src/content/create.rs");
     let historical_source = include_bytes!("../src/bin/c3_qualification.rs");
+    let historical_fixture = include_bytes!("fixtures/c3-registry-v1.tsv");
 
     assert!(manifest.contains("autobins = false"));
     assert!(manifest.contains("autotests = false"));
@@ -1805,6 +2618,15 @@ fn historical_c3_source_is_immutable_and_not_a_current_target() {
     assert_eq!(
         digest,
         "0f6f731e366a4802cac801ceacf8cb75d75296494f49c036ac368fcf31ca7da6"
+    );
+    assert_eq!(historical_fixture.len(), 47_759);
+    let fixture_digest = support::sha256(historical_fixture)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    assert_eq!(
+        fixture_digest,
+        "db8d1f2239cdbcfc3b37a050859533dea547b5d690dc17fd09099a0f6539ea61"
     );
     for module in ["cas", "content", "cow", "limits", "pack"] {
         assert!(lib.contains(&format!("pub(crate) mod {module};")));

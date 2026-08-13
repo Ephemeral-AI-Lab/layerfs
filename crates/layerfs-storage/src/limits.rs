@@ -56,11 +56,7 @@ impl OptionalU64ObservationV1 {
         }
     }
 
-    pub(crate) const fn observed(
-        value: u64,
-        method: &'static str,
-        scope: ObservationScopeV1,
-    ) -> Self {
+    pub const fn observed(value: u64, method: &'static str, scope: ObservationScopeV1) -> Self {
         Self::require_nonempty_description_v1(method);
         Self {
             status: OptionalObservationStatusV1::Observed,
@@ -70,7 +66,7 @@ impl OptionalU64ObservationV1 {
         }
     }
 
-    pub(crate) const fn unavailable(reason: &'static str, scope: ObservationScopeV1) -> Self {
+    pub const fn unavailable(reason: &'static str, scope: ObservationScopeV1) -> Self {
         Self::require_nonempty_description_v1(reason);
         Self {
             status: OptionalObservationStatusV1::Unavailable,
@@ -80,7 +76,7 @@ impl OptionalU64ObservationV1 {
         }
     }
 
-    pub(crate) const fn not_applicable(reason: &'static str, scope: ObservationScopeV1) -> Self {
+    pub const fn not_applicable(reason: &'static str, scope: ObservationScopeV1) -> Self {
         Self::require_nonempty_description_v1(reason);
         Self {
             status: OptionalObservationStatusV1::NotApplicable,
@@ -90,7 +86,7 @@ impl OptionalU64ObservationV1 {
         }
     }
 
-    pub(crate) const fn deferred(reason: &'static str, scope: ObservationScopeV1) -> Self {
+    pub const fn deferred(reason: &'static str, scope: ObservationScopeV1) -> Self {
         Self::require_nonempty_description_v1(reason);
         Self {
             status: OptionalObservationStatusV1::Deferred,
@@ -344,12 +340,10 @@ impl ResourceLedgerV1 {
         BASE_LEDGER_BYTES + self.high_water_planned_bytes.load(Ordering::Acquire)
     }
 
-    #[cfg(test)]
     pub fn reserve_operation(&self) -> CoreResult<OperationReservationV1<'_>> {
         self.reserve_operation_with_plan(OperationMemoryPlanV1::empty())
     }
 
-    #[cfg(test)]
     pub fn reserve_operation_with_plan(
         &self,
         plan: OperationMemoryPlanV1,
@@ -653,7 +647,7 @@ pub struct OperationCountersV1 {
     /// terminal; this bounded side channel records that the direct diagnostic
     /// event could not be represented instead of substituting a number or
     /// erasing the observation failure.
-    pub(crate) root_admission_release_failure_observation_error: Option<CoreError>,
+    pub root_admission_release_failure_observation_error: Option<CoreError>,
     /// Direct operation-local observations of the narrow shared-root
     /// visibility fence. Wait and hold durations use the portable monotonic
     /// `Instant` clock; they are never derived from process wall time or a
@@ -1362,7 +1356,7 @@ impl OperationCountersV1 {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub(crate) fn saturate_pack_object_disposition_for_test_v1(
         &mut self,
         kind: PhysicalObjectKindV1,
@@ -1765,7 +1759,8 @@ impl OperationCountersV1 {
 
 /// Neutral cooperative control used by bounded work owned below lifecycle.
 /// It deliberately carries no filesystem, CDC, scheduling, or fallback API.
-pub(crate) trait OperationWorkControlV1 {
+#[doc(hidden)]
+pub trait OperationWorkControlV1 {
     fn cancellation_requested_v1(&mut self) -> bool;
     fn deadline_exceeded_v1(&mut self) -> bool;
 }
@@ -1980,6 +1975,282 @@ pub(crate) enum CounterFieldV1 {
     RayonWorkUnits,
     SourceSizedStagingAllocations,
     WorkspaceSizedStagingAllocations,
+}
+
+/// Bounded observations for the default resource-owner tests. The request is
+/// semantic; ledger, plan, and counter values never cross the L1 boundary.
+pub mod resources {
+    use crate::error::CoreResult;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum MemoryBudgetV1 {
+        ThirtyTwoMiB,
+        FortyEightMiB,
+        SeventyTwoMiB,
+    }
+
+    impl MemoryBudgetV1 {
+        pub const fn bytes(self) -> u64 {
+            match self {
+                Self::ThirtyTwoMiB => super::MEMORY_PROFILE_32_MIB,
+                Self::FortyEightMiB => super::MEMORY_PROFILE_48_MIB,
+                Self::SeventyTwoMiB => super::MEMORY_PROFILE_72_MIB,
+            }
+        }
+
+        pub const fn expected_capacity_slots(self) -> u64 {
+            match self {
+                Self::ThirtyTwoMiB => 6,
+                Self::FortyEightMiB => 10,
+                Self::SeventyTwoMiB => 16,
+            }
+        }
+    }
+
+    pub const fn base_ledger_bytes_v1() -> u64 {
+        super::BASE_LEDGER_BYTES
+    }
+    pub const fn operation_slot_bytes_v1() -> u64 {
+        super::OPERATION_SLOT_BYTES
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum MemoryResourceKindV1 {
+        CdcRing,
+        SourceWindow,
+        HashState,
+        ComparisonWindow,
+        ObjectScratch,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct MemoryProfileObservationV1 {
+        capacity_slots: u64,
+        admitted_slots: u64,
+        high_water_bytes: u64,
+        planned_high_water_bytes: u64,
+        over_capacity_refused: bool,
+        cleaned_up: bool,
+    }
+
+    impl MemoryProfileObservationV1 {
+        pub const fn capacity_slots(self) -> u64 {
+            self.capacity_slots
+        }
+        pub const fn admitted_slots(self) -> u64 {
+            self.admitted_slots
+        }
+        pub const fn high_water_bytes(self) -> u64 {
+            self.high_water_bytes
+        }
+        pub const fn planned_high_water_bytes(self) -> u64 {
+            self.planned_high_water_bytes
+        }
+        pub const fn over_capacity_refused(self) -> bool {
+            self.over_capacity_refused
+        }
+        pub const fn cleaned_up(self) -> bool {
+            self.cleaned_up
+        }
+    }
+
+    pub fn observe_memory_profile_v1(
+        budget_bytes: u64,
+        resources: &[(MemoryResourceKindV1, u64)],
+    ) -> CoreResult<MemoryProfileObservationV1> {
+        let plan = resources.iter().try_fold(
+            super::OperationMemoryPlanV1::empty(),
+            |plan, (resource, bytes)| {
+                let component = match resource {
+                    MemoryResourceKindV1::CdcRing => super::MemoryComponentV1::CdcRing,
+                    MemoryResourceKindV1::SourceWindow => super::MemoryComponentV1::SourceWindow,
+                    MemoryResourceKindV1::HashState => super::MemoryComponentV1::HashState,
+                    MemoryResourceKindV1::ComparisonWindow => {
+                        super::MemoryComponentV1::ComparisonWindow
+                    }
+                    MemoryResourceKindV1::ObjectScratch => super::MemoryComponentV1::ObjectScratch,
+                };
+                plan.charge(component, *bytes)
+            },
+        )?;
+        let ledger = super::ResourceLedgerV1::new(budget_bytes);
+        let capacity_slots = ledger.capacity_slots();
+        let reservations: Vec<_> = (0..capacity_slots)
+            .map(|_| ledger.reserve_operation_with_plan(plan))
+            .collect::<CoreResult<_>>()?;
+        let over_capacity_refused = ledger.reserve_operation_with_plan(plan).is_err();
+        let observation = MemoryProfileObservationV1 {
+            capacity_slots,
+            admitted_slots: ledger.admitted_slots(),
+            high_water_bytes: ledger.high_water_bytes(),
+            planned_high_water_bytes: ledger.planned_high_water_bytes(),
+            over_capacity_refused,
+            cleaned_up: false,
+        };
+        drop(reservations);
+        Ok(MemoryProfileObservationV1 {
+            cleaned_up: ledger.admitted_slots() == 0,
+            ..observation
+        })
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct MemoryPlanObservationV1 {
+        comparison_window_present: bool,
+        duplicate_resource_refused: bool,
+        slot_overflow_refused: bool,
+        total_bytes: u64,
+    }
+
+    impl MemoryPlanObservationV1 {
+        pub const fn comparison_window_present(self) -> bool {
+            self.comparison_window_present
+        }
+        pub const fn duplicate_resource_refused(self) -> bool {
+            self.duplicate_resource_refused
+        }
+        pub const fn slot_overflow_refused(self) -> bool {
+            self.slot_overflow_refused
+        }
+        pub const fn total_bytes(self) -> u64 {
+            self.total_bytes
+        }
+    }
+
+    pub fn observe_memory_plan_v1() -> CoreResult<MemoryPlanObservationV1> {
+        let once = super::OperationMemoryPlanV1::empty()
+            .charge(super::MemoryComponentV1::ComparisonWindow, 65_536)?;
+        Ok(MemoryPlanObservationV1 {
+            comparison_window_present: once.contains(super::MemoryComponentV1::ComparisonWindow),
+            duplicate_resource_refused: once
+                .charge(super::MemoryComponentV1::ComparisonWindow, 1)
+                .is_err(),
+            slot_overflow_refused: super::OperationMemoryPlanV1::empty()
+                .charge(
+                    super::MemoryComponentV1::ObjectScratch,
+                    super::OPERATION_SLOT_BYTES + 1,
+                )
+                .is_err(),
+            total_bytes: once.total_bytes(),
+        })
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct ForbiddenWorkObservationV1 {
+        zero_before: bool,
+        zero_after: bool,
+        values: [u64; 18],
+    }
+
+    impl ForbiddenWorkObservationV1 {
+        pub const fn zero_before(self) -> bool {
+            self.zero_before
+        }
+        pub const fn zero_after(self) -> bool {
+            self.zero_after
+        }
+        pub const fn retry_attempts(self) -> u64 {
+            self.values[0]
+        }
+        pub const fn redispatches(self) -> u64 {
+            self.values[1]
+        }
+        pub const fn automatic_fallbacks(self) -> u64 {
+            self.values[2]
+        }
+        pub const fn provider_switches(self) -> u64 {
+            self.values[3]
+        }
+        pub const fn cdc_switches(self) -> u64 {
+            self.values[4]
+        }
+        pub const fn publication_dispatches(self) -> u64 {
+            self.values[5]
+        }
+        pub const fn update_to_replace_fallbacks(self) -> u64 {
+            self.values[6]
+        }
+        pub const fn full_base_payload_fallbacks(self) -> u64 {
+            self.values[7]
+        }
+        pub const fn file_sync_calls(self) -> u64 {
+            self.values[8]
+        }
+        pub const fn directory_sync_calls(self) -> u64 {
+            self.values[9]
+        }
+        pub const fn wal_or_recovery_operations(self) -> u64 {
+            self.values[10]
+        }
+        pub const fn memory_backend_operations(self) -> u64 {
+            self.values[11]
+        }
+        pub const fn whole_pack_copies(self) -> u64 {
+            self.values[12]
+        }
+        pub const fn filesystem_clone_reflink_operations(self) -> u64 {
+            self.values[13]
+        }
+        pub const fn layerfs_created_threads(self) -> u64 {
+            self.values[14]
+        }
+        pub const fn rayon_work_units(self) -> u64 {
+            self.values[15]
+        }
+        pub const fn source_sized_staging_allocations(self) -> u64 {
+            self.values[16]
+        }
+        pub const fn workspace_sized_staging_allocations(self) -> u64 {
+            self.values[17]
+        }
+    }
+
+    pub fn observe_forbidden_work_v1() -> CoreResult<ForbiddenWorkObservationV1> {
+        let mut counters = super::OperationCountersV1::default();
+        let zero_before = counters.has_zero_forbidden_work();
+        counters.record_retry_attempt()?;
+        counters.record_redispatch()?;
+        counters.record_fallback_attempt()?;
+        counters.record_provider_switch()?;
+        counters.record_cdc_switch()?;
+        counters.record_publication_dispatch()?;
+        counters.record_update_to_replace_fallback()?;
+        counters.record_full_base_payload_fallback()?;
+        counters.record_file_sync()?;
+        counters.record_directory_sync()?;
+        counters.record_wal_or_recovery_operation()?;
+        counters.record_memory_backend_operation()?;
+        counters.record_whole_pack_copy()?;
+        counters.record_filesystem_clone_reflink_operation()?;
+        counters.record_layerfs_created_thread()?;
+        counters.record_rayon_work()?;
+        counters.record_source_sized_staging_allocation()?;
+        counters.record_workspace_sized_staging_allocation()?;
+        Ok(ForbiddenWorkObservationV1 {
+            zero_before,
+            zero_after: counters.has_zero_forbidden_work(),
+            values: [
+                counters.retry_attempts,
+                counters.redispatches,
+                counters.automatic_fallbacks,
+                counters.provider_switches,
+                counters.cdc_switches,
+                counters.publication_authority_dispatches,
+                counters.update_to_replace_fallbacks,
+                counters.full_base_payload_fallbacks,
+                counters.file_sync_calls,
+                counters.directory_sync_calls,
+                counters.wal_or_recovery_operations,
+                counters.memory_backend_operations,
+                counters.whole_pack_copies,
+                counters.filesystem_clone_reflink_operations,
+                counters.layerfs_created_threads,
+                counters.rayon_work_units,
+                counters.source_sized_staging_allocations,
+                counters.workspace_sized_staging_allocations,
+            ],
+        })
+    }
 }
 
 #[cfg(test)]

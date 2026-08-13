@@ -40,7 +40,7 @@ use crate::{CoreError, CoreResult};
 use self::read_file_range_impl_v1 as read_file_range_v1;
 use super::object_reader::{required_occupied_len_v1, OccupiedObjectReaderV1};
 use super::range::{begin_exact_range_digest_v1, ExactRangePlanV1, ExactRangeRequestV1};
-pub(crate) use super::{
+pub use super::{
     ReadBuffersV1, ReadKindV1, ReadOperationErrorV1, ReadResultV1, ReadSinkErrorV1, ReadSinkV1,
 };
 
@@ -48,7 +48,7 @@ const FULL_DIGEST_DOMAIN: &[u8; 8] = b"L155EXT1";
 const CLOSURE_MARKER_BYTES: u64 = 120;
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn extract_root_v1<S, C>(
+pub fn extract_root_v1<S, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,
@@ -77,7 +77,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn read_file_range_impl_v1<S, C>(
+pub fn read_file_range_impl_v1<S, C>(
     cas: &FsCasV1,
     cancellation_key: u64,
     version_record: PhysicalVersionRecordIdV1,

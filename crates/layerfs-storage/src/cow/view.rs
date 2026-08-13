@@ -22,14 +22,14 @@ use crate::{CoreError, CoreResult};
 use blake3::hazmat::{merge_subtrees_non_root, merge_subtrees_root, HasherExt, Mode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum TreeMutationSourceErrorV1 {
+pub enum TreeMutationSourceErrorV1 {
     Failure,
 }
 
 /// Immutable entry view for general add/remove COW. Every method observes one
 /// authenticated snapshot; callers preflight the two declared shapes before
 /// reading the first entry.
-pub(crate) trait CanonicalTreeMutationSourceV1 {
+pub trait CanonicalTreeMutationSourceV1 {
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64>;
 
     /// Pure declarations: no allocation, caching, or I/O is permitted.
@@ -75,7 +75,7 @@ pub(super) enum TreeProofMutationV1<'a> {
 /// are streamed and hashed; the same proof is reused after changing only the
 /// frozen count field and the streamed suffix.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct DirectoryMutationHashProofV1<'a> {
+pub struct DirectoryMutationHashProofV1<'a> {
     pub(super) old_preimage_len: u64,
     pub(super) stream_start_index: u32,
     pub(super) stream_entry_offset: u64,
@@ -108,7 +108,7 @@ impl<'a> DirectoryMutationHashProofV1<'a> {
 /// capability; mutation code can consume it but cannot construct physical or
 /// logical evidence from an unauthenticated snapshot.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct AuthenticatedTreeMutationEvidenceV1<'a> {
+pub struct AuthenticatedTreeMutationEvidenceV1<'a> {
     pub(super) base_logical: DirectoryLogicalIdentityV1,
     pub(super) base_physical: PhysicalTreeIdV1,
     pub(super) affected_leaf_index: Option<u32>,
@@ -142,7 +142,7 @@ impl<'a> AuthenticatedTreeMutationEvidenceV1<'a> {
 /// One authenticated BLAKE3 subtree in a sparse proof of the frozen flat
 /// logical-directory preimage.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct DirectoryHashSubtreeV1 {
+pub struct DirectoryHashSubtreeV1 {
     pub(super) offset: u64,
     pub(super) byte_len: u64,
     pub(super) chaining_value: [u8; 32],
@@ -161,7 +161,7 @@ impl DirectoryHashSubtreeV1 {
 /// Sparse proof covering every byte outside one bounded logical-directory
 /// window.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct DirectoryHashProofV1<'a> {
+pub struct DirectoryHashProofV1<'a> {
     pub(super) preimage_len: u64,
     pub(super) window_offset: u64,
     pub(super) old_window: &'a [u8],
@@ -193,7 +193,7 @@ impl<'a> DirectoryHashProofV1<'a> {
 /// Bounded evidence for a same-name replacement. It contains only the
 /// affected leaf, the direct sibling summaries, and a sparse logical proof.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct AuthenticatedTreeReplacementEvidenceV1<'a> {
+pub struct AuthenticatedTreeReplacementEvidenceV1<'a> {
     pub(super) base_logical: DirectoryLogicalIdentityV1,
     pub(super) base_physical: PhysicalTreeIdV1,
     pub(super) affected_leaf_index: u32,

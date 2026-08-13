@@ -28,7 +28,7 @@ use crate::identity::{
     PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalSymlinkIdV1, PhysicalTreeIdV1,
     PhysicalVersionRecordIdV1, SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
@@ -132,7 +132,7 @@ impl<'a> AdmissionBuffersV1<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 pub fn admit_complete_immutable_v1<C, O, S>(
     closure: &mut C,
     expected_version_record: TypedPhysicalObjectIdV1,

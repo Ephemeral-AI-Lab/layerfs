@@ -5,7 +5,7 @@ use crate::identity::PackIdV1;
 use crate::pack::SealedPackV1;
 
 const CATALOG_MAGIC: &[u8; 8] = b"LFSCAT01";
-pub(crate) const CATALOG_MARKER_BYTES: usize = 64;
+pub const CATALOG_MARKER_BYTES: usize = 64;
 
 pub(super) fn encode_catalog_marker(sealed: SealedPackV1) -> [u8; CATALOG_MARKER_BYTES] {
     let mut bytes = [0_u8; CATALOG_MARKER_BYTES];

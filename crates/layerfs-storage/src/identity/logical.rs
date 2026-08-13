@@ -77,7 +77,7 @@ impl ExplicitDirectoryNodeV1 {
         self.0
     }
 
-    pub(crate) const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
+    pub const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
         Self(DirectoryNodeIdV1::from_digest(bytes))
     }
 }
@@ -90,7 +90,7 @@ impl ImplicitRootDirectoryV1 {
         self.0
     }
 
-    pub(crate) const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
+    pub const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
         Self(DirectoryNodeIdV1::from_digest(bytes))
     }
 }

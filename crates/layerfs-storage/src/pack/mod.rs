@@ -16,7 +16,7 @@ use crate::identity::{
     PhysicalSymlinkIdV1, PhysicalTreeIdV1, PhysicalVersionRecordIdV1, ProfileId,
     COMPARISON_WINDOW_BYTES, DIGEST_BYTES, IDENTITY_HASHER_BYTES_V1, TAG_OBJECT_CHECKSUM, TAG_PACK,
 };
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, ObservationScopeV1, OperationCountersV1,
@@ -500,8 +500,8 @@ where
     })
 }
 
-#[cfg(test)]
-pub fn build_dense_pack_v1<O, P, M>(
+#[cfg(any(test, feature = "operation-polymorphism"))]
+pub(crate) fn build_dense_pack_v1<O, P, M>(
     objects: &mut O,
     pack: &mut P,
     metadata: &mut M,
@@ -696,8 +696,8 @@ where
     Ok(validated)
 }
 
-#[cfg(test)]
-pub fn validate_pack_v1<P, M>(
+#[cfg(any(test, feature = "operation-polymorphism"))]
+pub(crate) fn validate_pack_v1<P, M>(
     pack: &mut P,
     metadata: &mut M,
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
@@ -1332,6 +1332,533 @@ const fn map_spool_port(error: PackPortErrorV1) -> CoreError {
         PackPortErrorV1::Failure | PackPortErrorV1::WorkExhausted => CoreError::ResourceRefused,
         PackPortErrorV1::Cancelled => CoreError::Cancelled,
         PackPortErrorV1::Deadline => CoreError::Deadline,
+    }
+}
+
+#[cfg(feature = "operation-polymorphism")]
+pub mod semantic {
+    use super::{
+        build_dense_pack_v1, validate_pack_v1, PackIndexEntryV1, PackIndexSpoolV1,
+        PackObjectSourceV1, PackPortErrorV1, PackReadPortV1, PrivatePackPortV1,
+        SealedPackV1, MAX_PACK_BYTES,
+    };
+    use crate::limits::{OperationCountersV1, ResourceLedgerV1, OPERATION_SLOT_BYTES};
+    use crate::object::{decode_physical_object_v1, DiscardStrongEdgesV1, TypedPhysicalObjectIdV1};
+    use crate::{CoreError, CoreResult};
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct PackRequestV1<'a> {
+        objects: &'a [&'a [u8]],
+        source_resident_bytes: Option<u64>,
+        pack_resident_bytes: Option<u64>,
+        index_resident_bytes: Option<u64>,
+        sink_failure_after: Option<usize>,
+    }
+
+    impl<'a> PackRequestV1<'a> {
+        pub const fn new(objects: &'a [&'a [u8]]) -> Self {
+            Self {
+                objects,
+                source_resident_bytes: None,
+                pack_resident_bytes: None,
+                index_resident_bytes: None,
+                sink_failure_after: None,
+            }
+        }
+
+        pub const fn with_source_residency(mut self, bytes: u64) -> Self {
+            self.source_resident_bytes = Some(bytes);
+            self
+        }
+
+        pub const fn with_pack_residency(mut self, bytes: u64) -> Self {
+            self.pack_resident_bytes = Some(bytes);
+            self
+        }
+
+        pub const fn with_index_residency(mut self, bytes: u64) -> Self {
+            self.index_resident_bytes = Some(bytes);
+            self
+        }
+
+        pub const fn with_sink_failure_after(mut self, bytes: usize) -> Self {
+            self.sink_failure_after = Some(bytes);
+            self
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct ValidationRequestV1<'a> {
+        bytes: &'a [u8],
+        maximum_entries: u32,
+        pack_resident_bytes: Option<u64>,
+        fail_reads: bool,
+    }
+
+    impl<'a> ValidationRequestV1<'a> {
+        pub const fn new(bytes: &'a [u8]) -> Self {
+            Self {
+                bytes,
+                maximum_entries: 10_000,
+                pack_resident_bytes: None,
+                fail_reads: false,
+            }
+        }
+
+        pub const fn with_maximum_entries(mut self, maximum_entries: u32) -> Self {
+            self.maximum_entries = maximum_entries;
+            self
+        }
+
+        pub const fn with_pack_residency(mut self, bytes: u64) -> Self {
+            self.pack_resident_bytes = Some(bytes);
+            self
+        }
+
+        pub const fn with_fail_reads(mut self, fail_reads: bool) -> Self {
+            self.fail_reads = fail_reads;
+            self
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct PackObservationV1 {
+        error: Option<CoreError>,
+        bytes: Vec<u8>,
+        sealed: bool,
+        aborted: bool,
+        begins: u64,
+        len_calls: u64,
+        source_metadata_reads: u64,
+        source_payload_bytes_read: u64,
+        spool_peak: u64,
+        pack_entries: u64,
+        pack_bytes: u64,
+        bytes_read: u64,
+        bytes_written: u64,
+        memory_high_water: u64,
+        pack_len: u64,
+        record_count: u32,
+        index_offset: u64,
+        pack_id: [u8; 32],
+        ledger_high_water: u64,
+        admitted_slots: u64,
+    }
+
+    impl PackObservationV1 {
+        pub const fn error(&self) -> Option<CoreError> {
+            self.error
+        }
+        pub fn bytes(&self) -> &[u8] {
+            &self.bytes
+        }
+        pub const fn sealed(&self) -> bool {
+            self.sealed
+        }
+        pub const fn aborted(&self) -> bool {
+            self.aborted
+        }
+        pub const fn begins(&self) -> u64 {
+            self.begins
+        }
+        pub const fn len_calls(&self) -> u64 {
+            self.len_calls
+        }
+        pub const fn source_metadata_reads(&self) -> u64 {
+            self.source_metadata_reads
+        }
+        pub const fn source_payload_bytes_read(&self) -> u64 {
+            self.source_payload_bytes_read
+        }
+        pub const fn spool_peak(&self) -> u64 {
+            self.spool_peak
+        }
+        pub const fn pack_entries(&self) -> u64 {
+            self.pack_entries
+        }
+        pub const fn pack_bytes(&self) -> u64 {
+            self.pack_bytes
+        }
+        pub const fn bytes_read(&self) -> u64 {
+            self.bytes_read
+        }
+        pub const fn bytes_written(&self) -> u64 {
+            self.bytes_written
+        }
+        pub const fn memory_high_water(&self) -> u64 {
+            self.memory_high_water
+        }
+        pub const fn pack_len(&self) -> u64 {
+            self.pack_len
+        }
+        pub const fn record_count(&self) -> u32 {
+            self.record_count
+        }
+        pub const fn index_offset(&self) -> u64 {
+            self.index_offset
+        }
+        pub const fn pack_id(&self) -> [u8; 32] {
+            self.pack_id
+        }
+        pub const fn ledger_high_water(&self) -> u64 {
+            self.ledger_high_water
+        }
+        pub const fn admitted_slots(&self) -> u64 {
+            self.admitted_slots
+        }
+    }
+
+    #[derive(Debug)]
+    struct ObjectSource<'a> {
+        bytes: &'a [&'a [u8]],
+        ids: Vec<TypedPhysicalObjectIdV1>,
+        reported_resident_bytes: Option<u64>,
+        metadata_reads: u64,
+        payload_bytes_read: u64,
+    }
+
+    impl<'a> ObjectSource<'a> {
+        fn new(bytes: &'a [&'a [u8]], reported_resident_bytes: Option<u64>) -> Self {
+            Self {
+                bytes,
+                ids: bytes
+                    .iter()
+                    .map(|value| {
+                        decode_physical_object_v1(value, &mut DiscardStrongEdgesV1)
+                            .expect("semantic pack request contains canonical objects")
+                            .physical_id()
+                            .expect("canonical object has a physical id")
+                    })
+                    .collect(),
+                reported_resident_bytes,
+                metadata_reads: 0,
+                payload_bytes_read: 0,
+            }
+        }
+    }
+
+    impl PackObjectSourceV1 for ObjectSource<'_> {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            self.reported_resident_bytes.map_or_else(
+                || {
+                    u64::try_from(self.ids.capacity())
+                        .map_err(|_| CoreError::IntegerOverflow)?
+                        .checked_mul(core::mem::size_of::<TypedPhysicalObjectIdV1>() as u64)
+                        .ok_or(CoreError::IntegerOverflow)
+                },
+                Ok,
+            )
+        }
+
+        fn declared_object_count(&self) -> CoreResult<u32> {
+            u32::try_from(self.bytes.len()).map_err(|_| CoreError::IntegerOverflow)
+        }
+
+        fn object_id(&mut self, ordinal: u32) -> Result<TypedPhysicalObjectIdV1, PackPortErrorV1> {
+            self.metadata_reads = self
+                .metadata_reads
+                .checked_add(1)
+                .ok_or(PackPortErrorV1::Failure)?;
+            self.ids
+                .get(ordinal as usize)
+                .copied()
+                .ok_or(PackPortErrorV1::Failure)
+        }
+
+        fn object_len(&mut self, ordinal: u32) -> Result<u64, PackPortErrorV1> {
+            self.metadata_reads = self
+                .metadata_reads
+                .checked_add(1)
+                .ok_or(PackPortErrorV1::Failure)?;
+            self.bytes
+                .get(ordinal as usize)
+                .ok_or(PackPortErrorV1::Failure)
+                .and_then(|bytes| u64::try_from(bytes.len()).map_err(|_| PackPortErrorV1::Failure))
+        }
+
+        fn read_object_exact_at(
+            &mut self,
+            ordinal: u32,
+            offset: u64,
+            destination: &mut [u8],
+        ) -> Result<(), PackPortErrorV1> {
+            let bytes = self
+                .bytes
+                .get(ordinal as usize)
+                .ok_or(PackPortErrorV1::Failure)?;
+            let start = usize::try_from(offset).map_err(|_| PackPortErrorV1::Failure)?;
+            let end = start
+                .checked_add(destination.len())
+                .ok_or(PackPortErrorV1::Failure)?;
+            destination.copy_from_slice(bytes.get(start..end).ok_or(PackPortErrorV1::Failure)?);
+            self.payload_bytes_read = self
+                .payload_bytes_read
+                .checked_add(destination.len() as u64)
+                .ok_or(PackPortErrorV1::Failure)?;
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct PackMemory {
+        bytes: Vec<u8>,
+        reported_resident_bytes: Option<u64>,
+        expected_len: u64,
+        sealed: bool,
+        aborted: bool,
+        begins: u64,
+        len_calls: u64,
+        fail_after: Option<usize>,
+        fail_reads: bool,
+    }
+
+    impl PackReadPortV1 for PackMemory {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(self.reported_resident_bytes.unwrap_or(0))
+        }
+        fn len(&mut self) -> Result<u64, PackPortErrorV1> {
+            self.len_calls = self
+                .len_calls
+                .checked_add(1)
+                .ok_or(PackPortErrorV1::Failure)?;
+            u64::try_from(self.bytes.len()).map_err(|_| PackPortErrorV1::Failure)
+        }
+        fn read_exact_at(
+            &mut self,
+            offset: u64,
+            destination: &mut [u8],
+        ) -> Result<(), PackPortErrorV1> {
+            if self.fail_reads {
+                return Err(PackPortErrorV1::Failure);
+            }
+            let start = usize::try_from(offset).map_err(|_| PackPortErrorV1::Failure)?;
+            let end = start
+                .checked_add(destination.len())
+                .ok_or(PackPortErrorV1::Failure)?;
+            destination.copy_from_slice(
+                self.bytes
+                    .get(start..end)
+                    .ok_or(PackPortErrorV1::Failure)?,
+            );
+            Ok(())
+        }
+    }
+
+    impl PrivatePackPortV1 for PackMemory {
+        fn begin_private(&mut self, exact_len: u64) -> Result<(), PackPortErrorV1> {
+            if exact_len > MAX_PACK_BYTES || self.begins != 0 {
+                return Err(PackPortErrorV1::Failure);
+            }
+            self.expected_len = exact_len;
+            self.begins += 1;
+            Ok(())
+        }
+        fn append(&mut self, bytes: &[u8]) -> Result<(), PackPortErrorV1> {
+            if self
+                .fail_after
+                .is_some_and(|limit| self.bytes.len() >= limit)
+            {
+                return Err(PackPortErrorV1::Failure);
+            }
+            let next = self
+                .bytes
+                .len()
+                .checked_add(bytes.len())
+                .ok_or(PackPortErrorV1::Failure)?;
+            if u64::try_from(next).map_err(|_| PackPortErrorV1::Failure)? > self.expected_len {
+                return Err(PackPortErrorV1::Failure);
+            }
+            self.bytes.extend_from_slice(bytes);
+            Ok(())
+        }
+        fn seal_private(
+            &mut self,
+            _id: crate::identity::PackIdV1,
+        ) -> Result<(), PackPortErrorV1> {
+            if u64::try_from(self.bytes.len()).map_err(|_| PackPortErrorV1::Failure)?
+                != self.expected_len
+            {
+                return Err(PackPortErrorV1::Failure);
+            }
+            self.sealed = true;
+            Ok(())
+        }
+        fn abort_private(&mut self) {
+            self.aborted = true;
+            self.sealed = false;
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct MetadataSpool {
+        entries: Vec<PackIndexEntryV1>,
+        cursor: usize,
+        maximum: usize,
+        peak: usize,
+        reported_resident_bytes: Option<u64>,
+    }
+
+    impl PackIndexSpoolV1 for MetadataSpool {
+        fn resident_memory_bound_bytes(&self, maximum_entries: u32) -> CoreResult<u64> {
+            self.reported_resident_bytes.map_or_else(
+                || {
+                    u64::from(maximum_entries)
+                        .checked_mul(core::mem::size_of::<PackIndexEntryV1>() as u64)
+                        .ok_or(CoreError::IntegerOverflow)
+                },
+                Ok,
+            )
+        }
+        fn reset(&mut self, maximum_entries: u32) -> Result<(), PackPortErrorV1> {
+            self.entries.clear();
+            self.cursor = 0;
+            self.maximum = maximum_entries as usize;
+            Ok(())
+        }
+        fn push(&mut self, entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1> {
+            if self.entries.len() >= self.maximum {
+                return Err(PackPortErrorV1::Failure);
+            }
+            self.entries.push(entry);
+            self.peak = self.peak.max(self.entries.len());
+            Ok(())
+        }
+        fn sort_by_key(&mut self) -> Result<(), PackPortErrorV1> {
+            self.entries.sort_by(PackIndexEntryV1::compare_key);
+            Ok(())
+        }
+        fn sort_by_offset(&mut self) -> Result<(), PackPortErrorV1> {
+            self.entries.sort_by(PackIndexEntryV1::compare_offset);
+            Ok(())
+        }
+        fn rewind(&mut self) -> Result<(), PackPortErrorV1> {
+            self.cursor = 0;
+            Ok(())
+        }
+        fn next(&mut self) -> Result<Option<PackIndexEntryV1>, PackPortErrorV1> {
+            let next = self.entries.get(self.cursor).copied();
+            self.cursor = self
+                .cursor
+                .checked_add(usize::from(next.is_some()))
+                .ok_or(PackPortErrorV1::Failure)?;
+            Ok(next)
+        }
+        fn abort(&mut self) {
+            self.entries.clear();
+        }
+    }
+
+    fn observe(
+        error: Option<CoreError>,
+        pack: PackMemory,
+        source: Option<ObjectSource<'_>>,
+        spool: MetadataSpool,
+        counters: OperationCountersV1,
+        sealed: Option<SealedPackV1>,
+        ledger: ResourceLedgerV1,
+    ) -> PackObservationV1 {
+        let (pack_len, record_count, index_offset, pack_id) = sealed.map_or(
+            (0, 0, 0, [0; 32]),
+            |sealed| {
+                (
+                    sealed.pack_len(),
+                    sealed.record_count(),
+                    sealed.index_offset(),
+                    *sealed.id().as_bytes(),
+                )
+            },
+        );
+        PackObservationV1 {
+            error,
+            bytes: pack.bytes,
+            sealed: pack.sealed,
+            aborted: pack.aborted,
+            begins: pack.begins,
+            len_calls: pack.len_calls,
+            source_metadata_reads: source.as_ref().map_or(0, |source| source.metadata_reads),
+            source_payload_bytes_read: source
+                .as_ref()
+                .map_or(0, |source| source.payload_bytes_read),
+            spool_peak: spool.peak as u64,
+            pack_entries: counters.pack_entries,
+            pack_bytes: counters.pack_bytes,
+            bytes_read: counters.bytes_read,
+            bytes_written: counters.bytes_written,
+            memory_high_water: counters.memory_high_water,
+            pack_len,
+            record_count,
+            index_offset,
+            pack_id,
+            ledger_high_water: ledger.high_water_bytes(),
+            admitted_slots: ledger.admitted_slots(),
+        }
+    }
+
+    pub fn build_v1(request: PackRequestV1<'_>) -> PackObservationV1 {
+        let mut source = ObjectSource::new(request.objects, request.source_resident_bytes);
+        let mut pack = PackMemory {
+            reported_resident_bytes: request.pack_resident_bytes,
+            fail_after: request.sink_failure_after,
+            ..PackMemory::default()
+        };
+        let mut spool = MetadataSpool {
+            reported_resident_bytes: request.index_resident_bytes,
+            ..MetadataSpool::default()
+        };
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut counters = OperationCountersV1::default();
+        let mut scratch = [0_u8; 65_536];
+        let result = build_dense_pack_v1(
+            &mut source,
+            &mut pack,
+            &mut spool,
+            &ledger,
+            &mut counters,
+            &mut scratch,
+        );
+        observe(
+            result.as_ref().err().copied(),
+            pack,
+            Some(source),
+            spool,
+            counters,
+            result.ok(),
+            ledger,
+        )
+    }
+
+    pub fn validate_v1(request: ValidationRequestV1<'_>) -> PackObservationV1 {
+        let mut pack = PackMemory {
+            bytes: request.bytes.to_vec(),
+            reported_resident_bytes: request.pack_resident_bytes,
+            fail_reads: request.fail_reads,
+            ..PackMemory::default()
+        };
+        let mut spool = MetadataSpool::default();
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut counters = OperationCountersV1::default();
+        let mut scratch = [0_u8; 65_536];
+        let result = validate_pack_v1(
+            &mut pack,
+            &mut spool,
+            &mut scratch,
+            request.maximum_entries,
+            &ledger,
+            &mut counters,
+        );
+        observe(
+            result.as_ref().err().copied(),
+            pack,
+            None,
+            spool,
+            counters,
+            result.ok(),
+            ledger,
+        )
+    }
+
+    pub const fn operation_slot_bytes() -> u64 {
+        OPERATION_SLOT_BYTES
     }
 }
 

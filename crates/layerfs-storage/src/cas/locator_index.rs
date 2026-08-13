@@ -315,7 +315,7 @@ fn decode_global_seen_record_v1(
     })
 }
 
-#[cfg(all(test, feature = "operation-polymorphism"))]
+#[cfg(test)]
 mod tests {
     use super::{
         global_seen_hash_v1, FileGlobalSeenSpoolV1, GlobalSeenErrorV1,

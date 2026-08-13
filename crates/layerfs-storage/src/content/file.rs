@@ -18,7 +18,6 @@ use crate::identity::{
 };
 #[cfg(feature = "operation-polymorphism")]
 use crate::limits::OperationReservationV1;
-#[cfg(test)]
 use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, ObservationScopeV1, OperationCountersV1,
@@ -188,7 +187,6 @@ impl<'buffers> ContentBuffersV1<'buffers> {
 }
 
 #[allow(clippy::too_many_arguments)]
-#[cfg(test)]
 pub fn create_file_v1<S, O, R, C>(
     path: &[u8],
     mode: u16,
@@ -222,7 +220,6 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-#[cfg(test)]
 pub(super) fn prepare_file_v1<S, O, R, C>(
     path: &[u8],
     mode: u16,

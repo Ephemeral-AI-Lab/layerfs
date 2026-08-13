@@ -6,12 +6,12 @@
 //! borrowed input record; it is deliberately not accepted by admission.
 
 use crate::identity::COMPARISON_WINDOW_BYTES;
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::identity::IDENTITY_HASHER_BYTES_V1;
 use crate::limits::{CounterFieldV1, OperationCountersV1};
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::limits::{MemoryComponentV1, OperationMemoryPlanV1, ResourceLedgerV1};
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::object::{decode_physical_object_from_port_v1, DiscardStrongEdgesV1};
 use crate::object::{PhysicalObjectReadPortV1, TypedPhysicalObjectIdV1};
 use crate::{CoreError, CoreResult};
@@ -178,7 +178,7 @@ impl CompleteImmutableReadV1 {
 
 /// Validate an occupied object completely, then copy it to a bounded sink.
 /// The immutable source is read twice: authentication first, delivery second.
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 pub fn read_complete_immutable_v1<O, S>(
     expected_id: TypedPhysicalObjectIdV1,
     occupied: &mut O,

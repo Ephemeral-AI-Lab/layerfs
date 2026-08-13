@@ -21,18 +21,15 @@ use super::view::{
 };
 use crate::format::compare_unsigned;
 use crate::identity::{COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1};
-#[cfg(feature = "operation-polymorphism")]
 use crate::limits::OperationReservationV1;
-#[cfg(test)]
 use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
 use crate::{CoreError, CoreResult};
 
-#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
+pub fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeReplacementEvidenceV1<'_>,
     replacement_index: usize,
@@ -84,7 +81,6 @@ pub(crate) fn replace_directory_entry_cow_borrowed_v1<S: PreparedTreeSinkV1 + ?S
 
 #[derive(Clone, Copy)]
 enum TreeMemoryAdmissionV1<'a> {
-    #[cfg(test)]
     Independent(&'a ResourceLedgerV1),
     Borrowed(&'a OperationReservationV1<'a>),
 }
@@ -150,7 +146,6 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
             sink.resident_memory_bound_bytes()?,
         )?;
     match admission {
-        #[cfg(test)]
         TreeMemoryAdmissionV1::Independent(ledger) => {
             let _reservation = ledger.reserve_operation_with_plan(memory)?;
             counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
@@ -352,9 +347,8 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
     })
 }
 
-#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn add_directory_entry_cow_v1<T, S>(
+pub fn add_directory_entry_cow_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
     insertion_index: usize,
@@ -420,9 +414,8 @@ where
     )
 }
 
-#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn remove_directory_entry_cow_v1<T, S>(
+pub fn remove_directory_entry_cow_v1<T, S>(
     base: CanonicalDirectoryTreeV1,
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
     removal_index: usize,
@@ -746,7 +739,6 @@ where
         )?
         .charge(MemoryComponentV1::MetadataWindow, port_bytes)?;
     match admission {
-        #[cfg(test)]
         TreeMemoryAdmissionV1::Independent(ledger) => {
             let _reservation = ledger.reserve_operation_with_plan(memory)?;
             counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());

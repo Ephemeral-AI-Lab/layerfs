@@ -29,7 +29,7 @@ use super::locator::{
     PersistentLocatorRollbackDecisionV1, PersistentLocatorRollbackEvidenceV1,
     PersistentObjectLocatorV1, PERSISTENT_LOCATOR_BYTES_V1,
 };
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::cas::admit_complete_immutable_v1;
 use crate::cas::{
     AdmissionBuffersV1, AdmittedClosureV1, CompleteImmutableClosureReadPortV1,
@@ -44,7 +44,7 @@ use crate::limits::{
     ResourceLedgerV1, BASE_LEDGER_BYTES, MEMORY_PROFILE_72_MIB, OPERATION_SLOT_BYTES,
 };
 use crate::object::TypedPhysicalObjectIdV1;
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::pack::validate_pack_v1;
 use crate::pack::{
     locate_validated_pack_index_entry_controlled_v1, read_sealed_pack_shape_v1,
@@ -57,7 +57,7 @@ use crate::{CoreError, CoreResult};
 const GENERATION_MAGIC: &[u8; 8] = b"LFSGEN01";
 const GENERATION_MARKER_BYTES: usize = 40;
 const CLOSURE_MAGIC: &[u8; 8] = b"LFSCLO01";
-pub(crate) const CLOSURE_MARKER_BYTES: usize = 120;
+pub const CLOSURE_MARKER_BYTES: usize = 120;
 const INVALIDATED_ROOT_NAME: &str = "invalidated";
 const ROOT_OWNER_NAME: &str = "owner";
 const ROOT_OWNER_MAGIC: &[u8; 8] = b"LFSOWN01";
@@ -70,8 +70,8 @@ const ADMISSION_CONTROL_POLL: Duration = Duration::from_millis(2);
 /// bound LayerFS' own admitted growth; they are deliberately not claims about
 /// filesystem free blocks or per-user quota, whose availability remains a
 /// separately typed observation.
-pub(crate) const ROOT_LOGICAL_STORAGE_BUDGET_V1: u64 = 512 * 1_024 * 1_024 * 1_024;
-pub(crate) const ROOT_NAMESPACE_ENTRY_BUDGET_V1: u64 = 256 * 1_024 * 1_024;
+pub const ROOT_LOGICAL_STORAGE_BUDGET_V1: u64 = 512 * 1_024 * 1_024 * 1_024;
+pub const ROOT_NAMESPACE_ENTRY_BUDGET_V1: u64 = 256 * 1_024 * 1_024;
 const ROOT_STORAGE_OPERATION_SLOTS_V1: usize = 16;
 const PERSISTENT_LOCATOR_BYTES_U64_V1: u64 = PERSISTENT_LOCATOR_BYTES_V1 as u64;
 
@@ -147,7 +147,7 @@ pub enum FsCasErrorV1 {
     },
 }
 
-#[cfg(all(test, feature = "operation-polymorphism"))]
+#[cfg(feature = "operation-polymorphism")]
 mod locator_custody_regression_tests {
     use super::{
         encode_catalog_marker, CarrierReceiptTransitionCheckV1, FsCasBoundaryV1, FsCasControlV1,
@@ -1800,7 +1800,7 @@ impl FsCasErrorV1 {
         }
     }
 
-    pub(crate) const fn dominant_cause_v1(self) -> FsCasFailureCauseV1 {
+    pub const fn dominant_cause_v1(self) -> FsCasFailureCauseV1 {
         match self {
             Self::TerminalFailure { dominant, .. } => dominant,
             scalar => scalar.first_cause_v1(),
@@ -1811,7 +1811,7 @@ impl FsCasErrorV1 {
         (self.first_cause_v1(), self.dominant_cause_v1())
     }
 
-    pub(crate) fn dominated_by_v1(self, dominant: Self) -> Self {
+    pub fn dominated_by_v1(self, dominant: Self) -> Self {
         // Only explicit cleanup and persistent-invalidation failure may
         // replace the terminal classification while retaining the initiating
         // cause. Counter/observation, I/O, integrity, and resource failures
@@ -1921,17 +1921,17 @@ pub enum FsCasFilesystemBoundaryV1 {
 /// Test-only arithmetic boundary for proving that visible immutable custody
 /// remains dependency-safe when a direct residue observation cannot be
 /// recorded. Production has no injectable counter path.
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum FsCasResidueAccountingBoundaryV1 {
+pub enum FsCasResidueAccountingBoundaryV1 {
     CatalogMarker,
     ObjectLocator,
     Carrier,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum CarrierReceiptTransitionCheckV1 {
+pub enum CarrierReceiptTransitionCheckV1 {
     PrivateHandle,
     PrivateMetadata,
     ActivePublicationAuthority,
@@ -2000,7 +2000,7 @@ pub trait FsCasControlV1 {
     ) -> Option<FsCasErrorV1> {
         None
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_residue_accounting_failure(
         &mut self,
         _boundary: FsCasResidueAccountingBoundaryV1,
@@ -2011,9 +2011,9 @@ pub trait FsCasControlV1 {
     /// reproduce an independent process winning after the in-process vacancy
     /// snapshot but before this caller's hard link. Production builds contain
     /// neither this callback nor any callback work inside the transition.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn before_carrier_no_replace_transition_for_test_v1(&mut self) {}
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_carrier_receipt_transition_failure_v1(
         &mut self,
         _check: CarrierReceiptTransitionCheckV1,
@@ -2024,21 +2024,21 @@ pub trait FsCasControlV1 {
     /// operation terminal callback unwinds after both owned capability halves
     /// have been released successfully. Production controls have no such
     /// callback and compile without this method.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
         false
     }
     /// Test-only direct-observation failure. It proves that a terminal unwind
     /// cannot replace the machine-readable observation result with a string
     /// panic. Production observations always come from `RootLockObservationV1`.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_root_lock_observation_failure(&mut self) -> Option<CoreError> {
         None
     }
     /// Test-only proof hook for the checked per-carrier counter transfer that
     /// follows an FsCas admission callback unwind. Production controls cannot
     /// alter the accumulator and compile without this method.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_carrier_counter_accumulation_overflow(&mut self) -> bool {
         false
     }
@@ -2047,21 +2047,21 @@ pub trait FsCasControlV1 {
     /// visible. Production controls cannot alter the tally; the hook proves
     /// that exact operation-relative residue is transferred before the typed
     /// arithmetic terminal leaves the pack sink.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_post_admission_carrier_tally_overflow(&mut self) -> bool {
         false
     }
     /// Test-only proof hook for the checked global-seen observation transfer.
     /// Production controls cannot alter the accumulator and compile without
     /// this method.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_global_seen_counter_accumulation_overflow(&mut self) -> bool {
         false
     }
     /// Test-only proof hook for the checked aggregate/physical/kind object
     /// disposition transaction. Production controls cannot alter counters and
     /// compile without this method.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_pack_object_disposition_overflow(&mut self, _created: bool) -> bool {
         false
     }
@@ -2069,14 +2069,14 @@ pub trait FsCasControlV1 {
     /// an operation preparation spool. The hook fires only after the real
     /// write succeeds, so tests can prove that the typed observation failure
     /// does not masquerade as structural corruption or disturb cleanup.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
         false
     }
     /// Test-only failure at the checked preparation-byte precharge immediately
     /// before an operation spool write. Production controls cannot refuse the
     /// root ledger transition and compile without this method.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<FsCasErrorV1> {
         None
     }
@@ -2085,7 +2085,7 @@ pub trait FsCasControlV1 {
     /// late call-count overflow can prove that the byte/call observation is
     /// indivisible and its exact checked-arithmetic cause survives the neutral
     /// pack-port error.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_counted_pack_read_observation_overflow(&mut self) -> bool {
         false
     }
@@ -2093,21 +2093,21 @@ pub trait FsCasControlV1 {
     /// a same-carrier incumbent with a new candidate. The hook fires only
     /// after both real reads complete, so a late call-count overflow proves
     /// that their byte/call observation commits as one transaction.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_same_carrier_comparison_observation_overflow(&mut self) -> bool {
         false
     }
     /// Test-only proof hook for the otherwise-unreachable checked transition
     /// that advances a cancelled queue ticket after a control callback
     /// unwinds. Production controls cannot alter root queue state.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_pending_unwind_retirement_failure(&mut self) -> Option<FsCasErrorV1> {
         None
     }
     /// Test-only proof hook for invalidation discovered after the root mutex
     /// has been acquired but before the acquisition is exposed to its caller.
     /// Production validation always comes from `FsCasV1::ensure_valid`.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_root_lock_post_acquire_validation_failure(&mut self) -> Option<FsCasErrorV1> {
         None
     }
@@ -2644,13 +2644,13 @@ impl RootLockObservationV1 {
 /// Operation-local control adapter for direct lock provenance. It allocates
 /// no heap state and delegates every stop/fault decision to the caller's
 /// existing control. The adapter is private and cannot mint an operation.
-pub(crate) struct FsOperationObservedControlV1<'control, C: ?Sized> {
+pub struct FsOperationObservedControlV1<'control, C: ?Sized> {
     inner: &'control mut C,
     locks: RootLockObservationV1,
 }
 
 impl<'control, C: ?Sized> FsOperationObservedControlV1<'control, C> {
-    pub(crate) fn new(inner: &'control mut C) -> Self {
+    pub fn new(inner: &'control mut C) -> Self {
         Self {
             inner,
             locks: RootLockObservationV1::default(),
@@ -2661,11 +2661,11 @@ impl<'control, C: ?Sized> FsOperationObservedControlV1<'control, C> {
         self.inner
     }
 
-    pub(crate) fn finish_v1(self, counters: &mut OperationCountersV1) -> CoreResult<()>
+    pub fn finish_v1(self, counters: &mut OperationCountersV1) -> CoreResult<()>
     where
         C: FsCasControlV1,
     {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if let Some(error) = self.inner.inject_root_lock_observation_failure() {
             return Err(error);
         }
@@ -2726,7 +2726,7 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
         self.inner.inject_filesystem_failure(boundary)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_residue_accounting_failure(
         &mut self,
         boundary: FsCasResidueAccountingBoundaryV1,
@@ -2734,13 +2734,13 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
         self.inner.inject_residue_accounting_failure(boundary)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn before_carrier_no_replace_transition_for_test_v1(&mut self) {
         self.inner
             .before_carrier_no_replace_transition_for_test_v1();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_carrier_receipt_transition_failure_v1(
         &mut self,
         check: CarrierReceiptTransitionCheckV1,
@@ -2749,65 +2749,65 @@ impl<C: FsCasControlV1 + ?Sized> FsCasControlV1 for FsOperationObservedControlV1
             .inject_carrier_receipt_transition_failure_v1(check)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_terminal_unwind_after_release(&mut self) -> bool {
         self.inner.inject_operation_terminal_unwind_after_release()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_root_lock_observation_failure(&mut self) -> Option<CoreError> {
         self.inner.inject_root_lock_observation_failure()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_carrier_counter_accumulation_overflow(&mut self) -> bool {
         self.inner.inject_carrier_counter_accumulation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_post_admission_carrier_tally_overflow(&mut self) -> bool {
         self.inner.inject_post_admission_carrier_tally_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_global_seen_counter_accumulation_overflow(&mut self) -> bool {
         self.inner
             .inject_global_seen_counter_accumulation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_pack_object_disposition_overflow(&mut self, created: bool) -> bool {
         self.inner.inject_pack_object_disposition_overflow(created)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_spool_write_observation_overflow(&mut self) -> bool {
         self.inner
             .inject_operation_spool_write_observation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<FsCasErrorV1> {
         self.inner.inject_operation_spool_precharge_failure_v1()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_counted_pack_read_observation_overflow(&mut self) -> bool {
         self.inner.inject_counted_pack_read_observation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_same_carrier_comparison_observation_overflow(&mut self) -> bool {
         self.inner
             .inject_same_carrier_comparison_observation_overflow()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_pending_unwind_retirement_failure(&mut self) -> Option<FsCasErrorV1> {
         self.inner.inject_pending_unwind_retirement_failure()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn inject_root_lock_post_acquire_validation_failure(&mut self) -> Option<FsCasErrorV1> {
         self.inner
             .inject_root_lock_post_acquire_validation_failure()
@@ -2927,6 +2927,8 @@ struct LocatorPublicationCustodyV1<'spool> {
     receipts: Vec<LocatorPublicationReceiptV1>,
     pending_receipt: Option<LocatorPublicationReceiptV1>,
     receipt_prelink_unwound: bool,
+    #[cfg(not(feature = "operation-polymorphism"))]
+    _spool: core::marker::PhantomData<&'spool ()>,
     #[cfg(feature = "operation-polymorphism")]
     receipt_spool: Option<&'spool mut FsOperationSpoolV1>,
     #[cfg(feature = "operation-polymorphism")]
@@ -3396,7 +3398,7 @@ struct FsCasInnerV1 {
     /// publication from an earlier incarnation after close-all/reopen.
     locator_incarnation: u64,
     invalidated: AtomicBool,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     invalidation_probe_failure: Mutex<Option<FsCasErrorV1>>,
     /// A pre-created, pre-opened cross-process ownership token. Invalidation
     /// mutates this existing allocation in place and retains its pathname;
@@ -3626,7 +3628,7 @@ const ROOT_INVALIDATION_BARRIER_RESERVATION_V1: RootStorageUsageV1 = RootStorage
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct FsStorageEnvelopeV1 {
+pub struct FsStorageEnvelopeV1 {
     preparation_bytes: u64,
     immutable_bytes: u64,
     preparation_inodes: u64,
@@ -3634,7 +3636,7 @@ pub(crate) struct FsStorageEnvelopeV1 {
 }
 
 impl FsStorageEnvelopeV1 {
-    pub(crate) fn new(
+    pub fn new(
         preparation_bytes: u64,
         immutable_bytes: u64,
         preparation_inodes: u64,
@@ -3709,9 +3711,9 @@ struct RootStorageAdmissionV1 {
     inode_capacity: u64,
     fixed_reservation: RootStorageUsageV1,
     state: Mutex<RootStorageAdmissionStateV1>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     poison_next_immutable_remove: AtomicBool,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fail_next_preparation_remove: AtomicBool,
 }
 
@@ -3734,7 +3736,7 @@ struct FsStorageOwnerIdentityV1 {
 /// already-admitted root operation. It is never exposed outside the crate and
 /// carries no authority to reserve another operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct FsStorageOperationTokenV1 {
+pub struct FsStorageOperationTokenV1 {
     owner: FsStorageOwnerIdentityV1,
     slot: u8,
     nonce: u64,
@@ -3756,7 +3758,7 @@ impl RootStorageAdmissionV1 {
         )
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn new_with_capacities(
         immutable: RootStorageUsageV1,
         preparation: RootStorageUsageV1,
@@ -3823,14 +3825,14 @@ impl RootStorageAdmissionV1 {
                 unclassified_terminals: [RootStorageUnclassifiedTerminalV1::default();
                     ROOT_STORAGE_OPERATION_SLOTS_V1],
             }),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             poison_next_immutable_remove: AtomicBool::new(false),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             fail_next_preparation_remove: AtomicBool::new(false),
         })
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn reserve(
         &self,
         envelope: FsStorageEnvelopeV1,
@@ -4103,7 +4105,7 @@ impl RootStorageAdmissionV1 {
         token: FsStorageOperationTokenV1,
         len: u64,
     ) -> Result<(), FsCasErrorV1> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if self
             .fail_next_preparation_remove
             .swap(false, Ordering::AcqRel)
@@ -4173,7 +4175,7 @@ impl RootStorageAdmissionV1 {
         bytes: u64,
         inodes: u64,
     ) -> Result<(), FsCasErrorV1> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if self
             .poison_next_immutable_remove
             .swap(false, Ordering::AcqRel)
@@ -4638,7 +4640,7 @@ const _: [(); 256] = [(); core::mem::size_of::<QueueTicketV1>()];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u64)]
-pub(crate) enum FsOperationKindV1 {
+pub enum FsOperationKindV1 {
     CompleteC3File = 1,
     CompleteC3Tree = 2,
     RootExtraction = 3,
@@ -4901,7 +4903,7 @@ enum OperationAdmissionAcquireOutcomeV1<'queue> {
     },
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 impl<'queue> OperationAdmissionAcquireOutcomeV1<'queue> {
     fn unwrap(self) -> RootAdmissionLeaseV1<'queue> {
         match self {
@@ -4925,8 +4927,8 @@ struct PendingAdmissionTicketV1<'queue> {
 /// an operation capability and its `Drop` only returns the preallocated queue
 /// cell. This exists solely to prove that a production caller rejected at the
 /// 1,025th ticket performs no typed request, sink, or storage work.
-#[cfg(test)]
-pub(crate) struct PendingAdmissionTicketForTestV1<'queue> {
+#[cfg(any(test, feature = "operation-polymorphism"))]
+pub struct PendingAdmissionTicketForTestV1<'queue> {
     _ticket: PendingAdmissionTicketV1<'queue>,
 }
 
@@ -5007,9 +5009,9 @@ impl<'queue> PendingAdmissionTicketV1<'queue> {
                         Err(FsCasErrorV1::Integrity)
                     } else {
                         state.tickets[self.slot] = AdmissionTicketStateV1::Cancelled;
-                        #[cfg(test)]
+                        #[cfg(any(test, feature = "operation-polymorphism"))]
                         let injected = control.inject_pending_unwind_retirement_failure();
-                        #[cfg(not(test))]
+                        #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
                         let injected: Option<FsCasErrorV1> = None;
                         match advance_cancelled_tickets_v1(&mut state) {
                             Err(error) => Err(error),
@@ -5161,7 +5163,7 @@ impl Drop for FsCasInnerV1 {
 /// replace it. Only this outer capability may monotonically refine its own
 /// conservative storage envelope before preparation begins.
 #[cfg(feature = "operation-polymorphism")]
-pub(crate) struct FsOperationCapabilityV1<'owner> {
+pub struct FsOperationCapabilityV1<'owner> {
     owner: &'owner FsCasV1,
     operation_kind: FsOperationKindV1,
     reservation: OperationReservationV1<'owner>,
@@ -5171,26 +5173,23 @@ pub(crate) struct FsOperationCapabilityV1<'owner> {
 
 #[cfg(feature = "operation-polymorphism")]
 impl FsOperationCapabilityV1<'_> {
-    pub(crate) fn owner_ref_v1(&self) -> &FsCasV1 {
+    pub fn owner_ref_v1(&self) -> &FsCasV1 {
         self.owner
     }
 
-    pub(crate) fn invalidate_owner_controlled_v1<C>(
-        &self,
-        control: &mut C,
-    ) -> Result<(), FsCasErrorV1>
+    pub fn invalidate_owner_controlled_v1<C>(&self, control: &mut C) -> Result<(), FsCasErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
         self.owner.invalidate_root_controlled_v1(control)
     }
 
-    pub(crate) fn invalidate_owner_backstop_v1(&self) -> Result<(), FsCasErrorV1> {
+    pub fn invalidate_owner_backstop_v1(&self) -> Result<(), FsCasErrorV1> {
         let mut control = ContinueFsCasControlV1;
         self.owner.invalidate_root_controlled_v1(&mut control)
     }
 
-    pub(crate) fn require_operation_kind_v1(
+    pub fn require_operation_kind_v1(
         &self,
         expected: FsOperationKindV1,
     ) -> Result<(), FsCasErrorV1> {
@@ -5201,19 +5200,19 @@ impl FsOperationCapabilityV1<'_> {
         }
     }
 
-    pub(crate) fn declare_plan_v1(&mut self, plan: OperationMemoryPlanV1) -> CoreResult<()> {
+    pub fn declare_plan_v1(&mut self, plan: OperationMemoryPlanV1) -> CoreResult<()> {
         self.reservation.declare_plan(plan)
     }
 
-    pub(crate) fn memory_high_water_bytes_v1(&self) -> u64 {
+    pub fn memory_high_water_bytes_v1(&self) -> u64 {
         self.owner.inner.operation_ledger.high_water_bytes()
     }
 
-    pub(crate) fn reservation_v1(&self) -> &OperationReservationV1<'_> {
+    pub fn reservation_v1(&self) -> &OperationReservationV1<'_> {
         &self.reservation
     }
 
-    pub(crate) fn declare_storage_envelope_v1(
+    pub fn declare_storage_envelope_v1(
         &mut self,
         envelope: FsStorageEnvelopeV1,
     ) -> Result<(), FsCasErrorV1> {
@@ -5234,14 +5233,14 @@ impl FsOperationCapabilityV1<'_> {
         self.owner.ensure_valid()
     }
 
-    pub(crate) fn storage_token_v1(&self) -> Result<FsStorageOperationTokenV1, FsCasErrorV1> {
+    pub fn storage_token_v1(&self) -> Result<FsStorageOperationTokenV1, FsCasErrorV1> {
         self.storage
             .as_ref()
             .ok_or(FsCasErrorV1::Integrity)?
             .token_v1()
     }
 
-    pub(crate) fn finish_storage_admission_v1<C>(
+    pub fn finish_storage_admission_v1<C>(
         &mut self,
         commit: bool,
         counters: &mut OperationCountersV1,
@@ -5309,7 +5308,7 @@ impl FsOperationCapabilityV1<'_> {
     /// Explicitly terminate the root-owned operation after every storage and
     /// preparation cleanup attempt. Queue release is fallible and therefore
     /// cannot be delegated to Drop on an ordinary return path.
-    pub(crate) fn finish_operation_admission_v1<C>(
+    pub fn finish_operation_admission_v1<C>(
         &mut self,
         counters: &mut OperationCountersV1,
         control: &mut C,
@@ -5350,7 +5349,7 @@ impl FsOperationCapabilityV1<'_> {
     /// still live. If the later admission release fails, no handoff may be
     /// returned: reclassify the operation's immutable set from committed to
     /// retained residue before returning the typed fail-closed error.
-    pub(crate) fn finish_terminal_v1<C>(
+    pub fn finish_terminal_v1<C>(
         &mut self,
         commit: bool,
         counters: &mut OperationCountersV1,
@@ -5407,7 +5406,7 @@ impl FsOperationCapabilityV1<'_> {
             (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
             (Ok(()), Ok(())) => Ok(()),
         };
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if terminal.is_ok()
             && storage_unwind.is_none()
             && admission_unwind.is_none()
@@ -5574,7 +5573,7 @@ where
         generation,
         locator_incarnation,
         invalidated: AtomicBool::new(false),
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         invalidation_probe_failure: Mutex::new(None),
         ownership: Mutex::new(Some(ownership)),
         operation_ledger: ResourceLedgerV1::new(MEMORY_PROFILE_72_MIB),
@@ -5594,7 +5593,7 @@ where
 /// uniqueness proof. The resulting tag is never used as deletion custody:
 /// exact operation-local receipts authorize locator unlinking.
 fn locator_incarnation_v1(storage_owner_instance: u64) -> u64 {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     if let Ok(value) = std::env::var("LAYERFS_TEST_LOCATOR_INCARNATION") {
         return value
             .parse()
@@ -5617,7 +5616,7 @@ fn locator_incarnation_v1(storage_owner_instance: u64) -> u64 {
 }
 
 fn next_locator_operation_nonce_v1() -> u64 {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     if let Ok(value) = std::env::var("LAYERFS_TEST_LOCATOR_OPERATION_NONCE") {
         return value
             .parse()
@@ -5728,18 +5727,17 @@ impl FsCasV1 {
     /// Crate-private logical admission observation for deterministic
     /// qualification. This does not expose the root-owned ledger or permit a
     /// caller to mint an operation reservation.
-    #[cfg(feature = "operation-polymorphism")]
-    pub(crate) fn operation_admitted_slots_v1(&self) -> u64 {
+    pub fn operation_admitted_slots_v1(&self) -> u64 {
         self.inner.operation_ledger.admitted_slots()
     }
 
-    #[cfg(test)]
-    pub(crate) fn visibility_lock_available_for_test_v1(&self) -> bool {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn visibility_lock_available_for_test_v1(&self) -> bool {
         self.inner.visibility.try_lock().is_ok()
     }
 
-    #[cfg(test)]
-    pub(crate) fn publication_lock_available_for_test_v1(&self) -> bool {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn publication_lock_available_for_test_v1(&self) -> bool {
         self.inner.publication.try_lock().is_ok()
     }
 
@@ -5747,8 +5745,8 @@ impl FsCasV1 {
     /// occupant-pack reader opened by this test thread. The one-shot,
     /// thread-local scope keeps concurrent tests and production state out of
     /// the fault surface.
-    #[cfg(test)]
-    pub(crate) fn saturate_next_occupant_pack_read_calls_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn saturate_next_occupant_pack_read_calls_for_test_v1(&self) {
         NEXT_OCCUPANT_PACK_READ_CALLS_FOR_TEST_V1.with(|seed| {
             assert!(seed.replace(Some(u64::MAX)).is_none());
         });
@@ -5758,8 +5756,8 @@ impl FsCasV1 {
     /// this test thread. The hook is consumed only after the real file read
     /// succeeds, proving the checked observation pair without altering
     /// production authority or concurrent tests.
-    #[cfg(test)]
-    pub(crate) fn seed_next_operation_spool_read_observation_for_test_v1(
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn seed_next_operation_spool_read_observation_for_test_v1(
         &self,
         bytes_read: u64,
         read_calls: u64,
@@ -5772,8 +5770,8 @@ impl FsCasV1 {
     /// Seed the direct metadata-read observation on the next occupied reader
     /// opened by this test thread. The one-shot seed leaves real locator and
     /// catalog I/O intact while making a late checked commit deterministic.
-    #[cfg(test)]
-    pub(crate) fn seed_next_occupied_read_observation_for_test_v1(
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn seed_next_occupied_read_observation_for_test_v1(
         &self,
         bytes_read: u64,
         read_calls: u64,
@@ -5786,8 +5784,8 @@ impl FsCasV1 {
     /// Seed the direct read observation immediately before the next occupied
     /// reader performs a real payload read. Resolution and authentication run
     /// normally first, so tests can isolate the payload tuple's checked commit.
-    #[cfg(test)]
-    pub(crate) fn seed_next_occupied_payload_read_observation_for_test_v1(
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn seed_next_occupied_payload_read_observation_for_test_v1(
         &self,
         bytes_read: u64,
         read_calls: u64,
@@ -5801,8 +5799,8 @@ impl FsCasV1 {
     /// This is a test-only substitute for nondeterministic permission and I/O
     /// races at the reserved marker pathname; it never affects production
     /// filesystem authority.
-    #[cfg(test)]
-    pub(crate) fn fail_next_invalidation_probe_for_test_v1(&self, error: FsCasErrorV1) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn fail_next_invalidation_probe_for_test_v1(&self, error: FsCasErrorV1) {
         assert!(matches!(
             error,
             FsCasErrorV1::Filesystem(FsCasFilesystemFailureV1::PermissionDenied)
@@ -5816,7 +5814,7 @@ impl FsCasV1 {
         assert!(failure.replace(error).is_none());
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub(crate) fn hold_visibility_lock_for_test_v1(&self) -> MutexGuard<'_, ()> {
         self.inner
             .visibility
@@ -5824,8 +5822,8 @@ impl FsCasV1 {
             .expect("test visibility lock must not already be poisoned")
     }
 
-    #[cfg(test)]
-    pub(crate) fn poison_operation_admission_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn poison_operation_admission_for_test_v1(&self) {
         let poison = self.clone();
         let unwind = std::thread::spawn(move || {
             let _guard = poison.inner.operation_admission.state.lock().unwrap();
@@ -5835,16 +5833,16 @@ impl FsCasV1 {
         assert!(unwind.is_err());
     }
 
-    #[cfg(test)]
-    pub(crate) fn operation_admission_active_for_test_v1(&self) -> u64 {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn operation_admission_active_for_test_v1(&self) -> u64 {
         match self.inner.operation_admission.state.lock() {
             Ok(state) => state.active,
             Err(poison) => poison.into_inner().active,
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn operation_admission_queue_for_test_v1(&self) -> (u64, u64, u64) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn operation_admission_queue_for_test_v1(&self) -> (u64, u64, u64) {
         let state = match self.inner.operation_admission.state.lock() {
             Ok(state) => state,
             Err(poison) => poison.into_inner(),
@@ -5866,8 +5864,8 @@ impl FsCasV1 {
         (outstanding, waiting, cancelled)
     }
 
-    #[cfg(test)]
-    pub(crate) fn poison_storage_admission_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn poison_storage_admission_for_test_v1(&self) {
         let poison = self.clone();
         let unwind = std::thread::spawn(move || {
             let _guard = poison.inner.storage_admission.state.lock().unwrap();
@@ -5881,8 +5879,8 @@ impl FsCasV1 {
     /// rollback. This is narrower than poisoning the whole storage ledger
     /// before publication, because the immutable install must first succeed
     /// for the no-replace losing-incumbent branch to be exercised.
-    #[cfg(test)]
-    pub(crate) fn poison_next_immutable_remove_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn poison_next_immutable_remove_for_test_v1(&self) {
         assert!(!self
             .inner
             .storage_admission
@@ -5894,8 +5892,8 @@ impl FsCasV1 {
     /// mutates the operation cell. The physically absent path then has a
     /// deliberately unreleased logical charge, isolating cleanup-terminal
     /// classification and invalidation-double-fault behavior.
-    #[cfg(test)]
-    pub(crate) fn fail_next_preparation_remove_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn fail_next_preparation_remove_for_test_v1(&self) {
         assert!(!self
             .inner
             .storage_admission
@@ -5907,8 +5905,8 @@ impl FsCasV1 {
     /// after one operation has charged a name but before the filesystem create
     /// reports its directional error. This is test-only state corruption for
     /// the otherwise unreachable bookkeeping-double-fault branch.
-    #[cfg(test)]
-    pub(crate) fn remove_active_preparation_inode_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn remove_active_preparation_inode_for_test_v1(&self) {
         let mut state = match self.inner.storage_admission.state.lock() {
             Ok(state) => state,
             Err(poison) => poison.into_inner(),
@@ -5928,8 +5926,8 @@ impl FsCasV1 {
     /// explicit cleanup reconciliation failure path; production can reach
     /// the same terminal through a stale/corrupt operation token or checked
     /// accounting failure.
-    #[cfg(test)]
-    pub(crate) fn clear_active_preparation_bytes_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn clear_active_preparation_bytes_for_test_v1(&self) {
         let mut state = match self.inner.storage_admission.state.lock() {
             Ok(state) => state,
             Err(poison) => poison.into_inner(),
@@ -5948,8 +5946,8 @@ impl FsCasV1 {
     /// with a marker's zero-length precharge. The paired control restores the
     /// value before explicit cleanup; this exists only to prove the checked
     /// accounting failure and invalidation-double-fault terminal paths.
-    #[cfg(test)]
-    pub(crate) fn inject_active_preparation_byte_for_test_v1(&self) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn inject_active_preparation_byte_for_test_v1(&self) {
         let mut state = match self.inner.storage_admission.state.lock() {
             Ok(state) => state,
             Err(poison) => poison.into_inner(),
@@ -5969,8 +5967,8 @@ impl FsCasV1 {
     /// This is test-only support for proving that a failed cleanup-time length
     /// reconciliation is classified once and retained exactly rather than
     /// retried by a backstop.
-    #[cfg(test)]
-    pub(crate) fn restore_active_preparation_bytes_for_test_v1(&self, bytes: u64) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn restore_active_preparation_bytes_for_test_v1(&self, bytes: u64) {
         let mut state = match self.inner.storage_admission.state.lock() {
             Ok(state) => state,
             Err(poison) => poison.into_inner(),
@@ -5990,8 +5988,8 @@ impl FsCasV1 {
         assert_eq!(found, 1, "expected one zero-byte preparation domain");
     }
 
-    #[cfg(test)]
-    pub(crate) fn publish_test_marker_borrowed_v1<C>(
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn publish_test_marker_borrowed_v1<C>(
         &self,
         storage_token: FsStorageOperationTokenV1,
         control: &mut C,
@@ -6028,16 +6026,16 @@ impl FsCasV1 {
     /// byte larger than its current root-ledger charge. This test-only setup
     /// isolates cleanup-time length reconciliation without introducing a
     /// second publication error that would become the chronological cause.
-    #[cfg(test)]
-    pub(crate) fn prepare_test_marker_cleanup_mismatch_v1(
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn prepare_test_marker_cleanup_mismatch_v1(
         &self,
         storage_token: FsStorageOperationTokenV1,
     ) -> Result<PathBuf, FsCasErrorV1> {
         self.prepare_test_marker_cleanup_file_v1(storage_token, 9)
     }
 
-    #[cfg(test)]
-    pub(crate) fn prepare_test_marker_cleanup_file_v1(
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn prepare_test_marker_cleanup_file_v1(
         &self,
         storage_token: FsStorageOperationTokenV1,
         observed_len: u64,
@@ -6062,8 +6060,8 @@ impl FsCasV1 {
         Ok(path)
     }
 
-    #[cfg(test)]
-    pub(crate) fn cleanup_test_marker_mismatch_borrowed_v1<C>(
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn cleanup_test_marker_mismatch_borrowed_v1<C>(
         &self,
         storage_token: FsStorageOperationTokenV1,
         control: &mut C,
@@ -6086,8 +6084,8 @@ impl FsCasV1 {
         )
     }
 
-    #[cfg(test)]
-    pub(crate) fn storage_admission_active_for_test_v1(&self) -> (u64, u64, u64) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn storage_admission_active_for_test_v1(&self) -> (u64, u64, u64) {
         let state = match self.inner.storage_admission.state.lock() {
             Ok(state) => state,
             Err(poison) => poison.into_inner(),
@@ -6109,10 +6107,8 @@ impl FsCasV1 {
     /// test-only: it deliberately bypasses this operation's storage authority
     /// so the losing operation can prove that a failed charge rollback stops
     /// before incumbent adoption.
-    #[cfg(test)]
-    pub(crate) fn install_single_prepared_carrier_for_test_v1(
-        &self,
-    ) -> Result<PathBuf, FsCasErrorV1> {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn install_single_prepared_carrier_for_test_v1(&self) -> Result<PathBuf, FsCasErrorV1> {
         let preparation = self.inner.root.join("preparation");
         let mut candidate = None;
         for entry in fs::read_dir(&preparation)
@@ -6195,7 +6191,7 @@ impl FsCasV1 {
             match mutex.try_lock() {
                 Ok(guard) => {
                     let acquired_at = Instant::now();
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     let validation = if require_valid_root {
                         control
                             .inject_root_lock_post_acquire_validation_failure()
@@ -6203,7 +6199,7 @@ impl FsCasV1 {
                     } else {
                         Ok(())
                     };
-                    #[cfg(not(test))]
+                    #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
                     let validation = if require_valid_root {
                         self.ensure_valid()
                     } else {
@@ -6525,11 +6521,11 @@ impl FsCasV1 {
             };
             let publication_acquired_at = Instant::now();
 
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             let publication_validation = control
                 .inject_root_lock_post_acquire_validation_failure()
                 .map_or_else(|| self.ensure_valid(), Err);
-            #[cfg(not(test))]
+            #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
             let publication_validation = self.ensure_valid();
             if let Err(error) = publication_validation {
                 let completion = ControlledRootMutexGuardV1::new_v1(
@@ -6601,11 +6597,11 @@ impl FsCasV1 {
             match self.inner.visibility.try_lock() {
                 Ok(visibility) => {
                     let visibility_acquired_at = Instant::now();
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     let visibility_validation = control
                         .inject_root_lock_post_acquire_validation_failure()
                         .map_or_else(|| self.ensure_valid(), Err);
-                    #[cfg(not(test))]
+                    #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
                     let visibility_validation = self.ensure_valid();
                     let publication = ControlledRootMutexGuardV1::new_v1(
                         publication,
@@ -6958,8 +6954,8 @@ impl FsCasV1 {
         }
     }
 
-    #[cfg(all(test, feature = "operation-polymorphism"))]
-    pub(crate) fn issue_pending_admission_for_test_v1(
+    #[cfg(feature = "operation-polymorphism")]
+    pub fn issue_pending_admission_for_test_v1(
         &self,
         cancellation_key: u64,
     ) -> Result<PendingAdmissionTicketForTestV1<'_>, FsCasErrorV1> {
@@ -6979,7 +6975,7 @@ impl FsCasV1 {
     /// Acquire the shared root's fixed-profile operation authority before any
     /// typed request, supplier, sink, or preparation object is inspected.
     #[cfg(feature = "operation-polymorphism")]
-    pub(crate) fn begin_operation_capability_v1<C>(
+    pub fn begin_operation_capability_v1<C>(
         &self,
         operation_kind: FsOperationKindV1,
         cancellation_key: u64,
@@ -7273,14 +7269,14 @@ impl FsCasV1 {
             .ok_or(CoreError::IntegerOverflow)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub fn begin_private_pack(&self) -> Result<FsPrivatePackV1, FsCasErrorV1> {
         let mut control = ContinueFsCasControlV1;
         self.begin_private_pack_inner_v1(None, &mut control)
     }
 
     #[cfg(feature = "operation-polymorphism")]
-    pub(crate) fn begin_private_pack_borrowed_v1(
+    pub fn begin_private_pack_borrowed_v1(
         &self,
         token: FsStorageOperationTokenV1,
     ) -> Result<FsPrivatePackV1, FsCasErrorV1> {
@@ -7336,8 +7332,8 @@ impl FsCasV1 {
     /// detail used by bounded storage operations, not a caller-visible CAS
     /// surface. Its name is removed on every drop path and it is never
     /// scanned or recovered by [`Self::open_existing`].
-    #[cfg(all(test, feature = "operation-polymorphism"))]
-    pub(crate) fn begin_operation_spool_v1<C>(
+    #[cfg(feature = "operation-polymorphism")]
+    pub fn begin_operation_spool_v1<C>(
         &self,
         prefix: &str,
         control: &mut C,
@@ -7349,7 +7345,7 @@ impl FsCasV1 {
     }
 
     #[cfg(feature = "operation-polymorphism")]
-    pub(crate) fn begin_operation_spool_borrowed_v1<C>(
+    pub fn begin_operation_spool_borrowed_v1<C>(
         &self,
         prefix: &str,
         token: FsStorageOperationTokenV1,
@@ -7597,7 +7593,7 @@ impl FsCasV1 {
     /// Validate, install, reopen, and validate a sealed operation pack before
     /// publishing its catalog marker. The hard link is a no-replace,
     /// same-filesystem ownership transfer; the private name is then removed.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub fn admit_pack<M>(
         &self,
         prepared: &mut FsPrivatePackV1,
@@ -7622,7 +7618,7 @@ impl FsCasV1 {
     /// The controlled form samples cancellation before filesystem visibility
     /// transitions and between bounded incumbent-comparison windows. Every
     /// error path destroys the still-private preparation name before return.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub fn admit_pack_controlled<M, C>(
         &self,
         prepared: &mut FsPrivatePackV1,
@@ -8048,7 +8044,7 @@ impl FsCasV1 {
                     .ok_or(FsCasErrorV1::Integrity)?
                     .begin_pack_v1(validated.id(), transaction)?;
                 active_publication = true;
-                #[cfg(test)]
+                #[cfg(any(test, feature = "operation-polymorphism"))]
                 control.before_carrier_no_replace_transition_for_test_v1();
 
                 // Prepare every authority needed to identify and roll back
@@ -8056,14 +8052,14 @@ impl FsCasV1 {
                 // successful hard link below therefore commits custody by
                 // infallible assignments before any later validation runs.
                 let prepared_carrier_snapshot = (|| {
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
                         CarrierReceiptTransitionCheckV1::PrivateHandle,
                     ) {
                         return Err(error);
                     }
                     let sealed_file = prepared.sealed_file_v1()?;
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
                         CarrierReceiptTransitionCheckV1::PrivateMetadata,
                     ) {
@@ -8073,7 +8069,7 @@ impl FsCasV1 {
                         .metadata()
                         .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
                     let snapshot = ImmutableFileSnapshotV1::from_metadata_v1(&private_metadata);
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
                         CarrierReceiptTransitionCheckV1::ActivePublicationAuthority,
                     ) {
@@ -8181,7 +8177,7 @@ impl FsCasV1 {
                 }
 
                 let snapshot_authentication = (|| -> Result<(), FsCasErrorV1> {
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
                         CarrierReceiptTransitionCheckV1::CarrierMetadata,
                     ) {
@@ -8189,7 +8185,7 @@ impl FsCasV1 {
                     }
                     let carrier_metadata = fs::metadata(&carrier_path)
                         .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
                         CarrierReceiptTransitionCheckV1::CarrierIdentity,
                     ) {
@@ -8198,7 +8194,7 @@ impl FsCasV1 {
                     if !prepared_carrier_snapshot.matches_v1(&carrier_metadata) {
                         return Err(FsCasErrorV1::Integrity);
                     }
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "operation-polymorphism"))]
                     if let Some(error) = control.inject_carrier_receipt_transition_failure_v1(
                         CarrierReceiptTransitionCheckV1::ActivePublicationValidation,
                     ) {
@@ -9201,7 +9197,7 @@ impl FsCasV1 {
         if self.inner.invalidated.load(Ordering::Acquire) {
             return Err(FsCasErrorV1::Invalidated);
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if let Some(error) = self
             .inner
             .invalidation_probe_failure
@@ -9451,7 +9447,7 @@ impl FsCasV1 {
     where
         C: FsCasControlV1 + ?Sized,
     {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         let locator_accounting = if control
             .inject_residue_accounting_failure(FsCasResidueAccountingBoundaryV1::ObjectLocator)
         {
@@ -9459,7 +9455,7 @@ impl FsCasV1 {
         } else {
             locator_custody.retain_all_live_v1(counters)
         };
-        #[cfg(not(test))]
+        #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
         let locator_accounting = locator_custody.retain_all_live_v1(counters);
 
         let mut accounting_failed = locator_accounting.is_err();
@@ -9471,7 +9467,7 @@ impl FsCasV1 {
         if locator_custody.requires_carrier_retention_v1()
             && *carrier_custody == CarrierPublicationCustodyV1::InstalledUnreported
         {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             let carrier_accounting = if control
                 .inject_residue_accounting_failure(FsCasResidueAccountingBoundaryV1::Carrier)
             {
@@ -9479,7 +9475,7 @@ impl FsCasV1 {
             } else {
                 counters.record_unreachable_installed_residue(sealed.pack_len())
             };
-            #[cfg(not(test))]
+            #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
             let carrier_accounting =
                 counters.record_unreachable_installed_residue(sealed.pack_len());
 
@@ -9553,10 +9549,10 @@ impl FsCasV1 {
     where
         C: FsCasControlV1 + ?Sized,
     {
-        #[cfg(not(test))]
+        #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
         let _ = &mut *control;
 
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         let catalog_accounting = if control
             .inject_residue_accounting_failure(FsCasResidueAccountingBoundaryV1::CatalogMarker)
         {
@@ -9564,11 +9560,11 @@ impl FsCasV1 {
         } else {
             catalog_marker_custody.retain_live_v1(counters)
         };
-        #[cfg(not(test))]
+        #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
         let catalog_accounting = catalog_marker_custody.retain_live_v1(counters);
         let mut first_error = catalog_accounting.err();
 
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         let locator_accounting = if control
             .inject_residue_accounting_failure(FsCasResidueAccountingBoundaryV1::ObjectLocator)
         {
@@ -9576,7 +9572,7 @@ impl FsCasV1 {
         } else {
             locator_custody.retain_all_live_v1(counters)
         };
-        #[cfg(not(test))]
+        #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
         let locator_accounting = locator_custody.retain_all_live_v1(counters);
         if let Err(error) = locator_accounting {
             first_error.get_or_insert(error);
@@ -9586,7 +9582,7 @@ impl FsCasV1 {
         // required even when catalog or locator attribution remains live but
         // unclassified after a counter failure.
         if *carrier_custody == CarrierPublicationCustodyV1::InstalledUnreported {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             let carrier_accounting = if control
                 .inject_residue_accounting_failure(FsCasResidueAccountingBoundaryV1::Carrier)
             {
@@ -9594,7 +9590,7 @@ impl FsCasV1 {
             } else {
                 counters.record_unreachable_installed_residue(sealed.pack_len())
             };
-            #[cfg(not(test))]
+            #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
             let carrier_accounting =
                 counters.record_unreachable_installed_residue(sealed.pack_len());
 
@@ -9651,7 +9647,7 @@ impl FsCasV1 {
         let _ = self.invalidate_root_controlled_v1(&mut control);
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     fn observe_final_carrier_snapshot_check_for_test_v1() {
         FINAL_CARRIER_SNAPSHOT_CHECKS_FOR_TEST_V1.with(|checks| checks.set(checks.get() + 1));
     }
@@ -9726,7 +9722,7 @@ impl FsCasV1 {
                                     // externally observable hook may occur
                                     // between this identity check and the
                                     // unlink.
-                                    #[cfg(test)]
+                                    #[cfg(any(test, feature = "operation-polymorphism"))]
                                     Self::observe_final_carrier_snapshot_check_for_test_v1();
                                     revalidate_immutable_file_snapshot_v1(
                                         path,
@@ -10278,7 +10274,7 @@ impl FsCasV1 {
                             }
                             Err(payload) => {
                                 if !locator_removed {
-                                    #[cfg(test)]
+                                    #[cfg(any(test, feature = "operation-polymorphism"))]
                                     let retention = if control.inject_residue_accounting_failure(
                                         FsCasResidueAccountingBoundaryV1::ObjectLocator,
                                     ) {
@@ -10286,7 +10282,7 @@ impl FsCasV1 {
                                     } else {
                                         locator_custody.retain_one_v1(counters)
                                     };
-                                    #[cfg(not(test))]
+                                    #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
                                     let retention = locator_custody.retain_one_v1(counters);
                                     if let Err(error) = retention {
                                         first_error.get_or_insert(error);
@@ -10385,7 +10381,7 @@ impl FsCasV1 {
                 }
                 Err(payload) => {
                     if *carrier_custody == CarrierPublicationCustodyV1::InstalledUnreported {
-                        #[cfg(test)]
+                        #[cfg(any(test, feature = "operation-polymorphism"))]
                         let retention = if control.inject_residue_accounting_failure(
                             FsCasResidueAccountingBoundaryV1::Carrier,
                         ) {
@@ -10393,7 +10389,7 @@ impl FsCasV1 {
                         } else {
                             counters.record_unreachable_installed_residue(sealed.pack_len())
                         };
-                        #[cfg(not(test))]
+                        #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
                         let retention =
                             counters.record_unreachable_installed_residue(sealed.pack_len());
                         match retention {
@@ -10498,18 +10494,18 @@ impl FsCasV1 {
 
     /// Open an occupied-object reader without exposing the filesystem reader
     /// implementation as a public storage SDK type.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub fn occupied(&self) -> Result<impl OccupiedImmutableReadPortV1 + use<>, FsCasErrorV1> {
         self.occupied_private_v1()
     }
 
-    #[cfg(test)]
-    pub(crate) fn occupied_private_v1(&self) -> Result<FsCasOccupiedV1, FsCasErrorV1> {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn occupied_private_v1(&self) -> Result<FsCasOccupiedV1, FsCasErrorV1> {
         let mut control = ContinueFsCasControlV1;
         self.occupied_private_controlled_v1(&mut control)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub(crate) fn occupied_private_controlled_v1<C>(
         &self,
         control: &mut C,
@@ -10557,13 +10553,13 @@ impl FsCasV1 {
         let validity = self.ensure_valid();
         self.unlock_visibility_controlled_v1(guard, control);
         validity?;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         let (bytes_read, read_calls) = NEXT_OCCUPIED_READ_OBSERVATION_FOR_TEST_V1
             .with(|seed| seed.take())
             .unwrap_or((0, 0));
-        #[cfg(not(test))]
+        #[cfg(all(not(test), not(feature = "operation-polymorphism")))]
         let (bytes_read, read_calls) = (0, 0);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         let payload_read_observation_for_test =
             NEXT_OCCUPIED_PAYLOAD_READ_OBSERVATION_FOR_TEST_V1.with(|seed| seed.take());
         Ok(FsCasOccupiedV1 {
@@ -10574,9 +10570,9 @@ impl FsCasV1 {
             read_calls,
             first_error: None,
             validation_scratch: [0_u8; COMPARISON_WINDOW_BYTES],
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             unlocked_payload_read_hook: None,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             payload_read_observation_for_test,
         })
     }
@@ -10585,7 +10581,7 @@ impl FsCasV1 {
     /// private read begins. The marker is bound to this FsCas generation and
     /// exact typed version-record identifier; a marker copied from another
     /// namespace or retained across invalidation is rejected.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub(crate) fn validate_closure_for_read_v1(
         &self,
         version_record: PhysicalVersionRecordIdV1,
@@ -10594,7 +10590,7 @@ impl FsCasV1 {
         self.validate_closure_for_read_controlled_v1(version_record, &mut control)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub(crate) fn validate_closure_for_read_controlled_v1<C>(
         &self,
         version_record: PhysicalVersionRecordIdV1,
@@ -11201,7 +11197,7 @@ impl FsCasV1 {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     pub fn begin_closure_operation(&self) -> Result<FsClosureOperationV1, FsCasErrorV1> {
         let mut control = ContinueFsCasControlV1;
         self.begin_closure_operation_inner_v1(None, &mut control)
@@ -11303,7 +11299,7 @@ impl FsCasV1 {
     /// Run the complete closure validator and mint an opaque capability only
     /// after its FsCas-backed fence becomes visible. The supplied operation is
     /// one-shot even when validation fails, preventing a hidden retry path.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     #[allow(clippy::too_many_arguments)]
     pub fn admit_complete_closure<C>(
         &self,
@@ -11454,7 +11450,6 @@ impl FsCasV1 {
         )
     }
 
-    #[cfg(feature = "operation-polymorphism")]
     pub(crate) fn consume_validated_closure_for_handoff_controlled_v1<C>(
         &self,
         operation: &mut FsClosureOperationV1,
@@ -11639,7 +11634,7 @@ impl FsCasV1 {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 std::thread_local! {
     static FINAL_CARRIER_SNAPSHOT_CHECKS_FOR_TEST_V1: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
@@ -11651,7 +11646,7 @@ std::thread_local! {
 #[cfg(any(test, feature = "operation-polymorphism"))]
 #[derive(Clone, Copy)]
 enum PackAdmissionAuthorityV1<'operation, 'ledger> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     Independent(&'operation ResourceLedgerV1),
     Borrowed {
         reservation: &'operation OperationReservationV1<'ledger>,
@@ -11663,7 +11658,7 @@ enum PackAdmissionAuthorityV1<'operation, 'ledger> {
 impl PackAdmissionAuthorityV1<'_, '_> {
     fn storage_token_v1(self) -> Option<FsStorageOperationTokenV1> {
         match self {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             Self::Independent(_) => None,
             Self::Borrowed { storage_token, .. } => Some(storage_token),
         }
@@ -11687,7 +11682,7 @@ where
     C: FsCasControlV1 + ?Sized,
 {
     let result = match authority {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         PackAdmissionAuthorityV1::Independent(ledger) => {
             validate_pack_v1(pack, metadata, scratch, maximum_entries, ledger, counters)
         }
@@ -11826,7 +11821,7 @@ impl FsOperationSpoolConstructionUnwindV1 {
 /// One bounded operation's file-backed metadata. The file has no recovery or
 /// publication semantics and its private name is unconditionally removed.
 #[cfg(feature = "operation-polymorphism")]
-pub(crate) struct FsOperationSpoolV1 {
+pub struct FsOperationSpoolV1 {
     owner: FsCasV1,
     path: PathBuf,
     file: Option<File>,
@@ -11839,7 +11834,7 @@ pub(crate) struct FsOperationSpoolV1 {
     storage_token: Option<FsStorageOperationTokenV1>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 std::thread_local! {
     static NEXT_OPERATION_SPOOL_READ_OBSERVATION_FOR_TEST_V1:
         std::cell::Cell<Option<(u64, u64)>> = const { std::cell::Cell::new(None) };
@@ -11856,7 +11851,7 @@ impl FsOperationSpoolV1 {
             .ok_or(CoreError::IntegerOverflow)
     }
 
-    pub(crate) const fn direct_storage_observation(&self) -> (u64, u64, u64) {
+    pub const fn direct_storage_observation(&self) -> (u64, u64, u64) {
         (self.bytes_read, self.read_calls, self.bytes_written)
     }
 
@@ -11864,7 +11859,7 @@ impl FsOperationSpoolV1 {
         self.set_len_controlled_v1(len, &mut ContinueFsCasControlV1)
     }
 
-    pub(crate) fn set_len_controlled_v1<C>(
+    pub fn set_len_controlled_v1<C>(
         &mut self,
         len: u64,
         control: &mut C,
@@ -11908,7 +11903,7 @@ impl FsOperationSpoolV1 {
         self.initialize_zeroed_len_controlled_v1(len, &mut ContinueFsCasControlV1)
     }
 
-    pub(crate) fn initialize_zeroed_len_controlled_v1<C>(
+    pub fn initialize_zeroed_len_controlled_v1<C>(
         &mut self,
         len: u64,
         control: &mut C,
@@ -11954,7 +11949,7 @@ impl FsOperationSpoolV1 {
         self.write_exact_at_controlled_v1(offset, bytes, &mut ContinueFsCasControlV1)
     }
 
-    pub(crate) fn write_exact_at_controlled_v1<C>(
+    pub fn write_exact_at_controlled_v1<C>(
         &mut self,
         offset: u64,
         bytes: &[u8],
@@ -11970,7 +11965,7 @@ impl FsOperationSpoolV1 {
             return Err(FsCasErrorV1::Integrity);
         }
         let next_len = self.len.max(end);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if let Some(error) = control.inject_operation_spool_precharge_failure_v1() {
             return Err(error);
         }
@@ -12005,7 +12000,7 @@ impl FsOperationSpoolV1 {
             return Err(error);
         }
         self.len = next_len;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if control.inject_operation_spool_write_observation_overflow() {
             self.bytes_written = u64::MAX;
         }
@@ -12017,12 +12012,12 @@ impl FsOperationSpoolV1 {
         self.owner.ensure_valid()
     }
 
-    #[cfg(test)]
-    pub(crate) const fn logical_len_for_test_v1(&self) -> u64 {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub const fn logical_len_for_test_v1(&self) -> u64 {
         self.len
     }
 
-    pub(crate) fn read_exact_at(
+    pub fn read_exact_at(
         &mut self,
         offset: u64,
         destination: &mut [u8],
@@ -12034,7 +12029,7 @@ impl FsOperationSpoolV1 {
             offset,
             destination,
         )?;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         NEXT_OPERATION_SPOOL_READ_OBSERVATION_FOR_TEST_V1.with(|seed| {
             if let Some((bytes_read, read_calls)) = seed.take() {
                 self.bytes_read = bytes_read;
@@ -12074,7 +12069,7 @@ impl FsOperationSpoolV1 {
     /// owner/root, leaves the exact immutable preparation residue observable,
     /// and is returned as a typed storage failure. `Drop` is only the unwind
     /// backstop and cannot report errors.
-    pub(crate) fn cleanup_controlled_v1<C>(&mut self, control: &mut C) -> Result<(), FsCasErrorV1>
+    pub fn cleanup_controlled_v1<C>(&mut self, control: &mut C) -> Result<(), FsCasErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -12309,7 +12304,7 @@ impl FsPrivatePackV1 {
     /// Recover the first concrete storage failure after a deliberately lossy
     /// pack-port callback returns. This is crate-private operation plumbing,
     /// not a caller-visible pack API.
-    pub(crate) fn take_first_error_typed_v1(&mut self) -> Option<FsCasErrorV1> {
+    pub fn take_first_error_typed_v1(&mut self) -> Option<FsCasErrorV1> {
         self.first_error.take()
     }
 
@@ -12347,7 +12342,7 @@ impl FsPrivatePackV1 {
     /// file and marks it pending; this method performs the observable removal
     /// and promotes any failure to a typed invalidation. `Drop` is solely an
     /// unwind backstop.
-    pub(crate) fn cleanup_controlled_v1<C>(&mut self, control: &mut C) -> Result<(), FsCasErrorV1>
+    pub fn cleanup_controlled_v1<C>(&mut self, control: &mut C) -> Result<(), FsCasErrorV1>
     where
         C: FsCasControlV1 + ?Sized,
     {
@@ -12479,7 +12474,7 @@ impl FsPrivatePackV1 {
     }
 
     #[cfg(feature = "operation-polymorphism")]
-    pub(crate) fn begin_direct_controlled_v1<C>(
+    pub fn begin_direct_controlled_v1<C>(
         &mut self,
         exact_len: u64,
         control: &mut C,
@@ -12543,7 +12538,7 @@ impl FsPrivatePackV1 {
     }
 
     #[cfg(feature = "operation-polymorphism")]
-    pub(crate) fn truncate_direct_controlled_v1<C>(
+    pub fn truncate_direct_controlled_v1<C>(
         &mut self,
         len: u64,
         control: &mut C,
@@ -12670,7 +12665,7 @@ impl FsPrivatePackV1 {
         Ok(())
     }
 
-    pub(crate) fn append_controlled_v1<C>(
+    pub fn append_controlled_v1<C>(
         &mut self,
         bytes: &[u8],
         control: &mut C,
@@ -12731,8 +12726,8 @@ impl FsPrivatePackV1 {
         self.ensure_owner_valid_v1()
     }
 
-    #[cfg(test)]
-    pub(crate) const fn direct_lengths_for_test_v1(&self) -> (Option<u64>, u64) {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub const fn direct_lengths_for_test_v1(&self) -> (Option<u64>, u64) {
         let written = match &self.state {
             PrivatePackStateV1::Writing { written, .. } => Some(*written),
             _ => None,
@@ -12930,7 +12925,7 @@ impl Drop for FsPrivatePackV1 {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 std::thread_local! {
     static NEXT_OCCUPANT_PACK_READ_CALLS_FOR_TEST_V1: std::cell::Cell<Option<u64>> =
         const { std::cell::Cell::new(None) };
@@ -12961,9 +12956,9 @@ impl FilePackReadV1 {
             FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
             other => other,
         })?;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         let mut reader = reader;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         NEXT_OCCUPANT_PACK_READ_CALLS_FOR_TEST_V1.with(|seed| {
             if let Some(read_calls) = seed.take() {
                 reader.read_calls = read_calls;
@@ -13087,7 +13082,7 @@ impl FsCasAcceptedClosureReadV1 {
     }
 }
 
-pub(crate) struct FsCasOccupiedV1 {
+pub struct FsCasOccupiedV1 {
     cas: FsCasV1,
     current: Option<ResolvedObjectV1>,
     previous: Option<ResolvedObjectV1>,
@@ -13095,13 +13090,13 @@ pub(crate) struct FsCasOccupiedV1 {
     read_calls: u64,
     first_error: Option<FsCasErrorV1>,
     validation_scratch: [u8; COMPARISON_WINDOW_BYTES],
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     unlocked_payload_read_hook: Option<Arc<dyn Fn() + Send + Sync>>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "operation-polymorphism"))]
     payload_read_observation_for_test: Option<(u64, u64)>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 std::thread_local! {
     static NEXT_OCCUPIED_READ_OBSERVATION_FOR_TEST_V1:
         std::cell::Cell<Option<(u64, u64)>> = const { std::cell::Cell::new(None) };
@@ -13110,9 +13105,7 @@ std::thread_local! {
 }
 
 impl FsCasOccupiedV1 {
-    pub(crate) fn direct_storage_read_observation_typed_v1(
-        &self,
-    ) -> Result<(u64, u64), FsCasErrorV1> {
+    pub fn direct_storage_read_observation_typed_v1(&self) -> Result<(u64, u64), FsCasErrorV1> {
         self.cas.ensure_valid()?;
         Ok((self.bytes_read, self.read_calls))
     }
@@ -13129,8 +13122,8 @@ impl FsCasOccupiedV1 {
         self.first_error.get_or_insert(error);
     }
 
-    #[cfg(test)]
-    pub(crate) fn resolved_object_cached_for_test_v1(&self, id: TypedPhysicalObjectIdV1) -> bool {
+    #[cfg(any(test, feature = "operation-polymorphism"))]
+    pub fn resolved_object_cached_for_test_v1(&self, id: TypedPhysicalObjectIdV1) -> bool {
         self.current
             .as_ref()
             .is_some_and(|current| current.id == id)
@@ -13140,7 +13133,7 @@ impl FsCasOccupiedV1 {
                 .is_some_and(|previous| previous.id == id)
     }
 
-    pub(crate) fn occupied_len_typed_v1(
+    pub fn occupied_len_typed_v1(
         &mut self,
         id: TypedPhysicalObjectIdV1,
     ) -> Result<Option<u64>, FsCasErrorV1> {
@@ -13341,7 +13334,7 @@ impl FsCasOccupiedV1 {
         Ok(Some(location.object_len))
     }
 
-    pub(crate) fn read_occupied_exact_at_typed_v1(
+    pub fn read_occupied_exact_at_typed_v1(
         &mut self,
         id: TypedPhysicalObjectIdV1,
         offset: u64,
@@ -13401,12 +13394,12 @@ impl FsCasOccupiedV1 {
             .object_offset
             .checked_add(offset)
             .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if let Some((bytes_read, read_calls)) = self.payload_read_observation_for_test.take() {
             self.bytes_read = bytes_read;
             self.read_calls = read_calls;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if let Some(hook) = &self.unlocked_payload_read_hook {
             hook();
         }
@@ -15461,7 +15454,7 @@ fn open_regular_file_if_present(path: &Path) -> Result<Option<File>, FsCasErrorV
     open_regular_file_if_present_impl_v1(path, || {})
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "operation-polymorphism"))]
 fn open_regular_file_if_present_with_post_open_hook_v1<F>(
     path: &Path,
     post_open: F,

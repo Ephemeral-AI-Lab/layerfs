@@ -376,7 +376,7 @@ where
             }
             Err(CoreError::IntegerOverflow)
         };
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if admission.outcome() == FsPackAdmissionOutcomeV1::Installed
             && self
                 .control
@@ -443,7 +443,7 @@ where
         // addition. Stage the merge so a late overflow cannot leave this
         // operation with a partially transferred carrier observation.
         let mut checked = self.storage_counters;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if self
             .control
             .borrow_mut()
@@ -571,7 +571,7 @@ where
         let (lookups, probes, maximum_probe, entries) = table.work_observation();
         let (metadata_bytes_read, metadata_read_calls, metadata_bytes_written) =
             table.direct_storage_observation();
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if self
             .control
             .borrow_mut()
@@ -750,7 +750,7 @@ where
                 id: expected_id,
                 complete_len: current.complete_len,
             })?;
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             if self
                 .control
                 .borrow_mut()
@@ -802,7 +802,7 @@ where
             id: expected_id,
             complete_len: current.complete_len,
         })?;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if self
             .control
             .borrow_mut()
@@ -842,7 +842,7 @@ where
                         CoreError::SourceFailure,
                     )
                 })?;
-            #[cfg(test)]
+            #[cfg(any(test, feature = "operation-polymorphism"))]
             if self
                 .control
                 .borrow_mut()
@@ -1147,7 +1147,7 @@ where
             read_calls: 0,
             first_core_error: None,
         };
-        #[cfg(test)]
+        #[cfg(any(test, feature = "operation-polymorphism"))]
         if self
             .control
             .borrow_mut()
