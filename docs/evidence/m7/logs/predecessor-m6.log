@@ -1,0 +1,1741 @@
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 validate:m6 C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> pnpm validate:m6:pre-evidence && pnpm check:evidence
+
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 validate:m6:pre-evidence C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> pnpm validate:m5:pre-evidence && node scripts/run-m6-local-gate.mjs --skip-build
+
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 validate:m5:pre-evidence C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> node scripts/run-accepted-node-gate.mjs
+
+accepted-node-gate: START workspace-build
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 build C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> pnpm -r build
+
+Scope: 7 of 8 workspace projects
+packages/fs build$ pnpm clean && tsc -p tsconfig.json
+packages/fs build: > @ephemeralai/fs@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\fs
+packages/fs build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/fs build: Done
+packages/replication build$ pnpm clean && tsc -p tsconfig.json
+packages/sqlite-cloudflare build$ pnpm clean && tsc -p tsconfig.json
+packages/testkit build$ pnpm clean && tsc -p tsconfig.json
+packages/sqlite-node build$ pnpm clean && tsc -p tsconfig.json
+packages/sqlite-cloudflare build: > @ephemeralai/fs-sqlite-cloudflare@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\sqlite-cloudflare
+packages/sqlite-cloudflare build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/testkit build: > @ephemeralai/fs-testkit@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\testkit
+packages/testkit build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/replication build: > @ephemeralai/fs-replication@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\replication
+packages/replication build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/sqlite-node build: > @ephemeralai/fs-sqlite-node@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\sqlite-node
+packages/sqlite-node build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/replication build: Done
+packages/sqlite-cloudflare build: Done
+packages/sqlite-node build: Done
+packages/testkit build: Done
+packages/node-vfs build$ pnpm clean && tsc -p tsconfig.json
+packages/node-vfs build: > @ephemeralai/fs-node-vfs@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\node-vfs
+packages/node-vfs build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/node-vfs build: Done
+accepted-node-gate: PASS workspace-build (4665 ms)
+accepted-node-gate: START fixtures-check
+accepted-node-gate: START docs-check
+accepted-node-gate: START style-check
+accepted-node-gate: START architecture-check
+accepted-node-gate: START exports-check
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 fixtures:check C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> node scripts/generate-fixtures.mjs --check
+
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 check:docs C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> markdownlint-cli2 "**/*.md" && node scripts/check-docs.mjs
+
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 check:style C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> prettier --check . --ignore-unknown && eslint . --max-warnings=0 && node scripts/check-style.mjs
+
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 check:exports C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> node scripts/check-exports.mjs
+
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 check:architecture C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> node scripts/check-architecture.mjs
+
+{"seed":1592639710,"bytes":1048576,"sha256":"37fcc2662466658ff1c3345de0dd5454764eded6ea1019a701563f359ab8c086","unchanged":true}
+accepted-node-gate: PASS fixtures-check (315 ms)
+Checking formatting...
+markdownlint-cli2 v0.23.2 (markdownlint v0.41.1)
+Finding: **/*.md !**/node_modules/** !**/dist/** !**/api-snapshots/**
+Linting: 33 files
+(node:28796) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Summary: 0 issues in 0 files
+docs: local links valid
+accepted-node-gate: PASS docs-check (1228 ms)
+architecture: 53 core files; statically expressible module edges, realpath package graph, exact ports/directions, cycles, composition, SQL ownership, reviewed reflection/code-generation ban, and 24 bypass fixtures valid
+accepted-node-gate: PASS architecture-check (1404 ms)
+All matched files use Prettier code style!
+style: shared strict TypeScript/format policy and 343 source/config files pass whitespace, newline, and JSON lint
+accepted-node-gate: PASS style-check (8093 ms)
+exports: 6 gate-cleaned packages (292 dist files) match source/reachable API snapshots; sentinel-only builds rejected; 6 tarballs (299 files) pass isolated declared-closure runtime/type parity and core deep-import denials
+accepted-node-gate: PASS exports-check (54666 ms)
+accepted-node-gate: START m3-benchmarks
+(node:42388) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+mini-bench: seed 5eed5eed, big=104857600, small=100x1048576, trials=5
+fixture generation...
+
+Mini-bench summary (schema efs-benchmark-result-v1):
+
+cell             wallMs    MiB/s   dbGrowth     overhead%   stmts   peakManaged
+A1-cold-write   1307.989   76.5  111334760    6.18    1250      15245312
+A2-rewrite-identical 1086.451     92    3786280       -     498     126337668
+A3-cold-read     329.741  303.3      53560       -      84     115765303
+A4-warm-read     123.733  808.2      53560       -      24     115765303
+A5-one-byte-edit 1281.875     -   19285720       -    8100     146855193
+A6-scattered-edits 8723.188     -  278483160       -   40484     170266712
+A6-small-reads   429.493     -          0       -    2825      63534222
+A7-materialization  887.393  112.7      53592       -      84     115765303
+
+mini-bench total: 109409 ms (budget 120000 ms)
+mini-bench: within budget
+mini-bench gates: 8 passed, 0 failed
+accepted-node-gate: PASS m3-benchmarks (110095 ms)
+accepted-node-gate: START m4-branch-benchmarks
+(node:48044) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+branch-bench: cells=20, trials=1
+branch-bench artifacts: C:\Users\yifan\AppData\Local\Temp\efs-branch-bench-artifacts-akU7CF
+independent  {"name":"independent","branchCount":1,"pathsPerBranch":1}  PASS
+independent  {"name":"independent","branchCount":1,"pathsPerBranch":10} PASS
+independent  {"name":"independent","branchCount":1,"pathsPerBranch":100} PASS
+independent  {"name":"independent","branchCount":5,"pathsPerBranch":1}  PASS
+independent  {"name":"independent","branchCount":5,"pathsPerBranch":10} PASS
+independent  {"name":"independent","branchCount":5,"pathsPerBranch":100} PASS
+independent  {"name":"independent","branchCount":10,"pathsPerBranch":1} PASS
+independent  {"name":"independent","branchCount":10,"pathsPerBranch":10} PASS
+independent  {"name":"independent","branchCount":10,"pathsPerBranch":100} PASS
+same-inode   {"name":"same-inode","branchCount":5}                      PASS
+same-inode   {"name":"same-inode","branchCount":10}                     PASS
+hard-link    {"name":"hard-link","branchCount":2}                       PASS
+cow          {"name":"cow","edits":10}                                  PASS
+cow          {"name":"cow","edits":100}                                 PASS
+cow          {"name":"cow","edits":500}                                 PASS
+patch        {"name":"patch","edits":10}                                PASS
+patch        {"name":"patch","edits":100}                               PASS
+patch        {"name":"patch","edits":500}                               PASS
+replay       {"name":"replay"}                                          PASS
+limit        {"name":"limit"}                                           PASS
+branch-bench total: 19500.4 ms
+branch-bench result: 20 passed, 0 failed
+accepted-node-gate: PASS m4-branch-benchmarks (19896 ms)
+accepted-node-gate: START node-smoke
+(node:49052) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Node SQLite completes the exact finite integration smoke profile within 60 seconds (54989.7484ms)
+ℹ {"schema":"efs-correctness-result-v1","commit":"ce9035e49037f60a8c52d2775fd2d88d34e57cd4","adapter":"node-sqlite-smoke","driver":"sqlite-node","capabilities":{"maxBlobBytes":67108864,"maxBindings":32766,"durability":"acknowledged","journalMode":"wal","memoryPolicy":"configured","cacheTargetBytes":16777216,"mmapLimitBytes":0,"maxPhysicalDatabaseBytes":10737418240,"maxJournalBytes":1073741824,"physicalQuotaPolicy":"driver-enforced","schemaIdentityMode":"sqlite-header","pageMetricsMode":"sqlite-pragma","journalQuotaPolicy":"checkpoint-backpressure","journalSizeLimitIsHard":false},"limits":{"maxPathBytes":4096,"maxNameBytes":255,"maxSymlinkTargetBytes":4096,"maxSymlinkTraversals":40,"maxMaterializedBytes":67108864,"preferredStreamChunkBytes":262144,"maxAtomicTreeEntries":10000,"maxReaddirEntries":10000,"maxManifestEntries":4294967295,"maxManifestNodeBytes":16384,"maxManifestDepth":8,"maxFileBytes":17179869184,"maxWriteBytes":67108864,"maxManagedPayloadBytes":8589934592,"maxChargedMetadataBytes":1073741824,"maxPhysicalDatabaseBytes":10737418240,"maxJournalBytes":1073741824,"maxStagingPayloadBytes":536870912,"maxBranchOverlayBytes":1073741824,"maxMaintenanceBytes":67108864,"maintenanceReserveBytes":67108864,"maxPermanentIdentifiers":10000000,"maxFinalTransactionRows":100000,"maxFinalTransactionBytes":16793600,"maxRevisionReplaySteps":1000,"maxPatchesPerFile":256,"maxPatchBytesPerFile":16777216,"maxQueryBatchSize":256,"maxGcBatchSize":64,"maxRetainedRevisions":1000,"readLeaseMs":300000,"stagingLeaseMs":900000,"maxManagedResidentBytes":134217728,"maxCacheBytes":67108864,"maxPendingWriteBytes":67108864,"maxWriteSessionBytes":16777216,"maxPrefetchBytes":1048576,"maxQueryBatchBytes":2097152,"maxPreparedResultBytes":67108864,"maxConcurrentStreams":64,"maxConcurrentOperations":256,"maxOpenBranchHandles":1024,"maxOpenNodeVfsSessions":256,"maxBranchIdBytes":200,"maxOperationIdBytes":200,"maxActiveBranches":10000,"maxChangedPathsPerBranch":100000,"maxChangedPathBytes":16777216,"maxConflictsPerPublication":100000,"maxConflictResultBytes":16777216,"terminalBranchRetentionMs":2592000000,"publicationResultRetentionMs":2592000000,"cowPageBytes":8192,"fastCdcMinimumBytes":32768,"fastCdcAverageBytes":131072,"fastCdcMaximumBytes":524288,"payloadBytes":16777216,"cowEdits":5000,"namespaceOperations":2000,"readers":16,"writers":16,"operationsPerActor":64,"restarts":3},"schemaVersion":13,"formatVersion":"efs-merkle-manifest-v1","seed":1592614637,"fixtureDigest":"488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8","faultPoint":"bounded-collection-after-first-committed-batch","commands":["pnpm test:smoke:built"],"environment":{"platform":"win32","architecture":"x64","node":"v24.11.1","pnpm":"10.32.1","cpu":"AMD Ryzen Threadripper 7960X 24-Cores","logicalCpuCount":48,"totalMemoryBytes":137438953472,"storage":"Samsung SSD 980 PRO 1TB [Fixed hard disk media, 1000202273280 bytes] CT2000T705SSD5 [Fixed hard disk media, 2000396321280 bytes]","sqlite":"3.50.4","sqlitePageSize":4096,"journalMode":"wal","cacheTargetBytes":16777216,"mmapLimitBytes":0,"operatingSystemCacheDropAttempted":false,"operatingSystemCacheDropSucceeded":false},"passed":1,"failed":0,"elapsedMs":54688,"metrics":{"peakManagedResidentBytes":32950276,"objectCount":372,"manifestCount":540,"completedOperationCount":9056,"namespaceOperationCount":2000,"namespaceDigest":"50d1e2037d66a96b718950f08232eac9b86e9ddd0939f3e2541ba805cce8f8d2","finalPayloadDigest":"5dcf868d1e469d1298c5f00b42870a5d393a891cb118871f2b72a6b3b92936a9","slowestOperations":[{"name":"write-16m-payload","elapsedMs":225.302},{"name":"cow-one-byte-edit","elapsedMs":156.502},{"name":"namespace-create","elapsedMs":125.341},{"name":"digest-after-initial-reopen","elapsedMs":112.481},{"name":"namespace-create","elapsedMs":69.922},{"name":"namespace-create","elapsedMs":69.53},{"name":"namespace-create","elapsedMs":69.141},{"name":"namespace-create","elapsedMs":68.807},{"name":"namespace-create","elapsedMs":68.341},{"name":"namespace-create","elapsedMs":68.073}]}}
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 55090.2688
+accepted-node-gate: PASS node-smoke (55165 ms)
+accepted-node-gate: START node-core-correctness
+accepted-node-gate: START node-maintenance
+accepted-node-gate: START node-fault
+accepted-node-gate: START workerd-algorithms
+(node:32896) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39656) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ GC root seeding and sweep reference probes use hash-leading indexes (37.1906ms)
+✔ mark and sweep resume in bounded batches and preserve every required root (122.0618ms)
+✔ sweep reconciles a post-mark root generation before deleting newly reachable data (63.0802ms)
+✔ branch root attachment advances generation before GC can sweep its old closure (65.779ms)
+✔ garbage collection preserves every manifest member of an active staging lease (41.2594ms)
+✔ terminal collection cleanup removes marks and prior run rows in bounded batches (73.1486ms)
+✔ content admission preserves GC progress and abandoned marks clean before a new run (90.6979ms)
+✔ bytesToHex is lowercase, zero-padded, and respects intrinsic byte ranges (8.0776ms)
+✔ CAS SHA-256 matches golden vectors and freezes inputs (1.6073ms)
+✔ fastcdc-v1 gear and boundary fixture vectors are exact (15.7679ms)
+✔ streaming FastCDC is partition-invariant with bounded push retention (662.367ms)
+✔ streaming FastCDC enforces allocation, retention, terminal, and linear-work bounds (13.0051ms)
+✔ runtime progress admission derives from the shared object ceiling (0.5731ms)
+✔ COW page overlays are exact at every persisted page size (7.6465ms)
+✔ COW page geometry rejects malformed or resizing overlays before allocation (0.4747ms)
+✔ COW page range is admitted and covers aligned and partial 64 MiB writes (2.1704ms)
+✔ ordered insertion, deletion, replacement, and truncation are deterministic (0.5102ms)
+✔ structural patches use bounded piece metadata and one final payload copy (69.7206ms)
+{"runtime":"workerd","passed":12,"checks":[{"name":"sha256-golden","ok":true,"metrics":{}},{"name":"fastcdc-boundary-goldens","ok":true,"metrics":{}},{"name":"streaming-fastcdc","ok":true,"metrics":{"inputBytesCopied":3145745,"outputBytesCopied":3145745,"boundaryBytesScanned":2588689,"peakPushOutputBytes":0,"peakPushOutputCount":0,"boundedPushOutputBytes":1025,"boundedPushOutputCount":2}},{"name":"manifest-diverse-grouping-root","ok":true,"metrics":{"nodeCount":6,"groupingRecordCount":605}},{"name":"manifest-binary-goldens","ok":true,"metrics":{"emptyLeafBytes":32,"leafBytes":104,"fullLeafBytes":9248,"internalBytes":128,"rootBytes":68,"deepDepth":3,"deepNodeCount":146}},{"name":"manifest-codec-cursor-corruption","ok":true,"metrics":{"rootMutations":10,"nodeMutations":8}},{"name":"cow-pages","ok":true,"metrics":{"pageSizesTested":3,"pages":6}},{"name":"structural-patches","ok":true,"metrics":{"copiedBytes":65536,"peakSegments":64,"metadataSegmentsCreated":1057}},{"name":"diagnostic-local-rebuild","ok":true,"metrics":{"sourceBytesRead":524287,"bytesHashed":155909,"scanWindowBytes":524288,"reconnectOldOffset":830895,"reconnectNewOffset":830895,"reusedPrefixEntries":3,"reusedSuffixEntries":8,"affectedEntryCount":1,"newObjectCount":1,"newManifestNodeCount":1,"reusedManifestNodeCount":0,"fellBackToEnd":false,"insertionCopyCount":1,"insertionBytesCopied":1,"chunkerInputBytesCopied":155909,"chunkerOutputBytesCopied":155909,"chunkerBoundaryBytesScanned":123141,"editedInputBytesPrepared":524288}},{"name":"streamed-rebuild-sink-ownership","ok":true,"metrics":{"sourceBytesRead":65554,"bytesHashed":65555,"attemptedLocalSourceBytesRead":0,"attemptedLocalBytesHashed":0,"attemptedLocalLargestSourceRead":0,"attemptedLocalChunkerInputBytesCopied":0,"attemptedLocalChunkerOutputBytesCopied":0,"attemptedLocalChunkerBoundaryBytesScanned":0,"attemptedLocalEditedInputBytesPrepared":0,"fallbackSourceBytesRead":65554,"fallbackBytesHashed":65555,"fallbackLargestSourceRead":257,"fallbackChunkerInputBytesCopied":65555,"fallbackChunkerOutputBytesCopied":65555,"fallbackChunkerBoundaryBytesScanned":39666,"objectCount":405,"largestSourceRead":257,"peakRetainedRecords":247,"peakPendingEntries":3,"insertionCopyCount":1,"insertionBytesCopied":1,"chunkerInputBytesCopied":65555,"chunkerOutputBytesCopied":65555,"chunkerBoundaryBytesScanned":39666}},{"name":"runtime-progress-bound","ok":true,"metrics":{"requiredBytes":102273024,"pageSizesTested":3}},{"name":"write-path-hashing","ok":true,"metrics":{"hashedBytes":41418752,"elapsedMs":98,"mibPerSec":403.1,"baselineMibPerSec":74,"speedup":5.45}}]}
+✔ root-journal cleanup resumes after physical reopen with one keyset row per batch (836.6697ms)
+✔ root-journal normal capacity rejects atomically and emergency collection compacts it (131.8352ms)
+✔ garbage collection rejects unbounded run identifiers and no-progress row profiles (21.8975ms)
+✔ verification is cursor-bounded, resumable, and detects reachable corruption (153.945ms)
+✔ reachable corruption aborts marking before sweep and remains restart-safe (320.9578ms)
+accepted-node-gate: PASS workerd-algorithms (3262 ms)
+✔ cold verification keysets exact-size objects within one UoW result envelope (1453.0097ms)
+✔ storage snapshot reports exact durable counters and physical pages (51.1126ms)
+✔ storage snapshots pause with durable progress and compute exact branch set differences (57.9828ms)
+✔ branch-exclusive accounting includes unchanged inherited base content exactly (62.7445ms)
+✔ root removal rebuilds exact scopes without deleting durable mark identities (77.5681ms)
+✔ garbage collection reports exact reclaimed branch-overlay payload (119.0852ms)
+✔ active marking incrementally reconciles every required root class (132.2371ms)
+✔ a stale completed snapshot returns EAGAIN on physical read-only reopen (327.3048ms)
+✔ GC deletion invalidates cached snapshots and anonymous runs adopt after reopen (304.7164ms)
+✔ caller-supplied lease time permits rollback without revival or early expiry (85.7137ms)
+✔ snapshot reconciliation evaluates newly acquired leases after clock rollback (52.3636ms)
+✔ content admission reserves enough space for exact snapshot marks (51.3483ms)
+✔ storage snapshots expose exact operation-result payload bytes (79.685ms)
+✔ current-main and retained-revision roots receive exact main scope (77.0355ms)
+✔ metadata quota failure is exact across reopen and later maintenance (259.1338ms)
+✔ pinned WAL pressure rejects one filesystem mutation and recovers after reopen (791.6974ms)
+✔ database page exhaustion preserves exact filesystem state and later maintenance (823.9487ms)
+✔ metadata-only page exhaustion is atomic and recovers from freed pages (1050.3714ms)
+(node:8768) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ root, leaf, internal, grouping, and complete manifest golden vectors are exact (47.509ms)
+✔ diagnostic full rebuild detaches Node Buffer object ranges (1.0765ms)
+✔ varied manifest grouping has natural boundaries and reconnecting subtree goldens (221.8458ms)
+✔ recomputed-digest corruption matrix rejects before affected content is exposed (6.5142ms)
+✔ builder, validation, and lookup reject noncanonical manifest structures (2.2016ms)
+✔ manifest builder snapshots caller records, parameters, and borrowed workspace pages (233.3412ms)
+✔ manifest builder enforces maxEntries before copying or over-pulling (0.3446ms)
+✔ manifest codecs reject overflow and malformed encodings without digest checks (1.5314ms)
+✔ format inspection accepts uint32 parameters while materializing paths reject unsupported maxima (0.5771ms)
+✔ manifest trees are canonical, bounded, corruption-detecting, and lookup exact (192.8445ms)
+✔ manifest readers isolate authoritative hashes from malicious reader mutation (0.4532ms)
+✔ 100001-entry canonical construction retains only a group and keyset page (1506.3732ms)
+✔ local rebuild crosses a fixed cap into a durable streamed fallback (952.6339ms)
+✔ diagnostic local rebuild authenticates cached entries and the complete capped closure (27.8084ms)
+✔ diagnostic local rebuild enforces its retained limits before source work (3.584ms)
+✔ diagnostic local rebuild handles appends beyond the lifted 16 MiB diagnostic cap (355.695ms)
+✔ diagnostic local limits are fixed lowering-only caps (66.0333ms)
+✔ streamed rebuild owns callback inputs and isolates mutating object sinks (13.2805ms)
+✔ streamed rebuild normalizes subclass source ranges before consumption (0.9276ms)
+✔ streamed rebuild validates size and attempted-local metrics before callbacks (0.5956ms)
+✔ invalid rebuild controls reject before copying insertion bytes (0.598ms)
+✔ local fallback preflights work and reports both attempted and fallback phases (16.859ms)
+✔ diagnostic local FastCDC work stays linear under hostile valid ratios (5.0275ms)
+✔ local and forced-fallback modes reject manifest parameter changes identically (0.5082ms)
+✔ local CDC reconnection and manifest-spine rebuilding equal a canonical full scan (1397.9896ms)
+✔ seeded local rebuild property cases match full rebuilds at boundaries and EOF (620.985ms)
+✔ bounded Merkle rebuild golden vectors match the full path across file sizes and edit shapes (3274.8136ms)
+✔ bounded local rebuild falls back when its retained window is too small (43.0665ms)
+✔ bounded local rebuild is byte-identical to the full-state rebuild across the edit-shape corpus (3388.0004ms)
+✔ bounded local rebuild matches the full-state rebuild on a seeded random corpus (1373.8592ms)
+✔ lint exceptions are limited to deliberate code-generation fixtures (0.8866ms)
+✔ CI invokes only the explicit highest accepted milestone gate (5.1177ms)
+✔ milestone gates select only their owned suites and sequential predecessors (0.6064ms)
+✔ documentation links resolve inline and reference-style targets (4.4041ms)
+✔ recording testkit fixtures preserve labels, seeds, restart hooks, and disposal (0.2926ms)
+✔ storage snapshots physically reopen and resume after every durable statement and batch (49778.7345ms)
+ℹ snapshot fault positions: 110 statements, 42 batches, max 6 statements/batch
+(node:47900) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ M0 architecture and exports are locked (38588.8247ms)
+(node:31976) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ branch reads a frozen base and publishes one durable revision (86.95ms)
+✔ fifty independent writers form one parent chain (494.4527ms)
+✔ fifty same-inode writers yield one merge and 49 explicit conflicts (381.4382ms)
+✔ concurrent publications of one branch produce at most one revision (30.8558ms)
+✔ lost-response replay survives physical reopen and operation IDs cannot cross branches (153.5321ms)
+✔ publication rollback survives every durable statement fault (38.9922ms)
+✔ publication preparation candidates roll back and release staging at every fault position (1839.934ms)
+✔ branch stream is immutable across later edit and discard (56.6754ms)
+✔ reopened branch streams retain their snapshot across main edits (222.7018ms)
+✔ prepared branch content is released on attach and abandoned on mutation rejection (39.888ms)
+✔ terminal lifecycle is durable, discard is idempotent, and identifiers are never reused (31.8311ms)
+✔ hard-link aliases retain identity and conflict as one inode (65.7938ms)
+✔ branch unlink updates durable hard-link counts without changing the base (45.793ms)
+✔ recursive removal detects descendant changes and leaves the branch unchanged (47.4485ms)
+✔ empty directory subtree tokens support recursive branch deletion (35.7774ms)
+✔ ancestor replacement reports an ancestor conflict instead of ENOTDIR (60.5606ms)
+✔ reusing an operation after a branch mutation replays the original result (55.0023ms)
+✔ repeated COW writes replace an unleased page predecessor (39.3182ms)
+✔ branch handle close invalidates its streams without affecting another handle (35.7632ms)
+✔ closed branch handles reject every filesystem method and close drains mutations (57.4293ms)
+✔ a scheduled branch stream cannot create a lease after handle close (31.3871ms)
+✔ a mutation admitted before handle close drains to completion (30.0829ms)
+✔ filesystem close waits for a branch close that is already draining (56.4888ms)
+✔ filesystem close drains a management call that was already scheduled (24.538ms)
+✔ branch-created directories rename their descendants atomically (59.0954ms)
+✔ branch-created hard links share identity, bytes, and link counts (58.749ms)
+✔ unlinking a branch-created hard-link alias decrements its inode links (38.3191ms)
+✔ branch streams enforce global stream and resident-memory admission (34.3929ms)
+✔ branch management calls enforce global operation admission (38.3902ms)
+✔ branch streams open with 255 leased COW pages under bounded query budgets (131.1912ms)
+✔ over-budget branch streams use a generation-pinned snapshot (72.6774ms)
+✔ branch and operation identifiers accept 200 bytes and reject empty or 201 bytes (41.7728ms)
+✔ sibling publication uses the branch mutation clock for parent timestamps (118.6012ms)
+✔ range overlays publish their inode write set and preserve metadata (48.9793ms)
+✔ full writes after structural patches reset replay state without deleting patches (61.8646ms)
+✔ active-branch GC reclaims structural patches made stale by materialization (101.4614ms)
+✔ branch streams retain the selected structural patches after later patches (45.7133ms)
+✔ structural patch growth falls back before exceeding materialization bounds (76.5548ms)
+✔ zero-length structural-patch streams do not pin unrelated overlay rows (46.7762ms)
+✔ concurrent replacement fallbacks never publish stale composed bytes (55.7698ms)
+✔ branch writeFile follows a final symbolic link (54.0073ms)
+✔ empty publication is durable and same-operation concurrent calls converge (49.3399ms)
+✔ rename reports deterministic source and destination conflicts (57.29ms)
+✔ range no-ops do not advance branch generation (38.0642ms)
+✔ no-op chmod does not advance branch generation (40.987ms)
+✔ branch handle exhaustion uses filesystem EAGAIN (29.0168ms)
+✔ branch limits reject an impossible conflict envelope at open (0.3072ms)
+✔ leased COW predecessors remain until the stream releases them (39.7456ms)
+✔ released COW leases are reclaimed without deleting current branch pages (68.9386ms)
+✔ large COW materialization and discard stay bounded under a tight row profile (255.3177ms)
+✔ terminal branch retention waits for a live branch stream lease (87.7899ms)
+✔ directory rename reports every moved descendant in UTF-8 order (50.5762ms)
+✔ branch streams survive publication and collection with exact bytes (82.3744ms)
+✔ expired publication results are pruned to lifetime operation tombstones (66.8931ms)
+✔ terminal branch metadata follows configured retention while identifiers remain reserved (80.749ms)
+✔ revision retention checkpoints preserve the retained history window (133.6591ms)
+✔ publication rejects a write set before opening an over-budget final transaction (80.2909ms)
+✔ publication preflight includes terminal COW cleanup rows (56.689ms)
+(node:43744) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ public filesystem covers canonical paths, ranges, metadata, and UTF-8 ordering (111.6467ms)
+✔ hard links, symbolic links, rename, unlink, and recursive removal persist (145.2881ms)
+✔ leased streams retain the selected snapshot across overwrite and release on completion (40.2337ms)
+✔ memory and transaction ceilings reject without a visible partial mutation (20.2963ms)
+✔ close is idempotent and rejects later operations (18.4321ms)
+(node:31520) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Node SQLite driver scopes transactions and enforces result/binding types (3.2115ms)
+✔ Node read transactions reject DML, DDL, write PRAGMAs, and RETURNING through run and all (0.733ms)
+✔ close invokes the native handle once and rethrows the first close failure (0.2933ms)
+✔ callback scope rejects transaction escapes and result queries cannot mutate (0.5462ms)
+✔ temporary and qualified schema escapes reject before file-backed mutation (22.6598ms)
+✔ file-backed driver reopens read-only and supports a second snapshot connection (927.0431ms)
+✔ bounded units of work roll back row and binding-byte overflow (1.5911ms)
+✔ unit-of-work row limits include trigger and foreign-key side effects (0.8772ms)
+✔ unit-of-work forwards only remaining intrinsic result and binding budgets (0.8132ms)
+✔ a busy BEGIN leaves the second writer reusable after the first writer commits (35.9233ms)
+✔ BLOB bindings and results are plain owned Uint8Arrays for Buffer and subclasses (0.7465ms)
+✔ WAL limits use observable checkpoint backpressure plus transaction admission (49.3303ms)
+✔ a pinned reader exposes one soft-target overshoot then backpressures the next writer (63.4809ms)
+✔ SQL-generated payloads use the same truthful soft-WAL backpressure policy (52.3061ms)
+✔ filesystem storage caps cannot silently undercut the configured Node driver (0.8997ms)
+✔ matching lower physical caps admit below-cap writes and survive reopen (122.8798ms)
+✔ max_page_count rejects an over-budget transaction without a partial row (32.9529ms)
+(node:37852) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ durable path-copy is authenticated and bounded on a 65,537-entry, three-level manifest (1767.1381ms)
+✔ repeated reused hashes retain the stronger non-final authenticated source path (656.9861ms)
+✔ nondegenerate multi-height CDC replacement copies one authenticated path (600.7372ms)
+✔ path-copy caps hostile nondegenerate rechunk output before retaining entry 257 (57.2157ms)
+✔ a 100 MiB fallback reports bounded windows and its full source-transaction cost (3692.8765ms)
+ℹ {"sourceReadCalls":3200,"sourceBytesRead":104857599,"largestSourceReadBytes":32768,"repositoryPersistenceTransactions":34,"reportedStorageTransactions":3233,"managedPeakBytes":12783636}
+✔ durable edits authenticate a three-level manifest before the retained-entry fallback (237.3349ms)
+✔ durable edits route empty, singleton, and two-level shapes to the local rebuild (60.3582ms)
+✔ a singleton leaf expands through fallback into a canonical multi-leaf tree (1919.2493ms)
+✔ durable edit reserves its concurrent read windows before source or insertion work (26.2123ms)
+✔ direct durable edits account retained insertion ownership before storage or source work (0.4919ms)
+✔ filesystem range mutations and streamed preparation own hostile byte views (74.4686ms)
+✔ batched local rebuilds release exact ingest, staging, and metadata reservations (51.7289ms)
+✔ string write preflight failures leave admission at its baseline (34.6911ms)
+✔ public range edits admit intrinsic exact-bound bytes before ownership copy or source work (33.7979ms)
+✔ Node storage prerequisite bounds 64 MiB materialization while public snapshot pinning remains M3 (1279.6449ms)
+(node:15864) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ durable local rebuild reconnects a size-changing edit and persists byte-identical content (1818.4209ms)
+✔ durable local rebuild handles append, prepend, and truncate byte-identically (235.3361ms)
+✔ every durable local rebuild persistence statement fault leaves the old state intact (1536.2378ms)
+(node:42424) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ manifest cursor intrinsically rejects oversized digest subclasses before source work (0.7375ms)
+✔ SQLite manifest cursor returns bounded ranges through authenticated M1 paths (193.8709ms)
+✔ cursor rejects unsupported parameters and root totals before exposing bytes (24.2858ms)
+✔ cursor validates child totals, canonical grouping, and configured depth (24.6869ms)
+✔ CAS corruption is rejected before destination bytes are changed (21.6962ms)
+✔ cold and warm one-byte ranges stay inside the admitted max-object envelope (746.2717ms)
+ℹ {"objectBytes":16777216,"coldPeakBytes":50913833,"coldTemporaryBytes":50913833,"warmStartingCacheBytes":16802216,"warmPeakBytes":17359408,"warmTemporaryBytes":557192,"callerOutputReservationIncludedDuringRead":true,"callerOutputExcludedAfterReturn":true}
+✔ a 100 MiB materialization rejects before a second full-window BLOB allocation (617.4592ms)
+(node:17728) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ local fresh appends reject duplicates while generic appends retain probes (33.3655ms)
+✔ immutable COW heads retain one current page and atomically cross boundaries at every page size (639.6066ms)
+✔ structural patches are segmented, ordered, bounded, and exact (22.4323ms)
+✔ structural patch segment envelopes persist exactly and reject plus one before writes (69.2666ms)
+✔ tight row profiles persist only patch sets their bounded reader can materialize (163.6434ms)
+✔ patch payload plus row and binding overhead is exact across reopen (71.0282ms)
+✔ bounded usage recount derives patch bytes from physical segments after reopen (74.161ms)
+✔ byte-weighted cache verifies once, remains bounded, and eviction preserves integrity checks (26.0047ms)
+✔ content cache owns Buffer and subclass inputs and detaches every outward hit (20.6489ms)
+✔ partial write-admission failure removes its staging lease and releases every reservation (18.008ms)
+✔ an oversized hostile stream chunk is intrinsically preflighted and cancelled before copy or processing (21.5774ms)
+✔ declared streamed-ingest quota is reserved before the first producer pull (18.3322ms)
+✔ declared entry-stream quota is reserved before iterable work or durable batches (18.8451ms)
+✔ borrowed entry streams reject intrinsic oversized views before detached copies (19.4689ms)
+✔ a 100 MiB streamed write stays chunk-bounded and a buffered peer rejects before copy (23470.1086ms)
+ℹ {"streamedBytes":104857600,"producerOwnedChunkBytes":1048576,"managedPeakBytes":12373056,"callerOwnedInputExcluded":true,"physicalBeforeReopen":{"mainFileBytes":4096,"walBytes":112723232},"pinnedDeletedObjects":0,"reclaimedObjects":676}
+✔ staging payload quota is exact across rollback, release, and reopen (74.8153ms)
+✔ staging row metadata is exact at limit, rolls back at plus one, recounts, and releases (80.7606ms)
+✔ maintenance expiry atomically releases partial and sealed staging charges after reopen (123.2949ms)
+✔ every expired-lease tombstone statement fault rolls back lease state and usage (328.1124ms)
+✔ every keyset cleanup statement fault rolls back its child deletion and cursor (183.5759ms)
+✔ tombstoned leases clean up through resumable keyset-sized child batches (38.4865ms)
+✔ lease maintenance observes aborts between bounded committed batches (25.7177ms)
+✔ sealed recovery rows reject raw mutation until tombstoned cleanup (159.1449ms)
+✔ count-only closure members seal across shared leaves, survive GC, and release exactly (123.746ms)
+✔ a genuine 100001-entry manifest closure reconciles durably and final-validates with constant-row work (3660.7819ms)
+ℹ {"manifestEntries":100001,"uniqueClosureMembers":7,"reconciliationStatements":1749,"statementsPerManifestEntry":0.01748982510174898,"finalValidationStatements":1}
+(node:37824) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ one OperationsStorage transaction rejects mixed quota profiles (29.8587ms)
+✔ writer filesystem, storage, and branch limits persist across connections (67.0764ms)
+✔ invalid writer profiles reject before creating schema state (1.286ms)
+✔ schema initialization is deterministic, persisted, and read-only reopen-safe (51.6344ms)
+✔ durable-table schema identity is atomic, exact, and header-independent (79.273ms)
+✔ current schema recovery authority is revalidated after physical reopen (483.1456ms)
+✔ schema v1 migrates data to the current schema and every migration-statement fault rolls back (16493.4665ms)
+✔ released schema v2 migrates through v3 to v4 and file-backed faults reopen as intact v2 (15324.6933ms)
+✔ collection and cleanup physically reopen after every durable statement and batch (92094.5321ms)
+ℹ collection fault positions: 154 statements, 72 batches, max 7 statements/batch
+✔ schema v3 migrates forward to v4 and every v4 statement fault preserves usable v3 (12692.5219ms)
+✔ populated multi-height v3 manifests certify and remain readable after physical reopen (109.6269ms)
+✔ a released v3 database containing one exact-bound object migrates and reopens (577.1799ms)
+✔ legacy certification rolls back corrupt, unbalanced, and unwritable manifests (159.1378ms)
+✔ v4 migration refuses an unbounded atomic recount before changing v3 (136.2862ms)
+✔ v1 transformed BLOB bytes admit the exact envelope and reject plus one row (538.1451ms)
+✔ one usage authority enforces aggregate and category quotas transactionally (31.6006ms)
+✔ staging identities and nonces are intrinsically bounded before durable admission (31.7819ms)
+✔ namespace root journals reserve maintenance quota before changing the head (28.4423ms)
+✔ transaction row profiles keep every derived statement budget safe (0.3103ms)
+✔ storage profiles reject an adapter that cannot persist default FastCDC chunks (0.2657ms)
+✔ namespace variable metadata deltas match a bounded direct recount across reopen (93.6302ms)
+✔ direct usage recount refuses before scanning beyond its configured row envelope (35.208ms)
+✔ two connections serialize quota admission against the authoritative usage row (83.4361ms)
+✔ two connections serialize staging metadata admission without an orphan row (83.2795ms)
+✔ CAS and segmented manifests persist with verified deduplication and exact usage (237.7527ms)
+✔ the exact supported content-object bound persists and bound plus one rolls back (1192.9969ms)
+✔ bulk content envelopes reject before hashing or manifest decoding (19.931ms)
+✔ failure at every content write statement leaves the complete old state (109.646ms)
+ℹ tests 204
+ℹ suites 0
+ℹ pass 204
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 156898.6028
+accepted-node-gate: PASS node-core-correctness (156979 ms)
+✔ abandoned-run reclamation reopens at every durable cleanup boundary (24125.1597ms)
+ℹ abandoned-run fault positions: 61 statements, 33 batches
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 166109.4296
+accepted-node-gate: PASS node-fault (166185 ms)
+✔ 100,000 reachable object, namespace, manifest-node, and mark rows stay cursor-bounded (288324.2144ms)
+ℹ 100k process memory: heapPeak=184492544, rssPeak=362160128, heapDelta=168564688, rssDelta=275542016, managedPeak=9315643
+ℹ 100k evidence: fixtureDigest=c2ff2b167ed8af69ebb7896c9e2a7390906376c7f479fb38ee38687064373eed, baselineRows=10240, baselineManagedPeak=9274632, namespaceRows=100001, reachableObjects=100001, manifestRootRows=100002, manifestNodeRows=100001, peakStorageMarks=300003, peakGcMarks=300003, verifiedRows=1000066, heapPeak=184492544, rssPeak=362160128, managedPeak=9315643, fullScaleManagedPeak=9315643, maxWal=203359112, maxMaintenanceBatchMs=1857.1, maintenanceMs=225429.9, transactions=48131, statements=5801973, durableStatements=3718239, maxBatchStatements=1543
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 296263.5703
+accepted-node-gate: PASS node-maintenance (296339 ms)
+accepted-node-gate: PASS (540853 ms) {"build":{"name":"workspace-build","elapsedMs":4665},"static":[{"name":"fixtures-check","elapsedMs":315},{"name":"docs-check","elapsedMs":1228},{"name":"style-check","elapsedMs":8093},{"name":"architecture-check","elapsedMs":1404},{"name":"exports-check","elapsedMs":54666}],"benchmarks":[{"name":"m3-benchmarks","elapsedMs":110095},{"name":"m4-branch-benchmarks","elapsedMs":19896}],"smoke":{"name":"node-smoke","elapsedMs":55165},"correctness":[{"name":"node-core-correctness","elapsedMs":156979},{"name":"node-maintenance","elapsedMs":296339},{"name":"node-fault","elapsedMs":166185},{"name":"workerd-algorithms","elapsedMs":3262}]}
+m6-local-gate: START preview-bundle
+{"status":"pass","dryRun":true,"bundleBytes":1022570,"bundleSha256":"93a0623eb5b315d4b12fc43f3be6518037e36671a4c30e7115b78c82af3f4e14","compatibilityDate":"2026-08-10","binding":{"name":"FILESYSTEM","class_name":"FilesystemObject"},"migration":{"tag":"v1","new_sqlite_classes":["FilesystemObject"]},"bundlePath":"C:\\Users\\yifan\\AppData\\Local\\Temp\\efs-m6-preview-gate-l8ho1L\\index.js"}
+m6-local-gate: PASS preview-bundle (947 ms)
+m6-local-gate: START workerd-algorithms
+{"runtime":"workerd","passed":12,"checks":[{"name":"sha256-golden","ok":true,"metrics":{}},{"name":"fastcdc-boundary-goldens","ok":true,"metrics":{}},{"name":"streaming-fastcdc","ok":true,"metrics":{"inputBytesCopied":3145745,"outputBytesCopied":3145745,"boundaryBytesScanned":2588689,"peakPushOutputBytes":0,"peakPushOutputCount":0,"boundedPushOutputBytes":1025,"boundedPushOutputCount":2}},{"name":"manifest-diverse-grouping-root","ok":true,"metrics":{"nodeCount":6,"groupingRecordCount":605}},{"name":"manifest-binary-goldens","ok":true,"metrics":{"emptyLeafBytes":32,"leafBytes":104,"fullLeafBytes":9248,"internalBytes":128,"rootBytes":68,"deepDepth":3,"deepNodeCount":146}},{"name":"manifest-codec-cursor-corruption","ok":true,"metrics":{"rootMutations":10,"nodeMutations":8}},{"name":"cow-pages","ok":true,"metrics":{"pageSizesTested":3,"pages":6}},{"name":"structural-patches","ok":true,"metrics":{"copiedBytes":65536,"peakSegments":64,"metadataSegmentsCreated":1057}},{"name":"diagnostic-local-rebuild","ok":true,"metrics":{"sourceBytesRead":524287,"bytesHashed":155909,"scanWindowBytes":524288,"reconnectOldOffset":830895,"reconnectNewOffset":830895,"reusedPrefixEntries":3,"reusedSuffixEntries":8,"affectedEntryCount":1,"newObjectCount":1,"newManifestNodeCount":1,"reusedManifestNodeCount":0,"fellBackToEnd":false,"insertionCopyCount":1,"insertionBytesCopied":1,"chunkerInputBytesCopied":155909,"chunkerOutputBytesCopied":155909,"chunkerBoundaryBytesScanned":123141,"editedInputBytesPrepared":524288}},{"name":"streamed-rebuild-sink-ownership","ok":true,"metrics":{"sourceBytesRead":65554,"bytesHashed":65555,"attemptedLocalSourceBytesRead":0,"attemptedLocalBytesHashed":0,"attemptedLocalLargestSourceRead":0,"attemptedLocalChunkerInputBytesCopied":0,"attemptedLocalChunkerOutputBytesCopied":0,"attemptedLocalChunkerBoundaryBytesScanned":0,"attemptedLocalEditedInputBytesPrepared":0,"fallbackSourceBytesRead":65554,"fallbackBytesHashed":65555,"fallbackLargestSourceRead":257,"fallbackChunkerInputBytesCopied":65555,"fallbackChunkerOutputBytesCopied":65555,"fallbackChunkerBoundaryBytesScanned":39666,"objectCount":405,"largestSourceRead":257,"peakRetainedRecords":247,"peakPendingEntries":3,"insertionCopyCount":1,"insertionBytesCopied":1,"chunkerInputBytesCopied":65555,"chunkerOutputBytesCopied":65555,"chunkerBoundaryBytesScanned":39666}},{"name":"runtime-progress-bound","ok":true,"metrics":{"requiredBytes":102273024,"pageSizesTested":3}},{"name":"write-path-hashing","ok":true,"metrics":{"hashedBytes":41418752,"elapsedMs":92,"mibPerSec":429.3,"baselineMibPerSec":77.6,"speedup":5.53}}]}
+m6-local-gate: PASS workerd-algorithms (3152 ms)
+m6-local-gate: START node-portable
+m6-local-gate: START durable-object-scale-resource
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:3152) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40560) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3556) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9912) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42564) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27704) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33760) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26244) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-suite-context-evidence {"adapter":"node-sqlite","schema":"efs-portable-fixture-context-v1","label":"portable-storage","seed":5744158,"fixtureDigest":"76e33a6ffc8b3e7abe9f180becdbb264f17c8555bca33d757542cb7beaba2380","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-publication-fault-topology {"direct":95,"prepared":91}
+m6-maintenance-fault-topology {"snapshot":{"durableStatements":110,"committedBatches":42,"maxBatchStatements":6},"collection":{"durableStatements":259,"committedBatches":128,"maxBatchStatements":3},"abandoned":{"durableStatements":61,"committedBatches":33,"maxBatchStatements":3}}
+m6-restart-evidence {"schema":"efs-portable-restart-result-v1","seed":98925095,"fixtureDigest":"3ef1b76ce50f31252cc5c631275ec56cc32cc2a5996645af27088c90ae27b60a","cases":["restart-committed-state","restart-active-branch","restart-lost-response-replay","restart-abandoned-lease","restart-interrupted-collection"],"verifiedEntities":512,"activeLeaseRows":0,"stagingRows":0,"collectionState":"complete"}
+m6-suite-context-evidence {"adapter":"node-sqlite","schema":"efs-portable-fixture-context-v1","label":"portable-m6","seed":1592639710,"fixtureDigest":"d6545f3c25b79d71a1fbc0dd78d64a7bd768e5a23073b110c9f173101515ccf1","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-cow-evidence {"adapter":"node","results":[{"schema":"efs-portable-cow-preparation-v1","pageBytes":4096,"branchId":"portable-cow-4096","fixtureDigest":"e53f44ef89bd755ce5c58fb4e532e63427a110415130e0c259fe0cb40a2be85e","repeatedWrites":1000,"cases":["cow-repeated-page-head","cow-boundary-crossing","cow-final-partial-page","cow-pinned-snapshot","cow-physical-reopen","cow-conflicting-format-refusal"],"pageHeadCount":3,"pageVersionCount":3,"finalPartialBytes":17},{"schema":"efs-portable-cow-preparation-v1","pageBytes":8192,"branchId":"portable-cow-8192","fixtureDigest":"a0215cad633725af74fede3d2bae8bf6f7f7a5807ba709e9b7ebc0d66e353211","repeatedWrites":1000,"cases":["cow-repeated-page-head","cow-boundary-crossing","cow-final-partial-page","cow-pinned-snapshot","cow-physical-reopen","cow-conflicting-format-refusal"],"pageHeadCount":3,"pageVersionCount":3,"finalPartialBytes":17},{"schema":"efs-portable-cow-preparation-v1","pageBytes":16384,"branchId":"portable-cow-16384","fixtureDigest":"1fc437e810a4ff3cba2b9090bb1c3dc6254eb34dbfa51e8af67397874aa4c6dd","repeatedWrites":1000,"cases":["cow-repeated-page-head","cow-boundary-crossing","cow-final-partial-page","cow-pinned-snapshot","cow-physical-reopen","cow-conflicting-format-refusal"],"pageHeadCount":3,"pageVersionCount":3,"finalPartialBytes":17}]}
+m6-suite-context-evidence {"adapter":"node-sqlite","schema":"efs-portable-fixture-context-v1","label":"portable-driver","seed":53790,"fixtureDigest":"6fa7a236b89952c781ef26d671ac7a8e70a1f081f3b089da871dacf4ca69c5e6","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-suite-context-evidence {"adapter":"node-sqlite","schema":"efs-portable-fixture-context-v1","label":"portable-branches","seed":11708100,"fixtureDigest":"4097a961d64604600859a91870e896e7a2e9cbf9f620d72727cf8788ddfc5304","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-workerd-resource-window {"phase":"baseline","edge":"start"}
+m6-workerd-resource-window {"phase":"baseline","edge":"end"}
+m6-workerd-control-phase {"phase":"baseline-measured","rows":10240,"databaseSize":12963840}
+m6-workerd-resource-window {"phase":"full","edge":"start"}
+m6-workerd-resource-window {"phase":"full","edge":"end"}
+m6-workerd-control-phase {"phase":"full-measured","rows":100000,"databaseSize":126369792}
+m6-workerd-control-evidence {"schema":"efs-m6-workerd-raw-control-v1","baselineRows":10240,"fullRows":100000,"payloadBytes":256,"baselineDatabaseBytes":12963840,"fullDatabaseBytes":126369792,"restart":"evictDurableObject","filesystemCachesInstantiated":false}
+ ✓ tests/durable-object-integration/cloudflare-resource-control.test.ts > raw Durable Object SQLite reproduces the scale resident-memory effect without filesystem caches 38752ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  03:42:37
+   Duration  39.80s (transform 298ms, setup 0ms, import 450ms, tests 38.75s, environment 1ms)
+
+m6-workerd-control-resource-evidence {"schema":"efs-m6-workerd-control-resource-v1","exactProcessBoundAvailable":false,"platformIsolateLimitBytes":134217728,"baselineRows":10240,"fullRows":100000,"baselinePeakRssBytes":165240832,"fullPeakRssBytes":271097856,"baselineMinimumRssBytes":124309504,"fullMinimumRssBytes":162353152,"rssGrowthBytes":105857024,"baselineWindowGrowthBytes":40931328,"fullWindowGrowthBytes":108744704,"peakWorkerdProcessRssBytes":271097856,"maxWorkerdProcessRssBytes":805306368,"observedPids":[17832],"sampleCount":74,"elapsedMs":42470,"controlBaselineDatabaseBytes":12963840,"controlFullDatabaseBytes":126369792}
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-scale-phase {"phase":"baseline-built","restart":"evictDurableObject"}
+m6-workerd-resource-window {"phase":"baseline","edge":"start"}
+m6-suite-context-evidence {"adapter":"node-sqlite","schema":"efs-portable-fixture-context-v1","label":"portable-maintenance-restart","seed":1835100526,"fixtureDigest":"f4d2ad16bdb74225a81eb2e83679773585df87002b553aba11a85fb26972abc1","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-workerd-resource-window {"phase":"baseline","edge":"end"}
+m6-scale-phase {"phase":"baseline-measured","restart":"evictDurableObject"}
+m6-filesystem-fault-evidence {"adapter":"node-sqlite-file-backed","statementPositions":1218,"operations":{"writeFile-create":214,"writeFile-stream":214,"writeRange":78,"replaceRange":78,"truncate":78,"mkdir":175,"chmod":29,"link":70,"symlink":59,"rename":60,"unlink":49,"rm-recursive":114},"restart":"physical-driver-destruction"}
+m6-suite-context-evidence {"adapter":"node-sqlite","schema":"efs-portable-fixture-context-v1","label":"portable-maintenance-corruption","seed":201400007,"fixtureDigest":"9fb30f48110470a36565724978f591b73ebad4e2d7498e82703adfe92a0fd981","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-suite-context-evidence {"adapter":"node-sqlite","schema":"efs-portable-fixture-context-v1","label":"portable-maintenance-quota","seed":1903521652,"fixtureDigest":"66aa544247de8674f5455753d0f21fa12316e81606a3e6bedb2f0b7e263f940e","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-migration-evidence {"adapter":"node-sqlite","sourceVersions":[1,2,3],"statementCounts":{"v1":339,"v2":314,"v3":269},"restart":"physical-driver-reopen"}
+m6-initialization-identity-evidence {"adapter":"node-sqlite","identityMode":"sqlite-header","identityWrites":12,"beforeAfterBoundaries":24,"restart":"physical-driver-reopen"}
+m6-scale-phase {"phase":"full-built","restart":"evictDurableObject"}
+m6-workerd-resource-window {"phase":"full","edge":"start"}
+m6-workerd-resource-window {"phase":"full","edge":"end"}
+m6-scale-phase {"phase":"full-measured","restart":"evictDurableObject"}
+m6-fault-evidence {"schema":"efs-portable-fault-result-v1","adapter":"node-sqlite-fault-matrix","seed":1024023,"fixtureDigest":"ef4636928161808e87035fa51983821677527ccd9661991c5d0126a778b2268a","faultPoint":"after-sql-statement","positions":1206,"payloadBytes":65536,"operationPositions":{"writeFile-create":214,"writeFile-stream":214,"writeRange":74,"replaceRange":74,"truncate":74,"mkdir":175,"chmod":29,"link":70,"symlink":59,"rename":60,"unlink":49,"rm-recursive":114}}
+m6-scale-phase {"phase":"collection-paused","restart":"evictDurableObject"}
+m6-scale-evidence {"schema":"efs-portable-scale-result-v1","adapter":"cloudflare-durable-object-scale","seed":379422,"fixtureDigest":"e472eed749c34849f2bf86c8be12b17d8b82954b77e5911de126c90daaf39104","rows":100000,"baselineRows":10240,"objectRows":100000,"namespaceRows":100000,"manifestRootRows":100000,"manifestNodeRows":100000,"baselineManagedPeakBytes":4481396,"fullManagedPeakBytes":4481396,"peakStorageMarks":300000,"peakGcMarks":300000,"verifiedRows":1000006,"maxMaintenanceCallMs":384,"mainFileBytes":88379392,"physicalRestarts":5}
+ ✓ tests/durable-object-integration/cloudflare-scale.test.ts > the shared 100,000-row scale suite passes in the faithful runtime 274470ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  03:43:20
+   Duration  276.87s (transform 778ms, setup 0ms, import 1.42s, tests 274.47s, environment 0ms)
+
+m6-workerd-resource-evidence {"schema":"efs-m6-workerd-resource-v1","exactProcessBoundAvailable":false,"platformIsolateLimitBytes":134217728,"baselineRows":10240,"fullRows":100000,"baselinePeakRssBytes":232058880,"fullPeakRssBytes":529334272,"baselineMinimumRssBytes":199241728,"fullMinimumRssBytes":257785856,"rssGrowthBytes":297275392,"baselineWindowGrowthBytes":32817152,"fullWindowGrowthBytes":271548416,"rawRuntimeControlGrowthBytes":105857024,"rawRuntimeControlWindowGrowthBytes":108744704,"reproducedRuntimeEffect":true,"minimumReproducedRuntimeEffectBytes":33554432,"peakWorkerdProcessRssBytes":529334272,"maxWorkerdProcessRssBytes":805306368,"observedPids":[47472],"sampleCount":213,"elapsedMs":278932,"scaleFixtureDigest":"e472eed749c34849f2bf86c8be12b17d8b82954b77e5911de126c90daaf39104","scaleMainFileBytes":88379392,"scalePhysicalRestarts":5}
+m6-local-gate: PASS durable-object-scale-resource (321747 ms)
+m6-scale-evidence {"schema":"efs-portable-scale-result-v1","adapter":"node-sqlite-scale","seed":379422,"fixtureDigest":"e472eed749c34849f2bf86c8be12b17d8b82954b77e5911de126c90daaf39104","rows":100000,"baselineRows":10240,"objectRows":100000,"namespaceRows":100000,"manifestRootRows":100000,"manifestNodeRows":100000,"baselineManagedPeakBytes":4481396,"fullManagedPeakBytes":4481396,"peakStorageMarks":300000,"peakGcMarks":300000,"verifiedRows":1000006,"maxMaintenanceCallMs":1320.9762000000046,"mainFileBytes":127348736}
+
+ Test Files  8 passed (8)
+      Tests  16 passed | 1 skipped (17)
+   Start at  03:42:36
+   Duration  332.03s (transform 4.43s, setup 0ms, import 10.15s, tests 776.56s, environment 1ms)
+
+m6-local-gate: PASS node-portable (332586 ms)
+m6-local-gate: START durable-object-portable
+m6-local-gate: START node-and-durable-object-maintenance-faults
+m6-maintenance-faults: START node:snapshot:statement:1-32
+m6-maintenance-faults: START node:snapshot:statement:33-64
+m6-maintenance-faults: START node:snapshot:statement:65-96
+m6-maintenance-faults: START node:snapshot:statement:97-110
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:31756) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37872) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48388) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51024) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-runtime-evidence {"driver":"sqlite-cloudflare","sqliteBuild":"3.47.0","sqliteVersionSource":"workerd-v1.20260810.1-MODULE.bazel","sqliteVersionQuery":"forbidden-by-runtime-authorizer-SQLITE_ERROR","databaseSize":8192,"capabilities":{"maxBlobBytes":2097152,"maxBindings":100,"durability":"acknowledged","journalMode":"runtime-managed","memoryPolicy":"runtime-managed","maxPhysicalDatabaseBytes":1000000000,"maxJournalBytes":1000000000,"physicalQuotaPolicy":"runtime-enforced","journalQuotaPolicy":"runtime-enforced","journalSizeLimitIsHard":false,"schemaIdentityMode":"durable-table","pageMetricsMode":"runtime-size-only"}}
+m6-suite-context-evidence {"adapter":"sqlite-cloudflare","schema":"efs-portable-fixture-context-v1","label":"portable-driver","seed":53790,"fixtureDigest":"6fa7a236b89952c781ef26d671ac7a8e70a1f081f3b089da871dacf4ca69c5e6","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-suite-context-evidence {"adapter":"sqlite-cloudflare","schema":"efs-portable-fixture-context-v1","label":"portable-storage","seed":5744158,"fixtureDigest":"76e33a6ffc8b3e7abe9f180becdbb264f17c8555bca33d757542cb7beaba2380","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-initialization-identity-evidence {"adapter":"cloudflare-durable-object","identityMode":"durable-table","identityWrites":13,"beforeAfterBoundaries":26,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:09
+   Duration  8.06s (transform 665ms, setup 0ms, import 1.31s, tests 6.60s, environment 0ms)
+
+m6-maintenance-faults: PASS node:snapshot:statement:97-110
+m6-maintenance-faults: START node:snapshot:batch:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:46240) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-cow-evidence {"adapter":"cloudflare-durable-object","restart":"evictDurableObject","results":[{"schema":"efs-portable-cow-preparation-v1","pageBytes":4096,"branchId":"portable-cow-4096","fixtureDigest":"e53f44ef89bd755ce5c58fb4e532e63427a110415130e0c259fe0cb40a2be85e","repeatedWrites":1000,"cases":["cow-repeated-page-head","cow-boundary-crossing","cow-final-partial-page","cow-pinned-snapshot","cow-physical-reopen","cow-conflicting-format-refusal"],"pageHeadCount":3,"pageVersionCount":3,"finalPartialBytes":17},{"schema":"efs-portable-cow-preparation-v1","pageBytes":8192,"branchId":"portable-cow-8192","fixtureDigest":"a0215cad633725af74fede3d2bae8bf6f7f7a5807ba709e9b7ebc0d66e353211","repeatedWrites":1000,"cases":["cow-repeated-page-head","cow-boundary-crossing","cow-final-partial-page","cow-pinned-snapshot","cow-physical-reopen","cow-conflicting-format-refusal"],"pageHeadCount":3,"pageVersionCount":3,"finalPartialBytes":17},{"schema":"efs-portable-cow-preparation-v1","pageBytes":16384,"branchId":"portable-cow-16384","fixtureDigest":"1fc437e810a4ff3cba2b9090bb1c3dc6254eb34dbfa51e8af67397874aa4c6dd","repeatedWrites":1000,"cases":["cow-repeated-page-head","cow-boundary-crossing","cow-final-partial-page","cow-pinned-snapshot","cow-physical-reopen","cow-conflicting-format-refusal"],"pageHeadCount":3,"pageVersionCount":3,"finalPartialBytes":17}]}
+m6-suite-context-evidence {"adapter":"sqlite-cloudflare","schema":"efs-portable-fixture-context-v1","label":"portable-m6","seed":1592639710,"fixtureDigest":"d6545f3c25b79d71a1fbc0dd78d64a7bd768e5a23073b110c9f173101515ccf1","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:09
+   Duration  15.28s (transform 679ms, setup 0ms, import 1.30s, tests 13.82s, environment 0ms)
+
+m6-maintenance-faults: PASS node:snapshot:statement:1-32
+m6-maintenance-faults: START node:snapshot:batch:33-42
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:09
+   Duration  15.39s (transform 679ms, setup 0ms, import 1.30s, tests 13.93s, environment 0ms)
+
+m6-maintenance-faults: PASS node:snapshot:statement:65-96
+m6-maintenance-faults: START node:collection:statement:1-32
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:09
+   Duration  15.45s (transform 675ms, setup 0ms, import 1.31s, tests 13.99s, environment 0ms)
+
+m6-maintenance-faults: PASS node:snapshot:statement:33-64
+m6-maintenance-faults: START node:collection:statement:33-64
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:50460) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47332) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45284) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-suite-context-evidence {"adapter":"sqlite-cloudflare","schema":"efs-portable-fixture-context-v1","label":"portable-branches","seed":11708100,"fixtureDigest":"4097a961d64604600859a91870e896e7a2e9cbf9f620d72727cf8788ddfc5304","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-suite-context-evidence {"adapter":"sqlite-cloudflare","schema":"efs-portable-fixture-context-v1","label":"portable-maintenance-restart","seed":1835100526,"fixtureDigest":"f4d2ad16bdb74225a81eb2e83679773585df87002b553aba11a85fb26972abc1","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:24
+   Duration  5.52s (transform 571ms, setup 0ms, import 1.22s, tests 4.16s, environment 0ms)
+
+m6-maintenance-faults: PASS node:snapshot:batch:33-42
+m6-maintenance-faults: START node:collection:statement:65-96
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:34380) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:17
+   Duration  13.28s (transform 531ms, setup 0ms, import 1.17s, tests 11.98s, environment 0ms)
+
+m6-maintenance-faults: PASS node:snapshot:batch:1-32
+m6-maintenance-faults: START node:collection:statement:97-128
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:49808) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-suite-context-evidence {"adapter":"sqlite-cloudflare","schema":"efs-portable-fixture-context-v1","label":"portable-maintenance-corruption","seed":201400007,"fixtureDigest":"9fb30f48110470a36565724978f591b73ebad4e2d7498e82703adfe92a0fd981","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+m6-suite-context-evidence {"adapter":"sqlite-cloudflare","schema":"efs-portable-fixture-context-v1","label":"portable-maintenance-quota","seed":1903521652,"fixtureDigest":"66aa544247de8674f5455753d0f21fa12316e81606a3e6bedb2f0b7e263f940e","digestBasis":"sha256-utf8-canonical-fixture-descriptor"}
+·-·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:24
+   Duration  34.45s (transform 566ms, setup 0ms, import 1.20s, tests 33.10s, environment 0ms)
+
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:24
+   Duration  34.40s (transform 567ms, setup 0ms, import 1.18s, tests 33.06s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:statement:1-32
+m6-maintenance-faults: START node:collection:statement:129-160
+m6-maintenance-faults: PASS node:collection:statement:33-64
+m6-maintenance-faults: START node:collection:statement:161-192
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:51024) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17460) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:30
+   Duration  35.02s (transform 556ms, setup 0ms, import 1.20s, tests 33.69s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:statement:65-96
+m6-maintenance-faults: START node:collection:statement:193-224
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:31
+   Duration  34.77s (transform 548ms, setup 0ms, import 1.19s, tests 33.44s, environment 0ms)
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-faults: PASS node:collection:statement:97-128
+m6-maintenance-faults: START node:collection:statement:225-256
+(node:41184) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:45156) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-smoke-evidence {"schema":"efs-portable-smoke-result-v1","adapter":"cloudflare-durable-object-faithful-local","seed":1592614637,"fixtureDigest":"488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8","finalPayloadDigest":"5dcf868d1e469d1298c5f00b42870a5d393a891cb118871f2b72a6b3b92936a9","namespaceDigest":"50d1e2037d66a96b718950f08232eac9b86e9ddd0939f3e2541ba805cce8f8d2","elapsedMs":39171,"completedOperationCount":9056,"namespaceOperationCount":2000,"restarts":3,"peakManagedResidentBytes":41718448,"objectCount":372,"manifestCount":540,"slowestOperations":[{"name":"write-16m-payload","elapsedMs":649},{"name":"digest-after-initial-reopen","elapsedMs":571},{"name":"namespace-hard-link","elapsedMs":62},{"name":"namespace-hard-link","elapsedMs":60},{"name":"namespace-hard-link","elapsedMs":59},{"name":"namespace-hard-link","elapsedMs":57},{"name":"namespace-hard-link","elapsedMs":57},{"name":"namespace-hard-link","elapsedMs":57},{"name":"namespace-hard-link","elapsedMs":57},{"name":"namespace-hard-link","elapsedMs":56}]}
+m6-restart-evidence {"schema":"efs-portable-restart-result-v1","seed":98925095,"fixtureDigest":"3ef1b76ce50f31252cc5c631275ec56cc32cc2a5996645af27088c90ae27b60a","cases":["restart-committed-state","restart-active-branch","restart-lost-response-replay","restart-abandoned-lease","restart-interrupted-collection"],"verifiedEntities":512,"activeLeaseRows":0,"stagingRows":0,"collectionState":"complete"}
+
+ Test Files  6 passed | 1 skipped (7)
+      Tests  23 passed | 5 skipped (28)
+   Start at  03:48:10
+   Duration  64.97s (transform 3.60s, setup 0ms, import 10.89s, tests 70.39s, environment 1ms)
+
+m6-local-gate: PASS durable-object-portable (66516 ms)
+m6-local-gate: START durable-object-migration-faults
+m6-cloudflare-migrations: START v1:1-48
+m6-cloudflare-migrations: START v1:49-96
+m6-cloudflare-migrations: START v1:97-144
+m6-cloudflare-migrations: START v1:145-192
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[1,48],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:16
+   Duration  4.99s (transform 714ms, setup 0ms, import 1.20s, tests 3.13s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:1-48
+m6-cloudflare-migrations: START v1:193-240
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[49,96],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:16
+   Duration  5.30s (transform 697ms, setup 0ms, import 1.18s, tests 3.45s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:49-96
+m6-cloudflare-migrations: START v1:241-288
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[97,144],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:16
+   Duration  5.51s (transform 748ms, setup 0ms, import 1.29s, tests 3.54s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:97-144
+m6-cloudflare-migrations: START v1:289-336
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[145,192],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:16
+   Duration  5.81s (transform 712ms, setup 0ms, import 1.20s, tests 3.95s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:145-192
+m6-cloudflare-migrations: START v1:337-365
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[193,240],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:22
+   Duration  6.75s (transform 640ms, setup 0ms, import 1.14s, tests 4.66s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:193-240
+m6-cloudflare-migrations: START v2:1-48
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[337,365],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:23
+   Duration  6.14s (transform 802ms, setup 0ms, import 1.33s, tests 3.60s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:337-365
+m6-cloudflare-migrations: START v2:49-96
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[241,288],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:23
+   Duration  8.23s (transform 884ms, setup 0ms, import 1.44s, tests 5.13s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:241-288
+m6-cloudflare-migrations: START v2:97-144
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":1,"statementRange":[289,336],"totalStatements":365,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:23
+   Duration  8.23s (transform 846ms, setup 0ms, import 1.40s, tests 5.37s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v1:289-336
+m6-cloudflare-migrations: START v2:145-192
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[1,48],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:30
+   Duration  5.22s (transform 690ms, setup 0ms, import 1.19s, tests 3.41s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v2:1-48
+m6-cloudflare-migrations: START v2:193-240
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[49,96],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:31
+   Duration  5.34s (transform 695ms, setup 0ms, import 1.20s, tests 3.52s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v2:49-96
+m6-cloudflare-migrations: START v2:241-288
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[97,144],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:32
+   Duration  6.04s (transform 663ms, setup 0ms, import 1.13s, tests 4.29s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v2:97-144
+m6-cloudflare-migrations: START v2:289-336
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[145,192],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:32
+   Duration  6.30s (transform 680ms, setup 0ms, import 1.16s, tests 4.51s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v2:145-192
+m6-cloudflare-migrations: START v2:337-339
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:59
+   Duration  40.04s (transform 569ms, setup 0ms, import 1.19s, tests 38.71s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:statement:161-192
+m6-maintenance-faults: START node:collection:statement:257-259
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:3704) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:48:59
+   Duration  41.05s (transform 570ms, setup 0ms, import 1.19s, tests 39.72s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:statement:129-160
+m6-maintenance-faults: START node:collection:batch:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:32060) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[337,339],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:40
+   Duration  2.20s (transform 705ms, setup 0ms, import 1.20s, tests 280ms, environment 0ms)
+
+m6-cloudflare-migrations: PASS v2:337-339
+m6-cloudflare-migrations: START v3:1-48
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[193,240],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:37
+   Duration  6.65s (transform 761ms, setup 0ms, import 1.30s, tests 4.17s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v2:193-240
+m6-cloudflare-migrations: START v3:49-96
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[241,288],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:37
+   Duration  6.43s (transform 689ms, setup 0ms, import 1.21s, tests 4.37s, environment 1ms)
+
+m6-cloudflare-migrations: PASS v2:241-288
+m6-cloudflare-migrations: START v3:97-144
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:49:05
+   Duration  39.27s (transform 569ms, setup 0ms, import 1.21s, tests 37.92s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:statement:193-224
+m6-maintenance-faults: START node:collection:batch:33-64
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:49:40
+   Duration  5.26s (transform 592ms, setup 0ms, import 1.27s, tests 3.84s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:statement:257-259
+m6-maintenance-faults: START node:collection:batch:65-96
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:49:06
+   Duration  39.10s (transform 568ms, setup 0ms, import 1.20s, tests 37.76s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:statement:225-256
+m6-maintenance-faults: START node:collection:batch:97-128
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:46588) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45140) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21412) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":2,"statementRange":[289,336],"totalStatements":339,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:39
+   Duration  7.59s (transform 723ms, setup 0ms, import 1.26s, tests 5.48s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v2:289-336
+m6-cloudflare-migrations: START v3:145-192
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":3,"statementRange":[1,48],"totalStatements":292,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:43
+   Duration  5.92s (transform 689ms, setup 0ms, import 1.18s, tests 4.09s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v3:1-48
+m6-cloudflare-migrations: START v3:193-240
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":3,"statementRange":[49,96],"totalStatements":292,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:45
+   Duration  5.01s (transform 761ms, setup 0ms, import 1.34s, tests 3.02s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v3:49-96
+m6-cloudflare-migrations: START v3:241-288
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":3,"statementRange":[97,144],"totalStatements":292,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:45
+   Duration  6.81s (transform 859ms, setup 0ms, import 1.44s, tests 4.05s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v3:97-144
+m6-cloudflare-migrations: START v3:289-292
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":3,"statementRange":[145,192],"totalStatements":292,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:48
+   Duration  6.48s (transform 668ms, setup 0ms, import 1.15s, tests 4.72s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v3:145-192
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":3,"statementRange":[289,292],"totalStatements":292,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:53
+   Duration  2.14s (transform 686ms, setup 0ms, import 1.18s, tests 349ms, environment 0ms)
+
+m6-cloudflare-migrations: PASS v3:289-292
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":3,"statementRange":[193,240],"totalStatements":292,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:51
+   Duration  7.88s (transform 817ms, setup 0ms, import 1.37s, tests 5.17s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v3:193-240
+m6-migration-evidence {"adapter":"cloudflare-durable-object","sourceVersion":3,"statementRange":[241,288],"totalStatements":292,"restart":"evictDurableObject"}
+·---
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  03:49:51
+   Duration  7.67s (transform 720ms, setup 0ms, import 1.27s, tests 5.43s, environment 0ms)
+
+m6-cloudflare-migrations: PASS v3:241-288
+m6-cloudflare-migrations: PASS {"chunks":23,"statementPositions":996,"sourceVersions":[1,2,3],"elapsedMs":43811}
+m6-local-gate: PASS durable-object-migration-faults (43851 ms)
+m6-local-gate: START durable-object-filesystem-faults
+m6-cloudflare-filesystem-faults: START writeFile-create
+m6-cloudflare-filesystem-faults: START writeFile-stream
+m6-cloudflare-filesystem-faults: START writeRange
+m6-cloudflare-filesystem-faults: START replaceRange
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"writeRange","statementPositions":78,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:00
+   Duration  5.90s (transform 712ms, setup 0ms, import 1.27s, tests 3.96s, environment 0ms)
+
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"replaceRange","statementPositions":78,"restart":"evictDurableObject"}
+m6-cloudflare-filesystem-faults: PASS writeRange
+m6-cloudflare-filesystem-faults: START truncate
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:00
+   Duration  6.00s (transform 716ms, setup 0ms, import 1.28s, tests 4.05s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS replaceRange
+m6-cloudflare-filesystem-faults: START mkdir
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"truncate","statementPositions":78,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:07
+   Duration  5.04s (transform 702ms, setup 0ms, import 1.25s, tests 3.18s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS truncate
+m6-cloudflare-filesystem-faults: START chmod
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"chmod","statementPositions":29,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:13
+   Duration  2.83s (transform 658ms, setup 0ms, import 1.19s, tests 1.04s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS chmod
+m6-cloudflare-filesystem-faults: START link
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"mkdir","statementPositions":175,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:07
+   Duration  10.29s (transform 654ms, setup 0ms, import 1.18s, tests 8.50s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS mkdir
+m6-cloudflare-filesystem-faults: START symlink
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:49:41
+   Duration  39.24s (transform 598ms, setup 0ms, import 1.27s, tests 37.82s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:batch:1-32
+m6-maintenance-faults: START node:abandoned:statement:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:47516) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"link","statementPositions":70,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:17
+   Duration  4.76s (transform 656ms, setup 0ms, import 1.22s, tests 2.92s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS link
+m6-cloudflare-filesystem-faults: START rename
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"writeFile-stream","statementPositions":214,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:00
+   Duration  22.41s (transform 716ms, setup 0ms, import 1.32s, tests 20.42s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS writeFile-stream
+m6-cloudflare-filesystem-faults: START unlink
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"symlink","statementPositions":59,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:19
+   Duration  3.94s (transform 670ms, setup 0ms, import 1.21s, tests 2.11s, environment 0ms)
+
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"writeFile-create","statementPositions":214,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:00
+   Duration  22.70s (transform 710ms, setup 0ms, import 1.26s, tests 20.77s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS symlink
+m6-cloudflare-filesystem-faults: START rm-recursive
+m6-cloudflare-filesystem-faults: PASS writeFile-create
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:49:45
+   Duration  38.14s (transform 621ms, setup 0ms, import 1.28s, tests 36.71s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:batch:33-64
+m6-maintenance-faults: START node:abandoned:statement:33-61
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:49:45
+   Duration  38.11s (transform 608ms, setup 0ms, import 1.27s, tests 36.70s, environment 0ms)
+
+m6-maintenance-faults: PASS node:collection:batch:65-96
+m6-maintenance-faults: START node:abandoned:batch:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:49:45
+   Duration  38.37s (transform 632ms, setup 0ms, import 1.30s, tests 36.92s, environment 0ms)
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-faults: PASS node:collection:batch:97-128
+m6-maintenance-faults: START node:abandoned:batch:33-33
+(node:30532) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51184) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+(node:43072) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:24
+   Duration  2.13s (transform 819ms, setup 0ms, import 1.46s, tests 522ms, environment 0ms)
+
+m6-maintenance-faults: PASS node:abandoned:batch:33-33
+m6-maintenance-faults: START cloudflare:snapshot:statement:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"rename","statementPositions":60,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:23
+   Duration  4.33s (transform 691ms, setup 0ms, import 1.27s, tests 2.38s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS rename
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"unlink","statementPositions":49,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:24
+   Duration  6.52s (transform 944ms, setup 0ms, import 1.63s, tests 2.48s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS unlink
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:20
+   Duration  12.11s (transform 561ms, setup 0ms, import 1.23s, tests 10.74s, environment 0ms)
+
+m6-maintenance-faults: PASS node:abandoned:statement:1-32
+m6-maintenance-faults: START cloudflare:snapshot:statement:33-64
+m6-filesystem-fault-evidence {"adapter":"cloudflare-durable-object","operation":"rm-recursive","statementPositions":114,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:24
+   Duration  9.02s (transform 874ms, setup 0ms, import 1.55s, tests 5.34s, environment 0ms)
+
+m6-cloudflare-filesystem-faults: PASS rm-recursive
+m6-cloudflare-filesystem-faults: PASS {"statementPositions":1218,"operations":{"writeFile-create":214,"writeFile-stream":214,"writeRange":78,"replaceRange":78,"truncate":78,"mkdir":175,"chmod":29,"link":70,"symlink":59,"rename":60,"unlink":49,"rm-recursive":114},"restart":"evictDurableObject","elapsedMs":34260}
+m6-local-gate: PASS durable-object-filesystem-faults (34301 ms)
+m6-local-gate: START durable-object-publication-faults
+m6-cloudflare-publication-faults: START direct:1-32
+m6-cloudflare-publication-faults: START direct:33-64
+m6-cloudflare-publication-faults: START direct:65-95
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:24
+   Duration  10.08s (transform 601ms, setup 0ms, import 1.26s, tests 8.66s, environment 0ms)
+
+m6-maintenance-faults: PASS node:abandoned:statement:33-61
+m6-maintenance-faults: START cloudflare:snapshot:statement:65-96
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:24
+   Duration  10.67s (transform 776ms, setup 0ms, import 1.43s, tests 9.09s, environment 0ms)
+
+m6-maintenance-faults: PASS node:abandoned:batch:1-32
+m6-maintenance-faults: START cloudflare:snapshot:statement:97-110
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"snapshot","kind":"statement","range":[1,32],"limit":110,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:27
+   Duration  8.20s (transform 646ms, setup 0ms, import 1.20s, tests 6.39s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:snapshot:statement:1-32
+m6-maintenance-faults: START cloudflare:snapshot:batch:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"snapshot","kind":"statement","range":[97,110],"limit":110,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:36
+   Duration  5.12s (transform 768ms, setup 0ms, import 1.41s, tests 3.04s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:snapshot:statement:97-110
+m6-maintenance-faults: START cloudflare:snapshot:batch:33-42
+m6-publication-fault-evidence {"adapter":"cloudflare-durable-object","variant":"direct","statementRange":[1,32],"totalStatements":95,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:34
+   Duration  6.82s (transform 791ms, setup 0ms, import 1.43s, tests 4.27s, environment 1ms)
+
+m6-publication-fault-evidence {"adapter":"cloudflare-durable-object","variant":"direct","statementRange":[65,95],"totalStatements":95,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:34
+   Duration  6.86s (transform 819ms, setup 0ms, import 1.45s, tests 4.30s, environment 0ms)
+
+m6-cloudflare-publication-faults: PASS direct:1-32
+m6-cloudflare-publication-faults: START prepared:1-32
+m6-cloudflare-publication-faults: PASS direct:65-95
+m6-cloudflare-publication-faults: START prepared:33-64
+m6-publication-fault-evidence {"adapter":"cloudflare-durable-object","variant":"direct","statementRange":[33,64],"totalStatements":95,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:34
+   Duration  7.09s (transform 857ms, setup 0ms, import 1.54s, tests 4.45s, environment 0ms)
+
+m6-cloudflare-publication-faults: PASS direct:33-64
+m6-cloudflare-publication-faults: START prepared:65-91
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"snapshot","kind":"statement","range":[33,64],"limit":110,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:33
+   Duration  8.61s (transform 746ms, setup 0ms, import 1.38s, tests 6.57s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:snapshot:statement:33-64
+m6-maintenance-faults: START cloudflare:collection:statement:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"snapshot","kind":"statement","range":[65,96],"limit":110,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:35
+   Duration  8.96s (transform 764ms, setup 0ms, import 1.39s, tests 6.89s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:snapshot:statement:65-96
+m6-maintenance-faults: START cloudflare:collection:statement:33-64
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"snapshot","kind":"batch","range":[1,32],"limit":42,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:37
+   Duration  8.29s (transform 681ms, setup 0ms, import 1.23s, tests 6.38s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:snapshot:batch:1-32
+m6-maintenance-faults: START cloudflare:collection:statement:65-96
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"snapshot","kind":"batch","range":[33,42],"limit":42,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:42
+   Duration  3.64s (transform 695ms, setup 0ms, import 1.26s, tests 1.72s, environment 0ms)
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-faults: PASS cloudflare:snapshot:batch:33-42
+m6-maintenance-faults: START cloudflare:collection:statement:97-128
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-publication-fault-evidence {"adapter":"cloudflare-durable-object","variant":"prepared","statementRange":[1,32],"totalStatements":91,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:42
+   Duration  6.35s (transform 723ms, setup 0ms, import 1.28s, tests 4.40s, environment 0ms)
+
+m6-cloudflare-publication-faults: PASS prepared:1-32
+m6-publication-fault-evidence {"adapter":"cloudflare-durable-object","variant":"prepared","statementRange":[33,64],"totalStatements":91,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:42
+   Duration  6.57s (transform 709ms, setup 0ms, import 1.28s, tests 4.65s, environment 0ms)
+
+m6-cloudflare-publication-faults: PASS prepared:33-64
+m6-publication-fault-evidence {"adapter":"cloudflare-durable-object","variant":"prepared","statementRange":[65,91],"totalStatements":91,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:43
+   Duration  7.82s (transform 784ms, setup 0ms, import 1.37s, tests 5.48s, environment 0ms)
+
+m6-cloudflare-publication-faults: PASS prepared:65-91
+m6-cloudflare-publication-faults: PASS {"statementPositions":186,"variants":{"direct":95,"prepared":91},"elapsedMs":17504}
+m6-local-gate: PASS durable-object-publication-faults (17545 ms)
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[1,32],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:43
+   Duration  14.75s (transform 703ms, setup 0ms, import 1.29s, tests 12.78s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:1-32
+m6-maintenance-faults: START cloudflare:collection:statement:129-160
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[33,64],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:45
+   Duration  13.51s (transform 667ms, setup 0ms, import 1.21s, tests 11.68s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:33-64
+m6-maintenance-faults: START cloudflare:collection:statement:161-192
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[65,96],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:46
+   Duration  13.90s (transform 748ms, setup 0ms, import 1.40s, tests 11.74s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:65-96
+m6-maintenance-faults: START cloudflare:collection:statement:193-224
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[97,128],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:47
+   Duration  13.17s (transform 659ms, setup 0ms, import 1.18s, tests 11.35s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:97-128
+m6-maintenance-faults: START cloudflare:collection:statement:225-256
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[129,160],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:50:59
+   Duration  12.35s (transform 725ms, setup 0ms, import 1.31s, tests 10.46s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:129-160
+m6-maintenance-faults: START cloudflare:collection:statement:257-259
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[161,192],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:00
+   Duration  12.27s (transform 689ms, setup 0ms, import 1.25s, tests 10.43s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:161-192
+m6-maintenance-faults: START cloudflare:collection:batch:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[193,224],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:01
+   Duration  13.02s (transform 656ms, setup 0ms, import 1.19s, tests 11.23s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:193-224
+m6-maintenance-faults: START cloudflare:collection:batch:33-64
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[225,256],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:02
+   Duration  12.81s (transform 650ms, setup 0ms, import 1.20s, tests 10.84s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:225-256
+m6-maintenance-faults: START cloudflare:collection:batch:65-96
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"statement","range":[257,259],"limit":259,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:13
+   Duration  2.81s (transform 662ms, setup 0ms, import 1.20s, tests 1.04s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:statement:257-259
+m6-maintenance-faults: START cloudflare:collection:batch:97-128
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"batch","range":[1,32],"limit":128,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:13
+   Duration  11.83s (transform 678ms, setup 0ms, import 1.22s, tests 10.01s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:batch:1-32
+m6-maintenance-faults: START cloudflare:abandoned:statement:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"batch","range":[65,96],"limit":128,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:16
+   Duration  11.87s (transform 691ms, setup 0ms, import 1.28s, tests 9.98s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:batch:65-96
+m6-maintenance-faults: START cloudflare:abandoned:statement:33-61
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"batch","range":[33,64],"limit":128,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:16
+   Duration  12.33s (transform 680ms, setup 0ms, import 1.23s, tests 10.49s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:batch:33-64
+m6-maintenance-faults: START cloudflare:abandoned:batch:1-32
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"collection","kind":"batch","range":[97,128],"limit":128,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:17
+   Duration  12.08s (transform 661ms, setup 0ms, import 1.20s, tests 10.29s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:collection:batch:97-128
+m6-maintenance-faults: START cloudflare:abandoned:batch:33-33
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+
+ RUN  v4.1.10 C:/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-fs-m7-audit
+
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"abandoned","kind":"statement","range":[1,32],"limit":61,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:26
+   Duration  5.86s (transform 634ms, setup 0ms, import 1.20s, tests 4.09s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:abandoned:statement:1-32
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"abandoned","kind":"batch","range":[33,33],"limit":33,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:30
+   Duration  2.11s (transform 669ms, setup 0ms, import 1.20s, tests 297ms, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:abandoned:batch:33-33
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"abandoned","kind":"statement","range":[33,61],"limit":61,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:29
+   Duration  7.31s (transform 677ms, setup 0ms, import 1.23s, tests 5.48s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:abandoned:statement:33-61
+m6-maintenance-fault-evidence {"adapter":"cloudflare-durable-object","variant":"abandoned","kind":"batch","range":[1,32],"limit":33,"restart":"evictDurableObject"}
+·-
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  03:51:29
+   Duration  7.64s (transform 672ms, setup 0ms, import 1.22s, tests 5.81s, environment 0ms)
+
+m6-maintenance-faults: PASS cloudflare:abandoned:batch:1-32
+m6-maintenance-faults: PASS {"targets":["node","cloudflare"],"topology":{"snapshot":{"statement":110,"batch":42},"collection":{"statement":259,"batch":128},"abandoned":{"statement":61,"batch":33}},"positionsPerTarget":633,"elapsedMs":208523}
+m6-local-gate: PASS node-and-durable-object-maintenance-faults (208562 ms)
+m6-local-gate: PASS (545257 ms) {"build":null,"results":[{"name":"preview-bundle","elapsedMs":947},{"name":"workerd-algorithms","elapsedMs":3152},{"name":"node-portable","elapsedMs":332586},{"name":"durable-object-scale-resource","elapsedMs":321747},{"name":"durable-object-portable","elapsedMs":66516},{"name":"durable-object-migration-faults","elapsedMs":43851},{"name":"durable-object-filesystem-faults","elapsedMs":34301},{"name":"durable-object-publication-faults","elapsedMs":17545},{"name":"node-and-durable-object-maintenance-faults","elapsedMs":208562}]}
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 check:evidence C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> node scripts/check-evidence.mjs
+
+evidence: preserved predecessor candidates and current M6 schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent
+M7_LOG_META exitCode=0 elapsedMs=1090158 candidate=ce9035e49037f60a8c52d2775fd2d88d34e57cd4 command=pnpm_validate_m6

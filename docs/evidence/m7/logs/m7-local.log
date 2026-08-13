@@ -1,0 +1,78 @@
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 test:m7:local C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> node scripts/run-m7-local-gate.mjs
+
+m7-local-gate: START build
+
+> ephemeral-ai-fs-workspace@0.1.0-rc.0 build C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
+> pnpm -r build
+
+Scope: 7 of 8 workspace projects
+packages/fs build$ pnpm clean && tsc -p tsconfig.json
+packages/fs build: > @ephemeralai/fs@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\fs
+packages/fs build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/fs build: Done
+packages/replication build$ pnpm clean && tsc -p tsconfig.json
+packages/sqlite-cloudflare build$ pnpm clean && tsc -p tsconfig.json
+packages/sqlite-node build$ pnpm clean && tsc -p tsconfig.json
+packages/testkit build$ pnpm clean && tsc -p tsconfig.json
+packages/sqlite-node build: > @ephemeralai/fs-sqlite-node@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\sqlite-node
+packages/sqlite-node build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/replication build: > @ephemeralai/fs-replication@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\replication
+packages/replication build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/testkit build: > @ephemeralai/fs-testkit@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\testkit
+packages/testkit build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/sqlite-cloudflare build: > @ephemeralai/fs-sqlite-cloudflare@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\sqlite-cloudflare
+packages/sqlite-cloudflare build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/replication build: Done
+packages/sqlite-cloudflare build: Done
+packages/sqlite-node build: Done
+packages/testkit build: Done
+packages/node-vfs build$ pnpm clean && tsc -p tsconfig.json
+packages/node-vfs build: > @ephemeralai/fs-node-vfs@0.1.0-rc.0 clean C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit\packages\node-vfs
+packages/node-vfs build: > node -e "require('fs').rmSync('dist',{recursive:true,force:true})"
+packages/node-vfs build: Done
+m7-local-gate: PASS build (4721 ms)
+m7-local-gate: START node-vfs-correctness-fault-resource
+(node:43936) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ an empty exclusive create is durable after successful close and physical reopen (116.0386ms)
+✔ renaming a parent directory updates dirty descendants atomically or returns EBUSY (52.276ms)
+✔ exclusive create resolves every injected commit outcome before returning and remains retryable (6541.2943ms)
+✔ all namespace operations consistently observe a pending inode (28.5708ms)
+✔ rename enforces the complete type, root, nonempty, and ancestry matrix (63.9676ms)
+✔ file and directory modes use portable defaults and reject invalid numbers (36.9252ms)
+✔ symlink targets are validated before namespace mutation (18.0151ms)
+✔ hard-link coordinators retain inode identity, exact nlink, and stable timestamps (39.6344ms)
+✔ metrics exactly account callbacks, contiguous runs, session peaks, and flush reasons (35.6873ms)
+✔ several edits in one large-file session stay on bounded COW paths (991.1001ms)
+✔ readIntoSync uses caller storage without an equal-sized owned allocation at every page size (166.9582ms)
+(node:42784) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"schema":"efs-m7-conformance-v1","cases":["pinned-direct-reads","irregular-range-writes","three-session-orders","pending-namespace","hidden-staging","flush-close-abort","session-backpressure"],"commitCloseOrders":36,"sessionCounts":[1,16,64]}
+{"schema":"efs-m7-default-pressure-v1","sessions":64,"residentBoundaryBytes":67108864,"aggregateLimitBytes":134217728,"peakManagedResidentBytes":78556130}
+✔ shared Node VFS conformance (4768.3322ms)
+✔ hidden staging does not advance visible state and direct reads fill caller buffers (37.0201ms)
+✔ three sessions on one inode preserve every commit order without lost updates (205.5616ms)
+✔ default 64 MiB pending-write budget backpressures 64 sessions exactly (72.26ms)
+✔ flush, close, physical restart, and remount preserve the digest (147.4288ms)
+✔ all persisted COW page formats report immutable effective capabilities (106.7717ms)
+✔ one callback larger than the session budget streams without resident whole-file state (979.6187ms)
+{"schema":"efs-m7-cow-resource-v1","fixtureBytes":104857600,"fixtureDigest":"dbd3abb6b32a319a2156c5312956281c6939d950f823eb6f7e039eaf4e9d0435","edits":1000,"cowEditCount":1000,"sourceBytesRead":576093118,"peakManagedResidentBytes":102983960}
+{"schema":"efs-m7-fault-matrix-v1","faultPoint":"after-sql-statement","stagingPositions":152,"commitPositions":203}
+✔ 1,000 one-byte overwrites of a 100 MiB file stay on bounded core COW paths (58291.362ms)
+✔ 100 one-MiB files commit and read without aggregate-budget leakage (1292.1717ms)
+✔ provider close rejects dirty state and failed session close remains retryable (31.6128ms)
+✔ every observed staging and visible-commit statement fault stays readable and retryable (10955.0751ms)
+✔ process restart discards unflushed memory and keeps hidden staging invisible (132.1315ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 85465.7179
+m7-local-gate: PASS node-vfs-correctness-fault-resource (85549 ms)
+m7-local-gate: PASS (90271 ms)
+M7_LOG_META exitCode=0 elapsedMs=90547 candidate=ce9035e49037f60a8c52d2775fd2d88d34e57cd4 command=pnpm_test_m7_local
