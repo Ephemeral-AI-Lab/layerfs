@@ -1,4 +1,20 @@
-import { EFS_APPLICATION_ID } from "../../packages/fs/dist/sqlite/schema.js";
+import {
+  EFS_APPLICATION_ID,
+  EFS_DURABLE_IDENTITY_DDL,
+} from "../../packages/fs/dist/sqlite/schema.js";
+
+function initializeIdentity(driver, tx, version) {
+  if (driver.capabilities.schemaIdentityMode === "durable-table") {
+    tx.run(EFS_DURABLE_IDENTITY_DDL);
+    tx.run(
+      "INSERT INTO efs_schema_identity(singleton,application_id,user_version) VALUES(1,?,?)",
+      [EFS_APPLICATION_ID, version],
+    );
+  } else {
+    tx.run(`PRAGMA application_id=${EFS_APPLICATION_ID}`);
+    tx.run(`PRAGMA user_version=${version}`);
+  }
+}
 
 const TABLES = [
   `CREATE TABLE efs_meta (singleton INTEGER PRIMARY KEY CHECK(singleton=1), schema_version INTEGER NOT NULL, filesystem_id TEXT NOT NULL UNIQUE, main_revision INTEGER NOT NULL, root_inode TEXT NOT NULL, root_mutation_generation INTEGER NOT NULL, next_allocation_sequence INTEGER NOT NULL, cow_page_bytes INTEGER NOT NULL CHECK(cow_page_bytes IN (4096,8192,16384)), created_at_ms INTEGER NOT NULL)`,
@@ -34,7 +50,7 @@ const TABLES = [
 
 export function createV1Schema(driver) {
   driver.transaction("exclusive", (tx) => {
-    tx.run(`PRAGMA application_id=${EFS_APPLICATION_ID}`);
+    initializeIdentity(driver, tx, 1);
     for (const statement of TABLES) tx.run(statement);
     tx.run("INSERT INTO efs_revisions VALUES(0,NULL,1,'bootstrap',1)");
     tx.run("INSERT INTO efs_meta VALUES(1,1,'v1-fixture',0,'root',0,1,4096,1)");
@@ -43,6 +59,5 @@ export function createV1Schema(driver) {
     tx.run("INSERT INTO efs_inode_revisions VALUES(0,'root',0,?)", [
       new TextEncoder().encode("{}"),
     ]);
-    tx.run("PRAGMA user_version=1");
   });
 }

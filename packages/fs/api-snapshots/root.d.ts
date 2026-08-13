@@ -1,6 +1,12 @@
 /* Generated public API declaration snapshot. Update only with: pnpm api:update */
 /* package: @ephemeralai/fs; subpath: .; entry: packages/fs/dist/index.d.ts */
 
+/* export: BranchCapableFilesystem; kinds: type */
+/* source: packages/fs/dist/branches/types.d.ts */
+export interface BranchCapableFilesystem extends EphemeralFilesystem, EphemeralFilesystemAdministration {
+    readonly branches: Branches;
+}
+
 /* export: BranchConfiguration; kinds: type */
 /* source: packages/fs/dist/resources/limits.d.ts */
 export interface BranchConfiguration {
@@ -145,11 +151,22 @@ export interface EphemeralFilesystem {
     close(): Promise<void>;
 }
 
+/* export: EphemeralFilesystemAdministration; kinds: type */
+/* source: packages/fs/dist/filesystem/types.d.ts */
+export interface EphemeralFilesystemAdministration {
+    readonly capabilities: FilesystemCapabilities;
+    readonly maintenance: FilesystemMaintenance;
+}
+
 /* export: EphemeralFS; kinds: value,type */
 /* source: packages/fs/dist/filesystem/ephemeral-fs.d.ts */
 /** Public composition root: injects the private SQLite storage-port adapter. */
 export declare class EphemeralFS {
-    static open(options: OpenFilesystemOptions): Promise<EphemeralFilesystem>;
+    private constructor();
+    static open(options: OpenFilesystemOptions): Promise<EphemeralFS>;
+}
+/* source: packages/fs/dist/index.d.ts */
+interface EphemeralFS extends BranchCapableFilesystem {
 }
 
 /* export: FileContent; kinds: type */

@@ -1401,6 +1401,36 @@ test("filesystem range mutations and streamed preparation own hostile byte views
   }
 });
 
+test("batched local rebuilds release exact ingest, staging, and metadata reservations", async () => {
+  const driver = await openNodeSqlite({ filename: ":memory:" });
+  const filesystem = await EphemeralFS.open({
+    database: driver,
+    ownsDatabase: false,
+  });
+  const verifyUsage = () =>
+    driver.transaction("read", (tx) => {
+      const usage = new UsageRepository(tx, filesystem.capabilities.storage);
+      usage.verifyDerivedUsage();
+      const snapshot = usage.snapshot();
+      assert.equal(snapshot.staging_bytes, 0);
+      assert.equal(snapshot.ingest_reservation_bytes, 0);
+    });
+  try {
+    await filesystem.writeFile("/data", "abcdef");
+    verifyUsage();
+    await filesystem.writeRange("/data", 8, Uint8Array.of(88));
+    verifyUsage();
+    await filesystem.replaceRange("/data", 1, 3, new TextEncoder().encode("Q"));
+    verifyUsage();
+    await filesystem.truncate("/data", 3);
+    verifyUsage();
+    assert.equal(await filesystem.readFile("/data", { encoding: "utf8" }), "aQe");
+  } finally {
+    await filesystem.close();
+    driver.close();
+  }
+});
+
 test("string write preflight failures leave admission at its baseline", async () => {
   const originalReserve = AdmissionController.prototype.reserve;
   let outstanding = 0;

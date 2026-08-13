@@ -1,4 +1,7 @@
-import type { EphemeralFilesystem } from "../filesystem/types.js";
+import type {
+  EphemeralFilesystem,
+  EphemeralFilesystemAdministration,
+} from "../filesystem/types.js";
 
 export type RevisionId = string;
 export type BranchState = "active" | "merged" | "discarded";
@@ -65,6 +68,10 @@ export interface Branches {
   open(id: string): Promise<EphemeralBranch>;
   get(id: string): Promise<BranchInfo>;
   replay(operationId: string, branchId?: string): Promise<PublishResult>;
+}
+export interface BranchCapableFilesystem
+  extends EphemeralFilesystem, EphemeralFilesystemAdministration {
+  readonly branches: Branches;
 }
 export type BranchErrorCode =
   | "InvalidBranchId"

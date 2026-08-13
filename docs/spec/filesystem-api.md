@@ -1016,6 +1016,8 @@ export interface FilesystemSQLiteTransaction {
 }
 
 export type TransactionMode = "read" | "write" | "exclusive";
+export type SQLiteSchemaIdentityMode = "sqlite-header" | "durable-table";
+export type SQLitePageMetricsMode = "sqlite-pragma" | "runtime-size-only";
 
 export interface SQLiteDriverCapabilities {
   /** Largest BLOB the adapter can bind and return exactly. */
@@ -1035,6 +1037,10 @@ export interface SQLiteDriverCapabilities {
   readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
   /** SQLite journal_size_limit is advisory cleanup policy, never a hard ceiling. */
   readonly journalSizeLimitIsHard?: false;
+  /** Durable representation used for application and relational-schema identity. */
+  readonly schemaIdentityMode?: SQLiteSchemaIdentityMode;
+  /** Source of physical page and freelist metrics. */
+  readonly pageMetricsMode?: SQLitePageMetricsMode;
 }
 
 export interface SQLitePhysicalStorage {
@@ -1068,7 +1074,14 @@ The two journal-policy fields are optional only on the raw driver port so paused
 non-Node adapters continue to compile without claiming M2 parity. The SQLite operations
 composition root normalizes an omission to `"runtime-enforced"` and `false` before the
 filesystem reports capabilities. The M2 Node driver always exposes both fields
-explicitly. This compatibility rule does not add Cloudflare behavior to M2.
+explicitly. Omitted `schemaIdentityMode` means `"sqlite-header"`; the Node driver MUST
+report that mode explicitly. This compatibility rule does not add Cloudflare behavior to
+M2. Omitted `pageMetricsMode` means `"sqlite-pragma"`; adapters selecting that mode MUST
+support the bounded `pragma_page_count`, `pragma_page_size`, and `pragma_freelist_count`
+queries used by maintenance. An adapter that cannot execute those native table-valued
+PRAGMAs MUST report `"runtime-size-only"` explicitly. In that mode maintenance MUST use
+the adapter's runtime-owned main-database byte counter and MUST omit unavailable
+freelist bytes rather than fabricating a page count, page size, or free-page value.
 
 The driver MUST NOT expose `run`, `all`, or cursor methods outside the transaction
 callback. The callback-scoped transaction value MUST become invalid before `transaction`
@@ -1242,6 +1255,16 @@ JavaScript objects. It MUST preserve statement order and transaction serializati
 within the object. It MUST report conservative tested Durable Object BLOB and binding
 limits through `capabilities`.
 
+Durable Object SQLite rejects the native SQLite `application_id` and `user_version`
+header interfaces. The Cloudflare driver MUST therefore report
+`schemaIdentityMode: "durable-table"`. The portable schema layer MUST use the exact
+core-owned `efs_schema_identity` singleton defined by
+[`storage-and-data-model.md`](./storage-and-data-model.md), create and update it inside
+the same `transactionSync` callback as schema initialization or migration, and validate
+it on every open. This is a durable SQLite table, not an in-memory mirror, KV sidecar,
+or permission to infer identity from unrelated schema objects. Native-header adapters
+MUST continue to use the header representation and MUST NOT create the table.
+
 The Cloudflare driver MUST also report conservative physical database and
 runtime-journal ceilings from the platform capabilities available to the configured
 deployment. Runtime enforcement is acceptable, but an unavailable exact byte counter
@@ -1249,7 +1272,22 @@ MUST be stated through `physicalQuotaPolicy` and MUST NOT be represented as unli
 capacity. It MUST report `"acknowledged"` durability and `"runtime-managed"` journal
 mode when the runtime owns those policies. It MUST also report `"runtime-managed"`
 memory policy. The portable core MUST still use bounded queries and buffers; the
-runtime-owned cache is not permission to mirror SQLite state in JavaScript memory.
+runtime-owned cache is not permission to mirror SQLite state in JavaScript memory. When
+the account plan is unknown, the adapter MUST report no more than the decimal
+1,000,000,000-byte Free-plan database ceiling. An explicitly configured paid-plan
+ceiling MUST be clamped to the decimal 10,000,000,000-byte platform maximum. Because the
+runtime exposes no separately enforceable WAL quota, the Durable Object journal
+capability MUST equal that runtime storage ceiling and report
+`journalQuotaPolicy: "runtime-enforced"`; it MUST NOT invent a lower hard WAL limit.
+Faithful-local scale fixtures MAY configure a lower 256–512 MiB physical ceiling when it
+remains comfortably above their measured database size. Such a lower fixture limit is
+capability truthfulness evidence, not a smaller substitute for the mandatory 100,000-row
+workload and not a performance optimization. Durable Object SQLite does not authorize
+the native page-count, page-size, or freelist interfaces, so the Cloudflare driver MUST
+report `pageMetricsMode: "runtime-size-only"`. Its `physicalStorage().mainFileBytes`
+MUST come from the runtime's SQLite database-size counter. Maintenance reports MUST omit
+`freelistBytes` in this mode. The Node driver MUST continue to report
+`pageMetricsMode: "sqlite-pragma"` and expose its native page and freelist accounting.
 
 Closing a Durable Object adapter MUST release adapter-local resources but MUST NOT
 close, delete, or invalidate runtime-owned Durable Object storage. The

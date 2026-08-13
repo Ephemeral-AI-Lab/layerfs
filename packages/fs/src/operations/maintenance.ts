@@ -415,18 +415,25 @@ export class MaintenanceManager implements FilesystemMaintenance {
       );
     const current = row.state === 6 && row.current === 1;
     const complete = row.state === 6 && current;
-    const pagePhysical = this.#read((tx) => {
-      const value = tx.maintenance(this.#storage).physical();
-      return Object.freeze({
-        mainFileBytes: value.pageCount * value.pageSize,
-        freelistBytes: value.freePages * value.pageSize,
-      });
-    });
     const files = this.#port.physicalStorage();
+    const pagePhysical =
+      this.#port.capabilities.pageMetricsMode === "runtime-size-only"
+        ? undefined
+        : this.#read((tx) => {
+            const value = tx.maintenance(this.#storage).physical();
+            return Object.freeze({
+              mainFileBytes: value.pageCount * value.pageSize,
+              freelistBytes: value.freePages * value.pageSize,
+            });
+          });
     const physical = Object.freeze({
-      mainFileBytes: files.mainFileBytes ?? pagePhysical.mainFileBytes,
+      ...((files.mainFileBytes ?? pagePhysical?.mainFileBytes) === undefined
+        ? {}
+        : { mainFileBytes: files.mainFileBytes ?? pagePhysical!.mainFileBytes }),
       ...(files.walBytes === undefined ? {} : { walBytes: files.walBytes }),
-      freelistBytes: pagePhysical.freelistBytes,
+      ...(pagePhysical === undefined
+        ? {}
+        : { freelistBytes: pagePhysical.freelistBytes }),
     });
     const phase = complete ? "complete" : this.#storageSnapshotPhase(row);
     return Object.freeze({
@@ -584,13 +591,17 @@ export class MaintenanceManager implements FilesystemMaintenance {
             if (
               finalState.counters.length !== usage.totals.length ||
               finalState.counters.some((value, index) => value !== usage.totals[index])
-            )
+            ) {
+              const difference = finalState.counters.findIndex(
+                (value, index) => value !== usage.totals[index],
+              );
               throw fsError(
                 "ECORRUPT",
                 "verify",
                 undefined,
-                "authoritative usage differs from the bounded durable recount",
+                `authoritative usage differs from the bounded durable recount (counter ${difference}: ${finalState.counters[difference] ?? "missing"} != ${usage.totals[difference] ?? "missing"})`,
               );
+            }
             cursor = {
               phase: cursor.phase + 1,
               last: "",
@@ -831,6 +842,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       const rowLimit = Math.max(
         1,
         Math.min(
+          256,
           this.#storage.maxGcBatchSize,
           this.#storage.maxQueryBatchSize,
           Math.floor((this.#storage.maxFinalTransactionRows - 4) / (edgeLimit + 3)),
@@ -946,6 +958,7 @@ export class MaintenanceManager implements FilesystemMaintenance {
       const rowLimit = Math.max(
         1,
         Math.min(
+          256,
           this.#storage.maxGcBatchSize,
           this.#storage.maxQueryBatchSize,
           state === 1
@@ -953,11 +966,16 @@ export class MaintenanceManager implements FilesystemMaintenance {
             : this.#storage.maxFinalTransactionRows - 8,
         ),
       );
+      // SQLite may inspect a larger fixed keyset window while the adapter still
+      // returns at most one configured query batch to managed memory.
+      const scanLimit = Math.min(4096, Math.max(rowLimit, rowLimit * 16));
       const candidates = maintenance.sweepCandidates(
         runId,
         state,
         run.high_water,
+        run.cursor_kind,
         rowLimit,
+        scanLimit,
         this.#runtime.maxQueryBatchBytes,
       );
       const payloadLimit = Math.max(
@@ -968,17 +986,51 @@ export class MaintenanceManager implements FilesystemMaintenance {
         ),
       );
       const rows: (typeof candidates)[number][] = [];
+      const scan = candidates[0];
+      const scannedCount = scan?.scanned_count ?? 0;
+      const windowEnd = scan?.scanned_through ?? run.cursor_kind;
+      const eligibleCount = scan?.eligible_count ?? 0;
+      if (
+        !Number.isSafeInteger(scannedCount) ||
+        scannedCount < 0 ||
+        scannedCount > scanLimit ||
+        !Number.isSafeInteger(windowEnd) ||
+        windowEnd < run.cursor_kind ||
+        windowEnd > run.high_water ||
+        !Number.isSafeInteger(eligibleCount) ||
+        eligibleCount < 0 ||
+        eligibleCount > scannedCount
+      )
+        throw new Error("ECORRUPT: invalid garbage-collection sweep window");
       let payloadBytes = 0;
+      let scannedThrough = run.cursor_kind;
+      let deferred = false;
       for (const candidate of candidates) {
+        if (candidate.eligible !== 1) {
+          scannedThrough = candidate.allocation_sequence;
+          continue;
+        }
         if (
           rows.length &&
           (rows.length >= rowLimit || payloadBytes + candidate.size > payloadLimit)
-        )
+        ) {
+          deferred = true;
           break;
+        }
         rows.push(candidate);
         payloadBytes += candidate.size;
+        scannedThrough = candidate.allocation_sequence;
       }
-      maintenance.applySweep(runId, state, rows, CLEAN_MARKS);
+      const queryDeferred = eligibleCount > rows.length;
+      if (!deferred && !queryDeferred) scannedThrough = windowEnd;
+      maintenance.applySweep(
+        runId,
+        state,
+        rows,
+        CLEAN_MARKS,
+        scannedThrough,
+        !deferred && !queryDeferred && scannedCount < scanLimit,
+      );
     });
   }
   #read<T>(callback: (tx: StorageTransactionPorts) => T): T {

@@ -1269,8 +1269,17 @@ export class BranchManager implements Branches {
     try {
       if (prepared) {
         for (const { path, state } of prepared.byInode.values()) {
+          // Materialized composition returns both authenticated base values and
+          // page/patch rows inside one bounded read transaction. Use it only
+          // when two complete logical values plus fixed query headroom fit the
+          // final-transaction byte envelope; otherwise stream bounded windows.
+          const singleTransactionCompositionBytes = Math.max(
+            0,
+            Math.floor((this.#storage.maxFinalTransactionBytes - 16 * 1024) / 2),
+          );
           const content =
-            state.size <= this.#filesystem.maxMaterializedBytes
+            state.size <= this.#filesystem.maxMaterializedBytes &&
+            state.size <= singleTransactionCompositionBytes
               ? this.composeFileForBranch(id, path, "publish")
               : this.#createComposeStream(id, state);
           const manifest = await this.prepare(content, undefined, state.size);
@@ -3551,9 +3560,9 @@ class BranchHandle implements EphemeralBranch {
         (node) => compareUtf8(node.path.segments.at(-1)!, options.startAfter!) > 0,
       );
     const limit = options.limit ?? this.#filesystem.maxReaddirEntries;
-    if (nodes.length > limit)
+    if (options.limit === undefined && nodes.length > limit)
       throw fsError("EFBIG", "readdir", path, "listing exceeds limit");
-    return nodes.map((node) => {
+    return nodes.slice(0, limit).map((node) => {
       const name = node.path.segments.at(-1)!;
       const type = typeName(node.inode.type);
       return Object.freeze({

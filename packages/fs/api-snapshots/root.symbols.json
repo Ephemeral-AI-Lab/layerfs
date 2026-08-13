@@ -4,6 +4,18 @@
   "entry": "packages/fs/dist/index.d.ts",
   "symbols": [
     {
+      "name": "BranchCapableFilesystem",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/branches/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "BranchConfiguration",
       "kinds": [
         "type"
@@ -173,6 +185,18 @@
       ]
     },
     {
+      "name": "EphemeralFilesystemAdministration",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "EphemeralFS",
       "kinds": [
         "value",
@@ -182,6 +206,10 @@
         {
           "file": "packages/fs/dist/filesystem/ephemeral-fs.d.ts",
           "kind": "ClassDeclaration"
+        },
+        {
+          "file": "packages/fs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
         }
       ]
     },

@@ -100,6 +100,921 @@
       ]
     },
     {
+      "name": "createStatementFaultController",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fault.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "filesystemConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_APPLICATION_ID",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_BRANCH_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/branch.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_CONFORMANCE_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_COW_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/cow.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_COW_PAGE_SIZES",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/cow.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_CURRENT_SCHEMA_VERSION",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_DRIVER_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/driver.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_DURABLE_MIGRATION_STATEMENT_COUNTS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_FAULT_OPERATION_POSITIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fault.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_FAULT_POSITIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fault.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_FAULT_SEED",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fault.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_FILESYSTEM_FAULT_OPERATIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_FILESYSTEM_RESTART_FAULT_OPERATION_POSITIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_FILESYSTEM_RESTART_FAULT_POSITIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_MAINTENANCE_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_MAINTENANCE_FAULT_TOPOLOGY",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance-fault.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_MIGRATION_STATEMENT_COUNTS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_PUBLICATION_FAULT_POSITIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/publication-fault.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_RELEASED_SCHEMA_VERSIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_RESTART_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/restart.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_RESTART_SEED",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/restart.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SCALE_SEED",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/scale.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SMOKE_ACTORS_PER_KIND",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SMOKE_COW_EDITS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SMOKE_DEADLINE_MS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SMOKE_NAMESPACE_OPERATIONS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SMOKE_OPERATIONS_PER_ACTOR",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SMOKE_PAYLOAD_BYTES",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_SMOKE_SEED",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_STORAGE_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_STORAGE_CONFORMANCE_CASE_IDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_STORAGE_RUNTIME_LIMITS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PORTABLE_STORAGE_STORAGE_LIMITS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableBranchCaseId",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/branch.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableBranchCaseResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/branch.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableConformanceCaseId",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableConformanceCaseResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableCowPageSize",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/cow.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableCowPreparation",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/cow.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableCowResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/cow.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableDriverCaseId",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableDriverCaseResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/driver.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableFaultMatrixResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fault.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableFilesystemFaultAttemptResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableFilesystemFaultOperation",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableMaintenanceCaseId",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableMaintenanceCaseResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableMaintenanceFaultAttempt",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance-fault.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableMaintenanceFaultKind",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance-fault.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableMaintenanceFaultMetrics",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance-fault.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableMaintenanceFaultVariant",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance-fault.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableMigrationAttemptResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortablePublicationFaultAttempt",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/publication-fault.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortablePublicationFaultVariant",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/publication-fault.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableRestartCaseId",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/restart.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableRestartPreparation",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/restart.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableRestartResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/restart.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableScalePhaseOutcome",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/scale.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableScaleResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/scale.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableScaleSession",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/scale.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableSmokeOperationMetric",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableSmokePhaseOutcome",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableSmokeResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableSmokeSession",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableStagingClosureEvidence",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableStagingCrashEvidence",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableStagingCrashOutcome",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableStagingCrashSession",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableStorageCaseId",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableStorageCaseResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PortableStorageInternals",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "prepareFilesystemFaultAttempt",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "preparePortableCowPageSize",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/cow.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "preparePortableRestart",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/restart.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
       "name": "RecordingEvent",
       "kinds": [
         "type"
@@ -108,6 +1023,234 @@
         {
           "file": "packages/testkit/dist/index.d.ts",
           "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runBranchConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/branch.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runFilesystemConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/index.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runFilesystemFaultMatrix",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fault.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runFilesystemSmoke",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/smoke.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runMaintenanceConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runPortableMaintenanceFaultAttempt",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance-fault.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runPortableMigrationAttempt",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runPortablePublicationFaultAttempt",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/publication-fault.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runScaleConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/scale.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runSQLiteDriverConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/driver.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runStorageConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/storage.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "StatementFaultController",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/fault.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyFilesystemFaultAttempt",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/filesystem-fault-attempt.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyPortableCowPageSize",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/cow.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyPortableCurrentSchema",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyPortableMaintenanceFaultRecovery",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/maintenance-fault.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyPortablePublicationFaultRecovery",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/publication-fault.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyPortableRecoverableMigrationState",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/schema.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "verifyPortableRestart",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/restart.d.ts",
+          "kind": "FunctionDeclaration"
         }
       ]
     }

@@ -14,6 +14,9 @@
   "dependencies": {
     "@ephemeralai/fs": "workspace:^"
   },
+  "peerDependencies": {
+    "vitest": "^4.1.10"
+  },
   "scripts": {
     "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

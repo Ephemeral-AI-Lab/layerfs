@@ -304,10 +304,15 @@ recalculation. Normal work may not consume the maintenance reserve.
 
 ### CT-SCALE-1: Bounded cursor scale
 
-Enumerate, account, verify, replicate, and collect 100,000 CAS, namespace,
+Beginning at M5, enumerate, account, verify, and collect 100,000 CAS, namespace,
 manifest-node, and mark rows under tiny query and memory limits. Managed-memory
 high-water MUST not grow with total row count. Bounded storage accounting MUST not hold
 a database-wide read transaction or pin WAL for the complete scan.
+
+Beginning at M8, the unchanged accepted 100,000-row fixture MUST additionally replicate
+Node-to-Node and Node-to-Durable-Object through the bounded host-neutral protocol before
+collection. This later replication phase does not reduce, replace, or defer the M5/M6
+enumeration, accounting, verification, or collection gate.
 
 An extended non-gating job SHOULD repeat this with millions of rows when CI capacity
 permits. It is not part of the 60-second integration smoke suite.

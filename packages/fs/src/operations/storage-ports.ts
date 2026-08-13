@@ -32,6 +32,8 @@ export interface StorageAdapterCapabilities {
   readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
   readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
   readonly journalSizeLimitIsHard: false;
+  readonly schemaIdentityMode?: "sqlite-header" | "durable-table";
+  readonly pageMetricsMode?: "sqlite-pragma" | "runtime-size-only";
 }
 export interface StoragePhysicalFiles {
   readonly mainFileBytes?: number;
@@ -748,6 +750,10 @@ export interface PayloadRow {
   readonly hash: Uint8Array;
   readonly size: number;
   readonly allocation_sequence: number;
+  readonly eligible?: number;
+  readonly scanned_count?: number;
+  readonly scanned_through?: number;
+  readonly eligible_count?: number;
 }
 export interface StorageSnapshotRow {
   readonly object_count: number;
@@ -891,7 +897,9 @@ export interface MaintenanceStore {
     runId: string,
     state: number,
     highWater: number,
-    limit: number,
+    afterAllocationSequence: number,
+    resultLimit: number,
+    scanLimit: number,
     maxBytes: number,
   ): readonly PayloadRow[];
   reconcileSweepGeneration(runId: string, state: number): boolean;
@@ -900,6 +908,8 @@ export interface MaintenanceStore {
     state: number,
     rows: readonly PayloadRow[],
     completeState: number,
+    scannedThrough: number,
+    scanComplete: boolean,
   ): void;
   cleanupMarks(runId: string, limit: number, nextState: number): boolean;
   cleanupRootJournal(runId: string, limit: number, nextState: number): boolean;

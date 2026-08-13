@@ -2,7 +2,7 @@
 /* package: @ephemeralai/fs; subpath: .; entry: packages/fs/dist/index.d.ts */
 
 /* ===== packages/fs/dist/branches/types.d.ts ===== */
-import type { EphemeralFilesystem } from "../filesystem/types.js";
+import type { EphemeralFilesystem, EphemeralFilesystemAdministration } from "../filesystem/types.js";
 export type RevisionId = string;
 export type BranchState = "active" | "merged" | "discarded";
 export interface BranchInfo {
@@ -63,6 +63,9 @@ export interface Branches {
     get(id: string): Promise<BranchInfo>;
     replay(operationId: string, branchId?: string): Promise<PublishResult>;
 }
+export interface BranchCapableFilesystem extends EphemeralFilesystem, EphemeralFilesystemAdministration {
+    readonly branches: Branches;
+}
 export type BranchErrorCode = "InvalidBranchId" | "InvalidOperationId" | "BranchNotFound" | "BranchNotActive" | "RevisionNotFound" | "BranchChanged" | "OperationBranchMismatch" | "OperationNotFound" | "OperationResultExpired" | "LimitExceeded";
 export declare class BranchError extends Error {
     readonly name: "BranchError";
@@ -108,10 +111,11 @@ export declare function writeCowPages(base: Uint8Array, offset: number, content:
 export declare function overlayCowPages(base: Uint8Array, pages: readonly CowPage[], pageBytes: CowPageBytes, logicalSize?: number, maxPages?: number): Uint8Array;
 
 /* ===== packages/fs/dist/filesystem/ephemeral-fs.d.ts ===== */
-import type { EphemeralFilesystem, OpenFilesystemOptions } from "./types.js";
+import type { OpenFilesystemOptions } from "./types.js";
 /** Public composition root: injects the private SQLite storage-port adapter. */
 export declare class EphemeralFS {
-    static open(options: OpenFilesystemOptions): Promise<EphemeralFilesystem>;
+    private constructor();
+    static open(options: OpenFilesystemOptions): Promise<EphemeralFS>;
 }
 
 /* ===== packages/fs/dist/filesystem/errors.d.ts ===== */
@@ -353,10 +357,19 @@ export interface EphemeralFilesystem {
     rm(path: string, options?: RmOptions): Promise<void>;
     close(): Promise<void>;
 }
+export interface EphemeralFilesystemAdministration {
+    readonly capabilities: FilesystemCapabilities;
+    readonly maintenance: FilesystemMaintenance;
+}
 
 /* ===== packages/fs/dist/index.d.ts ===== */
+import type { BranchCapableFilesystem } from "./branches/types.js";
 export declare const EPHEMERAL_AI_FS_VERSION = "0.1.0-rc.0";
 export { EphemeralFS } from "./filesystem/ephemeral-fs.js";
+declare module "./filesystem/ephemeral-fs.js" {
+    interface EphemeralFS extends BranchCapableFilesystem {
+    }
+}
 export { FilesystemError } from "./filesystem/errors.js";
 export type { FilesystemErrorCode } from "./filesystem/errors.js";
 export type * from "./filesystem/types.js";
@@ -503,6 +516,8 @@ export interface FilesystemSQLiteTransaction {
     all<Row extends SqliteRow = SqliteRow>(sql: string, bindings: SqliteBindings, budget: QueryBudget): readonly Row[];
 }
 export type TransactionMode = "read" | "write" | "exclusive";
+export type SQLiteSchemaIdentityMode = "sqlite-header" | "durable-table";
+export type SQLitePageMetricsMode = "sqlite-pragma" | "runtime-size-only";
 export interface SQLiteDriverCapabilities {
     readonly maxBlobBytes: number;
     readonly maxBindings: number;
@@ -516,6 +531,13 @@ export interface SQLiteDriverCapabilities {
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
     readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
     readonly journalSizeLimitIsHard?: false;
+    /**
+     * Selects the durable schema identity representation. Omission preserves the
+     * native SQLite-header contract for existing third-party adapters.
+     */
+    readonly schemaIdentityMode?: SQLiteSchemaIdentityMode;
+    /** Selects native page/freelist PRAGMAs or a runtime-owned size-only counter. */
+    readonly pageMetricsMode?: SQLitePageMetricsMode;
 }
 export interface SQLitePhysicalStorage {
     readonly mainFileBytes?: number;

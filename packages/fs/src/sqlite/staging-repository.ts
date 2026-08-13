@@ -290,10 +290,13 @@ export class StagingRepository {
   readonly #cache: ContentCache | undefined;
   readonly #content: ContentRepository;
   readonly #hashBytes: HashFunction;
+  readonly #maxBindings: number;
   #batchedIngestBytes = 0;
   #batchedStagedBytes = 0;
+  #batchedPendingStagedBytes = 0;
   #batchedIngestReservationBytes = 0;
   #batchedMetadataReservationBytes = 0;
+  #batchedReleasedMetadataBytes = 0;
   #ingestReservationLease: string | undefined;
   #ingestReservationBytes: number | undefined;
   #batchIngestAccounting = false;
@@ -331,11 +334,13 @@ export class StagingRepository {
     limits: StorageLimits,
     cache?: ContentCache,
     hashBytes: HashFunction = sha256,
+    maxBindings = Number.MAX_SAFE_INTEGER,
   ) {
     this.#tx = tx;
     this.#limits = limits;
     this.#cache = cache;
     this.#hashBytes = hashBytes;
+    this.#maxBindings = maxBindings;
     this.#content = new ContentRepository(tx, limits, cache, hashBytes);
   }
 
@@ -409,11 +414,23 @@ export class StagingRepository {
   flushBatchedIngestAccounting(includeCertificate = true): void {
     if (!this.#batchIngestAccounting) return;
     if (includeCertificate) this.flushBatchedCertificate();
-    if (this.#batchedIngestBytes !== 0) {
-      const bytes = this.#batchedIngestBytes;
+    if (
+      this.#batchedIngestBytes !== 0 ||
+      this.#batchedPendingStagedBytes !== 0 ||
+      this.#batchedReleasedMetadataBytes !== 0
+    ) {
+      const ingestBytes = this.#batchedIngestBytes;
+      const stagedBytes = this.#batchedPendingStagedBytes;
+      const releasedMetadataBytes = this.#batchedReleasedMetadataBytes;
       this.#batchedIngestBytes = 0;
+      this.#batchedPendingStagedBytes = 0;
+      this.#batchedReleasedMetadataBytes = 0;
       new UsageRepository(this.#tx, this.#limits).apply(
-        { staging_bytes: bytes, ingest_reservation_bytes: -bytes },
+        {
+          staging_bytes: stagedBytes,
+          ingest_reservation_bytes: -ingestBytes,
+          charged_metadata_bytes: -releasedMetadataBytes,
+        },
         "durable local-rebuild ingest transfer",
       );
     }
@@ -499,6 +516,8 @@ export class StagingRepository {
   }): void {
     this.#batchedCertificateDirty = false;
     this.#batchedStagedBytes = 0;
+    this.#batchedPendingStagedBytes = 0;
+    this.#batchedReleasedMetadataBytes = 0;
     this.#leaseExpiresAt = options.expiresAt;
     this.#certificateCache.delete(options.leaseId);
     this.#reconciliationCache.delete(options.leaseId);
@@ -617,6 +636,11 @@ export class StagingRepository {
         bytes,
         "batched metadata reservation consumption",
       );
+      this.#batchedReleasedMetadataBytes = checkedAdd(
+        this.#batchedReleasedMetadataBytes,
+        bytes,
+        "batched unused metadata reservation release",
+      );
     } else {
       this.#tx.run(
         "UPDATE efs_staging_certificates SET metadata_reservation_bytes=metadata_reservation_bytes-? WHERE lease_id=? AND sealed=0",
@@ -659,7 +683,7 @@ export class StagingRepository {
       this.#batchedIngestBytes = checkedAdd(
         this.#batchedIngestBytes,
         bytes,
-        "batched ingest transfer",
+        "batched ingest reservation release",
       );
     } else {
       this.#tx.run(
@@ -2325,16 +2349,28 @@ export class StagingRepository {
           .filter((edge) => !this.#trustedObjects.has(bytesToHex(edge.hash)));
         const queuedByHash = new Map<string, QueueRow>();
         if (remainingEdges.length) {
-          const placeholders = remainingEdges.map(() => "?").join(",");
-          const rows = this.#tx.all<QueueRow>(
-            `SELECT kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor FROM efs_staging_reconciliation_queue WHERE lease_id=? AND kind=? AND hash IN (${placeholders})`,
-            [leaseId, 0, ...remainingEdges.map((edge) => edge.hash)],
-            {
-              maxRows: remainingEdges.length + 1,
-              maxBytes: Math.max(1024, remainingEdges.length * 320 + 512),
-            },
+          const uniqueEdges = [
+            ...new Map(
+              remainingEdges.map((edge) => [bytesToHex(edge.hash), edge]),
+            ).values(),
+          ];
+          const maximumHashes = Math.max(
+            1,
+            Math.min(this.#limits.maxQueryBatchSize, this.#maxBindings - 2),
           );
-          for (const row of rows) queuedByHash.set(bytesToHex(row.hash!), row);
+          for (let offset = 0; offset < uniqueEdges.length; offset += maximumHashes) {
+            const batch = uniqueEdges.slice(offset, offset + maximumHashes);
+            const placeholders = batch.map(() => "?").join(",");
+            const rows = this.#tx.all<QueueRow>(
+              `SELECT kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor FROM efs_staging_reconciliation_queue WHERE lease_id=? AND kind=? AND hash IN (${placeholders})`,
+              [leaseId, 0, ...batch.map((edge) => edge.hash)],
+              {
+                maxRows: batch.length + 1,
+                maxBytes: Math.max(1024, batch.length * 320 + 512),
+              },
+            );
+            for (const row of rows) queuedByHash.set(bytesToHex(row.hash!), row);
+          }
         }
         const seen = new Set<string>();
         const seenLengths = new Map<string, number>();
@@ -2413,7 +2449,6 @@ export class StagingRepository {
           });
         }
         if (newEdges.length) {
-          const placeholders = newEdges.map(() => "?").join(",");
           // Generic/streamed staging keeps the CAS size check here. A
           // durable local rebuild may skip it: its new full objects were
           // checked by appendBatch and its count-only boundary objects were
@@ -2421,16 +2456,25 @@ export class StagingRepository {
           // reconciliation begins. The closure fold and certificate totals
           // still bind the discovered edge set to the staged chain.
           if (!options.skipObjectBackingCheck) {
-            const backing = this.#tx.all<
-              { hash?: Uint8Array; size: number } & SqliteRow
-            >(
-              `SELECT hash,size FROM efs_cas_objects WHERE hash IN (${placeholders})`,
-              newEdges.map((edge) => edge.hash),
-              {
-                maxRows: newEdges.length + 1,
-                maxBytes: Math.max(1024, newEdges.length * 192 + 256),
-              },
+            const backing: Array<{ hash?: Uint8Array; size: number } & SqliteRow> = [];
+            const maximumHashes = Math.max(
+              1,
+              Math.min(this.#limits.maxQueryBatchSize, this.#maxBindings),
             );
+            for (let offset = 0; offset < newEdges.length; offset += maximumHashes) {
+              const batch = newEdges.slice(offset, offset + maximumHashes);
+              const batchPlaceholders = batch.map(() => "?").join(",");
+              backing.push(
+                ...this.#tx.all<{ hash?: Uint8Array; size: number } & SqliteRow>(
+                  `SELECT hash,size FROM efs_cas_objects WHERE hash IN (${batchPlaceholders})`,
+                  batch.map((edge) => edge.hash),
+                  {
+                    maxRows: batch.length + 1,
+                    maxBytes: Math.max(1024, batch.length * 192 + 256),
+                  },
+                ),
+              );
+            }
             const sizes = new Map(
               backing.map((row) => [bytesToHex(row.hash!), row.size]),
             );
@@ -2443,21 +2487,27 @@ export class StagingRepository {
           let folded: Uint8Array = EMPTY_CLOSURE_FOLD;
           for (const edge of newEdges) folded = foldHashes(folded, edge.hash);
           const currentState = this.#reconciliation(leaseId)!;
-          const inserted = this.#tx.run(
-            `INSERT OR IGNORE INTO efs_staging_reconciliation_queue(lease_id,kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor,processed) VALUES ${newEdges
-              .map(() => "(?,?,?,?,?,?,?,0,0)")
-              .join(",")}`,
-            newEdges.flatMap((edge, index) => [
-              leaseId,
-              0,
-              edge.hash,
-              currentState.next_sequence + index,
-              edge.length,
-              edge.length,
-              1,
-            ]),
-          );
-          if (inserted.changes !== newEdges.length)
+          let insertedRows = 0;
+          const maximumInsertRows = Math.max(1, Math.floor(this.#maxBindings / 7));
+          for (let offset = 0; offset < newEdges.length; offset += maximumInsertRows) {
+            const batch = newEdges.slice(offset, offset + maximumInsertRows);
+            const inserted = this.#tx.run(
+              `INSERT OR IGNORE INTO efs_staging_reconciliation_queue(lease_id,kind,hash,sequence,declared_size,declared_span,declared_entry_count,edge_cursor,processed) VALUES ${batch
+                .map(() => "(?,?,?,?,?,?,?,0,0)")
+                .join(",")}`,
+              batch.flatMap((edge, index) => [
+                leaseId,
+                0,
+                edge.hash,
+                currentState.next_sequence + offset + index,
+                edge.length,
+                edge.length,
+                1,
+              ]),
+            );
+            insertedRows = checkedAdd(insertedRows, inserted.changes);
+          }
+          if (insertedRows !== newEdges.length)
             throw new Error(
               "ECORRUPT: reconciliation queue changed during batched insertion",
             );
@@ -3584,6 +3634,11 @@ export class StagingRepository {
         this.#batchedStagedBytes,
         bytes,
         "batched staged bytes",
+      );
+      this.#batchedPendingStagedBytes = checkedAdd(
+        this.#batchedPendingStagedBytes,
+        bytes,
+        "batched pending staged bytes",
       );
       return;
     }

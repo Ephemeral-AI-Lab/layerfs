@@ -31,6 +31,7 @@ import {
 } from "../../packages/fs/dist/sqlite/usage-repository.js";
 import {
   EFS_APPLICATION_ID,
+  EFS_DURABLE_IDENTITY_DDL,
   EFS_SCHEMA_VERSION,
   initializeOrValidateSchema,
 } from "../../packages/fs/dist/sqlite/schema.js";
@@ -40,6 +41,23 @@ import { prepareContentEntriesStreaming } from "../../packages/fs/dist/operation
 import { createV1Schema } from "../fixtures/schema-v1.mjs";
 import { createV2Schema } from "../fixtures/schema-v2.mjs";
 import { createV3Schema } from "../fixtures/schema-v3.mjs";
+
+function withDurableTableIdentity(driver) {
+  return Object.freeze({
+    kind: driver.kind,
+    readOnly: driver.readOnly,
+    capabilities: Object.freeze({
+      ...driver.capabilities,
+      schemaIdentityMode: "durable-table",
+    }),
+    hashBytes: driver.hashBytes,
+    hashBytesAsync: driver.hashBytesAsync,
+    transaction: driver.transaction.bind(driver),
+    physicalStorage: driver.physicalStorage?.bind(driver),
+    checkpoint: driver.checkpoint?.bind(driver),
+    close: driver.close.bind(driver),
+  });
+}
 
 async function removeTree(target, attempts = 20) {
   let lastError;
@@ -309,6 +327,95 @@ test("schema initialization is deterministic, persisted, and read-only reopen-sa
     );
     readOnly.close();
   } finally {
+    await removeTree(directory);
+  }
+});
+
+test("durable-table schema identity is atomic, exact, and header-independent", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-durable-identity-"));
+  const filename = path.join(directory, "filesystem.db");
+  let raw;
+  try {
+    raw = await openNodeSqlite({ filename });
+    const driver = withDurableTableIdentity(raw);
+    const created = initializeOrValidateSchema(driver, {
+      cowPageBytes: 4096,
+      now: 1234,
+    });
+    assert.deepEqual(
+      raw.transaction("read", (tx) => ({
+        nativeApplicationId: tx.all(
+          "SELECT application_id value FROM pragma_application_id",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].value,
+        nativeUserVersion: tx.all(
+          "SELECT user_version value FROM pragma_user_version",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].value,
+        durable: tx.all(
+          "SELECT application_id,user_version FROM efs_schema_identity WHERE singleton=1",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0],
+        definition: tx.all(
+          "SELECT sql FROM sqlite_schema WHERE name='efs_schema_identity'",
+          [],
+          { maxRows: 1, maxBytes: 1024 },
+        )[0].sql,
+      })),
+      {
+        nativeApplicationId: 0,
+        nativeUserVersion: 0,
+        durable: {
+          application_id: EFS_APPLICATION_ID,
+          user_version: EFS_SCHEMA_VERSION,
+        },
+        definition: EFS_DURABLE_IDENTITY_DDL,
+      },
+    );
+    raw.close();
+    raw = await openNodeSqlite({ filename, readOnly: true });
+    assert.deepEqual(
+      initializeOrValidateSchema(withDurableTableIdentity(raw), {
+        cowPageBytes: 4096,
+      }),
+      created,
+    );
+    raw.close();
+
+    raw = await openNodeSqlite({ filename });
+    raw.transaction("write", (tx) =>
+      tx.run("UPDATE efs_schema_identity SET user_version=12 WHERE singleton=1"),
+    );
+    assert.throws(
+      () => initializeOrValidateSchema(withDurableTableIdentity(raw)),
+      /does not match efs_meta\.schema_version/,
+    );
+    assert.equal(
+      raw.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT user_version value FROM efs_schema_identity WHERE singleton=1",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].value,
+      ),
+      12,
+    );
+    raw.transaction("write", (tx) => {
+      tx.run("UPDATE efs_schema_identity SET user_version=13,application_id=1");
+    });
+    assert.throws(
+      () => initializeOrValidateSchema(withDurableTableIdentity(raw)),
+      /wrong SQLite application_id/,
+    );
+  } finally {
+    try {
+      raw?.close();
+    } catch {}
     await removeTree(directory);
   }
 });

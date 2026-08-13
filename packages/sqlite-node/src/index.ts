@@ -567,6 +567,8 @@ export class NodeSQLiteDriver implements FilesystemSQLiteDriver {
         maxPhysicalDatabaseBytes: effectiveMaxPhysicalDatabaseBytes,
         maxJournalBytes,
         physicalQuotaPolicy: "driver-enforced",
+        schemaIdentityMode: "sqlite-header",
+        pageMetricsMode: "sqlite-pragma",
         journalQuotaPolicy: "checkpoint-backpressure",
         journalSizeLimitIsHard: false,
       });

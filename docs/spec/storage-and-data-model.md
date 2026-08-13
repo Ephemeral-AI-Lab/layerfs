@@ -125,6 +125,8 @@ interface FilesystemSQLiteTransaction {
 }
 
 type TransactionMode = "read" | "write" | "exclusive";
+type SQLiteSchemaIdentityMode = "sqlite-header" | "durable-table";
+type SQLitePageMetricsMode = "sqlite-pragma" | "runtime-size-only";
 
 interface FilesystemSQLiteDriver {
   readonly kind: "sqlite";
@@ -142,6 +144,8 @@ interface FilesystemSQLiteDriver {
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
     readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
     readonly journalSizeLimitIsHard?: false;
+    readonly schemaIdentityMode?: SQLiteSchemaIdentityMode;
+    readonly pageMetricsMode?: SQLitePageMetricsMode;
   };
   transaction<T>(
     mode: TransactionMode,
@@ -157,8 +161,14 @@ properties, but the core MUST NOT require them for correctness.
 
 The raw port keeps the two journal-policy fields optional only as a compile-time scope
 boundary for adapters whose parity milestone is paused. The operations composition root
-normalizes an omission to `"runtime-enforced"` and `false`. The M2 Node driver MUST
-publish both fields explicitly; no Cloudflare runtime behavior is accepted by M2.
+normalizes an omission to `"runtime-enforced"` and `false`. Omitted `schemaIdentityMode`
+means `"sqlite-header"` for compatibility. The M2 Node driver MUST publish the journal
+fields and `"sqlite-header"` explicitly; no Cloudflare runtime behavior is accepted by
+M2. Omitted `pageMetricsMode` means `"sqlite-pragma"`. An adapter whose SQLite host
+rejects the native page-count, page-size, or freelist table-valued PRAGMAs MUST report
+`"runtime-size-only"`, provide the host's durable database-size counter through
+`physicalStorage().mainFileBytes`, and omit unavailable freelist bytes. The core MUST
+not invent page or freelist values for such a host.
 
 The driver has no connection-level `run`, `all`, or cursor surface. Every SQL statement
 MUST execute through the transaction value supplied to one `transaction` callback. The
@@ -272,12 +282,35 @@ garbage-collection cycle could reclaim historical objects between those steps.
 
 ### 5.1 Database identity
 
-An initialized database MUST set SQLite `application_id` to hexadecimal `0x45414653`
-(ASCII `EAFS`). A database with another nonzero application ID MUST NOT be opened or
-modified as an Ephemeral AI FS database. A zero application ID permits initialization
-only when `sqlite_schema` contains no user table, index, view, or trigger. A zero-ID
-database with any user object MUST fail as an unsupported schema and MUST remain
-unchanged.
+An adapter MUST select exactly one durable schema-identity representation through
+`capabilities.schemaIdentityMode`; it MUST NOT silently fall back between
+representations for a nonempty database:
+
+- `"sqlite-header"` stores hexadecimal `0x45414653` (ASCII `EAFS`) in SQLite
+  `application_id` and the relational version in SQLite `user_version`. This is the Node
+  representation and the default for an adapter that omits the compatibility field.
+- `"durable-table"` is permitted only for a SQLite host, such as Durable Object SQLite,
+  that rejects access to those two header fields. It MUST use this exact core-owned
+  table:
+
+  ```sql
+  CREATE TABLE efs_schema_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), application_id INTEGER NOT NULL, user_version INTEGER NOT NULL CHECK(user_version>=0))
+  ```
+
+  The table MUST contain exactly the row `(1,0x45414653,<relational version>)`. Its DDL,
+  singleton cardinality, safe-integer values, application ID, and version MUST be
+  validated in the same SQLite snapshot as the rest of the schema. The table is fixed
+  database-format overhead, analogous to the native header fields; it is governed by the
+  physical database ceiling and is not mutable filesystem payload.
+
+A database with another nonzero selected application ID MUST NOT be opened or modified
+as an Ephemeral AI FS database. A zero or absent selected identity permits
+initialization only when `sqlite_schema` contains no user table, index, view, or
+trigger. A zero/absent-identity database with any user object MUST fail as an
+unsupported schema and MUST remain unchanged. Initialization MUST create the selected
+identity in the same exclusive SQLite transaction as the relational schema. A failed
+initialization therefore leaves neither a header identity nor a durable identity table
+behind.
 
 The database MUST contain one `efs_meta` row with at least:
 
@@ -343,8 +376,9 @@ rejection therefore cannot arrive late after unreserved batches. A non-quota fai
 leave verified immutable CAS that became unreachable; those bytes remain truthfully
 charged as physical payload until bounded GC reclaims them.
 
-SQLite `user_version` MUST equal `efs_meta.schema_version`. A mismatch is an integrity
-failure, not permission to guess which value is current.
+The selected identity `user_version`—the native SQLite header or
+`efs_schema_identity.user_version`—MUST equal `efs_meta.schema_version`. A mismatch is
+an integrity failure, not permission to guess which value is current.
 
 The relational schema version, manifest format version, chunker algorithm version, and
 copy-on-write page size are separate values. Changing one MUST NOT silently reinterpret
@@ -354,8 +388,8 @@ any of the others.
 
 Opening MUST perform these steps before exposing a filesystem handle:
 
-1. validate adapter capabilities and inspect `application_id`, `user_version`,
-   `sqlite_schema`, and metadata in a `read` transaction;
+1. validate adapter capabilities and inspect the selected `application_id` and
+   `user_version` representation, `sqlite_schema`, and metadata in a `read` transaction;
 2. when schema work is unnecessary, validate the singleton metadata row, root inode,
    main revision, indexes, constraints, and maintenance state in that read snapshot;
 3. when initialization or migration is required, reject a read-only adapter;
@@ -380,8 +414,8 @@ and a fixture in the conformance suite. A migration:
 - MUST be deterministic;
 - MUST validate its expected source schema;
 - MUST preserve filesystem and retained revision behavior;
-- MUST update `efs_meta.schema_version` and `user_version` in the same final
-  transaction;
+- MUST update `efs_meta.schema_version` and the selected identity `user_version` in the
+  same final SQLite transaction;
 - MUST roll back to the previous usable version on failure; and
 - MUST be safe to invoke again after process termination.
 
@@ -1652,6 +1686,13 @@ unrelated rewrite may retain old revisions until GC. Metrics MUST report main, W
 immutable payload, active staging, and reclaimable generations separately rather than
 summing them as if they described one byte population.
 
+For Durable Object SQLite, the platform does not expose a separately enforceable WAL
+quota. The adapter therefore reports the same conservative runtime storage ceiling for
+both capability fields and marks journal enforcement as runtime-owned; this equality of
+reported values does not turn the two accounting concepts into a summed allowance. An
+unknown plan uses at most 1,000,000,000 decimal bytes, while an explicitly configured
+paid plan is capped at 10,000,000,000 decimal bytes.
+
 For orientation, a pseudorandom 100 MiB initial ingest can therefore report about 100
 MiB of immutable payload plus 100 MiB of active logical staging before attachment. An
 unrelated 100 MiB rewrite can temporarily report about 200 MiB of immutable old and new
@@ -1834,10 +1875,13 @@ MUST NOT silently skip a normative case for a required adapter.
    branches, revisions, and accounting.
 4. Inject failure at every migration checkpoint and reopen the prior usable schema or
    resume the declared shadow migration.
-5. Reject newer, too-old, wrong-application, and mismatched `user_version` databases
-   without writes.
-6. Initialize a zero-application-ID database only when it has no user objects; reject a
-   zero-ID database containing any user schema object without writes.
+5. On both identity modes, reject newer, too-old, wrong-application, malformed-identity,
+   and mismatched `user_version` databases without writes.
+6. Initialize a zero/absent-identity database only when it has no user objects; reject a
+   zero/absent-identity database containing any user schema object without writes.
+7. Inject failure before and after every native-header or durable-table identity write;
+   reopen either the prior usable version or a truly empty database with no partial
+   identity representation.
 
 ### 18.3 Objects, chunking, and manifests
 
@@ -1941,9 +1985,12 @@ MUST NOT silently skip a normative case for a required adapter.
 17. Add and remove roots continuously below reconciliation capacity while collecting;
     prove eventual sweep progress without deleting new roots or restarting the mark
     cursor from the beginning.
-18. Build a fixture with 100,000 object, namespace, and mark rows, then enumerate,
-    verify, replicate, and collect it under tiny query and memory limits; assert keyset
-    progress and no resident collection proportional to total row count.
+18. Beginning at M5, build a fixture with 100,000 object, namespace, and mark rows, then
+    enumerate, account, verify, and collect it under tiny query and memory limits;
+    assert keyset progress and no resident collection proportional to total row count.
+    Beginning at M8, the unchanged accepted fixture MUST additionally replicate
+    Node-to-Node and Node-to-Durable-Object through the bounded host-neutral protocol
+    before collection. The M8 addition does not reduce or defer the M5/M6 scale gate.
 19. Race two connections at every payload and metadata quota boundary. Assert exact
     `efs_usage` counters after commit, rollback, deduplication, page replacement,
     staging expiry, and collection.

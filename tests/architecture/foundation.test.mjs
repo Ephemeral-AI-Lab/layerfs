@@ -65,31 +65,28 @@ test("milestone gates select only their owned suites and sequential predecessors
   const scripts = JSON.parse(
     readFileSync(path.join(root, "package.json"), "utf8"),
   ).scripts;
-  const suites = {
-    0: "tests/architecture",
-    1: "tests/algorithms",
-    2: "tests/storage tests/node-integration tests/maintenance",
-    3: "tests/conformance",
-    4: "tests/branches",
-    5: "tests/maintenance tests/fault",
-    6: "tests/durable-object-integration",
-    7: "tests/node-vfs",
-    8: "tests/replication",
-    9: "tests/fault tests/smoke tests/performance",
-    10: "tests/computer-integration",
+  const testCommands = {
+    0: "node scripts/run-test-suite.mjs tests/architecture",
+    1: "node scripts/run-test-suite.mjs tests/algorithms",
+    2: "node scripts/run-test-suite.mjs tests/storage tests/node-integration tests/maintenance",
+    3: "node scripts/run-test-suite.mjs tests/conformance",
+    4: "node scripts/run-test-suite.mjs tests/branches",
+    5: "node scripts/run-test-suite.mjs tests/maintenance tests/fault",
+    6: "node scripts/run-m6-local-gate.mjs",
+    7: "node scripts/run-test-suite.mjs tests/node-vfs",
+    8: "node scripts/run-test-suite.mjs tests/replication",
+    9: "node scripts/run-test-suite.mjs tests/fault tests/smoke tests/performance",
+    10: "node scripts/run-test-suite.mjs tests/computer-integration",
   };
-  for (const [milestone, owned] of Object.entries(suites)) {
-    assert.equal(
-      scripts[`test:m${milestone}`],
-      `node scripts/run-test-suite.mjs ${owned}`,
-    );
+  for (const [milestone, command] of Object.entries(testCommands)) {
+    assert.equal(scripts[`test:m${milestone}`], command);
     const expectedValidation =
-      Number(milestone) <= 5
+      Number(milestone) <= 6
         ? `pnpm validate:m${milestone}:pre-evidence && pnpm check:evidence`
         : `pnpm validate:m${Number(milestone) - 1} && pnpm test:m${milestone}`;
     assert.equal(scripts[`validate:m${milestone}`], expectedValidation);
     assert.doesNotMatch(scripts[`validate:m${milestone}`], /test:unit/);
-    if (Number(milestone) > 5)
+    if (Number(milestone) > 6)
       assert.match(
         scripts[`validate:m${milestone}`],
         new RegExp(`^pnpm validate:m${Number(milestone) - 1} && `),
@@ -119,6 +116,10 @@ test("milestone gates select only their owned suites and sequential predecessors
     scripts["validate:m5:pre-evidence"],
     "node scripts/run-accepted-node-gate.mjs",
   );
+  assert.equal(
+    scripts["validate:m6:pre-evidence"],
+    "pnpm validate:m5:pre-evidence && node scripts/run-m6-local-gate.mjs --skip-build",
+  );
   const acceptedNodeGate = readFileSync(
     path.join(root, "scripts", "run-accepted-node-gate.mjs"),
     "utf8",
@@ -147,6 +148,22 @@ test("milestone gates select only their owned suites and sequential predecessors
     assert.ok(
       acceptedNodeGate.includes(requiredSelection),
       `accepted Node gate omitted ${requiredSelection}`,
+    );
+  const m6LocalGate = readFileSync(
+    path.join(root, "scripts", "run-m6-local-gate.mjs"),
+    "utf8",
+  );
+  for (const requiredSelection of [
+    "const deadlineMs = 600_000;",
+    'runPnpm("workspace-build", ["build"])',
+    '"scripts/check-cloudflare-preview.mjs"',
+    '"scripts/check-workerd-algorithms.mjs"',
+    '"tests/durable-object-integration/vitest.node.config.ts"',
+    '"tests/durable-object-integration/vitest.config.ts"',
+  ])
+    assert.ok(
+      m6LocalGate.includes(requiredSelection),
+      `M6 local gate omitted ${requiredSelection}`,
     );
   assert.equal(scripts["validate:accepted"], "pnpm validate:m5");
 });

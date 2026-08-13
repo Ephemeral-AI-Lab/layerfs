@@ -289,17 +289,22 @@ export class EphemeralFS implements EphemeralFilesystem {
           `${name} must be configured on the SQLite adapter; a filesystem-only lower cap is not enforceable`,
         );
     }
-    const metadata = storagePort.initialize({
-      ...(options.format?.cowPageBytes === undefined
-        ? {}
-        : { cowPageBytes: options.format.cowPageBytes }),
-      now: (options.clock ?? Date.now)(),
-      maxManifestEntries: storage.maxManifestEntries,
-      maxManifestDepth: storage.maxManifestDepth,
-      maxFileBytes: storage.maxFileBytes,
-      maxContentObjectBytes: maxPersistedContentObjectBytes(storage),
-      writerProfile: persistedWriterProfile(filesystem, storage, branch),
-    });
+    let metadata;
+    try {
+      metadata = storagePort.initialize({
+        ...(options.format?.cowPageBytes === undefined
+          ? {}
+          : { cowPageBytes: options.format.cowPageBytes }),
+        now: (options.clock ?? Date.now)(),
+        maxManifestEntries: storage.maxManifestEntries,
+        maxManifestDepth: storage.maxManifestDepth,
+        maxFileBytes: storage.maxFileBytes,
+        maxContentObjectBytes: maxPersistedContentObjectBytes(storage),
+        writerProfile: persistedWriterProfile(filesystem, storage, branch),
+      });
+    } catch (error) {
+      mapStorageError(error, "open");
+    }
     validateRuntimeLimits(filesystem, storage, runtime, metadata.cowPageBytes);
     const format = Object.freeze({
       cowPageBytes: metadata.cowPageBytes,
@@ -1010,22 +1015,23 @@ export class EphemeralFS implements EphemeralFilesystem {
           );
         const limit = options.limit ?? this.#filesystemLimits.maxReaddirEntries;
         if (limit === 0) return [];
+        const enforceCompleteListing = options.limit === undefined;
         const rows = ns.children(
           selected.inode.id,
-          limit + 1,
+          limit + (enforceCompleteListing ? 1 : 0),
           this.#runtimeLimits.maxQueryBatchBytes,
           start,
         );
-        if (rows.length > limit)
+        if (enforceCompleteListing && rows.length > limit)
           throw fsError(
             "EFBIG",
             "readdir",
             canonical.value,
             "directory listing exceeds configured limit",
           );
-        return rows.map((row) =>
-          directoryEntry(row.name, canonical.value, inodeType(row.type)),
-        );
+        return rows
+          .slice(0, limit)
+          .map((row) => directoryEntry(row.name, canonical.value, inodeType(row.type)));
       });
     });
   }

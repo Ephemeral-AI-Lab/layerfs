@@ -67,6 +67,10 @@ export interface PayloadRow extends SqliteRow {
   size: number;
   allocation_sequence: number;
   metadata_rows?: number;
+  eligible?: number;
+  scanned_count?: number;
+  scanned_through?: number;
+  eligible_count?: number;
 }
 export interface SnapshotRow extends SqliteRow {
   object_count: number;
@@ -872,7 +876,9 @@ export class MaintenanceRepository {
     runId: string,
     state: number,
     highWater: number,
-    limit: number,
+    afterAllocationSequence: number,
+    resultLimit: number,
+    scanLimit: number,
     maxBytes: number,
   ): readonly PayloadRow[] {
     const table =
@@ -896,9 +902,9 @@ export class MaintenanceRepository {
           ? "NOT EXISTS(SELECT 1 FROM efs_lease_staged_manifests m WHERE m.kind=1 AND m.manifest_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_level_records l WHERE l.node_hash=efs_manifest_nodes.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_reused_subtrees s WHERE s.node_hash=efs_manifest_nodes.hash)"
           : "NOT EXISTS(SELECT 1 FROM efs_lease_objects l WHERE l.object_hash=efs_cas_objects.hash) AND NOT EXISTS(SELECT 1 FROM efs_staging_entries s WHERE s.object_hash=efs_cas_objects.hash)";
     return this.#tx.all<PayloadRow>(
-      `SELECT hash,${size} size,allocation_sequence,${metadataRows} metadata_rows FROM ${table} WHERE allocation_sequence<=? AND NOT EXISTS(SELECT 1 FROM efs_gc_marks m WHERE m.run_id=? AND m.kind=? AND m.hash=${table}.hash) AND ${unreferenced} ORDER BY allocation_sequence LIMIT ?`,
-      [highWater, runId, kind, limit],
-      { maxRows: limit, maxBytes },
+      `SELECT hash,size,allocation_sequence,metadata_rows,eligible,scanned_count,scanned_through,eligible_count FROM (SELECT hash,size,allocation_sequence,metadata_rows,eligible,count(*) OVER () scanned_count,max(allocation_sequence) OVER () scanned_through,sum(eligible) OVER () eligible_count,row_number() OVER (ORDER BY allocation_sequence DESC) final_rank FROM (SELECT hash,${size} size,allocation_sequence,${metadataRows} metadata_rows,CASE WHEN NOT EXISTS(SELECT 1 FROM efs_gc_marks m WHERE m.run_id=? AND m.kind=? AND m.hash=${table}.hash) AND ${unreferenced} THEN 1 ELSE 0 END eligible FROM ${table} WHERE allocation_sequence>? AND allocation_sequence<=? ORDER BY allocation_sequence LIMIT ?)) WHERE eligible=1 OR (eligible_count=0 AND final_rank=1) ORDER BY allocation_sequence LIMIT ?`,
+      [runId, kind, afterAllocationSequence, highWater, scanLimit, resultLimit],
+      { maxRows: resultLimit, maxBytes },
     );
   }
   reconcileSweepGeneration(runId: string, state: number): boolean {
@@ -923,6 +929,8 @@ export class MaintenanceRepository {
     state: number,
     rows: readonly PayloadRow[],
     completeState: number,
+    scannedThrough: number,
+    scanComplete: boolean,
   ): void {
     const table =
       state === 1
@@ -983,13 +991,29 @@ export class MaintenanceRepository {
         },
         "garbage-collection sweep",
       );
-      this.#tx.run(
-        `UPDATE efs_gc_runs SET ${deletedColumn}=${deletedColumn}+?,${reclaimedColumn}=${reclaimedColumn}+? WHERE id=?`,
-        [rows.length, bytes, runId],
-      );
+      if (scanComplete) {
+        const next = state === 3 ? completeState : state + 1;
+        this.#tx.run(
+          `UPDATE efs_gc_runs SET ${deletedColumn}=${deletedColumn}+?,${reclaimedColumn}=${reclaimedColumn}+?,state=?,cursor_kind=0 WHERE id=?`,
+          [rows.length, bytes, next, runId],
+        );
+      } else
+        this.#tx.run(
+          `UPDATE efs_gc_runs SET ${deletedColumn}=${deletedColumn}+?,${reclaimedColumn}=${reclaimedColumn}+?,cursor_kind=? WHERE id=?`,
+          [rows.length, bytes, scannedThrough, runId],
+        );
     } else {
-      const next = state === 3 ? completeState : state + 1;
-      this.#tx.run("UPDATE efs_gc_runs SET state=? WHERE id=?", [next, runId]);
+      if (scanComplete) {
+        const next = state === 3 ? completeState : state + 1;
+        this.#tx.run("UPDATE efs_gc_runs SET state=?,cursor_kind=0 WHERE id=?", [
+          next,
+          runId,
+        ]);
+      } else
+        this.#tx.run("UPDATE efs_gc_runs SET cursor_kind=? WHERE id=?", [
+          scannedThrough,
+          runId,
+        ]);
     }
   }
   cleanupMarks(runId: string, limit: number, nextState: number): boolean {
@@ -1081,7 +1105,7 @@ export class MaintenanceRepository {
       return false;
     }
     this.#tx.run(
-      "UPDATE efs_gc_runs SET state=1,cursor_kind=6,cursor_value=NULL WHERE id=? AND state=0",
+      "UPDATE efs_gc_runs SET state=1,cursor_kind=0,cursor_value=NULL WHERE id=? AND state=0",
       [runId],
     );
     return true;

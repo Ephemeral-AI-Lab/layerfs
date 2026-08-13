@@ -67,7 +67,13 @@ export function createSqliteOperationsStorage(
           branches: (limits: StorageLimits) =>
             new BranchRepository(tx, limitsFor(limits)),
           staging: (limits: StorageLimits, cache?: ContentCache) =>
-            new StagingRepository(tx, limitsFor(limits), cache, hashBytes),
+            new StagingRepository(
+              tx,
+              limitsFor(limits),
+              cache,
+              hashBytes,
+              driver.capabilities.maxBindings,
+            ),
           maintenance: (limits: StorageLimits) =>
             new MaintenanceRepository(tx, limitsFor(limits)),
           overlay: (limits: StorageLimits, pageBytes: CowPageBytes) =>

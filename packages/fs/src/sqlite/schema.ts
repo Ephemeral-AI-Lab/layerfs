@@ -1,6 +1,7 @@
 ﻿import type {
   FilesystemSQLiteDriver,
   FilesystemSQLiteTransaction,
+  SQLiteSchemaIdentityMode,
   SqliteRow,
 } from "./driver.js";
 import type { CowPageBytes } from "../cow/pages.js";
@@ -23,6 +24,8 @@ import {
 
 export const EFS_APPLICATION_ID = 0x45414653;
 export const EFS_SCHEMA_VERSION = 13;
+export const EFS_DURABLE_IDENTITY_TABLE = "efs_schema_identity";
+export const EFS_DURABLE_IDENTITY_DDL = `CREATE TABLE ${EFS_DURABLE_IDENTITY_TABLE} (singleton INTEGER PRIMARY KEY CHECK(singleton=1), application_id INTEGER NOT NULL, user_version INTEGER NOT NULL CHECK(user_version>=0))`;
 const MAX_ATOMIC_MIGRATION_RECOUNT_ROWS = 100_000;
 const MAX_ATOMIC_LEGACY_TRANSFORM_BYTES =
   MAX_CONTENT_OBJECT_BYTES + CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES;
@@ -253,6 +256,7 @@ const REQUIRED_SCHEMA_OBJECTS = Object.freeze([
 ]);
 const OWNED_TABLE_NAMES = Object.freeze(
   [
+    EFS_DURABLE_IDENTITY_DDL,
     ...EFS_SCHEMA_V3_CREATE_STATEMENTS,
     ...SCHEMA_V4_STATEMENTS,
     ...SCHEMA_V6_STATEMENTS,
@@ -305,17 +309,92 @@ function sqlText(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function inspect(tx: FilesystemSQLiteTransaction): {
+function inspectIdentity(
+  tx: FilesystemSQLiteTransaction,
+  mode: SQLiteSchemaIdentityMode,
+): { applicationId: number; userVersion: number } {
+  if (mode === "sqlite-header")
+    return {
+      applicationId: oneNumber(
+        tx,
+        "SELECT application_id AS value FROM pragma_application_id",
+      ),
+      userVersion: oneNumber(
+        tx,
+        "SELECT user_version AS value FROM pragma_user_version",
+      ),
+    };
+  const exists = oneNumber(
+    tx,
+    `SELECT count(*) AS value FROM sqlite_schema WHERE type='table' AND name=${sqlText(EFS_DURABLE_IDENTITY_TABLE)}`,
+  );
+  if (exists === 0) return { applicationId: 0, userVersion: 0 };
+  if (exists !== 1) throw new Error("ESCHEMA: invalid durable schema identity table");
+  const rows = tx.all<{ application_id: number; user_version: number } & SqliteRow>(
+    `SELECT application_id,user_version FROM ${EFS_DURABLE_IDENTITY_TABLE} WHERE singleton=1`,
+    [],
+    { maxRows: 2, maxBytes: 256 },
+  );
+  const identity = rows[0];
+  if (
+    rows.length !== 1 ||
+    !identity ||
+    !Number.isSafeInteger(identity.application_id) ||
+    !Number.isSafeInteger(identity.user_version) ||
+    identity.user_version < 0
+  )
+    throw new Error("ESCHEMA: invalid durable schema identity singleton");
+  return {
+    applicationId: identity.application_id,
+    userVersion: identity.user_version,
+  };
+}
+
+function initializeIdentity(
+  tx: FilesystemSQLiteTransaction,
+  mode: SQLiteSchemaIdentityMode,
+): void {
+  if (mode === "sqlite-header") {
+    tx.run(`PRAGMA application_id=${EFS_APPLICATION_ID}`);
+    return;
+  }
+  tx.run(EFS_DURABLE_IDENTITY_DDL);
+  tx.run(
+    `INSERT INTO ${EFS_DURABLE_IDENTITY_TABLE}(singleton,application_id,user_version) VALUES(1,?,0)`,
+    [EFS_APPLICATION_ID],
+  );
+}
+
+function setUserVersion(
+  tx: FilesystemSQLiteTransaction,
+  mode: SQLiteSchemaIdentityMode,
+  version: number,
+): void {
+  if (!Number.isSafeInteger(version) || version < 0)
+    throw new RangeError("invalid SQLite schema version");
+  if (mode === "sqlite-header") {
+    tx.run(`PRAGMA user_version=${version}`);
+    return;
+  }
+  const result = tx.run(
+    `UPDATE ${EFS_DURABLE_IDENTITY_TABLE} SET user_version=? WHERE singleton=1`,
+    [version],
+  );
+  if (result.changes !== 1)
+    throw new Error("ESCHEMA: durable schema identity singleton is missing");
+}
+
+function inspect(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): {
   applicationId: number;
   userVersion: number;
   objectCount: number;
 } {
+  const identity = inspectIdentity(tx, identityMode);
   return {
-    applicationId: oneNumber(
-      tx,
-      "SELECT application_id AS value FROM pragma_application_id",
-    ),
-    userVersion: oneNumber(tx, "SELECT user_version AS value FROM pragma_user_version"),
+    ...identity,
     objectCount: oneNumber(
       tx,
       "SELECT count(*) AS value FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
@@ -323,17 +402,43 @@ function inspect(tx: FilesystemSQLiteTransaction): {
   };
 }
 
+function inspectForOpen(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): ReturnType<typeof inspect> {
+  const state = inspect(tx, identityMode);
+  if (state.applicationId !== EFS_APPLICATION_ID) return state;
+  const metaVersion = oneNumber(
+    tx,
+    "SELECT schema_version AS value FROM efs_meta WHERE singleton=1",
+  );
+  if (metaVersion !== state.userVersion)
+    throw new Error(
+      "ESCHEMA: selected identity user_version does not match efs_meta.schema_version",
+    );
+  return state;
+}
+
 function validateCurrent(
   tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
   requestedPageBytes?: CowPageBytes,
   requestedManifest?: PersistedManifestLimits,
   requestedWriterProfile = "",
 ): MetaRow {
-  const state = inspect(tx);
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID)
     throw new Error("ESCHEMA: wrong SQLite application_id");
   if (state.userVersion !== EFS_SCHEMA_VERSION)
     throw new Error("ESCHEMA: unsupported or mismatched schema version");
+  if (
+    identityMode === "durable-table" &&
+    oneNumber(
+      tx,
+      `SELECT count(*) AS value FROM sqlite_schema WHERE type='table' AND name=${sqlText(EFS_DURABLE_IDENTITY_TABLE)} AND sql=${sqlText(EFS_DURABLE_IDENTITY_DDL)}`,
+    ) !== 1
+  )
+    throw new Error("ESCHEMA: durable schema identity table definition is invalid");
   const rows = tx.all<MetaRow>(
     "SELECT schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,last_root_removal_generation,next_allocation_sequence,cow_page_bytes,max_manifest_entries,max_manifest_depth,max_file_bytes,writer_profile FROM efs_meta WHERE singleton=1",
     [],
@@ -520,8 +625,12 @@ function validateCurrent(
   return meta;
 }
 
-function migrateV1ToV2(tx: FilesystemSQLiteTransaction, deadline: number): void {
-  const state = inspect(tx);
+function migrateV1ToV2(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+  deadline: number,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 1)
     throw new Error("ESCHEMA: schema v1 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -708,11 +817,14 @@ function migrateV1ToV2(tx: FilesystemSQLiteTransaction, deadline: number): void 
   }
   tx.run("DROP TABLE efs_staging_certificates_v1");
   tx.run("UPDATE efs_meta SET schema_version=2 WHERE singleton=1");
-  tx.run("PRAGMA user_version=2");
+  setUserVersion(tx, identityMode, 2);
 }
 
-function migrateV2ToV3(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV2ToV3(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 2)
     throw new Error("ESCHEMA: schema v2 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -729,16 +841,17 @@ function migrateV2ToV3(tx: FilesystemSQLiteTransaction): void {
     `CREATE TABLE efs_staging_reconciliation_queue (lease_id TEXT NOT NULL REFERENCES efs_leases(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind IN (0,1,2)), hash BLOB NOT NULL CHECK(length(hash)=32), sequence INTEGER NOT NULL CHECK(sequence>=0), declared_size INTEGER NOT NULL CHECK(declared_size>=0), declared_span INTEGER, declared_entry_count INTEGER, edge_cursor INTEGER NOT NULL DEFAULT 0 CHECK(edge_cursor>=0), processed INTEGER NOT NULL DEFAULT 0 CHECK(processed IN (0,1)), PRIMARY KEY(lease_id,kind,hash), UNIQUE(lease_id,sequence)) WITHOUT ROWID`,
   );
   tx.run("UPDATE efs_meta SET schema_version=3 WHERE singleton=1");
-  tx.run("PRAGMA user_version=3");
+  setUserVersion(tx, identityMode, 3);
 }
 
 function migrateV3ToV4(
   tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
   manifest?: PersistedManifestLimits,
   writerProfile = "",
 ): void {
   const deadline = performance.now() + MAX_ATOMIC_MIGRATION_MS;
-  const state = inspect(tx);
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 3)
     throw new Error("ESCHEMA: schema v3 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -771,13 +884,16 @@ function migrateV3ToV4(
     tx.run(`UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL}`);
   }
   tx.run("UPDATE efs_meta SET schema_version=4 WHERE singleton=1");
-  tx.run("PRAGMA user_version=4");
+  setUserVersion(tx, identityMode, 4);
   if (performance.now() > deadline)
     throw new Error("ESCHEMA: v4 atomic migration exceeds its time cap");
 }
 
-function migrateV4ToV5(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV4ToV5(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 4)
     throw new Error("ESCHEMA: schema v5 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -794,13 +910,16 @@ function migrateV4ToV5(tx: FilesystemSQLiteTransaction): void {
     tx.run(statement);
   }
   tx.run("UPDATE efs_meta SET schema_version=5 WHERE singleton=1");
-  tx.run("PRAGMA user_version=5");
+  setUserVersion(tx, identityMode, 5);
   if (performance.now() > deadline)
     throw new Error("ESCHEMA: v5 atomic migration exceeds its time cap");
 }
 
-function migrateV5ToV6(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV5ToV6(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 5)
     throw new Error("ESCHEMA: schema v6 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -820,13 +939,16 @@ function migrateV5ToV6(tx: FilesystemSQLiteTransaction): void {
     `UPDATE efs_usage SET charged_metadata_bytes=${DIRECT_CHARGED_METADATA_EXPRESSION_LEGACY} WHERE singleton=1`,
   );
   tx.run("UPDATE efs_meta SET schema_version=6 WHERE singleton=1");
-  tx.run("PRAGMA user_version=6");
+  setUserVersion(tx, identityMode, 6);
   if (performance.now() > deadline)
     throw new Error("ESCHEMA: v6 atomic migration exceeds its time cap");
 }
 
-function migrateV6ToV7(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV6ToV7(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 6)
     throw new Error("ESCHEMA: schema v7 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -838,11 +960,14 @@ function migrateV6ToV7(tx: FilesystemSQLiteTransaction): void {
     throw new Error("ECORRUPT: invalid schema v6 metadata");
   for (const statement of SCHEMA_V7_STATEMENTS) tx.run(statement);
   tx.run("UPDATE efs_meta SET schema_version=7 WHERE singleton=1");
-  tx.run("PRAGMA user_version=7");
+  setUserVersion(tx, identityMode, 7);
 }
 
-function migrateV7ToV8(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV7ToV8(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 7)
     throw new Error("ESCHEMA: schema v8 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -873,11 +998,14 @@ function migrateV7ToV8(tx: FilesystemSQLiteTransaction): void {
     ]);
   }
   tx.run("UPDATE efs_meta SET schema_version=8 WHERE singleton=1");
-  tx.run("PRAGMA user_version=8");
+  setUserVersion(tx, identityMode, 8);
 }
 
-function migrateV8ToV9(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV8ToV9(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 8)
     throw new Error("ESCHEMA: schema v9 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -921,11 +1049,14 @@ function migrateV8ToV9(tx: FilesystemSQLiteTransaction): void {
     `UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL} WHERE singleton=1`,
   );
   tx.run("UPDATE efs_meta SET schema_version=9 WHERE singleton=1");
-  tx.run("PRAGMA user_version=9");
+  setUserVersion(tx, identityMode, 9);
 }
 
-function migrateV9ToV10(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV9ToV10(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 9)
     throw new Error("ESCHEMA: schema v10 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -971,11 +1102,14 @@ function migrateV9ToV10(tx: FilesystemSQLiteTransaction): void {
     `UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL} WHERE singleton=1`,
   );
   tx.run("UPDATE efs_meta SET schema_version=10 WHERE singleton=1");
-  tx.run("PRAGMA user_version=10");
+  setUserVersion(tx, identityMode, 10);
 }
 
-function migrateV10ToV11(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV10ToV11(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 10)
     throw new Error("ESCHEMA: schema v11 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -987,11 +1121,14 @@ function migrateV10ToV11(tx: FilesystemSQLiteTransaction): void {
     throw new Error("ECORRUPT: invalid schema v10 metadata");
   for (const statement of SCHEMA_V11_STATEMENTS) tx.run(statement);
   tx.run("UPDATE efs_meta SET schema_version=11 WHERE singleton=1");
-  tx.run("PRAGMA user_version=11");
+  setUserVersion(tx, identityMode, 11);
 }
 
-function migrateV11ToV12(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV11ToV12(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 11)
     throw new Error("ESCHEMA: schema v12 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -1039,11 +1176,14 @@ function migrateV11ToV12(tx: FilesystemSQLiteTransaction): void {
     `UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL} WHERE singleton=1`,
   );
   tx.run("UPDATE efs_meta SET schema_version=12 WHERE singleton=1");
-  tx.run("PRAGMA user_version=12");
+  setUserVersion(tx, identityMode, 12);
 }
 
-function migrateV12ToV13(tx: FilesystemSQLiteTransaction): void {
-  const state = inspect(tx);
+function migrateV12ToV13(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID || state.userVersion !== 12)
     throw new Error("ESCHEMA: schema v13 migration precondition failed");
   const meta = tx.all<MetaRow>(
@@ -1055,7 +1195,7 @@ function migrateV12ToV13(tx: FilesystemSQLiteTransaction): void {
     throw new Error("ECORRUPT: invalid schema v12 metadata");
   for (const statement of SCHEMA_V13_STATEMENTS) tx.run(statement);
   tx.run("UPDATE efs_meta SET schema_version=13 WHERE singleton=1");
-  tx.run("PRAGMA user_version=13");
+  setUserVersion(tx, identityMode, 13);
 }
 
 function assertBoundedLegacyTransformBytes(tx: FilesystemSQLiteTransaction): void {
@@ -1142,6 +1282,8 @@ export function initializeOrValidateSchema(
     readonly writerProfile?: string;
   } = {},
 ): StorageMetadata {
+  const identityMode =
+    driver.capabilities.schemaIdentityMode ?? ("sqlite-header" as const);
   const requestedPageBytes = options.cowPageBytes;
   const requestedWriterProfile = options.writerProfile ?? "";
   if (utf8ByteLength(requestedWriterProfile) > 8192)
@@ -1166,7 +1308,7 @@ export function initializeOrValidateSchema(
     requestedManifest.maxContentObjectBytes > MAX_CONTENT_OBJECT_BYTES
   )
     throw new RangeError("invalid persisted manifest storage envelope");
-  const state = driver.transaction("read", (tx) => inspect(tx));
+  const state = driver.transaction("read", (tx) => inspectForOpen(tx, identityMode));
   if (state.applicationId === EFS_APPLICATION_ID) {
     if (state.userVersion === 1) {
       if (driver.readOnly)
@@ -1175,94 +1317,95 @@ export function initializeOrValidateSchema(
         const deadline = performance.now() + MAX_ATOMIC_MIGRATION_MS;
         assertBoundedLegacyMigrationRows(tx);
         assertBoundedLegacyTransformBytes(tx);
-        migrateV1ToV2(tx, deadline);
+        migrateV1ToV2(tx, identityMode, deadline);
         if (performance.now() > deadline)
           throw new Error("ESCHEMA: legacy atomic migration exceeds its time cap");
-        migrateV2ToV3(tx);
-        migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
-        migrateV4ToV5(tx);
+        migrateV2ToV3(tx, identityMode);
+        migrateV3ToV4(tx, identityMode, requestedManifest, requestedWriterProfile);
+        migrateV4ToV5(tx, identityMode);
       });
     }
-    const afterV1 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV1 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV1.userVersion === 2) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v2 requires a writable migration");
       driver.transaction("exclusive", (tx) => {
         const deadline = performance.now() + MAX_ATOMIC_MIGRATION_MS;
         assertBoundedLegacyMigrationRows(tx);
-        migrateV2ToV3(tx);
+        migrateV2ToV3(tx, identityMode);
         if (performance.now() > deadline)
           throw new Error("ESCHEMA: legacy atomic migration exceeds its time cap");
-        migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
-        migrateV4ToV5(tx);
+        migrateV3ToV4(tx, identityMode, requestedManifest, requestedWriterProfile);
+        migrateV4ToV5(tx, identityMode);
       });
     }
-    const afterV2 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV2 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV2.userVersion === 3) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v3 requires a writable migration");
       driver.transaction("exclusive", (tx) => {
-        migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
-        migrateV4ToV5(tx);
+        migrateV3ToV4(tx, identityMode, requestedManifest, requestedWriterProfile);
+        migrateV4ToV5(tx, identityMode);
       });
     }
-    const afterV3 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV3 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV3.userVersion === 4) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v4 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV4ToV5(tx));
+      driver.transaction("exclusive", (tx) => migrateV4ToV5(tx, identityMode));
     }
-    const afterV4 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV4 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV4.userVersion === 5) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v5 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV5ToV6(tx));
+      driver.transaction("exclusive", (tx) => migrateV5ToV6(tx, identityMode));
     }
-    const afterV5 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV5 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV5.userVersion === 6) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v6 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV6ToV7(tx));
+      driver.transaction("exclusive", (tx) => migrateV6ToV7(tx, identityMode));
     }
-    const afterV6 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV6 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV6.userVersion === 7) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v7 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV7ToV8(tx));
+      driver.transaction("exclusive", (tx) => migrateV7ToV8(tx, identityMode));
     }
-    const afterV7 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV7 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV7.userVersion === 8) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v8 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV8ToV9(tx));
+      driver.transaction("exclusive", (tx) => migrateV8ToV9(tx, identityMode));
     }
-    const afterV8 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV8 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV8.userVersion === 9) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v9 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV9ToV10(tx));
+      driver.transaction("exclusive", (tx) => migrateV9ToV10(tx, identityMode));
     }
-    const afterV9 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV9 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV9.userVersion === 10) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v10 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV10ToV11(tx));
+      driver.transaction("exclusive", (tx) => migrateV10ToV11(tx, identityMode));
     }
-    const afterV10 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV10 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV10.userVersion === 11) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v11 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV11ToV12(tx));
+      driver.transaction("exclusive", (tx) => migrateV11ToV12(tx, identityMode));
     }
-    const afterV11 = driver.transaction("read", (tx) => inspect(tx));
+    const afterV11 = driver.transaction("read", (tx) => inspect(tx, identityMode));
     if (afterV11.userVersion === 12) {
       if (driver.readOnly)
         throw new Error("ESCHEMA: schema v12 requires a writable migration");
-      driver.transaction("exclusive", (tx) => migrateV12ToV13(tx));
+      driver.transaction("exclusive", (tx) => migrateV12ToV13(tx, identityMode));
     }
     const meta = driver.transaction("read", (tx) =>
       validateCurrent(
         tx,
+        identityMode,
         requestedPageBytes,
         requestedManifest,
         requestedWriterProfile,
@@ -1275,7 +1418,9 @@ export function initializeOrValidateSchema(
       cowPageBytes: meta.cow_page_bytes as CowPageBytes,
     });
   }
-  if (state.applicationId !== 0 || state.objectCount !== 0 || state.userVersion !== 0)
+  if (state.applicationId !== 0)
+    throw new Error("ESCHEMA: wrong SQLite application_id");
+  if (state.objectCount !== 0 || state.userVersion !== 0)
     throw new Error("ESCHEMA: database is not an empty Ephemeral AI FS database");
   if (driver.readOnly) throw new Error("EROFS: cannot initialize a read-only database");
   const pageBytes = requestedPageBytes ?? 8192;
@@ -1283,14 +1428,14 @@ export function initializeOrValidateSchema(
   const filesystemId = globalThis.crypto.randomUUID();
   const rootInode = globalThis.crypto.randomUUID();
   driver.transaction("exclusive", (tx) => {
-    const recheck = inspect(tx);
+    const recheck = inspect(tx, identityMode);
     if (
       recheck.applicationId !== 0 ||
       recheck.objectCount !== 0 ||
       recheck.userVersion !== 0
     )
       throw new Error("ESCHEMA: database changed during initialization");
-    tx.run(`PRAGMA application_id=${EFS_APPLICATION_ID}`);
+    initializeIdentity(tx, identityMode);
     for (const statement of EFS_SCHEMA_V3_CREATE_STATEMENTS) tx.run(statement);
     tx.run(
       "INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(0,NULL,?,'bootstrap',1)",
@@ -1324,18 +1469,24 @@ export function initializeOrValidateSchema(
         }),
       ],
     );
-    tx.run("PRAGMA user_version=3");
-    migrateV3ToV4(tx, requestedManifest, requestedWriterProfile);
-    migrateV4ToV5(tx);
-    migrateV5ToV6(tx);
-    migrateV6ToV7(tx);
-    migrateV7ToV8(tx);
-    migrateV8ToV9(tx);
-    migrateV9ToV10(tx);
-    migrateV10ToV11(tx);
-    migrateV11ToV12(tx);
-    migrateV12ToV13(tx);
-    validateCurrent(tx, pageBytes, requestedManifest, requestedWriterProfile);
+    setUserVersion(tx, identityMode, 3);
+    migrateV3ToV4(tx, identityMode, requestedManifest, requestedWriterProfile);
+    migrateV4ToV5(tx, identityMode);
+    migrateV5ToV6(tx, identityMode);
+    migrateV6ToV7(tx, identityMode);
+    migrateV7ToV8(tx, identityMode);
+    migrateV8ToV9(tx, identityMode);
+    migrateV9ToV10(tx, identityMode);
+    migrateV10ToV11(tx, identityMode);
+    migrateV11ToV12(tx, identityMode);
+    migrateV12ToV13(tx, identityMode);
+    validateCurrent(
+      tx,
+      identityMode,
+      pageBytes,
+      requestedManifest,
+      requestedWriterProfile,
+    );
   });
   return Object.freeze({
     filesystemId,

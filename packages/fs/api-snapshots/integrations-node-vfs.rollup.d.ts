@@ -329,6 +329,10 @@ export interface EphemeralFilesystem {
     rm(path: string, options?: RmOptions): Promise<void>;
     close(): Promise<void>;
 }
+export interface EphemeralFilesystemAdministration {
+    readonly capabilities: FilesystemCapabilities;
+    readonly maintenance: FilesystemMaintenance;
+}
 
 /* ===== packages/fs/dist/integrations/node-vfs.d.ts ===== */
 import type { StorageFormatOptions } from "../filesystem/types.js";
@@ -496,6 +500,8 @@ export interface StorageAdapterCapabilities {
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
     readonly journalQuotaPolicy: "checkpoint-backpressure" | "runtime-enforced";
     readonly journalSizeLimitIsHard: false;
+    readonly schemaIdentityMode?: "sqlite-header" | "durable-table";
+    readonly pageMetricsMode?: "sqlite-pragma" | "runtime-size-only";
 }
 export interface StoragePhysicalFiles {
     readonly mainFileBytes?: number;
@@ -987,6 +993,10 @@ export interface PayloadRow {
     readonly hash: Uint8Array;
     readonly size: number;
     readonly allocation_sequence: number;
+    readonly eligible?: number;
+    readonly scanned_count?: number;
+    readonly scanned_through?: number;
+    readonly eligible_count?: number;
 }
 export interface StorageSnapshotRow {
     readonly object_count: number;
@@ -1111,9 +1121,9 @@ export interface MaintenanceStore {
     advanceMark(runId: string, kind: number, hash: Uint8Array, edgeCursor: number, processed: boolean): void;
     addExamined(runId: string, roots: number, nodes: number, objects: number): void;
     seedRootsBatch(runId: string, limit: number, maxBytes: number): boolean;
-    sweepCandidates(runId: string, state: number, highWater: number, limit: number, maxBytes: number): readonly PayloadRow[];
+    sweepCandidates(runId: string, state: number, highWater: number, afterAllocationSequence: number, resultLimit: number, scanLimit: number, maxBytes: number): readonly PayloadRow[];
     reconcileSweepGeneration(runId: string, state: number): boolean;
-    applySweep(runId: string, state: number, rows: readonly PayloadRow[], completeState: number): void;
+    applySweep(runId: string, state: number, rows: readonly PayloadRow[], completeState: number, scannedThrough: number, scanComplete: boolean): void;
     cleanupMarks(runId: string, limit: number, nextState: number): boolean;
     cleanupRootJournal(runId: string, limit: number, nextState: number): boolean;
     cleanupTerminalRuns(runId: string, limit: number, completeState: number, abandonedState: number, nextState: number): boolean;
@@ -1352,6 +1362,8 @@ export interface FilesystemSQLiteTransaction {
     all<Row extends SqliteRow = SqliteRow>(sql: string, bindings: SqliteBindings, budget: QueryBudget): readonly Row[];
 }
 export type TransactionMode = "read" | "write" | "exclusive";
+export type SQLiteSchemaIdentityMode = "sqlite-header" | "durable-table";
+export type SQLitePageMetricsMode = "sqlite-pragma" | "runtime-size-only";
 export interface SQLiteDriverCapabilities {
     readonly maxBlobBytes: number;
     readonly maxBindings: number;
@@ -1365,6 +1377,13 @@ export interface SQLiteDriverCapabilities {
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
     readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
     readonly journalSizeLimitIsHard?: false;
+    /**
+     * Selects the durable schema identity representation. Omission preserves the
+     * native SQLite-header contract for existing third-party adapters.
+     */
+    readonly schemaIdentityMode?: SQLiteSchemaIdentityMode;
+    /** Selects native page/freelist PRAGMAs or a runtime-owned size-only counter. */
+    readonly pageMetricsMode?: SQLitePageMetricsMode;
 }
 export interface SQLitePhysicalStorage {
     readonly mainFileBytes?: number;

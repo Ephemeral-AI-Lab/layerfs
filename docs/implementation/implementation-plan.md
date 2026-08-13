@@ -408,32 +408,32 @@ SQLite without importing DOFS or reimplementing filesystem logic.
 
 ### M6 checklist
 
-- [ ] Implement the Cloudflare SQLite driver over Durable Object SQLite.
-- [ ] Map callback-scoped transactions to the runtime transaction facility.
-- [ ] Normalize rows, BLOBs, safe integers, constraints, busy errors, and corruption
+- [x] Implement the Cloudflare SQLite driver over Durable Object SQLite.
+- [x] Map callback-scoped transactions to the runtime transaction facility.
+- [x] Normalize rows, BLOBs, safe integers, constraints, busy errors, and corruption
       errors.
-- [ ] Report conservative BLOB, binding, physical quota, journal, durability, and
+- [x] Report conservative BLOB, binding, physical quota, journal, durability, and
       runtime-memory capabilities.
-- [ ] Implement runtime restart and eviction test hooks.
-- [ ] Add the deployable preview fixture and exercise its exact Worker bundle,
+- [x] Implement runtime restart and eviction test hooks.
+- [x] Add the deployable preview fixture and exercise its exact Worker bundle,
       compatibility date, bindings, and SQLite migration in the faithful local Workers
       runtime without deploying it.
-- [ ] Run storage, filesystem, branch, maintenance, recovery, and resource suites
+- [x] Run storage, filesystem, branch, maintenance, recovery, and resource suites
       through the shared testkit in the faithful local Workers runtime.
-- [ ] Add the credential-free, faithful-local 60-second Durable Object SQLite smoke
+- [x] Add the credential-free, faithful-local 60-second Durable Object SQLite smoke
       profile.
 
 ### M6 acceptance criteria
 
-- [ ] Every mandatory portable test from milestones 1 through 5 passes on both Node and
+- [x] Every mandatory portable test from milestones 1 through 5 passes on both Node and
       Durable Object SQLite.
-- [ ] Adapter-specific setup does not change public results or error codes.
-- [ ] Runtime restart reconstructs all state from committed SQLite data.
-- [ ] The driver never uses an in-memory SQLite mirror or filesystem index.
-- [ ] The driver reports finite conservative resource capabilities.
-- [ ] The faithful-local 60-second Durable Object smoke profile passes without a
+- [x] Adapter-specific setup does not change public results or error codes.
+- [x] Runtime restart reconstructs all state from committed SQLite data.
+- [x] The driver never uses an in-memory SQLite mirror or filesystem index.
+- [x] The driver reports finite conservative resource capabilities.
+- [x] The faithful-local 60-second Durable Object smoke profile passes without a
       Cloudflare account, credentials, network deployment, or remote resource.
-- [ ] `pnpm test:m6` and `pnpm validate:m6` are fully local and create no external
+- [x] `pnpm test:m6` and `pnpm validate:m6` are fully local and create no external
       state.
 
 ## 10. Milestone 7: Node VFS and real FUSE readiness
@@ -494,6 +494,8 @@ host-neutral protocol without exposing tables or raw content mutation.
 - [ ] Implement policy checks before durable session creation.
 - [ ] Implement bounded abandoned-session cleanup.
 - [ ] Add Node-to-Node, Node-to-Durable-Object, and restart suites.
+- [ ] Replicate the unchanged accepted 100,000-row CT-SCALE-1 fixture Node-to-Node and
+      Node-to-Durable-Object under its tiny query and memory limits before collection.
 
 ### M8 acceptance criteria
 

@@ -256,3 +256,7 @@ export interface EphemeralFilesystem {
   rm(path: string, options?: RmOptions): Promise<void>;
   close(): Promise<void>;
 }
+export interface EphemeralFilesystemAdministration {
+  readonly capabilities: FilesystemCapabilities;
+  readonly maintenance: FilesystemMaintenance;
+}

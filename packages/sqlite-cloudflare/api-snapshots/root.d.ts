@@ -18,7 +18,23 @@ export declare class CloudflareSQLiteDriver implements FilesystemSQLiteDriver {
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;
     get databaseSize(): number;
+    physicalStorage(): {
+        readonly mainFileBytes: number;
+    };
 }
+
+/* export: CloudflareSQLiteError; kinds: value,type */
+/* source: packages/sqlite-cloudflare/dist/index.d.ts */
+export declare class CloudflareSQLiteError extends Error {
+    readonly name: "CloudflareSQLiteError";
+    readonly category: CloudflareSQLiteErrorCategory;
+    readonly code: string;
+    constructor(category: CloudflareSQLiteErrorCategory, code: string, message: string, cause: unknown);
+}
+
+/* export: CloudflareSQLiteErrorCategory; kinds: type */
+/* source: packages/sqlite-cloudflare/dist/index.d.ts */
+export type CloudflareSQLiteErrorCategory = "constraint" | "busy" | "corruption" | "resource-limit";
 
 /* export: DurableObjectSqlCursor; kinds: type */
 /* source: packages/sqlite-cloudflare/dist/index.d.ts */
@@ -50,6 +66,7 @@ export declare function openCloudflareSqlite(options: OpenCloudflareSqliteOption
 /* source: packages/sqlite-cloudflare/dist/index.d.ts */
 export interface OpenCloudflareSqliteOptions {
     readonly storage: DurableObjectSQLiteStorage;
-    readonly maxManagedPayloadBytes?: number;
+    /** Conservative byte ceiling for the configured Durable Object plan. */
+    readonly maxPhysicalDatabaseBytes?: number;
     readonly maxJournalBytes?: number;
 }

@@ -21,6 +21,8 @@ export interface FilesystemSQLiteTransaction {
     all<Row extends SqliteRow = SqliteRow>(sql: string, bindings: SqliteBindings, budget: QueryBudget): readonly Row[];
 }
 export type TransactionMode = "read" | "write" | "exclusive";
+export type SQLiteSchemaIdentityMode = "sqlite-header" | "durable-table";
+export type SQLitePageMetricsMode = "sqlite-pragma" | "runtime-size-only";
 export interface SQLiteDriverCapabilities {
     readonly maxBlobBytes: number;
     readonly maxBindings: number;
@@ -34,6 +36,13 @@ export interface SQLiteDriverCapabilities {
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
     readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
     readonly journalSizeLimitIsHard?: false;
+    /**
+     * Selects the durable schema identity representation. Omission preserves the
+     * native SQLite-header contract for existing third-party adapters.
+     */
+    readonly schemaIdentityMode?: SQLiteSchemaIdentityMode;
+    /** Selects native page/freelist PRAGMAs or a runtime-owned size-only counter. */
+    readonly pageMetricsMode?: SQLitePageMetricsMode;
 }
 export interface SQLitePhysicalStorage {
     readonly mainFileBytes?: number;
@@ -89,8 +98,16 @@ export interface DurableObjectSQLiteStorage {
 }
 export interface OpenCloudflareSqliteOptions {
     readonly storage: DurableObjectSQLiteStorage;
-    readonly maxManagedPayloadBytes?: number;
+    /** Conservative byte ceiling for the configured Durable Object plan. */
+    readonly maxPhysicalDatabaseBytes?: number;
     readonly maxJournalBytes?: number;
+}
+export type CloudflareSQLiteErrorCategory = "constraint" | "busy" | "corruption" | "resource-limit";
+export declare class CloudflareSQLiteError extends Error {
+    readonly name: "CloudflareSQLiteError";
+    readonly category: CloudflareSQLiteErrorCategory;
+    readonly code: string;
+    constructor(category: CloudflareSQLiteErrorCategory, code: string, message: string, cause: unknown);
 }
 export declare class CloudflareSQLiteDriver implements FilesystemSQLiteDriver {
     #private;
@@ -107,5 +124,8 @@ export declare class CloudflareSQLiteDriver implements FilesystemSQLiteDriver {
     transaction<T>(mode: TransactionMode, callback: (tx: FilesystemSQLiteTransaction) => T): T;
     close(): void;
     get databaseSize(): number;
+    physicalStorage(): {
+        readonly mainFileBytes: number;
+    };
 }
 export declare function openCloudflareSqlite(options: OpenCloudflareSqliteOptions): Promise<CloudflareSQLiteDriver>;

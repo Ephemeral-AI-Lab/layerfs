@@ -100,6 +100,18 @@
       ]
     },
     {
+      "name": "SQLitePageMetricsMode",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
       "name": "SQLitePhysicalStorage",
       "kinds": [
         "type"
@@ -132,6 +144,18 @@
         {
           "file": "packages/fs/dist/sqlite/driver.d.ts",
           "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "SQLiteSchemaIdentityMode",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/driver.d.ts",
+          "kind": "TypeAliasDeclaration"
         }
       ]
     },

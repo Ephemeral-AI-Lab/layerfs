@@ -514,8 +514,8 @@ test(
     );
     assert.ok(probe.durableStatements > 0);
     assert.ok(probe.committedBatches > 0);
-    assert.equal(probe.durableStatements, 157);
-    assert.equal(probe.committedBatches, 75);
+    assert.equal(probe.durableStatements, 154);
+    assert.equal(probe.committedBatches, 72);
     for (const fragment of [
       "efs_gc_marks",
       "efs_root_journal",

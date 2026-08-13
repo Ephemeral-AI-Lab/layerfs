@@ -75,11 +75,22 @@ export interface SQLiteDriverCapabilities {
     readonly physicalQuotaPolicy: "driver-enforced" | "runtime-enforced";
     readonly journalQuotaPolicy?: "checkpoint-backpressure" | "runtime-enforced";
     readonly journalSizeLimitIsHard?: false;
+    /**
+     * Selects the durable schema identity representation. Omission preserves the
+     * native SQLite-header contract for existing third-party adapters.
+     */
+    readonly schemaIdentityMode?: SQLiteSchemaIdentityMode;
+    /** Selects native page/freelist PRAGMAs or a runtime-owned size-only counter. */
+    readonly pageMetricsMode?: SQLitePageMetricsMode;
 }
 
 /* export: SqliteHashFunction; kinds: type */
 /* source: packages/fs/dist/sqlite/driver.d.ts */
 export type SqliteHashFunction = (bytes: Uint8Array) => Uint8Array;
+
+/* export: SQLitePageMetricsMode; kinds: type */
+/* source: packages/fs/dist/sqlite/driver.d.ts */
+export type SQLitePageMetricsMode = "sqlite-pragma" | "runtime-size-only";
 
 /* export: SQLitePhysicalStorage; kinds: type */
 /* source: packages/fs/dist/sqlite/driver.d.ts */
@@ -100,6 +111,10 @@ export interface SqliteRunResult {
     readonly totalChanges?: number;
     readonly lastInsertRowid?: number;
 }
+
+/* export: SQLiteSchemaIdentityMode; kinds: type */
+/* source: packages/fs/dist/sqlite/driver.d.ts */
+export type SQLiteSchemaIdentityMode = "sqlite-header" | "durable-table";
 
 /* export: SqliteValue; kinds: type */
 /* source: packages/fs/dist/sqlite/driver.d.ts */

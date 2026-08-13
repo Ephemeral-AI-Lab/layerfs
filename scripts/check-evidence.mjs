@@ -15,7 +15,7 @@ const acceptedMatch = /^pnpm validate:(m\d+)$/u.exec(acceptedValidation ?? "");
 if (!acceptedMatch)
   throw new Error("validate:accepted must select one milestone validation command");
 const activeAcceptedMilestone = acceptedMatch[1];
-if (!new Set(["m0", "m1", "m2", "m3", "m4", "m5"]).has(activeAcceptedMilestone))
+if (!new Set(["m0", "m1", "m2", "m3", "m4", "m5", "m6"]).has(activeAcceptedMilestone))
   throw new Error(
     `evidence checker has no validation schema for ${activeAcceptedMilestone}`,
   );
@@ -115,10 +115,16 @@ function ownedByMilestone(milestone, filename) {
     filename.startsWith("tests/branches/") ||
     filename === "tests/performance/branch-bench.mjs";
   if (milestone === "m4") return m4;
-  return (
+  const m5 =
     m4 ||
     filename.startsWith("tests/fault/") ||
-    filename === "docs/implementation/m5-handoff.md"
+    filename === "docs/implementation/m5-handoff.md";
+  if (milestone === "m5") return m5;
+  return (
+    m5 ||
+    filename.startsWith("tests/durable-object-integration/") ||
+    filename.startsWith("examples/durable-object-workspace/") ||
+    filename === "docs/implementation/m6-handoff.md"
   );
 }
 const m1SourceEntrypoints = [
@@ -407,8 +413,8 @@ async function validateBenchmarkArtifact(filename, candidate, evidenceRecordComm
 if (process.argv[2] === "--owned-tree-digest") {
   const milestone = process.argv[3];
   const commit = process.argv[4] ?? "HEAD";
-  if (!new Set(["m0", "m1", "m2", "m3", "m4", "m5"]).has(milestone))
-    throw new Error("owned-tree digest milestone must be m0 through m5");
+  if (!new Set(["m0", "m1", "m2", "m3", "m4", "m5", "m6"]).has(milestone))
+    throw new Error("owned-tree digest milestone must be m0 through m6");
   console.log(await ownedTreeDigest(milestone, commit));
   process.exit(0);
 }
@@ -775,6 +781,128 @@ const m5Predecessor = m5.exit.match(
 )?.[1];
 if (m5Predecessor !== m4.candidate)
   throw new Error("m5 sequential predecessor differs from the accepted m4 candidate");
+
+const m6 = await validateMilestone(
+  "m6",
+  [
+    "operatingSystems",
+    "nodeVersions",
+    "matrixRuns",
+    "cumulativePredecessorChecks",
+    "workerdChecks",
+    "nodePortableTests",
+    "durableObjectPortableTests",
+    "durableObjectScaleTests",
+    "releasedSchemaVersions",
+    "migrationStatementPositions",
+    "filesystemFaultFamilies",
+    "nodeFilesystemFaultPositions",
+    "durableObjectFilesystemFaultPositions",
+    "publicationFaultFamilies",
+    "publicationFaultPositions",
+    "maintenanceFaultFamilies",
+    "nodeMaintenanceFaultPositions",
+    "durableObjectMaintenanceFaultPositions",
+    "portableStorageCases",
+    "stagingCrashRestarts",
+    "smokeElapsedMs",
+    "smokeCompletedOperations",
+    "smokeRuntimeRestarts",
+    "scaleRows",
+    "scaleBaselineRows",
+    "scaleObjectRows",
+    "scaleNamespaceRows",
+    "scaleManifestRootRows",
+    "scaleManifestNodeRows",
+    "scalePeakStorageMarks",
+    "scalePeakGcMarks",
+    "scaleVerifiedRows",
+    "scaleBaselineManagedBytes",
+    "scaleManagedPeakBytes",
+    "scalePhysicalRestarts",
+    "workerdPeakRssBytes",
+    "workerdProcessRssLimitBytes",
+    "previewBundleBytes",
+    "durableObjectTargetElapsedMs",
+    "nodeTargetDeadlineMs",
+    "durableObjectTargetDeadlineMs",
+  ],
+  {
+    requireCurrentDigest: activeAcceptedMilestone === "m6",
+    requireStructuredContext: true,
+  },
+);
+const m6LogicalChecks =
+  m6.artifact.metrics.workerdChecks +
+  m6.artifact.metrics.nodePortableTests +
+  m6.artifact.metrics.durableObjectPortableTests +
+  m6.artifact.metrics.durableObjectScaleTests +
+  m6.artifact.metrics.releasedSchemaVersions +
+  m6.artifact.metrics.filesystemFaultFamilies +
+  m6.artifact.metrics.publicationFaultFamilies +
+  m6.artifact.metrics.maintenanceFaultFamilies;
+if (
+  m6.artifact.passed !==
+  m6.artifact.metrics.cumulativePredecessorChecks + m6LogicalChecks
+)
+  throw new Error("m6 passed count differs from predecessor plus M6 target checks");
+if (m6.artifact.independentAudit !== "approved")
+  throw new Error("m6 correctness artifact lacks independent audit approval");
+if (
+  m6.artifact.metrics.cumulativePredecessorChecks !== m5.artifact.passed ||
+  m6.artifact.metrics.workerdChecks !== 12 ||
+  m6.artifact.metrics.nodePortableTests < 15 ||
+  m6.artifact.metrics.durableObjectPortableTests < 22 ||
+  m6.artifact.metrics.durableObjectScaleTests !== 1 ||
+  m6.artifact.metrics.releasedSchemaVersions !== 3 ||
+  m6.artifact.metrics.migrationStatementPositions !== 915 ||
+  m6.artifact.metrics.filesystemFaultFamilies !== 12 ||
+  m6.artifact.metrics.nodeFilesystemFaultPositions !== 1218 ||
+  m6.artifact.metrics.durableObjectFilesystemFaultPositions !== 1218 ||
+  m6.artifact.metrics.publicationFaultFamilies !== 2 ||
+  m6.artifact.metrics.publicationFaultPositions !== 186 ||
+  m6.artifact.metrics.maintenanceFaultFamilies !== 3 ||
+  m6.artifact.metrics.nodeMaintenanceFaultPositions !== 633 ||
+  m6.artifact.metrics.durableObjectMaintenanceFaultPositions !== 633 ||
+  m6.artifact.metrics.portableStorageCases < 7 ||
+  m6.artifact.metrics.stagingCrashRestarts !== 3 ||
+  m6.artifact.metrics.smokeElapsedMs >= 60_000 ||
+  m6.artifact.metrics.smokeCompletedOperations !== 9_056 ||
+  m6.artifact.metrics.smokeRuntimeRestarts !== 3 ||
+  m6.artifact.metrics.scaleRows < 100_000 ||
+  m6.artifact.metrics.scaleBaselineRows >= m6.artifact.metrics.scaleRows ||
+  m6.artifact.metrics.scaleObjectRows < 100_000 ||
+  m6.artifact.metrics.scaleNamespaceRows < 100_000 ||
+  m6.artifact.metrics.scaleManifestRootRows < 100_000 ||
+  m6.artifact.metrics.scaleManifestNodeRows < 100_000 ||
+  m6.artifact.metrics.scalePeakStorageMarks < 300_000 ||
+  m6.artifact.metrics.scalePeakGcMarks < 300_000 ||
+  m6.artifact.metrics.scaleVerifiedRows < 1_000_000 ||
+  m6.artifact.metrics.scaleBaselineManagedBytes >= 16 * 1024 * 1024 ||
+  m6.artifact.metrics.scaleManagedPeakBytes >= 16 * 1024 * 1024 ||
+  m6.artifact.metrics.scaleManagedPeakBytes >
+    m6.artifact.metrics.scaleBaselineManagedBytes + 512 * 1024 ||
+  m6.artifact.metrics.scalePhysicalRestarts < 5 ||
+  m6.artifact.metrics.workerdPeakRssBytes >=
+    m6.artifact.metrics.workerdProcessRssLimitBytes ||
+  m6.artifact.metrics.durableObjectTargetElapsedMs >=
+    m6.artifact.metrics.durableObjectTargetDeadlineMs ||
+  m6.artifact.metrics.nodeTargetDeadlineMs !== 600_000 ||
+  m6.artifact.metrics.durableObjectTargetDeadlineMs !== 600_000 ||
+  m6.artifact.capabilities.schemaIdentityMode !== "durable-table" ||
+  m6.artifact.capabilities.pageMetricsMode !== "runtime-size-only" ||
+  m6.artifact.capabilities.maxPhysicalDatabaseBytes !== 1_000_000_000 ||
+  m6.artifact.capabilities.maxJournalBytes !== 1_000_000_000 ||
+  m6.artifact.capabilities.hostedDeployment !== false ||
+  m6.artifact.capabilities.exactProcessBoundAvailable !== false ||
+  !/^[0-9a-f]{64}$/u.test(m6.artifact.metrics.previewBundleSha256 ?? "")
+)
+  throw new Error("m6 evidence metrics miss a parity, restart, or resource threshold");
+const m6Predecessor = m6.exit.match(
+  /Sequential predecessor:[\s\S]*?`([0-9a-f]{40})`/u,
+)?.[1];
+if (m6Predecessor !== m5.candidate)
+  throw new Error("m6 sequential predecessor differs from the accepted m5 candidate");
 
 console.log(
   `evidence: preserved predecessor candidates and current ${activeAcceptedMilestone.toUpperCase()} schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,

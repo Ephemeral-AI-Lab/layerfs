@@ -17,6 +17,31 @@
       ]
     },
     {
+      "name": "CloudflareSQLiteError",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "CloudflareSQLiteErrorCategory",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/sqlite-cloudflare/dist/index.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
       "name": "DurableObjectSqlCursor",
       "kinds": [
         "type"
