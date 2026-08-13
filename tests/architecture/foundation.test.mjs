@@ -165,7 +165,7 @@ test("milestone gates select only their owned suites and sequential predecessors
       m6LocalGate.includes(requiredSelection),
       `M6 local gate omitted ${requiredSelection}`,
     );
-  assert.equal(scripts["validate:accepted"], "pnpm validate:m5");
+  assert.equal(scripts["validate:accepted"], "pnpm validate:m6");
 });
 
 test("documentation links resolve inline and reference-style targets", async () => {
