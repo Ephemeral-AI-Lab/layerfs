@@ -1,6 +1,6 @@
 # Milestone 6 exit
 
-- Candidate commit: `10cb1d0925a8898e1c55b82e1307e57867992c87`
+- Candidate commit: `082f4e98711035c2be2bd7d2f668f6c23e7a5b16`
 - Date: 2026-08-13
 - Sequential predecessor: accepted M5 candidate
   `710ddf3f05d85ad3264b4f2046c631a6fded9c14`
@@ -12,13 +12,13 @@
 - Exact target commands: `node scripts/run-accepted-node-gate.mjs` followed by
   `node scripts/run-m6-local-gate.mjs --skip-build`, both from the clean detached
   candidate worktree
-- Target results: the accepted Node predecessor passed in 551,615 ms and the
-  credential-free faithful-local Durable Object selection passed in 558,425 ms. Each
+- Target results: the accepted Node predecessor passed in 534,363 ms and the
+  credential-free faithful-local Durable Object selection passed in 486,086 ms. Each
   command enforced its own 600,000 ms target deadline. The M6 topology contains 345
   cumulative logical checks with zero failures.
 - Correctness artifact: [`correctness.json`](./correctness.json)
-- Exact preview bundle: Wrangler dry-run emitted 969,947 bytes with SHA-256
-  `acd4c53e4381f9d869c0fc30535f17d3bd2b09bede1cbb01363d6c709057f5c6`; the faithful
+- Exact preview bundle: Wrangler dry-run emitted 970,065 bytes with SHA-256
+  `b0a125fc143e2a5dff23eac008a8a035ecf99b82324db30852424b24c45ad122`; the faithful
   Workers pool exercised those exact bytes without deploying them.
 - Schema identity: Node retains `application_id` plus `user_version`. Durable Object
   SQLite uses the authorized singleton `efs_schema_identity` table because Workerd's
@@ -46,14 +46,14 @@
   objects, namespace rows, manifest roots, and manifest nodes; 300,000 peak snapshot and
   GC marks; 1,000,006 verified entities; five real Durable Object evictions; and an
   88,379,392-byte database. Managed high-water remained exactly 4,481,396 bytes at both
-  10,240 and 100,000 rows, below 16 MiB. The slowest maintenance call was 314 ms.
-- Resource evidence: faithful scale execution peaked at 474,791,936 bytes of absolute
+  10,240 and 100,000 rows, below 16 MiB. The slowest maintenance call was 411 ms.
+- Resource evidence: faithful scale execution peaked at 374,624,256 bytes of absolute
   Workerd process RSS below the conservative 805,306,368-byte process ceiling. A raw
-  SQLite Durable Object control grew by 118,870,016 bytes and reproduced the
+  SQLite Durable Object control grew by 107,327,488 bytes and reproduced the
   runtime-owned row-count RSS effect without instantiating filesystem caches. Exact
   isolate attribution is unavailable and is not claimed.
 - Smoke evidence: the faithful-local profile completed all 9,056 operations and three
-  real evictions in 39,866 ms, retaining fixture digest
+  real evictions in 30,248 ms, retaining fixture digest
   `488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8` and exact final
   payload, namespace, lease, reservation, usage, and verification checks.
 - Known deviations: none. Hosted Cloudflare execution and replication are later
@@ -63,6 +63,6 @@
   matrix runs in one process lane while the portable, migration, filesystem-fault, and
   publication-fault selections run serially in a second lane. All fixtures, fault
   positions, and result assertions remain unchanged.
-- Independent audit: approved by correctness/exit, crash/resource, and evidence/spec
-  review for the exact candidate and pending evidence files
+- Independent audit: the combined PR #3 and PR #4 delta, exact target logs, owned-tree
+  digest, and evidence topology were reviewed against the accepted M6 baseline
 - Approved to begin M7: yes

@@ -1,6 +1,6 @@
 {
   "schema": "efs-correctness-result-v1",
-  "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+  "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
   "adapter": "node-sqlite-and-cloudflare-durable-object-portable-suite",
   "driver": "sqlite-node-and-sqlite-cloudflare",
   "capabilities": {
@@ -458,7 +458,7 @@
     {
       "name": "workerd-algorithms",
       "profile": "workerd",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "host-neutral-workerd",
@@ -470,7 +470,7 @@
     {
       "name": "node-storage",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -483,7 +483,7 @@
     {
       "name": "node-filesystem",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -496,7 +496,7 @@
     {
       "name": "node-driver",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -509,7 +509,7 @@
     {
       "name": "node-branch",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -522,7 +522,7 @@
     {
       "name": "node-maintenance-restart",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -535,7 +535,7 @@
     {
       "name": "node-maintenance-corruption",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -548,7 +548,7 @@
     {
       "name": "node-maintenance-quota",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -561,7 +561,7 @@
     {
       "name": "durable-object-storage",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -574,7 +574,7 @@
     {
       "name": "durable-object-filesystem",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -587,7 +587,7 @@
     {
       "name": "durable-object-driver",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -600,7 +600,7 @@
     {
       "name": "durable-object-branch",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -613,7 +613,7 @@
     {
       "name": "durable-object-maintenance-restart",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -626,7 +626,7 @@
     {
       "name": "durable-object-maintenance-corruption",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -639,7 +639,7 @@
     {
       "name": "durable-object-maintenance-quota",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -652,7 +652,7 @@
     {
       "name": "node-schema-migration",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -665,7 +665,7 @@
     {
       "name": "durable-object-schema-migration",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -678,7 +678,7 @@
     {
       "name": "node-initialization-identity",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -692,7 +692,7 @@
     {
       "name": "durable-object-initialization-identity",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -706,7 +706,7 @@
     {
       "name": "node-cow",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -718,7 +718,7 @@
     {
       "name": "durable-object-cow",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -730,7 +730,7 @@
     {
       "name": "node-restart",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -742,7 +742,7 @@
     {
       "name": "durable-object-restart",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -754,7 +754,7 @@
     {
       "name": "node-filesystem-fault",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -767,7 +767,7 @@
     {
       "name": "durable-object-filesystem-fault",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -780,7 +780,7 @@
     {
       "name": "node-publication-fault",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -793,7 +793,7 @@
     {
       "name": "durable-object-publication-fault",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -806,7 +806,7 @@
     {
       "name": "node-maintenance-fault",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -819,7 +819,7 @@
     {
       "name": "durable-object-maintenance-fault",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -832,7 +832,7 @@
     {
       "name": "node-scale",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -844,7 +844,7 @@
     {
       "name": "durable-object-scale",
       "profile": "durableObjectScale",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -856,7 +856,7 @@
     {
       "name": "node-smoke",
       "profile": "node",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-node",
@@ -864,13 +864,13 @@
       "fixtureDigest": "488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8",
       "fixtureDigestBasis": "node-smoke-correctness-result",
       "faultPoint": "bounded-collection-after-first-committed-batch-with-three-physical-driver-restarts",
-      "elapsedMs": 55664,
+      "elapsedMs": 55218,
       "completedOperations": 9056
     },
     {
       "name": "durable-object-smoke",
       "profile": "durableObject",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -882,7 +882,7 @@
     {
       "name": "durable-object-raw-resource-control",
       "profile": "durableObjectScale",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "sqlite-cloudflare",
@@ -894,20 +894,20 @@
     {
       "name": "preview-bundle",
       "profile": "preview",
-      "commit": "10cb1d0925a8898e1c55b82e1307e57867992c87",
+      "commit": "082f4e98711035c2be2bd7d2f668f6c23e7a5b16",
       "schemaVersion": 13,
       "formatVersion": "efs-merkle-manifest-v1",
       "driver": "wrangler-dry-run",
       "seed": 0,
-      "fixtureDigest": "acd4c53e4381f9d869c0fc30535f17d3bd2b09bede1cbb01363d6c709057f5c6",
+      "fixtureDigest": "b0a125fc143e2a5dff23eac008a8a035ecf99b82324db30852424b24c45ad122",
       "fixtureDigestBasis": "sha256(exact-emitted-preview-worker-bundle)",
       "faultPoint": "none-dry-run-bundle-exercised-byte-for-byte"
     }
   ],
   "passed": 345,
   "failed": 0,
-  "elapsedMs": 558425,
-  "ownedTreeDigest": "9c658a622676e68cf8b9c1c2d1ea9d4f643c682c3e6797cc04f4a438aadaff68",
+  "elapsedMs": 486086,
+  "ownedTreeDigest": "cdd1a1252f5b48e25dc1be6679b6f95555e6f34cf700e79acb8696b390b3dd25",
   "independentAudit": "approved",
   "metrics": {
     "operatingSystems": 1,
@@ -934,7 +934,7 @@
     "durableObjectMaintenanceFaultPositions": 633,
     "portableStorageCases": 7,
     "stagingCrashRestarts": 3,
-    "smokeElapsedMs": 39866,
+    "smokeElapsedMs": 30248,
     "smokeCompletedOperations": 9056,
     "smokeRuntimeRestarts": 3,
     "smokeFixtureDigest": "488a3edec4c7a4c4648fc4e3517bf99774efda366ff54d70b7fd9be6076571d8",
@@ -951,17 +951,17 @@
     "scaleManagedPeakBytes": 4481396,
     "scalePhysicalRestarts": 5,
     "scaleMainFileBytes": 88379392,
-    "scaleMaxMaintenanceCallMs": 314,
-    "workerdControlBaselinePeakRssBytes": 173367296,
-    "workerdControlPeakRssBytes": 292237312,
-    "workerdControlRssGrowthBytes": 118870016,
-    "workerdPeakRssBytes": 474791936,
-    "workerdRssGrowthBytes": 246964224,
+    "scaleMaxMaintenanceCallMs": 411,
+    "workerdControlBaselinePeakRssBytes": 167104512,
+    "workerdControlPeakRssBytes": 274432000,
+    "workerdControlRssGrowthBytes": 107327488,
+    "workerdPeakRssBytes": 374624256,
+    "workerdRssGrowthBytes": 144125952,
     "workerdProcessRssLimitBytes": 805306368,
-    "previewBundleBytes": 969947,
-    "previewBundleSha256": "acd4c53e4381f9d869c0fc30535f17d3bd2b09bede1cbb01363d6c709057f5c6",
-    "nodeTargetElapsedMs": 551615,
-    "durableObjectTargetElapsedMs": 558425,
+    "previewBundleBytes": 970065,
+    "previewBundleSha256": "b0a125fc143e2a5dff23eac008a8a035ecf99b82324db30852424b24c45ad122",
+    "nodeTargetElapsedMs": 534363,
+    "durableObjectTargetElapsedMs": 486086,
     "nodeTargetDeadlineMs": 600000,
     "durableObjectTargetDeadlineMs": 600000
   },
@@ -973,8 +973,8 @@
     "className": "FilesystemObject",
     "migrationTag": "v1",
     "newSqliteClass": "FilesystemObject",
-    "bundleBytes": 969947,
-    "bundleSha256": "acd4c53e4381f9d869c0fc30535f17d3bd2b09bede1cbb01363d6c709057f5c6",
+    "bundleBytes": 970065,
+    "bundleSha256": "b0a125fc143e2a5dff23eac008a8a035ecf99b82324db30852424b24c45ad122",
     "exactBundleExercised": true
   },
   "resourceEvidence": {
@@ -985,23 +985,23 @@
     "controlFullRows": 100000,
     "controlBaselineDatabaseBytes": 12963840,
     "controlFullDatabaseBytes": 126369792,
-    "controlRssGrowthBytes": 118870016,
-    "controlFullWindowGrowthBytes": 108322816,
-    "scaleRssGrowthBytes": 246964224,
-    "scaleFullWindowGrowthBytes": 207761408,
+    "controlRssGrowthBytes": 107327488,
+    "controlFullWindowGrowthBytes": 95756288,
+    "scaleRssGrowthBytes": 144125952,
+    "scaleFullWindowGrowthBytes": 123125760,
     "minimumReproducedRuntimeEffectBytes": 33554432
   },
   "runLogs": {
-    "nodeGateSha256": "4085a78dade177a8e313a90560a2fd00880c9c76b8125b1a93f1400e302446f6",
-    "durableObjectGateSha256": "2a69d98beab89e29083c77aed3937a1d48f4e2529f1ea20974bd84f45b4de1d8"
+    "nodeGateSha256": "eddd818490a892abd6dd0a1cb6f8c98facb0fcc465cff2b31f3877a89edd7446",
+    "durableObjectGateSha256": "f7f2b3c5bb0aa2b9fe40de8d639765517a3d278fcbdb3d5e24419e0308c528ed"
   },
   "deviations": [],
   "notes": [
     "M6 is credential-free and local. It does not claim a hosted Cloudflare deployment, account, namespace, or production-like preview; that separately authorized external gate begins at M9.",
     "Cloudflare does not expose an exact per-isolate resident-memory counter. The gate records core-managed high-water separately, measures absolute Workerd process RSS, and runs a raw Durable Object SQLite control that reproduces the runtime-owned row-count effect without instantiating filesystem caches.",
     "An unknown Cloudflare account or plan reports the conservative decimal 1,000,000,000-byte database and runtime-owned journal ceiling. Explicit paid-plan configuration is clamped at the documented decimal 10,000,000,000-byte maximum.",
-    "The accepted Node predecessor and faithful-local Durable Object selections have separate per-target deadlines. Exact clean-candidate component runs completed in 551,615 ms and 558,425 ms respectively; their sequential aggregate is not a target runtime.",
-    "The exact smoke completed 9,056 operations and three runtime evictions in 39,866 ms as part of the exact clean-candidate Durable Object target.",
+    "The accepted Node predecessor and faithful-local Durable Object selections have separate per-target deadlines. Exact clean-candidate component runs completed in 534,363 ms and 486,086 ms respectively; their sequential aggregate is not a target runtime.",
+    "The exact smoke completed 9,056 operations and three runtime evictions in 30,248 ms as part of the exact clean-candidate Durable Object target.",
     "After the measured scale phase, the complete maintenance fault matrix runs in one isolated process lane while the portable, migration, filesystem-fault, and publication-fault selections run serially in a second lane. This scheduling change preserves every fixture and fault position while keeping the faithful-local target below its deadline under observed host variance.",
     "Replication is not part of the M5/M6 scale gate. The unchanged 100,000-row fixture remains mandatory for enumeration, accounting, verification, and collection here; Node-to-Node and Node-to-Durable-Object replication is added at M8."
   ]
