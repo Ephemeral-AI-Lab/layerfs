@@ -124,7 +124,7 @@ function testTotals(source, name) {
       skipped: 0,
     };
   const computerMatch = normalized.match(
-    /Tests\s+(\d+)\s+passed\s*\|\s*(\d+)\s+skipped\s*\|\s*(\d+)\s+total/u,
+    /Tests\s+(\d+)\s+passed\s*\|\s*(\d+)\s+skipped\s*(?:\|\s*)?\((\d+)\)/u,
   );
   if (computerMatch)
     return {
