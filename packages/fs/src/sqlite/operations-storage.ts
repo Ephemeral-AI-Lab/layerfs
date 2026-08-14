@@ -9,9 +9,7 @@ import { MaintenanceRepository } from "./maintenance-repository.js";
 import { OverlayRepository } from "./overlay-repository.js";
 import { ManifestTreeRepository } from "./manifest-tree-repository.js";
 import { ReplicationSessionRepository } from "./replication-repository.js";
-import {
-  createReplicationTransferRepository,
-} from "./replication-transfer-repository.js";
+import { createReplicationTransferRepository } from "./replication-transfer-repository.js";
 import { sha256 } from "../cas/sha256.js";
 import type {
   OperationsStorage,

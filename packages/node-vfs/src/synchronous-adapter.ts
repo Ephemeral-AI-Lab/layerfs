@@ -47,7 +47,11 @@ function hostStat(stat: FileStat): FileStat & {
   // these bits a FUSE kernel treats a directory root as a regular file and
   // rejects readdir/opendir with EIO.
   const typeMode =
-    stat.type === "directory" ? 0o040000 : stat.type === "symlink" ? 0o120000 : 0o100000;
+    stat.type === "directory"
+      ? 0o040000
+      : stat.type === "symlink"
+        ? 0o120000
+        : 0o100000;
   return Object.freeze({
     ...stat,
     mode: typeMode | (stat.mode & 0o7777),

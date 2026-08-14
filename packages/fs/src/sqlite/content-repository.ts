@@ -736,7 +736,9 @@ export class ContentRepository {
         insert.length,
       );
       const sequence = this.#allocateSequenceRange(insert.length);
-      const allocationConflicts = this.#tx.all<{ allocation_sequence: number } & SqliteRow>(
+      const allocationConflicts = this.#tx.all<
+        { allocation_sequence: number } & SqliteRow
+      >(
         `SELECT allocation_sequence FROM efs_manifest_nodes WHERE allocation_sequence>=? AND allocation_sequence<? ORDER BY allocation_sequence`,
         [sequence, sequence + insert.length],
         { maxRows: insert.length + 1, maxBytes: 4096 },

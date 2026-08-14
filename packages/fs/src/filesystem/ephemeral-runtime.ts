@@ -71,10 +71,7 @@ export class EphemeralRuntime {
           );
         initializeOrValidateUnboundReplicaSchema(options.database);
         const runtimeLimits = resolveLimits(DEFAULT_RUNTIME_LIMITS, options.runtime);
-        const storageLimits = constrainStorageLimits(
-          {},
-          options.database.capabilities,
-        );
+        const storageLimits = constrainStorageLimits({}, options.database.capabilities);
         const admission = new AdmissionController(
           runtimeLimits.maxManagedResidentBytes,
         );

@@ -77,14 +77,19 @@ class DropResponseTransport {
     this.count += 1;
     if (!this.dropped && this.count === this.dropAfter) {
       this.dropped = true;
-      throw new ReplicationError("TransportFailure", "test dropped the response after durable acceptance");
+      throw new ReplicationError(
+        "TransportFailure",
+        "test dropped the response after durable acceptance",
+      );
     }
     return response;
   }
 }
 
 async function openAuthority(directory) {
-  const database = await openNodeSqlite({ filename: path.join(directory, "authority.db") });
+  const database = await openNodeSqlite({
+    filename: path.join(directory, "authority.db"),
+  });
   const runtime = await EphemeralRuntime.open({
     database,
     replicationIdentity: { authorityId: "authority-a", role: "main-authority" },
@@ -93,7 +98,9 @@ async function openAuthority(directory) {
 }
 
 async function openReplica(directory) {
-  const database = await openNodeSqlite({ filename: path.join(directory, "replica.db") });
+  const database = await openNodeSqlite({
+    filename: path.join(directory, "replica.db"),
+  });
   const runtime = await EphemeralRuntime.open({
     database,
     replicationIdentity: { authorityId: "authority-a", role: "replica" },
@@ -104,13 +111,15 @@ async function openReplica(directory) {
 test("authority main transfers to an authenticated replica through the wire", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-repl-transfer-"));
   try {
-    const { database: authorityDb, runtime: authority } = await openAuthority(
-      directory,
-    );
+    const { database: authorityDb, runtime: authority } =
+      await openAuthority(directory);
     try {
       await authority.filesystem.writeFile("/hello.txt", "hello world");
       await authority.filesystem.mkdir("/dir");
-      await authority.filesystem.writeFile("/dir/nested.bin", new Uint8Array(4096).fill(7));
+      await authority.filesystem.writeFile(
+        "/dir/nested.bin",
+        new Uint8Array(4096).fill(7),
+      );
       const filesystemId = authority.identity.filesystemId;
       const authorityBridge = authority.replication;
       const plan = { flow: "authority-main-to-replica" };
@@ -173,7 +182,9 @@ test("authority main transfers to an authenticated replica through the wire", as
         // branch-scoped Node VFS must observe the newly activated namespace
         // without requiring a second filesystem core or process restart.
         const liveNodeView = replica.openNodeVfs();
-        assert.ok(liveNodeView.readdirSync("/").some((entry) => entry.name === "hello.txt"));
+        assert.ok(
+          liveNodeView.readdirSync("/").some((entry) => entry.name === "hello.txt"),
+        );
         assert.equal(
           new TextDecoder().decode(liveNodeView.readFileSync("/hello.txt")),
           "hello world",
@@ -188,15 +199,10 @@ test("authority main transfers to an authenticated replica through the wire", as
           const bytes = await replicaFs.readFile("/dir/nested.bin");
           assert.equal(bytes.byteLength, 4096);
           assert.equal(bytes[0], 7);
-          assert.equal(
-            await replicaFs.stat("/hello.txt").then((s) => s.size),
-            11,
-          );
+          assert.equal(await replicaFs.stat("/hello.txt").then((s) => s.size), 11);
           assert.equal(
             await replicaFs.stat("/dir/nested.bin").then((s) => s.id),
-            await authority.filesystem
-              .stat("/dir/nested.bin")
-              .then((s) => s.id),
+            await authority.filesystem.stat("/dir/nested.bin").then((s) => s.id),
           );
         } finally {
           await replicaFs.close();
@@ -254,13 +260,19 @@ test("main transfer resumes after a dropped response and restart without a secon
     assert.equal(provision.status, "complete");
     await unbound.close();
     await replicaDb.close();
-    replicaDb = await openNodeSqlite({ filename: path.join(directory, "replica.db"), create: false });
+    replicaDb = await openNodeSqlite({
+      filename: path.join(directory, "replica.db"),
+      create: false,
+    });
     replica = await EphemeralRuntime.open({
       database: replicaDb,
       replicationIdentity: { authorityId: "authority-a", role: "replica" },
     });
 
-    const firstEndpoint = createReplicationEndpoint({ bridge: replica.replication, authorization: auth });
+    const firstEndpoint = createReplicationEndpoint({
+      bridge: replica.replication,
+      authorization: auth,
+    });
     const pending = await replicate({
       bridge: authority.replication,
       transport: new DropResponseTransport(firstEndpoint, 8),
@@ -280,7 +292,10 @@ test("main transfer resumes after a dropped response and restart without a secon
     authorityDb = undefined;
 
     ({ database: authorityDb, runtime: authority } = await openAuthority(directory));
-    replicaDb = await openNodeSqlite({ filename: path.join(directory, "replica.db"), create: false });
+    replicaDb = await openNodeSqlite({
+      filename: path.join(directory, "replica.db"),
+      create: false,
+    });
     replica = await EphemeralRuntime.open({
       database: replicaDb,
       replicationIdentity: { authorityId: "authority-a", role: "replica" },
@@ -315,27 +330,43 @@ test("main transfer resumes after a dropped response and restart without a secon
       replicate({
         bridge: authority.replication,
         transport: new LoopbackTransport(
-          createReplicationEndpoint({ bridge: replica.replication, authorization: auth }),
+          createReplicationEndpoint({
+            bridge: replica.replication,
+            authorization: auth,
+          }),
         ),
         authorization: { ...auth, policyVersion: "policy-changed" },
         plan,
         operationId: "restart-main",
         resumeKey,
       }),
-      (error) => error instanceof ReplicationError && error.code === "UnauthorizedScope",
+      (error) =>
+        error instanceof ReplicationError && error.code === "UnauthorizedScope",
     );
     assert.equal(
       replicaDb.transaction(
         "read",
-        (tx) => tx.all("SELECT count(*) value FROM efs_revisions", [], { maxRows: 1, maxBytes: 128 })[0].value,
+        (tx) =>
+          tx.all("SELECT count(*) value FROM efs_revisions", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].value,
       ),
       2,
     );
   } finally {
-    try { await replica?.close(); } catch {}
-    try { await replicaDb?.close(); } catch {}
-    try { await authority?.close(); } catch {}
-    try { await authorityDb?.close(); } catch {}
+    try {
+      await replica?.close();
+    } catch {}
+    try {
+      await replicaDb?.close();
+    } catch {}
+    try {
+      await authority?.close();
+    } catch {}
+    try {
+      await authorityDb?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -343,9 +374,8 @@ test("main transfer resumes after a dropped response and restart without a secon
 test("provisioning adopts the authority genesis into an unbound replica", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-repl-provision-"));
   try {
-    const { database: authorityDb, runtime: authority } = await openAuthority(
-      directory,
-    );
+    const { database: authorityDb, runtime: authority } =
+      await openAuthority(directory);
     try {
       await authority.filesystem.writeFile("/genesis.txt", "genesis");
       const filesystemId = authority.identity.filesystemId;
@@ -399,10 +429,7 @@ test("provisioning adopts the authority genesis into an unbound replica", async 
       try {
         assert.equal(bound.filesystem !== null, true);
         assert.equal(bound.identity?.filesystemId, filesystemId);
-        assert.equal(
-          bound.identity?.filesystemId,
-          authority.identity?.filesystemId,
-        );
+        assert.equal(bound.identity?.filesystemId, authority.identity?.filesystemId);
         const plan = { flow: "authority-main-to-replica" };
         const boundEndpoint = createReplicationEndpoint({
           bridge: bound.replication,
@@ -440,7 +467,8 @@ test("provisioning adopts the authority genesis into an unbound replica", async 
 test("authority branch transfer preserves the selected generation and private content", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "efs-repl-branch-"));
   try {
-    const { database: authorityDb, runtime: authority } = await openAuthority(directory);
+    const { database: authorityDb, runtime: authority } =
+      await openAuthority(directory);
     try {
       await authority.filesystem.writeFile("/base.txt", "base");
       const branch = await authority.filesystem.branches.create("branch-a");
@@ -511,7 +539,10 @@ test("authority branch transfer preserves the selected generation and private co
         });
         assert.equal(branchRun.status, "complete");
         assert.equal(branchRun.result.activation.branchId, "branch-a");
-        assert.equal(branchRun.result.activation.baseRevision, String(branchInfo.baseRevision));
+        assert.equal(
+          branchRun.result.activation.baseRevision,
+          String(branchInfo.baseRevision),
+        );
         assert.equal(branchRun.result.activation.generation, branchInfo.generation);
         assert.equal(branchRun.result.activation.generationDigest.length, 64);
         const received = await replica.filesystem.branches.open("branch-a");
@@ -520,7 +551,9 @@ test("authority branch transfer preserves the selected generation and private co
             await received.readFile("/private.txt", { encoding: "utf8" }),
             "private",
           );
-          await assert.rejects(replica.filesystem.stat("/private.txt"), { code: "ENOENT" });
+          await assert.rejects(replica.filesystem.stat("/private.txt"), {
+            code: "ENOENT",
+          });
         } finally {
           await received.close();
         }
@@ -547,7 +580,10 @@ test("authority branch transfer preserves the selected generation and private co
           operationId: "branch-transfer-advanced",
         });
         assert.equal(advanced.status, "complete");
-        assert.equal(advanced.result.activation.generation, advancedBranchInfo.generation);
+        assert.equal(
+          advanced.result.activation.generation,
+          advancedBranchInfo.generation,
+        );
         assert.equal(
           advanced.result.activation.generationDigest,
           advancedBranchInfo.generationDigest,
@@ -596,7 +632,10 @@ test("replica branch returns, publishes with a generation guard, and returns the
       const provision = await replicate({
         bridge: authority.replication,
         transport: new LoopbackTransport(
-          createReplicationEndpoint({ bridge: unbound.replication, authorization: auth }),
+          createReplicationEndpoint({
+            bridge: unbound.replication,
+            authorization: auth,
+          }),
         ),
         authorization: auth,
         plan: mainPlan,
@@ -632,7 +671,10 @@ test("replica branch returns, publishes with a generation guard, and returns the
     const returned = await replicate({
       bridge: replica.replication,
       transport: new LoopbackTransport(
-        createReplicationEndpoint({ bridge: authority.replication, authorization: returnAuth }),
+        createReplicationEndpoint({
+          bridge: authority.replication,
+          authorization: returnAuth,
+        }),
       ),
       authorization: returnAuth,
       plan: returnPlan,
@@ -671,7 +713,10 @@ test("replica branch returns, publishes with a generation guard, and returns the
     const terminal = await replicate({
       bridge: authority.replication,
       transport: new LoopbackTransport(
-        createReplicationEndpoint({ bridge: replica.replication, authorization: terminalAuth }),
+        createReplicationEndpoint({
+          bridge: replica.replication,
+          authorization: terminalAuth,
+        }),
       ),
       authorization: terminalAuth,
       plan: terminalPlan,
@@ -689,10 +734,18 @@ test("replica branch returns, publishes with a generation guard, and returns the
       (error) => error?.code === "EROFS",
     );
   } finally {
-    try { await replica?.close(); } catch {}
-    try { await replicaDb?.close(); } catch {}
-    try { await authority?.close(); } catch {}
-    try { await authorityDb?.close(); } catch {}
+    try {
+      await replica?.close();
+    } catch {}
+    try {
+      await replicaDb?.close();
+    } catch {}
+    try {
+      await authority?.close();
+    } catch {}
+    try {
+      await authorityDb?.close();
+    } catch {}
     await rm(directory, { recursive: true, force: true });
   }
 });

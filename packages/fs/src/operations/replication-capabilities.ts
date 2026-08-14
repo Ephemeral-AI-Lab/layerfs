@@ -71,7 +71,11 @@ export function buildBoundReplicationCapabilities(options: {
   readonly maxManifestDepth: number;
   readonly maxFileBytes: number;
   readonly writerProfile: string;
-  readonly fastCdc?: { readonly minimum: number; readonly average: number; readonly maximum: number };
+  readonly fastCdc?: {
+    readonly minimum: number;
+    readonly average: number;
+    readonly maximum: number;
+  };
 }): ReplicationBridgeCapabilities {
   const fastCdc = options.fastCdc ?? DEFAULT_FASTCDC;
   const features = {
@@ -102,9 +106,7 @@ export function buildBoundReplicationCapabilities(options: {
     activeChunkerFormat: "fastcdc-v1",
     supportedChunkerFormats: Object.freeze(["fastcdc-v1"]),
     fastCdc: Object.freeze({ ...fastCdc }),
-    supportedFastCdcConfigurations: Object.freeze([
-      Object.freeze({ ...fastCdc }),
-    ]),
+    supportedFastCdcConfigurations: Object.freeze([Object.freeze({ ...fastCdc })]),
     copyOnWritePageBytes: options.cowPageBytes,
     supportedCopyOnWritePageBytes: Object.freeze([4096, 8192, 16384] as const),
     features,

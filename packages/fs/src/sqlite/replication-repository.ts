@@ -1,8 +1,5 @@
 import type { FilesystemSQLiteTransaction, SqliteRow } from "./driver.js";
-import {
-  DURABLE_METADATA_ROW_BYTES,
-  type StorageLimits,
-} from "../resources/limits.js";
+import { DURABLE_METADATA_ROW_BYTES, type StorageLimits } from "../resources/limits.js";
 import { UsageRepository } from "./usage-repository.js";
 import type {
   CreateReplicationSessionRequest,
@@ -1145,9 +1142,7 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
     });
   }
 
-  loadSession(request: {
-    readonly operationId: string;
-  }): Readonly<{
+  loadSession(request: { readonly operationId: string }): Readonly<{
     readonly binding: ReplicationSessionBinding;
     readonly session: ReplicationSessionSnapshot;
     readonly flow: ReplicationFlow;
@@ -1342,7 +1337,11 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
     readonly ownerNonce: Uint8Array;
     readonly throughSequence: number;
     readonly maxRows: number;
-  }): Readonly<{ readonly compactedThrough: number; readonly deletedRows: number; readonly deletedBytes: number }> {
+  }): Readonly<{
+    readonly compactedThrough: number;
+    readonly deletedRows: number;
+    readonly deletedBytes: number;
+  }> {
     const loaded = this.#load(request.operationId);
     const { row, state } = loaded;
     this.#assertOwner(state, state.binding.sessionId, request.ownerNonce);
@@ -1352,11 +1351,18 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
       throw replicationError("ResourceLimit", "receipt compaction batch is too large");
     const target = Math.min(request.throughSequence, state.nextSequence - 1);
     if (target <= state.compactedThrough)
-      return Object.freeze({ compactedThrough: state.compactedThrough, deletedRows: 0, deletedBytes: 0 });
+      return Object.freeze({
+        compactedThrough: state.compactedThrough,
+        deletedRows: 0,
+        deletedBytes: 0,
+      });
     const rows = this.#tx.all<ReceiptRow & { batch_index: number } & SqliteRow>(
       "SELECT batch_index,digest,encoded FROM efs_replication_receipts WHERE session_id=? AND batch_index>? AND batch_index<=? ORDER BY batch_index LIMIT ?",
       [request.operationId, state.compactedThrough, target, request.maxRows],
-      { maxRows: request.maxRows, maxBytes: state.binding.maxReceiptBytesPerSession + 4096 },
+      {
+        maxRows: request.maxRows,
+        maxBytes: state.binding.maxReceiptBytesPerSession + 4096,
+      },
     );
     if (rows.length === 0)
       throw replicationError("ECORRUPT", "receipt compaction found a missing receipt");
@@ -1372,7 +1378,8 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
         [request.operationId, receipt.batch_index, receipt.digest],
       );
     }
-    const compactedThrough = rows.length < request.maxRows ? target : rows[rows.length - 1]!.batch_index;
+    const compactedThrough =
+      rows.length < request.maxRows ? target : rows[rows.length - 1]!.batch_index;
     state.compactedThrough = compactedThrough;
     state.receiptBytes -= deletedBytes;
     if (state.receiptBytes < 0)
@@ -1401,9 +1408,11 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
     this.#assertOwner(state, request.sessionId, request.ownerNonce);
     safeNonnegative(request.now, "now");
     if (request.operationId === REPLICATION_IDENTITY_MARKER_ID || row.state < 0)
-      throw replicationError("OperationMismatch", "the durable replication identity cannot be aborted");
-    if (row.state === 1)
-      return;
+      throw replicationError(
+        "OperationMismatch",
+        "the durable replication identity cannot be aborted",
+      );
+    if (row.state === 1) return;
     const deleted = this.#tx.run(
       "DELETE FROM efs_replication_sessions WHERE id=? AND state=0 AND nonce=?",
       [request.operationId, request.ownerNonce],
@@ -1412,7 +1421,10 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
       throw replicationError("Busy", "replication session changed during abort");
   }
 
-  maintenance(request: { readonly now: number; readonly maxRows: number }): Readonly<{ readonly expiredSessions: number }> {
+  maintenance(request: {
+    readonly now: number;
+    readonly maxRows: number;
+  }): Readonly<{ readonly expiredSessions: number }> {
     safeNonnegative(request.now, "now");
     safePositive(request.maxRows, "maxRows");
     const rows = this.#tx.all<{ id: string } & SqliteRow>(
@@ -1421,7 +1433,9 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
       { maxRows: request.maxRows, maxBytes: Math.max(1024, request.maxRows * 128) },
     );
     for (const session of rows) {
-      this.#tx.run("DELETE FROM efs_replication_sessions WHERE id=? AND state>=0", [session.id]);
+      this.#tx.run("DELETE FROM efs_replication_sessions WHERE id=? AND state>=0", [
+        session.id,
+      ]);
     }
     return Object.freeze({ expiredSessions: rows.length });
   }
@@ -1515,19 +1529,29 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
     const encodedState = encodeJson(state);
     if (request.responseBytes !== undefined) {
       if (!request.requestDigest || request.requestDigest.byteLength !== 32)
-        throw replicationError("IntegrityFailure", "outbound receipt request digest is invalid");
+        throw replicationError(
+          "IntegrityFailure",
+          "outbound receipt request digest is invalid",
+        );
       if (request.responseBytes.byteLength > state.binding.maxResponseBytes)
-        throw replicationError("ResourceLimit", "outbound receipt exceeds the response limit");
+        throw replicationError(
+          "ResourceLimit",
+          "outbound receipt exceeds the response limit",
+        );
       this.#tx.run(
         "INSERT INTO efs_replication_receipts(session_id,batch_index,digest,encoded) VALUES(?,?,?,?)",
-        [request.operationId, -request.sequence - 2, request.requestDigest, request.responseBytes],
+        [
+          request.operationId,
+          -request.sequence - 2,
+          request.requestDigest,
+          request.responseBytes,
+        ],
       );
     }
     this.#assertAggregateAdmission(state.binding, {
       activeSessions: terminalResultAcknowledgement ? 0 : 1,
       sessionRows: 1,
-      metadataBytes:
-        DURABLE_METADATA_ROW_BYTES + encodedState.byteLength - priorBytes,
+      metadataBytes: DURABLE_METADATA_ROW_BYTES + encodedState.byteLength - priorBytes,
     });
     this.#tx.run(
       "UPDATE efs_replication_sessions SET cursor=? WHERE id=? AND nonce=? AND (state=0 OR state=1)",
@@ -1553,7 +1577,10 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
       { maxRows: 1, maxBytes: loaded.state.binding.maxResponseBytes + 4096 },
     )[0];
     if (!row || !equalBytes(row.digest, request.requestDigest))
-      throw replicationError("BatchReplayMismatch", "outbound receipt is missing or mismatched");
+      throw replicationError(
+        "BatchReplayMismatch",
+        "outbound receipt is missing or mismatched",
+      );
     return new Uint8Array(row.encoded);
   }
 

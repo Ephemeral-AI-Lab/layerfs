@@ -684,10 +684,7 @@ test("branch overwrite preparation composes branch-visible content without a los
   try {
     const provider = handle.provider;
     const session = provider.openFileSync("/mixed", { writable: true });
-    assert.equal(
-      new TextDecoder().decode(session.readRangeSync(0, 6)),
-      "abXdef",
-    );
+    assert.equal(new TextDecoder().decode(session.readRangeSync(0, 6)), "abXdef");
     session.writeSync(new TextEncoder().encode("ZZ"), 0);
     session.flushSync();
     session.closeSync();
@@ -730,10 +727,7 @@ test("writable open on replica main fails EROFS before pending state", async () 
       code: "EROFS",
     });
     const pinned = provider.openFileSync("/readonly");
-    assert.equal(
-      new TextDecoder().decode(pinned.readRangeSync(0, 7)),
-      "content",
-    );
+    assert.equal(new TextDecoder().decode(pinned.readRangeSync(0, 7)), "content");
     pinned.closeSync();
     provider.closeSync();
   } finally {

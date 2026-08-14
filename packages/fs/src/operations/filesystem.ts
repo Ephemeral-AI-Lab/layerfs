@@ -430,7 +430,12 @@ export class EphemeralFS implements EphemeralFilesystem {
     readonly role: ReplicationRole;
   }): ReplicationFilesystemIdentity {
     if (this.#closing || this.#closed)
-      throw fsError("EBADF", "bindReplicationIdentity", undefined, "filesystem is closing");
+      throw fsError(
+        "EBADF",
+        "bindReplicationIdentity",
+        undefined,
+        "filesystem is closing",
+      );
     const identity = this.#transaction("write", (ports) => {
       const filesystemId = ports.branches(this.#storageLimits).filesystemId();
       const repository = ports.replication(this.#storageLimits);

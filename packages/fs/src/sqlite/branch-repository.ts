@@ -351,14 +351,22 @@ export class BranchRepository {
       throw new Error("ECORRUPT: terminal branch metadata binding changed");
     return decoded.digest;
   }
-  storedGenerationDigest(branchId: string): Readonly<{
-    readonly generation: number;
-    readonly digest: string;
-    readonly cursorBytes: number;
-  }> | undefined {
+  storedGenerationDigest(branchId: string):
+    | Readonly<{
+        readonly generation: number;
+        readonly digest: string;
+        readonly cursorBytes: number;
+      }>
+    | undefined {
     const id = terminalBranchMetadataId(branchId);
     const row = this.#tx.all<
-      { state: number; nonce: Uint8Array; cursor: Uint8Array; expires_at_ms: number; staged_bytes: number } & SqliteRow
+      {
+        state: number;
+        nonce: Uint8Array;
+        cursor: Uint8Array;
+        expires_at_ms: number;
+        staged_bytes: number;
+      } & SqliteRow
     >(
       "SELECT state,nonce,cursor,expires_at_ms,staged_bytes FROM efs_replication_sessions WHERE id=?",
       [id],
@@ -769,7 +777,9 @@ export class BranchRepository {
       [generation, branchId],
     );
     if (updated.changes !== 1)
-      throw new Error("ECORRUPT: replicated branch generation update missed the active branch");
+      throw new Error(
+        "ECORRUPT: replicated branch generation update missed the active branch",
+      );
     this.#bumpRoot(1, branchId, true);
   }
   private clearOverlayPayload(branchId: string): void {

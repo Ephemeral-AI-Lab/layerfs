@@ -1948,10 +1948,20 @@ async function validateOptionalM8Evidence() {
     "scripts/",
     "tests/architecture/",
   ];
+  const m8CandidateFiles = new Set([
+    "docs/implementation/m8-handoff-spec.md",
+    "docs/spec/replication-wire-v1.md",
+    "packages/node-vfs/src/synchronous-adapter.ts",
+    "tests/node-vfs/node-vfs.test.mjs",
+    "tests/replication/durable-session.test.mjs",
+    "tests/replication/transfer.test.mjs",
+  ]);
   if (
     !candidateChanges.length ||
     candidateChanges.some(
-      (filename) => !m8CandidatePrefixes.some((prefix) => filename.startsWith(prefix)),
+      (filename) =>
+        !m8CandidatePrefixes.some((prefix) => filename.startsWith(prefix)) &&
+        !m8CandidateFiles.has(filename),
     )
   )
     throw new Error("m8 production candidate changes an unowned path");

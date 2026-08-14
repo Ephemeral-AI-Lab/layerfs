@@ -321,8 +321,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     this.#port = options.port;
     this.#clock = options.clock ?? Date.now;
     this.#branch = options.branch;
-    this.mainReadOnly =
-      options.mainReadOnly === true && options.branch === undefined;
+    this.mainReadOnly = options.mainReadOnly === true && options.branch === undefined;
     this.#prepareOverwriteSync = options.prepareOverwriteSync;
     this.#prepareOverwritesSync = options.prepareOverwritesSync;
     if (options.shared) {

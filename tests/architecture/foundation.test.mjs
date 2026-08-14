@@ -202,9 +202,7 @@ test("milestone gates select only their owned suites and sequential predecessors
       `M6 local gate omitted ${requiredSelection}`,
     );
   assert.ok(
-    ["pnpm validate:m7", "pnpm validate:m8"].includes(
-      scripts["validate:accepted"],
-    ),
+    ["pnpm validate:m7", "pnpm validate:m8"].includes(scripts["validate:accepted"]),
   );
 });
 

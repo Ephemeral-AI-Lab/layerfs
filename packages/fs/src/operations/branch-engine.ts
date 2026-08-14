@@ -12,7 +12,13 @@ import {
   validateSymlinkTarget,
   type CanonicalPath,
 } from "../namespace/paths.js";
-import { bytesToHex, copyBytes, equalBytes, hexToBytes, intrinsicByteRange } from "../cas/bytes.js";
+import {
+  bytesToHex,
+  copyBytes,
+  equalBytes,
+  hexToBytes,
+  intrinsicByteRange,
+} from "../cas/bytes.js";
 import {
   branchPatchInsertDigest,
   computeBranchGenerationDigest,
@@ -34,10 +40,7 @@ import {
 import type { SynchronousContentSource } from "./streaming-prepare.js";
 import { checkedInteger, checkedAdd } from "../resources/safe-integers.js";
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
-import {
-  decodeManifestRoot,
-  type ManifestParameters,
-} from "../manifests/codec.js";
+import { decodeManifestRoot, type ManifestParameters } from "../manifests/codec.js";
 import { fsError } from "../filesystem/errors.js";
 import { ContentCache } from "../cache/content-cache.js";
 import type {
@@ -1552,7 +1555,8 @@ export class BranchManager implements Branches {
         manifestHash: prepared.hash,
         size: prepared.size,
         certificate: prepared.certificate,
-        preparationMode: prepared.mode === "durable-path-copy" ? "durable-path-copy" : "local-rebuild",
+        preparationMode:
+          prepared.mode === "durable-path-copy" ? "durable-path-copy" : "local-rebuild",
         sourceBytesRead:
           prepared.localRebuildMetrics?.sourceBytesRead ??
           prepared.pathCopyMetrics?.sourceBytesRead ??

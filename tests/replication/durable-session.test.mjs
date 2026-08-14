@@ -291,20 +291,20 @@ test("retry-aborted sessions release their durable row and retained receipts", a
         [],
         { maxRows: 1, maxBytes: 128 },
       )[0].value,
-      receipts: tx.all(
-        "SELECT count(*) value FROM efs_replication_receipts",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0].value,
-      exports: tx.all(
-        "SELECT count(*) value FROM efs_replication_exports",
-        [],
-        { maxRows: 1, maxBytes: 128 },
-      )[0].value,
+      receipts: tx.all("SELECT count(*) value FROM efs_replication_receipts", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].value,
+      exports: tx.all("SELECT count(*) value FROM efs_replication_exports", [], {
+        maxRows: 1,
+        maxBytes: 128,
+      })[0].value,
     }));
     assert.deepEqual(counts, { sessions: 0, receipts: 0, exports: 0 });
   } finally {
-    try { driver?.close(); } catch {}
+    try {
+      driver?.close();
+    } catch {}
     await removeTree(directory);
   }
 });
@@ -571,7 +571,8 @@ test("receipt compaction and maintenance are bounded and durable", async () => {
     assert.equal(compacted.compactedThrough, 0);
     assert.equal(compacted.deletedRows, 1);
     assert.throws(
-      () => withRepository(driver, "write", (repository) => repository.acceptBatch(batch)),
+      () =>
+        withRepository(driver, "write", (repository) => repository.acceptBatch(batch)),
       /BatchReplayMismatch.*compacted/,
     );
     const expired = withRepository(driver, "write", (repository) =>
@@ -581,12 +582,19 @@ test("receipt compaction and maintenance are bounded and durable", async () => {
     assert.equal(
       driver.transaction(
         "read",
-        (tx) => tx.all("SELECT count(*) value FROM efs_replication_sessions WHERE id=?", ["operation-01"], { maxRows: 1, maxBytes: 128 })[0].value,
+        (tx) =>
+          tx.all(
+            "SELECT count(*) value FROM efs_replication_sessions WHERE id=?",
+            ["operation-01"],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].value,
       ),
       0,
     );
   } finally {
-    try { driver?.close(); } catch {}
+    try {
+      driver?.close();
+    } catch {}
     await removeTree(directory);
   }
 });
@@ -750,16 +758,18 @@ test("durable replica identity makes main read-only while private branches remai
     await assert.rejects(runtime.filesystem.writeFile("/main", "denied"), {
       code: "EROFS",
     });
-    assert.throws(
-      () => runtime.openNodeVfs().writeFileSync("/main", bytes("denied")),
-      { code: "EROFS" },
-    );
+    assert.throws(() => runtime.openNodeVfs().writeFileSync("/main", bytes("denied")), {
+      code: "EROFS",
+    });
 
     const branch = await runtime.filesystem.branches.create("replica-work");
     await branch.writeFile("/private", "branch-data");
     const branchVfs = runtime.openNodeVfs({ branchId: "replica-work" });
     branchVfs.writeFileSync("/private-vfs", bytes("vfs-data"));
-    assert.equal(await branch.readFile("/private-vfs", { encoding: "utf8" }), "vfs-data");
+    assert.equal(
+      await branch.readFile("/private-vfs", { encoding: "utf8" }),
+      "vfs-data",
+    );
     await assert.rejects(branch.publish(), { code: "EROFS" });
     await assert.rejects(branch.discard(), { code: "EROFS" });
     await branch.close();
@@ -880,7 +890,9 @@ test("lost outbound responses replay from a durable receipt and bind the request
       /BatchReplayMismatch/,
     );
   } finally {
-    try { driver?.close(); } catch {}
+    try {
+      driver?.close();
+    } catch {}
     await removeTree(directory);
   }
 });

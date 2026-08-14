@@ -312,9 +312,7 @@ function encodeBranchRow(row: TransferBranchRow): Uint8Array {
   return concat([uint8(6), byteValue(row.path), digest32(row.manifestHash)]);
 }
 
-export function encodeRevisionFragment(
-  fragment: TransferRevisionFragment,
-): Uint8Array {
+export function encodeRevisionFragment(fragment: TransferRevisionFragment): Uint8Array {
   return concat([
     uint8(1),
     text(fragment.revisionId),
@@ -343,8 +341,13 @@ export function encodeCheckpointFragment(
 export function encodeBranchGenerationFragment(
   fragment: TransferBranchGenerationFragment,
 ): Uint8Array {
-  if ((fragment.previousGeneration === null) !== (fragment.previousGenerationDigest === null))
-    throw new RangeError("branch predecessor generation and digest must be present together");
+  if (
+    (fragment.previousGeneration === null) !==
+    (fragment.previousGenerationDigest === null)
+  )
+    throw new RangeError(
+      "branch predecessor generation and digest must be present together",
+    );
   return concat([
     uint8(1),
     text(fragment.branchId),
@@ -584,7 +587,11 @@ export function encodeActivationRequest(
     uint8(request.checkpoint ? 1 : 0),
     optional(request.branchId === null ? null : text(request.branchId)),
     optional(request.baseRevision === null ? null : text(request.baseRevision)),
-    optional(request.generation === null ? null : uint64(request.generation, "activation generation")),
+    optional(
+      request.generation === null
+        ? null
+        : uint64(request.generation, "activation generation"),
+    ),
     optional(
       request.generationDigest === null ? null : digest32(request.generationDigest),
     ),
@@ -600,14 +607,14 @@ export function encodeActivationRequest(
         : byteValue(request.terminalResultBytes),
     ),
     optional(
-      request.genesis === null ? null : byteValue(encodeGenesisFragment(request.genesis)),
+      request.genesis === null
+        ? null
+        : byteValue(encodeGenesisFragment(request.genesis)),
     ),
   ]);
 }
 
-export function decodeActivationRequest(
-  value: Uint8Array,
-): TransferActivationRequest {
+export function decodeActivationRequest(value: Uint8Array): TransferActivationRequest {
   const view = new Decoder(value);
   const version = view.uint8("activation version");
   if (version !== 1) throw new RangeError("activation version is not canonical");
@@ -624,17 +631,21 @@ export function decodeActivationRequest(
   const expectedClosureObjects = view.uint64("activation closure objects");
   const expectedClosureObjectBytes = view.uint64("activation closure object bytes");
   const checkpointByte = view.uint8("activation checkpoint");
-  if (checkpointByte > 1) throw new RangeError("activation checkpoint is not canonical");
+  if (checkpointByte > 1)
+    throw new RangeError("activation checkpoint is not canonical");
   const branchId = view.optional(() => view.text("activation branch id"));
   const baseRevision = view.optional(() => view.text("activation base revision"));
   const generation = view.optional(() => view.uint64("activation generation"));
   const generationDigest = view.optional(() => view.digest("activation generation"));
   const terminalState = view.uint8("activation terminal state") as 0 | 1 | 2;
-  if (terminalState > 2) throw new RangeError("activation terminal state is not canonical");
+  if (terminalState > 2)
+    throw new RangeError("activation terminal state is not canonical");
   const terminalResultOperationId = view.optional(() =>
     view.text("activation terminal operation id"),
   );
-  const terminalResultBytes = view.optional(() => view.bytes("activation terminal result"));
+  const terminalResultBytes = view.optional(() =>
+    view.bytes("activation terminal result"),
+  );
   const genesisBytes = view.optional(() => view.bytes("activation genesis"));
   if (view.remaining() !== 0)
     throw new RangeError("activation request has trailing bytes");
@@ -694,7 +705,8 @@ function decodeGenesisFragment(bytes: Uint8Array): TransferGenesisFragment {
   for (let index = 0; index < rowCount; index += 1) {
     const inodeId = view.text("genesis row inode");
     const tombstoneByte = view.uint8("genesis row tombstone");
-    if (tombstoneByte > 1) throw new RangeError("genesis row tombstone is not canonical");
+    if (tombstoneByte > 1)
+      throw new RangeError("genesis row tombstone is not canonical");
     const encoded = view.bytesOrNull("genesis row encoded");
     rows.push({ inodeId, tombstone: tombstoneByte === 1, encoded });
   }
