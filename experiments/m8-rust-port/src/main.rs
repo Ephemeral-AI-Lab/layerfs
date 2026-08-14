@@ -2075,6 +2075,7 @@ fn phase2_edit_entries(
         phase2_local_rebuild(built, affected, reconnect_index, &output_entries)?;
     timings.tree_ns += tree_started.elapsed().as_nanos();
     if std::env::var_os("PHASE2_M7_CANONICAL_CHECK").is_some() {
+        let canonical_started = Instant::now();
         let mut canonical_bytes = deterministic_bytes(SEED, built.file_size);
         canonical_bytes[offset] = INSERT_BYTE;
         let (canonical_entries, _) = chunk_fixture(&canonical_bytes);
@@ -2082,6 +2083,7 @@ fn phase2_edit_entries(
         if canonical.root_hash != rebuilt.root_hash {
             return Err("bounded M7 spine root differs from canonical rebuild".into());
         }
+        timings.canonical_check_ns += canonical_started.elapsed().as_nanos();
     }
     let old_node_hashes: HashSet<_> = built.nodes.iter().map(|node| node.hash).collect();
     let reused_nodes = rebuilt
@@ -2388,7 +2390,9 @@ struct Phase2Timings {
     source_read_ns: u128,
     cdc_hash_ns: u128,
     tree_ns: u128,
+    canonical_check_ns: u128,
     admission_ns: u128,
+    storage_before_commit_ns: u128,
     carrier_append_ns: u128,
     carrier_write_ns: u128,
     carrier_fsync_ns: u128,
@@ -2433,6 +2437,7 @@ fn phase2_store(
     counters: &mut Counters,
     timings: &mut Phase2Timings,
 ) -> AppResult<(usize, usize, Option<CarrierBatch>)> {
+    let storage_started = Instant::now();
     let carrier_dir = directory.join("carriers");
     let admission_started = Instant::now();
     let missing = phase2_prepare_objects(conn, objects, mode, counters)?;
@@ -2470,6 +2475,7 @@ fn phase2_store(
     )?;
     timings.sqlite_metadata_ns += metadata_started.elapsed().as_nanos();
     let commit_started = Instant::now();
+    timings.storage_before_commit_ns += commit_started.duration_since(storage_started).as_nanos();
     tx.commit()?;
     timings.sqlite_commit_ns += commit_started.elapsed().as_nanos();
     counters.peak_disk_bytes = counters.peak_disk_bytes.max(directory_bytes(directory)?);
@@ -2585,15 +2591,16 @@ fn phase2_reopen(
     expected: [u8; 32],
     timings: &mut Phase2Timings,
     counters: &mut Counters,
-) -> AppResult<(Connection, u128)> {
+) -> AppResult<(Connection, u128, u128)> {
     let started = Instant::now();
     conn.close().map_err(|(_, error)| error)?;
     let reopened = phase2_open(path, mode, false)?;
     let reopen_ns = started.elapsed().as_nanos();
     let verification_started = Instant::now();
     phase2_verify(&reopened, mode, directory, built, expected, counters)?;
-    timings.verification_ns += verification_started.elapsed().as_nanos();
-    Ok((reopened, reopen_ns))
+    let verification_ns = verification_started.elapsed().as_nanos();
+    timings.verification_ns += verification_ns;
+    Ok((reopened, reopen_ns, verification_ns))
 }
 
 fn phase2_materialize_to(
@@ -2768,7 +2775,9 @@ fn phase2_json_timing(t: &Phase2Timings) -> serde_json::Value {
         "source_read_ms": t.source_read_ns as f64 / 1e6,
         "fastcdc_hash_ms": t.cdc_hash_ns as f64 / 1e6,
         "tree_member_ms": t.tree_ns as f64 / 1e6,
+        "m7_canonical_check_ms": t.canonical_check_ns as f64 / 1e6,
         "object_admission_ms": t.admission_ns as f64 / 1e6,
+        "payload_persistence_ms": t.storage_before_commit_ns as f64 / 1e6,
         "carrier_append_ms": t.carrier_append_ns as f64 / 1e6,
         "carrier_write_ms": t.carrier_write_ns as f64 / 1e6,
         "carrier_fsync_ms": t.carrier_fsync_ns as f64 / 1e6,
@@ -2800,7 +2809,7 @@ fn phase2_create_record(mode: StorageMode, size: usize) -> AppResult<serde_json:
     let expected = sha256(&original);
     let s1 = phase2_space(&conn, mode, &directory, &directory.join("carriers"))?;
     let db_path = directory.join("fs.db");
-    let (conn, reopen_ns) = phase2_reopen(
+    let (conn, reopen_ns, _) = phase2_reopen(
         conn,
         &db_path,
         mode,
@@ -2872,7 +2881,7 @@ fn phase2_edit_record(
     let (conn, base, original, mut timings, mut counters) = phase2_base(&directory, mode, size)?;
     let expected_base = sha256(&original);
     let db_path = directory.join("fs.db");
-    let (mut conn, reopen_ns) = phase2_reopen(
+    let (mut conn, reopen_ns, _) = phase2_reopen(
         conn,
         &db_path,
         mode,
@@ -2892,9 +2901,17 @@ fn phase2_edit_record(
     let mut current = base;
     let mut edits = Vec::new();
     let operation_start_counters = counters.clone();
+    let mut operation_bounded_local_edit_ns = 0u128;
+    let mut operation_canonical_check_ns = 0u128;
+    let mut operation_payload_persistence_ns = 0u128;
+    let mut operation_sqlite_commit_ns = 0u128;
+    let mut operation_close_reopen_ns = 0u128;
+    let mut operation_full_verification_ns = 0u128;
     let operation_started = Instant::now();
     for offset in offsets {
         let edit_started = Instant::now();
+        let canonical_check_before = timings.canonical_check_ns;
+        let bounded_edit_started = Instant::now();
         let (rebuilt, output_objects, metrics) = phase2_edit_entries(
             &conn,
             mode,
@@ -2904,6 +2921,13 @@ fn phase2_edit_record(
             &mut timings,
             &mut counters,
         )?;
+        let canonical_check_ns = timings
+            .canonical_check_ns
+            .saturating_sub(canonical_check_before);
+        let bounded_local_edit_ns = bounded_edit_started
+            .elapsed()
+            .as_nanos()
+            .saturating_sub(canonical_check_ns);
         let old_nodes: HashSet<_> = current.nodes.iter().map(|node| node.hash).collect();
         let mut edit_timings = Phase2Timings::default();
         let (new_objects, new_nodes, _) = phase2_store(
@@ -2917,13 +2941,14 @@ fn phase2_edit_record(
             &mut edit_timings,
         )?;
         timings.admission_ns += edit_timings.admission_ns;
+        timings.storage_before_commit_ns += edit_timings.storage_before_commit_ns;
         timings.carrier_append_ns += edit_timings.carrier_append_ns;
         timings.carrier_fsync_ns += edit_timings.carrier_fsync_ns;
         timings.sqlite_metadata_ns += edit_timings.sqlite_metadata_ns;
         timings.sqlite_commit_ns += edit_timings.sqlite_commit_ns;
         expected_bytes[offset] = INSERT_BYTE;
         let expected = sha256(&expected_bytes);
-        let (reopened, close_reopen_ns) = phase2_reopen(
+        let (reopened, close_reopen_ns, full_verification_ns) = phase2_reopen(
             conn,
             &db_path,
             mode,
@@ -2935,14 +2960,47 @@ fn phase2_edit_record(
         )?;
         timings.close_reopen_ns += close_reopen_ns;
         conn = reopened;
-        edits.push(json!({"offset":offset,"elapsed_ms":edit_started.elapsed().as_secs_f64()*1000.0,"new_objects":new_objects,"new_nodes":new_nodes,"metrics":metrics,"digest":hex(&expected)}));
+        let total_end_to_end_ns = edit_started.elapsed().as_nanos();
+        operation_bounded_local_edit_ns += bounded_local_edit_ns;
+        operation_canonical_check_ns += canonical_check_ns;
+        operation_payload_persistence_ns += edit_timings.storage_before_commit_ns;
+        operation_sqlite_commit_ns += edit_timings.sqlite_commit_ns;
+        operation_close_reopen_ns += close_reopen_ns;
+        operation_full_verification_ns += full_verification_ns;
+        edits.push(json!({
+            "offset":offset,
+            "elapsed_ms":total_end_to_end_ns as f64/1e6,
+            "new_objects":new_objects,
+            "new_nodes":new_nodes,
+            "metrics":metrics,
+            "digest":hex(&expected),
+            "timing": {
+                "m7_bounded_local_edit_ms": bounded_local_edit_ns as f64/1e6,
+                "m7_canonical_check_ms": canonical_check_ns as f64/1e6,
+                "payload_persistence_ms": edit_timings.storage_before_commit_ns as f64/1e6,
+                "sqlite_commit_ms": edit_timings.sqlite_commit_ns as f64/1e6,
+                "close_reopen_ms": close_reopen_ns as f64/1e6,
+                "full_verification_ms": full_verification_ns as f64/1e6,
+                "total_end_to_end_ms": total_end_to_end_ns as f64/1e6
+            }
+        }));
         current = rebuilt;
     }
     let total_ms = operation_started.elapsed().as_secs_f64() * 1000.0;
     let space = phase2_space(&conn, mode, &directory, &directory.join("carriers"))?;
     let result = json!({
         "phase2":"pass","candidate":mode.name(),"workload":workload,"size_bytes":size,"size_mib":size/MIB,
-        "elapsed_ms":total_ms,"throughput_mib_s":(size as f64 / MIB as f64)/(total_ms/1000.0),"edits":edits,"timing":phase2_json_timing(&timings),
+        "elapsed_ms":total_ms,"total_end_to_end_ms":total_ms,"throughput_mib_s":(size as f64 / MIB as f64)/(total_ms/1000.0),"edits":edits,
+        "operation_timing": {
+            "m7_bounded_local_edit_ms": operation_bounded_local_edit_ns as f64/1e6,
+            "m7_canonical_check_ms": operation_canonical_check_ns as f64/1e6,
+            "payload_persistence_ms": operation_payload_persistence_ns as f64/1e6,
+            "sqlite_commit_ms": operation_sqlite_commit_ns as f64/1e6,
+            "close_reopen_ms": operation_close_reopen_ns as f64/1e6,
+            "full_verification_ms": operation_full_verification_ns as f64/1e6,
+            "total_end_to_end_ms": total_ms
+        },
+        "timing":phase2_json_timing(&timings),
         "counters":phase2_counters_json(&counters),
         "operation_counters":phase2_counter_delta_json(&operation_start_counters, &counters),
         "space":{"steady_state":space},"correctness":{"changed_object_set":"pass","unchanged_identity_set":"pass","close_reopen":"pass","digest":"pass","carrier":"pass","sqlite_integrity":"pass"}
@@ -2960,7 +3018,7 @@ fn phase2_read_record(mode: StorageMode, size: usize) -> AppResult<serde_json::V
     let (conn, built, original, mut timings, mut counters) = phase2_base(&directory, mode, size)?;
     let expected = sha256(&original);
     let db_path = directory.join("fs.db");
-    let (conn, reopen_ns) = phase2_reopen(
+    let (conn, reopen_ns, _) = phase2_reopen(
         conn,
         &db_path,
         mode,
@@ -3017,7 +3075,7 @@ fn phase2_materialize_record(mode: StorageMode, size: usize) -> AppResult<serde_
     let (conn, built, original, mut timings, mut counters) = phase2_base(&directory, mode, size)?;
     let expected = sha256(&original);
     let db_path = directory.join("fs.db");
-    let (conn, reopen_ns) = phase2_reopen(
+    let (conn, reopen_ns, _) = phase2_reopen(
         conn,
         &db_path,
         mode,
@@ -3054,7 +3112,7 @@ fn phase2_many_materialize_record(mode: StorageMode) -> AppResult<serde_json::Va
     let (conn, built, original, mut timings, mut counters) = phase2_base(&directory, mode, size)?;
     let expected = sha256(&original);
     let db_path = directory.join("fs.db");
-    let (conn, _) = phase2_reopen(
+    let (conn, _, _) = phase2_reopen(
         conn,
         &db_path,
         mode,

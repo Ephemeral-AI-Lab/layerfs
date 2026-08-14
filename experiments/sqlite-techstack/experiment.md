@@ -1463,3 +1463,70 @@ The final evidence is mixed but does not satisfy the adoption rule:
 R-HYBRID should be reconsidered only after a streaming carrier writer and a
 lower-overhead publication/verification path are implemented and measured with
 the same M7 and crash gates. It is not adopted in production LayerFS.
+
+## Phase 2 timing-boundary correction — M7 edit versus full lifecycle
+
+The earlier Phase 2 edit table reported an end-to-end value while describing it
+as edit latency. This correction keeps that end-to-end value, but separates the
+five requested boundaries for a prepared 1/10/100 MiB file:
+
+1. `M7 bounded local edit`: authenticated path load, bounded source-window
+   read, local FastCDC/hash work, local regrouping, and path-copy.
+2. `payload persistence`: mode-specific payload/reference write, carrier append
+   and carrier fsync where applicable, plus SQLite metadata work through the
+   point immediately before `tx.commit()`.
+3. `SQLite commit`: the durable SQLite commit with the shared WAL and
+   `synchronous=FULL` settings.
+4. `close/reopen`: close the connection and open the same database again.
+5. `full verification`: SQLite integrity, root/manifest validation, every
+   payload hash, logical digest, carrier validation, and orphan check.
+
+The total is measured from the beginning of the bounded edit through the end of
+full verification. It does not include building the already-prepared base
+fixture. Each cell has six serial samples, alternating lane order. All samples
+passed the edit correctness gates. The optional full canonical M7 oracle was
+disabled for these performance samples; when enabled, its full-rebuild time is
+reported separately as `m7_canonical_check_ms` and is excluded from the bounded
+local-edit value.
+
+### Corrected one-byte edit timing medians
+
+All values are milliseconds. The full verification column is intentionally
+size-dependent; it is not part of the M7 bounded-edit algorithm.
+
+| File size | Lane | M7 bounded local edit | Payload persistence | SQLite commit | Close/reopen | Full verification | Total end-to-end |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 MiB | R-SQLite | 4.824 | 1.865 | 2.111 | 2.934 | 11.349 | 26.943 |
+| 1 MiB | R-HYBRID | 4.466 | 11.104 | 1.387 | 2.194 | 18.247 | 40.938 |
+| 10 MiB | R-SQLite | 10.989 | 2.074 | 2.350 | 4.220 | 114.809 | 166.070 |
+| 10 MiB | R-HYBRID | 8.792 | 11.392 | 1.825 | 3.125 | 164.518 | 221.468 |
+| 100 MiB | R-SQLite | 12.814 | 3.219 | 4.205 | 6.788 | 1,239.488 | 1,585.432 |
+| 100 MiB | R-HYBRID | 9.458 | 13.546 | 1.600 | 3.541 | 1,659.769 | 2,005.970 |
+
+The individual total end-to-end samples were retained as follows, in execution
+order; no sample was removed as an outlier:
+
+| File size | R-SQLite samples (ms) | R-HYBRID samples (ms) |
+|---:|---|---|
+| 1 MiB | 28.0, 26.9, 27.7, 25.3, 26.1, 27.0 | 42.0, 39.9, 42.0, 39.9, 39.2, 46.3 |
+| 10 MiB | 173.1, 171.0, 165.9, 166.3, 164.7, 165.0 | 222.6, 221.4, 221.3, 221.5, 219.8, 221.6 |
+| 100 MiB | 1,576.6, 1,595.2, 1,581.1, 1,196.5, 1,602.5, 1,589.8 | 1,998.7, 2,012.8, 2,011.5, 2,019.9, 1,623.4, 2,000.5 |
+
+### Interpretation
+
+The corrected measurement shows that the Rust M7 local edit is bounded over
+these sizes: R-SQLite grows from 4.824 ms to 12.814 ms and R-HYBRID from
+4.466 ms to 9.458 ms while the logical file grows 100x. The size-dependent
+part of the old result is full verification, which grows from roughly 11–18 ms
+at 1 MiB to roughly 1.2–1.7 seconds at 100 MiB.
+
+R-HYBRID is faster in the bounded local-edit and SQLite-commit components at
+10/100 MiB, but its carrier write/fsync and full carrier-aware verification
+costs are higher. The total verified edit therefore remains slower by about
+52.0% at 1 MiB, 33.4% at 10 MiB, and 26.5% at 100 MiB. This does not change the
+Phase 2 decision to defer R-HYBRID; it corrects which phase is responsible for
+the observed size scaling.
+
+The release binary now emits both the per-edit `timing` object and the summed
+`operation_timing` object. The existing phase2 summarizer also reports medians
+for these fields rather than treating `elapsed_ms` as the only edit metric.

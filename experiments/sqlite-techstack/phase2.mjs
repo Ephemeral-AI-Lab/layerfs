@@ -53,7 +53,21 @@ function summarize(rows) {
       const values = group.map((row) => row[field]).filter((value) => typeof value === "number");
       if (values.length) metrics[field] = median(values);
     }
-    return { workload, size_mib: Number(size_mib), candidate, retained_samples: group.length, metrics };
+    const timing = {};
+    for (const field of [
+      "m7_bounded_local_edit_ms",
+      "payload_persistence_ms",
+      "sqlite_commit_ms",
+      "close_reopen_ms",
+      "full_verification_ms",
+      "total_end_to_end_ms",
+    ]) {
+      const values = group
+        .map((row) => row.operation_timing?.[field])
+        .filter((value) => typeof value === "number");
+      if (values.length) timing[field] = median(values);
+    }
+    return { workload, size_mib: Number(size_mib), candidate, retained_samples: group.length, metrics, timing };
   });
 }
 
