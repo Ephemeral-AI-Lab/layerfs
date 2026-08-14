@@ -75,7 +75,12 @@ async function runCommand(spec, candidate, computerCandidate) {
         ? "pnpm.cmd"
         : spec.command,
       spec.args,
-      { cwd: spec.cwd, windowsHide: true, maxBuffer: 256 * 1024 * 1024 },
+      {
+        cwd: spec.cwd,
+        windowsHide: true,
+        maxBuffer: 256 * 1024 * 1024,
+        shell: process.platform === "win32" && spec.command.endsWith(".cmd"),
+      },
     );
     stdout = result.stdout;
     stderr = result.stderr;
@@ -217,11 +222,13 @@ const artifact = {
     pnpm: (
       await execute(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--version"], {
         windowsHide: true,
+        shell: process.platform === "win32",
       })
     ).stdout.trim(),
     npm: (
       await execute(process.platform === "win32" ? "npm.cmd" : "npm", ["--version"], {
         windowsHide: true,
+        shell: process.platform === "win32",
       })
     ).stdout.trim(),
   },
