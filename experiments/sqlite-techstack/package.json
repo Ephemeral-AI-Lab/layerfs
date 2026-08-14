@@ -1,0 +1,9 @@
+{
+  "name": "sqlite-techstack-experiment",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "hash-wasm": "=4.12.0",
+    "sqlite3": "=6.0.1"
+  }
+}
