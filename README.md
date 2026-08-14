@@ -1,6 +1,22 @@
-# Ephemeral AI FS
+<p align="center">
+  <img src="assets/layerfs.png" width="112" alt="LayerFS logo">
+</p>
 
-> Branch-aware, content-addressed storage for multi-agent workspaces.
+<h1 align="center">LayerFS</h1>
+
+<p align="center"><strong>Filesystem Storage for Parallel AI Agents</strong></p>
+
+<p align="center">
+  <a href="https://ephemeral-ai-lab.github.io/layerfs-engine-lab/">Website</a>
+  ·
+  <a href="#-quick-start">Quick start</a>
+  ·
+  <a href="#-how-it-works">How it works</a>
+  ·
+  <a href="#-benchmark-progress">Benchmarks</a>
+  ·
+  <a href="#-milestone-progress">Milestones</a>
+</p>
 
 [![M2 accepted](https://img.shields.io/badge/M2-accepted-2ea44f)](./docs/evidence/m2/exit.md)
 [![M3 accepted](https://img.shields.io/badge/M3-accepted-2ea44f)](./docs/evidence/m3/exit.md)
@@ -9,12 +25,9 @@
 [![M6 accepted](https://img.shields.io/badge/M6-accepted-2ea44f)](./docs/evidence/m6/exit.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-Ephemeral AI FS gives Ephemeral AI Computer a durable workspace layer where agents can
+LayerFS gives Ephemeral AI Computer a durable workspace layer where agents can
 read and edit files independently, share unchanged content, and publish changes through
 one authoritative SQLite-backed workspace.
-
-[Quick start](#-quick-start) · [How it works](#-how-it-works) ·
-[Benchmarks](#-benchmark-progress) · [Milestones](#-milestone-progress)
 
 ## ✨ At a glance
 
@@ -104,7 +117,7 @@ private agent state, bounded edits, and explicit publication into one durable ma
 ## 💡 Why this design
 
 Full workspace copies make branch creation and repeated edits scale with workspace size.
-Ephemeral AI FS separates immutable content from workspace state instead:
+LayerFS separates immutable content from workspace state instead:
 
 - **CAS** shares identical content across files, revisions, and agents.
 - **CDC** helps insertions and deletions reconnect with unchanged content.
@@ -292,4 +305,4 @@ privileged Linux.
 
 ## 📄 License
 
-Ephemeral AI FS is released under the [MIT License](./LICENSE).
+LayerFS is released under the [MIT License](./LICENSE).
