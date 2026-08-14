@@ -56,7 +56,8 @@ use crate::format::{
 };
 use crate::identity::{
     derive_file_node_v1, derive_version_v1, FileNodeIdV1, PhysicalFileIdV1, PhysicalTreeIdV1,
-    PhysicalVersionRecordIdV1, VersionIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
+    PhysicalVersionRecordIdV1, VersionIdV1, COMPARISON_WINDOW_BYTES,
+    DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1, IDENTITY_HASHER_BYTES_V1,
 };
 use crate::limits::{
     MemoryComponentV1, ObservationScopeV1, OperationCountersV1, OperationMemoryPlanV1,
@@ -88,6 +89,7 @@ pub mod semantic {
         run_complete_update_v1, run_create_tree_v1, run_create_v1, FsCasBoundaryV1,
         FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasV1, FsOperationKindV1,
         FsStorageEnvelopeV1, LifecycleControlV1, OperationBuffersV1, OperationErrorV1,
+        CLOSURE_MARKER_BYTES,
     };
     use crate::cas::semantic::{
         publication_causes_v1, publication_error_v1, PublicationCauseV1,
@@ -121,7 +123,7 @@ pub mod semantic {
         COMPARISON_WINDOW_BYTES,
     };
     use crate::limits::{ObservationScopeV1, OperationCountersV1, OptionalObservationStatusV1};
-    use crate::pack::PACK_HEADER_BYTES;
+    use crate::pack::{SealedPackV1, PACK_HEADER_BYTES};
     use crate::profile::ProfileSpecV1;
     use crate::read::extraction::{extract_root_v1, read_file_range_impl_v1};
     use crate::read::{
@@ -614,6 +616,14 @@ pub mod semantic {
         pub file_sort_work_units: u64,
         pub file_sort_maximum_work_budget: u64,
         pub file_sort_temporary_bytes_high_water: u64,
+        pub logical_reconstruction_cdc_passes: u64,
+        pub logical_reconstruction_logical_bytes: u64,
+        pub logical_reconstruction_payload_read_calls: u64,
+        pub logical_reconstruction_payload_bytes: u64,
+        pub logical_reconstruction_control_polls: u64,
+        pub logical_reconstruction_maximum_work_between_polls: u64,
+        pub cow_mutation_control_polls: u64,
+        pub cow_mutation_maximum_work_between_polls: u64,
         pub storage_bytes_requested: u64,
         pub storage_bytes_reserved: u64,
         pub storage_bytes_released: u64,
@@ -641,6 +651,11 @@ pub mod semantic {
         pub error_from_storage: bool,
         pub control_fired: bool,
         pub algorithm: Option<CdcAlgorithmV1>,
+        pub version_record: Option<PhysicalVersionRecordIdV1>,
+        pub root_tree: Option<PhysicalTreeIdV1>,
+        pub pack: Option<SealedPackV1>,
+        pub closure_object_count: Option<u64>,
+        pub closure_transcript: Option<[u8; 32]>,
         pub pack_installed: bool,
         pub object_count: u64,
         pub carrier_count: u32,
@@ -693,6 +708,8 @@ pub mod semantic {
         CreatedDispositionOverflow,
         TreeReusedDispositionOverflow,
         Algorithm(CdcAlgorithmV1),
+        FragmentationSchedule(u32),
+        Exact10MiB,
         Exact100MiB,
         ClosureMarkerLockScope,
         WriterDirectLockObservations,
@@ -1016,9 +1033,25 @@ pub mod semantic {
         poisoned: bool,
     }
 
-    struct CounterSource {
+    pub(crate) struct CounterSource {
         len: u64,
         offset: u64,
+    }
+
+    impl CounterSource {
+        pub(crate) const fn new(len: u64, offset: u64) -> Self {
+            Self { len, offset }
+        }
+    }
+
+    fn counter_source_block_v1(block: u64) -> [u8; 8] {
+        let mut mixed = block ^ 0x6a09_e667_f3bc_c909;
+        mixed ^= mixed >> 30;
+        mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        mixed ^= mixed >> 27;
+        mixed = mixed.wrapping_mul(0x94d0_49bb_1331_11eb);
+        mixed ^= mixed >> 31;
+        mixed.to_le_bytes()
     }
 
     impl ContentSourceV1 for CounterSource {
@@ -1029,20 +1062,54 @@ pub mod semantic {
         fn read(&mut self, destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
             let remaining = usize::try_from(self.len - self.offset).unwrap_or(usize::MAX);
             let take = destination.len().min(remaining);
-            for (relative, byte) in destination[..take].iter_mut().enumerate() {
-                let position = self.offset + relative as u64;
-                let block = position / 8;
-                let lane = usize::try_from(position % 8).unwrap();
-                let mut mixed = block ^ 0x6a09_e667_f3bc_c909;
-                mixed ^= mixed >> 30;
-                mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
-                mixed ^= mixed >> 27;
-                mixed = mixed.wrapping_mul(0x94d0_49bb_1331_11eb);
-                mixed ^= mixed >> 31;
-                *byte = mixed.to_le_bytes()[lane];
+            let mut written = 0;
+            while written < take {
+                let position = self.offset + written as u64;
+                let lane = (position & 7) as usize;
+                let block = counter_source_block_v1(position / 8);
+                let copied = (8 - lane).min(take - written);
+                destination[written..written + copied].copy_from_slice(&block[lane..lane + copied]);
+                written += copied;
             }
             self.offset += take as u64;
             Ok(take)
+        }
+    }
+
+    #[cfg(test)]
+    mod counter_source_tests {
+        use super::*;
+
+        fn original_counter_byte(position: u64) -> u8 {
+            let mut mixed = (position / 8) ^ 0x6a09_e667_f3bc_c909;
+            mixed ^= mixed >> 30;
+            mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            mixed ^= mixed >> 27;
+            mixed = mixed.wrapping_mul(0x94d0_49bb_1331_11eb);
+            mixed ^= mixed >> 31;
+            mixed.to_le_bytes()[(position & 7) as usize]
+        }
+
+        #[test]
+        fn block_generation_matches_original_bytes_across_unaligned_reads() {
+            let mut source = CounterSource {
+                len: 269,
+                offset: 3,
+            };
+            let schedule = [1, 2, 7, 3, 16, 5, 31, 4, 9];
+            let mut actual = Vec::new();
+            let mut read_index = 0;
+            while actual.len() < 266 {
+                let requested = schedule[read_index % schedule.len()];
+                let mut destination = vec![0xa5; requested];
+                let read = source.read(&mut destination).unwrap();
+                actual.extend_from_slice(&destination[..read]);
+                read_index += 1;
+            }
+            assert_eq!(source.read(&mut [0xa5; 11]), Ok(0));
+
+            let expected = (3..269).map(original_counter_byte).collect::<Vec<_>>();
+            assert_eq!(actual, expected);
         }
     }
 
@@ -10291,6 +10358,42 @@ pub mod semantic {
         }
     }
 
+    struct FragmentedSliceSource<'a> {
+        source: SliceSource<'a>,
+        maximum_read: usize,
+    }
+
+    impl ContentSourceV1 for FragmentedSliceSource<'_> {
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<Self>() as u64)
+        }
+
+        fn read(&mut self, destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
+            let maximum = destination.len().min(self.maximum_read);
+            self.source.read(&mut destination[..maximum])
+        }
+    }
+
+    struct FragmentedSliceSupplier<'a> {
+        bytes: &'a [u8],
+        maximum_read: usize,
+    }
+
+    impl<'a> SourceSupplierV1 for FragmentedSliceSupplier<'a> {
+        type Source = FragmentedSliceSource<'a>;
+
+        fn resident_memory_bound_bytes(&self) -> crate::CoreResult<u64> {
+            Ok(core::mem::size_of::<FragmentedSliceSource<'_>>() as u64)
+        }
+
+        fn supply(self) -> crate::CoreResult<Self::Source> {
+            Ok(FragmentedSliceSource {
+                source: SliceSource::new(self.bytes),
+                maximum_read: self.maximum_read,
+            })
+        }
+    }
+
     struct OperationScratch {
         source: Box<[u8; MAXIMUM_CHUNK_BYTES]>,
         cdc_ring: Box<[u8; MAXIMUM_CHUNK_BYTES]>,
@@ -10993,6 +11096,17 @@ pub mod semantic {
             file_sort_work_units: counters.file_sort_work_units,
             file_sort_maximum_work_budget: counters.file_sort_maximum_work_budget,
             file_sort_temporary_bytes_high_water: counters.file_sort_temporary_bytes_high_water,
+            logical_reconstruction_cdc_passes: counters.logical_reconstruction_cdc_passes,
+            logical_reconstruction_logical_bytes: counters.logical_reconstruction_logical_bytes,
+            logical_reconstruction_payload_read_calls: counters
+                .logical_reconstruction_payload_read_calls,
+            logical_reconstruction_payload_bytes: counters.logical_reconstruction_payload_bytes,
+            logical_reconstruction_control_polls: counters.logical_reconstruction_control_polls,
+            logical_reconstruction_maximum_work_between_polls: counters
+                .logical_reconstruction_maximum_work_between_polls,
+            cow_mutation_control_polls: counters.cow_mutation_control_polls,
+            cow_mutation_maximum_work_between_polls: counters
+                .cow_mutation_maximum_work_between_polls,
             storage_bytes_requested: counters.storage_bytes_requested,
             storage_bytes_reserved: counters.storage_bytes_reserved,
             storage_bytes_released: counters.storage_bytes_released,
@@ -11030,6 +11144,39 @@ pub mod semantic {
         observed_publication_releases: u64,
     }
 
+    fn complete_closure_marker_observation(
+        root: &Path,
+        successful: bool,
+    ) -> (Option<u64>, Option<[u8; 32]>) {
+        if !successful {
+            return (None, None);
+        }
+        let mut entries = fs::read_dir(root.join("closures"))
+            .expect("successful complete Create closure namespace");
+        let marker_path = entries
+            .next()
+            .expect("successful complete Create closure marker")
+            .expect("successful complete Create closure entry")
+            .path();
+        assert!(
+            entries.next().is_none(),
+            "successful complete Create produced extra closure markers"
+        );
+        let bytes = fs::read(marker_path).expect("successful complete Create closure bytes");
+        let marker: [u8; CLOSURE_MARKER_BYTES] = bytes
+            .try_into()
+            .expect("successful complete Create closure marker length");
+        let object_count = u64::from_be_bytes(
+            marker[48..56]
+                .try_into()
+                .expect("closure object-count bytes"),
+        );
+        let transcript = marker[88..120]
+            .try_into()
+            .expect("closure transcript bytes");
+        (Some(object_count), Some(transcript))
+    }
+
     fn observe_complete_create(
         root: &Path,
         cas: &FsCasV1,
@@ -11049,6 +11196,8 @@ pub mod semantic {
         };
         let reference = handoff.map(|value| value.reference_spool_bytes());
         let index = handoff.map(|value| value.index_spool_bytes());
+        let (closure_object_count, closure_transcript) =
+            complete_closure_marker_observation(root, handoff.is_some());
         let (preparation_bytes, preparation_inodes) = directory_usage(&root.join("preparation"));
         let (immutable_bytes, immutable_inodes) = immutable_usage(root);
         let operation_admitted_slots = cas.operation_admitted_slots_v1();
@@ -11063,6 +11212,11 @@ pub mod semantic {
             error_from_storage,
             control_fired,
             algorithm: handoff.map(|value| value.algorithm()),
+            version_record: handoff.map(|value| value.version_record()),
+            root_tree: handoff.map(|value| value.root_tree()),
+            pack: handoff.map(|value| value.pack()),
+            closure_object_count,
+            closure_transcript,
             pack_installed: handoff
                 .map(|value| value.pack_outcome() == super::FsPackAdmissionOutcomeV1::Installed)
                 .unwrap_or(false),
@@ -11354,6 +11508,75 @@ pub mod semantic {
                     algorithm,
                     input.len() as u64,
                     SliceSupplier { bytes: &input },
+                    &mut control,
+                    &mut counters,
+                );
+                observed!(terminal, false, counters)
+            }
+            CompleteCreateCaseV1::FragmentationSchedule(maximum_read) => {
+                let maximum_read = match maximum_read {
+                    1 | 997 => maximum_read as usize,
+                    value if value == MAXIMUM_CHUNK_BYTES as u32 => MAXIMUM_CHUNK_BYTES,
+                    _ => panic!("non-frozen complete-Create fragmentation schedule"),
+                };
+                let repeated = vec![0x6d; 2 * MAXIMUM_CHUNK_BYTES + 17];
+                let nested = vec![0x39; MAXIMUM_CHUNK_BYTES + 29];
+                let mut files = [
+                    TreeFileV1::new(
+                        b"alpha.bin",
+                        0o644,
+                        repeated.len() as u64,
+                        FragmentedSliceSupplier {
+                            bytes: &repeated,
+                            maximum_read,
+                        },
+                    ),
+                    TreeFileV1::new(
+                        b"dir/nested.bin",
+                        0o600,
+                        nested.len() as u64,
+                        FragmentedSliceSupplier {
+                            bytes: &nested,
+                            maximum_read,
+                        },
+                    ),
+                    TreeFileV1::new(
+                        b"repeat-alpha.bin",
+                        0o644,
+                        repeated.len() as u64,
+                        FragmentedSliceSupplier {
+                            bytes: &repeated,
+                            maximum_read,
+                        },
+                    ),
+                ];
+                let mut counters = OperationCountersV1::default();
+                let mut control = ContinueFaultControl;
+                let terminal =
+                    request_tree_operation_v1(&cas, 0x0011_5512, &mut counters, &mut control)
+                        .map_err(OperationErrorV1::FsCas)
+                        .and_then(|operation| {
+                            let mut scratch = OperationScratch::new();
+                            run_create_tree_v1(
+                                operation,
+                                CdcAlgorithmV1::FastCdc,
+                                &mut files,
+                                scratch.borrow(),
+                                &mut control,
+                                &mut counters,
+                            )
+                        });
+                observed!(terminal, false, counters)
+            }
+            CompleteCreateCaseV1::Exact10MiB => {
+                const EXACT_BYTES: u64 = 10 * 1024 * 1024;
+                let mut counters = OperationCountersV1::default();
+                let mut control = ContinueFaultControl;
+                let terminal = run_semantic_create(
+                    &cas,
+                    0x0010_0000,
+                    EXACT_BYTES,
+                    SemanticCounterSupplier { len: EXACT_BYTES },
                     &mut control,
                     &mut counters,
                 );
@@ -17250,7 +17473,10 @@ fn mutation_memory_plan_v1(
         )?
         .charge(MemoryComponentV1::EvidenceWindow, evidence_resident)?
         .charge(MemoryComponentV1::MetadataWindow, metadata)?
-        .charge(MemoryComponentV1::HashState, hash_state_bytes)
+        .charge(
+            MemoryComponentV1::HashState,
+            hash_state_bytes.max(DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1),
+        )
 }
 
 fn complete_mutation_candidate_v1<C>(
@@ -17421,7 +17647,8 @@ where
                         MemoryComponentV1::HashState,
                         IDENTITY_HASHER_BYTES_V1
                             .checked_mul(2)
-                            .ok_or(CoreError::IntegerOverflow)?,
+                            .ok_or(CoreError::IntegerOverflow)?
+                            .max(DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1),
                     )?;
                 operation.declare_plan_v1(plan)?;
                 counters.memory_high_water = counters
@@ -18033,7 +18260,8 @@ where
                     MemoryComponentV1::HashState,
                     IDENTITY_HASHER_BYTES_V1
                         .checked_mul(2)
-                        .ok_or(CoreError::IntegerOverflow)?,
+                        .ok_or(CoreError::IntegerOverflow)?
+                        .max(DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1),
                 )?;
             operation.declare_plan_v1(plan)?;
             counters.memory_high_water = counters
@@ -18301,6 +18529,7 @@ where
                     physical: file.physical_file(),
                 },
             );
+            let mut cow_control = SharedOperationControlV1::new(control_cell);
             let candidate = replace_directory_entry_cow_borrowed_v1(
                 base_root,
                 replacement_evidence,
@@ -18309,6 +18538,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
             )?
@@ -18518,6 +18748,7 @@ where
                     physical: file.physical_file(),
                 },
             );
+            let mut cow_control = SharedOperationControlV1::new(control_cell);
             let candidate = replace_directory_entry_cow_borrowed_v1(
                 base_root,
                 replacement_evidence,
@@ -18526,6 +18757,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
             )?
@@ -18717,6 +18949,7 @@ where
                     physical: file.physical_file(),
                 },
             );
+            let mut cow_control = SharedOperationControlV1::new(control_cell);
             let candidate = add_directory_entry_cow_borrowed_v1(
                 base_root,
                 mutation_evidence,
@@ -18726,6 +18959,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
                 buffers.tree_pages,
@@ -18854,6 +19088,7 @@ where
             if tree_source.resident_memory_bound_bytes()? > tree_source_resident {
                 return Err(CoreError::ResourceRefused.into());
             }
+            let mut cow_control = SharedOperationControlV1::new(control_cell);
             let candidate = remove_directory_entry_cow_borrowed_v1(
                 base_root,
                 mutation_evidence,
@@ -18863,6 +19098,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
                 buffers.tree_pages,
@@ -19019,6 +19255,7 @@ where
                     physical: file.physical_file(),
                 },
             );
+            let mut cow_control = SharedOperationControlV1::new(control_cell);
             let candidate = replace_directory_entry_cow_borrowed_v1(
                 base_root,
                 replacement_evidence,
@@ -19027,6 +19264,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
             )?
@@ -19166,6 +19404,7 @@ where
             if tree_source.resident_memory_bound_bytes()? > tree_source_resident {
                 return Err(CoreError::ResourceRefused.into());
             }
+            let mut cow_control = SharedOperationControlV1::new(control_cell);
             let candidate = move_directory_entry_cow_borrowed_v1(
                 base_root,
                 mutation_evidence,
@@ -19177,6 +19416,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
                 buffers.tree_pages,
@@ -19396,6 +19636,7 @@ where
             {
                 return Err(CoreError::ResourceRefused.into());
             }
+            let mut cow_control = SharedOperationControlV1::new(control_cell);
             let source_candidate = remove_directory_entry_cow_borrowed_v1(
                 source_directory,
                 source_evidence,
@@ -19405,6 +19646,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
                 buffers.tree_pages,
@@ -19419,6 +19661,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
                 buffers.tree_pages,
@@ -19445,6 +19688,7 @@ where
                 storage.tree_sink_v1(),
                 reservation,
                 counters,
+                &mut cow_control,
                 buffers.tree_object,
                 cow_logical,
                 buffers.tree_pages,

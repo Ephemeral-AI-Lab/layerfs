@@ -336,6 +336,9 @@ impl CowTreeReplacementV1 {
 pub struct CowTreeMutationV1 {
     pub(super) directory: CanonicalDirectoryTreeV1,
     pub(super) first_changed_leaf: u32,
+    pub(super) last_changed_leaf: u32,
+    pub(super) changed_leaves: u32,
+    pub(super) changed_level_one: u32,
     pub(super) structurally_reused_leaves: u32,
     pub(super) structurally_reused_level_one: u32,
     pub(super) emitted_objects: u32,
@@ -348,6 +351,18 @@ impl CowTreeMutationV1 {
 
     pub const fn first_changed_leaf(self) -> u32 {
         self.first_changed_leaf
+    }
+
+    pub const fn last_changed_leaf(self) -> u32 {
+        self.last_changed_leaf
+    }
+
+    pub const fn changed_leaves(self) -> u32 {
+        self.changed_leaves
+    }
+
+    pub const fn changed_level_one(self) -> u32 {
+        self.changed_level_one
     }
 
     pub const fn structurally_reused_leaves(self) -> u32 {

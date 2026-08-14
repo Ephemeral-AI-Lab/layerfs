@@ -12,8 +12,7 @@ use crate::cas::{
 };
 use crate::cdc::{
     BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1,
-    CdcSourceErrorV1, ChunkBoundaryV1, ContinueCdcControlV1, FastCdcV1, FastCdcV1Stream,
-    MAXIMUM_CHUNK_BYTES,
+    CdcSourceErrorV1, ChunkBoundaryV1, FastCdcV1, FastCdcV1Stream, MAXIMUM_CHUNK_BYTES,
 };
 #[cfg(feature = "operation-polymorphism")]
 use crate::cdc::{CdcAlgorithmV1, CdcStreamV1};
@@ -23,10 +22,11 @@ use crate::format::{
 };
 use crate::identity::{
     derive_file_node_v1, derive_logical_chunk_spans_v1, derive_symlink_node_v1, derive_version_v1,
-    ExplicitDirectoryNodeV1, FileNodeIdV1, ImplicitRootDirectoryV1, LogicalChildIdV1,
-    LogicalChunkRefV1, LogicalDirectoryEntryV1, LogicalDirectoryHasherV1, LogicalFileHasherV1,
-    PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalSymlinkIdV1, PhysicalTreeIdV1,
-    PhysicalVersionRecordIdV1, SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
+    DeferredCountLogicalFileHasherV1, ExplicitDirectoryNodeV1, FileNodeIdV1,
+    ImplicitRootDirectoryV1, LogicalChildIdV1, LogicalChunkRefV1, LogicalDirectoryEntryV1,
+    LogicalDirectoryHasherV1, PhysicalChunkIdV1, PhysicalFileIdV1, PhysicalSymlinkIdV1,
+    PhysicalTreeIdV1, PhysicalVersionRecordIdV1, SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES,
+    DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1,
 };
 #[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::limits::ResourceLedgerV1;
@@ -129,6 +129,60 @@ impl<'a> AdmissionBuffersV1<'a> {
             cdc_ring,
             traversal_state,
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum AdmissionControlStageV1 {
+    ClosureValidation,
+    CandidateGraph,
+}
+
+/// One borrow of the caller-owned operation control plus the direct stage
+/// observation that makes each bounded interval independently auditable.
+struct AdmissionWorkControlV1<'a, S>
+where
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    sink: &'a mut S,
+    counters: &'a mut OperationCountersV1,
+    stage: AdmissionControlStageV1,
+}
+
+impl<'a, S> AdmissionWorkControlV1<'a, S>
+where
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    const fn new(sink: &'a mut S, counters: &'a mut OperationCountersV1) -> Self {
+        Self {
+            sink,
+            counters,
+            stage: AdmissionControlStageV1::ClosureValidation,
+        }
+    }
+
+    fn poll(&mut self, work_since_poll: u64) -> CoreResult<()> {
+        match self.stage {
+            AdmissionControlStageV1::ClosureValidation => self
+                .counters
+                .record_closure_validation_control_poll_v1(work_since_poll)?,
+            AdmissionControlStageV1::CandidateGraph => self
+                .counters
+                .record_candidate_graph_control_poll_v1(work_since_poll)?,
+        }
+        if self.sink.cancellation_requested_v1() {
+            Err(CoreError::Cancelled)
+        } else if self.sink.deadline_exceeded_v1() {
+            Err(CoreError::Deadline)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn begin_candidate_graph(&mut self) -> CoreResult<()> {
+        self.poll(0)?;
+        self.stage = AdmissionControlStageV1::CandidateGraph;
+        self.poll(0)
     }
 }
 
@@ -238,7 +292,10 @@ where
             admission_traversal_resident_bytes_v1()?,
         )?
         .charge(MemoryComponentV1::MetadataWindow, source_resident)?
-        .charge(MemoryComponentV1::HashState, IDENTITY_HASHER_BYTES_V1)
+        .charge(
+            MemoryComponentV1::HashState,
+            DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1,
+        )
 }
 
 pub(crate) fn admission_traversal_resident_bytes_v1() -> CoreResult<u64> {
@@ -269,7 +326,11 @@ where
     O: OccupiedImmutableReadPortV1 + ?Sized,
     S: PreparedImmutableClosurePortV1 + ?Sized,
 {
+    let mut control = AdmissionWorkControlV1::new(sink, counters);
+    control.poll(0)?;
+    control.poll(0)?;
     let object_count = closure.object_count().map_err(map_source_port)?;
+    control.poll(1)?;
     crate::format::validate_total_object_count(object_count)?;
     let object_count_usize =
         usize::try_from(object_count).map_err(|_| CoreError::IntegerOverflow)?;
@@ -282,29 +343,43 @@ where
         return Err(CoreError::ResourceRefused);
     }
 
-    validate_canonical_typed_ids(closure, object_count)?;
+    validate_canonical_typed_ids(closure, object_count, &mut control)?;
     buffers.traversal_state[..required_traversal_bytes].fill(0);
-    sink.begin_private_closure(object_count)
+    control.poll(0)?;
+    control
+        .sink
+        .begin_private_closure(object_count)
         .map_err(map_sink_port)?;
-    let validation = admit_inner(
-        closure,
-        object_count,
-        expected_version_record,
-        occupied,
-        sink,
-        counters,
-        buffers,
-        required_traversal_bytes,
-        validation_cdc,
-    );
+    let validation = control.poll(1).and_then(|()| {
+        admit_inner(
+            closure,
+            object_count,
+            expected_version_record,
+            occupied,
+            &mut control,
+            buffers,
+            required_traversal_bytes,
+            validation_cdc,
+        )
+    });
+    let source_poll = control.poll(0);
     let source_read_accounting = closure
         .direct_storage_read_observation()
         .map_err(map_source_port)
-        .and_then(|(bytes, calls)| counters.record_fscas_read(bytes, calls));
+        .and_then(|(bytes, calls)| {
+            control.counters.record_fscas_read(bytes, calls)?;
+            control.poll(calls)
+        });
+    let source_read_accounting = source_poll.and(source_read_accounting);
+    let occupied_poll = control.poll(0);
     let occupied_read_accounting = occupied
         .direct_storage_read_observation()
         .map_err(map_source_port)
-        .and_then(|(bytes, calls)| counters.record_fscas_read(bytes, calls));
+        .and_then(|(bytes, calls)| {
+            control.counters.record_fscas_read(bytes, calls)?;
+            control.poll(calls)
+        });
+    let occupied_read_accounting = occupied_poll.and(occupied_read_accounting);
     let result = match (validation, source_read_accounting, occupied_read_accounting) {
         (Err(error), _, _) => Err(error),
         (Ok(_), Err(error), _) | (Ok(_), Ok(()), Err(error)) => Err(error),
@@ -313,18 +388,21 @@ where
             // transition. Assigning the checked snapshot afterward cannot
             // turn a visible complete closure into an accounting failure.
             let visibility = (|| {
-                let mut visible_counters = *counters;
+                control.poll(0)?;
+                let mut visible_counters = *control.counters;
                 visible_counters.record_closure_fence()?;
-                sink.make_closure_visible(expected_version_record)
+                control
+                    .sink
+                    .make_closure_visible(expected_version_record)
                     .map_err(map_sink_port)?;
-                *counters = visible_counters;
+                *control.counters = visible_counters;
                 Ok(())
             })();
             visibility.map(|()| admitted)
         }
     };
     if result.is_err() {
-        sink.abort_private_closure();
+        control.sink.abort_private_closure();
     }
     result
 }
@@ -335,8 +413,7 @@ fn admit_inner<C, O, S>(
     object_count: u64,
     expected_version_record: TypedPhysicalObjectIdV1,
     occupied: &mut O,
-    sink: &mut S,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
     buffers: AdmissionBuffersV1<'_>,
     required_traversal_bytes: usize,
     validation_cdc: ClosureCdcV1,
@@ -352,10 +429,14 @@ where
     let mut reused_count = 0_u64;
 
     for ordinal in 0..object_count {
+        control.poll(0)?;
         let expected_id = closure.object_id_at(ordinal).map_err(map_source_port)?;
+        control.poll(1)?;
+        control.poll(0)?;
         let len = closure.object_len_at(ordinal).map_err(map_source_port)?;
+        control.poll(1)?;
         let decoded = {
-            let mut source = ClosureObjectReadV1::new(closure, ordinal, len, counters);
+            let mut source = ClosureObjectReadV1::new(closure, ordinal, len, control);
             decode_physical_object_from_port_v1(
                 &mut source,
                 &mut DiscardStrongEdgesV1,
@@ -368,7 +449,7 @@ where
         if decoded.physical_id() != expected_id {
             return Err(CoreError::IdMismatch);
         }
-        validate_object_edges(closure, object_count, ordinal, decoded.payload(), counters)?;
+        validate_object_edges(closure, object_count, ordinal, decoded.payload(), control)?;
         summaries.add(decoded.payload())?;
         if expected_id == expected_version_record {
             let PhysicalObjectPayloadV1::VersionRecord(record) = decoded.payload() else {
@@ -377,10 +458,12 @@ where
             version = Some(record);
         }
 
-        match occupied
+        control.poll(0)?;
+        let occupied_len = occupied
             .occupied_len(expected_id)
-            .map_err(map_source_port)?
-        {
+            .map_err(map_source_port)?;
+        control.poll(1)?;
+        match occupied_len {
             Some(occupied_len) => {
                 let validated = validate_and_compare_occupied(
                     closure,
@@ -389,15 +472,22 @@ where
                     expected_id,
                     occupied,
                     occupied_len,
-                    counters,
+                    control,
                     buffers.incoming_comparison,
                     buffers.occupied_comparison,
                 )?;
-                sink.note_reused_object(validated).map_err(map_sink_port)?;
+                control.poll(0)?;
+                control
+                    .sink
+                    .note_reused_object(validated)
+                    .map_err(map_sink_port)?;
+                control.poll(1)?;
                 reused_count = reused_count
                     .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?;
-                counters.add(CounterFieldV1::ClosureObjectsOccupiedValidated, 1)?;
+                control
+                    .counters
+                    .add(CounterFieldV1::ClosureObjectsOccupiedValidated, 1)?;
             }
             None => {
                 stage_private_object_bounded(
@@ -405,22 +495,24 @@ where
                     ordinal,
                     len,
                     expected_id,
-                    sink,
-                    counters,
+                    control,
                     buffers.incoming_comparison,
                 )?;
                 created_count = created_count
                     .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?;
-                counters.add(CounterFieldV1::ClosureObjectsMissing, 1)?;
+                control
+                    .counters
+                    .add(CounterFieldV1::ClosureObjectsMissing, 1)?;
             }
         }
     }
 
     let version = version.ok_or(CoreError::MissingClosureEdge)?;
     validate_version_summary(version, summaries, object_count)?;
+    control.begin_candidate_graph()?;
     let mut visited = 0_u64;
-    let version_ordinal = find_ordinal(closure, object_count, expected_version_record)?
+    let version_ordinal = find_ordinal(closure, object_count, expected_version_record, control)?
         .ok_or(CoreError::MissingClosureEdge)?;
     traversal_enter(
         &mut buffers.traversal_state[..required_traversal_bytes],
@@ -430,7 +522,7 @@ where
         closure,
         object_count,
         version.root_tree_id,
-        counters,
+        control,
         buffers.source_window,
         buffers.cdc_ring,
         &mut buffers.traversal_state[..required_traversal_bytes],
@@ -449,6 +541,7 @@ where
     if derive_version_v1(logical_root) != version.version_id {
         return Err(CoreError::IdMismatch);
     }
+    control.poll(0)?;
 
     Ok(AdmittedClosureV1 {
         version_record: expected_version_record,
@@ -458,13 +551,20 @@ where
     })
 }
 
-fn validate_canonical_typed_ids<C>(closure: &mut C, count: u64) -> CoreResult<()>
+fn validate_canonical_typed_ids<C, S>(
+    closure: &mut C,
+    count: u64,
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<()>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     let mut previous = None;
     for ordinal in 0..count {
+        control.poll(0)?;
         let current = closure.object_id_at(ordinal).map_err(map_source_port)?;
+        control.poll(1)?;
         if previous.is_some_and(|left| {
             compare_closure_object_ids_v1(left, current) != core::cmp::Ordering::Less
         }) {
@@ -475,31 +575,44 @@ where
     Ok(())
 }
 
-struct ClosureObjectReadV1<'a, C: CompleteImmutableClosureReadPortV1 + ?Sized> {
+struct ClosureObjectReadV1<
+    'a,
+    'operation,
+    C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+> {
     closure: &'a mut C,
     ordinal: u64,
     len: u64,
-    counters: &'a mut OperationCountersV1,
+    control: &'a mut AdmissionWorkControlV1<'operation, S>,
 }
 
-impl<'a, C: CompleteImmutableClosureReadPortV1 + ?Sized> ClosureObjectReadV1<'a, C> {
+impl<
+        'a,
+        'operation,
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
+    > ClosureObjectReadV1<'a, 'operation, C, S>
+{
     const fn new(
         closure: &'a mut C,
         ordinal: u64,
         len: u64,
-        counters: &'a mut OperationCountersV1,
+        control: &'a mut AdmissionWorkControlV1<'operation, S>,
     ) -> Self {
         Self {
             closure,
             ordinal,
             len,
-            counters,
+            control,
         }
     }
 }
 
-impl<C: CompleteImmutableClosureReadPortV1 + ?Sized> PhysicalObjectReadPortV1
-    for ClosureObjectReadV1<'_, C>
+impl<
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
+    > PhysicalObjectReadPortV1 for ClosureObjectReadV1<'_, '_, C, S>
 {
     fn len(&mut self) -> CoreResult<u64> {
         Ok(self.len)
@@ -513,22 +626,31 @@ impl<C: CompleteImmutableClosureReadPortV1 + ?Sized> PhysicalObjectReadPortV1
         if end > self.len {
             return Err(CoreError::Truncated);
         }
+        self.control.poll(0)?;
         self.closure
             .read_object_exact_at(self.ordinal, offset, destination)
             .map_err(map_source_port)?;
-        self.counters.add(CounterFieldV1::BytesRead, amount)
+        self.control
+            .counters
+            .add(CounterFieldV1::BytesRead, amount)?;
+        self.control.poll(amount)
     }
 }
 
-struct OccupiedObjectReadV1<'a, O: OccupiedImmutableReadPortV1 + ?Sized> {
+struct OccupiedObjectReadV1<
+    'a,
+    'operation,
+    O: OccupiedImmutableReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+> {
     port: &'a mut O,
     id: TypedPhysicalObjectIdV1,
     len: u64,
-    counters: &'a mut OperationCountersV1,
+    control: &'a mut AdmissionWorkControlV1<'operation, S>,
 }
 
-impl<O: OccupiedImmutableReadPortV1 + ?Sized> PhysicalObjectReadPortV1
-    for OccupiedObjectReadV1<'_, O>
+impl<O: OccupiedImmutableReadPortV1 + ?Sized, S: PreparedImmutableClosurePortV1 + ?Sized>
+    PhysicalObjectReadPortV1 for OccupiedObjectReadV1<'_, '_, O, S>
 {
     fn len(&mut self) -> CoreResult<u64> {
         Ok(self.len)
@@ -542,10 +664,14 @@ impl<O: OccupiedImmutableReadPortV1 + ?Sized> PhysicalObjectReadPortV1
         if end > self.len {
             return Err(CoreError::Truncated);
         }
+        self.control.poll(0)?;
         self.port
             .read_occupied_exact_at(self.id, offset, destination)
             .map_err(map_source_port)?;
-        self.counters.add(CounterFieldV1::BytesRead, amount)
+        self.control
+            .counters
+            .add(CounterFieldV1::BytesRead, amount)?;
+        self.control.poll(amount)
     }
 }
 
@@ -621,27 +747,28 @@ fn validate_version_summary(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn validate_and_compare_occupied<C, O>(
+fn validate_and_compare_occupied<C, O, S>(
     closure: &mut C,
     ordinal: u64,
     incoming_len: u64,
     expected_id: TypedPhysicalObjectIdV1,
     occupied: &mut O,
     occupied_len: u64,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
     incoming_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     occupied_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
 ) -> CoreResult<ValidatedOccupiedObjectV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
     O: OccupiedImmutableReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     {
         let mut reader = OccupiedObjectReadV1 {
             port: occupied,
             id: expected_id,
             len: occupied_len,
-            counters,
+            control,
         };
         let decoded = decode_physical_object_from_port_v1(
             &mut reader,
@@ -666,32 +793,40 @@ where
         let occupied_take = usize::try_from(occupied_len.saturating_sub(offset).min(amount))
             .map_err(|_| CoreError::IntegerOverflow)?;
         if incoming_take != 0 {
+            control.poll(0)?;
             closure
                 .read_object_exact_at(ordinal, offset, &mut incoming_scratch[..incoming_take])
                 .map_err(map_source_port)?;
-            counters.add(
-                CounterFieldV1::BytesRead,
-                u64::try_from(incoming_take).map_err(|_| CoreError::IntegerOverflow)?,
-            )?;
+            let incoming_amount =
+                u64::try_from(incoming_take).map_err(|_| CoreError::IntegerOverflow)?;
+            control
+                .counters
+                .add(CounterFieldV1::BytesRead, incoming_amount)?;
+            control.poll(incoming_amount)?;
         }
         if occupied_take != 0 {
+            control.poll(0)?;
             occupied
                 .read_occupied_exact_at(expected_id, offset, &mut occupied_scratch[..occupied_take])
                 .map_err(map_source_port)?;
-            counters.add(
-                CounterFieldV1::BytesRead,
-                u64::try_from(occupied_take).map_err(|_| CoreError::IntegerOverflow)?,
-            )?;
+            let occupied_amount =
+                u64::try_from(occupied_take).map_err(|_| CoreError::IntegerOverflow)?;
+            control
+                .counters
+                .add(CounterFieldV1::BytesRead, occupied_amount)?;
+            control.poll(occupied_amount)?;
         }
         if incoming_take != occupied_take
             || incoming_scratch[..incoming_take] != occupied_scratch[..occupied_take]
         {
             equal = false;
         }
+        control.poll(amount)?;
         offset = offset
             .checked_add(amount)
             .ok_or(CoreError::IntegerOverflow)?;
     }
+    control.poll(0)?;
     if equal {
         Ok(ValidatedOccupiedObjectV1::new(
             ordinal,
@@ -708,33 +843,50 @@ fn stage_private_object_bounded<C, S>(
     ordinal: u64,
     len: u64,
     id: TypedPhysicalObjectIdV1,
-    sink: &mut S,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
 ) -> CoreResult<()>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
     S: PreparedImmutableClosurePortV1 + ?Sized,
 {
-    sink.begin_private_object(id, len).map_err(map_sink_port)?;
+    control.poll(0)?;
+    control
+        .sink
+        .begin_private_object(id, len)
+        .map_err(map_sink_port)?;
+    control.poll(1)?;
     let mut offset = 0_u64;
     while offset < len {
         let take = usize::try_from((len - offset).min(COMPARISON_WINDOW_BYTES as u64))
             .map_err(|_| CoreError::IntegerOverflow)?;
+        control.poll(0)?;
         closure
             .read_object_exact_at(ordinal, offset, &mut scratch[..take])
             .map_err(map_source_port)?;
-        sink.write_private_object(&scratch[..take])
-            .map_err(map_sink_port)?;
         let amount = u64::try_from(take).map_err(|_| CoreError::IntegerOverflow)?;
-        counters.add(CounterFieldV1::BytesRead, amount)?;
-        counters.add(CounterFieldV1::BytesCopied, amount)?;
-        counters.add(CounterFieldV1::BytesWritten, amount)?;
+        control.counters.add(CounterFieldV1::BytesRead, amount)?;
+        control.poll(amount)?;
+        control.poll(0)?;
+        control
+            .sink
+            .write_private_object(&scratch[..take])
+            .map_err(map_sink_port)?;
+        let mut checked = *control.counters;
+        checked.add(CounterFieldV1::BytesCopied, amount)?;
+        checked.add(CounterFieldV1::BytesWritten, amount)?;
+        *control.counters = checked;
+        control.poll(amount)?;
         offset = offset
             .checked_add(amount)
             .ok_or(CoreError::IntegerOverflow)?;
     }
-    sink.finish_private_object(id).map_err(map_sink_port)
+    control.poll(0)?;
+    control
+        .sink
+        .finish_private_object(id)
+        .map_err(map_sink_port)?;
+    control.poll(1)
 }
 
 fn map_source_port(ImmutablePortErrorV1::Failure: ImmutablePortErrorV1) -> CoreError {
@@ -759,15 +911,16 @@ const fn map_occupant_validation(error: CoreError) -> CoreError {
     }
 }
 
-fn validate_object_edges<C>(
+fn validate_object_edges<C, S>(
     closure: &mut C,
     object_count: u64,
     ordinal: u64,
     payload: PhysicalObjectPayloadV1,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
 ) -> CoreResult<()>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     match payload {
         PhysicalObjectPayloadV1::VersionRecord(version) => {
@@ -775,26 +928,32 @@ where
                 closure,
                 object_count,
                 TypedPhysicalObjectIdV1::Tree(version.root_tree_id),
+                control,
             )?;
         }
         PhysicalObjectPayloadV1::Tree(TreeRecordV1::Directory(directory)) => {
             if let Some(root) = directory.root_page_id {
-                require_edge(closure, object_count, TypedPhysicalObjectIdV1::Tree(root))?;
+                require_edge(
+                    closure,
+                    object_count,
+                    TypedPhysicalObjectIdV1::Tree(root),
+                    control,
+                )?;
             }
         }
         PhysicalObjectPayloadV1::Tree(TreeRecordV1::Leaf(leaf)) => {
-            let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-            let _subtype = cursor.read_u8(closure, counters)?;
-            let _depth = cursor.read_u8(closure, counters)?;
-            let count = cursor.read_u16_be(closure, counters)?;
+            let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
+            let _subtype = cursor.read_u8(closure, control)?;
+            let _depth = cursor.read_u8(closure, control)?;
+            let count = cursor.read_u16_be(closure, control)?;
             if count != leaf.count {
                 return Err(CoreError::IdMismatch);
             }
             for _ in 0..count {
                 let mut name = [0_u8; MAX_COMPONENT_BYTES];
-                let _name_len = read_component(&mut cursor, closure, counters, &mut name)?;
-                let kind = PhysicalTreeChildKindV1::try_from(cursor.read_u8(closure, counters)?)?;
-                let raw = cursor.read_array::<32, _>(closure, counters)?;
+                let _name_len = read_component(&mut cursor, closure, control, &mut name)?;
+                let kind = PhysicalTreeChildKindV1::try_from(cursor.read_u8(closure, control)?)?;
+                let raw = cursor.read_array::<32, _, _>(closure, control)?;
                 let id = match kind {
                     PhysicalTreeChildKindV1::Tree => {
                         TypedPhysicalObjectIdV1::Tree(PhysicalTreeIdV1::from_digest(raw))
@@ -806,49 +965,59 @@ where
                         TypedPhysicalObjectIdV1::Symlink(PhysicalSymlinkIdV1::from_digest(raw))
                     }
                 };
-                require_edge(closure, object_count, id)?;
+                require_edge(closure, object_count, id, control)?;
             }
             cursor.finish()?;
         }
         PhysicalObjectPayloadV1::Tree(TreeRecordV1::Index(index)) => {
-            let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-            let _subtype = cursor.read_u8(closure, counters)?;
-            let _depth = cursor.read_u8(closure, counters)?;
-            let count = cursor.read_u16_be(closure, counters)?;
+            let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
+            let _subtype = cursor.read_u8(closure, control)?;
+            let _depth = cursor.read_u8(closure, control)?;
+            let count = cursor.read_u16_be(closure, control)?;
             if count != index.count {
                 return Err(CoreError::IdMismatch);
             }
             for _ in 0..count {
-                let _subtree_count = cursor.read_u32_be(closure, counters)?;
+                let _subtree_count = cursor.read_u32_be(closure, control)?;
                 let mut first = [0_u8; MAX_COMPONENT_BYTES];
-                let _first_len = read_component(&mut cursor, closure, counters, &mut first)?;
+                let _first_len = read_component(&mut cursor, closure, control, &mut first)?;
                 let mut last = [0_u8; MAX_COMPONENT_BYTES];
-                let _last_len = read_component(&mut cursor, closure, counters, &mut last)?;
+                let _last_len = read_component(&mut cursor, closure, control, &mut last)?;
                 let child =
-                    PhysicalTreeIdV1::from_digest(cursor.read_array::<32, _>(closure, counters)?);
-                require_edge(closure, object_count, TypedPhysicalObjectIdV1::Tree(child))?;
+                    PhysicalTreeIdV1::from_digest(cursor.read_array::<32, _, _>(closure, control)?);
+                require_edge(
+                    closure,
+                    object_count,
+                    TypedPhysicalObjectIdV1::Tree(child),
+                    control,
+                )?;
             }
             cursor.finish()?;
         }
         PhysicalObjectPayloadV1::File(file) => {
-            let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-            let _mode = cursor.read_u16_be(closure, counters)?;
-            let _logical_len = cursor.read_u64_be(closure, counters)?;
-            let extent_count = cursor.read_u32_be(closure, counters)?;
+            let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
+            let _mode = cursor.read_u16_be(closure, control)?;
+            let _logical_len = cursor.read_u64_be(closure, control)?;
+            let extent_count = cursor.read_u32_be(closure, control)?;
             if extent_count != file.extent_count {
                 return Err(CoreError::IdMismatch);
             }
             for _ in 0..extent_count {
-                let tag = ExtentTagV1::try_from(cursor.read_u8(closure, counters)?)?;
-                let _extent_len = cursor.read_u64_be(closure, counters)?;
+                let tag = ExtentTagV1::try_from(cursor.read_u8(closure, control)?)?;
+                let _extent_len = cursor.read_u64_be(closure, control)?;
                 if tag == ExtentTagV1::Data {
-                    let count = cursor.read_u32_be(closure, counters)?;
+                    let count = cursor.read_u32_be(closure, control)?;
                     for _ in 0..count {
-                        let _chunk_len = cursor.read_u32_be(closure, counters)?;
+                        let _chunk_len = cursor.read_u32_be(closure, control)?;
                         let chunk = PhysicalChunkIdV1::from_digest(
-                            cursor.read_array::<32, _>(closure, counters)?,
+                            cursor.read_array::<32, _, _>(closure, control)?,
                         );
-                        require_edge(closure, object_count, TypedPhysicalObjectIdV1::Chunk(chunk))?;
+                        require_edge(
+                            closure,
+                            object_count,
+                            TypedPhysicalObjectIdV1::Chunk(chunk),
+                            control,
+                        )?;
                     }
                 }
             }
@@ -859,19 +1028,23 @@ where
     Ok(())
 }
 
-fn find_ordinal<C>(
+fn find_ordinal<C, S>(
     closure: &mut C,
     count: u64,
     id: TypedPhysicalObjectIdV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
 ) -> CoreResult<Option<u64>>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     let mut low = 0_u64;
     let mut high = count;
     while low < high {
         let middle = low + (high - low) / 2;
+        control.poll(0)?;
         let current = closure.object_id_at(middle).map_err(map_source_port)?;
+        control.poll(1)?;
         match compare_closure_object_ids_v1(current, id) {
             core::cmp::Ordering::Less => low = middle + 1,
             core::cmp::Ordering::Greater => high = middle,
@@ -881,9 +1054,15 @@ where
     Ok(None)
 }
 
-fn contains_raw_id<C>(closure: &mut C, count: u64, raw: [u8; 32]) -> CoreResult<bool>
+fn contains_raw_id<C, S>(
+    closure: &mut C,
+    count: u64,
+    raw: [u8; 32],
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<bool>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     for candidate in [
         TypedPhysicalObjectIdV1::VersionRecord(PhysicalVersionRecordIdV1::from_digest(raw)),
@@ -892,20 +1071,26 @@ where
         TypedPhysicalObjectIdV1::Symlink(PhysicalSymlinkIdV1::from_digest(raw)),
         TypedPhysicalObjectIdV1::Chunk(PhysicalChunkIdV1::from_digest(raw)),
     ] {
-        if find_ordinal(closure, count, candidate)?.is_some() {
+        if find_ordinal(closure, count, candidate, control)?.is_some() {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-fn require_edge<C>(closure: &mut C, count: u64, id: TypedPhysicalObjectIdV1) -> CoreResult<u64>
+fn require_edge<C, S>(
+    closure: &mut C,
+    count: u64,
+    id: TypedPhysicalObjectIdV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<u64>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
-    if let Some(ordinal) = find_ordinal(closure, count, id)? {
+    if let Some(ordinal) = find_ordinal(closure, count, id, control)? {
         Ok(ordinal)
-    } else if contains_raw_id(closure, count, *id.as_bytes())? {
+    } else if contains_raw_id(closure, count, *id.as_bytes(), control)? {
         Err(CoreError::TypedEdge)
     } else {
         Err(CoreError::MissingClosureEdge)
@@ -979,11 +1164,18 @@ struct ObjectCursorV1 {
 }
 
 impl ObjectCursorV1 {
-    fn payload<C>(closure: &mut C, ordinal: u64) -> CoreResult<Self>
+    fn payload<C, S>(
+        closure: &mut C,
+        ordinal: u64,
+        control: &mut AdmissionWorkControlV1<'_, S>,
+    ) -> CoreResult<Self>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
+        control.poll(0)?;
         let len = closure.object_len_at(ordinal).map_err(map_source_port)?;
+        control.poll(1)?;
         if len < OBJECT_HEADER_BYTES {
             return Err(CoreError::Truncated);
         }
@@ -998,14 +1190,15 @@ impl ObjectCursorV1 {
         self.end - self.offset
     }
 
-    fn read_into<C>(
+    fn read_into<C, S>(
         &mut self,
         closure: &mut C,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
         destination: &mut [u8],
     ) -> CoreResult<()>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
         let amount = u64::try_from(destination.len()).map_err(|_| CoreError::IntegerOverflow)?;
         let end = self
@@ -1015,65 +1208,76 @@ impl ObjectCursorV1 {
         if end > self.end {
             return Err(CoreError::Truncated);
         }
+        control.poll(0)?;
         closure
             .read_object_exact_at(self.ordinal, self.offset, destination)
             .map_err(map_source_port)?;
-        counters.add(CounterFieldV1::BytesRead, amount)?;
+        control.counters.add(CounterFieldV1::BytesRead, amount)?;
+        control.poll(amount)?;
         self.offset = end;
         Ok(())
     }
 
-    fn read_array<const N: usize, C>(
+    fn read_array<const N: usize, C, S>(
         &mut self,
         closure: &mut C,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
     ) -> CoreResult<[u8; N]>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
         let mut result = [0_u8; N];
-        self.read_into(closure, counters, &mut result)?;
+        self.read_into(closure, control, &mut result)?;
         Ok(result)
     }
 
-    fn read_u8<C>(&mut self, closure: &mut C, counters: &mut OperationCountersV1) -> CoreResult<u8>
-    where
-        C: CompleteImmutableClosureReadPortV1 + ?Sized,
-    {
-        Ok(self.read_array::<1, _>(closure, counters)?[0])
-    }
-
-    fn read_u16_be<C>(
+    fn read_u8<C, S>(
         &mut self,
         closure: &mut C,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
+    ) -> CoreResult<u8>
+    where
+        C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
+    {
+        Ok(self.read_array::<1, _, _>(closure, control)?[0])
+    }
+
+    fn read_u16_be<C, S>(
+        &mut self,
+        closure: &mut C,
+        control: &mut AdmissionWorkControlV1<'_, S>,
     ) -> CoreResult<u16>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
-        Ok(u16::from_be_bytes(self.read_array(closure, counters)?))
+        Ok(u16::from_be_bytes(self.read_array(closure, control)?))
     }
 
-    fn read_u32_be<C>(
+    fn read_u32_be<C, S>(
         &mut self,
         closure: &mut C,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
     ) -> CoreResult<u32>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
-        Ok(u32::from_be_bytes(self.read_array(closure, counters)?))
+        Ok(u32::from_be_bytes(self.read_array(closure, control)?))
     }
 
-    fn read_u64_be<C>(
+    fn read_u64_be<C, S>(
         &mut self,
         closure: &mut C,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
     ) -> CoreResult<u64>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
-        Ok(u64::from_be_bytes(self.read_array(closure, counters)?))
+        Ok(u64::from_be_bytes(self.read_array(closure, control)?))
     }
 
     fn finish(self) -> CoreResult<()> {
@@ -1085,20 +1289,21 @@ impl ObjectCursorV1 {
     }
 }
 
-fn read_component<C>(
+fn read_component<C, S>(
     cursor: &mut ObjectCursorV1,
     closure: &mut C,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
     destination: &mut [u8; MAX_COMPONENT_BYTES],
 ) -> CoreResult<usize>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
-    let len = usize::from(cursor.read_u16_be(closure, counters)?);
+    let len = usize::from(cursor.read_u16_be(closure, control)?);
     if len == 0 || len > destination.len() {
         return Err(CoreError::Name);
     }
-    cursor.read_into(closure, counters, &mut destination[..len])?;
+    cursor.read_into(closure, control, &mut destination[..len])?;
     ValidatedComponent::new(&destination[..len])?;
     Ok(len)
 }
@@ -1163,16 +1368,17 @@ struct OwnedComponentV1 {
 }
 
 impl OwnedComponentV1 {
-    fn read<C>(
+    fn read<C, S>(
         cursor: &mut ObjectCursorV1,
         closure: &mut C,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
     ) -> CoreResult<Self>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
         let mut bytes = [0; MAX_COMPONENT_BYTES];
-        let len = read_component(cursor, closure, counters, &mut bytes)?;
+        let len = read_component(cursor, closure, control, &mut bytes)?;
         Ok(Self { bytes, len })
     }
 
@@ -1228,47 +1434,54 @@ struct PageTraversalV1 {
 }
 
 impl PageTraversalV1 {
-    fn new<C>(
+    fn new<C, S>(
         closure: &mut C,
         object_count: u64,
         id: PhysicalTreeIdV1,
         expected_depth: u8,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
         states: &mut [u8],
     ) -> CoreResult<Self>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
         let mut result = Self {
             frames: [None; PAGE_TRAVERSAL_CAPACITY_V1],
             len: 0,
             finished: None,
         };
-        result.push_page(closure, object_count, id, expected_depth, counters, states)?;
+        result.push_page(closure, object_count, id, expected_depth, control, states)?;
         Ok(result)
     }
 
-    fn push_page<C>(
+    fn push_page<C, S>(
         &mut self,
         closure: &mut C,
         object_count: u64,
         id: PhysicalTreeIdV1,
         expected_depth: u8,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
         states: &mut [u8],
     ) -> CoreResult<()>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
         if self.len >= self.frames.len() {
             return Err(CoreError::CountCap);
         }
-        let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::Tree(id))?;
+        let ordinal = require_edge(
+            closure,
+            object_count,
+            TypedPhysicalObjectIdV1::Tree(id),
+            control,
+        )?;
         let first_visit = traversal_enter(states, ordinal)?;
-        let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-        let subtype = TreeSubtypeV1::try_from(cursor.read_u8(closure, counters)?)?;
-        let depth = cursor.read_u8(closure, counters)?;
-        let count = cursor.read_u16_be(closure, counters)?;
+        let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
+        let subtype = TreeSubtypeV1::try_from(cursor.read_u8(closure, control)?)?;
+        let depth = cursor.read_u8(closure, control)?;
+        let count = cursor.read_u16_be(closure, control)?;
         if depth != expected_depth || count == 0 {
             return Err(CoreError::IdMismatch);
         }
@@ -1293,16 +1506,17 @@ impl PageTraversalV1 {
         Ok(())
     }
 
-    fn next_entry<C>(
+    fn next_entry<C, S>(
         &mut self,
         closure: &mut C,
         object_count: u64,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
         states: &mut [u8],
         visited: &mut u64,
     ) -> CoreResult<Option<PhysicalTreeEntryOwnedV1>>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
         loop {
             let index = self.len.checked_sub(1).ok_or(CoreError::Truncated)?;
@@ -1310,11 +1524,10 @@ impl PageTraversalV1 {
             match state {
                 PageFrameStateV1::Leaf { remaining } if remaining != 0 => {
                     let frame = self.frames[index].as_mut().ok_or(CoreError::Truncated)?;
-                    let name = OwnedComponentV1::read(&mut frame.cursor, closure, counters)?;
-                    let kind = PhysicalTreeChildKindV1::try_from(
-                        frame.cursor.read_u8(closure, counters)?,
-                    )?;
-                    let raw_id = frame.cursor.read_array::<32, _>(closure, counters)?;
+                    let name = OwnedComponentV1::read(&mut frame.cursor, closure, control)?;
+                    let kind =
+                        PhysicalTreeChildKindV1::try_from(frame.cursor.read_u8(closure, control)?)?;
+                    let raw_id = frame.cursor.read_array::<32, _, _>(closure, control)?;
                     frame.facts.add_entry(&name.bytes[..name.len])?;
                     frame.state = PageFrameStateV1::Leaf {
                         remaining: remaining - 1,
@@ -1327,11 +1540,11 @@ impl PageTraversalV1 {
                 } if remaining != 0 => {
                     let (expectation, child, child_depth) = {
                         let frame = self.frames[index].as_mut().ok_or(CoreError::Truncated)?;
-                        let count = frame.cursor.read_u32_be(closure, counters)?;
-                        let first = OwnedComponentV1::read(&mut frame.cursor, closure, counters)?;
-                        let last = OwnedComponentV1::read(&mut frame.cursor, closure, counters)?;
+                        let count = frame.cursor.read_u32_be(closure, control)?;
+                        let first = OwnedComponentV1::read(&mut frame.cursor, closure, control)?;
+                        let last = OwnedComponentV1::read(&mut frame.cursor, closure, control)?;
                         let child = PhysicalTreeIdV1::from_digest(
-                            frame.cursor.read_array::<32, _>(closure, counters)?,
+                            frame.cursor.read_array::<32, _, _>(closure, control)?,
                         );
                         let child_depth = frame
                             .facts
@@ -1349,7 +1562,7 @@ impl PageTraversalV1 {
                         )
                     };
                     let _ = expectation;
-                    self.push_page(closure, object_count, child, child_depth, counters, states)?;
+                    self.push_page(closure, object_count, child, child_depth, control, states)?;
                 }
                 PageFrameStateV1::Index {
                     pending: Some(_), ..
@@ -1423,35 +1636,40 @@ struct AdmissionDirectoryFrameV1 {
 }
 
 impl AdmissionDirectoryFrameV1 {
-    fn new<C>(
+    fn new<C, S>(
         closure: &mut C,
         object_count: u64,
         id: PhysicalTreeIdV1,
         context: DirectoryModeContext,
-        counters: &mut OperationCountersV1,
+        control: &mut AdmissionWorkControlV1<'_, S>,
         states: &mut [u8],
     ) -> CoreResult<Self>
     where
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
+        S: PreparedImmutableClosurePortV1 + ?Sized,
     {
-        let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::Tree(id))?;
+        let ordinal = require_edge(
+            closure,
+            object_count,
+            TypedPhysicalObjectIdV1::Tree(id),
+            control,
+        )?;
         let first_visit = traversal_enter(states, ordinal)?;
-        let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-        if TreeSubtypeV1::try_from(cursor.read_u8(closure, counters)?)? != TreeSubtypeV1::Directory
-        {
+        let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
+        if TreeSubtypeV1::try_from(cursor.read_u8(closure, control)?)? != TreeSubtypeV1::Directory {
             return Err(CoreError::TypedEdge);
         }
-        let mode = cursor.read_u16_be(closure, counters)?;
-        let entry_count = cursor.read_u32_be(closure, counters)?;
-        let page_depth = cursor.read_u8(closure, counters)?;
+        let mode = cursor.read_u16_be(closure, control)?;
+        let entry_count = cursor.read_u32_be(closure, control)?;
+        let page_depth = cursor.read_u8(closure, control)?;
         if u64::from(page_depth) > MAX_TREE_PAGE_DEPTH {
             return Err(CoreError::CountCap);
         }
-        let presence = cursor.read_u8(closure, counters)?;
+        let presence = cursor.read_u8(closure, control)?;
         let root_page = match presence {
             0 if entry_count == 0 => None,
             1 if entry_count != 0 => Some(PhysicalTreeIdV1::from_digest(
-                cursor.read_array::<32, _>(closure, counters)?,
+                cursor.read_array::<32, _, _>(closure, control)?,
             )),
             _ => return Err(CoreError::TypedEdge),
         };
@@ -1462,7 +1680,7 @@ impl AdmissionDirectoryFrameV1 {
                 object_count,
                 root_page,
                 page_depth,
-                counters,
+                control,
                 states,
             )?),
             None => None,
@@ -1521,11 +1739,11 @@ fn directory_depth_charge_v1(directory_frames: usize) -> CoreResult<usize> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn reconstruct_root_directory<C>(
+fn reconstruct_root_directory<C, S>(
     closure: &mut C,
     object_count: u64,
     id: PhysicalTreeIdV1,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
     source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
     cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
     states: &mut [u8],
@@ -1535,6 +1753,7 @@ fn reconstruct_root_directory<C>(
 ) -> CoreResult<ImplicitRootDirectoryV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     let mut frames = Vec::new();
     frames
@@ -1548,7 +1767,7 @@ where
         object_count,
         id,
         DirectoryModeContext::ImplicitRoot,
-        counters,
+        control,
         states,
     )?);
     loop {
@@ -1589,7 +1808,7 @@ where
                 .pages
                 .as_mut()
                 .ok_or(CoreError::Truncated)?
-                .next_entry(closure, object_count, counters, states, visited)?
+                .next_entry(closure, object_count, control, states, visited)?
         };
         let Some(entry) = entry else {
             let frame = frames.last_mut().ok_or(CoreError::Truncated)?;
@@ -1618,7 +1837,7 @@ where
                     object_count,
                     PhysicalTreeIdV1::from_digest(entry.raw_id),
                     DirectoryModeContext::Explicit,
-                    counters,
+                    control,
                     states,
                 )?);
             }
@@ -1627,7 +1846,7 @@ where
                     closure,
                     object_count,
                     PhysicalFileIdV1::from_digest(entry.raw_id),
-                    counters,
+                    control,
                     source_window,
                     cdc_ring,
                     states,
@@ -1645,7 +1864,7 @@ where
                     closure,
                     object_count,
                     PhysicalSymlinkIdV1::from_digest(entry.raw_id),
-                    counters,
+                    control,
                     source_window,
                     states,
                     visited,
@@ -1665,11 +1884,11 @@ fn require_depth(depth: usize) -> CoreResult<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn reconstruct_symlink<C>(
+fn reconstruct_symlink<C, S>(
     closure: &mut C,
     object_count: u64,
     id: PhysicalSymlinkIdV1,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
     source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
     states: &mut [u8],
     visited: &mut u64,
@@ -1677,17 +1896,23 @@ fn reconstruct_symlink<C>(
 ) -> CoreResult<SymlinkNodeIdV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     require_depth(depth)?;
-    let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::Symlink(id))?;
+    let ordinal = require_edge(
+        closure,
+        object_count,
+        TypedPhysicalObjectIdV1::Symlink(id),
+        control,
+    )?;
     let first_visit = traversal_enter(states, ordinal)?;
-    let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
-    let target_len = usize::try_from(cursor.read_u32_be(closure, counters)?)
+    let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
+    let target_len = usize::try_from(cursor.read_u32_be(closure, control)?)
         .map_err(|_| CoreError::IntegerOverflow)?;
     if target_len == 0 || target_len > 4_096 {
         return Err(CoreError::Target);
     }
-    cursor.read_into(closure, counters, &mut source_window[..target_len])?;
+    cursor.read_into(closure, control, &mut source_window[..target_len])?;
     cursor.finish()?;
     let target = ValidatedSymlinkTarget::new(&source_window[..target_len])?;
     let result = derive_symlink_node_v1(target)?;
@@ -1698,11 +1923,11 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn reconstruct_file<C>(
+fn reconstruct_file<C, S>(
     closure: &mut C,
     object_count: u64,
     id: PhysicalFileIdV1,
-    counters: &mut OperationCountersV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
     source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
     cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
     states: &mut [u8],
@@ -1712,79 +1937,79 @@ fn reconstruct_file<C>(
 ) -> CoreResult<FileNodeIdV1>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
-    require_depth(depth)?;
-    let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::File(id))?;
-    let first_visit = traversal_enter(states, ordinal)?;
-    let mut count_control = ContinueCdcControlV1;
-    let mut count_consumer = ChunkCountConsumerV1 { count: 0 };
-    let mut count_stream = validation_cdc.stream(cdc_ring, &mut count_control)?;
-    let (mode, logical_len) = stream_file_bytes(
-        closure,
-        object_count,
-        ordinal,
-        counters,
-        source_window,
-        states,
-        visited,
-        depth + 1,
-        |bytes| count_stream.push(Ok(bytes), &mut count_control, &mut count_consumer),
-    )?;
-    count_stream.finish(&mut count_control, &mut count_consumer)?;
-
-    let mut hash_control = ContinueCdcControlV1;
-    let mut hash_consumer = LogicalFileConsumerV1 {
-        hasher: LogicalFileHasherV1::new(logical_len, count_consumer.count)?,
-        failure: None,
-    };
-    let mut hash_stream = validation_cdc.stream(cdc_ring, &mut hash_control)?;
-    let (second_mode, second_len) = stream_file_bytes(
-        closure,
-        object_count,
-        ordinal,
-        counters,
-        source_window,
-        states,
-        visited,
-        depth + 1,
-        |bytes| hash_stream.push(Ok(bytes), &mut hash_control, &mut hash_consumer),
-    )?;
-    if second_mode != mode || second_len != logical_len {
-        return Err(CoreError::IdMismatch);
+    let mut direct = OperationCountersV1::default();
+    let result = (|| {
+        require_depth(depth)?;
+        let ordinal = require_edge(
+            closure,
+            object_count,
+            TypedPhysicalObjectIdV1::File(id),
+            control,
+        )?;
+        let first_visit = traversal_enter(states, ordinal)?;
+        let (mode, logical_file) = stream_file_bytes(
+            closure,
+            object_count,
+            ordinal,
+            control,
+            &mut direct,
+            source_window,
+            cdc_ring,
+            states,
+            visited,
+            depth + 1,
+            validation_cdc,
+        )?;
+        if first_visit {
+            traversal_finish(states, ordinal, visited)?;
+        }
+        derive_file_node_v1(mode, logical_file)
+    })();
+    let observation = control.counters.accumulate(direct);
+    match (result, observation) {
+        (Err(error), _) => Err(error),
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
     }
-    if let Err(error) = hash_stream.finish(&mut hash_control, &mut hash_consumer) {
-        return Err(hash_consumer.failure.take().unwrap_or(error));
-    }
-    let logical_file = hash_consumer.hasher.finish()?;
-    if first_visit {
-        traversal_finish(states, ordinal, visited)?;
-    }
-    derive_file_node_v1(mode, logical_file)
 }
 
 #[allow(clippy::too_many_arguments)]
-fn stream_file_bytes<C, F>(
+fn stream_file_bytes<C, S>(
     closure: &mut C,
     object_count: u64,
     file_ordinal: u64,
-    counters: &mut OperationCountersV1,
+    admission: &mut AdmissionWorkControlV1<'_, S>,
+    direct: &mut OperationCountersV1,
     source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
+    cdc_ring: &mut [u8; MAXIMUM_CHUNK_BYTES],
     states: &mut [u8],
     visited: &mut u64,
     depth: usize,
-    mut consume: F,
-) -> CoreResult<(u16, u64)>
+    validation_cdc: ClosureCdcV1,
+) -> CoreResult<(u16, crate::identity::LogicalFileIdentityV1)>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
-    F: FnMut(&[u8]) -> CoreResult<()>,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
-    let mut cursor = ObjectCursorV1::payload(closure, file_ordinal)?;
-    let mode = cursor.read_u16_be(closure, counters)?;
-    let logical_len = cursor.read_u64_be(closure, counters)?;
-    let extent_count = cursor.read_u32_be(closure, counters)?;
+    let mut cursor = ObjectCursorV1::payload(closure, file_ordinal, admission)?;
+    let mode = cursor.read_u16_be(closure, admission)?;
+    let logical_len = cursor.read_u64_be(closure, admission)?;
+    let extent_count = cursor.read_u32_be(closure, admission)?;
+    let mut control = LogicalReconstructionControlV1::new(admission, direct);
+    control.record_pass()?;
+    let mut stream = match validation_cdc.stream(cdc_ring, &mut control) {
+        Ok(stream) => stream,
+        Err(error) => return Err(control.take_failure().unwrap_or(error)),
+    };
+    let mut consumer = LogicalFileConsumerV1 {
+        hasher: DeferredCountLogicalFileHasherV1::new(logical_len)?,
+        failure: None,
+    };
     for _ in 0..extent_count {
-        let tag = ExtentTagV1::try_from(cursor.read_u8(closure, counters)?)?;
-        let length = cursor.read_u64_be(closure, counters)?;
+        let tag = ExtentTagV1::try_from(cursor.read_u8(closure, control.admission)?)?;
+        let length = cursor.read_u64_be(closure, control.admission)?;
         match tag {
             ExtentTagV1::Hole => {
                 source_window.fill(0);
@@ -1792,29 +2017,35 @@ where
                 while remaining != 0 {
                     let take = usize::try_from(remaining.min(MAXIMUM_CHUNK_BYTES as u64))
                         .map_err(|_| CoreError::IntegerOverflow)?;
-                    consume(&source_window[..take])?;
+                    push_reconstructed_bytes(
+                        &mut stream,
+                        &mut control,
+                        &mut consumer,
+                        &source_window[..take],
+                    )?;
                     remaining -= u64::try_from(take).map_err(|_| CoreError::IntegerOverflow)?;
                 }
             }
             ExtentTagV1::Data => {
-                let count = cursor.read_u32_be(closure, counters)?;
+                let count = cursor.read_u32_be(closure, control.admission)?;
                 let mut reconstructed = 0_u64;
                 for _ in 0..count {
-                    let chunk_len = cursor.read_u32_be(closure, counters)?;
+                    let chunk_len = cursor.read_u32_be(closure, control.admission)?;
                     let chunk_id = PhysicalChunkIdV1::from_digest(
-                        cursor.read_array::<32, _>(closure, counters)?,
+                        cursor.read_array::<32, _, _>(closure, control.admission)?,
                     );
                     stream_chunk_payload(
                         closure,
                         object_count,
                         chunk_id,
                         chunk_len,
-                        counters,
+                        &mut control,
+                        &mut stream,
+                        &mut consumer,
                         source_window,
                         states,
                         visited,
                         depth,
-                        &mut consume,
                     )?;
                     reconstructed = reconstructed
                         .checked_add(u64::from(chunk_len))
@@ -1827,30 +2058,43 @@ where
         }
     }
     cursor.finish()?;
-    Ok((mode, logical_len))
+    if let Err(error) = stream.finish(&mut control, &mut consumer) {
+        return Err(consumer
+            .failure
+            .take()
+            .or_else(|| control.take_failure())
+            .unwrap_or(error));
+    }
+    Ok((mode, consumer.hasher.finish()?))
 }
 
 #[allow(clippy::too_many_arguments)]
-fn stream_chunk_payload<C, F>(
+fn stream_chunk_payload<C, S>(
     closure: &mut C,
     object_count: u64,
     id: PhysicalChunkIdV1,
     declared_len: u32,
-    counters: &mut OperationCountersV1,
+    control: &mut LogicalReconstructionControlV1<'_, '_, S>,
+    stream: &mut ClosureCdcStreamV1<'_>,
+    consumer: &mut LogicalFileConsumerV1,
     source_window: &mut [u8; MAXIMUM_CHUNK_BYTES],
     states: &mut [u8],
     visited: &mut u64,
     depth: usize,
-    consume: &mut F,
 ) -> CoreResult<()>
 where
     C: CompleteImmutableClosureReadPortV1 + ?Sized,
-    F: FnMut(&[u8]) -> CoreResult<()>,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     require_depth(depth)?;
-    let ordinal = require_edge(closure, object_count, TypedPhysicalObjectIdV1::Chunk(id))?;
+    let ordinal = require_edge(
+        closure,
+        object_count,
+        TypedPhysicalObjectIdV1::Chunk(id),
+        control.admission,
+    )?;
     let first_visit = traversal_enter(states, ordinal)?;
-    let mut cursor = ObjectCursorV1::payload(closure, ordinal)?;
+    let mut cursor = ObjectCursorV1::payload(closure, ordinal, control.admission)?;
     let actual_len = cursor.remaining();
     if actual_len != u64::from(declared_len) {
         return Err(CoreError::IdMismatch);
@@ -1859,35 +2103,156 @@ where
     if take > source_window.len() {
         return Err(CoreError::ResourceRefused);
     }
-    cursor.read_into(closure, counters, &mut source_window[..take])?;
+    control.poll_now()?;
+    control.record_payload_call()?;
+    let end = cursor
+        .offset
+        .checked_add(actual_len)
+        .ok_or(CoreError::IntegerOverflow)?;
+    if end > cursor.end {
+        return Err(CoreError::Truncated);
+    }
+    closure
+        .read_object_exact_at(cursor.ordinal, cursor.offset, &mut source_window[..take])
+        .map_err(map_source_port)?;
+    control
+        .admission
+        .counters
+        .add(CounterFieldV1::BytesRead, actual_len)?;
+    cursor.offset = end;
+    control.record_payload_bytes(actual_len)?;
+    control.poll_now()?;
     cursor.finish()?;
-    consume(&source_window[..take])?;
+    push_reconstructed_bytes(stream, control, consumer, &source_window[..take])?;
     if first_visit {
         traversal_finish(states, ordinal, visited)?;
     }
     Ok(())
 }
 
-struct ChunkCountConsumerV1 {
-    count: u64,
+fn push_reconstructed_bytes<S>(
+    stream: &mut ClosureCdcStreamV1<'_>,
+    control: &mut LogicalReconstructionControlV1<'_, '_, S>,
+    consumer: &mut LogicalFileConsumerV1,
+    bytes: &[u8],
+) -> CoreResult<()>
+where
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    control.record_logical_bytes(
+        u64::try_from(bytes.len()).map_err(|_| CoreError::IntegerOverflow)?,
+    )?;
+    if let Err(error) = stream.push(Ok(bytes), control, consumer) {
+        return Err(consumer
+            .failure
+            .take()
+            .or_else(|| control.take_failure())
+            .unwrap_or(error));
+    }
+    Ok(())
 }
 
-impl BoundaryConsumerV1 for ChunkCountConsumerV1 {
-    fn accept(
-        &mut self,
-        _boundary: ChunkBoundaryV1,
-        _chunk: BorrowedChunkV1<'_>,
-    ) -> Result<(), CdcBoundaryConsumerErrorV1> {
-        self.count = self
-            .count
-            .checked_add(1)
-            .ok_or(CdcBoundaryConsumerErrorV1::Refused)?;
+struct LogicalReconstructionControlV1<'a, 'operation, S>
+where
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    admission: &'a mut AdmissionWorkControlV1<'operation, S>,
+    direct: &'a mut OperationCountersV1,
+    work_since_poll: u64,
+    failure: Option<CoreError>,
+}
+
+impl<'a, 'operation, S> LogicalReconstructionControlV1<'a, 'operation, S>
+where
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    fn new(
+        admission: &'a mut AdmissionWorkControlV1<'operation, S>,
+        direct: &'a mut OperationCountersV1,
+    ) -> Self {
+        Self {
+            admission,
+            direct,
+            work_since_poll: 0,
+            failure: None,
+        }
+    }
+
+    fn record_pass(&mut self) -> CoreResult<()> {
+        self.direct.record_logical_reconstruction_pass_v1()
+    }
+
+    fn record_payload_call(&mut self) -> CoreResult<()> {
+        self.direct.record_logical_reconstruction_payload_call_v1()
+    }
+
+    fn record_payload_bytes(&mut self, bytes: u64) -> CoreResult<()> {
+        let mut checked = *self.direct;
+        checked.record_logical_reconstruction_payload_bytes_v1(bytes)?;
+        let work = self
+            .work_since_poll
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        *self.direct = checked;
+        self.work_since_poll = work;
         Ok(())
+    }
+
+    fn record_logical_bytes(&mut self, bytes: u64) -> CoreResult<()> {
+        let mut checked = *self.direct;
+        checked.record_logical_reconstruction_bytes_v1(bytes)?;
+        let work = self
+            .work_since_poll
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        *self.direct = checked;
+        self.work_since_poll = work;
+        Ok(())
+    }
+
+    fn record_poll(&mut self) -> CoreResult<()> {
+        self.direct
+            .record_logical_reconstruction_poll_v1(self.work_since_poll)?;
+        self.work_since_poll = 0;
+        Ok(())
+    }
+
+    fn poll_now(&mut self) -> CoreResult<()> {
+        self.record_poll()?;
+        if self.admission.sink.cancellation_requested_v1() {
+            Err(CoreError::Cancelled)
+        } else if self.admission.sink.deadline_exceeded_v1() {
+            Err(CoreError::Deadline)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn take_failure(&mut self) -> Option<CoreError> {
+        self.failure.take()
+    }
+}
+
+impl<S> CdcControlV1 for LogicalReconstructionControlV1<'_, '_, S>
+where
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    fn cancellation_requested(&mut self) -> bool {
+        if let Err(error) = self.record_poll() {
+            self.failure.get_or_insert(error);
+            true
+        } else {
+            self.admission.sink.cancellation_requested_v1()
+        }
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        self.admission.sink.deadline_exceeded_v1()
     }
 }
 
 struct LogicalFileConsumerV1 {
-    hasher: LogicalFileHasherV1,
+    hasher: DeferredCountLogicalFileHasherV1,
     failure: Option<CoreError>,
 }
 

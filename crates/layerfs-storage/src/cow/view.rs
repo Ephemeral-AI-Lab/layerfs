@@ -12,14 +12,86 @@ use super::tree::{
     TreeObjectDispositionV1, TreePageBoundaryV1, TreePageSummaryV1, TreePlanV1, TreeSinkErrorV1,
     MAX_DIRECTORY_HASH_PROOF_NODES, MAX_TREE_OBJECT_BYTES, TREE_INDEX_FANOUT, TREE_LEAF_FANOUT,
 };
-use crate::format::compare_unsigned;
+use crate::format::{compare_unsigned, ValidatedComponent};
 use crate::identity::{
     ExplicitDirectoryNodeV1, ImplicitRootDirectoryV1, PhysicalTreeIdV1, COMPARISON_WINDOW_BYTES,
     IDENTITY_HASHER_BYTES_V1,
 };
-use crate::limits::{CounterFieldV1, OperationCountersV1};
+use crate::limits::{CounterFieldV1, OperationCountersV1, OperationWorkControlV1};
 use crate::{CoreError, CoreResult};
 use blake3::hazmat::{merge_subtrees_non_root, merge_subtrees_root, HasherExt, Mode};
+
+/// Frozen maximum directly counted COW entry/page work between cooperative
+/// cancellation/deadline polls. Blocking source calls are polled on both
+/// sides independently of this cadence.
+pub(super) const COW_MUTATION_CONTROL_POLL_WORK_UNITS_V1: u64 = 128;
+
+pub(super) struct CowMutationWorkV1 {
+    work_since_poll: u64,
+}
+
+impl CowMutationWorkV1 {
+    pub(super) fn begin(
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<Self> {
+        let mut work = Self { work_since_poll: 0 };
+        work.poll(control, counters)?;
+        Ok(work)
+    }
+
+    pub(super) fn complete(
+        &mut self,
+        units: u64,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.work_since_poll = self
+            .work_since_poll
+            .checked_add(units)
+            .ok_or(CoreError::IntegerOverflow)?;
+        if self.work_since_poll >= COW_MUTATION_CONTROL_POLL_WORK_UNITS_V1 {
+            self.poll(control, counters)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn poll(
+        &mut self,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        counters.record_cow_mutation_poll_v1(self.work_since_poll)?;
+        self.work_since_poll = 0;
+        if control.cancellation_requested_v1() {
+            Err(CoreError::Cancelled)
+        } else if control.deadline_exceeded_v1() {
+            Err(CoreError::Deadline)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(super) fn complete_blocking_call(
+        &mut self,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.work_since_poll = self
+            .work_since_poll
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        self.poll(control, counters)
+    }
+
+    pub(super) fn finish(
+        &mut self,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.poll(control, counters)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TreeMutationSourceErrorV1 {
@@ -114,6 +186,8 @@ pub struct AuthenticatedTreeMutationEvidenceV1<'a> {
     pub(super) affected_leaf_index: Option<u32>,
     pub(super) affected_leaf: Option<TreePageSummaryV1>,
     pub(super) leaf_group: &'a [TreePageBoundaryV1<'a>],
+    pub(super) secondary_leaf_group_index: Option<u32>,
+    pub(super) secondary_leaf_group: &'a [TreePageBoundaryV1<'a>],
     pub(super) level_one_group: &'a [TreePageBoundaryV1<'a>],
     pub(super) logical: DirectoryMutationHashProofV1<'a>,
 }
@@ -133,8 +207,24 @@ impl<'a> AuthenticatedTreeMutationEvidenceV1<'a> {
             affected_leaf_index,
             affected_leaf,
             leaf_group,
+            secondary_leaf_group_index: None,
+            secondary_leaf_group: &[],
             level_one_group,
             logical,
+        }
+    }
+
+    /// Attach the other authenticated leaf group required by a
+    /// same-cardinality mutation whose two affected spines differ.
+    pub const fn with_secondary_leaf_group(
+        self,
+        group_index: u32,
+        group: &'a [TreePageBoundaryV1<'a>],
+    ) -> Self {
+        Self {
+            secondary_leaf_group_index: Some(group_index),
+            secondary_leaf_group: group,
+            ..self
         }
     }
 }
@@ -366,6 +456,9 @@ impl HashProofAccumulatorV1 {
 pub(super) fn hash_directory_sparse_proof(
     proof: DirectoryHashProofV1<'_>,
     window: &[u8],
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
 ) -> CoreResult<[u8; 32]> {
     if proof.preimage_len <= blake3::CHUNK_LEN as u64 {
         if proof.window_offset != 0
@@ -380,6 +473,7 @@ pub(super) fn hash_directory_sparse_proof(
     let mut accumulator = HashProofAccumulatorV1::new(proof.preimage_len);
     let mut expected_offset = 0_u64;
     for subtree in proof.prefix {
+        work.complete(1, control, counters)?;
         let node = validate_hash_subtree(*subtree, expected_offset, proof.preimage_len)?;
         expected_offset = expected_offset
             .checked_add(node.byte_len)
@@ -390,6 +484,7 @@ pub(super) fn hash_directory_sparse_proof(
         return Err(CoreError::IdMismatch);
     }
     for chunk in window.chunks(blake3::CHUNK_LEN) {
+        work.complete(1, control, counters)?;
         let mut hasher = blake3::Hasher::new();
         hasher.set_input_offset(expected_offset);
         hasher.update(chunk);
@@ -405,6 +500,7 @@ pub(super) fn hash_directory_sparse_proof(
         accumulator.push(node)?;
     }
     for subtree in proof.suffix {
+        work.complete(1, control, counters)?;
         let node = validate_hash_subtree(*subtree, expected_offset, proof.preimage_len)?;
         expected_offset = expected_offset
             .checked_add(node.byte_len)
@@ -485,23 +581,47 @@ impl TreeEntrySnapshotV1 {
 pub(super) fn read_base_snapshot<T: CanonicalTreeMutationSourceV1 + ?Sized>(
     source: &mut T,
     ordinal: usize,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
 ) -> CoreResult<TreeEntrySnapshotV1> {
     let ordinal = u32::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
-    let entry = source
+    work.poll(control, counters)?;
+    let result = source
         .read_base_entry(ordinal)
-        .map_err(map_tree_mutation_source)?;
-    TreeEntrySnapshotV1::from_entry(entry)
+        .map_err(map_tree_mutation_source)
+        .and_then(TreeEntrySnapshotV1::from_entry);
+    let after = work.complete_blocking_call(control, counters);
+    match result {
+        Err(error) => Err(error),
+        Ok(entry) => {
+            after?;
+            Ok(entry)
+        }
+    }
 }
 
 pub(super) fn read_result_snapshot<T: CanonicalTreeMutationSourceV1 + ?Sized>(
     source: &mut T,
     ordinal: usize,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
 ) -> CoreResult<TreeEntrySnapshotV1> {
     let ordinal = u32::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
-    let entry = source
+    work.poll(control, counters)?;
+    let result = source
         .read_result_entry(ordinal)
-        .map_err(map_tree_mutation_source)?;
-    TreeEntrySnapshotV1::from_entry(entry)
+        .map_err(map_tree_mutation_source)
+        .and_then(TreeEntrySnapshotV1::from_entry);
+    let after = work.complete_blocking_call(control, counters);
+    match result {
+        Err(error) => Err(error),
+        Ok(entry) => {
+            after?;
+            Ok(entry)
+        }
+    }
 }
 
 pub(super) fn map_tree_mutation_source(
@@ -515,12 +635,16 @@ pub(super) fn validate_page_boundaries(
     first_index: usize,
     end_index: usize,
     plan: TreePlanV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
     if boundaries.len() != end_index - first_index {
         return Err(CoreError::IdMismatch);
     }
     let mut previous_last: Option<&[u8]> = None;
     for (relative, boundary) in boundaries.iter().enumerate() {
+        work.complete(1, control, counters)?;
         let index = first_index
             .checked_add(relative)
             .ok_or(CoreError::IntegerOverflow)?;
@@ -572,6 +696,8 @@ pub(super) fn derive_replacement_logical(
     replacement: CanonicalTreeEntryV1<'_>,
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
 ) -> CoreResult<DirectoryLogicalIdentityV1> {
     let proof = evidence.logical;
     let window_len = proof.old_window.len();
@@ -600,6 +726,7 @@ pub(super) fn derive_replacement_logical(
         .map_err(|_| CoreError::IntegerOverflow)?;
     let mut replacement_child_offset = None;
     for (relative, entry) in evidence.affected_entries.iter().enumerate() {
+        work.complete(1, control, counters)?;
         let name = entry.name.as_bytes();
         verify_logical_bytes(scratch, &mut cursor, &(name.len() as u32).to_le_bytes())?;
         verify_logical_bytes(scratch, &mut cursor, name)?;
@@ -612,7 +739,8 @@ pub(super) fn derive_replacement_logical(
         }
     }
 
-    let old_digest = hash_directory_sparse_proof(proof, &scratch[..window_len])?;
+    let old_digest =
+        hash_directory_sparse_proof(proof, &scratch[..window_len], work, control, counters)?;
     if old_digest != directory_logical_bytes(base.logical) {
         return Err(CoreError::IdMismatch);
     }
@@ -626,7 +754,8 @@ pub(super) fn derive_replacement_logical(
     let (kind, id) = replacement.child.logical().kind_and_id();
     destination[0] = kind;
     destination[1..].copy_from_slice(&id);
-    let new_digest = hash_directory_sparse_proof(proof, &scratch[..window_len])?;
+    let new_digest =
+        hash_directory_sparse_proof(proof, &scratch[..window_len], work, control, counters)?;
     Ok(directory_logical_from_digest(base.mode, new_digest))
 }
 
@@ -673,6 +802,7 @@ pub(crate) fn mutation_evidence_resident_bytes_v1(
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
 ) -> CoreResult<usize> {
     if evidence.leaf_group.len() > TREE_INDEX_FANOUT
+        || evidence.secondary_leaf_group.len() > TREE_INDEX_FANOUT
         || evidence.level_one_group.len() > 55
         || evidence.logical.middle.len() > MAX_DIRECTORY_HASH_PROOF_NODES
         || evidence.logical.old_head.len() > blake3::CHUNK_LEN
@@ -681,7 +811,8 @@ pub(crate) fn mutation_evidence_resident_bytes_v1(
         return Err(CoreError::ResourceRefused);
     }
     let mut bytes = core::mem::size_of_val(evidence.leaf_group)
-        .checked_add(core::mem::size_of_val(evidence.level_one_group))
+        .checked_add(core::mem::size_of_val(evidence.secondary_leaf_group))
+        .and_then(|value| value.checked_add(core::mem::size_of_val(evidence.level_one_group)))
         .and_then(|value| value.checked_add(core::mem::size_of_val(evidence.logical.middle)))
         .and_then(|value| value.checked_add(evidence.logical.old_head.len()))
         .and_then(|value| value.checked_add(evidence.logical.old_tail_prefix.len()))
@@ -689,6 +820,7 @@ pub(crate) fn mutation_evidence_resident_bytes_v1(
     for boundary in evidence
         .leaf_group
         .iter()
+        .chain(evidence.secondary_leaf_group.iter())
         .chain(evidence.level_one_group.iter())
     {
         bytes = bytes
@@ -715,11 +847,14 @@ pub(super) fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Siz
     mutation: TreeProofMutationV1<'_>,
     base_count: usize,
     result_count: usize,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
     let stream_start = mutation_index.saturating_sub(1);
     let mut previous_base: Option<TreeEntrySnapshotV1> = None;
     for ordinal in stream_start..base_count {
-        let entry = read_base_snapshot(source, ordinal)?;
+        let entry = read_base_snapshot(source, ordinal, work, control, counters)?;
         if previous_base.is_some_and(|previous| {
             compare_unsigned(previous.name(), entry.name()) != core::cmp::Ordering::Less
         }) {
@@ -730,7 +865,7 @@ pub(super) fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Siz
 
     let mut previous_result: Option<TreeEntrySnapshotV1> = None;
     for result_ordinal in stream_start.min(result_count)..result_count {
-        let result = read_result_snapshot(source, result_ordinal)?;
+        let result = read_result_snapshot(source, result_ordinal, work, control, counters)?;
         if previous_result.is_some_and(|previous| {
             compare_unsigned(previous.name(), result.name()) != core::cmp::Ordering::Less
         }) {
@@ -810,7 +945,7 @@ pub(super) fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Siz
             TreeProofMutationV1::ReplacePair { .. } => Some(result_ordinal),
         };
         if let Some(base_ordinal) = expected {
-            if read_base_snapshot(source, base_ordinal)? != result {
+            if read_base_snapshot(source, base_ordinal, work, control, counters)? != result {
                 return Err(CoreError::Path);
             }
         }
@@ -818,7 +953,9 @@ pub(super) fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Siz
     }
     match mutation {
         TreeProofMutationV1::Remove(expected) => {
-            if !read_base_snapshot(source, mutation_index)?.matches(expected) {
+            if !read_base_snapshot(source, mutation_index, work, control, counters)?
+                .matches(expected)
+            {
                 return Err(CoreError::Path);
             }
         }
@@ -827,7 +964,9 @@ pub(super) fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Siz
             expected_removed,
             ..
         } => {
-            if !read_base_snapshot(source, removal_index)?.matches(expected_removed) {
+            if !read_base_snapshot(source, removal_index, work, control, counters)?
+                .matches(expected_removed)
+            {
                 return Err(CoreError::Path);
             }
         }
@@ -838,8 +977,10 @@ pub(super) fn validate_mutation_relation<T: CanonicalTreeMutationSourceV1 + ?Siz
             second_expected,
             ..
         } => {
-            if !read_base_snapshot(source, first_index)?.matches(first_expected)
-                || !read_base_snapshot(source, second_index)?.matches(second_expected)
+            if !read_base_snapshot(source, first_index, work, control, counters)?
+                .matches(first_expected)
+                || !read_base_snapshot(source, second_index, work, control, counters)?
+                    .matches(second_expected)
             {
                 return Err(CoreError::Path);
             }
@@ -875,6 +1016,8 @@ pub(super) fn authenticate_and_derive_mutation_logical<
     result_count: usize,
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
 ) -> CoreResult<DirectoryLogicalIdentityV1> {
     let proof = evidence.logical;
     let expected_stream_start = mutation_index.saturating_sub(1);
@@ -950,6 +1093,8 @@ pub(super) fn authenticate_and_derive_mutation_logical<
         proof.old_tail_prefix,
         proof.old_preimage_len,
         counters,
+        work,
+        control,
     )?;
     if old_digest != directory_logical_bytes(base.logical) {
         return Err(CoreError::IdMismatch);
@@ -982,6 +1127,8 @@ pub(super) fn authenticate_and_derive_mutation_logical<
         new_tail_prefix,
         result_preimage_len,
         counters,
+        work,
+        control,
     )?;
     Ok(directory_logical_from_digest(base.mode, new_digest))
 }
@@ -996,10 +1143,13 @@ fn hash_streamed_directory_side<T: CanonicalTreeMutationSourceV1 + ?Sized>(
     tail_prefix: &[u8],
     total_len: u64,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
 ) -> CoreResult<[u8; 32]> {
     let mut hasher = SparsePreimageHasherV1::new(total_len);
     hasher.write(head)?;
     for subtree in proof.middle {
+        work.complete(1, control, counters)?;
         hasher.push_subtree(*subtree)?;
     }
     hasher.write(tail_prefix)?;
@@ -1007,9 +1157,9 @@ fn hash_streamed_directory_side<T: CanonicalTreeMutationSourceV1 + ?Sized>(
     let mut previous: Option<TreeEntrySnapshotV1> = None;
     for ordinal in stream_start..count {
         let entry = if base_side {
-            read_base_snapshot(source, ordinal)?
+            read_base_snapshot(source, ordinal, work, control, counters)?
         } else {
-            read_result_snapshot(source, ordinal)?
+            read_result_snapshot(source, ordinal, work, control, counters)?
         };
         if previous.is_some_and(|left| {
             compare_unsigned(left.name(), entry.name()) != core::cmp::Ordering::Less
@@ -1123,16 +1273,24 @@ impl SparsePreimageHasherV1 {
 
 struct BaseTreeEntryReader<'a, T: CanonicalTreeMutationSourceV1 + ?Sized> {
     source: &'a mut T,
+    work: &'a mut CowMutationWorkV1,
+    control: &'a mut dyn OperationWorkControlV1,
+    counters: &'a mut OperationCountersV1,
+    snapshot: Option<TreeEntrySnapshotV1>,
 }
 
 impl<T: CanonicalTreeMutationSourceV1 + ?Sized> CanonicalTreeEntryReaderV1
     for BaseTreeEntryReader<'_, T>
 {
     fn read_entry(&mut self, ordinal: usize) -> CoreResult<CanonicalTreeEntryV1<'_>> {
-        let ordinal = u32::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
-        self.source
-            .read_base_entry(ordinal)
-            .map_err(map_tree_mutation_source)
+        let snapshot =
+            read_base_snapshot(self.source, ordinal, self.work, self.control, self.counters)?;
+        self.snapshot = Some(snapshot);
+        let snapshot = self.snapshot.as_ref().ok_or(CoreError::SourceFailure)?;
+        Ok(CanonicalTreeEntryV1::new(
+            ValidatedComponent::new(snapshot.name())?,
+            snapshot.child,
+        ))
     }
 }
 
@@ -1142,8 +1300,12 @@ pub(super) fn validate_mutation_physical_evidence<T: CanonicalTreeMutationSource
     plan: TreePlanV1,
     evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
     mutation_index: usize,
+    secondary_leaf_index: Option<usize>,
     source: &mut T,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
 ) -> CoreResult<Option<TreePageSummaryV1>> {
     if evidence.base_logical != base.logical
         || evidence.base_physical != base.physical
@@ -1160,6 +1322,8 @@ pub(super) fn validate_mutation_physical_evidence<T: CanonicalTreeMutationSource
         if evidence.affected_leaf_index.is_some()
             || evidence.affected_leaf.is_some()
             || !evidence.leaf_group.is_empty()
+            || evidence.secondary_leaf_group_index.is_some()
+            || !evidence.secondary_leaf_group.is_empty()
             || !evidence.level_one_group.is_empty()
         {
             return Err(CoreError::IdMismatch);
@@ -1180,21 +1344,35 @@ pub(super) fn validate_mutation_physical_evidence<T: CanonicalTreeMutationSource
     }
 
     let base_index = mutation_index.min(plan.entry_count - 1);
+    if plan.page_depth < 2
+        && (evidence.secondary_leaf_group_index.is_some()
+            || !evidence.secondary_leaf_group.is_empty())
+    {
+        return Err(CoreError::IdMismatch);
+    }
     let leaf_index = base_index / TREE_LEAF_FANOUT;
     if evidence.affected_leaf_index != Some(leaf_index as u32) {
         return Err(CoreError::IdMismatch);
     }
     let first = leaf_index * TREE_LEAF_FANOUT;
     let end = (first + TREE_LEAF_FANOUT).min(plan.entry_count);
-    let mut reader = BaseTreeEntryReader { source };
-    let verified_leaf = encode_leaf_from_reader(
-        &mut reader,
-        first,
-        end,
-        &mut verifier,
-        &mut ignored,
-        scratch,
-    )?;
+    let verified_leaf = {
+        let mut reader = BaseTreeEntryReader {
+            source,
+            work,
+            control,
+            counters,
+            snapshot: None,
+        };
+        encode_leaf_from_reader(
+            &mut reader,
+            first,
+            end,
+            &mut verifier,
+            &mut ignored,
+            scratch,
+        )?
+    };
     if evidence.affected_leaf != Some(verified_leaf) {
         return Err(CoreError::IdMismatch);
     }
@@ -1210,13 +1388,22 @@ pub(super) fn validate_mutation_physical_evidence<T: CanonicalTreeMutationSource
             let group = leaf_index / TREE_INDEX_FANOUT;
             let first_leaf = group * TREE_INDEX_FANOUT;
             let end_leaf = (first_leaf + TREE_INDEX_FANOUT).min(plan.leaf_count);
-            validate_page_boundaries(evidence.leaf_group, 0, first_leaf, end_leaf, plan)?;
+            validate_page_boundaries(
+                evidence.leaf_group,
+                0,
+                first_leaf,
+                end_leaf,
+                plan,
+                work,
+                control,
+                counters,
+            )?;
             let affected = evidence
                 .leaf_group
                 .get(leaf_index - first_leaf)
                 .ok_or(CoreError::MissingClosureEdge)?;
-            let first_entry = read_base_snapshot(reader.source, first)?;
-            let last_entry = read_base_snapshot(reader.source, end - 1)?;
+            let first_entry = read_base_snapshot(source, first, work, control, counters)?;
+            let last_entry = read_base_snapshot(source, end - 1, work, control, counters)?;
             if affected.summary != verified_leaf
                 || affected.first_name.as_bytes() != first_entry.name()
                 || affected.last_name.as_bytes() != last_entry.name()
@@ -1243,7 +1430,16 @@ pub(super) fn validate_mutation_physical_evidence<T: CanonicalTreeMutationSource
             .map(|(_, summary)| summary)
             .ok_or(CoreError::MissingClosureEdge)?,
         2 => {
-            validate_page_boundaries(evidence.level_one_group, 1, 0, plan.level_one_count, plan)?;
+            validate_page_boundaries(
+                evidence.level_one_group,
+                1,
+                0,
+                plan.level_one_count,
+                plan,
+                work,
+                control,
+                counters,
+            )?;
             let (group, verified) = verified_level_one.ok_or(CoreError::MissingClosureEdge)?;
             if evidence
                 .level_one_group
@@ -1251,6 +1447,52 @@ pub(super) fn validate_mutation_physical_evidence<T: CanonicalTreeMutationSource
                 .map(|boundary| boundary.summary)
                 != Some(verified)
             {
+                return Err(CoreError::IdMismatch);
+            }
+            let expected_secondary_group = secondary_leaf_index
+                .map(|index| index / TREE_INDEX_FANOUT)
+                .filter(|secondary| *secondary != group);
+            if evidence
+                .secondary_leaf_group_index
+                .map(|index| index as usize)
+                != expected_secondary_group
+            {
+                return Err(CoreError::IdMismatch);
+            }
+            if let Some(secondary_group) = expected_secondary_group {
+                let first_leaf = secondary_group
+                    .checked_mul(TREE_INDEX_FANOUT)
+                    .ok_or(CoreError::IntegerOverflow)?;
+                let end_leaf = first_leaf
+                    .checked_add(TREE_INDEX_FANOUT)
+                    .ok_or(CoreError::IntegerOverflow)?
+                    .min(plan.leaf_count);
+                validate_page_boundaries(
+                    evidence.secondary_leaf_group,
+                    0,
+                    first_leaf,
+                    end_leaf,
+                    plan,
+                    work,
+                    control,
+                    counters,
+                )?;
+                let verified_secondary = encode_index_boundaries(
+                    1,
+                    evidence.secondary_leaf_group.iter().copied().map(Ok),
+                    &mut verifier,
+                    &mut ignored,
+                    scratch,
+                )?;
+                if evidence
+                    .level_one_group
+                    .get(secondary_group)
+                    .map(|boundary| boundary.summary)
+                    != Some(verified_secondary)
+                {
+                    return Err(CoreError::IdMismatch);
+                }
+            } else if !evidence.secondary_leaf_group.is_empty() {
                 return Err(CoreError::IdMismatch);
             }
             encode_index_boundaries(
@@ -1332,6 +1574,8 @@ pub(super) fn validate_replacement_evidence(
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
 ) -> CoreResult<DirectoryLogicalIdentityV1> {
     let leaf_index = replacement_index / TREE_LEAF_FANOUT;
     let leaf_first = leaf_index
@@ -1359,6 +1603,7 @@ pub(super) fn validate_replacement_evidence(
 
     let mut verifier = VerificationTreeSinkV1;
     let mut ignored = OperationCountersV1::default();
+    work.complete(1, control, counters)?;
     let verified_leaf = encode_leaf(
         evidence.affected_entries.iter().copied(),
         leaf_first,
@@ -1387,7 +1632,16 @@ pub(super) fn validate_replacement_evidence(
                 .checked_add(TREE_INDEX_FANOUT)
                 .ok_or(CoreError::IntegerOverflow)?
                 .min(plan.leaf_count);
-            validate_page_boundaries(evidence.leaf_group, 0, first_leaf, end_leaf, plan)?;
+            validate_page_boundaries(
+                evidence.leaf_group,
+                0,
+                first_leaf,
+                end_leaf,
+                plan,
+                work,
+                control,
+                counters,
+            )?;
             let affected_boundary = evidence
                 .leaf_group
                 .get(leaf_index - first_leaf)
@@ -1422,7 +1676,16 @@ pub(super) fn validate_replacement_evidence(
             .map(|(_, summary)| summary)
             .ok_or(CoreError::MissingClosureEdge)?,
         2 => {
-            validate_page_boundaries(evidence.level_one_group, 1, 0, plan.level_one_count, plan)?;
+            validate_page_boundaries(
+                evidence.level_one_group,
+                1,
+                0,
+                plan.level_one_count,
+                plan,
+                work,
+                control,
+                counters,
+            )?;
             let (level_one_index, verified) =
                 verified_level_one.ok_or(CoreError::MissingClosureEdge)?;
             if evidence
@@ -1463,6 +1726,8 @@ pub(super) fn validate_replacement_evidence(
         replacement,
         logical_scratch,
         counters,
+        work,
+        control,
     )
 }
 

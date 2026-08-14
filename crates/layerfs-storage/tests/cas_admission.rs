@@ -13,6 +13,7 @@ mod cas_admission_owner {
         derive_physical_symlink_id_v1, derive_physical_tree_id_v1,
         derive_physical_version_record_id_v1, derive_symlink_node_v1, derive_version_v1,
         LogicalChildIdV1, LogicalChunkRefV1, LogicalDirectoryEntryV1,
+        DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1,
     };
     use layerfs_storage::object::TypedPhysicalObjectIdV1;
     use layerfs_storage::profile::{ChunkerSpecV1, DigestSpecV1, ProfileSpecV1};
@@ -993,7 +994,7 @@ mod cas_admission_owner {
             + 2 * 32_768
             + 1
             + admission_traversal
-            + core::mem::size_of::<blake3::Hasher>();
+            + DEFERRED_COUNT_LOGICAL_FILE_HASHER_BYTES_V1 as usize;
         assert_eq!(observation.planned_high_water(), 8_388_608 + planned as u64);
     }
 
@@ -1031,11 +1032,27 @@ mod cas_admission_owner {
 
     #[test]
     fn admission_replays_logical_cdc_across_different_physical_chunking() {
+        let logical_bytes = b"logical bytes reconstructed across physical chunks";
         let objects = rechunked_file_closure();
         let object_refs = typed_refs(&objects);
         let observation = admit_v1(AdmissionRequestV1::new(&object_refs));
         assert_eq!((observation.error(), observation.object_count()), (None, 6));
         assert_eq!(observation.visible_expected(), true);
+        assert_eq!(observation.logical_reconstruction_cdc_passes(), 1);
+        assert_eq!(
+            observation.logical_reconstruction_logical_bytes(),
+            logical_bytes.len() as u64
+        );
+        assert_eq!(observation.logical_reconstruction_payload_read_calls(), 2);
+        assert_eq!(
+            observation.logical_reconstruction_payload_bytes(),
+            logical_bytes.len() as u64
+        );
+        assert!(observation.logical_reconstruction_control_polls() > 0);
+        assert!(
+            observation.logical_reconstruction_maximum_work_between_polls()
+                <= layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u64
+        );
         assert_eq!(
             objects
                 .iter()
@@ -1043,6 +1060,22 @@ mod cas_admission_owner {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn logical_reconstruction_borrowed_control_stops_before_visibility() {
+        let objects = rechunked_file_closure();
+        let object_refs = typed_refs(&objects);
+        for failure in [CoreError::Cancelled, CoreError::Deadline] {
+            let observation =
+                admit_v1(AdmissionRequestV1::new(&object_refs).with_control_failure(failure));
+            assert_eq!(observation.error(), Some(failure));
+            assert_eq!(observation.logical_reconstruction_cdc_passes(), 1);
+            assert!(observation.logical_reconstruction_control_polls() > 0);
+            assert!(!observation.visible_expected());
+            assert_eq!(observation.sink_aborts(), 1);
+            assert_eq!(observation.admitted_slots(), 0);
+        }
     }
 
     #[test]

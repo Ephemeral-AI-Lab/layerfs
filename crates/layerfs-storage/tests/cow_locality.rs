@@ -216,6 +216,141 @@ mod cow_owner {
     }
 
     #[test]
+    fn pb08a_move_replace_pair_and_frozen_suffix_work_are_direct_and_exact() {
+        for (
+            first,
+            second,
+            first_leaf,
+            last_leaf,
+            changed,
+            reused,
+            emitted,
+            base_reads,
+            result_reads,
+            moved_created_bytes,
+            paired_created_bytes,
+            reused_bytes,
+        ) in [
+            (0, 1, 0, 0, 1, 3, 3, 1_994, 1_400, 8_686, 8_685, 17_712),
+            (192, 384, 1, 2, 2, 2, 4, 1_421, 1_210, 16_999, 16_997, 9_400),
+            (598, 599, 3, 3, 1, 3, 3, 35, 38, 1_463, 1_461, 24_936),
+        ] {
+            for (observation, expected_created_bytes) in [
+                (
+                    mutate_v1(TreeMutationRequestV1::move_entry(600, first, second)).unwrap(),
+                    moved_created_bytes,
+                ),
+                (
+                    mutate_v1(TreeMutationRequestV1::replace_pair(600, first, second)).unwrap(),
+                    paired_created_bytes,
+                ),
+            ] {
+                assert_eq!(observation.outcome(), Ok(()));
+                assert_eq!(observation.first_changed_leaf(), first_leaf);
+                assert_eq!(observation.last_changed_leaf(), last_leaf);
+                assert_eq!(observation.changed_leaves(), changed);
+                assert_eq!(observation.changed_level_one(), 1);
+                assert_eq!(observation.reused_leaves(), reused);
+                assert_eq!(observation.reused_level_one(), 0);
+                assert_eq!(observation.emitted_objects(), emitted);
+                assert_eq!(observation.tree_nodes_created(), u64::from(emitted));
+                assert_eq!(observation.tree_nodes_reused(), u64::from(reused));
+                assert_eq!(observation.base_reads(), base_reads);
+                assert_eq!(observation.result_reads(), result_reads);
+                assert_eq!(observation.created_bytes(), expected_created_bytes);
+                assert_eq!(observation.reused_bytes(), reused_bytes);
+                assert!(observation.cow_mutation_control_polls() > 0);
+                assert!(observation.cow_mutation_maximum_work_between_polls() <= 128);
+                assert!(observation.logical_matches_rebuild());
+                assert!(observation.physical_matches_rebuild());
+                assert_eq!(observation.ledger_admitted_slots(), 0);
+            }
+        }
+
+        let moved = mutate_v1(TreeMutationRequestV1::move_entry(18_433, 10 * 192, 18_432)).unwrap();
+        assert_eq!(
+            (
+                moved.first_changed_leaf(),
+                moved.last_changed_leaf(),
+                moved.changed_leaves(),
+                moved.changed_level_one(),
+                moved.reused_leaves(),
+                moved.reused_level_one(),
+                moved.emitted_objects(),
+                moved.base_reads(),
+                moved.result_reads(),
+            ),
+            (10, 96, 87, 2, 10, 0, 91, 49_736, 49_739)
+        );
+        assert_eq!(moved.created_bytes(), 720_741);
+        assert_eq!(moved.reused_bytes(), 83_120);
+        assert!(moved.cow_mutation_control_polls() > 0);
+        assert!(moved.cow_mutation_maximum_work_between_polls() <= 128);
+        assert!(moved.logical_matches_rebuild() && moved.physical_matches_rebuild());
+
+        let paired = mutate_v1(TreeMutationRequestV1::replace_pair(
+            18_433,
+            10 * 192,
+            18_432,
+        ))
+        .unwrap();
+        assert_eq!(
+            (
+                paired.first_changed_leaf(),
+                paired.last_changed_leaf(),
+                paired.changed_leaves(),
+                paired.changed_level_one(),
+                paired.reused_leaves(),
+                paired.reused_level_one(),
+                paired.emitted_objects(),
+                paired.base_reads(),
+                paired.result_reads(),
+            ),
+            (10, 96, 2, 2, 95, 0, 6, 49_736, 33_419)
+        );
+        assert_eq!(paired.created_bytes(), 14_216);
+        assert_eq!(paired.reused_bytes(), 789_640);
+        assert!(paired.cow_mutation_control_polls() > 0);
+        assert!(paired.cow_mutation_maximum_work_between_polls() <= 128);
+        assert!(paired.logical_matches_rebuild() && paired.physical_matches_rebuild());
+
+        for (index, first_leaf, last_leaf, changed, reused, emitted) in [
+            (0, 0, 3, 4, 0, 6),
+            (300, 1, 3, 3, 1, 5),
+            (600, 3, 3, 1, 3, 3),
+        ] {
+            let added = mutate_v1(TreeMutationRequestV1::add(600, index)).unwrap();
+            assert_eq!(
+                (
+                    added.first_changed_leaf(),
+                    added.last_changed_leaf(),
+                    added.changed_leaves(),
+                    added.reused_leaves(),
+                    added.emitted_objects(),
+                ),
+                (first_leaf, last_leaf, changed, reused, emitted)
+            );
+        }
+        for (index, first_leaf, last_leaf, changed, reused, emitted) in [
+            (0, 0, 3, 4, 0, 6),
+            (300, 1, 3, 3, 1, 5),
+            (599, 3, 3, 1, 3, 3),
+        ] {
+            let removed = mutate_v1(TreeMutationRequestV1::remove(600, index)).unwrap();
+            assert_eq!(
+                (
+                    removed.first_changed_leaf(),
+                    removed.last_changed_leaf(),
+                    removed.changed_leaves(),
+                    removed.reused_leaves(),
+                    removed.emitted_objects(),
+                ),
+                (first_leaf, last_leaf, changed, reused, emitted)
+            );
+        }
+    }
+
+    #[test]
     fn cow_add_rejects_duplicate_or_mismatched_result_before_staging() {
         let observation = mutate_v1(
             TreeMutationRequestV1::add(2, 2).with_fault(TreeMutationFaultV1::DuplicateResult),

@@ -54,7 +54,7 @@ pub mod semantic {
         derive_physical_chunk_id_v1, derive_physical_file_id_v1, derive_physical_symlink_id_v1,
         derive_symlink_node_v1, LogicalChunkRefV1, PhysicalTreeIdV1, COMPARISON_WINDOW_BYTES,
     };
-    use crate::limits::{OperationCountersV1, ResourceLedgerV1};
+    use crate::limits::{OperationCountersV1, OperationWorkControlV1, ResourceLedgerV1};
     use crate::object::{
         decode_physical_object_v1, DiscardStrongEdgesV1, PhysicalObjectPayloadV1, TreeRecordV1,
     };
@@ -63,7 +63,9 @@ pub mod semantic {
     use blake3::hazmat::HasherExt;
 
     use super::mutate::{
-        add_directory_entry_cow_v1, remove_directory_entry_cow_v1, replace_directory_entry_cow_v1,
+        add_directory_entry_cow_v1, move_directory_entry_cow_independent_v1,
+        remove_directory_entry_cow_v1, replace_directory_entry_cow_v1,
+        replace_two_directory_entries_cow_independent_v1,
     };
     use super::tree::DirectoryLogicalIdentityV1;
     use super::view::{
@@ -71,6 +73,18 @@ pub mod semantic {
         CanonicalTreeMutationSourceV1, DirectoryHashProofV1, DirectoryHashSubtreeV1,
         DirectoryMutationHashProofV1, TreeMutationSourceErrorV1,
     };
+
+    struct ContinueCowControlV1;
+
+    impl OperationWorkControlV1 for ContinueCowControlV1 {
+        fn cancellation_requested_v1(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded_v1(&mut self) -> bool {
+            false
+        }
+    }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum TreeModeV1 {
@@ -530,6 +544,8 @@ pub mod semantic {
         Add,
         Remove,
         Replace,
+        Move,
+        ReplacePair,
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -551,6 +567,7 @@ pub mod semantic {
         action: TreeMutationActionV1,
         base_entries: u32,
         index: u32,
+        second_index: u32,
         base_tag: u8,
         changed_tag: u8,
         fault: TreeMutationFaultV1,
@@ -564,6 +581,7 @@ pub mod semantic {
                 action,
                 base_entries,
                 index,
+                second_index: index,
                 base_tag: 0,
                 changed_tag: 1,
                 fault: TreeMutationFaultV1::None,
@@ -582,6 +600,24 @@ pub mod semantic {
 
         pub const fn remove(base_entries: u32, index: u32) -> Self {
             Self::new(TreeMutationActionV1::Remove, base_entries, index)
+        }
+
+        pub const fn move_entry(
+            base_entries: u32,
+            removal_index: u32,
+            insertion_index: u32,
+        ) -> Self {
+            Self {
+                second_index: insertion_index,
+                ..Self::new(TreeMutationActionV1::Move, base_entries, removal_index)
+            }
+        }
+
+        pub const fn replace_pair(base_entries: u32, first_index: u32, second_index: u32) -> Self {
+            Self {
+                second_index,
+                ..Self::new(TreeMutationActionV1::ReplacePair, base_entries, first_index)
+            }
         }
 
         pub const fn with_tags(self, base_tag: u8, changed_tag: u8) -> Self {
@@ -612,6 +648,9 @@ pub mod semantic {
         page_depth: u8,
         changed_leaf_index: u32,
         first_changed_leaf: u32,
+        last_changed_leaf: u32,
+        changed_leaves: u32,
+        changed_level_one: u32,
         reused_leaves: u32,
         reused_level_one: u32,
         emitted_objects: u32,
@@ -626,6 +665,9 @@ pub mod semantic {
         base_reads: u64,
         result_reads: u64,
         created_bytes: u64,
+        reused_bytes: u64,
+        cow_mutation_control_polls: u64,
+        cow_mutation_maximum_work_between_polls: u64,
         proof_window_bytes: u64,
         proof_node_count: u32,
         middle_len: u32,
@@ -662,6 +704,18 @@ pub mod semantic {
 
         pub const fn first_changed_leaf(self) -> u32 {
             self.first_changed_leaf
+        }
+
+        pub const fn last_changed_leaf(self) -> u32 {
+            self.last_changed_leaf
+        }
+
+        pub const fn changed_leaves(self) -> u32 {
+            self.changed_leaves
+        }
+
+        pub const fn changed_level_one(self) -> u32 {
+            self.changed_level_one
         }
 
         pub const fn reused_leaves(self) -> u32 {
@@ -718,6 +772,18 @@ pub mod semantic {
 
         pub const fn created_bytes(self) -> u64 {
             self.created_bytes
+        }
+
+        pub const fn reused_bytes(self) -> u64 {
+            self.reused_bytes
+        }
+
+        pub const fn cow_mutation_control_polls(self) -> u64 {
+            self.cow_mutation_control_polls
+        }
+
+        pub const fn cow_mutation_maximum_work_between_polls(self) -> u64 {
+            self.cow_mutation_maximum_work_between_polls
         }
 
         pub const fn proof_window_bytes(self) -> u64 {
@@ -949,6 +1015,8 @@ pub mod semantic {
         affected_leaf_index: Option<u32>,
         affected_leaf: Option<TreePageSummaryV1>,
         leaf_group: Vec<TreePageBoundaryV1<'a>>,
+        secondary_leaf_group_index: Option<u32>,
+        secondary_leaf_group: Vec<TreePageBoundaryV1<'a>>,
         level_one_group: Vec<TreePageBoundaryV1<'a>>,
         old_preimage_len: u64,
         stream_start_index: u32,
@@ -1259,6 +1327,8 @@ pub mod semantic {
             affected_leaf_index: affected_index,
             affected_leaf,
             leaf_group,
+            secondary_leaf_group_index: None,
+            secondary_leaf_group: Vec::new(),
             level_one_group,
             old_preimage_len: bytes.len() as u64,
             stream_start_index: stream_start as u32,
@@ -1267,6 +1337,30 @@ pub mod semantic {
             middle,
             old_tail_prefix: bytes[tail_offset..stream_offset].to_vec(),
         }
+    }
+
+    fn add_secondary_leaf_group<'a>(
+        evidence: &mut MutationEvidence<'a>,
+        entries: &'a [CanonicalTreeEntryV1<'a>],
+        built: &BuiltTree,
+        index: usize,
+    ) {
+        if built.directory.page_depth() != 2 || entries.is_empty() {
+            return;
+        }
+        let leaf = index.min(entries.len() - 1) / 192;
+        let group = leaf / 96;
+        if evidence.affected_leaf_index.map(|leaf| leaf as usize / 96) == Some(group) {
+            return;
+        }
+        let first = group * 96;
+        let end = (first + 96).min(built.leaves.len());
+        evidence.secondary_leaf_group_index = Some(group as u32);
+        evidence.secondary_leaf_group = built.leaves[first..end]
+            .iter()
+            .copied()
+            .map(|summary| boundary(summary, entries))
+            .collect();
     }
 
     fn replacement_evidence_value<'a>(
@@ -1309,7 +1403,7 @@ pub mod semantic {
         evidence: &'a MutationEvidence<'a>,
         base: CanonicalDirectoryTreeV1,
     ) -> AuthenticatedTreeMutationEvidenceV1<'a> {
-        AuthenticatedTreeMutationEvidenceV1::new(
+        let value = AuthenticatedTreeMutationEvidenceV1::new(
             base,
             evidence.affected_leaf_index,
             evidence.affected_leaf,
@@ -1323,7 +1417,11 @@ pub mod semantic {
                 &evidence.middle,
                 &evidence.old_tail_prefix,
             ),
-        )
+        );
+        match evidence.secondary_leaf_group_index {
+            Some(group) => value.with_secondary_leaf_group(group, &evidence.secondary_leaf_group),
+            None => value,
+        }
     }
 
     pub(crate) fn with_mutation_evidence_v1<R>(
@@ -1359,10 +1457,11 @@ pub mod semantic {
     fn mutation_name(index: usize, action: TreeMutationActionV1) -> Vec<u8> {
         match action {
             TreeMutationActionV1::Add if index == 0 => b"a0000000".to_vec(),
-            TreeMutationActionV1::Add if index == 9_000 => b"n0008999x".to_vec(),
-            TreeMutationActionV1::Add => b"n9999999".to_vec(),
+            TreeMutationActionV1::Add => format!("n{:07}x", index - 1).into_bytes(),
             TreeMutationActionV1::Remove => Vec::new(),
-            TreeMutationActionV1::Replace => Vec::new(),
+            TreeMutationActionV1::Replace
+            | TreeMutationActionV1::Move
+            | TreeMutationActionV1::ReplacePair => Vec::new(),
         }
     }
 
@@ -1385,6 +1484,9 @@ pub mod semantic {
         level_one_group: u32,
         changed_leaf_index: u32,
         first_changed_leaf: u32,
+        last_changed_leaf: u32,
+        changed_leaves: u32,
+        changed_level_one: u32,
         changed_leaf_id_differs: bool,
         directory_logical_differs_from_base: bool,
         directory_physical_differs_from_base: bool,
@@ -1401,7 +1503,9 @@ pub mod semantic {
             .unwrap_or_else(|| match request.action {
                 TreeMutationActionV1::Add => request.base_entries.saturating_add(1),
                 TreeMutationActionV1::Remove => request.base_entries.saturating_sub(1),
-                TreeMutationActionV1::Replace => request.base_entries,
+                TreeMutationActionV1::Replace
+                | TreeMutationActionV1::Move
+                | TreeMutationActionV1::ReplacePair => request.base_entries,
             });
         let created_objects_are_tree_pages = sink
             .committed
@@ -1415,6 +1519,9 @@ pub mod semantic {
                 .unwrap_or(base.directory.page_depth()),
             changed_leaf_index,
             first_changed_leaf,
+            last_changed_leaf,
+            changed_leaves,
+            changed_level_one,
             reused_leaves,
             reused_level_one,
             emitted_objects,
@@ -1437,6 +1544,10 @@ pub mod semantic {
                 .iter()
                 .map(|(_, bytes)| bytes.len() as u64)
                 .sum(),
+            reused_bytes: counters.bytes_structurally_reused,
+            cow_mutation_control_polls: counters.cow_mutation_control_polls,
+            cow_mutation_maximum_work_between_polls: counters
+                .cow_mutation_maximum_work_between_polls,
             proof_window_bytes: evidence_window_bytes,
             proof_node_count,
             middle_len,
@@ -1499,6 +1610,7 @@ pub mod semantic {
         };
         let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
         let mut counters = OperationCountersV1::default();
+        let mut control = ContinueCowControlV1;
         let outcome = replace_directory_entry_cow_v1(
             base.directory,
             replacement_evidence_value(&evidence, base.directory),
@@ -1507,6 +1619,7 @@ pub mod semantic {
             &mut sink,
             &ledger,
             &mut counters,
+            &mut control,
             &mut [0_u8; MAX_TREE_OBJECT_BYTES],
             &mut [0_u8; COMPARISON_WINDOW_BYTES],
         );
@@ -1555,6 +1668,9 @@ pub mod semantic {
             level_one_group,
             changed_leaf_index,
             0,
+            0,
+            0,
+            0,
             changed_leaf_id_differs,
             directory_logical_differs_from_base,
             directory_physical_differs_from_base,
@@ -1582,6 +1698,8 @@ pub mod semantic {
         let base_count =
             usize::try_from(request.base_entries).map_err(|_| CoreError::IntegerOverflow)?;
         let index = usize::try_from(request.index).map_err(|_| CoreError::IntegerOverflow)?;
+        let second_index =
+            usize::try_from(request.second_index).map_err(|_| CoreError::IntegerOverflow)?;
         let names = names(base_count);
         let mut base_entries = entries(&names, symlink_child(request.base_tag));
         if request.action == TreeMutationActionV1::Remove {
@@ -1592,34 +1710,66 @@ pub mod semantic {
             );
         }
         let base = build_tree(DirectoryBuildModeV1::ImplicitRoot, &base_entries)?;
-        let mut result_names = names.clone();
-        let changed = if request.action == TreeMutationActionV1::Add {
-            let changed_name = mutation_name(index, request.action);
-            let position = index.min(result_names.len());
-            result_names.insert(position, changed_name);
-            symlink_child(request.changed_tag)
-        } else {
-            let removed = result_names.get(index).cloned().ok_or(CoreError::Path)?;
-            result_names.remove(index);
-            let _ = removed;
-            symlink_child(request.base_tag)
-        };
+        let mutation_component_name: Vec<u8>;
         let result_entries = if request.fault == TreeMutationFaultV1::DuplicateResult {
             let duplicate = base_entries.get(1).copied().ok_or(CoreError::Path)?;
             vec![base_entries[0], base_entries[1], duplicate]
         } else {
             let mut result = base_entries.clone();
             match request.action {
-                TreeMutationActionV1::Add => result.insert(
-                    index,
-                    CanonicalTreeEntryV1::new(
-                        ValidatedComponent::new(&result_names[index])
-                            .map_err(|_| CoreError::Name)?,
-                        changed,
-                    ),
-                ),
+                TreeMutationActionV1::Add => {
+                    mutation_component_name = mutation_name(index, request.action);
+                    result.insert(
+                        index,
+                        CanonicalTreeEntryV1::new(
+                            ValidatedComponent::new(&mutation_component_name)
+                                .map_err(|_| CoreError::Name)?,
+                            symlink_child(request.changed_tag),
+                        ),
+                    );
+                }
                 TreeMutationActionV1::Remove => {
                     result.remove(index);
+                }
+                TreeMutationActionV1::Move => {
+                    if index >= result.len() || second_index >= result.len() {
+                        return Err(CoreError::Path);
+                    }
+                    let removed = result.remove(index);
+                    mutation_component_name = if second_index == 0 {
+                        b"a0000000".to_vec()
+                    } else {
+                        let mut name = result
+                            .get(second_index - 1)
+                            .ok_or(CoreError::Path)?
+                            .name()
+                            .as_bytes()
+                            .to_vec();
+                        name.push(b'x');
+                        name
+                    };
+                    result.insert(
+                        second_index,
+                        CanonicalTreeEntryV1::new(
+                            ValidatedComponent::new(&mutation_component_name)
+                                .map_err(|_| CoreError::Name)?,
+                            removed.child(),
+                        ),
+                    );
+                }
+                TreeMutationActionV1::ReplacePair => {
+                    if index == second_index
+                        || index >= result.len()
+                        || second_index >= result.len()
+                    {
+                        return Err(CoreError::Path);
+                    }
+                    result[index] = CanonicalTreeEntryV1::new(
+                        result[index].name(),
+                        symlink_child(request.changed_tag),
+                    );
+                    result[second_index] =
+                        CanonicalTreeEntryV1::new(result[second_index].name(), symlink_child(7));
                 }
                 TreeMutationActionV1::Replace => unreachable!(),
             }
@@ -1633,12 +1783,24 @@ pub mod semantic {
                 &result_entries,
             )?)
         };
+        let mutation_index = match request.action {
+            TreeMutationActionV1::Move | TreeMutationActionV1::ReplacePair => {
+                index.min(second_index)
+            }
+            _ => index,
+        };
         let mut evidence = mutation_evidence(
             DirectoryBuildModeV1::ImplicitRoot,
             &base_entries,
             &base,
-            index,
+            mutation_index,
         );
+        if matches!(
+            request.action,
+            TreeMutationActionV1::Move | TreeMutationActionV1::ReplacePair
+        ) {
+            add_secondary_leaf_group(&mut evidence, &base_entries, &base, index.max(second_index));
+        }
         match request.fault {
             TreeMutationFaultV1::CorruptOldHead => {
                 if let Some(first) = evidence.old_head.first_mut() {
@@ -1669,8 +1831,9 @@ pub mod semantic {
         };
         let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
         let mut counters = OperationCountersV1::default();
-        let outcome = if request.action == TreeMutationActionV1::Add {
-            add_directory_entry_cow_v1(
+        let mut control = ContinueCowControlV1;
+        let outcome = match request.action {
+            TreeMutationActionV1::Add => add_directory_entry_cow_v1(
                 base.directory,
                 mutation_evidence_value(&evidence, base.directory),
                 index,
@@ -1679,12 +1842,12 @@ pub mod semantic {
                 &mut sink,
                 &ledger,
                 &mut counters,
+                &mut control,
                 &mut [0_u8; MAX_TREE_OBJECT_BYTES],
                 &mut [0_u8; COMPARISON_WINDOW_BYTES],
                 &mut [None; MAX_COW_TREE_PAGE_SUMMARIES],
-            )
-        } else {
-            remove_directory_entry_cow_v1(
+            ),
+            TreeMutationActionV1::Remove => remove_directory_entry_cow_v1(
                 base.directory,
                 mutation_evidence_value(&evidence, base.directory),
                 index,
@@ -1693,10 +1856,46 @@ pub mod semantic {
                 &mut sink,
                 &ledger,
                 &mut counters,
+                &mut control,
                 &mut [0_u8; MAX_TREE_OBJECT_BYTES],
                 &mut [0_u8; COMPARISON_WINDOW_BYTES],
                 &mut [None; MAX_COW_TREE_PAGE_SUMMARIES],
-            )
+            ),
+            TreeMutationActionV1::Move => move_directory_entry_cow_independent_v1(
+                base.directory,
+                mutation_evidence_value(&evidence, base.directory),
+                index,
+                second_index,
+                base_entries[index],
+                result_entries[second_index],
+                &mut source,
+                &mut sink,
+                &ledger,
+                &mut counters,
+                &mut control,
+                &mut [0_u8; MAX_TREE_OBJECT_BYTES],
+                &mut [0_u8; COMPARISON_WINDOW_BYTES],
+                &mut [None; MAX_COW_TREE_PAGE_SUMMARIES],
+            ),
+            TreeMutationActionV1::ReplacePair => replace_two_directory_entries_cow_independent_v1(
+                base.directory,
+                mutation_evidence_value(&evidence, base.directory),
+                index,
+                base_entries[index],
+                result_entries[index],
+                second_index,
+                base_entries[second_index],
+                result_entries[second_index],
+                &mut source,
+                &mut sink,
+                &ledger,
+                &mut counters,
+                &mut control,
+                &mut [0_u8; MAX_TREE_OBJECT_BYTES],
+                &mut [0_u8; COMPARISON_WINDOW_BYTES],
+                &mut [None; MAX_COW_TREE_PAGE_SUMMARIES],
+            ),
+            TreeMutationActionV1::Replace => unreachable!(),
         };
         let error = outcome.as_ref().err().copied();
         let (logical_matches_rebuild, physical_matches_rebuild) =
@@ -1750,6 +1949,18 @@ pub mod semantic {
             evidence.level_one_group.len() as u32,
             0,
             first_changed_leaf,
+            outcome
+                .as_ref()
+                .map(|cow| cow.last_changed_leaf())
+                .unwrap_or(0),
+            outcome
+                .as_ref()
+                .map(|cow| cow.changed_leaves())
+                .unwrap_or(0),
+            outcome
+                .as_ref()
+                .map(|cow| cow.changed_level_one())
+                .unwrap_or(0),
             false,
             directory_logical_differs_from_base,
             directory_physical_differs_from_base,
@@ -1808,6 +2019,7 @@ pub mod semantic {
         let mut sink = MutationSink::default();
         let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
         let mut counters = OperationCountersV1::default();
+        let mut control = ContinueCowControlV1;
         let outcome = replace_directory_entry_cow_v1(
             base.directory,
             replacement_evidence_value(&evidence, base.directory),
@@ -1816,6 +2028,7 @@ pub mod semantic {
             &mut sink,
             &ledger,
             &mut counters,
+            &mut control,
             &mut [0_u8; MAX_TREE_OBJECT_BYTES],
             &mut [0_u8; COMPARISON_WINDOW_BYTES],
         )?;
@@ -1837,6 +2050,9 @@ pub mod semantic {
             evidence.leaf_group.len() as u32,
             evidence.level_one_group.len() as u32,
             outcome.changed_leaf_index(),
+            0,
+            0,
+            0,
             0,
             outcome.changed_leaf().id() != base.leaves[outcome.changed_leaf_index() as usize].id(),
             outcome.directory().logical() != base.directory.logical(),

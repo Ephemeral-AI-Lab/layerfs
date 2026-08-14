@@ -630,6 +630,26 @@ pub struct OperationCountersV1 {
     pub file_sort_work_units: u64,
     pub file_sort_maximum_work_budget: u64,
     pub file_sort_temporary_bytes_high_water: u64,
+    /// Direct authenticated logical-reconstruction work. Payload reads are
+    /// counted at the chunk-object port; logical bytes are counted when they
+    /// enter the single CDC stream, including synthesized hole bytes.
+    pub logical_reconstruction_cdc_passes: u64,
+    pub logical_reconstruction_logical_bytes: u64,
+    pub logical_reconstruction_payload_read_calls: u64,
+    pub logical_reconstruction_payload_bytes: u64,
+    pub logical_reconstruction_control_polls: u64,
+    pub logical_reconstruction_maximum_work_between_polls: u64,
+    /// Direct COW entry/page work observed between cancellation/deadline
+    /// polls. This is counted at the mutation owner rather than inferred from
+    /// source-read totals or elapsed operation time.
+    pub cow_mutation_control_polls: u64,
+    pub cow_mutation_maximum_work_between_polls: u64,
+    pub closure_validation_control_polls: u64,
+    pub closure_validation_maximum_work_between_polls: u64,
+    pub candidate_graph_control_polls: u64,
+    pub candidate_graph_maximum_work_between_polls: u64,
+    pub exact_range_control_polls: u64,
+    pub exact_range_maximum_work_between_polls: u64,
     /// Direct phase-one/root-admission events. Queue depth counts waiting
     /// tickets, while active-slot high-water counts granted operations. The
     /// duration is measured with the portable monotonic `Instant` clock and
@@ -854,6 +874,15 @@ impl OperationCountersV1 {
             file_sort_passes,
             file_sort_control_polls,
             file_sort_work_units,
+            logical_reconstruction_cdc_passes,
+            logical_reconstruction_logical_bytes,
+            logical_reconstruction_payload_read_calls,
+            logical_reconstruction_payload_bytes,
+            logical_reconstruction_control_polls,
+            cow_mutation_control_polls,
+            closure_validation_control_polls,
+            candidate_graph_control_polls,
+            exact_range_control_polls,
             root_admission_queue_entries,
             root_admission_queue_refusals,
             root_admission_wait_polls,
@@ -957,6 +986,21 @@ impl OperationCountersV1 {
         self.file_sort_temporary_bytes_high_water = self
             .file_sort_temporary_bytes_high_water
             .max(other.file_sort_temporary_bytes_high_water);
+        self.logical_reconstruction_maximum_work_between_polls = self
+            .logical_reconstruction_maximum_work_between_polls
+            .max(other.logical_reconstruction_maximum_work_between_polls);
+        self.cow_mutation_maximum_work_between_polls = self
+            .cow_mutation_maximum_work_between_polls
+            .max(other.cow_mutation_maximum_work_between_polls);
+        self.closure_validation_maximum_work_between_polls = self
+            .closure_validation_maximum_work_between_polls
+            .max(other.closure_validation_maximum_work_between_polls);
+        self.candidate_graph_maximum_work_between_polls = self
+            .candidate_graph_maximum_work_between_polls
+            .max(other.candidate_graph_maximum_work_between_polls);
+        self.exact_range_maximum_work_between_polls = self
+            .exact_range_maximum_work_between_polls
+            .max(other.exact_range_maximum_work_between_polls);
         self.root_admission_queue_depth_high_water = self
             .root_admission_queue_depth_high_water
             .max(other.root_admission_queue_depth_high_water);
@@ -1129,6 +1173,118 @@ impl OperationCountersV1 {
             .file_sort_control_polls
             .checked_add(1)
             .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    pub(crate) fn record_logical_reconstruction_pass_v1(&mut self) -> CoreResult<()> {
+        self.logical_reconstruction_cdc_passes = self
+            .logical_reconstruction_cdc_passes
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    pub(crate) fn record_logical_reconstruction_bytes_v1(&mut self, bytes: u64) -> CoreResult<()> {
+        self.logical_reconstruction_logical_bytes = self
+            .logical_reconstruction_logical_bytes
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    pub(crate) fn record_logical_reconstruction_payload_call_v1(&mut self) -> CoreResult<()> {
+        self.logical_reconstruction_payload_read_calls = self
+            .logical_reconstruction_payload_read_calls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    pub(crate) fn record_logical_reconstruction_payload_bytes_v1(
+        &mut self,
+        bytes: u64,
+    ) -> CoreResult<()> {
+        self.logical_reconstruction_payload_bytes = self
+            .logical_reconstruction_payload_bytes
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    pub(crate) fn record_logical_reconstruction_poll_v1(
+        &mut self,
+        completed_work: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.logical_reconstruction_control_polls = checked
+            .logical_reconstruction_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.logical_reconstruction_maximum_work_between_polls = checked
+            .logical_reconstruction_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_cow_mutation_poll_v1(&mut self, completed_work: u64) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.cow_mutation_control_polls = checked
+            .cow_mutation_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.cow_mutation_maximum_work_between_polls = checked
+            .cow_mutation_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_closure_validation_control_poll_v1(
+        &mut self,
+        completed_work: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.closure_validation_control_polls = checked
+            .closure_validation_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.closure_validation_maximum_work_between_polls = checked
+            .closure_validation_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_candidate_graph_control_poll_v1(
+        &mut self,
+        completed_work: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.candidate_graph_control_polls = checked
+            .candidate_graph_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.candidate_graph_maximum_work_between_polls = checked
+            .candidate_graph_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_exact_range_control_poll_v1(
+        &mut self,
+        completed_work: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.exact_range_control_polls = checked
+            .exact_range_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.exact_range_maximum_work_between_polls = checked
+            .exact_range_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
         Ok(())
     }
 
@@ -2350,6 +2506,153 @@ mod tests {
             Err(CoreError::IntegerOverflow)
         );
         assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn logical_reconstruction_poll_is_transactional_on_counter_overflow() {
+        let mut destination = OperationCountersV1 {
+            logical_reconstruction_control_polls: u64::MAX,
+            logical_reconstruction_maximum_work_between_polls: 17,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_logical_reconstruction_poll_v1(29),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn cow_mutation_poll_is_transactional_on_counter_overflow() {
+        let mut destination = OperationCountersV1 {
+            cow_mutation_control_polls: u64::MAX,
+            cow_mutation_maximum_work_between_polls: 17,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_cow_mutation_poll_v1(29),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn remaining_direct_work_polls_are_transactional_on_counter_overflow() {
+        let cases: [fn(&mut OperationCountersV1, u64) -> CoreResult<()>; 3] = [
+            OperationCountersV1::record_closure_validation_control_poll_v1,
+            OperationCountersV1::record_candidate_graph_control_poll_v1,
+            OperationCountersV1::record_exact_range_control_poll_v1,
+        ];
+        for (index, record) in cases.into_iter().enumerate() {
+            let mut destination = OperationCountersV1 {
+                closure_validation_control_polls: u64::from(index == 0) * u64::MAX,
+                closure_validation_maximum_work_between_polls: 17,
+                candidate_graph_control_polls: u64::from(index == 1) * u64::MAX,
+                candidate_graph_maximum_work_between_polls: 19,
+                exact_range_control_polls: u64::from(index == 2) * u64::MAX,
+                exact_range_maximum_work_between_polls: 23,
+                ..OperationCountersV1::default()
+            };
+            let before = destination;
+            assert_eq!(
+                record(&mut destination, 29),
+                Err(CoreError::IntegerOverflow)
+            );
+            assert_eq!(destination, before);
+        }
+    }
+
+    #[test]
+    fn direct_work_poll_accumulation_checked_adds_counts_and_merges_maxima_transactionally() {
+        let mut destination = OperationCountersV1 {
+            cow_mutation_control_polls: 2,
+            cow_mutation_maximum_work_between_polls: 11,
+            closure_validation_control_polls: 3,
+            closure_validation_maximum_work_between_polls: 13,
+            candidate_graph_control_polls: 5,
+            candidate_graph_maximum_work_between_polls: 17,
+            exact_range_control_polls: 7,
+            exact_range_maximum_work_between_polls: 19,
+            ..OperationCountersV1::default()
+        };
+        destination
+            .accumulate_from(OperationCountersV1 {
+                cow_mutation_control_polls: 23,
+                cow_mutation_maximum_work_between_polls: 29,
+                closure_validation_control_polls: 31,
+                closure_validation_maximum_work_between_polls: 37,
+                candidate_graph_control_polls: 41,
+                candidate_graph_maximum_work_between_polls: 43,
+                exact_range_control_polls: 47,
+                exact_range_maximum_work_between_polls: 53,
+                ..OperationCountersV1::default()
+            })
+            .unwrap();
+        assert_eq!(destination.cow_mutation_control_polls, 25);
+        assert_eq!(destination.cow_mutation_maximum_work_between_polls, 29);
+        assert_eq!(destination.closure_validation_control_polls, 34);
+        assert_eq!(
+            destination.closure_validation_maximum_work_between_polls,
+            37
+        );
+        assert_eq!(destination.candidate_graph_control_polls, 46);
+        assert_eq!(destination.candidate_graph_maximum_work_between_polls, 43);
+        assert_eq!(destination.exact_range_control_polls, 54);
+        assert_eq!(destination.exact_range_maximum_work_between_polls, 53);
+
+        for (mut destination, source) in [
+            (
+                OperationCountersV1 {
+                    cow_mutation_control_polls: u64::MAX,
+                    ..OperationCountersV1::default()
+                },
+                OperationCountersV1 {
+                    cow_mutation_control_polls: 1,
+                    ..OperationCountersV1::default()
+                },
+            ),
+            (
+                OperationCountersV1 {
+                    closure_validation_control_polls: u64::MAX,
+                    ..OperationCountersV1::default()
+                },
+                OperationCountersV1 {
+                    closure_validation_control_polls: 1,
+                    ..OperationCountersV1::default()
+                },
+            ),
+            (
+                OperationCountersV1 {
+                    candidate_graph_control_polls: u64::MAX,
+                    ..OperationCountersV1::default()
+                },
+                OperationCountersV1 {
+                    candidate_graph_control_polls: 1,
+                    ..OperationCountersV1::default()
+                },
+            ),
+            (
+                OperationCountersV1 {
+                    exact_range_control_polls: u64::MAX,
+                    ..OperationCountersV1::default()
+                },
+                OperationCountersV1 {
+                    exact_range_control_polls: 1,
+                    ..OperationCountersV1::default()
+                },
+            ),
+        ] {
+            let before = destination;
+            assert_eq!(
+                destination.accumulate_from(source),
+                Err(CoreError::IntegerOverflow)
+            );
+            assert_eq!(destination, before);
+        }
     }
 
     #[test]

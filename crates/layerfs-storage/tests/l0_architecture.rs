@@ -4782,10 +4782,10 @@ fn pb08_final_sources_are_substantive_and_alias_free() {
         "FastCDC comparison lost its pinned boundary corpus"
     );
     for (relative, expected_tests, expected_feature_gates) in [
-        ("cas_admission.rs", 50, 1),
-        ("cow_locality.rs", 16, 1),
+        ("cas_admission.rs", 51, 1),
+        ("cow_locality.rs", 17, 1),
         ("operation_concurrency.rs", 23, 1),
-        ("operation_create.rs", 46, 3),
+        ("operation_create.rs", 47, 3),
         ("operation_faults.rs", 74, 1),
         ("operation_lifecycle.rs", 31, 1),
         ("operation_mutation.rs", 13, 3),
@@ -4961,7 +4961,7 @@ fn pb08_final_sources_are_substantive_and_alias_free() {
     let public_surface = public_items.join("\n");
     assert_eq!(
         digest_hex(public_surface.as_bytes()),
-        "ea387bcf636c67c3fa7cfbd036ce6c4f593a495f2957decdb2db9139cf81c3aa",
+        "e751ccb8b311c6cbee85492a1c95921c82e411df6e2398e9049e68f5ceabf193",
         "qualification transitive public surface drifted ({} declarations)",
         public_items.len()
     );
@@ -5269,14 +5269,36 @@ fn pb08_custody_inventory_is_executable_and_exact() {
             .or_default()
             .insert(row[3].to_owned());
     }
+    for (owner, name) in [
+        (
+            "cas_admission.rs",
+            "logical_reconstruction_borrowed_control_stops_before_visibility",
+        ),
+        (
+            "cow_locality.rs",
+            "pb08a_move_replace_pair_and_frozen_suffix_work_are_direct_and_exact",
+        ),
+        (
+            "operation_create.rs",
+            "exact_10_mib_complete_operation_is_the_fast_iteration_path",
+        ),
+    ] {
+        assert!(
+            expected_names
+                .entry(owner)
+                .or_default()
+                .insert(name.to_owned()),
+            "PB-08A extension duplicates historical PB-08 custody: {owner}::{name}"
+        );
+    }
     for owner in owner_names {
         assert_eq!(
             current_names.get(owner).expect("current owner names"),
             expected_names.get(owner).expect("inventory owner names"),
-            "inventory does not describe the exact registered tests in {owner}"
+            "PB-08 custody plus PB-08A extensions do not describe the exact registered tests in {owner}"
         );
     }
-    for (owner, expected_count) in owner_names.into_iter().zip([50, 16, 23, 46, 74, 31, 13, 9]) {
+    for (owner, expected_count) in owner_names.into_iter().zip([51, 17, 23, 47, 74, 31, 13, 9]) {
         assert_eq!(
             current_names.get(owner).expect("current owner names").len(),
             expected_count,
@@ -5294,7 +5316,7 @@ fn pb08_custody_inventory_is_executable_and_exact() {
                 .insert(row[3].to_owned());
         }
     }
-    for (owner, expected_count) in owner_names.into_iter().zip([50, 16, 23, 24, 74, 31, 13, 3]) {
+    for (owner, expected_count) in owner_names.into_iter().zip([51, 17, 23, 25, 74, 31, 13, 3]) {
         let actual = feature_gated_test_names(current_sources.get(owner).unwrap());
         let historical = expected_gated.get(owner).cloned().unwrap_or_default();
         assert!(

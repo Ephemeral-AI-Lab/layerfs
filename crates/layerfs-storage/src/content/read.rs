@@ -10,7 +10,10 @@ use crate::{CoreError, CoreResult};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum VerifiedFileSegmentKindV1 {
     Hole,
-    Data { token: u64, source_offset: u64 },
+    Data {
+        scratch_offset: usize,
+        authenticated_payload_bytes: u64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,31 +30,29 @@ impl VerifiedFileSegmentV1 {
         }
     }
 
-    pub(crate) const fn data(token: u64, source_offset: u64, len: u64) -> Self {
+    pub(crate) const fn data(
+        scratch_offset: usize,
+        len: u64,
+        authenticated_payload_bytes: u64,
+    ) -> Self {
         Self {
             kind: VerifiedFileSegmentKindV1::Data {
-                token,
-                source_offset,
+                scratch_offset,
+                authenticated_payload_bytes,
             },
             len,
         }
     }
 }
 
-/// Opaque authenticated extent source. Implementations retain the concrete
-/// object locator and reject stale or forged data tokens.
+/// Opaque authenticated extent source. Data intersections remain in the
+/// supplied bounded scratch window for immediate delivery.
 pub(crate) trait VerifiedFileRangePortV1 {
     fn check_control(&mut self) -> CoreResult<()>;
     fn next_intersection(
         &mut self,
         verification_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     ) -> CoreResult<Option<VerifiedFileSegmentV1>>;
-    fn read_data_exact(
-        &mut self,
-        token: u64,
-        source_offset: u64,
-        destination: &mut [u8],
-    ) -> CoreResult<()>;
 }
 
 /// Root extraction owns digest framing and sink transactions. This callback
@@ -86,34 +87,45 @@ where
         if segment.len == 0 {
             return Err(CoreError::LogicalLength);
         }
+        if let VerifiedFileSegmentKindV1::Data {
+            scratch_offset,
+            authenticated_payload_bytes,
+        } = segment.kind
+        {
+            port.check_control()?;
+            let len = usize::try_from(segment.len).map_err(|_| CoreError::IntegerOverflow)?;
+            let end = scratch_offset
+                .checked_add(len)
+                .ok_or(CoreError::IntegerOverflow)?;
+            let bytes = scratch
+                .get(scratch_offset..end)
+                .ok_or(CoreError::LogicalLength)?;
+            let next_payload_direct_bytes = result
+                .payload_direct_bytes
+                .checked_add(authenticated_payload_bytes)
+                .ok_or(CoreError::IntegerOverflow)?;
+            let next_payload_direct_calls = result
+                .payload_direct_calls
+                .checked_add(1)
+                .ok_or(CoreError::IntegerOverflow)?;
+            let next_logical_bytes = result
+                .logical_bytes
+                .checked_add(segment.len)
+                .ok_or(CoreError::IntegerOverflow)?;
+            consumer.write_verified_bytes(bytes)?;
+            result = VerifiedFileStreamResultV1 {
+                logical_bytes: next_logical_bytes,
+                payload_direct_bytes: next_payload_direct_bytes,
+                payload_direct_calls: next_payload_direct_calls,
+            };
+            continue;
+        }
         let mut emitted = 0_u64;
         while emitted < segment.len {
             port.check_control()?;
             let take = usize::try_from((segment.len - emitted).min(scratch.len() as u64))
                 .map_err(|_| CoreError::IntegerOverflow)?;
-            match segment.kind {
-                VerifiedFileSegmentKindV1::Hole => scratch[..take].fill(0),
-                VerifiedFileSegmentKindV1::Data {
-                    token,
-                    source_offset,
-                } => {
-                    port.read_data_exact(
-                        token,
-                        source_offset
-                            .checked_add(emitted)
-                            .ok_or(CoreError::IntegerOverflow)?,
-                        &mut scratch[..take],
-                    )?;
-                    result.payload_direct_bytes = result
-                        .payload_direct_bytes
-                        .checked_add(take as u64)
-                        .ok_or(CoreError::IntegerOverflow)?;
-                    result.payload_direct_calls = result
-                        .payload_direct_calls
-                        .checked_add(1)
-                        .ok_or(CoreError::IntegerOverflow)?;
-                }
-            }
+            scratch[..take].fill(0);
             consumer.write_verified_bytes(&scratch[..take])?;
             emitted = emitted
                 .checked_add(take as u64)
@@ -138,7 +150,6 @@ mod tests {
         segments: Vec<VerifiedFileSegmentV1>,
         next: usize,
         controls: u64,
-        reads: Vec<(u64, u64, usize)>,
     }
 
     impl VerifiedFileRangePortV1 for ScriptedPort {
@@ -152,28 +163,29 @@ mod tests {
 
         fn next_intersection(
             &mut self,
-            _verification_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+            verification_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
         ) -> CoreResult<Option<VerifiedFileSegmentV1>> {
             let segment = self.segments.get(self.next).copied();
-            if segment.is_some() {
+            if let Some(segment) = segment {
                 self.next += 1;
+                if let VerifiedFileSegmentKindV1::Data {
+                    scratch_offset: _,
+                    authenticated_payload_bytes,
+                } = segment.kind
+                {
+                    let len = usize::try_from(authenticated_payload_bytes)
+                        .map_err(|_| CoreError::IntegerOverflow)?;
+                    for (offset, byte) in verification_scratch
+                        .get_mut(..len)
+                        .ok_or(CoreError::LogicalLength)?
+                        .iter_mut()
+                        .enumerate()
+                    {
+                        *byte = offset as u8;
+                    }
+                }
             }
             Ok(segment)
-        }
-
-        fn read_data_exact(
-            &mut self,
-            token: u64,
-            source_offset: u64,
-            destination: &mut [u8],
-        ) -> CoreResult<()> {
-            self.reads.push((token, source_offset, destination.len()));
-            for (index, byte) in destination.iter_mut().enumerate() {
-                *byte = source_offset
-                    .checked_add(index as u64)
-                    .ok_or(CoreError::IntegerOverflow)? as u8;
-            }
-            Ok(())
         }
     }
 
@@ -190,49 +202,26 @@ mod tests {
 
     #[test]
     fn verified_streamer_emits_data_hole_and_crossing_segments() {
-        let crossing_len = COMPARISON_WINDOW_BYTES as u64 + 3;
         let mut port = ScriptedPort {
             segments: vec![
-                VerifiedFileSegmentV1::data(7, 11, crossing_len),
+                VerifiedFileSegmentV1::data(11, 17, 31),
                 VerifiedFileSegmentV1::hole(2),
-                VerifiedFileSegmentV1::data(9, 31, 4),
+                VerifiedFileSegmentV1::data(31, 4, 41),
             ],
             next: 0,
             controls: 0,
-            reads: Vec::new(),
         };
         let mut consumer = CollectingConsumer { bytes: Vec::new() };
         let mut scratch = [0_u8; COMPARISON_WINDOW_BYTES];
-        let result =
-            stream_verified_file_range_v1(crossing_len + 6, &mut port, &mut consumer, &mut scratch)
-                .expect("verified intersections stream");
+        let result = stream_verified_file_range_v1(23, &mut port, &mut consumer, &mut scratch)
+            .expect("verified intersections stream");
 
-        assert_eq!(result.logical_bytes, crossing_len + 6);
-        assert_eq!(result.payload_direct_bytes, crossing_len + 4);
-        assert_eq!(result.payload_direct_calls, 3);
-        assert_eq!(port.controls, 4);
-        assert_eq!(
-            port.reads,
-            vec![
-                (7, 11, COMPARISON_WINDOW_BYTES),
-                (7, 11 + COMPARISON_WINDOW_BYTES as u64, 3),
-                (9, 31, 4)
-            ]
-        );
-        let expected_data = (0..crossing_len)
-            .map(|offset| (11_u64 + offset) as u8)
-            .collect::<Vec<_>>();
-        assert_eq!(
-            &consumer.bytes[..crossing_len as usize],
-            expected_data.as_slice()
-        );
-        assert_eq!(
-            &consumer.bytes[crossing_len as usize..crossing_len as usize + 2],
-            &[0, 0]
-        );
-        assert_eq!(
-            &consumer.bytes[crossing_len as usize + 2..],
-            &[31, 32, 33, 34]
-        );
+        assert_eq!(result.logical_bytes, 23);
+        assert_eq!(result.payload_direct_bytes, 72);
+        assert_eq!(result.payload_direct_calls, 2);
+        assert_eq!(port.controls, 3);
+        assert_eq!(&consumer.bytes[..17], &(11_u8..28).collect::<Vec<_>>());
+        assert_eq!(&consumer.bytes[17..19], &[0, 0]);
+        assert_eq!(&consumer.bytes[19..], &[31, 32, 33, 34]);
     }
 }

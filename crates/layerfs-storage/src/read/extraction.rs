@@ -1023,8 +1023,6 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
             logical_offset: 0,
             active_data_chunks: 0,
             active_data_end: 0,
-            next_token: 1,
-            current_data: None,
             validated_chunks: 0,
         };
         let mut consumer = RangeFileConsumerV1 {
@@ -1151,16 +1149,8 @@ impl<S: ReadSinkV1 + ?Sized> VerifiedFileBytesConsumerV1 for RangeFileConsumerV1
     }
 }
 
-#[derive(Clone, Copy)]
-struct CurrentVerifiedDataV1 {
-    token: u64,
-    id: PhysicalChunkIdV1,
-    allowed_start: u64,
-    allowed_end: u64,
-}
-
 /// Extraction owns the concrete occupied-file adapter. The range owner sees
-/// only authenticated intersections and opaque data tokens.
+/// only authenticated intersections in its bounded scratch window.
 struct FsCasVerifiedFileRangeV1<'a, C: FsCasControlV1 + ?Sized> {
     occupied: &'a mut FsCasOccupiedV1,
     counters: &'a mut OperationCountersV1,
@@ -1175,8 +1165,6 @@ struct FsCasVerifiedFileRangeV1<'a, C: FsCasControlV1 + ?Sized> {
     logical_offset: u64,
     active_data_chunks: u32,
     active_data_end: u64,
-    next_token: u64,
-    current_data: Option<CurrentVerifiedDataV1>,
     validated_chunks: u64,
 }
 
@@ -1186,7 +1174,7 @@ impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
         id: PhysicalChunkIdV1,
         expected_len: u32,
         scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
-    ) -> CoreResult<()> {
+    ) -> CoreResult<u64> {
         let typed = TypedPhysicalObjectIdV1::Chunk(id);
         let len = required_occupied_len_v1(self.occupied, self.control, typed)?;
         let mut source =
@@ -1202,11 +1190,12 @@ impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
         {
             return Err(CoreError::IdMismatch);
         }
+        check_control(self.control)?;
         self.validated_chunks = self
             .validated_chunks
             .checked_add(1)
             .ok_or(CoreError::IntegerOverflow)?;
-        Ok(())
+        Ok(u64::from(chunk.payload_len))
     }
 
     fn finish_if_complete(&mut self) -> CoreResult<Option<VerifiedFileSegmentV1>> {
@@ -1230,7 +1219,6 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
         &mut self,
         verification_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     ) -> CoreResult<Option<VerifiedFileSegmentV1>> {
-        self.current_data = None;
         loop {
             self.check_control()?;
             if self.active_data_chunks != 0 {
@@ -1261,24 +1249,16 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
                     self.selected_start,
                     self.selected_end,
                 ) {
-                    self.validate_chunk(chunk, chunk_len, verification_scratch)?;
-                    let token = self.next_token;
-                    self.next_token = self
-                        .next_token
-                        .checked_add(1)
-                        .ok_or(CoreError::IntegerOverflow)?;
+                    let authenticated_payload_bytes =
+                        self.validate_chunk(chunk, chunk_len, verification_scratch)?;
                     let source_start = start - chunk_start;
                     let source_end = end - chunk_start;
-                    self.current_data = Some(CurrentVerifiedDataV1 {
-                        token,
-                        id: chunk,
-                        allowed_start: source_start,
-                        allowed_end: source_end,
-                    });
+                    let scratch_offset =
+                        usize::try_from(source_start).map_err(|_| CoreError::IntegerOverflow)?;
                     return Ok(Some(VerifiedFileSegmentV1::data(
-                        token,
-                        source_start,
+                        scratch_offset,
                         source_end - source_start,
+                        authenticated_payload_bytes,
                     )));
                 }
                 continue;
@@ -1333,35 +1313,6 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
                 self.active_data_end = extent_end;
             }
         }
-    }
-
-    fn read_data_exact(
-        &mut self,
-        token: u64,
-        source_offset: u64,
-        destination: &mut [u8],
-    ) -> CoreResult<()> {
-        let current = self.current_data.ok_or(CoreError::TypedEdge)?;
-        let end = source_offset
-            .checked_add(destination.len() as u64)
-            .ok_or(CoreError::IntegerOverflow)?;
-        if token != current.token
-            || source_offset < current.allowed_start
-            || end > current.allowed_end
-        {
-            return Err(CoreError::TypedEdge);
-        }
-        let typed = TypedPhysicalObjectIdV1::Chunk(current.id);
-        let len = required_occupied_len_v1(self.occupied, self.control, typed)?;
-        let mut source = OccupiedObjectReaderV1::resolved_new(
-            self.occupied,
-            self.counters,
-            self.control,
-            typed,
-            len,
-        )?;
-        let payload_offset = source_offset;
-        read_object_payload_exact_v1(&mut source, payload_offset, destination)
     }
 }
 
@@ -1454,6 +1405,7 @@ mod tests {
         derive_physical_tree_id_v1, derive_physical_version_record_id_v1, derive_version_v1,
         LogicalChildIdV1, LogicalChunkRefV1, LogicalDirectoryEntryV1,
     };
+    use crate::lifecycle::semantic::CounterSource;
     use crate::limits::ResourceLedgerV1;
     use crate::pack::{
         build_dense_pack_v1, PackIndexEntryV1, PackIndexSpoolV1, PackObjectSourceV1,
@@ -1528,6 +1480,24 @@ mod tests {
                 offset: 0,
                 maximum_read: self.maximum_read,
             })
+        }
+    }
+
+    struct CounterSupplier<'a> {
+        len: u64,
+        cas: &'a FsCasV1,
+    }
+
+    impl SourceSupplierV1 for CounterSupplier<'_> {
+        type Source = CounterSource;
+
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(core::mem::size_of::<CounterSource>() as u64)
+        }
+
+        fn supply(self) -> CoreResult<Self::Source> {
+            assert_eq!(self.cas.operation_admitted_slots_v1(), 1);
+            Ok(CounterSource::new(self.len, 0))
         }
     }
 
@@ -2326,9 +2296,10 @@ mod tests {
         bytes
     }
 
-    fn create_fixture_from_expected(
+    fn create_fixture_from_expected_with_maximum_read(
         label: &str,
         expected: Vec<(Vec<u8>, u16, Vec<u8>)>,
+        maximum_read: usize,
     ) -> CreatedFixture {
         let root = TestRoot::new(label);
         let cas = FsCasV1::create_new(root.path()).expect("create FsCas");
@@ -2341,7 +2312,7 @@ mod tests {
                     entry.2.len() as u64,
                     SliceSupplier {
                         bytes: &entry.2,
-                        maximum_read: 997,
+                        maximum_read,
                         cas: &cas,
                     },
                 )
@@ -2399,6 +2370,13 @@ mod tests {
             root_tree: handoff.root_tree(),
             expected,
         }
+    }
+
+    fn create_fixture_from_expected(
+        label: &str,
+        expected: Vec<(Vec<u8>, u16, Vec<u8>)>,
+    ) -> CreatedFixture {
+        create_fixture_from_expected_with_maximum_read(label, expected, 997)
     }
 
     fn create_fixture(label: &str) -> CreatedFixture {
@@ -2629,6 +2607,268 @@ mod tests {
     }
 
     #[test]
+    fn exact_range_reads_each_overlapping_payload_once_across_small_fragmented_and_repeated_files()
+    {
+        for (label, maximum_read, bytes, selected_offset, selected_len) in [
+            (
+                "small",
+                997,
+                deterministic_bytes(4 * 1024 + 97, 0x8a55_3f91_c4d2_7701),
+                31_u64,
+                1_023_u64,
+            ),
+            (
+                "fragmented",
+                1,
+                deterministic_bytes(3 * MAXIMUM_CHUNK_BYTES + 73, 0x2d7b_491e_a806_33f9),
+                MAXIMUM_CHUNK_BYTES as u64 - 137,
+                MAXIMUM_CHUNK_BYTES as u64 + 509,
+            ),
+            (
+                "repeated",
+                997,
+                vec![0xa5; 5 * MAXIMUM_CHUNK_BYTES + 19],
+                MAXIMUM_CHUNK_BYTES as u64 + 73,
+                2 * MAXIMUM_CHUNK_BYTES as u64 + 17,
+            ),
+        ] {
+            let selected_end = selected_offset + selected_len;
+            let mut expected_payload_calls = 0_u64;
+            let mut expected_payload_bytes = 0_u64;
+            let mut chunk_start = 0_usize;
+            while chunk_start < bytes.len() {
+                let chunk_len = FastCdcV1::new()
+                    .cut(&bytes[chunk_start..])
+                    .expect("canonical expected chunk boundary");
+                assert!(chunk_len > 0, "{label}");
+                let chunk_end = chunk_start + chunk_len;
+                if (chunk_start as u64) < selected_end && chunk_end as u64 > selected_offset {
+                    expected_payload_calls += 1;
+                    expected_payload_bytes += chunk_len as u64;
+                }
+                chunk_start = chunk_end;
+            }
+
+            let fixture = create_fixture_from_expected_with_maximum_read(
+                &format!("exact-range-{label}"),
+                vec![(b"payload.bin".to_vec(), 0o640, bytes)],
+                maximum_read,
+            );
+            let (mut comparison, mut path) = read_buffers();
+            let mut counters = OperationCountersV1::default();
+            let mut sink = CaptureSink::new(selected_len + 1024);
+            let result = read_file_range_v1(
+                &fixture.cas,
+                0x5_100,
+                fixture.version,
+                fixture.root_tree,
+                b"payload.bin",
+                selected_offset,
+                selected_len,
+                &mut sink,
+                &mut counters,
+                ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut ContinueControl,
+            )
+            .expect("exact authenticated range");
+
+            assert_eq!(result.kind(), ReadKindV1::ExactRange, "{label}");
+            assert_eq!(result.ranges(), 1, "{label}");
+            assert_eq!(result.payload_bytes(), selected_len, "{label}");
+            assert_eq!(
+                result.payload_direct_calls(),
+                expected_payload_calls,
+                "{label}"
+            );
+            assert_eq!(
+                result.payload_direct_bytes(),
+                expected_payload_bytes,
+                "{label}"
+            );
+            assert_eq!(
+                result.direct_fscas_calls(),
+                counters.fscas_read_calls,
+                "{label}"
+            );
+            assert_eq!(
+                result.direct_fscas_bytes(),
+                counters.fscas_bytes_read,
+                "{label}"
+            );
+            assert_eq!(sink.began, 1, "{label}");
+            assert_eq!(sink.finished, 1, "{label}");
+            assert_eq!(sink.aborted, 0, "{label}");
+            assert_eq!(sink.files.len(), 1, "{label}");
+            assert_eq!(sink.files[0].path, b"payload.bin", "{label}");
+            assert_eq!(sink.files[0].selected_offset, selected_offset, "{label}");
+            assert_eq!(sink.files[0].selected_len, selected_len, "{label}");
+            assert_eq!(
+                sink.files[0].bytes,
+                fixture.expected[0].2[selected_offset as usize..selected_end as usize],
+                "{label}"
+            );
+            assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0, "{label}");
+            assert_eq!(preparation_entry_count(&fixture), 0, "{label}");
+            assert!(counters.has_zero_forbidden_work(), "{label}");
+        }
+    }
+
+    #[test]
+    fn exact_100_mib_range_reads_each_overlapping_payload_once() {
+        const EXACT_BYTES: u64 = 100 * 1024 * 1024;
+        const SELECTED_OFFSET: u64 = 50 * 1024 * 1024 + 137;
+        const SELECTED_LEN: u64 = 2 * 32 * 1024 + 211;
+
+        let root = TestRoot::new("exact-range-100-mib");
+        let cas = FsCasV1::create_new(root.path()).expect("create 100 MiB FsCas");
+        let mut files = [TreeFileV1::new(
+            b"payload.bin",
+            0o640,
+            EXACT_BYTES,
+            CounterSupplier {
+                len: EXACT_BYTES,
+                cas: &cas,
+            },
+        )];
+        let mut create_counters = OperationCountersV1::default();
+        let mut source: Box<[u8; MAXIMUM_CHUNK_BYTES]> = vec![0; MAXIMUM_CHUNK_BYTES]
+            .into_boxed_slice()
+            .try_into()
+            .expect("source array");
+        let mut ring: Box<[u8; MAXIMUM_CHUNK_BYTES]> = vec![0; MAXIMUM_CHUNK_BYTES]
+            .into_boxed_slice()
+            .try_into()
+            .expect("ring array");
+        let mut incoming: Box<[u8; COMPARISON_WINDOW_BYTES]> = vec![0; COMPARISON_WINDOW_BYTES]
+            .into_boxed_slice()
+            .try_into()
+            .expect("comparison array");
+        let mut occupied: Box<[u8; COMPARISON_WINDOW_BYTES]> = vec![0; COMPARISON_WINDOW_BYTES]
+            .into_boxed_slice()
+            .try_into()
+            .expect("comparison array");
+        let mut tree_object: Box<[u8; MAX_TREE_OBJECT_BYTES]> = vec![0; MAX_TREE_OBJECT_BYTES]
+            .into_boxed_slice()
+            .try_into()
+            .expect("tree object array");
+        let mut tree_pages = [None::<TreePageSummaryV1>; MAX_TREE_PAGE_SUMMARIES];
+        let mut traversal = vec![0_u8; 64 * 1024];
+        let mut create_control = ContinueControl;
+        let operation =
+            request_tree_operation_v1(&cas, 0x5_101, &mut create_counters, &mut create_control)
+                .expect("admit 100 MiB create");
+        let handoff = run_create_tree_v1(
+            operation,
+            CdcAlgorithmV1::FastCdc,
+            &mut files,
+            OperationBuffersV1 {
+                source: &mut source,
+                cdc_ring: &mut ring,
+                incoming_comparison: &mut incoming,
+                occupied_comparison: &mut occupied,
+                tree_object: &mut tree_object,
+                tree_pages: &mut tree_pages,
+                traversal_state: &mut traversal,
+            },
+            &mut create_control,
+            &mut create_counters,
+        )
+        .unwrap_or_else(|error| panic!("{error:?}; {create_counters:#?}"));
+        drop(files);
+        assert_eq!(create_counters.source_bytes_read, EXACT_BYTES);
+        assert!(create_counters.has_zero_forbidden_work());
+        assert_eq!(cas.operation_admitted_slots_v1(), 0);
+
+        let selected_end = SELECTED_OFFSET + SELECTED_LEN;
+        let mut expected = vec![0_u8; SELECTED_LEN as usize];
+        let mut expected_source = CounterSource::new(EXACT_BYTES, SELECTED_OFFSET);
+        let mut filled = 0;
+        while filled < expected.len() {
+            let read = expected_source
+                .read(&mut expected[filled..])
+                .expect("generate bounded selected bytes");
+            assert!(read > 0);
+            filled += read;
+        }
+
+        let mut expected_payload_calls = 0_u64;
+        let mut expected_payload_bytes = 0_u64;
+        let mut chunk_start = 0_u64;
+        let mut chunk_window = [0_u8; MAXIMUM_CHUNK_BYTES];
+        while chunk_start < selected_end {
+            let window_len =
+                usize::try_from((EXACT_BYTES - chunk_start).min(MAXIMUM_CHUNK_BYTES as u64))
+                    .expect("bounded counter-source window");
+            let mut boundary_source = CounterSource::new(EXACT_BYTES, chunk_start);
+            let mut window_filled = 0;
+            while window_filled < window_len {
+                let read = boundary_source
+                    .read(&mut chunk_window[window_filled..window_len])
+                    .expect("generate canonical boundary window");
+                assert!(read > 0);
+                window_filled += read;
+            }
+            let chunk_len = FastCdcV1::new()
+                .cut(&chunk_window[..window_len])
+                .expect("canonical counter-source chunk boundary");
+            assert!(chunk_len > 0);
+            let chunk_end = chunk_start + chunk_len as u64;
+            if chunk_start < selected_end && chunk_end > SELECTED_OFFSET {
+                expected_payload_calls += 1;
+                expected_payload_bytes += chunk_len as u64;
+            }
+            chunk_start = chunk_end;
+        }
+
+        let (mut comparison, mut path) = read_buffers();
+        let mut counters = OperationCountersV1::default();
+        let mut sink = CaptureSink::new(SELECTED_LEN + 1024);
+        let result = read_file_range_v1(
+            &cas,
+            0x5_102,
+            handoff.version_record(),
+            handoff.root_tree(),
+            b"payload.bin",
+            SELECTED_OFFSET,
+            SELECTED_LEN,
+            &mut sink,
+            &mut counters,
+            ReadBuffersV1 {
+                comparison: &mut comparison,
+                path: &mut path,
+            },
+            &mut ContinueControl,
+        )
+        .expect("100 MiB exact authenticated range");
+
+        assert_eq!(result.kind(), ReadKindV1::ExactRange);
+        assert_eq!(result.payload_bytes(), SELECTED_LEN);
+        assert_eq!(result.payload_direct_calls(), expected_payload_calls);
+        assert_eq!(result.payload_direct_bytes(), expected_payload_bytes);
+        assert_eq!(result.direct_fscas_calls(), counters.fscas_read_calls);
+        assert_eq!(result.direct_fscas_bytes(), counters.fscas_bytes_read);
+        assert_eq!(sink.files.len(), 1);
+        assert_eq!(sink.files[0].path, b"payload.bin");
+        assert_eq!(sink.files[0].selected_offset, SELECTED_OFFSET);
+        assert_eq!(sink.files[0].selected_len, SELECTED_LEN);
+        assert_eq!(sink.files[0].bytes, expected);
+        assert_eq!(sink.began, 1);
+        assert_eq!(sink.finished, 1);
+        assert_eq!(sink.aborted, 0);
+        assert_eq!(cas.operation_admitted_slots_v1(), 0);
+        assert_eq!(
+            fs::read_dir(root.path().join("preparation"))
+                .expect("read 100 MiB preparation directory")
+                .count(),
+            0
+        );
+        assert!(counters.has_zero_forbidden_work());
+    }
+
+    #[test]
     fn real_fscas_hole_and_cross_chunk_ranges_preserve_zero_payload_reads() {
         let fixture = create_hole_fixture("hole-range");
         let reopened = FsCasV1::open_existing(fixture._root.path()).expect("reopen FsCas");
@@ -2688,11 +2928,11 @@ mod tests {
         assert_eq!(sink.files[0].bytes, fixture.expected);
         assert_baseline(&counters);
 
-        for (label, offset, expected) in [
-            ("hole", 100_u64, vec![0_u8; 17]),
-            ("data-to-hole", 3_u64, vec![b'd', 0, 0]),
-            ("hole-to-data", 4_u64 + 65_536 - 1, vec![0, b'X']),
-            ("physical-chunks", 1_u64, b"bcd".to_vec()),
+        for (label, offset, expected, payload_bytes, payload_calls) in [
+            ("hole", 100_u64, vec![0_u8; 17], 0_u64, 0_u64),
+            ("data-to-hole", 3_u64, vec![b'd', 0, 0], 2, 1),
+            ("hole-to-data", 4_u64 + 65_536 - 1, vec![0, b'X'], 3, 1),
+            ("physical-chunks", 1_u64, b"bcd".to_vec(), 4, 2),
         ] {
             let selected_len = expected.len() as u64;
             let (mut comparison, mut path) = read_buffers();
@@ -2728,10 +2968,8 @@ mod tests {
                 counters.fscas_read_calls,
                 "{label}"
             );
-            if label == "hole" {
-                assert_eq!(result.payload_direct_bytes(), 0, "{label}");
-                assert_eq!(result.payload_direct_calls(), 0, "{label}");
-            }
+            assert_eq!(result.payload_direct_bytes(), payload_bytes, "{label}");
+            assert_eq!(result.payload_direct_calls(), payload_calls, "{label}");
             assert_eq!(sink.began, 1, "{label}");
             assert_eq!(sink.finished, 1, "{label}");
             assert_eq!(sink.aborted, 0, "{label}");
@@ -3966,6 +4204,7 @@ mod tests {
                     assert_eq!(sink.finished, 0, "{fault_name}/{operation_name}");
                     assert_eq!(sink.aborted, 1, "{fault_name}/{operation_name}");
                     assert!(sink.current.is_none(), "{fault_name}/{operation_name}");
+                    assert!(sink.files.is_empty(), "{fault_name}/{operation_name}");
                     assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
                     assert_eq!(fixture.cas.operation_admission_active_for_test_v1(), 0);
                     assert_eq!(
@@ -4692,38 +4931,68 @@ mod tests {
         assert!(sink.finished);
     }
 
-    fn assert_stopped_read(fixture: &CreatedFixture, kind: StopKind, expected: CoreError) {
+    fn assert_stopped_read(
+        fixture: &CreatedFixture,
+        kind: StopKind,
+        range: bool,
+        expected: CoreError,
+    ) {
         let (mut comparison, mut path) = read_buffers();
         let mut counters = OperationCountersV1::default();
         let mut sink = CaptureSink::new(256 * 1024);
         let stopped = Rc::new(Cell::new(false));
         sink.stop_after_begin = Some(Rc::clone(&stopped));
-        let error = extract_root_v1(
-            &fixture.cas,
-            106,
-            fixture.version,
-            fixture.root_tree,
-            &mut sink,
-            &mut counters,
-            ReadBuffersV1 {
-                comparison: &mut comparison,
-                path: &mut path,
-            },
-            &mut StopAfterBeginControl { kind, stopped },
-        )
-        .expect_err("read must stop");
+        let mut control = StopAfterBeginControl { kind, stopped };
+        let result = if range {
+            read_file_range_v1(
+                &fixture.cas,
+                0x5_103,
+                fixture.version,
+                fixture.root_tree,
+                b"d/b.bin",
+                817,
+                17_777,
+                &mut sink,
+                &mut counters,
+                ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut control,
+            )
+        } else {
+            extract_root_v1(
+                &fixture.cas,
+                106,
+                fixture.version,
+                fixture.root_tree,
+                &mut sink,
+                &mut counters,
+                ReadBuffersV1 {
+                    comparison: &mut comparison,
+                    path: &mut path,
+                },
+                &mut control,
+            )
+        };
+        let error = result.expect_err("read must stop");
         assert_eq!(error, ReadOperationErrorV1::Core(expected));
         assert_eq!(fixture.cas.operation_admitted_slots_v1(), 0);
         assert_eq!(sink.began, 1);
         assert_eq!(sink.finished, 0);
         assert_eq!(sink.aborted, 1);
+        assert!(sink.current.is_none());
+        assert!(sink.files.is_empty());
+        assert!(counters.has_zero_forbidden_work());
     }
 
     #[test]
     fn cancellation_deadline_and_corrupt_occupant_are_exact_and_release_the_slot() {
         let fixture = create_fixture("failure");
-        assert_stopped_read(&fixture, StopKind::Cancel, CoreError::Cancelled);
-        assert_stopped_read(&fixture, StopKind::Deadline, CoreError::Deadline);
+        for range in [false, true] {
+            assert_stopped_read(&fixture, StopKind::Cancel, range, CoreError::Cancelled);
+            assert_stopped_read(&fixture, StopKind::Deadline, range, CoreError::Deadline);
+        }
 
         for entry in fs::read_dir(fixture._root.path().join("objects")).expect("object locators") {
             let path = entry.expect("locator entry").path();

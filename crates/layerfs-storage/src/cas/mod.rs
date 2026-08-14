@@ -741,6 +741,7 @@ pub mod semantic {
         occupied_resident_bytes: u64,
         sink_resident_bytes: u64,
         ledger_budget_bytes: u64,
+        control_failure: Option<CoreError>,
     }
 
     impl<'a> AdmissionRequestV1<'a> {
@@ -755,6 +756,7 @@ pub mod semantic {
                 occupied_resident_bytes: 0,
                 sink_resident_bytes: 0,
                 ledger_budget_bytes: 32 * 1024 * 1024,
+                control_failure: None,
             }
         }
 
@@ -793,6 +795,11 @@ pub mod semantic {
             self.ledger_budget_bytes = bytes;
             self
         }
+
+        pub const fn with_control_failure(mut self, failure: CoreError) -> Self {
+            self.control_failure = Some(failure);
+            self
+        }
     }
 
     /// Immutable admission outcome facts; no storage engine authority or
@@ -815,6 +822,12 @@ pub mod semantic {
         closure_objects_missing: u64,
         closure_objects_occupied_validated: u64,
         publication_authority_dispatches: u64,
+        logical_reconstruction_cdc_passes: u64,
+        logical_reconstruction_logical_bytes: u64,
+        logical_reconstruction_payload_read_calls: u64,
+        logical_reconstruction_payload_bytes: u64,
+        logical_reconstruction_control_polls: u64,
+        logical_reconstruction_maximum_work_between_polls: u64,
         bytes_read: u64,
         bytes_copied: u64,
         bytes_written: u64,
@@ -876,6 +889,24 @@ pub mod semantic {
         }
         pub const fn publication_authority_dispatches(&self) -> u64 {
             self.publication_authority_dispatches
+        }
+        pub const fn logical_reconstruction_cdc_passes(&self) -> u64 {
+            self.logical_reconstruction_cdc_passes
+        }
+        pub const fn logical_reconstruction_logical_bytes(&self) -> u64 {
+            self.logical_reconstruction_logical_bytes
+        }
+        pub const fn logical_reconstruction_payload_read_calls(&self) -> u64 {
+            self.logical_reconstruction_payload_read_calls
+        }
+        pub const fn logical_reconstruction_payload_bytes(&self) -> u64 {
+            self.logical_reconstruction_payload_bytes
+        }
+        pub const fn logical_reconstruction_control_polls(&self) -> u64 {
+            self.logical_reconstruction_control_polls
+        }
+        pub const fn logical_reconstruction_maximum_work_between_polls(&self) -> u64 {
+            self.logical_reconstruction_maximum_work_between_polls
         }
         pub const fn bytes_read(&self) -> u64 {
             self.bytes_read
@@ -2415,6 +2446,7 @@ pub mod semantic {
 
     struct AdmissionSink {
         resident_memory: u64,
+        control_failure: Option<CoreError>,
         begun: u64,
         staged: Vec<TypedPhysicalObjectIdV1>,
         active: Option<(TypedPhysicalObjectIdV1, u64, u64)>,
@@ -2426,6 +2458,14 @@ pub mod semantic {
     impl PreparedImmutableClosurePortV1 for AdmissionSink {
         fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
             Ok(self.resident_memory)
+        }
+
+        fn cancellation_requested_v1(&mut self) -> bool {
+            self.control_failure == Some(CoreError::Cancelled)
+        }
+
+        fn deadline_exceeded_v1(&mut self) -> bool {
+            self.control_failure == Some(CoreError::Deadline)
         }
 
         fn begin_private_closure(&mut self, object_count: u64) -> Result<(), ImmutablePortErrorV1> {
@@ -2533,6 +2573,7 @@ pub mod semantic {
         };
         let mut sink = AdmissionSink {
             resident_memory: request.sink_resident_bytes,
+            control_failure: request.control_failure,
             begun: 0,
             staged: Vec::new(),
             active: None,
@@ -2584,6 +2625,14 @@ pub mod semantic {
             closure_objects_missing: counters.closure_objects_missing,
             closure_objects_occupied_validated: counters.closure_objects_occupied_validated,
             publication_authority_dispatches: counters.publication_authority_dispatches,
+            logical_reconstruction_cdc_passes: counters.logical_reconstruction_cdc_passes,
+            logical_reconstruction_logical_bytes: counters.logical_reconstruction_logical_bytes,
+            logical_reconstruction_payload_read_calls: counters
+                .logical_reconstruction_payload_read_calls,
+            logical_reconstruction_payload_bytes: counters.logical_reconstruction_payload_bytes,
+            logical_reconstruction_control_polls: counters.logical_reconstruction_control_polls,
+            logical_reconstruction_maximum_work_between_polls: counters
+                .logical_reconstruction_maximum_work_between_polls,
             bytes_read: counters.bytes_read,
             bytes_copied: counters.bytes_copied,
             bytes_written: counters.bytes_written,

@@ -2285,7 +2285,12 @@ mod operation_create_owner {
                 CompleteCreateCaseV1::Algorithm(algorithm),
             );
             let counters = observation.counters;
-            assert_eq!(observation.algorithm, Some(algorithm));
+            assert_eq!(
+                observation.algorithm,
+                Some(algorithm),
+                "terminal: {:?}",
+                observation.error
+            );
             assert!(observation.pack_installed);
             assert_eq!(
                 (
@@ -2321,6 +2326,15 @@ mod operation_create_owner {
             assert!(counters.fscas_bytes_read > 0);
             assert!(counters.fscas_bytes_written > 0);
             assert_eq!(counters.closure_fences, 1);
+            assert_eq!(counters.logical_reconstruction_cdc_passes, 1);
+            assert_eq!(counters.logical_reconstruction_logical_bytes, LOGICAL_BYTES);
+            assert!(counters.logical_reconstruction_payload_read_calls > 0);
+            assert_eq!(counters.logical_reconstruction_payload_bytes, LOGICAL_BYTES);
+            assert!(counters.logical_reconstruction_control_polls > 0);
+            assert!(
+                counters.logical_reconstruction_maximum_work_between_polls
+                    <= layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u64
+            );
             assert_eq!(counters.unreachable_installed_residue_bytes, 0);
             assert!(counters.storage_bytes_committed > 0);
             assert!(counters.storage_inodes_committed > 0);
@@ -2344,6 +2358,92 @@ mod operation_create_owner {
     }
 
     #[test]
+    fn complete_create_reconstruction_is_equivalent_across_frozen_fragmentation_schedules() {
+        const LOGICAL_BYTES: u64 = 2 * (2 * 32 * 1024 + 17) + (32 * 1024 + 29);
+        let observations = [
+            ("fragmentation-one-byte", 1_u32),
+            ("fragmentation-997-bytes", 997_u32),
+            (
+                "fragmentation-maximum-chunk",
+                layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u32,
+            ),
+        ]
+        .map(|(label, maximum_read)| {
+            run(
+                label,
+                CompleteCreateCaseV1::FragmentationSchedule(maximum_read),
+            )
+        });
+        let expected = observations[0];
+
+        for observation in observations {
+            let counters = observation.counters;
+            assert_eq!(observation.error, None);
+            assert_eq!(observation.algorithm, Some(CdcAlgorithmV1::FastCdc));
+            assert_eq!(observation.version_record, expected.version_record);
+            assert_eq!(observation.root_tree, expected.root_tree);
+            assert_eq!(observation.pack, expected.pack);
+            assert_eq!(observation.object_count, expected.object_count);
+            assert_eq!(
+                observation.closure_object_count,
+                Some(observation.object_count)
+            );
+            assert_eq!(observation.closure_transcript, expected.closure_transcript);
+            assert_eq!(
+                (
+                    counters.pack_entries,
+                    counters.pack_bytes,
+                    counters.carrier_bytes_total,
+                ),
+                (
+                    expected.counters.pack_entries,
+                    expected.counters.pack_bytes,
+                    expected.counters.carrier_bytes_total,
+                )
+            );
+            assert!(counters.source_read_calls > 0);
+            assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
+            assert_eq!(counters.logical_reconstruction_cdc_passes, 1);
+            assert_eq!(counters.logical_reconstruction_logical_bytes, LOGICAL_BYTES);
+            assert!(counters.logical_reconstruction_payload_read_calls > 0);
+            assert_eq!(counters.logical_reconstruction_payload_bytes, LOGICAL_BYTES);
+            assert!(counters.logical_reconstruction_control_polls > 0);
+            assert!(
+                counters.logical_reconstruction_maximum_work_between_polls
+                    <= layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u64
+            );
+            assert!(counters.file_objects_reused > 0);
+            assert!(counters.chunk_objects_reused > 0);
+            assert_eq!(counters.closure_fences, 1);
+            assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+            assert!(observation.operation_authority_clean);
+            assert!(counters.zero_forbidden_work);
+        }
+    }
+
+    #[test]
+    fn exact_10_mib_complete_operation_is_the_fast_iteration_path() {
+        const LOGICAL_BYTES: u64 = 10 * 1024 * 1024;
+        let observation = run("iteration-10m", CompleteCreateCaseV1::Exact10MiB);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.carrier_count,
+                observation.carrier_rollovers,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold,
+            ),
+            (1, 0, true, true)
+        );
+        assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
+        assert_eq!(counters.logical_reconstruction_cdc_passes, 1);
+        assert_eq!(counters.logical_reconstruction_logical_bytes, LOGICAL_BYTES);
+        assert_eq!(counters.logical_reconstruction_payload_bytes, LOGICAL_BYTES);
+        assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+        assert!(counters.zero_forbidden_work);
+    }
+
+    #[test]
     fn exact_100_mib_complete_operation_rolls_over_real_fscas_carriers() {
         const LOGICAL_BYTES: u64 = 100 * 1024 * 1024;
         let observation = run("multi-pack-100m", CompleteCreateCaseV1::Exact100MiB);
@@ -2361,6 +2461,15 @@ mod operation_create_owner {
         assert_eq!(observation.carriers_reused, 0);
         assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
         assert_eq!(counters.closure_fences, 1);
+        assert_eq!(counters.logical_reconstruction_cdc_passes, 1);
+        assert_eq!(counters.logical_reconstruction_logical_bytes, LOGICAL_BYTES);
+        assert!(counters.logical_reconstruction_payload_read_calls > 0);
+        assert_eq!(counters.logical_reconstruction_payload_bytes, LOGICAL_BYTES);
+        assert!(counters.logical_reconstruction_control_polls > 0);
+        assert!(
+            counters.logical_reconstruction_maximum_work_between_polls
+                <= layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u64
+        );
         assert_eq!(counters.unreachable_installed_residue_bytes, 0);
         assert!(counters.file_sort_comparisons > 0);
         assert!(counters.file_sort_record_reads > 0);

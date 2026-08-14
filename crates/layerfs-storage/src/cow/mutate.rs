@@ -16,17 +16,33 @@ use super::view::{
     mutation_hash_state_bytes_v1, read_base_snapshot, read_result_snapshot,
     replacement_evidence_resident_bytes_v1, validate_mutation_physical_evidence,
     validate_mutation_relation, validate_replacement_evidence, AuthenticatedTreeMutationEvidenceV1,
-    AuthenticatedTreeReplacementEvidenceV1, CanonicalTreeMutationSourceV1, TreeEntrySnapshotV1,
-    TreeProofMutationV1,
+    AuthenticatedTreeReplacementEvidenceV1, CanonicalTreeMutationSourceV1, CowMutationWorkV1,
+    TreeEntrySnapshotV1, TreeProofMutationV1,
 };
 use crate::format::compare_unsigned;
 use crate::identity::{COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1};
-use crate::limits::OperationReservationV1;
 use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
+use crate::limits::{OperationReservationV1, OperationWorkControlV1};
 use crate::{CoreError, CoreResult};
+
+fn complete_cow_blocking_call_v1<T>(
+    result: CoreResult<T>,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<T> {
+    let after = work.complete_blocking_call(control, counters);
+    match result {
+        Err(error) => Err(error),
+        Ok(value) => {
+            after?;
+            Ok(value)
+        }
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
@@ -37,6 +53,7 @@ pub fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
     sink: &mut S,
     ledger: &ResourceLedgerV1,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
 ) -> CoreResult<CowTreeReplacementV1> {
@@ -48,6 +65,7 @@ pub fn replace_directory_entry_cow_v1<S: PreparedTreeSinkV1 + ?Sized>(
         sink,
         TreeMemoryAdmissionV1::Independent(ledger),
         counters,
+        control,
         object_scratch,
         logical_scratch,
     )
@@ -63,6 +81,7 @@ pub(crate) fn replace_directory_entry_cow_borrowed_v1<S: PreparedTreeSinkV1 + ?S
     sink: &mut S,
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
 ) -> CoreResult<CowTreeReplacementV1> {
@@ -74,6 +93,7 @@ pub(crate) fn replace_directory_entry_cow_borrowed_v1<S: PreparedTreeSinkV1 + ?S
         sink,
         TreeMemoryAdmissionV1::Borrowed(reservation),
         counters,
+        control,
         object_scratch,
         logical_scratch,
     )
@@ -94,9 +114,11 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
     sink: &mut S,
     admission: TreeMemoryAdmissionV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
 ) -> CoreResult<CowTreeReplacementV1> {
+    let mut work = CowMutationWorkV1::begin(control, counters)?;
     let plan = TreePlanV1::for_count(base.entry_count as usize)?;
     let leaf_index = replacement_index / TREE_LEAF_FANOUT;
     if replacement_index >= base.entry_count as usize
@@ -145,7 +167,7 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
             MemoryComponentV1::MetadataWindow,
             sink.resident_memory_bound_bytes()?,
         )?;
-    match admission {
+    let result = match admission {
         TreeMemoryAdmissionV1::Independent(ledger) => {
             let _reservation = ledger.reserve_operation_with_plan(memory)?;
             counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
@@ -157,6 +179,8 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
                 replacement,
                 sink,
                 counters,
+                &mut work,
+                control,
                 object_scratch,
                 logical_scratch,
             )
@@ -171,9 +195,19 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
                 replacement,
                 sink,
                 counters,
+                &mut work,
+                control,
                 object_scratch,
                 logical_scratch,
             )
+        }
+    };
+    let finish = work.finish(control, counters);
+    match result {
+        Err(error) => Err(error),
+        Ok(value) => {
+            finish?;
+            Ok(value)
         }
     }
 }
@@ -187,6 +221,8 @@ fn replace_directory_entry_after_admission_v1<S: PreparedTreeSinkV1 + ?Sized>(
     replacement: CanonicalTreeEntryV1<'_>,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
 ) -> CoreResult<CowTreeReplacementV1> {
@@ -199,12 +235,17 @@ fn replace_directory_entry_after_admission_v1<S: PreparedTreeSinkV1 + ?Sized>(
         object_scratch,
         logical_scratch,
         counters,
+        work,
+        control,
     )?;
     let changed_objects = u32::from(plan.page_depth)
         .checked_add(2)
         .ok_or(CoreError::IntegerOverflow)?;
-    sink.begin_private_tree_set(changed_objects)
-        .map_err(map_sink)?;
+    work.poll(control, counters)?;
+    let begin = sink
+        .begin_private_tree_set(changed_objects)
+        .map_err(map_sink);
+    complete_cow_blocking_call_v1(begin, work, control, counters)?;
     let result = replace_inner(
         base,
         evidence,
@@ -214,6 +255,8 @@ fn replace_directory_entry_after_admission_v1<S: PreparedTreeSinkV1 + ?Sized>(
         plan,
         sink,
         counters,
+        work,
+        control,
         object_scratch,
     );
     if result.is_err() {
@@ -232,6 +275,8 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
     plan: TreePlanV1,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
 ) -> CoreResult<CowTreeReplacementV1> {
     let leaf_index = replacement_index / TREE_LEAF_FANOUT;
@@ -245,23 +290,29 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
     let relative_replacement = replacement_index
         .checked_sub(leaf_first)
         .ok_or(CoreError::IntegerOverflow)?;
-    let changed_leaf = encode_leaf(
-        evidence
-            .affected_entries
-            .iter()
-            .enumerate()
-            .map(|(relative, entry)| {
-                if relative == relative_replacement {
-                    replacement
-                } else {
-                    *entry
-                }
-            }),
-        leaf_first,
-        leaf_end,
-        sink,
+    work.poll(control, counters)?;
+    let changed_leaf = complete_cow_blocking_call_v1(
+        encode_leaf(
+            evidence
+                .affected_entries
+                .iter()
+                .enumerate()
+                .map(|(relative, entry)| {
+                    if relative == relative_replacement {
+                        replacement
+                    } else {
+                        *entry
+                    }
+                }),
+            leaf_first,
+            leaf_end,
+            sink,
+            counters,
+            object_scratch,
+        ),
+        work,
+        control,
         counters,
-        object_scratch,
     )?;
 
     let mut changed_level_one = None;
@@ -272,43 +323,18 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
             let first_leaf = level_one_index
                 .checked_mul(TREE_INDEX_FANOUT)
                 .ok_or(CoreError::IntegerOverflow)?;
-            let level_one = encode_index_boundaries(
-                1,
-                evidence
-                    .leaf_group
-                    .iter()
-                    .enumerate()
-                    .map(|(relative, boundary)| {
-                        Ok(if first_leaf + relative == leaf_index {
-                            TreePageBoundaryV1 {
-                                summary: changed_leaf,
-                                ..*boundary
-                            }
-                        } else {
-                            *boundary
-                        })
-                    }),
-                sink,
-                counters,
-                object_scratch,
-            )?;
-            changed_level_one = Some((
-                u32::try_from(level_one_index).map_err(|_| CoreError::IntegerOverflow)?,
-                level_one,
-            ));
-            if plan.page_depth == 1 {
-                level_one
-            } else {
+            work.poll(control, counters)?;
+            let level_one = complete_cow_blocking_call_v1(
                 encode_index_boundaries(
-                    2,
+                    1,
                     evidence
-                        .level_one_group
+                        .leaf_group
                         .iter()
                         .enumerate()
-                        .map(|(index, boundary)| {
-                            Ok(if index == level_one_index {
+                        .map(|(relative, boundary)| {
+                            Ok(if first_leaf + relative == leaf_index {
                                 TreePageBoundaryV1 {
-                                    summary: level_one,
+                                    summary: changed_leaf,
                                     ..*boundary
                                 }
                             } else {
@@ -318,23 +344,75 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
                     sink,
                     counters,
                     object_scratch,
+                ),
+                work,
+                control,
+                counters,
+            )?;
+            changed_level_one = Some((
+                u32::try_from(level_one_index).map_err(|_| CoreError::IntegerOverflow)?,
+                level_one,
+            ));
+            if plan.page_depth == 1 {
+                level_one
+            } else {
+                work.poll(control, counters)?;
+                complete_cow_blocking_call_v1(
+                    encode_index_boundaries(
+                        2,
+                        evidence
+                            .level_one_group
+                            .iter()
+                            .enumerate()
+                            .map(|(index, boundary)| {
+                                Ok(if index == level_one_index {
+                                    TreePageBoundaryV1 {
+                                        summary: level_one,
+                                        ..*boundary
+                                    }
+                                } else {
+                                    *boundary
+                                })
+                            }),
+                        sink,
+                        counters,
+                        object_scratch,
+                    ),
+                    work,
+                    control,
+                    counters,
                 )?
             }
         }
         _ => return Err(CoreError::CountCap),
     };
-    let physical = encode_directory(
-        base.mode.wire_mode()?,
-        base.entry_count,
-        base.page_depth,
-        Some(root_page.id),
-        sink,
+    work.poll(control, counters)?;
+    let physical = complete_cow_blocking_call_v1(
+        encode_directory(
+            base.mode.wire_mode()?,
+            base.entry_count,
+            base.page_depth,
+            Some(root_page.id),
+            sink,
+            counters,
+            object_scratch,
+        ),
+        work,
+        control,
         counters,
-        object_scratch,
     )?;
-    sink.finish_private_tree_set(physical).map_err(map_sink)?;
+    work.poll(control, counters)?;
+    let finish = sink.finish_private_tree_set(physical).map_err(map_sink);
+    complete_cow_blocking_call_v1(finish, work, control, counters)?;
 
-    account_replacement_reuse(evidence, leaf_index, plan.page_depth, counters)?;
+    account_replacement_reuse(
+        evidence,
+        leaf_index,
+        plan.page_depth,
+        counters,
+        work,
+        control,
+    )?;
     Ok(CowTreeReplacementV1 {
         directory: CanonicalDirectoryTreeV1 {
             logical,
@@ -357,6 +435,7 @@ pub fn add_directory_entry_cow_v1<T, S>(
     sink: &mut S,
     ledger: &ResourceLedgerV1,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -374,6 +453,7 @@ where
         sink,
         TreeMemoryAdmissionV1::Independent(ledger),
         counters,
+        control,
         object_scratch,
         logical_scratch,
         page_scratch,
@@ -391,6 +471,7 @@ pub(crate) fn add_directory_entry_cow_borrowed_v1<T, S>(
     sink: &mut S,
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -408,6 +489,7 @@ where
         sink,
         TreeMemoryAdmissionV1::Borrowed(reservation),
         counters,
+        control,
         object_scratch,
         logical_scratch,
         page_scratch,
@@ -424,6 +506,7 @@ pub fn remove_directory_entry_cow_v1<T, S>(
     sink: &mut S,
     ledger: &ResourceLedgerV1,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -441,6 +524,7 @@ where
         sink,
         TreeMemoryAdmissionV1::Independent(ledger),
         counters,
+        control,
         object_scratch,
         logical_scratch,
         page_scratch,
@@ -458,6 +542,7 @@ pub(crate) fn remove_directory_entry_cow_borrowed_v1<T, S>(
     sink: &mut S,
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -475,6 +560,7 @@ where
         sink,
         TreeMemoryAdmissionV1::Borrowed(reservation),
         counters,
+        control,
         object_scratch,
         logical_scratch,
         page_scratch,
@@ -494,6 +580,7 @@ pub(crate) fn move_directory_entry_cow_borrowed_v1<T, S>(
     sink: &mut S,
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -516,6 +603,49 @@ where
         sink,
         TreeMemoryAdmissionV1::Borrowed(reservation),
         counters,
+        control,
+        object_scratch,
+        logical_scratch,
+        page_scratch,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn move_directory_entry_cow_independent_v1<T, S>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
+    removal_index: usize,
+    insertion_index: usize,
+    expected_removed: CanonicalTreeEntryV1<'_>,
+    moved: CanonicalTreeEntryV1<'_>,
+    source: &mut T,
+    sink: &mut S,
+    ledger: &ResourceLedgerV1,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+) -> CoreResult<CowTreeMutationV1>
+where
+    T: CanonicalTreeMutationSourceV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    mutate_directory_entries_cow_v1(
+        base,
+        evidence,
+        removal_index.min(insertion_index),
+        TreeMutationKindV1::Move {
+            removal_index,
+            insertion_index,
+            expected_removed,
+            moved,
+        },
+        source,
+        sink,
+        TreeMemoryAdmissionV1::Independent(ledger),
+        counters,
+        control,
         object_scratch,
         logical_scratch,
         page_scratch,
@@ -542,6 +672,7 @@ pub(crate) fn replace_two_directory_entries_cow_borrowed_v1<T, S>(
     sink: &mut S,
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -566,6 +697,53 @@ where
         sink,
         TreeMemoryAdmissionV1::Borrowed(reservation),
         counters,
+        control,
+        object_scratch,
+        logical_scratch,
+        page_scratch,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn replace_two_directory_entries_cow_independent_v1<T, S>(
+    base: CanonicalDirectoryTreeV1,
+    evidence: AuthenticatedTreeMutationEvidenceV1<'_>,
+    first_index: usize,
+    first_expected: CanonicalTreeEntryV1<'_>,
+    first_replacement: CanonicalTreeEntryV1<'_>,
+    second_index: usize,
+    second_expected: CanonicalTreeEntryV1<'_>,
+    second_replacement: CanonicalTreeEntryV1<'_>,
+    source: &mut T,
+    sink: &mut S,
+    ledger: &ResourceLedgerV1,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
+    object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    page_scratch: &mut [Option<TreePageSummaryV1>],
+) -> CoreResult<CowTreeMutationV1>
+where
+    T: CanonicalTreeMutationSourceV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    mutate_directory_entries_cow_v1(
+        base,
+        evidence,
+        first_index.min(second_index),
+        TreeMutationKindV1::ReplacePair {
+            first_index,
+            first_expected,
+            first_replacement,
+            second_index,
+            second_expected,
+            second_replacement,
+        },
+        source,
+        sink,
+        TreeMemoryAdmissionV1::Independent(ledger),
+        counters,
+        control,
         object_scratch,
         logical_scratch,
         page_scratch,
@@ -625,6 +803,78 @@ impl<'a> TreeMutationKindV1<'a> {
             },
         }
     }
+
+    fn changed_pages(self) -> ChangedPagesV1 {
+        match self {
+            Self::Add(_) | Self::Remove(_) => ChangedPagesV1::Suffix,
+            Self::Move {
+                removal_index,
+                insertion_index,
+                ..
+            } => ChangedPagesV1::Interval {
+                last_leaf: removal_index.max(insertion_index) / TREE_LEAF_FANOUT,
+            },
+            Self::ReplacePair {
+                first_index,
+                second_index,
+                ..
+            } => ChangedPagesV1::Pair {
+                second_leaf: first_index.max(second_index) / TREE_LEAF_FANOUT,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ChangedPagesV1 {
+    Suffix,
+    Interval { last_leaf: usize },
+    Pair { second_leaf: usize },
+}
+
+impl ChangedPagesV1 {
+    fn leaf_changed(self, first_leaf: usize, leaf: usize) -> bool {
+        match self {
+            Self::Suffix => leaf >= first_leaf,
+            Self::Interval { last_leaf } => (first_leaf..=last_leaf).contains(&leaf),
+            Self::Pair { second_leaf } => leaf == first_leaf || leaf == second_leaf,
+        }
+    }
+
+    fn group_changed(self, first_leaf: usize, group: usize, leaf_count: usize) -> CoreResult<bool> {
+        let group_first = group
+            .checked_mul(TREE_INDEX_FANOUT)
+            .ok_or(CoreError::IntegerOverflow)?;
+        let group_end = group_first
+            .checked_add(TREE_INDEX_FANOUT)
+            .ok_or(CoreError::IntegerOverflow)?
+            .min(leaf_count);
+        Ok(match self {
+            Self::Suffix => group_end > first_leaf,
+            Self::Interval { last_leaf } => group_first <= last_leaf && group_end > first_leaf,
+            Self::Pair { second_leaf } => {
+                (group_first..group_end).contains(&first_leaf)
+                    || (group_first..group_end).contains(&second_leaf)
+            }
+        })
+    }
+
+    fn secondary_leaf(self) -> Option<usize> {
+        match self {
+            Self::Suffix => None,
+            Self::Interval { last_leaf } => Some(last_leaf),
+            Self::Pair { second_leaf } => Some(second_leaf),
+        }
+    }
+
+    fn last_changed_leaf(self, first_leaf: usize, leaf_count: usize) -> usize {
+        match self {
+            Self::Suffix => leaf_count.saturating_sub(1),
+            Self::Interval { last_leaf } => last_leaf,
+            Self::Pair { second_leaf } => second_leaf,
+        }
+        .max(first_leaf)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -637,6 +887,7 @@ fn mutate_directory_entries_cow_v1<T, S>(
     sink: &mut S,
     admission: TreeMemoryAdmissionV1<'_>,
     counters: &mut OperationCountersV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -645,6 +896,7 @@ where
     T: CanonicalTreeMutationSourceV1 + ?Sized,
     S: PreparedTreeSinkV1 + ?Sized,
 {
+    let mut work = CowMutationWorkV1::begin(control, counters)?;
     let base_count = usize::try_from(source.declared_base_entry_count()?)
         .map_err(|_| CoreError::IntegerOverflow)?;
     let result_count = usize::try_from(source.declared_result_entry_count()?)
@@ -738,7 +990,7 @@ where
             mutation_hash_state_bytes_v1()?,
         )?
         .charge(MemoryComponentV1::MetadataWindow, port_bytes)?;
-    match admission {
+    let result = match admission {
         TreeMemoryAdmissionV1::Independent(ledger) => {
             let _reservation = ledger.reserve_operation_with_plan(memory)?;
             counters.memory_high_water = counters.memory_high_water.max(ledger.high_water_bytes());
@@ -750,6 +1002,8 @@ where
                 source,
                 sink,
                 counters,
+                &mut work,
+                control,
                 object_scratch,
                 logical_scratch,
                 page_scratch,
@@ -769,6 +1023,8 @@ where
                 source,
                 sink,
                 counters,
+                &mut work,
+                control,
                 object_scratch,
                 logical_scratch,
                 page_scratch,
@@ -777,6 +1033,14 @@ where
                 base_plan,
                 result_plan,
             )
+        }
+    };
+    let finish = work.finish(control, counters);
+    match result {
+        Err(error) => Err(error),
+        Ok(value) => {
+            finish?;
+            Ok(value)
         }
     }
 }
@@ -790,6 +1054,8 @@ fn mutate_directory_entries_after_admission_v1<T, S>(
     source: &mut T,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     logical_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
@@ -803,12 +1069,16 @@ where
     S: PreparedTreeSinkV1 + ?Sized,
 {
     let proof_mutation = mutation.proof();
+    let changed_pages = mutation.changed_pages();
     validate_mutation_relation(
         source,
         mutation_index,
         proof_mutation,
         base_count,
         result_count,
+        work,
+        control,
+        counters,
     )?;
     let logical = authenticate_and_derive_mutation_logical(
         base,
@@ -820,38 +1090,58 @@ where
         result_count,
         logical_scratch,
         counters,
+        work,
+        control,
     )?;
     let verified_base_root = validate_mutation_physical_evidence(
         base,
         base_plan,
         evidence,
         mutation_index,
+        changed_pages.secondary_leaf(),
         source,
         object_scratch,
+        work,
+        control,
+        counters,
     )?;
     let first_changed_leaf = mutation_index / TREE_LEAF_FANOUT;
-    let reused_leaves = first_changed_leaf
-        .min(result_plan.leaf_count)
-        .min(base_plan.leaf_count);
-    let first_changed_level_one = first_changed_leaf / TREE_INDEX_FANOUT;
-    let reused_level_one = first_changed_level_one
-        .min(result_plan.level_one_count)
-        .min(base_plan.level_one_count);
-    let emitted = result_plan
+    let mut reused_leaves = 0_usize;
+    for leaf in 0..result_plan.leaf_count.min(base_plan.leaf_count) {
+        work.complete(1, control, counters)?;
+        if !changed_pages.leaf_changed(first_changed_leaf, leaf) {
+            reused_leaves = reused_leaves
+                .checked_add(1)
+                .ok_or(CoreError::IntegerOverflow)?;
+        }
+    }
+    let mut reused_level_one = 0_usize;
+    for group in 0..result_plan.level_one_count.min(base_plan.level_one_count) {
+        work.complete(1, control, counters)?;
+        if !changed_pages.group_changed(first_changed_leaf, group, result_plan.leaf_count)? {
+            reused_level_one = reused_level_one
+                .checked_add(1)
+                .ok_or(CoreError::IntegerOverflow)?;
+        }
+    }
+    let changed_leaves = result_plan
         .leaf_count
         .checked_sub(reused_leaves)
-        .and_then(|count| {
-            result_plan
-                .level_one_count
-                .checked_sub(reused_level_one)
-                .and_then(|level_one| count.checked_add(level_one))
-        })
+        .ok_or(CoreError::IntegerOverflow)?;
+    let changed_level_one = result_plan
+        .level_one_count
+        .checked_sub(reused_level_one)
+        .ok_or(CoreError::IntegerOverflow)?;
+    let emitted = changed_leaves
+        .checked_add(changed_level_one)
         .and_then(|count| count.checked_add(usize::from(result_plan.page_depth == 2)))
         .and_then(|count| count.checked_add(1))
         .ok_or(CoreError::IntegerOverflow)?;
     let emitted = u32::try_from(emitted).map_err(|_| CoreError::IntegerOverflow)?;
 
-    sink.begin_private_tree_set(emitted).map_err(map_sink)?;
+    work.poll(control, counters)?;
+    let begin = sink.begin_private_tree_set(emitted).map_err(map_sink);
+    complete_cow_blocking_call_v1(begin, work, control, counters)?;
     let result = mutate_directory_entries_inner(
         base,
         evidence,
@@ -859,11 +1149,16 @@ where
         result_count,
         result_plan,
         first_changed_leaf,
+        changed_pages,
+        changed_leaves,
+        changed_level_one,
         reused_leaves,
         reused_level_one,
         emitted,
         sink,
         counters,
+        work,
+        control,
         object_scratch,
         page_scratch,
         logical,
@@ -883,11 +1178,16 @@ fn mutate_directory_entries_inner<T, S>(
     entry_count: usize,
     plan: TreePlanV1,
     first_changed_leaf: usize,
+    changed_pages: ChangedPagesV1,
+    changed_leaves: usize,
+    changed_level_one: usize,
     reused_leaves: usize,
     reused_level_one: usize,
     emitted: u32,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     object_scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
     page_scratch: &mut [Option<TreePageSummaryV1>],
     logical: DirectoryLogicalIdentityV1,
@@ -904,8 +1204,9 @@ where
     let level_one_start = TREE_INDEX_FANOUT;
 
     for group in 0..plan.level_one_count {
+        work.complete(1, control, counters)?;
         let level_one_target = level_one_start + group;
-        if group < reused_level_one {
+        if !changed_pages.group_changed(first_changed_leaf, group, plan.leaf_count)? {
             let summary = reused_level_one_summary(base, evidence, group, verified_base_root)?;
             page_scratch[level_one_target] = Some(summary);
             account_reused_page(summary, counters)?;
@@ -920,8 +1221,10 @@ where
             .min(plan.leaf_count);
         page_scratch[..end_leaf - first_leaf].fill(None);
         for leaf in first_leaf..end_leaf {
+            work.complete(1, control, counters)?;
             let target = leaf - first_leaf;
-            let summary = if leaf < reused_leaves {
+            let leaf_changed = changed_pages.leaf_changed(first_changed_leaf, leaf);
+            let summary = if !leaf_changed {
                 reused_leaf_summary(base, evidence, leaf, verified_base_root)?
             } else {
                 let first = leaf
@@ -937,10 +1240,12 @@ where
                     end,
                     sink,
                     counters,
+                    work,
+                    control,
                     object_scratch,
                 )?
             };
-            if leaf < reused_leaves {
+            if !leaf_changed {
                 account_reused_page(summary, counters)?;
             }
             page_scratch[target] = Some(summary);
@@ -953,6 +1258,8 @@ where
             source,
             sink,
             counters,
+            work,
+            control,
             object_scratch,
         )?;
         page_scratch[level_one_target] = Some(summary);
@@ -960,7 +1267,7 @@ where
 
     let root_page = match plan.page_depth {
         0 if entry_count == 0 => None,
-        0 if reused_leaves == 1 => {
+        0 if !changed_pages.leaf_changed(first_changed_leaf, 0) => {
             let summary = reused_leaf_summary(base, evidence, 0, verified_base_root)?;
             account_reused_page(summary, counters)?;
             page_scratch[0] = Some(summary);
@@ -972,6 +1279,8 @@ where
             entry_count,
             sink,
             counters,
+            work,
+            control,
             object_scratch,
         )?),
         1 => page_scratch[level_one_start],
@@ -983,20 +1292,30 @@ where
             source,
             sink,
             counters,
+            work,
+            control,
             object_scratch,
         )?),
         _ => return Err(CoreError::CountCap),
     };
-    let physical = encode_directory(
-        base.mode.wire_mode()?,
-        u32::try_from(entry_count).map_err(|_| CoreError::IntegerOverflow)?,
-        plan.page_depth,
-        root_page.map(TreePageSummaryV1::id),
-        sink,
+    work.poll(control, counters)?;
+    let physical = complete_cow_blocking_call_v1(
+        encode_directory(
+            base.mode.wire_mode()?,
+            u32::try_from(entry_count).map_err(|_| CoreError::IntegerOverflow)?,
+            plan.page_depth,
+            root_page.map(TreePageSummaryV1::id),
+            sink,
+            counters,
+            object_scratch,
+        ),
+        work,
+        control,
         counters,
-        object_scratch,
     )?;
-    sink.finish_private_tree_set(physical).map_err(map_sink)?;
+    work.poll(control, counters)?;
+    let finish = sink.finish_private_tree_set(physical).map_err(map_sink);
+    complete_cow_blocking_call_v1(finish, work, control, counters)?;
     Ok(CowTreeMutationV1 {
         directory: CanonicalDirectoryTreeV1 {
             logical,
@@ -1010,6 +1329,13 @@ where
                 .map_err(|_| CoreError::IntegerOverflow)?,
         },
         first_changed_leaf: u32::try_from(first_changed_leaf)
+            .map_err(|_| CoreError::IntegerOverflow)?,
+        last_changed_leaf: u32::try_from(
+            changed_pages.last_changed_leaf(first_changed_leaf, plan.leaf_count),
+        )
+        .map_err(|_| CoreError::IntegerOverflow)?,
+        changed_leaves: u32::try_from(changed_leaves).map_err(|_| CoreError::IntegerOverflow)?,
+        changed_level_one: u32::try_from(changed_level_one)
             .map_err(|_| CoreError::IntegerOverflow)?,
         structurally_reused_leaves: u32::try_from(reused_leaves)
             .map_err(|_| CoreError::IntegerOverflow)?,
@@ -1048,9 +1374,16 @@ fn reused_leaf_summary(
     let affected = evidence
         .affected_leaf_index
         .ok_or(CoreError::MissingClosureEdge)? as usize;
-    let first_leaf = affected / TREE_INDEX_FANOUT * TREE_INDEX_FANOUT;
-    evidence
-        .leaf_group
+    let group = leaf / TREE_INDEX_FANOUT;
+    let affected_group = affected / TREE_INDEX_FANOUT;
+    let (first_leaf, leaf_group) = if group == affected_group {
+        (affected_group * TREE_INDEX_FANOUT, evidence.leaf_group)
+    } else if evidence.secondary_leaf_group_index == Some(group as u32) {
+        (group * TREE_INDEX_FANOUT, evidence.secondary_leaf_group)
+    } else {
+        return Err(CoreError::MissingClosureEdge);
+    };
+    leaf_group
         .get(
             leaf.checked_sub(first_leaf)
                 .ok_or(CoreError::MissingClosureEdge)?,
@@ -1065,6 +1398,8 @@ fn encode_leaf_from_base_source<T, S>(
     end_entry: usize,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
 ) -> CoreResult<TreePageSummaryV1>
 where
@@ -1078,6 +1413,8 @@ where
         end_entry,
         sink,
         counters,
+        work,
+        control,
         scratch,
     )
 }
@@ -1088,6 +1425,8 @@ fn encode_leaf_from_mutation_source<T, S>(
     end_entry: usize,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
 ) -> CoreResult<TreePageSummaryV1>
 where
@@ -1101,6 +1440,8 @@ where
         end_entry,
         sink,
         counters,
+        work,
+        control,
         scratch,
     )
 }
@@ -1113,6 +1454,8 @@ fn encode_leaf_from_source<T, S>(
     end_entry: usize,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
 ) -> CoreResult<TreePageSummaryV1>
 where
@@ -1135,9 +1478,9 @@ where
     let mut previous: Option<TreeEntrySnapshotV1> = None;
     for ordinal in first_entry..end_entry {
         let entry = if base_side {
-            read_base_snapshot(source, ordinal)?
+            read_base_snapshot(source, ordinal, work, control, counters)?
         } else {
-            read_result_snapshot(source, ordinal)?
+            read_result_snapshot(source, ordinal, work, control, counters)?
         };
         if previous.is_some_and(|left| {
             compare_unsigned(left.name(), entry.name()) != core::cmp::Ordering::Less
@@ -1150,7 +1493,9 @@ where
         writer.write(entry.child.physical_id_ref())?;
         previous = Some(entry);
     }
-    let (id, object_len) = finish_tree_object(writer, sink, counters)?;
+    work.poll(control, counters)?;
+    let encoded = finish_tree_object(writer, sink, counters);
+    let (id, object_len) = complete_cow_blocking_call_v1(encoded, work, control, counters)?;
     Ok(TreePageSummaryV1 {
         id,
         depth: 0,
@@ -1167,6 +1512,8 @@ fn encode_index_from_mutation_source<T, I, S>(
     source: &mut T,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
 ) -> CoreResult<TreePageSummaryV1>
 where
@@ -1186,6 +1533,7 @@ where
     let mut first_entry = None;
     let mut last_entry = None;
     for child in children {
+        work.complete(1, control, counters)?;
         let child = child?;
         if child.depth.checked_add(1) != Some(depth) {
             return Err(CoreError::TypedEdge);
@@ -1197,8 +1545,10 @@ where
         total = total
             .checked_add(child.subtree_entry_count)
             .ok_or(CoreError::IntegerOverflow)?;
-        let first = read_result_snapshot(source, child.first_entry as usize)?;
-        let last = read_result_snapshot(source, child.last_entry as usize)?;
+        let first =
+            read_result_snapshot(source, child.first_entry as usize, work, control, counters)?;
+        let last =
+            read_result_snapshot(source, child.last_entry as usize, work, control, counters)?;
         writer.write(&child.subtree_entry_count.to_be_bytes())?;
         writer.write(&u16::from(first.name_len).to_be_bytes())?;
         writer.write(first.name())?;
@@ -1212,7 +1562,9 @@ where
         return Err(CoreError::CountCap);
     }
     writer.overwrite(count_offset, &count.to_be_bytes())?;
-    let (id, object_len) = finish_tree_object(writer, sink, counters)?;
+    work.poll(control, counters)?;
+    let encoded = finish_tree_object(writer, sink, counters);
+    let (id, object_len) = complete_cow_blocking_call_v1(encoded, work, control, counters)?;
     Ok(TreePageSummaryV1 {
         id,
         depth,
@@ -1228,9 +1580,12 @@ fn account_replacement_reuse(
     changed_leaf: usize,
     depth: u8,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
 ) -> CoreResult<()> {
     let first_leaf = (changed_leaf / TREE_INDEX_FANOUT) * TREE_INDEX_FANOUT;
     for (relative, boundary) in evidence.leaf_group.iter().enumerate() {
+        work.complete(1, control, counters)?;
         if first_leaf + relative != changed_leaf {
             account_reused_page(boundary.summary, counters)?;
         }
@@ -1238,6 +1593,7 @@ fn account_replacement_reuse(
     if depth == 2 {
         let changed_level_one = changed_leaf / TREE_INDEX_FANOUT;
         for (index, boundary) in evidence.level_one_group.iter().enumerate() {
+            work.complete(1, control, counters)?;
             if index != changed_level_one {
                 account_reused_page(boundary.summary, counters)?;
             }
@@ -1250,10 +1606,13 @@ fn account_reused_page(
     summary: TreePageSummaryV1,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
-    counters.add(CounterFieldV1::TreeNodesReused, 1)?;
-    counters.add(CounterFieldV1::PhysicalObjectsReused, 1)?;
-    counters.add(
+    let mut next = *counters;
+    next.add(CounterFieldV1::TreeNodesReused, 1)?;
+    next.add(CounterFieldV1::PhysicalObjectsReused, 1)?;
+    next.add(
         CounterFieldV1::BytesStructurallyReused,
         u64::from(summary.object_len),
-    )
+    )?;
+    *counters = next;
+    Ok(())
 }

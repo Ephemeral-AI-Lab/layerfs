@@ -453,10 +453,12 @@ mod locator_custody_regression_tests {
     }
 
     struct ReceiptPrelinkFailureControlV1 {
+        cas: FsCasV1,
         failure: ReceiptPrelinkFailureV1,
         cleanup: ReceiptCleanupFailureV1,
         armed: bool,
         injected: bool,
+        preparation_lock_scope: Option<(bool, bool)>,
         cancellation_polls: u32,
         deadline_polls: u32,
         cleanup_injected: bool,
@@ -464,12 +466,18 @@ mod locator_custody_regression_tests {
     }
 
     impl ReceiptPrelinkFailureControlV1 {
-        const fn new(failure: ReceiptPrelinkFailureV1, cleanup: ReceiptCleanupFailureV1) -> Self {
+        fn new(
+            cas: FsCasV1,
+            failure: ReceiptPrelinkFailureV1,
+            cleanup: ReceiptCleanupFailureV1,
+        ) -> Self {
             Self {
+                cas,
                 failure,
                 cleanup,
                 armed: false,
                 injected: false,
+                preparation_lock_scope: None,
                 cancellation_polls: 0,
                 deadline_polls: 0,
                 cleanup_injected: false,
@@ -640,6 +648,15 @@ mod locator_custody_regression_tests {
             &mut self,
             boundary: FsCasFilesystemBoundaryV1,
         ) -> Option<FsCasErrorV1> {
+            if self.armed
+                && boundary == FsCasFilesystemBoundaryV1::PreparationWrite
+                && self.preparation_lock_scope.is_none()
+            {
+                self.preparation_lock_scope = Some((
+                    self.cas.visibility_lock_available_for_test_v1(),
+                    self.cas.publication_lock_available_for_test_v1(),
+                ));
+            }
             if !self.armed
                 || self.injected
                 || boundary != FsCasFilesystemBoundaryV1::PreparationWrite
@@ -685,6 +702,12 @@ mod locator_custody_regression_tests {
         fn inject_operation_spool_precharge_failure_v1(&mut self) -> Option<FsCasErrorV1> {
             if !self.armed || self.injected {
                 return None;
+            }
+            if self.preparation_lock_scope.is_none() {
+                self.preparation_lock_scope = Some((
+                    self.cas.visibility_lock_available_for_test_v1(),
+                    self.cas.publication_lock_available_for_test_v1(),
+                ));
             }
             match self.failure {
                 ReceiptPrelinkFailureV1::Precharge => {
@@ -1444,7 +1467,8 @@ mod locator_custody_regression_tests {
                 let cas = FsCasV1::create_new(&root).unwrap();
                 let stale = FsCasV1::open_existing(&root).unwrap();
                 let mut counters = OperationCountersV1::default();
-                let mut control = ReceiptPrelinkFailureControlV1::new(failure, cleanup);
+                let mut control =
+                    ReceiptPrelinkFailureControlV1::new(cas.clone(), failure, cleanup);
 
                 let terminal = run_small_create(&cas, b"payload.bin", &mut control, &mut counters);
                 let dominant = match cleanup {
@@ -1464,6 +1488,15 @@ mod locator_custody_regression_tests {
                 assert_eq!(terminal.failure_causes_v1(), (first, dominant), "{case}");
                 assert!(control.armed, "{case}");
                 assert!(control.injected, "{case}");
+                if matches!(
+                    failure,
+                    ReceiptPrelinkFailureV1::ShortWrite
+                        | ReceiptPrelinkFailureV1::WriteFailure
+                        | ReceiptPrelinkFailureV1::Precharge
+                        | ReceiptPrelinkFailureV1::ObservationOverflow
+                ) {
+                    assert_eq!(control.preparation_lock_scope, Some((true, true)), "{case}");
+                }
                 assert_eq!(
                     control.cleanup_injected,
                     cleanup != ReceiptCleanupFailureV1::None
@@ -1542,6 +1575,7 @@ mod locator_custody_regression_tests {
             let stale = FsCasV1::open_existing(&root).unwrap();
             let mut counters = OperationCountersV1::default();
             let mut control = ReceiptPrelinkFailureControlV1::new(
+                cas.clone(),
                 ReceiptPrelinkFailureV1::CallbackUnwind,
                 cleanup,
             );
@@ -1579,6 +1613,7 @@ mod locator_custody_regression_tests {
 
             assert!(control.armed, "{case}");
             assert!(control.injected, "{case}");
+            assert_eq!(control.preparation_lock_scope, Some((true, true)), "{case}");
             assert_eq!(
                 control.cleanup_injected,
                 cleanup != ReceiptCleanupFailureV1::None
@@ -3002,11 +3037,14 @@ impl<'spool> LocatorPublicationCustodyV1<'spool> {
         core::mem::take(&mut self.receipt_prelink_unwound)
     }
 
+    fn has_pending_receipt_v1(&self) -> bool {
+        self.pending_receipt.is_some()
+    }
+
     /// Prepare the exact custody record before the destination pathname can
-    /// become visible.  The spool write is the last fallible publication
-    /// step; the no-replace link is followed only by the infallible commit
-    /// below. A failed or abandoned write is truncated back to the committed
-    /// receipt population before control can leave this staging boundary.
+    /// become visible and before either root-wide lock is acquired. A failed
+    /// or abandoned write is truncated back to the committed receipt
+    /// population before control can leave this staging boundary.
     fn prepare_v1<C>(
         &mut self,
         input: LocatorPublicationReceiptInputV1,
@@ -13566,6 +13604,14 @@ where
         u64::try_from(core::mem::size_of::<Self>()).map_err(|_| CoreError::IntegerOverflow)
     }
 
+    fn cancellation_requested_v1(&mut self) -> bool {
+        self.control.cancellation_requested()
+    }
+
+    fn deadline_exceeded_v1(&mut self) -> bool {
+        self.control.deadline_exceeded()
+    }
+
     fn begin_private_closure(&mut self, object_count: u64) -> Result<(), ImmutablePortErrorV1> {
         if self.expected_count.replace(object_count).is_some() || self.complete.is_some() {
             return Err(ImmutablePortErrorV1::Failure);
@@ -14757,6 +14803,33 @@ where
                 prepublication_charge = Some((owner, token, len));
             }
 
+            // A locator receipt is operation-local cleanup authority. Finish
+            // its bounded file-backed preparation before taking either
+            // root-wide lock; the locked pass below only revalidates the
+            // authoritative namespace snapshot and performs the no-replace
+            // transition.
+            let locator_receipt_prepared = if let Some(input) = locator_receipt {
+                let custody = locator_custody.as_mut().ok_or(FsCasErrorV1::Integrity)?;
+                custody.reserve_v1(1)?;
+                let preparation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    custody.prepare_v1(
+                        input,
+                        candidate_snapshot.ok_or(FsCasErrorV1::Integrity)?,
+                        control,
+                    )
+                }));
+                match preparation {
+                    Ok(result) => result?,
+                    Err(payload) => {
+                        custody.note_receipt_prelink_unwind_v1();
+                        std::panic::resume_unwind(payload);
+                    }
+                }
+                true
+            } else {
+                false
+            };
+
             if serialize_publication {
                 let owner = visibility_owner.ok_or(FsCasErrorV1::Integrity)?;
                 let (publication, visibility) = owner.lock_marker_guards_controlled_v1(control)?;
@@ -14796,31 +14869,6 @@ where
                     return Err(FsCasErrorV1::Integrity);
                 }
             }
-            // A locator receipt is operation-local cleanup authority. Make
-            // the custody object and its next receipt slot available before
-            // the no-replace link; no allocation or missing-custody branch
-            // may remain after the destination becomes visible.
-            let locator_receipt_prepared = if let Some(input) = locator_receipt {
-                let custody = locator_custody.as_mut().ok_or(FsCasErrorV1::Integrity)?;
-                custody.reserve_v1(1)?;
-                let preparation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    custody.prepare_v1(
-                        input,
-                        candidate_snapshot.ok_or(FsCasErrorV1::Integrity)?,
-                        control,
-                    )
-                }));
-                match preparation {
-                    Ok(result) => result?,
-                    Err(payload) => {
-                        custody.note_receipt_prelink_unwind_v1();
-                        std::panic::resume_unwind(payload);
-                    }
-                }
-                true
-            } else {
-                false
-            };
             match fs::hard_link(&temporary, destination) {
                 Ok(()) => {
                     destination_linked = true;
@@ -14843,12 +14891,6 @@ where
                     Ok(None)
                 }
                 Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-                    if locator_receipt_prepared {
-                        locator_custody
-                            .as_mut()
-                            .expect("locator custody was reserved before incumbent read")
-                            .discard_prepared_v1(control)?;
-                    }
                     // Open and authenticate the incumbent pathname while the
                     // no-replace transition remains serialized. The complete
                     // fixed-size read is performed only after both root
@@ -14876,6 +14918,12 @@ where
                         &mut publication_guard,
                         control,
                     );
+                    if locator_receipt_prepared {
+                        locator_custody
+                            .as_mut()
+                            .expect("locator custody was reserved before incumbent read")
+                            .discard_prepared_v1(control)?;
+                    }
                     if let Some((owner, token, len)) = prepublication_charge.take() {
                         if let Err(error) = owner.record_storage_immutable_remove_v1(token, len, 1)
                         {
@@ -14900,29 +14948,26 @@ where
                     incumbent.map(|incumbent| Some(MarkerPublicationV1::IncumbentClean(incumbent)))
                 }
                 Err(error) => {
-                    let receipt_cleanup = if locator_receipt_prepared {
-                        locator_custody
-                            .as_mut()
-                            .expect("locator custody was reserved before link error")
-                            .discard_prepared_v1(control)
-                            .err()
-                    } else {
-                        None
-                    };
                     let mut original = if is_unsupported_link_error(&error) {
                         FsCasErrorV1::Unsupported
                     } else {
                         map_required_filesystem_write_error_v1(&error)
                     };
-                    if let Some(cleanup) = receipt_cleanup {
-                        original = original.dominated_by_v1(cleanup);
-                    }
                     unlock_marker_guards_v1(
                         visibility_owner,
                         &mut visibility_guard,
                         &mut publication_guard,
                         control,
                     );
+                    if locator_receipt_prepared {
+                        if let Err(cleanup) = locator_custody
+                            .as_mut()
+                            .expect("locator custody was reserved before link error")
+                            .discard_prepared_v1(control)
+                        {
+                            original = original.dominated_by_v1(cleanup);
+                        }
+                    }
                     let terminal =
                         prepublication_charge
                             .take()
@@ -14962,7 +15007,35 @@ where
             };
             Ok(terminal)
         }
-        Err(payload) => Err(payload),
+        Err(payload) => {
+            let discard = locator_custody
+                .as_deref_mut()
+                .filter(|custody| custody.has_pending_receipt_v1())
+                .map(|custody| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        custody.discard_prepared_v1(control)
+                    }))
+                });
+            match discard {
+                None | Some(Ok(Ok(()))) => Err(payload),
+                Some(Ok(Err(cleanup))) => {
+                    drop(payload);
+                    Ok(Err(cleanup))
+                }
+                Some(Err(_)) => {
+                    drop(payload);
+                    Ok(Err(visibility_owner.map_or(
+                        FsCasErrorV1::CleanupFailed(FsCasCleanupTargetV1::PreparationSpool),
+                        |owner| {
+                            owner.cleanup_failure_after_unwind_v1(
+                                FsCasCleanupTargetV1::PreparationSpool,
+                                control,
+                            )
+                        },
+                    )))
+                }
+            }
+        }
     };
     match pre_link {
         Ok(Ok(None)) => {}

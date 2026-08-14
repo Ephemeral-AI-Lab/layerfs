@@ -80,6 +80,15 @@ pub trait PreparedImmutableClosurePortV1 {
     /// Maximum transient userspace memory retained by this adapter. The query
     /// must be side-effect-free and must not begin private preparation.
     fn resident_memory_bound_bytes(&self) -> CoreResult<u64>;
+    /// Borrowed operation control used by bounded admission loops. Semantic
+    /// test sinks keep the default non-cancelling behavior; filesystem sinks
+    /// delegate to the caller-owned operation control.
+    fn cancellation_requested_v1(&mut self) -> bool {
+        false
+    }
+    fn deadline_exceeded_v1(&mut self) -> bool {
+        false
+    }
     fn begin_private_closure(&mut self, object_count: u64) -> Result<(), ImmutablePortErrorV1>;
     fn begin_private_object(
         &mut self,
