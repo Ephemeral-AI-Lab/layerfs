@@ -1,55 +1,65 @@
-# LayerFS
+<p align="center">
+  <img src="assets/layerfs.png" width="112" alt="LayerFS logo">
+</p>
 
-LayerFS V2.1 is a standalone Rust storage and workspace engine for immutable
-content-addressed state, copy-on-write workspaces, structural diff, and
-generic conditional publication.
+<h1 align="center">LayerFS</h1>
 
-Learn how the storage engine works in
-[LayerFS: Building Filesystem Storage for AI Agents](https://ephemeral-ai-lab.github.io/layerfs/).
+<p align="center"><strong>Filesystem Storage for Parallel AI Agents</strong></p>
 
-L0 is implemented. It contains the three-crate dependency shape required by
-the V2.1 architecture, the checked M6.1.2 canonical codec/error/path surface,
-and byte-preserved custody fixtures for the frozen M6.0 identity vectors.
-Storage behavior beyond these primitives is implemented incrementally
-according to the staged plan.
+<p align="center">
+  <a href="https://ephemeral-ai-lab.github.io/layerfs/">Read the book</a>
+  ·
+  <a href="LICENSE">MIT License</a>
+</p>
 
-## Crates
+LayerFS stores filesystem history as immutable LayerStacks. An agent can check
+out an ephemeral filesystem from any layer, work in isolation, and publish its
+changes as new copy-on-write layers. Branching does not duplicate unchanged
+stored content or directory structure.
 
-- `layerfs-sdk` — public package; its Rust library namespace is `layerfs`.
-- `layerfs-storage` — private, backend-neutral storage implementation crate.
-- `layerfs-driver` — private, OS-facing projection and capture crate.
+## Core storage mechanisms
 
-The dependency direction is:
+- **Content-addressed storage** gives immutable content a stable identity and
+  reuses exact duplicates.
+- **Content-defined chunking** preserves byte reuse around localized file
+  edits.
+- **Copy-on-write** creates a new layer while sharing unchanged filesystem
+  structure with its parent.
 
-```text
-layerfs-sdk -> { layerfs-storage, layerfs-driver }
-layerfs-driver -> layerfs-storage
-```
+## Components
 
-The first projection driver is Linux OverlayFS. Sandbox orchestration,
-environment lifecycle, CLI/MCP policy, Git filtering, and provider behavior
-remain outside this repository's LayerFS contract.
+- `layerfs-storage` — identities, canonical objects, CDC, file manifests,
+  structural COW, packs, immutable CAS admission, lifecycle coordination, and
+  verified reads.
+- `layerfs-sdk` — the public LayerFS API boundary.
+- `layerfs-driver` — filesystem projection and capture.
 
-## V2.1 documentation
+The storage engine is the implemented core. The stable SDK and filesystem
+projection remain planned boundaries around it.
 
-The normative proposal and implementation plan are maintained in the
-documentation repository:
+## Collaborating projects
 
-- [Specification](../ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/SPEC.md)
-- [Architecture](../ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/ARCHITECTURE.md)
-- [Storage and performance](../ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/STORAGE_AND_PERFORMANCE.md)
-- [Implementation plan](../ephemeral-sandbox-docs/ephemelra-sanbdox-v2.1/layefs/IMPLEMENTATION_PLAN.md)
+- [Ephemeral Sandbox](https://github.com/Ephemeral-AI-Lab/ephemeral-sandbox) —
+  isolated execution environments for parallel agents.
+- [DeltaGit](https://github.com/Ephemeral-AI-Lab/deltagit) — version control for
+  work in motion.
 
-## Local checks
+Future collaborators building agent runtimes, sandboxes, filesystem tools, or
+version-control workflows are welcome to open an issue or discussion.
+
+## Build and test
 
 ```sh
 cargo fmt --all -- --check
 cargo check --workspace
 cargo test --workspace
-cargo tree --workspace --edges normal
-shasum -a 256 -c tests/fixtures/frozen/SHA256SUMS
 ```
 
-The L0 runtime crates have no normal external dependencies. The storage crate
-has one dev-only BLAKE3 dependency so tests can recompute the frozen M6.0
-structural identity vectors; it is not part of the runtime dependency graph.
+## Documentation
+
+Read [LayerFS: Filesystem Storage for Parallel AI Agents](https://ephemeral-ai-lab.github.io/layerfs/)
+to follow the storage design from CAS and CDC through copy-on-write LayerStacks.
+
+## License
+
+LayerFS is available under the [MIT License](LICENSE).
