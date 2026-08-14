@@ -134,7 +134,8 @@ const mountpoint = path.join(directory, "mnt");
 await mkdir(mountpoint);
 const server = path.join(root, "tests/node-vfs/real-fuse-server.mjs");
 const storage = run("stat", ["-f", "-c", "%T", directory], root).trim();
-const candidate = run("git", ["rev-parse", "HEAD"], root).trim();
+const candidate =
+  process.env.M7_FUSE_CANDIDATE ?? run("git", ["rev-parse", "HEAD"], root).trim();
 const pnpm = run("pnpm", ["--version"], root).trim();
 
 function serverProcess() {
