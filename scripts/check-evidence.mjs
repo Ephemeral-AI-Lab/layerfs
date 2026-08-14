@@ -2101,6 +2101,7 @@ async function validateOptionalM8Evidence() {
     !process.env.M8_PRECOMMIT
   ) {
     // Pin the verifier alongside the M8 record so later audits use the same rules.
+    // Keep this audit rule in the atomic evidence commit as well as the candidate.
     const evidenceParents = (
       await execute("git", ["show", "-s", "--format=%P", recordCommit], {
         cwd: root,

@@ -4,4 +4,4 @@
 
 api snapshots: 6 publishable packages, 10 public subpaths, and 404 exported symbols match committed symbol/.d.ts reports
 
-M8_LOG_META name=fs-api exitCode=0 elapsedMs=1366 candidate=04e51df33781d005169ce6e1f0f178acd81aa537 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=fs_api
+M8_LOG_META name=fs-api exitCode=0 elapsedMs=1347 candidate=3409cce081a9c3c1254ec602c56f2d2d5ef94af9 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=fs_api
