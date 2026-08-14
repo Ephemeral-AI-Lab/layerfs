@@ -178,6 +178,22 @@ and MUST preserve the portable filesystem contract.
 `filesystem` and `provider` MUST address the same database, filesystem identity, branch
 view, limits, and persisted format settings.
 
+When `branchId` is present, the provider MUST bind every namespace, metadata, range,
+write-session, flush, and sync operation to exactly that active private branch. A
+missing branch MUST fail opening with `ENOENT`; a terminal branch MUST fail with
+`EROFS`. Neither case may fall back to main. Reopening after process restart MUST bind
+the same branch or fail.
+
+An execution replica's main view is read-only. A writable open or namespace mutation on
+replica main MUST fail with `EROFS` before creating provider-visible pending state. A
+writable execution provider MUST therefore select an active private branch.
+
+The M8 composition API MUST also allow this provider to be derived from the same
+core-owned runtime as replication and the portable filesystem. That derived provider
+MUST share the runtime's cache, mutation coordinator, and aggregate admission
+controller. Opening an independent core instance over the same SQLite database for FUSE
+and replication is not a supported Computer configuration.
+
 Opening MUST fail if the database is not a compatible Ephemeral AI FS database. The
 package MUST NOT initialize, migrate, or open a DOFS database. It MUST NOT fall back to
 another engine.
@@ -493,12 +509,12 @@ observation-error policy.
 
 Computer SHOULD perform only these Node-side steps:
 
-1. open the selected engine and database;
-2. obtain the engine's Node provider;
+1. open the selected engine's one shared filesystem runtime;
+2. obtain the provider for the exact active execution `branchId`;
 3. map Computer-owned FUSE handles and flags to provider sessions;
 4. forward range, namespace, flush, and close operations;
 5. expose provider metrics; and
-6. close the provider during execution-backend shutdown.
+6. close the provider and runtime during execution-backend shutdown.
 
 Computer MUST NOT inspect Ephemeral AI FS tables, manifests, chunks, pages, or
 write-session buffers. It MUST NOT duplicate the provider's memory cache. The DOFS
@@ -531,7 +547,16 @@ real file-backed SQLite database and MUST cover at least:
 16. immutable capabilities and exact memory metrics;
 17. all 4 KiB, 8 KiB, and 16 KiB copy-on-write page formats; and
 18. no page-size interpretation, FastCDC implementation, SQL, or repository access in
-    this package.
+    this package;
+19. an active branch mount that sees its base-main content while its private mutations
+    remain invisible to main and sibling branches and sibling-private mutations remain
+    invisible to it, including reconnect to the same branch after restart;
+20. opening a missing or terminal branch fails without main fallback, and replica-main
+    writes fail with `EROFS` before mutation;
+21. the provider and replication endpoint derive from one runtime and remain within one
+    aggregate managed-memory budget; and
+22. incoming replication activation invalidates new-open caches while preserving pinned
+    read snapshots and serializing or rejecting dirty writers without lost updates.
 
 Fault tests MUST prove that a failed flush remains readable and retryable, that abort
 releases its entire accounted capacity, and that resident bytes never cross the
@@ -582,4 +607,8 @@ gains are not inferred from one repetitive fixture.
 - SQLite work passes through supported core batching APIs;
 - page size is reported from, and interpreted only by, the core;
 - the benchmark gates pass against the retained DOFS control; and
-- Computer can select and open the provider without filesystem logic of its own.
+- Computer can select and open the exact active branch provider from its shared runtime
+  without filesystem logic of its own; and
+- missing or terminal branch reconnect never falls back to main, replica main remains
+  read-only, and live replication activation passes the pinned-reader and dirty-writer
+  conformance cases.

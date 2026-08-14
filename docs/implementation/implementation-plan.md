@@ -481,24 +481,60 @@ durable state. M7 is accepted and `validate:accepted` selects it.
 
 ### M8 objective
 
-Replicate revisions, branches, manifests, CAS objects, and results through a bounded
-host-neutral protocol without exposing tables or raw content mutation.
+Replicate revisions, active private branches, manifests, CAS objects, and
+authority-owned results through a bounded host-neutral protocol without exposing tables
+or raw content mutation. Deliver the shared-runtime, branch-mounted, resumable contract
+required by the pinned Ephemeral AI Computer fork; production cutover remains M10.
 
 ### M8 checklist
 
+- [ ] Freeze the canonical version 1 wire format, golden vectors, discriminated
+      global-flow plan, semantic error envelopes, result shape, operation ID, and opaque
+      resume-key contract.
 - [ ] Implement the schema-free replication integration bridge in the core.
-- [ ] Implement protocol capabilities, roles, and compatibility handshake.
-- [ ] Implement authenticated session, cursor, nonce, receipt, and retry state.
+- [ ] Add one public runtime owner that derives the portable filesystem, replication
+      endpoint, and branch-scoped Node VFS from one cache, mutation coordinator, and
+      aggregate admission controller.
+- [ ] Implement an authenticated empty-only replica bootstrap that atomically adopts the
+      authority's exact filesystem and genesis identity, resumes only the recognized
+      durable unbound state, rejects unrelated nonempty or mismatched databases without
+      writes, and survives restart after every accepted batch.
+- [ ] Implement protocol capabilities, the normative role/flow matrix, and explicit
+      logical filesystem-schema, storage-user-version, protocol, and format
+      compatibility.
+- [ ] Bind authenticated principal, host scope, filesystem, role, global flow, branch,
+      policy version, and limits before durable session creation.
+- [ ] Implement durable operation, cursor, nonce, receipt, retry-budget,
+      terminal-result, and resume-key state. Hosts schedule returned wake-ups but do not
+      own protocol retry accounting.
+- [ ] Enable Node VFS mounts of one exact active private branch, make execution-replica
+      main read-only, and fail missing or terminal branch reconnect without main
+      fallback.
 - [ ] Implement bounded manifest-root, manifest-node, and CAS negotiation.
 - [ ] Implement incremental envelopes with no complete duplicate buffer.
-- [ ] Implement checkpoint bootstrap and main catch-up.
-- [ ] Implement branch push and pull.
+- [ ] Implement checkpoint bootstrap, authoritative-main-to-replica catch-up, and every
+      allowed exact branch flow in the normative role matrix.
+- [ ] Return the imported branch generation and digest and add generation-guarded,
+      operation-ID publication so an intervening mutation cannot be published.
+- [ ] Enforce authority-only terminal branch state and publication-result origination.
 - [ ] Implement durable export and staging leases.
 - [ ] Implement staging-certificate updates and constant-row final activation.
+- [ ] Specify and implement live activation for namespace caches, new opens, pinned read
+      snapshots, and dirty writers without silent rebase or lost updates.
 - [ ] Implement dropped-response replay and retry exhaustion.
-- [ ] Implement policy checks before durable session creation.
 - [ ] Implement bounded abandoned-session cleanup.
 - [ ] Add Node-to-Node, Node-to-Durable-Object, and restart suites.
+- [ ] Add the Computer carrier profile: authentication before exchange, outer raw and
+      decompressed frame limits before JSON/base64 decode, decoded-envelope limits,
+      canonical semantic errors, one mutating exchange in flight, disconnect cleanup,
+      and combined transport-plus-filesystem memory accounting.
+- [ ] Run the pinned Computer fork end to end through its actual Cap'n Web carrier and a
+      real FUSE mount: provision, main transfer, exact branch mount, shell and Git
+      mutation, restart/remount, branch return, guarded publication, replay, and
+      cleanup.
+- [ ] Bind the Computer compatibility evidence to exact clean Ephemeral AI FS and
+      Ephemeral AI Computer commits, commands, logs, artifact hashes, carrier settings,
+      and runtime environment.
 - [ ] Replicate the unchanged accepted 100,000-row CT-SCALE-1 fixture Node-to-Node and
       Node-to-Durable-Object under its tiny query and memory limits before collection.
 
@@ -513,7 +549,31 @@ host-neutral protocol without exposing tables or raw content mutation.
 - [ ] Retry exhaustion releases or expires all leases and reservations.
 - [ ] The bridge exposes no SQL, schema, repository, standalone CAS insertion, or
       standalone COW mutation.
-- [ ] Replicated bytes pass digest verification through Node VFS.
+- [ ] A fresh authenticated replica adopts the exact authority genesis; recognized
+      durable unbound state resumes, while unrelated nonempty, wrong-workspace,
+      wrong-engine, and unsupported-version targets fail before writes.
+- [ ] Replica main is read-only, an active branch mounts through Node VFS and real FUSE,
+      base-main content is visible, branch-private mutations remain invisible to main
+      and siblings, sibling-private mutations remain invisible to the mounted branch,
+      and missing or terminal branches never fall back to main.
+- [ ] Replication and Node VFS share one runtime budget; live activation preserves
+      pinned snapshots and rejects or serializes dirty-writer conflicts without lost
+      updates.
+- [ ] Imported generation and digest expectations prevent publication of a later branch
+      generation, lost responses replay one activation and one publication, and the
+      authority's terminal state returns to the replica before reconnect.
+- [ ] The actual Computer Cap'n Web carrier enforces pre-decode and decoded limits,
+      preserves stable errors, releases RPC stubs, and stays within the single
+      configured process-memory budget.
+- [ ] The complete Computer profile verifies the source and final authoritative digests
+      through real mounted FUSE and reports carrier, managed-memory, RSS, SQLite, WAL,
+      lease, reservation, and retry metrics.
+- [ ] Evidence verification rejects drift in either recorded candidate tree and
+      validates every stored command, exit code, log hash, workload count, identity,
+      digest, restart, resource, and cleanup assertion.
+- [ ] Deleting the local replica and provisioning a replacement from empty restores
+      exact main and active-branch identity and digest without a duplicate authority
+      activation.
 
 ## 12. Milestone 9: Version 0.1 integration candidate
 

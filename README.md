@@ -327,7 +327,12 @@ docs/benchmarks/              Benchmark plans, results, and improvement targets
 - [M7 implementation handoff](./docs/implementation/m7-handoff.md)
 - [Full implementation plan](./docs/implementation/implementation-plan.md)
 
-The next milestone is M8 replication.
+The next milestone is M8 replication. Its Computer compatibility profile now includes
+authenticated fresh-replica provisioning, one shared filesystem runtime, exact active
+branch mounts with read-only replica main, durable resume, bounded Cap'n Web framing,
+generation-guarded publication, live-mount activation semantics, and an end-to-end gate
+through the pinned Ephemeral AI Computer fork and real FUSE. M10 remains the production
+cutover milestone.
 
 ## 📄 License
 

@@ -208,6 +208,32 @@ sessions fit before forced staging, and a 4 MiB replication batch plus response 
 codec headroom fits its 10 MiB session reservation. Manifest traversal retains only
 bounded nodes. The sub-limits are admission ceilings and MUST NOT be preallocated.
 
+For Computer's Cap'n Web text carrier, the 20 MiB host reservation MUST include the raw
+and decompressed frame, JSON string, base64 expansion, decoded envelope, and transient
+remote procedure call copies. The carrier MUST reject an oversized raw or decompressed
+frame before JSON/base64 decoding and then apply the negotiated decoded-envelope limit.
+The 10 MiB replication session ceiling does not include untracked carrier copies.
+
+The `computer-efs-carrier-v1` profile disables compression, limits a decoded request or
+response to 3 MiB, limits mutating acknowledgements to 64 KiB, limits a raw JSON/base64
+frame to 4 MiB plus 64 KiB, allows one exchange per operation, and reserves at most 2
+MiB for carrier scratch. It may retain at most one raw frame, one decoded JavaScript
+string charged at two bytes per code unit, one decoded envelope, one acknowledgement,
+and that scratch simultaneously. The resulting 17.25 MiB maximum leaves 2.75 MiB of the
+20 MiB reservation unused. A carrier implementation that needs another full frame copy
+MUST lower its negotiated envelope maximum or increase the process profile before it can
+pass the Computer gate.
+
+Every Computer replication operation in a process shares that one 20 MiB transport pool.
+The carrier MUST reserve its conservative simultaneous-copy maximum before reading a
+frame and apply backpressure when the aggregate would exceed the pool. At most one 17.25
+MiB maximum-sized exchange may run process-wide; the generic replication session limit
+does not grant a separate transport reservation to each session.
+
+Replication and branch Node VFS derived from one execution runtime share the same 128
+MiB managed-filesystem allowance. They MUST NOT open independent filesystem instances or
+multiply cache and admission ceilings over one SQLite replica.
+
 Several workspaces in one process share one explicitly configured process budget. They
 MUST NOT each assume an independent 256 MiB allowance.
 
@@ -505,6 +531,11 @@ The Node virtual filesystem provider MUST additionally expose active and peak se
 counts, callback-size distribution, contiguous-run length, and flush reason. Computer
 MUST record FUSE request counts, request sizes, cache mode, mount options, engine
 selection, and process peak resident memory.
+
+The Computer replication profile MUST additionally record raw and decompressed carrier
+bytes, JSON/base64 expansion, decoded envelope bytes, current and high-water transport
+bytes, one-flow operation and resume identifiers, live remote procedure call stubs after
+disconnect, and combined transport-plus-filesystem process high-water.
 
 ## 8. Benchmark method
 
