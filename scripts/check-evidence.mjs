@@ -1946,6 +1946,7 @@ async function validateOptionalM8Evidence() {
     "packages/node-vfs/api-snapshots/",
     "packages/testkit/api-snapshots/",
     "scripts/",
+    "tests/architecture/",
   ];
   if (
     !candidateChanges.length ||
