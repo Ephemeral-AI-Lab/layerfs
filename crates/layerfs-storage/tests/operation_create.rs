@@ -1362,11 +1362,13 @@ mod l1_profiles {
     }
 }
 
+#[cfg(feature = "operation-polymorphism")]
 mod l1_resources {
-    use layerfs_storage::resources::{
+    use layerfs_storage::qualification::resources::{
         base_ledger_bytes_v1, observe_forbidden_work_v1, observe_memory_plan_v1,
         observe_memory_profile_v1, operation_slot_bytes_v1, MemoryBudgetV1, MemoryResourceKindV1,
     };
+    use layerfs_storage::CoreError;
 
     #[test]
     fn qualified_memory_profiles_admit_the_exact_frozen_slot_counts() {
@@ -1395,7 +1397,10 @@ mod l1_resources {
                 observation.planned_high_water_bytes(),
                 base_ledger_bytes_v1() + expected_slots * (32_768 + 65_536 + 2_048)
             );
-            assert!(observation.over_capacity_refused());
+            assert_eq!(
+                observation.over_capacity_error(),
+                Some(CoreError::ResourceRefused)
+            );
             assert!(observation.cleaned_up());
         }
     }
@@ -1405,8 +1410,14 @@ mod l1_resources {
         let observation = observe_memory_plan_v1().unwrap();
         assert!(observation.comparison_window_present());
         assert_eq!(observation.total_bytes(), 65_536);
-        assert!(observation.duplicate_resource_refused());
-        assert!(observation.slot_overflow_refused());
+        assert_eq!(
+            observation.duplicate_resource_error(),
+            Some(CoreError::ResourceRefused)
+        );
+        assert_eq!(
+            observation.slot_overflow_error(),
+            Some(CoreError::ResourceRefused)
+        );
     }
 
     #[test]
@@ -1444,12 +1455,16 @@ mod l1_resources {
     }
 }
 
+#[cfg(feature = "operation-polymorphism")]
 mod l1_content {
     use crate::support;
 
-    use layerfs_storage::content::semantic::{
-        base_budget_bytes, create_and_replace_v1, create_v1, observe_failure_v1,
-        operation_slot_bytes, ContentRequestV1,
+    use layerfs_storage::qualification::content::semantic::{
+        base_budget_bytes, create_and_replace_v1, create_v1, expected_planned_high_water,
+        observe_failure_v1, operation_slot_bytes, ContentRequestV1,
+    };
+    use layerfs_storage::qualification::resources::{
+        observe_memory_profile_v1, MemoryBudgetV1, MemoryResourceKindV1,
     };
     use layerfs_storage::CoreError;
 
@@ -1465,12 +1480,36 @@ mod l1_content {
 
     #[test]
     fn large_source_uses_fixed_io_windows_and_the_qualified_memory_ledger() {
+        let resources = [
+            (MemoryResourceKindV1::CdcRing, 32_768),
+            (MemoryResourceKindV1::SourceWindow, 65_536),
+            (MemoryResourceKindV1::HashState, 2_048),
+        ];
+        let refusal =
+            observe_memory_profile_v1(MemoryBudgetV1::ThirtyTwoMiB.bytes(), &resources).unwrap();
+        let profile_48 =
+            observe_memory_profile_v1(MemoryBudgetV1::FortyEightMiB.bytes(), &resources).unwrap();
+        let profile_72 =
+            observe_memory_profile_v1(MemoryBudgetV1::SeventyTwoMiB.bytes(), &resources).unwrap();
+        assert_eq!(refusal.capacity_slots(), 6);
+        assert_eq!(profile_48.capacity_slots(), 10);
+        assert_eq!(profile_72.capacity_slots(), 16);
+        assert_eq!(refusal.admitted_slots(), 6);
+        assert_eq!(refusal.high_water_bytes(), 32 * 1024 * 1024);
+        assert_eq!(
+            refusal.over_capacity_error(),
+            Some(CoreError::ResourceRefused)
+        );
+        assert!(refusal.cleaned_up());
+
         let data = support::fastcdc_golden_input(64 * 1024 * 1024);
         let length = data.len() as u64;
         let observation = create_v1(&ContentRequestV1::new(b"large.bin", 0o644, &data)).unwrap();
 
         assert!(observation.completed());
+        assert_eq!(observation.source_remaining(), 0);
         assert_eq!(observation.bytes_read(), length);
+        assert_eq!(observation.bytes_copied(), length);
         assert!(observation.source_max_request() <= 32_768);
         assert!(observation.sink_max_segment() <= 32_768);
         assert_eq!(
@@ -1481,8 +1520,14 @@ mod l1_content {
             observation.memory_high_water(),
             base_budget_bytes() + operation_slot_bytes()
         );
-        assert!(observation.planned_high_water() > base_budget_bytes());
-        assert!(observation.planned_high_water() <= base_budget_bytes() + operation_slot_bytes());
+        assert_eq!(
+            observation.ledger_high_water(),
+            base_budget_bytes() + operation_slot_bytes()
+        );
+        assert_eq!(
+            observation.planned_high_water(),
+            expected_planned_high_water(length)
+        );
         assert_eq!(observation.admitted_slots(), 0);
         assert!(observation.zero_forbidden_work());
     }
@@ -1509,10 +1554,8 @@ mod l1_content {
         assert!(created.physical_hash_update_calls() > 0);
         assert!(created.zero_forbidden_work());
         assert_eq!(created.admitted_slots(), 0);
-        assert_eq!(
-            created.chunk_count() as u64,
-            created.spool_ref_count()
-        );
+        assert_eq!(created.chunk_count() as u64, created.spool_ref_count());
+        assert!(created.file_object_observed());
         assert_eq!(created.file_chunk_ref_count(), created.chunk_count() as u64);
         assert_eq!(created.logical_len(), data.len() as u64);
 
@@ -1530,7 +1573,10 @@ mod l1_content {
         assert_eq!(replaced.physical_id(), created.physical_id());
         assert_eq!(replaced.logical_len(), created.logical_len());
         assert_eq!(replaced.chunk_count(), created.chunk_count());
-        assert_eq!(replaced.file_chunk_ref_count(), created.file_chunk_ref_count());
+        assert_eq!(
+            replaced.file_chunk_ref_count(),
+            created.file_chunk_ref_count()
+        );
         assert!(replaced.logical_chunks_reused() > 0);
         assert!(replaced.physical_objects_reused() > 0);
         assert!(replaced.zero_forbidden_work());
@@ -1564,8 +1610,7 @@ mod l1_content {
             CoreError::ResourceRefused,
         );
         assert_rejected(
-            ContentRequestV1::new(b"file", 0o644, data)
-                .with_sink_residency(operation_slot_bytes()),
+            ContentRequestV1::new(b"file", 0o644, data).with_sink_residency(operation_slot_bytes()),
             CoreError::ResourceRefused,
         );
         assert_rejected(
@@ -1577,8 +1622,7 @@ mod l1_content {
     #[test]
     fn invalid_source_count_is_rejected_without_slicing_or_partial_visibility() {
         let observation = observe_failure_v1(
-            &ContentRequestV1::new(b"file.bin", 0o644, b"x")
-                .with_invalid_source_count(true),
+            &ContentRequestV1::new(b"file.bin", 0o644, b"x").with_invalid_source_count(true),
         );
         assert_eq!(observation.error(), CoreError::SourceFailure);
         assert_eq!(observation.bytes_read(), 0);
@@ -1592,255 +1636,756 @@ mod l1_content {
 
 #[cfg(feature = "operation-polymorphism")]
 mod operation_create_owner {
-    use layerfs_storage::qualification::pack::semantic::{
-        build_v1, validate_v1, PackRequestV1, ValidationRequestV1,
-    };
-    use layerfs_storage::profile::ProfileSpecV1;
-    use layerfs_storage::qualification::content::semantic::{
-        create_and_replace_v1, create_v1, observe_failure_v1, ContentRequestV1,
-        CreateObservationV1, FailureObservationV1, operation_slot_bytes,
+    use crate::support::temp_fs_cas::TempFsCas;
+    use layerfs_storage::cdc::CdcAlgorithmV1;
+    use layerfs_storage::qualification::cas::semantic::PublicationErrorV1;
+    use layerfs_storage::qualification::lifecycle::semantic::{
+        complete_create_case_v1, equivalent_create_lifecycle_v1, CompleteCreateCaseV1,
+        CompleteCreateCountersV1, CompleteCreateObservationV1,
     };
     use layerfs_storage::CoreError;
 
-    fn sample(len: usize) -> Vec<u8> {
-        (0..len)
-            .map(|index| (index as u8).wrapping_mul(31).wrapping_add(7))
-            .collect()
+    fn run(label: &str, case: CompleteCreateCaseV1) -> CompleteCreateObservationV1 {
+        let fixture = TempFsCas::new(label);
+        let observation = complete_create_case_v1(fixture.path(), case);
+        assert_storage_equations(observation.counters);
+        assert_eq!(observation.operation_admitted_slots, 0);
+        assert_eq!(observation.operation_admission_active, 0);
+        assert_eq!(observation.operation_admission_queue, (0, 0, 0));
+        assert_eq!(observation.storage_admission_active, (0, 0, 0));
+        assert_eq!(observation.preparation_entries, 0);
+        observation
     }
 
-    fn created(data: &[u8]) -> CreateObservationV1 {
-        create_v1(&ContentRequestV1::new(b"file.bin", 0o644, data)).unwrap()
-    }
-
-    fn assert_created(observation: CreateObservationV1, data_len: usize) {
-        assert!(observation.completed());
-        assert_eq!(observation.logical_len(), data_len as u64);
-        assert!(observation.logical_id() != [0; 32]);
-        assert!(observation.physical_id() != [0; 32]);
-        assert!(observation.chunk_count() > 0);
+    fn assert_storage_equations(counters: CompleteCreateCountersV1) {
         assert_eq!(
-            observation.file_chunk_ref_count(),
-            u64::from(observation.chunk_count())
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
         );
-        assert_eq!(observation.admitted_slots(), 0);
-        assert!(observation.zero_forbidden_work());
-        assert!(observation.bytes_read() >= data_len as u64);
-        assert!(observation.source_max_request() <= 32_768);
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            Some(counters.storage_bytes_reserved),
+            counters
+                .storage_bytes_released
+                .checked_add(counters.storage_bytes_committed)
+                .and_then(|value| value.checked_add(counters.storage_bytes_retained))
+        );
+        assert_eq!(
+            Some(counters.storage_inodes_reserved),
+            counters
+                .storage_inodes_released
+                .checked_add(counters.storage_inodes_committed)
+                .and_then(|value| value.checked_add(counters.storage_inodes_retained))
+        );
     }
 
-    fn failed(request: ContentRequestV1<'_>) -> FailureObservationV1 {
-        observe_failure_v1(&request)
+    fn overflow() -> Option<PublicationErrorV1> {
+        Some(PublicationErrorV1::Core(CoreError::IntegerOverflow))
     }
 
-    fn assert_clean_failure(observation: FailureObservationV1, error: CoreError) {
-        assert_eq!(observation.error(), error);
-        assert!(!observation.sink_active());
-        assert_eq!(observation.admitted_slots(), 0);
-        assert!(observation.sink_aborts() <= 1);
-        assert!(observation.spool_aborted() || observation.sink_aborts() == 0);
+    fn saturated_created(counters: CompleteCreateCountersV1) -> usize {
+        [
+            counters.version_objects_created,
+            counters.tree_objects_created,
+            counters.file_objects_created,
+            counters.symlink_objects_created,
+            counters.chunk_objects_created,
+        ]
+        .into_iter()
+        .filter(|value| *value == u64::MAX)
+        .count()
     }
 
-    fn object(kind: u8, payload: &[u8]) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(52 + payload.len());
-        bytes.extend_from_slice(b"ELSOBJ01");
-        bytes.extend_from_slice(&1_u16.to_be_bytes());
-        bytes.push(kind);
-        bytes.push(0);
-        bytes.extend_from_slice(ProfileSpecV1::frozen().id().as_bytes());
-        bytes.extend_from_slice(&(payload.len() as u64).to_be_bytes());
-        bytes.extend_from_slice(payload);
-        bytes
+    fn saturated_reused(counters: CompleteCreateCountersV1) -> usize {
+        [
+            counters.version_objects_reused,
+            counters.tree_objects_reused,
+            counters.file_objects_reused,
+            counters.symlink_objects_reused,
+            counters.chunk_objects_reused,
+        ]
+        .into_iter()
+        .filter(|value| *value == u64::MAX)
+        .count()
     }
 
     #[test]
     fn one_file_and_multi_entry_create_share_outer_lifecycle_trace_and_fault_terminal() {
-        let one = sample(1_024);
-        let many = sample(100_000);
-        let first = created(&one);
-        let second = created(&many);
-        assert_created(first, one.len());
-        assert_created(second, many.len());
-        assert!(second.chunk_count() > first.chunk_count());
-        let refused = failed(
-            ContentRequestV1::new(b"file.bin", 0o644, b"fault")
-                .with_sink_refusal_after(0),
+        let fixture = TempFsCas::new("equivalent-create-lifecycle");
+        let observation = equivalent_create_lifecycle_v1(fixture.path());
+        let one = observation.success_one_counters;
+        let tree = observation.success_tree_counters;
+        let failed_one = observation.failed_one_counters;
+        let failed_tree = observation.failed_tree_counters;
+
+        assert_eq!(observation.success_traces_equal, true);
+        assert_eq!(observation.success_starts_at_slot_reservation, true);
+        assert_eq!(observation.success_ends_at_validated_handoff, true);
+        assert!(observation.failed_one_control_fired);
+        assert!(observation.failed_tree_control_fired);
+        assert_eq!(observation.failure_errors_equal, true);
+        assert_eq!(observation.failure_traces_equal, true);
+        assert!(observation.failure_trace_has_no_handoff);
+        assert_eq!(observation.failed_one_clean, true);
+        assert_eq!(observation.failed_tree_clean, true);
+        assert_eq!(one.storage_bytes_requested, one.storage_bytes_reserved);
+        assert_eq!(tree.storage_bytes_requested, tree.storage_bytes_reserved);
+        assert!(one.storage_bytes_requested > 0);
+        assert_eq!(
+            one.storage_bytes_reserved,
+            one.storage_bytes_released + one.storage_bytes_committed + one.storage_bytes_retained
         );
-        assert_clean_failure(refused, CoreError::SinkRefused);
+        assert_eq!(
+            tree.storage_bytes_reserved,
+            tree.storage_bytes_released
+                + tree.storage_bytes_committed
+                + tree.storage_bytes_retained
+        );
+        assert_eq!(
+            failed_one.storage_bytes_requested,
+            failed_one.storage_bytes_reserved
+        );
+        assert_eq!(
+            failed_tree.storage_bytes_requested,
+            failed_tree.storage_bytes_reserved
+        );
+        assert!(tree.storage_bytes_requested > 0);
+        assert!(one.root_reserved_bytes_high_water >= one.storage_bytes_reserved);
+        assert!(tree.root_reserved_bytes_high_water >= tree.storage_bytes_reserved);
+        assert!(failed_one.root_reserved_bytes_high_water >= failed_one.storage_bytes_reserved);
+        assert_eq!(one.storage_inodes_requested, one.storage_inodes_reserved);
+        assert_eq!(tree.storage_inodes_requested, tree.storage_inodes_reserved);
+        assert_eq!(
+            failed_one.storage_inodes_requested,
+            failed_one.storage_inodes_reserved
+        );
+        assert_eq!(
+            failed_tree.storage_inodes_requested,
+            failed_tree.storage_inodes_reserved
+        );
+        assert_eq!(one.storage_bytes_retained, 0);
+        assert!(one.zero_forbidden_work);
+        assert!(tree.zero_forbidden_work);
+        assert_eq!(tree.storage_bytes_retained, 0);
+        assert_eq!(one.storage_inodes_retained, 0);
+        assert_eq!(tree.storage_inodes_retained, 0);
+        assert_eq!(one.mutable_preparation_residue_bytes, 0);
+        assert!(failed_one.zero_forbidden_work);
+        assert!(failed_tree.zero_forbidden_work);
+        assert_eq!(one.mutable_preparation_residue_inodes, 0);
+        assert_eq!(tree.mutable_preparation_residue_bytes, 0);
+        assert_eq!(tree.mutable_preparation_residue_inodes, 0);
+        assert_eq!(failed_one.mutable_preparation_residue_bytes, 0);
+        assert_eq!(failed_one.mutable_preparation_residue_inodes, 0);
+        assert_eq!(failed_tree.mutable_preparation_residue_bytes, 0);
+        assert_eq!(failed_tree.mutable_preparation_residue_inodes, 0);
+        assert!(one.storage_equations_hold);
+        assert_eq!(tree.storage_equations_hold, true);
+        assert_eq!(failed_one.storage_equations_hold, true);
+        assert_eq!(failed_tree.storage_equations_hold, true);
+        assert_eq!(one.unreachable_installed_residue_bytes, 0);
+        assert_eq!(tree.unreachable_installed_residue_bytes, 0);
+        assert_eq!(failed_one.unreachable_installed_residue_bytes, 0);
+        assert_eq!(failed_tree.unreachable_installed_residue_bytes, 0);
+        assert_eq!(one.storage_bytes_committed > 0, true);
+        assert_eq!(tree.storage_bytes_committed > 0, true);
+        assert_eq!(one.storage_inodes_committed > 0, true);
+        assert_eq!(tree.storage_inodes_committed > 0, true);
+        assert_eq!(failed_one.storage_bytes_committed, 0);
+        assert_eq!(failed_tree.storage_bytes_committed, 0);
+        assert_eq!(
+            (
+                failed_one.storage_inodes_committed,
+                failed_tree.storage_inodes_committed
+            ),
+            (0, 0)
+        );
+        assert!(one.closure_fences == 1 && tree.closure_fences == 1);
+        assert_eq!(failed_one.closure_fences, 0);
+        assert!(failed_tree.closure_fences == 0);
     }
 
     #[test]
     fn closure_marker_preparation_holds_neither_root_fence() {
-        let data = sample(12_345);
-        let request = ContentRequestV1::new(b"marker.bin", 0o644, &data);
-        let (first, replacement) = create_and_replace_v1(&request).unwrap();
-        assert_created(first, data.len());
-        assert!(replacement.completed());
-        assert_eq!(first.logical_id(), replacement.logical_id());
-        assert_eq!(first.physical_id(), replacement.physical_id());
-        assert_eq!(replacement.admitted_slots(), 0);
-        assert!(replacement.zero_forbidden_work());
+        let observation = run(
+            "closure-marker-lock-scope",
+            CompleteCreateCaseV1::ClosureMarkerLockScope,
+        );
+        assert!(observation.closure_marker_observed);
+        assert!(observation.visibility_lock_available);
+        assert!(observation.publication_lock_available);
+        assert_eq!(observation.closure_publication_acquisitions, 2);
+        assert_eq!(observation.closure_publication_releases, 2);
+        assert_eq!(
+            observation.counters.visibility_lock_acquisitions,
+            observation.observed_visibility_acquisitions
+        );
+        assert_eq!(
+            observation.observed_visibility_acquisitions,
+            observation.observed_visibility_releases
+        );
+        assert_eq!(
+            observation.counters.publication_lock_acquisitions,
+            observation.observed_publication_acquisitions
+        );
+        assert_eq!(
+            observation.observed_publication_acquisitions,
+            observation.observed_publication_releases
+        );
+        assert!(observation.counters.storage_equations_hold);
     }
 
     #[test]
     fn writer_transfers_direct_visibility_and_publication_observations() {
-        let data = sample(100_000);
-        let observation = created(&data);
-        assert_created(observation, data.len());
-        assert!(observation.bytes_copied() > 0);
-        assert!(observation.source_read_calls() > 0);
-        assert!(observation.sink_max_segment() <= 32_768);
-        assert!(observation.memory_high_water() > 0);
-        assert!(observation.planned_high_water() > 0);
-        assert!(observation.object_count() > 0);
+        let observation = run(
+            "writer-direct-root-lock-observations",
+            CompleteCreateCaseV1::WriterDirectLockObservations,
+        );
+        assert!(observation.counters.visibility_lock_acquisitions > 0);
+        assert!(observation.counters.publication_lock_acquisitions > 0);
+        assert!(observation.counters.storage_equations_hold);
+        assert!(observation.counters.zero_forbidden_work);
     }
 
     #[test]
     fn lifecycle_storage_counter_merge_overflow_is_transactional_and_terminal() {
-        let observation = failed(
-            ContentRequestV1::new(b"overflow.bin", 0o644, b"x")
-                .with_budget(0),
+        let observation = run(
+            "lifecycle-storage-counter-merge-overflow",
+            CompleteCreateCaseV1::StorageCounterMergeOverflow,
         );
-        assert_clean_failure(observation, CoreError::ResourceRefused);
-        assert_eq!(observation.bytes_read(), 0);
-        assert_eq!(observation.bytes_copied(), 0);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), true, true)
+        );
+        assert_eq!(counters.physical_carrier_object_writes, 41);
+        assert_eq!(counters.pack_entries, 43);
+        assert_eq!(counters.pack_bytes, 47);
+        assert_eq!(counters.carrier_bytes_total, u64::MAX);
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert!(counters.storage_bytes_retained > 0);
+        assert!(counters.storage_inodes_retained > 0);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(
+            counters.unreachable_installed_residue_bytes,
+            observation.immutable_usage.0
+        );
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_cdc_stream_overflow_is_transactional_and_terminal() {
-        let observation = failed(
-            ContentRequestV1::new(b"overflow.bin", 0o644, b"x")
-                .with_declared_len(u64::MAX),
+        let observation = run(
+            "complete-create-cdc-counter-overflow",
+            CompleteCreateCaseV1::FastCdcCounterOverflow,
         );
-        assert_clean_failure(observation, CoreError::LogicalLength);
-        assert_eq!(observation.bytes_read(), 0);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), true, true)
+        );
+        assert_eq!(counters.ring_fills, 41);
+        assert_eq!(counters.ring_wrap_spans, 43);
+        assert_eq!(counters.cdc_scan_calls, 47);
+        assert_eq!(counters.cdc_scan_bytes, 53);
+        assert_eq!(counters.bytes_boundary_inspected, u64::MAX);
+        assert!(counters.source_read_calls > 0);
+        assert!(counters.source_bytes_read > 0);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_seqcdc_overflow_is_transactional_and_terminal() {
-        let observation = failed(
-            ContentRequestV1::new(b"overflow.bin", 0o644, b"x")
-                .with_declared_len(u64::MAX),
+        const LOGICAL_BYTES: u64 = 64 * 1024;
+        let observation = run(
+            "complete-create-seqcdc-counter-overflow",
+            CompleteCreateCaseV1::SeqCdcCounterOverflow,
         );
-        assert_clean_failure(observation, CoreError::LogicalLength);
-        assert!(observation.source_reads() <= 1);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), true, true)
+        );
+        assert_eq!(counters.seqcdc_comparisons, 41);
+        assert_eq!(counters.seqcdc_equal_absorptions, 43);
+        assert_eq!(counters.seqcdc_opposing_slopes, 47);
+        assert_eq!(counters.seqcdc_jumps, 53);
+        assert_eq!(counters.seqcdc_jump_bytes, u64::MAX);
+        assert!(counters.ring_fills > 0);
+        assert!(counters.cdc_scan_calls > 0);
+        assert!(counters.cdc_scan_bytes > 0);
+        assert!(counters.bytes_boundary_inspected > 0);
+        assert!(counters.source_read_calls > 0);
+        assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_global_seen_overflow_is_transactional_and_terminal() {
-        let observation = failed(
-            ContentRequestV1::new(b"source.bin", 0o644, b"x")
-                .with_invalid_source_count(true),
+        const LOGICAL_BYTES: u64 = 64 * 1024;
+        let observation = run(
+            "complete-create-global-seen-counter-overflow",
+            CompleteCreateCaseV1::GlobalSeenCounterOverflow,
         );
-        assert_clean_failure(observation, CoreError::SourceFailure);
-        assert_eq!(observation.bytes_read(), 0);
-        assert!(observation.source_reads() <= 2);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), true, true)
+        );
+        assert!(observation.control_fired);
+        assert_eq!(counters.global_seen_lookups, 41);
+        assert_eq!(counters.global_seen_probes, 43);
+        assert_eq!(counters.global_seen_metadata_bytes_read, 47);
+        assert_eq!(counters.global_seen_metadata_read_calls, 53);
+        assert_eq!(counters.global_seen_metadata_bytes_written, u64::MAX);
+        assert_eq!(counters.global_seen_maximum_probe, 59);
+        assert_eq!(counters.global_seen_entries, 61);
+        assert_eq!(counters.global_seen_table_bytes, 67);
+        assert!(counters.source_read_calls > 0);
+        assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
+        assert!(counters.cdc_scan_calls > 0);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(
+            counters.unreachable_installed_residue_bytes,
+            observation.immutable_usage.0
+        );
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_operation_spool_write_overflow_retains_typed_cause_and_cleans() {
-        let observation = failed(
-            ContentRequestV1::new(b"spool.bin", 0o644, b"x")
-                .with_spool_residency(operation_slot_bytes()),
+        let observation = run(
+            "complete-create-operation-spool-write-overflow",
+            CompleteCreateCaseV1::OperationSpoolWriteOverflow,
         );
-        assert_clean_failure(observation, CoreError::ResourceRefused);
-        assert_eq!(observation.bytes_read(), 0);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.error_from_storage,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), true, true, true)
+        );
+        assert!(observation.control_fired);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(
+            counters.unreachable_installed_residue_bytes,
+            observation.immutable_usage.0
+        );
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_operation_spool_read_overflow_is_transactional_and_terminal() {
-        let observation = failed(
-            ContentRequestV1::new(b"spool.bin", 0o644, b"x")
-                .with_source_residency(operation_slot_bytes()),
+        let observation = run(
+            "complete-create-operation-spool-read-overflow",
+            CompleteCreateCaseV1::OperationSpoolReadOverflow,
         );
-        assert_clean_failure(observation, CoreError::ResourceRefused);
-        assert_eq!(observation.source_reads(), 0);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.error_from_storage,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), true, true, true)
+        );
+        assert_eq!(
+            (
+                counters.global_seen_metadata_bytes_read,
+                counters.global_seen_metadata_read_calls
+            ),
+            (71, u64::MAX)
+        );
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(
+            counters.unreachable_installed_residue_bytes,
+            observation.immutable_usage.0
+        );
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_counted_pack_read_overflow_is_transactional_and_terminal() {
-        let observation = failed(
-            ContentRequestV1::new(b"pack.bin", 0o644, b"x")
-                .with_sink_residency(operation_slot_bytes()),
+        let observation = run(
+            "complete-create-counted-pack-read-overflow",
+            CompleteCreateCaseV1::CountedPackReadOverflow,
         );
-        assert_clean_failure(observation, CoreError::ResourceRefused);
-        assert_eq!(observation.bytes_read(), 0);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.error_from_storage,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), false, true, true)
+        );
+        assert!(observation.control_fired);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(observation.immutable_usage, (0, 0));
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+        assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_same_carrier_comparison_overflow_is_transactional_and_terminal() {
-        let observation = failed(
-            ContentRequestV1::new(b"carrier.bin", 0o644, b"payload")
-                .with_sink_refusal_after(0),
+        const LOGICAL_BYTES: u64 = 64 * 1024;
+        let observation = run(
+            "complete-create-same-carrier-comparison-overflow",
+            CompleteCreateCaseV1::SameCarrierComparisonOverflow,
         );
-        assert_clean_failure(observation, CoreError::SinkRefused);
-        assert!(observation.source_reads() <= 2);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.error_from_storage,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), false, true, true)
+        );
+        assert!(observation.control_fired);
+        assert!(counters.source_read_calls > 0);
+        assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
+        assert!(counters.cdc_scan_calls > 0);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(observation.immutable_usage, (0, 0));
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+        assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_post_admission_tally_overflow_retains_exact_visible_residue() {
-        let data = sample(65_000);
-        let request = ContentRequestV1::new(b"tally.bin", 0o644, &data);
-        let (first, replacement) = create_and_replace_v1(&request).unwrap();
-        assert!(first.completed());
-        assert!(replacement.completed());
-        assert_eq!(first.logical_id(), replacement.logical_id());
-        assert_eq!(first.physical_id(), replacement.physical_id());
-        assert_eq!(replacement.admitted_slots(), 0);
-        assert!(replacement.spool_ref_count() > 0);
+        let observation = run(
+            "complete-create-post-admission-tally-overflow",
+            CompleteCreateCaseV1::PostAdmissionCarrierTallyOverflow,
+        );
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.error_from_storage,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), false, true, true)
+        );
+        assert!(observation.control_fired);
+        assert!(counters.source_read_calls > 0);
+        assert!(counters.cdc_scan_calls > 0);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert!(observation.immutable_usage.0 > 0);
+        assert!(observation.immutable_usage.1 > 0);
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(
+            counters.unreachable_installed_residue_bytes,
+            observation.immutable_usage.0
+        );
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_create_created_disposition_overflow_is_transactional_and_terminal() {
-        let data = sample(8_192);
-        let request = ContentRequestV1::new(b"disposition.bin", 0o644, &data);
-        let (first, replacement) = create_and_replace_v1(&request).unwrap();
-        assert!(first.completed());
-        assert!(replacement.completed());
-        assert!(replacement.physical_objects_reused() > 0);
-        assert!(replacement.logical_chunks_reused() > 0);
-        assert_eq!(first.logical_id(), replacement.logical_id());
+        let observation = run(
+            "complete-create-created-disposition-overflow",
+            CompleteCreateCaseV1::CreatedDispositionOverflow,
+        );
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.error_from_storage,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), false, true, true)
+        );
+        assert!(observation.control_fired);
+        assert_eq!(saturated_created(counters), 1);
+        assert_eq!(counters.pack_local_objects_created, 0);
+        assert_eq!(counters.physical_carrier_object_writes, 0);
+        assert_eq!(counters.pack_local_objects_reused, 0);
+        assert_eq!(saturated_reused(counters), 0);
+        assert!(counters.source_read_calls > 0);
+        assert_eq!(counters.source_bytes_read, 1);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_tree_reused_disposition_overflow_is_transactional_and_terminal() {
-        let data = sample(4_096);
-        let request = ContentRequestV1::new(b"tree.bin", 0o644, &data);
-        let (first, replacement) = create_and_replace_v1(&request).unwrap();
-        assert_eq!(first.logical_id(), replacement.logical_id());
-        assert_eq!(first.physical_id(), replacement.physical_id());
-        assert!(replacement.physical_objects_reused() >= 1);
-        assert!(replacement.logical_chunks_reused() >= 1);
-        assert_eq!(replacement.admitted_slots(), 0);
+        let observation = run(
+            "complete-tree-reused-disposition-overflow",
+            CompleteCreateCaseV1::TreeReusedDispositionOverflow,
+        );
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.error,
+                observation.error_from_storage,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (overflow(), false, true, true)
+        );
+        assert!(observation.control_fired);
+        assert_eq!(saturated_reused(counters), 1);
+        assert_eq!(counters.pack_local_objects_reused, 0);
+        assert_eq!(
+            counters.physical_carrier_object_writes,
+            counters.pack_local_objects_created
+        );
+        assert!(counters.pack_local_objects_created > 0);
+        assert!(counters.source_read_calls >= 2);
+        assert_eq!(counters.source_bytes_read, 2);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            (
+                counters.storage_bytes_retained,
+                counters.storage_inodes_retained
+            ),
+            observation.immutable_usage
+        );
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert!(counters.zero_forbidden_work);
+        assert!(observation.root_usable);
+        assert!(observation.stale_usable);
     }
 
     #[test]
     fn complete_algorithms_use_one_pre_supplier_slot_and_return_all_preparation_resources() {
-        let data = sample(120_000);
-        let observation = created(&data);
-        assert_created(observation, data.len());
-        assert_eq!(observation.admitted_slots(), 0);
-        assert!(observation.planned_high_water() > 0);
-        assert_eq!(observation.file_chunk_ref_count(), u64::from(observation.chunk_count()));
-
-        let packed_object = object(5, b"pack-object");
-        let objects = [packed_object.as_slice()];
-        let packed = build_v1(PackRequestV1::new(&objects));
-        assert_eq!(packed.error(), None);
-        assert!(packed.sealed());
-        let validated = validate_v1(ValidationRequestV1::new(packed.bytes()));
-        assert_eq!(validated.error(), None);
-        assert_eq!(validated.record_count(), 1);
-        assert!(validated.pack_len() > 0);
+        const LOGICAL_BYTES: u64 = 384 * 1024 + 73;
+        for algorithm in [CdcAlgorithmV1::FastCdc, CdcAlgorithmV1::SeqCdc] {
+            let observation = run(
+                "complete-create-algorithm",
+                CompleteCreateCaseV1::Algorithm(algorithm),
+            );
+            let counters = observation.counters;
+            assert_eq!(observation.algorithm, Some(algorithm));
+            assert!(observation.pack_installed);
+            assert_eq!(
+                (
+                    observation.operation_authority_clean,
+                    counters.storage_equations_hold
+                ),
+                (true, true)
+            );
+            assert!(observation.object_count >= 4);
+            assert_eq!(observation.reference_spool_observed, true);
+            assert!(observation.reference_spool_bytes.unwrap_or(0) > 0);
+            assert_eq!(observation.reference_spool_operation_scoped, true);
+            assert_eq!(
+                observation.reference_spool_method,
+                "direct chunk-reference spool logical length"
+            );
+            assert_eq!(observation.index_spool_observed, true);
+            assert!(observation.index_spool_bytes.unwrap_or(0) > 0);
+            assert_eq!(observation.index_spool_operation_scoped, true);
+            assert_eq!(
+                observation.index_spool_method,
+                "direct cumulative pack-index spool logical length"
+            );
+            assert_eq!(
+                observation.terminal_optional_observations_match_counters,
+                true
+            );
+            assert!(observation.terminal_optional_observations_empty);
+            assert_eq!(observation.preparation_usage, (0, 0));
+            assert!(counters.source_read_calls > 0);
+            assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
+            assert!(counters.fscas_read_calls > 0);
+            assert!(counters.fscas_bytes_read > 0);
+            assert!(counters.fscas_bytes_written > 0);
+            assert_eq!(counters.closure_fences, 1);
+            assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+            assert!(counters.storage_bytes_committed > 0);
+            assert!(counters.storage_inodes_committed > 0);
+            assert_eq!(counters.storage_bytes_retained, 0);
+            assert_eq!(counters.storage_inodes_retained, 0);
+            assert_eq!(counters.mutable_preparation_residue_bytes, 0);
+            assert_eq!(counters.mutable_preparation_residue_inodes, 0);
+            assert_eq!(observation.preparation_usage.0, 0);
+            assert_eq!(observation.preparation_usage.1, 0);
+            assert_eq!(
+                counters.storage_bytes_committed,
+                observation.immutable_usage.0
+            );
+            assert_eq!(
+                counters.storage_inodes_committed,
+                observation.immutable_usage.1
+            );
+            assert_eq!(counters.immutable_residue_inodes, 0);
+            assert!(counters.zero_forbidden_work);
+        }
     }
 
     #[test]
     fn exact_100_mib_complete_operation_rolls_over_real_fscas_carriers() {
-        let data = vec![0x5a; 100 * 1024 * 1024];
-        let observation = created(&data);
-        assert_created(observation, data.len());
-        assert_eq!(observation.logical_len(), 100 * 1024 * 1024);
-        assert!(observation.chunk_count() > 1);
-        assert_eq!(observation.admitted_slots(), 0);
-        assert!(observation.zero_forbidden_work());
+        const LOGICAL_BYTES: u64 = 100 * 1024 * 1024;
+        let observation = run("multi-pack-100m", CompleteCreateCaseV1::Exact100MiB);
+        let counters = observation.counters;
+        assert_eq!(
+            (
+                observation.carrier_count,
+                observation.operation_authority_clean,
+                counters.storage_equations_hold
+            ),
+            (2, true, true)
+        );
+        assert_eq!(observation.carrier_rollovers, 1);
+        assert_eq!(observation.carriers_installed, 2);
+        assert_eq!(observation.carriers_reused, 0);
+        assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
+        assert_eq!(counters.closure_fences, 1);
+        assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+        assert!(counters.file_sort_comparisons > 0);
+        assert!(counters.file_sort_record_reads > 0);
+        assert!(counters.file_sort_record_writes > 0);
+        assert!(counters.file_sort_passes > 0);
+        assert!(counters.file_sort_control_polls > 0);
+        assert_eq!(
+            counters.file_sort_work_units,
+            counters.file_sort_comparisons
+                + counters.file_sort_record_reads
+                + counters.file_sort_record_writes
+        );
+        assert!(counters.file_sort_maximum_work_budget > 0);
+        assert_eq!(counters.file_sort_temporary_bytes_high_water, 0);
+        assert_eq!(observation.preparation_usage, (0, 0));
+        assert_eq!(
+            counters.storage_bytes_committed,
+            observation.immutable_usage.0
+        );
+        assert_eq!(
+            counters.storage_inodes_committed,
+            observation.immutable_usage.1
+        );
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+        assert!(counters.zero_forbidden_work);
     }
 }

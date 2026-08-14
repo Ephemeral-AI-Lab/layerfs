@@ -15128,18 +15128,15 @@ where
             control.boundary_reached(boundary);
         }
         alias_cleanup_attempted = true;
+        let mut unlink_error =
+            sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::MarkerAliasUnlink).err();
         let injected = linked_boundary.is_some()
             && control.inject_cleanup_failure(FsCasCleanupTargetV1::PublishedMarkerAlias);
-        let unlink_error = if injected {
-            None
-        } else {
-            sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::MarkerAliasUnlink)
-                .and_then(|()| {
-                    fs::remove_file(&temporary)
-                        .map_err(|error| map_required_filesystem_write_error_v1(&error))
-                })
-                .err()
-        };
+        if unlink_error.is_none() && !injected {
+            unlink_error = fs::remove_file(&temporary)
+                .map_err(|error| map_required_filesystem_write_error_v1(&error))
+                .err();
+        }
         if injected || unlink_error.is_some() {
             Ok(MarkerPublicationV1::VisibleWithPreparationResidue(
                 unlink_error,

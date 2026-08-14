@@ -60,15 +60,17 @@ impl CountingSink {
         self.aborted = false;
     }
 
-    pub fn write(
-        &mut self,
-        bytes: &[u8],
-    ) -> bool {
-        if !self.active || self.file_active {
+    pub fn write(&mut self, bytes: &[u8]) -> bool {
+        if !self.active {
             return false;
         }
         self.file_active = true;
-        if self.bytes.len().checked_add(bytes.len()).map_or(true, |length| length > self.maximum_bytes) {
+        if self
+            .bytes
+            .len()
+            .checked_add(bytes.len())
+            .map_or(true, |length| length > self.maximum_bytes)
+        {
             return false;
         }
         self.writes += 1;
@@ -98,5 +100,17 @@ impl CountingSink {
         self.file_active = false;
         self.bytes.clear();
         self.aborted = true;
+    }
+}
+
+impl std::io::Write for CountingSink {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        CountingSink::write(self, bytes)
+            .then_some(bytes.len())
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::WriteZero))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }

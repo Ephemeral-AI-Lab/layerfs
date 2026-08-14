@@ -2,79 +2,63 @@ mod support;
 
 #[cfg(feature = "operation-polymorphism")]
 mod operation_faults_owner {
+    use crate::support::fault_injection::FaultPoint;
     use crate::support::temp_fs_cas::TempFsCas;
     use layerfs_storage::profile::ProfileSpecV1;
     use layerfs_storage::qualification::cas::semantic::{
         atomic_locator_cleanup_failure_v1, atomic_locator_malformed_occupant_v1,
-        invalidation_probe_failure_before_candidate_validation_v1,
-        CandidateValidationFailureV1,
         cancellation_during_loser_readback_v1, carrier_cleanup_failure_v1,
-        catalog_counter_overflow_v1, deadline_before_install_v1,
-        cross_carrier_object_validation_read_failures_v1, locator_cleanup_failure_v1,
-        equal_incumbent_comparison_overflow_v1, incumbent_pack_read_observation_overflow_v1,
-        later_closure_failure_v1, malformed_incumbent_v1,
+        catalog_counter_overflow_v1, cross_carrier_object_validation_read_failures_v1,
+        deadline_before_install_v1, equal_incumbent_comparison_overflow_v1,
+        incumbent_pack_read_observation_overflow_v1, later_closure_failure_v1,
+        locator_cleanup_failure_v1, malformed_incumbent_v1,
         occupied_locator_catalog_observation_overflow_v1,
-        rollback_carrier_authentication_failure_v1, source_failure_v1, FaultObservationV1,
-        ClosureFailureObservationV1, ComparisonOverflowObservationV1, IncumbentObservationV1,
-        OccupiedOverflowObservationV1,
-        PublicationCauseV1, PublicationCleanupTargetV1,
+        rollback_carrier_authentication_failure_v1, same_carrier_incumbent_read_failures_v1,
+        source_failure_v1, ClosureFailureObservationV1, ComparisonOverflowObservationV1,
+        FaultObservationV1, IncumbentIdentityObservationV1, IncumbentObservationV1,
+        OccupiedOverflowObservationV1, PublicationCauseV1, PublicationCleanupTargetV1,
         PublicationErrorV1, PublicationRequestV1, ReadFaultObservationV1,
-        same_carrier_incumbent_read_failures_v1,
     };
     use layerfs_storage::qualification::lifecycle::semantic::{
-        carrier_accounting_poison_v1,
+        alias_cleanup_invalidation_double_fault_v1, atomic_closure_malformed_occupant_v1,
+        carrier_accounting_poison_v1, carrier_alias_unlink_cleanup_v1,
         carrier_cleanup_failure_v1 as lifecycle_carrier_cleanup_failure_v1,
-        carrier_exists_fault_v1, carrier_link_fault_v1, filesystem_fault_v1,
+        carrier_exists_fault_v1, carrier_link_fault_v1, closure_unwind_fault_v1,
+        equal_marker_incumbent_rollback_v1, filesystem_fault_v1,
+        invalidation_probe_failure_before_candidate_validation_v1,
+        malformed_closure_cleanup_terminal_v1, marker_cleanup_length_fault_v1,
+        marker_cleanup_metadata_fault_v1, marker_cleanup_post_unlink_fault_v1,
+        marker_create_fault_v1, marker_hard_link_fault_v1, marker_immutable_precharge_v1,
+        marker_length_precharge_v1, marker_write_cleanup_terminal_v1,
+        operation_spool_cleanup_accounting_fault_v1, operation_spool_cleanup_metadata_fault_v1,
+        operation_spool_drop_metadata_fault_v1, operation_spool_read_observation_overflow_v1,
+        operation_spool_resize_fault_v1, operation_spool_unlink_fault_v1,
+        operation_spool_write_observation_overflow_v1, post_install_cleanup_v1,
+        post_link_alias_directional_failure_v1, post_link_marker_secondary_v1,
+        post_link_marker_unwind_v1, pre_link_marker_callback_cleanup_v1,
+        pre_link_marker_terminal_cleanup_v1, pre_link_marker_unwind_v1,
         preparation_accounting_poison_fault_v1, preparation_construction_unwind_fault_v1,
-        preparation_create_cleanup_fault_v1, preparation_initialization_cleanup_fault_v1,
+        preparation_create_cleanup_fault_v1, preparation_free_terminalization_v1,
+        preparation_free_unwind_v1, preparation_initialization_cleanup_fault_v1,
         preparation_initialization_unwind_fault_v1, preparation_open_accounting_fault_v1,
-        preparation_permission_cleanup_fault_v1,
-        preparation_free_unwind_v1, preparation_free_terminalization_v1,
-        private_pack_cleanup_failure_v1, private_pack_create_failure_v1,
-        private_pack_precharge_poison_v1, marker_create_fault_v1,
-        marker_length_precharge_v1, marker_immutable_precharge_v1,
-        equal_marker_incumbent_rollback_v1, marker_hard_link_fault_v1,
-        alias_cleanup_invalidation_double_fault_v1,
-        atomic_closure_malformed_occupant_v1,
-        carrier_alias_unlink_cleanup_v1,
-        malformed_closure_cleanup_terminal_v1,
-        marker_cleanup_length_fault_v1, marker_cleanup_metadata_fault_v1,
-        marker_cleanup_post_unlink_fault_v1,
-        marker_write_cleanup_terminal_v1,
-        operation_spool_cleanup_accounting_fault_v1,
-        operation_spool_cleanup_metadata_fault_v1,
-        operation_spool_drop_metadata_fault_v1,
-        operation_spool_unlink_fault_v1,
-        operation_spool_read_observation_overflow_v1, operation_spool_resize_fault_v1,
-        operation_spool_write_observation_overflow_v1, OperationSpoolFaultObservationV1,
-        private_pack_cleanup_accounting_fault_v1,
-        private_pack_cleanup_metadata_fault_v1,
-        private_pack_drop_metadata_fault_v1,
-        private_pack_truncate_accounting_fault_v1,
-        private_pack_unlink_fault_v1,
-        PackFaultObservationV1,
-        post_link_alias_directional_failure_v1,
-        post_link_marker_secondary_v1,
-        post_link_marker_unwind_v1,
-        pre_link_marker_callback_cleanup_v1,
-        pre_link_marker_terminal_cleanup_v1,
-        pre_link_marker_unwind_v1,
-        published_locator_alias_unlink_v1,
-        CarrierLinkFaultFailureV1,
-        FilesystemFaultCaseV1, FilesystemFaultErrorV1, FilesystemFaultFailureV1,
-        PreparationConstructionCaseV1,
-        MalformedClosureObservationV1, PostLinkAliasCleanupV1, PostLinkMarkerTargetV1,
-        PreLinkMarkerPanicPointV1,
-        closure_unwind_fault_v1,
+        preparation_permission_cleanup_fault_v1, private_pack_cleanup_accounting_fault_v1,
+        private_pack_cleanup_failure_v1, private_pack_cleanup_metadata_fault_v1,
+        private_pack_create_failure_v1, private_pack_drop_metadata_fault_v1,
+        private_pack_precharge_poison_v1, private_pack_truncate_accounting_fault_v1,
+        private_pack_unlink_fault_v1, published_locator_alias_unlink_v1,
         typed_body_cleanup_dominance_v1, typed_complete_body_error_v1,
         typed_complete_global_seen_error_v1, typed_complete_storage_counter_error_v1,
-        typed_preparation_free_error_v1, CreateFaultObservationV1,
-        post_install_cleanup_v1, PostInstallCleanupObservationV1, PostInstallCleanupRequestV1,
+        typed_preparation_free_error_v1, CandidateValidationFailureV1, CarrierLinkFaultFailureV1,
+        CreateFaultObservationV1, FilesystemFaultCaseV1, FilesystemFaultErrorV1,
+        FilesystemFaultFailureV1, MalformedClosureObservationV1, OperationSpoolFaultObservationV1,
+        PackFaultObservationV1, PostInstallCleanupObservationV1, PostInstallCleanupRequestV1,
+        PostLinkAliasCleanupV1, PostLinkMarkerTargetV1, PreLinkMarkerPanicPointV1,
+        PreparationConstructionCaseV1,
     };
     #[cfg(unix)]
     use layerfs_storage::qualification::lifecycle::semantic::{
-        marker_cleanup_unlink_fault_v1, MarkerCleanupUnlinkModeV1,
-        PreparationMetadataFaultModeV1, PreparationUnlinkFaultModeV1,
+        marker_cleanup_unlink_fault_v1, MarkerCleanupUnlinkModeV1, PreparationMetadataFaultModeV1,
+        PreparationUnlinkFaultModeV1,
     };
     use layerfs_storage::CoreError;
 
@@ -93,7 +77,6 @@ mod operation_faults_owner {
     fn fault_object(label: &str, payload: &[u8]) -> (TempFsCas, Vec<u8>) {
         (TempFsCas::new(label), object(payload))
     }
-
 
     fn assert_clean_fault_observation(observation: FaultObservationV1) {
         assert_eq!(observation.preparation_entries(), 0);
@@ -115,6 +98,89 @@ mod operation_faults_owner {
         assert!(observation.zero_forbidden_work());
     }
 
+    fn assert_create_fault_terminal(
+        observation: CreateFaultObservationV1,
+        error: PublicationErrorV1,
+        first: PublicationCauseV1,
+        dominant: PublicationCauseV1,
+    ) {
+        assert_eq!(
+            (
+                observation.error(),
+                observation.first_cause(),
+                observation.dominant_cause()
+            ),
+            (Some(error), Some(first), Some(dominant))
+        );
+    }
+
+    fn assert_usable_create_fault_observation(observation: CreateFaultObservationV1) {
+        assert_eq!(observation.operation_slots(), 0);
+        assert_eq!(observation.operation_active(), 0);
+        assert_eq!(observation.operation_queue(), (0, 0, 0));
+        assert_eq!(
+            (
+                observation.storage_active_operations(),
+                observation.storage_active_bytes(),
+                observation.storage_active_inodes()
+            ),
+            (0, 0, 0)
+        );
+        assert_eq!(observation.preparation_entries(), 0);
+        assert!(observation.visibility_lock_available());
+        assert!(observation.publication_lock_available());
+        assert_eq!(
+            observation.storage_bytes_requested(),
+            observation.storage_bytes_reserved()
+        );
+        assert_eq!(
+            observation.storage_inodes_requested(),
+            observation.storage_inodes_reserved()
+        );
+        assert_eq!(
+            observation.storage_bytes_reserved(),
+            observation.storage_bytes_released()
+                + observation.storage_bytes_committed()
+                + observation.storage_bytes_retained()
+        );
+        assert_eq!(
+            observation.storage_inodes_reserved(),
+            observation.storage_inodes_released()
+                + observation.storage_inodes_committed()
+                + observation.storage_inodes_retained()
+        );
+        let (queue_entries, queue_refusals, release_failures) = observation.root_admission_queue();
+        assert_eq!(queue_entries, 1);
+        assert_eq!(queue_refusals, 0);
+        assert_eq!(release_failures, 0);
+        assert_eq!(observation.storage_bytes_committed(), 0);
+        assert_eq!(observation.storage_inodes_committed(), 0);
+        assert_eq!(observation.storage_bytes_retained(), 0);
+        assert_eq!(observation.storage_inodes_retained(), 0);
+        assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+        assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+        assert_eq!(observation.residue_bytes(), 0);
+        assert!(observation.zero_forbidden_work());
+        assert_eq!(
+            (
+                observation.preparation_bytes(),
+                observation.preparation_entries()
+            ),
+            (0, 0)
+        );
+        assert_eq!(
+            (
+                observation.immutable_bytes(),
+                observation.immutable_entries()
+            ),
+            (0, 0)
+        );
+        let (owner_usable, stale_usable, reopen_usable) = observation.usable_handles();
+        assert!(owner_usable);
+        assert!(stale_usable);
+        assert!(reopen_usable);
+    }
+
     fn assert_clean_operation_spool(observation: OperationSpoolFaultObservationV1) {
         assert_eq!(observation.cleanup_error(), None);
         assert_eq!(observation.preparation_entries(), 0);
@@ -130,6 +196,7 @@ mod operation_faults_owner {
     }
 
     fn assert_failed_pack_root(observation: PackFaultObservationV1) {
+        assert_eq!(observation.operation_slots(), 0);
         assert!(observation.invalidated());
         assert!(observation.stale_invalidated());
         assert!(observation.reopen_invalidated());
@@ -140,20 +207,20 @@ mod operation_faults_owner {
 
     fn assert_read_fault_matrix(observation: ReadFaultObservationV1, cases: u32, boundaries: u32) {
         assert_eq!(observation.cases(), cases);
-        assert_eq!(observation.injected_cases(), cases);
-        assert_eq!(observation.expected_error_cases(), cases);
+        assert!(observation.all_injected());
+        assert!(observation.all_errors_expected());
         assert_eq!(observation.missing_occupant_cases(), boundaries);
         assert_eq!(observation.permission_denied_cases(), boundaries);
         assert_eq!(observation.read_failure_cases(), boundaries);
         assert_eq!(observation.short_read_cases(), boundaries);
-        assert_eq!(observation.preparation_clean_cases(), cases);
-        assert_eq!(observation.carrier_preserved_cases(), cases);
-        assert_eq!(observation.catalog_preserved_cases(), cases);
-        assert_eq!(observation.object_cleanup_cases(), cases);
-        assert_eq!(observation.residue_free_cases(), cases);
-        assert_eq!(observation.slots_released_cases(), cases);
-        assert_eq!(observation.incumbent_usable_cases(), cases);
-        assert_eq!(observation.zero_forbidden_cases(), cases);
+        assert!(observation.all_preparations_clean());
+        assert!(observation.all_carriers_preserved());
+        assert!(observation.all_catalogs_preserved());
+        assert!(observation.all_objects_cleaned());
+        assert!(observation.all_residue_free());
+        assert!(observation.all_slots_released());
+        assert!(observation.all_incumbents_usable());
+        assert!(observation.all_forbidden_work_zero());
     }
 
     fn assert_comparison_overflow(observation: ComparisonOverflowObservationV1) {
@@ -170,27 +237,37 @@ mod operation_faults_owner {
         assert_eq!(observation.catalog_entries(), 1);
         assert_eq!(observation.residue_bytes(), 0);
         assert_eq!(observation.admitted_slots(), 0);
-        for value in [
-            observation.storage_bytes_requested(),
-            observation.storage_bytes_reserved(),
-            observation.storage_bytes_released(),
-            observation.storage_bytes_committed(),
-            observation.storage_bytes_retained(),
-            observation.storage_inodes_requested(),
-            observation.storage_inodes_reserved(),
-            observation.storage_inodes_released(),
-            observation.storage_inodes_committed(),
-            observation.storage_inodes_retained(),
-        ] {
-            assert_eq!(value, 0);
-        }
+        assert_eq!(observation.storage_bytes_requested(), 0);
+        assert_eq!(observation.storage_bytes_reserved(), 0);
+        assert_eq!(observation.storage_bytes_released(), 0);
+        assert_eq!(observation.storage_bytes_committed(), 0);
+        assert_eq!(observation.storage_bytes_retained(), 0);
+        assert_eq!(observation.storage_inodes_requested(), 0);
+        assert_eq!(observation.storage_inodes_reserved(), 0);
+        assert_eq!(observation.storage_inodes_released(), 0);
+        assert_eq!(observation.storage_inodes_committed(), 0);
+        assert_eq!(observation.storage_inodes_retained(), 0);
         assert_eq!(observation.installed_pack_len(), 33_048);
-        assert!(observation.incumbent_preserved());
+        #[cfg(unix)]
+        assert_eq!(
+            observation.incumbent_identity(),
+            IncumbentIdentityObservationV1::Preserved
+        );
+        #[cfg(not(unix))]
+        assert_eq!(
+            observation.incumbent_identity(),
+            IncumbentIdentityObservationV1::Unavailable
+        );
+        assert!(observation.owner_usable());
+        assert!(observation.stale_usable());
         assert!(observation.zero_forbidden_work());
     }
 
     fn assert_malformed_incumbent(observation: IncumbentObservationV1) {
-        assert_eq!(observation.error(), Some(PublicationErrorV1::MalformedOccupant));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::MalformedOccupant)
+        );
         assert_eq!(observation.preparation_entries(), 0);
         assert_eq!(observation.carrier_entries(), 1);
         assert_eq!(observation.catalog_entries(), 1);
@@ -203,16 +280,14 @@ mod operation_faults_owner {
 
     fn assert_post_install_cleanup(observation: PostInstallCleanupObservationV1) {
         assert_eq!(
-            observation.error(),
-            Some(PublicationErrorV1::TerminalFailure)
-        );
-        assert_eq!(
-            observation.first_cause(),
-            Some(PublicationCauseV1::Core(CoreError::Cancelled))
-        );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack))
+            observation.terminal(),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PrivatePack
+                )),
+            )
         );
         assert!(observation.after_catalog_publication());
         assert!(observation.publication_poll_passed());
@@ -292,31 +367,59 @@ mod operation_faults_owner {
 
     #[test]
     fn occupied_locator_catalog_observation_overflow_is_typed_and_transactional() {
-        let (root, bytes) = fault_object("occupied-metadata-observation", b"occupied-metadata-observation");
+        const SEEDED_BYTES: u64 = 37;
+        const SEEDED_CALLS: u64 = u64::MAX - 1;
+        const PACK_SEEDED_BYTES: u64 = 53;
+        const PERSISTENT_LOCATOR_BYTES_V1: u64 = 160;
+        const CATALOG_MARKER_BYTES: u64 = 64;
+        const PAYLOAD_SEEDED_BYTES: u64 = 71;
+
+        let (root, bytes) = fault_object(
+            "occupied-metadata-observation",
+            b"occupied-metadata-observation",
+        );
         let observation = occupied_locator_catalog_observation_overflow_v1(
             PublicationRequestV1::new(root.path(), &[bytes.as_slice()]),
         );
+        assert_eq!(observation.initial_admitted_slots(), 0);
+        assert_eq!(observation.initial_preparation_entries(), 0);
         assert_eq!(
             observation.metadata_error(),
             Some(PublicationErrorV1::Core(CoreError::IntegerOverflow))
         );
-        assert_eq!(observation.metadata_bytes(), 37);
-        assert_eq!(observation.metadata_calls(), u64::MAX - 1);
+        assert_eq!(
+            (observation.metadata_bytes(), observation.metadata_calls()),
+            (SEEDED_BYTES, SEEDED_CALLS)
+        );
+        assert!(!observation.metadata_object_cached());
         assert_eq!(
             observation.pack_error(),
             Some(PublicationErrorV1::Core(CoreError::IntegerOverflow))
         );
-        assert_eq!(observation.pack_bytes(), 53 + 160 + 64);
-        assert_eq!(observation.pack_calls(), u64::MAX);
+        assert_eq!(
+            (observation.pack_bytes(), observation.pack_calls()),
+            (
+                PACK_SEEDED_BYTES + PERSISTENT_LOCATOR_BYTES_V1 + CATALOG_MARKER_BYTES,
+                u64::MAX
+            )
+        );
+        assert!(!observation.pack_object_cached());
+        assert_eq!(observation.payload_len(), Some(bytes.len() as u64));
+        assert!(observation.payload_object_cached_before_read());
         assert_eq!(
             observation.payload_error(),
             Some(PublicationErrorV1::Core(CoreError::IntegerOverflow))
         );
-        assert_eq!(observation.payload_bytes(), 71);
-        assert_eq!(observation.payload_calls(), u64::MAX);
+        assert_eq!(
+            (observation.payload_bytes(), observation.payload_calls()),
+            (PAYLOAD_SEEDED_BYTES, u64::MAX)
+        );
         assert!(observation.payload_prefix_preserved());
         assert!(observation.payload_object_cached());
-        assert!(observation.root_clean());
+        assert!(observation.current_handle_usable());
+        assert!(observation.reopen_usable());
+        assert_eq!(observation.admitted_slots(), 0);
+        assert_eq!(observation.preparation_entries(), 0);
     }
 
     #[test]
@@ -335,6 +438,7 @@ mod operation_faults_owner {
         assert_eq!(observation.carrier_entries(), 0);
         assert_eq!(observation.object_entries(), 0);
         assert_eq!(observation.catalog_entries(), 0);
+        assert_eq!(observation.closure_entries(), 0);
         assert_eq!(observation.residue_bytes(), 0);
         assert_eq!(observation.bytes_written(), 0);
         assert_eq!(observation.admitted_slots(), 0);
@@ -344,49 +448,81 @@ mod operation_faults_owner {
     #[test]
     fn carrier_cleanup_failure_invalidates_owner_and_root() {
         let (root, bytes) = fault_object("carrier-cleanup-failure", b"carrier-cleanup");
-        let observation = carrier_cleanup_failure_v1(PublicationRequestV1::new(
-            root.path(),
-            &[bytes.as_slice()],
-        ));
+        let observation =
+            carrier_cleanup_failure_v1(PublicationRequestV1::new(root.path(), &[bytes.as_slice()]));
         assert_eq!(
-            observation.first_cause(),
-            Some(PublicationCauseV1::Core(CoreError::Cancelled))
+            (
+                observation.error(),
+                observation.first_cause(),
+                observation.dominant_cause()
+            ),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::Carrier
+                ))
+            )
         );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::Carrier))
-        );
+        assert_eq!(observation.source_bytes_read(), bytes.len() as u64);
+        assert_eq!(observation.closure_payload_len(), 184);
         assert_eq!(observation.preparation_entries(), 0);
         assert_eq!(observation.carrier_entries(), 1);
         assert_eq!(observation.object_entries(), 0);
         assert_eq!(observation.catalog_entries(), 0);
-        assert!(observation.residue_bytes() > 0);
+        assert_eq!(
+            observation.residue_bytes(),
+            observation.candidate_pack_len()
+        );
         assert!(observation.invalidated());
+        assert!(observation.fault_injected());
+        assert!(observation.stale_private_invalidated());
+        assert!(observation.stale_occupied_invalidated());
+        assert!(observation.stale_closure_refused());
+        assert!(observation.owner_private_invalidated());
+        assert!(observation.owner_occupied_invalidated());
+        assert!(observation.owner_closure_invalidated());
+        assert!(observation.reopen_invalidated());
         assert_eq!(observation.admitted_slots(), 0);
         assert!(observation.zero_forbidden_work());
     }
 
     #[test]
     fn rollback_carrier_authentication_failure_preserves_cleanup_dominance() {
-        let (root, bytes) = fault_object("rollback-carrier-authentication", b"rollback carrier authentication");
+        let (root, bytes) = fault_object(
+            "rollback-carrier-authentication",
+            b"rollback carrier authentication",
+        );
         let observation = rollback_carrier_authentication_failure_v1(PublicationRequestV1::new(
             root.path(),
             &[bytes.as_slice()],
         ));
         assert_eq!(
-            observation.first_cause(),
-            Some(PublicationCauseV1::Core(CoreError::Cancelled))
-        );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::ObjectLocator))
+            (
+                observation.error(),
+                observation.first_cause(),
+                observation.dominant_cause()
+            ),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::ObjectLocator
+                ))
+            )
         );
         assert_eq!(observation.preparation_entries(), 0);
         assert_eq!(observation.carrier_entries(), 1);
         assert_eq!(observation.object_entries(), 1);
         assert_eq!(observation.catalog_entries(), 0);
-        assert!(observation.residue_bytes() > 0);
+        assert_eq!(
+            observation.residue_bytes(),
+            observation.expected_residue_bytes()
+        );
+        assert!(observation.fault_injected());
         assert!(observation.invalidated());
+        assert!(observation.owner_occupied_invalidated());
+        assert!(observation.reopen_invalidated());
         assert_eq!(observation.admitted_slots(), 0);
         assert!(observation.zero_forbidden_work());
     }
@@ -394,24 +530,37 @@ mod operation_faults_owner {
     #[test]
     fn locator_cleanup_failure_is_counted_and_cannot_poison_a_later_admission() {
         let (root, bytes) = fault_object("locator-cleanup-failure", b"locator-cleanup-a");
+        let additional = object(b"locator-cleanup-b");
         let observation = locator_cleanup_failure_v1(PublicationRequestV1::new(
             root.path(),
-            &[bytes.as_slice()],
+            &[bytes.as_slice(), additional.as_slice()],
         ));
         assert_eq!(
-            observation.first_cause(),
-            Some(PublicationCauseV1::Core(CoreError::Cancelled))
-        );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::ObjectLocator))
+            (
+                observation.error(),
+                observation.first_cause(),
+                observation.dominant_cause()
+            ),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::ObjectLocator
+                ))
+            )
         );
         assert_eq!(observation.preparation_entries(), 0);
         assert_eq!(observation.carrier_entries(), 1);
         assert_eq!(observation.object_entries(), 1);
         assert_eq!(observation.catalog_entries(), 0);
-        assert!(observation.residue_bytes() > 0);
+        assert_eq!(
+            observation.residue_bytes(),
+            observation.expected_residue_bytes()
+        );
+        assert!(observation.fault_injected());
         assert!(observation.invalidated());
+        assert!(observation.owner_private_invalidated());
+        assert!(observation.reopen_invalidated());
         assert_eq!(observation.admitted_slots(), 0);
         assert!(observation.zero_forbidden_work());
     }
@@ -423,12 +572,18 @@ mod operation_faults_owner {
             root.path(),
             &[bytes.as_slice()],
         ));
-        assert_eq!(observation.error(), Some(PublicationErrorV1::MalformedOccupant));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::MalformedOccupant)
+        );
         assert_eq!(observation.preparation_entries(), 0);
         assert_eq!(observation.carrier_entries(), 0);
         assert_eq!(observation.catalog_entries(), 0);
         assert_eq!(observation.object_entries(), 1);
+        assert!(observation.malformed_locator_preserved());
+        assert!(observation.fault_injected());
         assert!(observation.invalidated());
+        assert!(observation.reopen_invalidated());
         assert_eq!(observation.admitted_slots(), 0);
         assert!(observation.zero_forbidden_work());
     }
@@ -441,18 +596,29 @@ mod operation_faults_owner {
             &[bytes.as_slice()],
         ));
         assert_eq!(
-            observation.first_cause(),
-            Some(PublicationCauseV1::MalformedOccupant)
+            (
+                observation.error(),
+                observation.first_cause(),
+                observation.dominant_cause()
+            ),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::MalformedOccupant),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool
+                ))
+            )
         );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool))
-        );
+        assert!(observation.fault_injected());
+        assert!(observation.cleanup_fault_injected());
         assert_eq!(observation.preparation_entries(), 1);
         assert_eq!(observation.carrier_entries(), 0);
         assert_eq!(observation.object_entries(), 1);
         assert_eq!(observation.catalog_entries(), 0);
         assert_eq!(observation.residue_bytes(), 0);
+        assert!(observation.owner_occupied_invalidated());
+        assert!(observation.stale_occupied_invalidated());
+        assert!(observation.reopen_invalidated());
         assert!(observation.invalidated());
         assert_eq!(observation.admitted_slots(), 0);
         assert!(observation.zero_forbidden_work());
@@ -465,18 +631,17 @@ mod operation_faults_owner {
             root.path(),
             &[bytes.as_slice()],
         ));
-        assert_read_fault_matrix(observation, 16, 1);
+        assert_read_fault_matrix(observation, 16, 4);
     }
 
     #[test]
     fn cross_carrier_object_validation_read_failures_are_typed_and_cleanup_the_candidate() {
         let (root, shared) = fault_object("cross-carrier-read-failures", &[0x4d; 16_384]);
         let additional = object(&[0x9e; 16_384]);
-        let observation = cross_carrier_object_validation_read_failures_v1(PublicationRequestV1::new(
-            root.path(),
-            &[shared.as_slice(), additional.as_slice()],
-        ));
-        assert_read_fault_matrix(observation, 24, 1);
+        let observation = cross_carrier_object_validation_read_failures_v1(
+            PublicationRequestV1::new(root.path(), &[shared.as_slice(), additional.as_slice()]),
+        );
+        assert_read_fault_matrix(observation, 24, 6);
     }
 
     #[test]
@@ -491,7 +656,8 @@ mod operation_faults_owner {
 
     #[test]
     fn incumbent_pack_read_observation_overflow_retains_typed_cause() {
-        let (root, bytes) = fault_object("incumbent-pack-read-observation-overflow", &[0x7b; 32_768]);
+        let (root, bytes) =
+            fault_object("incumbent-pack-read-observation-overflow", &[0x7b; 32_768]);
         let observation = incumbent_pack_read_observation_overflow_v1(PublicationRequestV1::new(
             root.path(),
             &[bytes.as_slice()],
@@ -509,28 +675,45 @@ mod operation_faults_owner {
         assert_eq!(observation.catalog_entries(), 1);
         assert_eq!(observation.residue_bytes(), 0);
         assert_eq!(observation.admitted_slots(), 0);
+        assert_eq!(observation.storage_bytes_requested(), 0);
+        assert_eq!(observation.storage_bytes_reserved(), 0);
+        assert_eq!(observation.storage_bytes_released(), 0);
+        assert_eq!(observation.storage_bytes_committed(), 0);
+        assert_eq!(observation.storage_bytes_retained(), 0);
+        assert_eq!(observation.storage_inodes_requested(), 0);
+        assert_eq!(observation.storage_inodes_reserved(), 0);
+        assert_eq!(observation.storage_inodes_released(), 0);
+        assert_eq!(observation.storage_inodes_committed(), 0);
+        assert_eq!(observation.storage_inodes_retained(), 0);
         assert_eq!(observation.installed_pack_len(), 33_048);
-        assert!(observation.incumbent_preserved());
+        #[cfg(unix)]
+        assert_eq!(
+            observation.incumbent_identity(),
+            IncumbentIdentityObservationV1::Preserved
+        );
+        #[cfg(not(unix))]
+        assert_eq!(
+            observation.incumbent_identity(),
+            IncumbentIdentityObservationV1::Unavailable
+        );
+        assert!(observation.owner_usable());
+        assert!(observation.stale_usable());
         assert!(observation.zero_forbidden_work());
     }
 
     #[test]
     fn malformed_incumbent_fails_closed_without_overwrite_or_fallback() {
         let (root, bytes) = fault_object("malformed-incumbent", b"immutable");
-        let observation = malformed_incumbent_v1(PublicationRequestV1::new(
-            root.path(),
-            &[bytes.as_slice()],
-        ));
+        let observation =
+            malformed_incumbent_v1(PublicationRequestV1::new(root.path(), &[bytes.as_slice()]));
         assert_malformed_incumbent(observation);
     }
 
     #[test]
     fn source_failure_cleans_preinstall_state_and_releases_the_slot() {
         let (root, bytes) = fault_object("source-failure", b"never-installed");
-        let observation = source_failure_v1(PublicationRequestV1::new(
-            root.path(),
-            &[bytes.as_slice()],
-        ));
+        let observation =
+            source_failure_v1(PublicationRequestV1::new(root.path(), &[bytes.as_slice()]));
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::Core(CoreError::SourceFailure))
@@ -546,10 +729,8 @@ mod operation_faults_owner {
     #[test]
     fn deadline_before_install_removes_private_pack_and_releases_resources() {
         let (root, bytes) = fault_object("deadline-before-install", b"deadline-before-install");
-        let observation = deadline_before_install_v1(PublicationRequestV1::new(
-            root.path(),
-            &[bytes.as_slice()],
-        ));
+        let observation =
+            deadline_before_install_v1(PublicationRequestV1::new(root.path(), &[bytes.as_slice()]));
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::Core(CoreError::Deadline))
@@ -564,11 +745,15 @@ mod operation_faults_owner {
 
     #[test]
     fn cancellation_during_loser_readback_keeps_incumbent_and_cleans_candidate() {
+        let mut fault = FaultPoint::cancel_at(1);
         let (root, bytes) = fault_object("cancel-loser", &[0xa5; 32_768]);
-        let observation = cancellation_during_loser_readback_v1(PublicationRequestV1::new(
-            root.path(),
-            &[bytes.as_slice()],
-        ));
+        let observation = {
+            let mut should_cancel = || fault.observe(1);
+            cancellation_during_loser_readback_v1(
+                PublicationRequestV1::new(root.path(), &[bytes.as_slice()]),
+                &mut should_cancel,
+            )
+        };
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::Core(CoreError::Cancelled))
@@ -577,18 +762,27 @@ mod operation_faults_owner {
         assert_eq!(observation.catalog_entries(), 1);
         assert_eq!(observation.object_entries(), 1);
         assert!(observation.incumbent_preserved());
+        #[cfg(unix)]
+        assert_eq!(
+            observation.incumbent_identity(),
+            IncumbentIdentityObservationV1::Preserved
+        );
+        #[cfg(not(unix))]
+        assert_eq!(
+            observation.incumbent_identity(),
+            IncumbentIdentityObservationV1::Unavailable
+        );
         assert_eq!(observation.incumbent_comparison_windows(), 1);
         assert_eq!(observation.incumbent_comparison_bytes(), 32_768);
+        assert_eq!(fault.calls(), 1);
         assert_clean_fault_observation(observation);
     }
 
     #[test]
     fn later_closure_failure_is_counted_residue_not_a_private_version() {
         let (root, bytes) = fault_object("later-closure-failure", b"carrier-only");
-        let observation = later_closure_failure_v1(PublicationRequestV1::new(
-            root.path(),
-            &[bytes.as_slice()],
-        ));
+        let observation =
+            later_closure_failure_v1(PublicationRequestV1::new(root.path(), &[bytes.as_slice()]));
         assert_eq!(observation.error(), Some(CoreError::SinkRefused));
         assert_eq!(observation.pack_len(), 296);
         assert_eq!(observation.record_count(), 1);
@@ -620,12 +814,164 @@ mod operation_faults_owner {
         assert!(observation.panicked());
         assert!(observation.bound_invoked());
         assert!(!observation.supply_invoked());
+        let (unwind_slots, unwind_active, unwind_queue, unwind_storage_active, unwind_owner_usable) =
+            observation.unwind_authority();
+        assert_eq!(unwind_slots, 0);
+        assert_eq!(unwind_active, 0);
+        assert_eq!(unwind_queue, (0, 0, 0));
+        assert_eq!(unwind_storage_active, (0, 0, 0));
+        assert!(unwind_owner_usable);
+        assert_eq!(
+            (
+                observation.preparation_bytes(),
+                observation.preparation_entries()
+            ),
+            (0, 0)
+        );
+        assert_eq!(observation.preparation_entries(), 0);
+        assert_eq!(
+            (
+                observation.immutable_bytes(),
+                observation.immutable_entries()
+            ),
+            (0, 0)
+        );
+
+        let (
+            followup_bound,
+            followup_supply,
+            followup_preparation_entries,
+            followup_storage,
+            followup_zero_forbidden_work,
+        ) = observation.followup_observation();
         assert!(observation.followup_succeeded());
         assert_eq!(observation.error(), None);
-        assert_eq!(observation.preparation_entries(), 0);
-        assert_eq!(observation.immutable_entries(), 0);
-        assert_eq!(observation.residue_bytes(), 0);
-        assert!(observation.zero_forbidden_work());
+        assert!(followup_bound);
+        assert!(followup_supply);
+        assert_eq!(observation.operation_slots(), 0);
+        assert_eq!(observation.operation_active(), 0);
+        assert_eq!(observation.operation_queue(), (0, 0, 0));
+        assert_eq!(
+            (
+                observation.storage_active_operations(),
+                observation.storage_active_bytes(),
+                observation.storage_active_inodes()
+            ),
+            (0, 0, 0)
+        );
+        assert_eq!(followup_preparation_entries, 0);
+        let (
+            storage_bytes_requested,
+            storage_bytes_reserved,
+            storage_bytes_released,
+            storage_bytes_committed,
+            storage_bytes_retained,
+            storage_inodes_requested,
+            storage_inodes_reserved,
+            storage_inodes_released,
+            storage_inodes_committed,
+            storage_inodes_retained,
+        ) = followup_storage;
+        assert_eq!(storage_bytes_requested, storage_bytes_reserved);
+        assert_eq!(storage_inodes_requested, storage_inodes_reserved);
+        assert_eq!(
+            storage_bytes_reserved,
+            storage_bytes_released + storage_bytes_committed + storage_bytes_retained
+        );
+        assert_eq!(
+            storage_inodes_reserved,
+            storage_inodes_released + storage_inodes_committed + storage_inodes_retained
+        );
+        assert!(followup_zero_forbidden_work);
+
+        for fail_invalidation in [false, true] {
+            let fixture = TempFsCas::new(&format!(
+                "preparation-free-terminalization-{fail_invalidation}"
+            ));
+            let observation =
+                preparation_free_terminalization_v1(fixture.path(), fail_invalidation);
+            assert!(!observation.panicked());
+            assert_eq!(
+                (
+                    observation.error(),
+                    observation.first_cause(),
+                    observation.dominant_cause()
+                ),
+                (
+                    Some(if fail_invalidation {
+                        PublicationErrorV1::TerminalFailure
+                    } else {
+                        PublicationErrorV1::SynchronizationPoisoned
+                    }),
+                    Some(PublicationCauseV1::SynchronizationPoisoned),
+                    Some(if fail_invalidation {
+                        PublicationCauseV1::InvalidationFailed
+                    } else {
+                        PublicationCauseV1::SynchronizationPoisoned
+                    })
+                )
+            );
+            assert!(observation.bound_invoked());
+            assert!(!observation.supply_invoked());
+            assert_eq!(observation.invalidation_attempts(), 1);
+            assert_eq!(observation.operation_slots(), 0);
+            assert_eq!(observation.operation_active(), 0);
+            assert_eq!(observation.operation_queue(), (0, 0, 0));
+            assert_eq!(
+                (
+                    observation.storage_active_operations(),
+                    observation.storage_active_bytes(),
+                    observation.storage_active_inodes()
+                ),
+                (0, 0, 0)
+            );
+            assert_eq!(
+                (
+                    observation.preparation_bytes(),
+                    observation.preparation_entries()
+                ),
+                (0, 0)
+            );
+            assert_eq!(observation.preparation_entries(), 0);
+            assert_eq!(
+                (
+                    observation.immutable_bytes(),
+                    observation.immutable_entries()
+                ),
+                (0, 0)
+            );
+            assert_eq!(
+                observation.storage_bytes_requested(),
+                observation.storage_bytes_reserved()
+            );
+            assert_eq!(
+                observation.storage_inodes_requested(),
+                observation.storage_inodes_reserved()
+            );
+            assert_eq!(
+                observation.storage_bytes_reserved(),
+                observation.storage_bytes_released()
+                    + observation.storage_bytes_committed()
+                    + observation.storage_bytes_retained()
+            );
+            assert_eq!(
+                observation.storage_inodes_reserved(),
+                observation.storage_inodes_released()
+                    + observation.storage_inodes_committed()
+                    + observation.storage_inodes_retained()
+            );
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.storage_bytes_retained(), 0);
+            assert_eq!(observation.storage_inodes_retained(), 0);
+            assert_eq!(observation.residue_bytes(), 0);
+            assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+            assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+            assert!(observation.invalidated());
+            assert!(observation.stale_invalidated());
+            assert!(observation.reopen_invalidated());
+            assert!(observation.zero_forbidden_work());
+        }
     }
 
     #[test]
@@ -636,13 +982,24 @@ mod operation_faults_owner {
             observation.error(),
             Some(PublicationErrorV1::Core(CoreError::ResourceRefused))
         );
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Core(CoreError::ResourceRefused)));
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::Core(CoreError::ResourceRefused))
+        );
         assert_eq!(observation.terminal_hook_calls(), 1);
         assert!(observation.bound_invoked());
         assert!(!observation.supply_invoked());
-        assert_eq!(observation.operation_active(), 0);
-        assert_eq!(observation.storage_active_operations(), 0);
-        assert_clean_create_fault_observation(observation);
+        assert!(observation.storage_bytes_requested() > 0);
+        assert!(observation.storage_inodes_requested() > 0);
+        assert_eq!(
+            observation.storage_bytes_released(),
+            observation.storage_bytes_requested()
+        );
+        assert_eq!(
+            observation.storage_inodes_released(),
+            observation.storage_inodes_requested()
+        );
+        assert_usable_create_fault_observation(observation);
     }
 
     #[test]
@@ -653,10 +1010,13 @@ mod operation_faults_owner {
             observation.error(),
             Some(PublicationErrorV1::Core(CoreError::SourceFailure))
         );
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Core(CoreError::SourceFailure)));
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::Core(CoreError::SourceFailure))
+        );
         assert_eq!(observation.terminal_hook_calls(), 1);
         assert!(observation.source_read_calls() > 0);
-        assert_clean_create_fault_observation(observation);
+        assert_usable_create_fault_observation(observation);
     }
 
     #[test]
@@ -676,7 +1036,7 @@ mod operation_faults_owner {
         assert_eq!(observation.global_seen_maximum_probe(), 59);
         assert_eq!(observation.global_seen_entries(), 61);
         assert_eq!(observation.global_seen_table_bytes(), 67);
-        assert_clean_create_fault_observation(observation);
+        assert_usable_create_fault_observation(observation);
     }
 
     #[test]
@@ -688,7 +1048,7 @@ mod operation_faults_owner {
             Some(PublicationErrorV1::Core(CoreError::SourceFailure))
         );
         assert_eq!(observation.global_seen_metadata_bytes_written(), u64::MAX);
-        assert_clean_create_fault_observation(observation);
+        assert_usable_create_fault_observation(observation);
     }
 
     #[test]
@@ -701,19 +1061,17 @@ mod operation_faults_owner {
             };
             let fixture = TempFsCas::new(label);
             let observation = typed_body_cleanup_dominance_v1(fixture.path(), fail_invalidation);
-            assert_eq!(
-                observation.first_cause(),
-                Some(PublicationCauseV1::Core(CoreError::SourceFailure))
-            );
-            assert_eq!(
-                observation.dominant_cause(),
-                Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+            assert_create_fault_terminal(
+                observation,
+                PublicationErrorV1::TerminalFailure,
+                PublicationCauseV1::Core(CoreError::SourceFailure),
+                if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
-                })
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
+                },
             );
-            assert_eq!(observation.preparation_entries(), 0);
+            assert_eq!(observation.preparation_entries(), 1);
             assert!(observation.mutable_preparation_residue_bytes() > 0);
             assert_eq!(observation.mutable_preparation_residue_inodes(), 1);
             assert_eq!(observation.immutable_entries(), 0);
@@ -849,21 +1207,16 @@ mod operation_faults_owner {
             for fail_invalidation in [false, true] {
                 let label = format!("carrier-link-{failure:?}-{fail_invalidation}");
                 let fixture = TempFsCas::new(&label);
-                let observation = carrier_link_fault_v1(
-                    fixture.path(),
-                    failure,
-                    fail_invalidation,
-                );
-                assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure), "{label}");
-                assert_eq!(observation.first_cause(), Some(expected_first), "{label}");
-                assert_eq!(
-                    observation.dominant_cause(),
-                    Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                let observation = carrier_link_fault_v1(fixture.path(), failure, fail_invalidation);
+                assert_create_fault_terminal(
+                    observation,
+                    PublicationErrorV1::TerminalFailure,
+                    expected_first,
+                    if fail_invalidation {
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::Carrier)
-                    }),
-                    "{label}"
+                        PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
+                    },
                 );
                 assert!(observation.control_fired(), "{label}");
                 assert!(observation.poisoned(), "{label}");
@@ -883,20 +1236,15 @@ mod operation_faults_owner {
             let label = format!("carrier-exists-{fail_invalidation}");
             let fixture = TempFsCas::new(&label);
             let observation = carrier_exists_fault_v1(fixture.path(), fail_invalidation);
-            assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure), "{label}");
-            assert_eq!(
-                observation.first_cause(),
-                Some(PublicationCauseV1::SynchronizationPoisoned),
-                "{label}"
-            );
-            assert_eq!(
-                observation.dominant_cause(),
-                Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+            assert_create_fault_terminal(
+                observation,
+                PublicationErrorV1::TerminalFailure,
+                PublicationCauseV1::SynchronizationPoisoned,
+                if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::Carrier)
-                }),
-                "{label}"
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
+                },
             );
             assert!(observation.control_fired(), "{label}");
             assert!(observation.carrier_installed(), "{label}");
@@ -919,19 +1267,11 @@ mod operation_faults_owner {
     fn preparation_construction_preserves_first_failure_when_cleanup_dominates() {
         let fixture = TempFsCas::new("preparation-create-cleanup-dual-cause");
         let observation = preparation_create_cleanup_fault_v1(fixture.path());
-        assert_eq!(
-            observation.error(),
-            Some(PublicationErrorV1::TerminalFailure)
-        );
-        assert_eq!(
-            observation.first_cause(),
-            Some(PublicationCauseV1::Filesystem)
-        );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(
-                PublicationCleanupTargetV1::PreparationSpool,
-            ))
+        assert_create_fault_terminal(
+            observation,
+            PublicationErrorV1::TerminalFailure,
+            PublicationCauseV1::Filesystem,
+            PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
         );
         assert!(observation.control_fired());
         assert_eq!(observation.cleanup_calls(), 1);
@@ -942,8 +1282,14 @@ mod operation_faults_owner {
         assert_eq!(observation.immutable_entries(), 0);
         assert_eq!(observation.storage_bytes_committed(), 0);
         assert_eq!(observation.storage_inodes_committed(), 0);
-        assert_eq!(observation.storage_bytes_retained(), observation.preparation_bytes());
-        assert_eq!(observation.storage_inodes_retained(), observation.preparation_entries());
+        assert_eq!(
+            observation.storage_bytes_retained(),
+            observation.preparation_bytes()
+        );
+        assert_eq!(
+            observation.storage_inodes_retained(),
+            observation.preparation_entries()
+        );
         assert_eq!(
             observation.mutable_preparation_residue_bytes(),
             observation.preparation_bytes()
@@ -973,15 +1319,23 @@ mod operation_faults_owner {
                     failure,
                     fail_invalidation,
                 );
-                assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
-                assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Filesystem));
+                assert_eq!(
+                    observation.error(),
+                    Some(PublicationErrorV1::TerminalFailure)
+                );
+                assert_eq!(
+                    observation.first_cause(),
+                    Some(PublicationCauseV1::Filesystem)
+                );
                 assert_eq!(observation.filesystem_failure(), Some(failure));
                 assert_eq!(
                     observation.dominant_cause(),
                     Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                        PublicationCauseV1::CleanupFailed(
+                            PublicationCleanupTargetV1::PreparationSpool,
+                        )
                     })
                 );
                 assert!(observation.control_fired());
@@ -1015,7 +1369,7 @@ mod operation_faults_owner {
                     fail_invalidation,
                 );
                 assert!(observation.control_fired());
-                assert!(observation.panicked());
+                assert!(!observation.panicked());
                 assert!(observation.bound_invoked());
                 assert!(!observation.supply_invoked());
                 assert_eq!(observation.immutable_entries(), 0);
@@ -1025,14 +1379,43 @@ mod operation_faults_owner {
                 assert!(observation.zero_forbidden_work());
                 assert_eq!(
                     observation.cleanup_calls(),
-                    u32::from(case != PreparationConstructionCaseV1::PreCreateAccountingReleaseFails)
+                    u32::from(
+                        case != PreparationConstructionCaseV1::PreCreateAccountingReleaseFails
+                    )
+                );
+                assert_eq!(
+                    observation.error(),
+                    Some(
+                        if fail_invalidation
+                            || case
+                                == PreparationConstructionCaseV1::PreCreateAccountingReleaseFails
+                        {
+                            PublicationErrorV1::TerminalFailure
+                        } else {
+                            PublicationErrorV1::CleanupFailed
+                        }
+                    )
+                );
+                assert_eq!(
+                    observation.first_cause(),
+                    Some(
+                        if case == PreparationConstructionCaseV1::PreCreateAccountingReleaseFails {
+                            PublicationCauseV1::Integrity
+                        } else {
+                            PublicationCauseV1::CleanupFailed(
+                                PublicationCleanupTargetV1::PreparationSpool,
+                            )
+                        }
+                    )
                 );
                 assert_eq!(
                     observation.dominant_cause(),
                     Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                        PublicationCauseV1::CleanupFailed(
+                            PublicationCleanupTargetV1::PreparationSpool,
+                        )
                     })
                 );
             }
@@ -1042,10 +1425,15 @@ mod operation_faults_owner {
     #[test]
     fn preparation_unwind_returns_typed_outer_terminal_only_when_terminalization_fails() {
         let clean = TempFsCas::new("preparation-unwind-clean-outer-terminal");
-        let clean_observation = preparation_initialization_unwind_fault_v1(clean.path(), false, false);
+        let clean_observation =
+            preparation_initialization_unwind_fault_v1(clean.path(), false, false);
         assert!(clean_observation.panicked());
         assert!(clean_observation.followup_succeeded());
         assert_eq!(clean_observation.error(), None);
+        assert_eq!(
+            clean_observation.panic_payload(),
+            Some("injected preparation initialization unwind before outer terminal")
+        );
         assert!(clean_observation.bound_invoked());
         assert!(clean_observation.supply_invoked());
         assert!(clean_observation.zero_forbidden_work());
@@ -1054,12 +1442,29 @@ mod operation_faults_owner {
             let fixture = TempFsCas::new(&format!(
                 "preparation-unwind-storage-terminal-{fail_invalidation}"
             ));
-            let observation = preparation_initialization_unwind_fault_v1(
-                fixture.path(),
-                true,
-                fail_invalidation,
+            let observation =
+                preparation_initialization_unwind_fault_v1(fixture.path(), true, fail_invalidation);
+            assert!(!observation.panicked());
+            assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::SynchronizationPoisoned
+                })
             );
-            assert!(observation.panicked());
+            assert_eq!(
+                observation.first_cause(),
+                Some(PublicationCauseV1::SynchronizationPoisoned)
+            );
+            assert_eq!(
+                observation.dominant_cause(),
+                Some(if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
+                } else {
+                    PublicationCauseV1::SynchronizationPoisoned
+                })
+            );
             assert!(observation.control_fired());
             assert!(observation.poisoned());
             assert!(!observation.followup_succeeded());
@@ -1077,6 +1482,10 @@ mod operation_faults_owner {
         assert!(clean_observation.panicked());
         assert!(clean_observation.bound_invoked());
         assert!(clean_observation.supply_invoked());
+        assert_eq!(
+            clean_observation.panic_payload(),
+            Some("injected closure-fence unwind before outer terminal")
+        );
         assert!(clean_observation.zero_forbidden_work());
 
         for fail_invalidation in [false, true] {
@@ -1084,7 +1493,27 @@ mod operation_faults_owner {
                 "closure-unwind-storage-terminal-{fail_invalidation}"
             ));
             let observation = closure_unwind_fault_v1(fixture.path(), true, fail_invalidation);
-            assert!(observation.panicked());
+            assert!(!observation.panicked());
+            assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::SynchronizationPoisoned
+                })
+            );
+            assert_eq!(
+                observation.first_cause(),
+                Some(PublicationCauseV1::SynchronizationPoisoned)
+            );
+            assert_eq!(
+                observation.dominant_cause(),
+                Some(if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
+                } else {
+                    PublicationCauseV1::SynchronizationPoisoned
+                })
+            );
             assert!(observation.control_fired());
             assert!(observation.poisoned());
             assert!(observation.invalidated());
@@ -1100,11 +1529,31 @@ mod operation_faults_owner {
             let fixture = TempFsCas::new(&format!(
                 "preparation-initialization-unwind-{fail_invalidation}"
             ));
-            let observation = preparation_initialization_cleanup_fault_v1(
-                fixture.path(),
-                fail_invalidation,
+            let observation =
+                preparation_initialization_cleanup_fault_v1(fixture.path(), fail_invalidation);
+            assert!(!observation.panicked());
+            assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::CleanupFailed
+                })
             );
-            assert!(observation.panicked());
+            assert_eq!(
+                observation.first_cause(),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool,
+                ))
+            );
+            assert_eq!(
+                observation.dominant_cause(),
+                Some(if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
+                } else {
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
+                })
+            );
             assert!(observation.control_fired());
             assert_eq!(observation.cleanup_calls(), 4);
             assert_eq!(observation.invalidation_attempts(), 1);
@@ -1122,12 +1571,16 @@ mod operation_faults_owner {
     #[test]
     fn preparation_accounting_failure_preserves_poison_and_invalidation_dominance() {
         for fail_invalidation in [false, true] {
-            let fixture = TempFsCas::new(&format!(
-                "preparation-accounting-{fail_invalidation}"
-            ));
-            let observation = preparation_accounting_poison_fault_v1(
-                fixture.path(),
-                fail_invalidation,
+            let fixture = TempFsCas::new(&format!("preparation-accounting-{fail_invalidation}"));
+            let observation =
+                preparation_accounting_poison_fault_v1(fixture.path(), fail_invalidation);
+            assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::SynchronizationPoisoned
+                })
             );
             assert!(observation.control_fired());
             assert!(observation.poisoned());
@@ -1138,7 +1591,7 @@ mod operation_faults_owner {
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
                     PublicationCauseV1::SynchronizationPoisoned
                 })
@@ -1156,11 +1609,17 @@ mod operation_faults_owner {
     fn preparation_open_failure_preserves_cleanup_accounting_failure() {
         let fixture = TempFsCas::new("preparation-open-accounting-cleanup");
         let observation = preparation_open_accounting_fault_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Filesystem));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::TerminalFailure)
+        );
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::Filesystem)
+        );
         assert_eq!(
             observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(
+            Some(PublicationCauseV1::CleanupFailed(
                 PublicationCleanupTargetV1::PreparationSpool
             ))
         );
@@ -1185,13 +1644,21 @@ mod operation_faults_owner {
             let fixture = TempFsCas::new(&format!("private-pack-precharge-{fail_invalidation}"));
             let observation = private_pack_precharge_poison_v1(fixture.path(), fail_invalidation);
             assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::SynchronizationPoisoned
+                })
+            );
+            assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::SynchronizationPoisoned)
             );
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
                     PublicationCauseV1::SynchronizationPoisoned
                 })
@@ -1217,6 +1684,11 @@ mod operation_faults_owner {
                 let fixture = TempFsCas::new(&label);
                 let observation =
                     private_pack_create_failure_v1(fixture.path(), failure, fail_invalidation);
+                assert_eq!(
+                    observation.error(),
+                    Some(PublicationErrorV1::TerminalFailure),
+                    "{label}"
+                );
                 assert_eq!(observation.filesystem_failure(), Some(failure), "{label}");
                 assert_eq!(
                     observation.first_cause(),
@@ -1226,9 +1698,9 @@ mod operation_faults_owner {
                 assert_eq!(
                     observation.dominant_cause(),
                     Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack)
+                        PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack)
                     }),
                     "{label}"
                 );
@@ -1262,13 +1734,13 @@ mod operation_faults_owner {
                 FilesystemFaultFailureV1::WriteFailure,
                 true,
                 false,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
             ),
             (
                 FilesystemFaultFailureV1::PermissionDenied,
                 true,
                 true,
-                PublicationCauseV1::Invalidation,
+                PublicationCauseV1::InvalidationFailed,
             ),
         ] {
             let label = format!("marker-create-{failure:?}-{break_accounting}-{fail_invalidation}");
@@ -1278,6 +1750,15 @@ mod operation_faults_owner {
                 failure,
                 break_accounting,
                 fail_invalidation,
+            );
+            assert_eq!(
+                observation.error(),
+                Some(if break_accounting {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::Filesystem
+                }),
+                "{label}"
             );
             assert_eq!(observation.filesystem_failure(), Some(failure), "{label}");
             assert_eq!(
@@ -1303,12 +1784,22 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-length-{fail_invalidation}"));
             let observation = marker_length_precharge_v1(fixture.path(), fail_invalidation);
-            assert_eq!(observation.error(), Some(PublicationErrorV1::Integrity));
-            assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Integrity));
+            assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::Integrity
+                })
+            );
+            assert_eq!(
+                observation.first_cause(),
+                Some(PublicationCauseV1::Integrity)
+            );
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
                     PublicationCauseV1::Integrity
                 })
@@ -1328,12 +1819,22 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-immutable-{fail_invalidation}"));
             let observation = marker_immutable_precharge_v1(fixture.path(), fail_invalidation);
-            assert_eq!(observation.error(), Some(PublicationErrorV1::Integrity));
-            assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Integrity));
+            assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::Integrity
+                })
+            );
+            assert_eq!(
+                observation.first_cause(),
+                Some(PublicationCauseV1::Integrity)
+            );
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
                     PublicationCauseV1::Integrity
                 })
@@ -1354,13 +1855,21 @@ mod operation_faults_owner {
             let fixture = TempFsCas::new(&format!("marker-incumbent-{fail_invalidation}"));
             let observation = equal_marker_incumbent_rollback_v1(fixture.path(), fail_invalidation);
             assert_eq!(
+                observation.error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::SynchronizationPoisoned
+                })
+            );
+            assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::SynchronizationPoisoned)
             );
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
                     PublicationCauseV1::SynchronizationPoisoned
                 })
@@ -1380,15 +1889,19 @@ mod operation_faults_owner {
             let fixture = TempFsCas::new(&format!("marker-hard-link-{fail_invalidation}"));
             let observation = marker_hard_link_fault_v1(fixture.path(), fail_invalidation);
             assert_eq!(
+                observation.error(),
+                Some(PublicationErrorV1::TerminalFailure)
+            );
+            assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::Filesystem)
             );
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
                 })
             );
             assert!(observation.control_fired());
@@ -1407,13 +1920,20 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-cleanup-length-{fail_invalidation}"));
             let observation = marker_cleanup_length_fault_v1(fixture.path(), fail_invalidation);
-            assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Integrity));
+            assert_eq!(
+                observation.error(),
+                Some(PublicationErrorV1::TerminalFailure)
+            );
+            assert_eq!(
+                observation.first_cause(),
+                Some(PublicationCauseV1::Integrity)
+            );
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
                 })
             );
             assert!(observation.control_fired());
@@ -1436,18 +1956,21 @@ mod operation_faults_owner {
                 let fixture = TempFsCas::new(&format!(
                     "marker-cleanup-metadata-{wrong_type}-{fail_invalidation}"
                 ));
-                let observation = marker_cleanup_metadata_fault_v1(
-                    fixture.path(),
-                    wrong_type,
-                    fail_invalidation,
+                let observation =
+                    marker_cleanup_metadata_fault_v1(fixture.path(), wrong_type, fail_invalidation);
+                assert_eq!(
+                    observation.error(),
+                    Some(PublicationErrorV1::TerminalFailure)
                 );
                 assert_eq!(observation.first_cause(), Some(first));
                 assert_eq!(
                     observation.dominant_cause(),
                     Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                        PublicationCauseV1::CleanupFailed(
+                            PublicationCleanupTargetV1::PreparationSpool,
+                        )
                     })
                 );
                 assert!(observation.control_fired());
@@ -1470,24 +1993,38 @@ mod operation_faults_owner {
                 MarkerCleanupUnlinkModeV1::NonDirectory,
                 Some(PublicationCauseV1::Filesystem),
             ),
-            (MarkerCleanupUnlinkModeV1::Injected, None),
+            (
+                MarkerCleanupUnlinkModeV1::Injected,
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool,
+                )),
+            ),
         ] {
             for fail_invalidation in [false, true] {
                 let fixture = TempFsCas::new(&format!(
                     "marker-cleanup-unlink-{mode:?}-{fail_invalidation}"
                 ));
-                let observation = marker_cleanup_unlink_fault_v1(
-                    fixture.path(),
-                    mode,
-                    fail_invalidation,
+                let observation =
+                    marker_cleanup_unlink_fault_v1(fixture.path(), mode, fail_invalidation);
+                assert_eq!(
+                    observation.error(),
+                    Some(
+                        if fail_invalidation || mode != MarkerCleanupUnlinkModeV1::Injected {
+                            PublicationErrorV1::TerminalFailure
+                        } else {
+                            PublicationErrorV1::CleanupFailed
+                        }
+                    )
                 );
                 assert_eq!(observation.first_cause(), first);
                 assert_eq!(
                     observation.dominant_cause(),
                     Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                        PublicationCauseV1::CleanupFailed(
+                            PublicationCleanupTargetV1::PreparationSpool,
+                        )
                     })
                 );
                 assert!(observation.control_fired());
@@ -1502,20 +2039,24 @@ mod operation_faults_owner {
     #[test]
     fn marker_cleanup_post_unlink_accounting_failure_is_stable_and_fail_closed() {
         for fail_invalidation in [false, true] {
-            let fixture = TempFsCas::new(&format!(
-                "marker-cleanup-post-unlink-{fail_invalidation}"
-            ));
-            let observation = marker_cleanup_post_unlink_fault_v1(
-                fixture.path(),
-                fail_invalidation,
+            let fixture =
+                TempFsCas::new(&format!("marker-cleanup-post-unlink-{fail_invalidation}"));
+            let observation =
+                marker_cleanup_post_unlink_fault_v1(fixture.path(), fail_invalidation);
+            assert_eq!(
+                observation.error(),
+                Some(PublicationErrorV1::TerminalFailure)
             );
-            assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Integrity));
+            assert_eq!(
+                observation.first_cause(),
+                Some(PublicationCauseV1::Integrity)
+            );
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
                 })
             );
             assert!(observation.control_fired());
@@ -1531,7 +2072,14 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("operation-spool-resize-{fail_invalidation}"));
             let observation = operation_spool_resize_fault_v1(fixture.path(), fail_invalidation);
-            assert_eq!(observation.operation_error(), Some(PublicationErrorV1::Integrity));
+            assert_eq!(
+                observation.operation_error(),
+                Some(if fail_invalidation {
+                    PublicationErrorV1::TerminalFailure
+                } else {
+                    PublicationErrorV1::Integrity
+                })
+            );
             assert_eq!(observation.logical_length(), 9);
             assert_eq!(observation.physical_length(), 9);
             assert_eq!(observation.preparation_bytes(), 9);
@@ -1545,11 +2093,10 @@ mod operation_faults_owner {
             assert!(observation.stale_invalidated());
             assert!(observation.reopen_invalidated());
             assert!(observation.zero_forbidden_work());
-            if fail_invalidation {
-                assert_eq!(observation.cleanup_error(), Some(PublicationErrorV1::Cleanup));
-            } else {
-                assert_eq!(observation.cleanup_error(), Some(PublicationErrorV1::Cleanup));
-            }
+            assert_eq!(
+                observation.cleanup_error(),
+                Some(PublicationErrorV1::TerminalFailure)
+            );
         }
     }
 
@@ -1591,33 +2138,66 @@ mod operation_faults_owner {
             (
                 true,
                 false,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
             ),
-            (true, true, PublicationCauseV1::Invalidation),
+            (true, true, PublicationCauseV1::InvalidationFailed),
             (
                 false,
                 false,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
             ),
-            (false, true, PublicationCauseV1::Invalidation),
+            (false, true, PublicationCauseV1::InvalidationFailed),
         ] {
-            let case = format!("operation-spool-cleanup-accounting-{before_unlink}-{fail_invalidation}");
+            let case =
+                format!("operation-spool-cleanup-accounting-{before_unlink}-{fail_invalidation}");
             let observation = operation_spool_cleanup_accounting_fault_v1(
                 TempFsCas::new(&case).path(),
                 before_unlink,
                 fail_invalidation,
             );
             assert_eq!(observation.operation_error(), None, "{case}");
-            assert_eq!(observation.cleanup_error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
-            assert_eq!(observation.cleanup_first_cause(), Some(PublicationCauseV1::Integrity), "{case}");
-            assert_eq!(observation.cleanup_dominant_cause(), Some(dominant), "{case}");
+            assert_eq!(
+                observation.cleanup_error(),
+                Some(PublicationErrorV1::TerminalFailure),
+                "{case}"
+            );
+            assert_eq!(
+                observation.cleanup_first_cause(),
+                Some(PublicationCauseV1::Integrity),
+                "{case}"
+            );
+            assert_eq!(
+                observation.cleanup_dominant_cause(),
+                Some(dominant),
+                "{case}"
+            );
             assert_eq!(observation.logical_length(), 17, "{case}");
             assert_eq!(observation.accounted_length(), 17, "{case}");
-            assert_eq!(observation.physical_length(), before_unlink.then_some(17), "{case}");
-            assert_eq!(observation.preparation_bytes(), if before_unlink { 17 } else { 0 }, "{case}");
-            assert_eq!(observation.preparation_entries(), u64::from(before_unlink), "{case}");
-            assert_eq!(observation.storage_bytes_retained(), if before_unlink { 0 } else { 17 }, "{case}");
-            assert_eq!(observation.storage_inodes_retained(), u64::from(before_unlink), "{case}");
+            assert_eq!(
+                observation.physical_length(),
+                before_unlink.then_some(17),
+                "{case}"
+            );
+            assert_eq!(
+                observation.preparation_bytes(),
+                if before_unlink { 17 } else { 0 },
+                "{case}"
+            );
+            assert_eq!(
+                observation.preparation_entries(),
+                u64::from(before_unlink),
+                "{case}"
+            );
+            assert_eq!(
+                observation.storage_bytes_retained(),
+                if before_unlink { 0 } else { 17 },
+                "{case}"
+            );
+            assert_eq!(
+                observation.storage_inodes_retained(),
+                u64::from(before_unlink),
+                "{case}"
+            );
             assert_failed_pack_root(observation);
         }
     }
@@ -1663,14 +2243,20 @@ mod operation_faults_owner {
                     fail_invalidation,
                 );
                 assert_eq!(observation.operation_error(), None, "{case}");
-                assert_eq!(observation.cleanup_error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
+                assert_eq!(
+                    observation.cleanup_error(),
+                    Some(PublicationErrorV1::TerminalFailure),
+                    "{case}"
+                );
                 assert_eq!(observation.cleanup_first_cause(), Some(first), "{case}");
                 assert_eq!(
                     observation.cleanup_dominant_cause(),
                     Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
+                        PublicationCauseV1::CleanupFailed(
+                            PublicationCleanupTargetV1::PreparationSpool,
+                        )
                     }),
                     "{case}"
                 );
@@ -1678,7 +2264,11 @@ mod operation_faults_owner {
                 assert_eq!(observation.accounted_length(), 19, "{case}");
                 assert_eq!(observation.physical_length(), path_length, "{case}");
                 assert_eq!(observation.preparation_bytes(), preparation_bytes, "{case}");
-                assert_eq!(observation.preparation_entries(), preparation_entries, "{case}");
+                assert_eq!(
+                    observation.preparation_entries(),
+                    preparation_entries,
+                    "{case}"
+                );
                 assert_eq!(observation.storage_bytes_retained(), 19, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
                 assert_failed_pack_root(observation);
@@ -1693,21 +2283,37 @@ mod operation_faults_owner {
             (None, None, 0, 0),
             (Some(PreparationMetadataFaultModeV1::WrongType), None, 0, 1),
             (Some(PreparationMetadataFaultModeV1::Missing), None, 0, 0),
-            (Some(PreparationMetadataFaultModeV1::PermissionDenied), Some(7), 7, 1),
-            (Some(PreparationMetadataFaultModeV1::ReadFailure), Some(7), 7, 1),
+            (
+                Some(PreparationMetadataFaultModeV1::PermissionDenied),
+                Some(7),
+                7,
+                1,
+            ),
+            (
+                Some(PreparationMetadataFaultModeV1::ReadFailure),
+                Some(7),
+                7,
+                1,
+            ),
         ] {
             let case = format!("operation-spool-drop-metadata-{mode:?}");
-            let observation = operation_spool_drop_metadata_fault_v1(
-                TempFsCas::new(&case).path(),
-                mode,
-            );
+            let observation =
+                operation_spool_drop_metadata_fault_v1(TempFsCas::new(&case).path(), mode);
             assert_eq!(observation.operation_error(), None, "{case}");
             assert_eq!(observation.cleanup_error(), None, "{case}");
             assert_eq!(observation.logical_length(), 23, "{case}");
-            assert_eq!(observation.accounted_length(), u64::from(mode.is_some()) * 23, "{case}");
+            assert_eq!(
+                observation.accounted_length(),
+                u64::from(mode.is_some()) * 23,
+                "{case}"
+            );
             assert_eq!(observation.physical_length(), path_length, "{case}");
             assert_eq!(observation.preparation_bytes(), preparation_bytes, "{case}");
-            assert_eq!(observation.preparation_entries(), preparation_entries, "{case}");
+            assert_eq!(
+                observation.preparation_entries(),
+                preparation_entries,
+                "{case}"
+            );
             if mode.is_some() {
                 assert_eq!(observation.storage_bytes_retained(), 23, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
@@ -1745,7 +2351,9 @@ mod operation_faults_owner {
             ),
             (
                 PreparationUnlinkFaultModeV1::Injected,
-                Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool,
+                )),
                 Some(23),
             ),
         ] {
@@ -1757,17 +2365,31 @@ mod operation_faults_owner {
                     fail_invalidation,
                 );
                 assert_eq!(observation.operation_error(), None, "{case}");
-                assert_eq!(observation.cleanup_error(), Some(if matches!(mode, PreparationUnlinkFaultModeV1::Injected) && !fail_invalidation {
-                    PublicationErrorV1::Cleanup
-                } else {
-                    PublicationErrorV1::TerminalFailure
-                }), "{case}");
+                assert_eq!(
+                    observation.cleanup_error(),
+                    Some(
+                        if matches!(mode, PreparationUnlinkFaultModeV1::Injected)
+                            && !fail_invalidation
+                        {
+                            PublicationErrorV1::CleanupFailed
+                        } else {
+                            PublicationErrorV1::TerminalFailure
+                        }
+                    ),
+                    "{case}"
+                );
                 assert_eq!(observation.cleanup_first_cause(), first, "{case}");
-                assert_eq!(observation.cleanup_dominant_cause(), Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
-                } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
-                }), "{case}");
+                assert_eq!(
+                    observation.cleanup_dominant_cause(),
+                    Some(if fail_invalidation {
+                        PublicationCauseV1::InvalidationFailed
+                    } else {
+                        PublicationCauseV1::CleanupFailed(
+                            PublicationCleanupTargetV1::PreparationSpool,
+                        )
+                    }),
+                    "{case}"
+                );
                 assert_eq!(observation.logical_length(), 23, "{case}");
                 assert_eq!(observation.accounted_length(), 23, "{case}");
                 assert_eq!(observation.physical_length(), path_length, "{case}");
@@ -1819,18 +2441,30 @@ mod operation_faults_owner {
                     fail_invalidation,
                 );
                 assert_eq!(observation.operation_error(), None, "{case}");
-                assert_eq!(observation.cleanup_error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
+                assert_eq!(
+                    observation.cleanup_error(),
+                    Some(PublicationErrorV1::TerminalFailure),
+                    "{case}"
+                );
                 assert_eq!(observation.cleanup_first_cause(), Some(first), "{case}");
-                assert_eq!(observation.cleanup_dominant_cause(), Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
-                } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack)
-                }), "{case}");
+                assert_eq!(
+                    observation.cleanup_dominant_cause(),
+                    Some(if fail_invalidation {
+                        PublicationCauseV1::InvalidationFailed
+                    } else {
+                        PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack)
+                    }),
+                    "{case}"
+                );
                 assert_eq!(observation.logical_length(), 128, "{case}");
                 assert_eq!(observation.accounted_length(), 64, "{case}");
                 assert_eq!(observation.physical_length(), path_length, "{case}");
                 assert_eq!(observation.preparation_bytes(), preparation_bytes, "{case}");
-                assert_eq!(observation.preparation_entries(), preparation_entries, "{case}");
+                assert_eq!(
+                    observation.preparation_entries(),
+                    preparation_entries,
+                    "{case}"
+                );
                 assert_eq!(observation.storage_bytes_retained(), 64, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
                 assert_failed_pack_root(observation);
@@ -1845,21 +2479,37 @@ mod operation_faults_owner {
             (None, None, 0, 0),
             (Some(PreparationMetadataFaultModeV1::WrongType), None, 0, 1),
             (Some(PreparationMetadataFaultModeV1::Missing), None, 0, 0),
-            (Some(PreparationMetadataFaultModeV1::PermissionDenied), Some(7), 7, 1),
-            (Some(PreparationMetadataFaultModeV1::ReadFailure), Some(7), 7, 1),
+            (
+                Some(PreparationMetadataFaultModeV1::PermissionDenied),
+                Some(7),
+                7,
+                1,
+            ),
+            (
+                Some(PreparationMetadataFaultModeV1::ReadFailure),
+                Some(7),
+                7,
+                1,
+            ),
         ] {
             let case = format!("private-pack-drop-metadata-{mode:?}");
-            let observation = private_pack_drop_metadata_fault_v1(
-                TempFsCas::new(&case).path(),
-                mode,
-            );
+            let observation =
+                private_pack_drop_metadata_fault_v1(TempFsCas::new(&case).path(), mode);
             assert_eq!(observation.operation_error(), None, "{case}");
             assert_eq!(observation.cleanup_error(), None, "{case}");
             assert_eq!(observation.logical_length(), 128, "{case}");
-            assert_eq!(observation.accounted_length(), if mode.is_some() { 64 } else { 0 }, "{case}");
+            assert_eq!(
+                observation.accounted_length(),
+                if mode.is_some() { 64 } else { 0 },
+                "{case}"
+            );
             assert_eq!(observation.physical_length(), path_length, "{case}");
             assert_eq!(observation.preparation_bytes(), preparation_bytes, "{case}");
-            assert_eq!(observation.preparation_entries(), preparation_entries, "{case}");
+            assert_eq!(
+                observation.preparation_entries(),
+                preparation_entries,
+                "{case}"
+            );
             if mode.is_some() {
                 assert_eq!(observation.storage_bytes_retained(), 64, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
@@ -1897,7 +2547,9 @@ mod operation_faults_owner {
             ),
             (
                 PreparationUnlinkFaultModeV1::Injected,
-                Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PrivatePack,
+                )),
                 Some(64),
             ),
         ] {
@@ -1909,17 +2561,29 @@ mod operation_faults_owner {
                     fail_invalidation,
                 );
                 assert_eq!(observation.operation_error(), None, "{case}");
-                assert_eq!(observation.cleanup_error(), Some(if matches!(mode, PreparationUnlinkFaultModeV1::Injected) && !fail_invalidation {
-                    PublicationErrorV1::Cleanup
-                } else {
-                    PublicationErrorV1::TerminalFailure
-                }), "{case}");
+                assert_eq!(
+                    observation.cleanup_error(),
+                    Some(
+                        if matches!(mode, PreparationUnlinkFaultModeV1::Injected)
+                            && !fail_invalidation
+                        {
+                            PublicationErrorV1::CleanupFailed
+                        } else {
+                            PublicationErrorV1::TerminalFailure
+                        }
+                    ),
+                    "{case}"
+                );
                 assert_eq!(observation.cleanup_first_cause(), first, "{case}");
-                assert_eq!(observation.cleanup_dominant_cause(), Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
-                } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack)
-                }), "{case}");
+                assert_eq!(
+                    observation.cleanup_dominant_cause(),
+                    Some(if fail_invalidation {
+                        PublicationCauseV1::InvalidationFailed
+                    } else {
+                        PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack)
+                    }),
+                    "{case}"
+                );
                 assert_eq!(observation.logical_length(), 128, "{case}");
                 assert_eq!(observation.accounted_length(), 64, "{case}");
                 assert_eq!(observation.physical_length(), path_length, "{case}");
@@ -1932,7 +2596,9 @@ mod operation_faults_owner {
 
     #[test]
     fn private_pack_truncate_and_append_accounting_failures_preserve_invalidation_cause() {
-        for (truncate, fail_invalidation) in [(true, false), (true, true), (false, false), (false, true)] {
+        for (truncate, fail_invalidation) in
+            [(true, false), (true, true), (false, false), (false, true)]
+        {
             let case = format!("private-pack-accounting-{truncate}-{fail_invalidation}");
             let observation = private_pack_truncate_accounting_fault_v1(
                 TempFsCas::new(&case).path(),
@@ -1948,30 +2614,58 @@ mod operation_faults_owner {
                 }),
                 "{case}"
             );
-            assert_eq!(observation.operation_first_cause(), Some(PublicationCauseV1::Integrity), "{case}");
+            assert_eq!(
+                observation.operation_first_cause(),
+                Some(PublicationCauseV1::Integrity),
+                "{case}"
+            );
             assert_eq!(
                 observation.operation_dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
                     PublicationCauseV1::Integrity
                 }),
                 "{case}"
             );
-            assert_eq!(observation.cleanup_error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
-            assert_eq!(observation.cleanup_first_cause(), Some(PublicationCauseV1::Integrity), "{case}");
             assert_eq!(
-                observation.cleanup_dominant_cause(),
-                Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack)),
+                observation.cleanup_error(),
+                Some(PublicationErrorV1::TerminalFailure),
                 "{case}"
             );
-            assert_eq!(observation.logical_length(), if truncate { 70 } else { 64 }, "{case}");
-            assert_eq!(observation.physical_length(), Some(if truncate { 70 } else { 64 }), "{case}");
-            assert_eq!(observation.accounted_length(), if truncate { 80 } else { 64 }, "{case}");
-            assert_eq!(observation.preparation_bytes(), if truncate { 70 } else { 64 }, "{case}");
+            assert_eq!(
+                observation.cleanup_first_cause(),
+                Some(PublicationCauseV1::Integrity),
+                "{case}"
+            );
+            assert_eq!(
+                observation.cleanup_dominant_cause(),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PrivatePack
+                )),
+                "{case}"
+            );
+            assert_eq!(
+                observation.logical_length(),
+                if truncate { 70 } else { 64 },
+                "{case}"
+            );
+            assert_eq!(
+                observation.physical_length(),
+                Some(if truncate { 70 } else { 64 }),
+                "{case}"
+            );
+            assert_eq!(
+                observation.accounted_length(),
+                if truncate { 80 } else { 64 },
+                "{case}"
+            );
+            assert_eq!(
+                observation.preparation_bytes(),
+                if truncate { 70 } else { 64 },
+                "{case}"
+            );
             assert_eq!(observation.preparation_entries(), 1, "{case}");
-            assert_eq!(observation.storage_bytes_retained(), if truncate { 70 } else { 64 }, "{case}");
-            assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
             assert_failed_pack_root(observation);
         }
     }
@@ -1982,33 +2676,66 @@ mod operation_faults_owner {
             (
                 true,
                 false,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack),
             ),
-            (true, true, PublicationCauseV1::Invalidation),
+            (true, true, PublicationCauseV1::InvalidationFailed),
             (
                 false,
                 false,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack),
             ),
-            (false, true, PublicationCauseV1::Invalidation),
+            (false, true, PublicationCauseV1::InvalidationFailed),
         ] {
-            let case = format!("private-pack-cleanup-accounting-{before_unlink}-{fail_invalidation}");
+            let case =
+                format!("private-pack-cleanup-accounting-{before_unlink}-{fail_invalidation}");
             let observation = private_pack_cleanup_accounting_fault_v1(
                 TempFsCas::new(&case).path(),
                 before_unlink,
                 fail_invalidation,
             );
             assert_eq!(observation.operation_error(), None, "{case}");
-            assert_eq!(observation.cleanup_error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
-            assert_eq!(observation.cleanup_first_cause(), Some(PublicationCauseV1::Integrity), "{case}");
-            assert_eq!(observation.cleanup_dominant_cause(), Some(dominant), "{case}");
+            assert_eq!(
+                observation.cleanup_error(),
+                Some(PublicationErrorV1::TerminalFailure),
+                "{case}"
+            );
+            assert_eq!(
+                observation.cleanup_first_cause(),
+                Some(PublicationCauseV1::Integrity),
+                "{case}"
+            );
+            assert_eq!(
+                observation.cleanup_dominant_cause(),
+                Some(dominant),
+                "{case}"
+            );
             assert_eq!(observation.logical_length(), 128, "{case}");
             assert_eq!(observation.accounted_length(), 64, "{case}");
-            assert_eq!(observation.physical_length(), before_unlink.then_some(64), "{case}");
-            assert_eq!(observation.preparation_bytes(), if before_unlink { 64 } else { 0 }, "{case}");
-            assert_eq!(observation.preparation_entries(), u64::from(before_unlink), "{case}");
-            assert_eq!(observation.storage_bytes_retained(), if before_unlink { 0 } else { 64 }, "{case}");
-            assert_eq!(observation.storage_inodes_retained(), u64::from(before_unlink), "{case}");
+            assert_eq!(
+                observation.physical_length(),
+                before_unlink.then_some(64),
+                "{case}"
+            );
+            assert_eq!(
+                observation.preparation_bytes(),
+                if before_unlink { 64 } else { 0 },
+                "{case}"
+            );
+            assert_eq!(
+                observation.preparation_entries(),
+                u64::from(before_unlink),
+                "{case}"
+            );
+            assert_eq!(
+                observation.storage_bytes_retained(),
+                if before_unlink { 0 } else { 64 },
+                "{case}"
+            );
+            assert_eq!(
+                observation.storage_inodes_retained(),
+                u64::from(before_unlink),
+                "{case}"
+            );
             assert_failed_pack_root(observation);
         }
     }
@@ -2017,11 +2744,19 @@ mod operation_faults_owner {
     fn marker_write_failure_survives_pre_link_cleanup_failure() {
         let fixture = TempFsCas::new("marker-write-cleanup-dual-cause");
         let observation = marker_write_cleanup_terminal_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Filesystem));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::TerminalFailure)
+        );
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::Filesystem)
+        );
         assert_eq!(
             observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool))
+            Some(PublicationCauseV1::CleanupFailed(
+                PublicationCleanupTargetV1::PreparationSpool
+            ))
         );
         assert!(observation.control_fired());
         assert_eq!(observation.cleanup_calls(), 1);
@@ -2044,28 +2779,28 @@ mod operation_faults_owner {
                 false,
                 false,
                 PublicationErrorV1::TerminalFailure,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
             ),
             (
                 "marker-write-cleanup-invalidation-double-fault",
                 false,
                 true,
                 PublicationErrorV1::TerminalFailure,
-                PublicationCauseV1::Invalidation,
+                PublicationCauseV1::InvalidationFailed,
             ),
             (
                 "equal-marker-cleanup-unwind",
                 true,
                 false,
-                PublicationErrorV1::Cleanup,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool),
+                PublicationErrorV1::CleanupFailed,
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
             ),
             (
                 "equal-marker-cleanup-invalidation-double-fault",
                 true,
                 true,
                 PublicationErrorV1::TerminalFailure,
-                PublicationCauseV1::Invalidation,
+                PublicationCauseV1::InvalidationFailed,
             ),
         ] {
             let fixture = TempFsCas::new(case);
@@ -2075,18 +2810,19 @@ mod operation_faults_owner {
                 fail_invalidation,
             );
             assert_eq!(observation.error(), Some(expected), "{case}");
-            assert_eq!(
-                observation.dominant_cause(),
-                Some(dominant),
-                "{case}"
-            );
+            assert_eq!(observation.dominant_cause(), Some(dominant), "{case}");
             assert!(observation.control_fired(), "{case}");
             assert_eq!(observation.cleanup_calls(), 1, "{case}");
             assert_eq!(observation.invalidation_attempts(), 1, "{case}");
             assert_eq!(observation.preparation_entries(), 1, "{case}");
-            assert_eq!(observation.immutable_entries(), u64::from(equal_incumbent), "{case}");
+            assert_eq!(
+                observation.immutable_entries(),
+                u64::from(equal_incumbent),
+                "{case}"
+            );
             assert!(observation.invalidated(), "{case}");
             assert!(observation.stale_invalidated(), "{case}");
+            assert!(observation.reopen_invalidated(), "{case}");
             assert!(observation.zero_forbidden_work(), "{case}");
         }
     }
@@ -2098,25 +2834,25 @@ mod operation_faults_owner {
                 "marker-callback-unwind-cleanup-failure",
                 false,
                 false,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
             ),
             (
                 "marker-callback-unwind-cleanup-failure-invalidation-double-fault",
                 false,
                 true,
-                PublicationCauseV1::Invalidation,
+                PublicationCauseV1::InvalidationFailed,
             ),
             (
                 "marker-callback-unwind-cleanup-unwind",
                 true,
                 false,
-                PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool),
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
             ),
             (
                 "marker-callback-unwind-cleanup-unwind-invalidation-double-fault",
                 true,
                 true,
-                PublicationCauseV1::Invalidation,
+                PublicationCauseV1::InvalidationFailed,
             ),
         ] {
             let fixture = TempFsCas::new(case);
@@ -2130,13 +2866,15 @@ mod operation_faults_owner {
                 Some(if fail_invalidation {
                     PublicationErrorV1::TerminalFailure
                 } else {
-                    PublicationErrorV1::Cleanup
+                    PublicationErrorV1::CleanupFailed
                 }),
                 "{case}"
             );
             assert_eq!(
                 observation.first_cause(),
-                Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool
+                )),
                 "{case}"
             );
             assert_eq!(observation.dominant_cause(), Some(dominant), "{case}");
@@ -2154,11 +2892,19 @@ mod operation_faults_owner {
     fn carrier_alias_unlink_failure_is_typed_cleanup_with_exact_preparation_residue() {
         let fixture = TempFsCas::new("carrier-alias-unlink-enospc");
         let observation = carrier_alias_unlink_cleanup_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Filesystem));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::TerminalFailure)
+        );
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::Filesystem)
+        );
         assert_eq!(
             observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack))
+            Some(PublicationCauseV1::CleanupFailed(
+                PublicationCleanupTargetV1::PrivatePack
+            ))
         );
         assert!(observation.control_fired());
         assert!(observation.bound_invoked());
@@ -2178,7 +2924,11 @@ mod operation_faults_owner {
             let case = format!("carrier-alias-post-unlink-accounting-{fail_invalidation}");
             let fixture = TempFsCas::new(&case);
             let observation = carrier_accounting_poison_v1(fixture.path(), fail_invalidation);
-            assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
+            assert_eq!(
+                observation.error(),
+                Some(PublicationErrorV1::TerminalFailure),
+                "{case}"
+            );
             assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::Core(CoreError::Cancelled)),
@@ -2187,9 +2937,9 @@ mod operation_faults_owner {
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::Carrier)
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
                 }),
                 "{case}"
             );
@@ -2207,11 +2957,19 @@ mod operation_faults_owner {
     fn published_locator_alias_unlink_failure_retains_dependencies_and_exact_residue() {
         let fixture = TempFsCas::new("locator-alias-unlink-edquot");
         let observation = published_locator_alias_unlink_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Filesystem));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::TerminalFailure)
+        );
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::Filesystem)
+        );
         assert_eq!(
             observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PublishedMarkerAlias))
+            Some(PublicationCauseV1::CleanupFailed(
+                PublicationCleanupTargetV1::PublishedMarkerAlias
+            ))
         );
         assert!(observation.control_fired());
         assert!(observation.bound_invoked());
@@ -2229,9 +2987,18 @@ mod operation_faults_owner {
     fn alias_cleanup_and_invalidation_persistence_double_fault_stays_fail_closed() {
         let fixture = TempFsCas::new("alias-invalidation-double-fault");
         let observation = alias_cleanup_invalidation_double_fault_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Filesystem));
-        assert_eq!(observation.dominant_cause(), Some(PublicationCauseV1::Invalidation));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::TerminalFailure)
+        );
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::Filesystem)
+        );
+        assert_eq!(
+            observation.dominant_cause(),
+            Some(PublicationCauseV1::InvalidationFailed)
+        );
         assert!(observation.control_fired());
         assert!(observation.bound_invoked());
         assert!(observation.supply_invoked());
@@ -2246,7 +3013,10 @@ mod operation_faults_owner {
     #[test]
     fn post_link_marker_unwind_cleans_alias_records_exact_residue_and_invalidates() {
         for (case, target) in [
-            ("post-link-object-locator-unwind", PostLinkMarkerTargetV1::ObjectLocator),
+            (
+                "post-link-object-locator-unwind",
+                PostLinkMarkerTargetV1::ObjectLocator,
+            ),
             ("post-link-catalog-unwind", PostLinkMarkerTargetV1::Catalog),
             ("post-link-closure-unwind", PostLinkMarkerTargetV1::Closure),
         ] {
@@ -2267,23 +3037,18 @@ mod operation_faults_owner {
     #[test]
     fn post_link_marker_unwind_classifies_cleanup_and_invalidation_secondary_terminals() {
         for (boundary_unwind, alias_cleanup, fail_invalidation, expected_error) in [
-            (
-                true,
-                PostLinkAliasCleanupV1::Succeeds,
-                false,
-                None,
-            ),
+            (true, PostLinkAliasCleanupV1::Succeeds, false, None),
             (
                 true,
                 PostLinkAliasCleanupV1::Succeeds,
                 true,
-                Some(PublicationErrorV1::Invalidation),
+                Some(PublicationErrorV1::InvalidationFailed),
             ),
             (
                 true,
                 PostLinkAliasCleanupV1::Fails,
                 false,
-                Some(PublicationErrorV1::Cleanup),
+                Some(PublicationErrorV1::CleanupFailed),
             ),
             (
                 true,
@@ -2295,7 +3060,7 @@ mod operation_faults_owner {
                 true,
                 PostLinkAliasCleanupV1::Unwinds,
                 false,
-                Some(PublicationErrorV1::Cleanup),
+                Some(PublicationErrorV1::CleanupFailed),
             ),
             (
                 true,
@@ -2307,7 +3072,7 @@ mod operation_faults_owner {
                 false,
                 PostLinkAliasCleanupV1::Unwinds,
                 false,
-                Some(PublicationErrorV1::Cleanup),
+                Some(PublicationErrorV1::CleanupFailed),
             ),
             (
                 false,
@@ -2316,7 +3081,9 @@ mod operation_faults_owner {
                 Some(PublicationErrorV1::TerminalFailure),
             ),
         ] {
-            let case = format!("post-link-secondary-{boundary_unwind}-{alias_cleanup:?}-{fail_invalidation}");
+            let case = format!(
+                "post-link-secondary-{boundary_unwind}-{alias_cleanup:?}-{fail_invalidation}"
+            );
             let fixture = TempFsCas::new(&case);
             let observation = post_link_marker_secondary_v1(
                 fixture.path(),
@@ -2345,53 +3112,46 @@ mod operation_faults_owner {
     #[test]
     fn pre_link_marker_unwind_cleans_once_or_retains_exact_fail_closed_residue() {
         for (point, retain_marker, expected_error, expected_panicked) in [
-            (
-                PreLinkMarkerPanicPointV1::MarkerWrite,
-                false,
-                None,
-                true,
-            ),
-            (
-                PreLinkMarkerPanicPointV1::MarkerFlush,
-                false,
-                None,
-                true,
-            ),
+            (PreLinkMarkerPanicPointV1::MarkerWrite, false, None, true),
+            (PreLinkMarkerPanicPointV1::MarkerFlush, false, None, true),
             (
                 PreLinkMarkerPanicPointV1::VisibilityRequest,
                 false,
                 None,
                 true,
             ),
-            (
-                PreLinkMarkerPanicPointV1::MarkerHardLink,
-                false,
-                None,
-                true,
-            ),
+            (PreLinkMarkerPanicPointV1::MarkerHardLink, false, None, true),
             (
                 PreLinkMarkerPanicPointV1::MarkerFlush,
                 true,
-                Some(PublicationErrorV1::Cleanup),
+                Some(PublicationErrorV1::CleanupFailed),
                 false,
             ),
         ] {
             let case = format!("pre-link-marker-unwind-{point:?}-{retain_marker}");
             let fixture = TempFsCas::new(&case);
-            let observation = pre_link_marker_unwind_v1(
-                fixture.path(),
-                point,
-                retain_marker,
-            );
+            let observation = pre_link_marker_unwind_v1(fixture.path(), point, retain_marker);
             assert_eq!(observation.error(), expected_error, "{case}");
             assert_eq!(observation.panicked(), expected_panicked, "{case}");
             assert!(observation.control_fired(), "{case}");
             assert!(observation.bound_invoked(), "{case}");
             assert!(observation.supply_invoked(), "{case}");
             assert_eq!(observation.operation_slots(), 0, "{case}");
-            assert_eq!(observation.preparation_entries(), u64::from(retain_marker), "{case}");
-            assert_eq!(observation.immutable_entries(), u64::from(!retain_marker), "{case}");
-            assert_eq!(observation.cleanup_calls(), u32::from(retain_marker), "{case}");
+            assert_eq!(
+                observation.preparation_entries(),
+                u64::from(retain_marker),
+                "{case}"
+            );
+            assert_eq!(
+                observation.immutable_entries(),
+                u64::from(!retain_marker),
+                "{case}"
+            );
+            assert_eq!(
+                observation.cleanup_calls(),
+                u32::from(retain_marker),
+                "{case}"
+            );
             assert!(observation.invalidated(), "{case}");
             assert!(observation.stale_invalidated(), "{case}");
             assert!(observation.zero_forbidden_work(), "{case}");
@@ -2413,14 +3173,24 @@ mod operation_faults_owner {
                     target,
                     fail_invalidation,
                 );
-                assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
-                assert_eq!(observation.first_cause(), Some(PublicationCauseV1::Filesystem), "{case}");
+                assert_eq!(
+                    observation.error(),
+                    Some(PublicationErrorV1::TerminalFailure),
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.first_cause(),
+                    Some(PublicationCauseV1::Filesystem),
+                    "{case}"
+                );
                 assert_eq!(
                     observation.dominant_cause(),
                     Some(if fail_invalidation {
-                        PublicationCauseV1::Invalidation
+                        PublicationCauseV1::InvalidationFailed
                     } else {
-                        PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PublishedMarkerAlias)
+                        PublicationCauseV1::CleanupFailed(
+                            PublicationCleanupTargetV1::PublishedMarkerAlias,
+                        )
                     }),
                     "{case}"
                 );
@@ -2439,44 +3209,76 @@ mod operation_faults_owner {
         let fixture = TempFsCas::new("atomic-closure-malformed-occupant");
         let observation: MalformedClosureObservationV1 =
             atomic_closure_malformed_occupant_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::MalformedOccupant));
-        assert_eq!(observation.first_cause(), Some(PublicationCauseV1::MalformedOccupant));
-        assert_eq!(observation.dominant_cause(), Some(PublicationCauseV1::MalformedOccupant));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::MalformedOccupant)
+        );
+        assert_eq!(
+            observation.first_cause(),
+            Some(PublicationCauseV1::MalformedOccupant)
+        );
+        assert_eq!(
+            observation.dominant_cause(),
+            Some(PublicationCauseV1::MalformedOccupant)
+        );
         assert!(observation.malformed_closure_installed());
+        assert!(observation.malformed_closure_preserved());
         assert_eq!(observation.closure_bytes(), 120);
         assert_eq!(observation.preparation_entries(), 0);
+        assert!(observation.carrier_entries_preserved());
+        assert!(observation.catalog_entries_preserved());
+        assert!(observation.object_entries_preserved());
+        assert_eq!(observation.closure_fences(), 0);
+        assert_eq!(observation.residue_bytes(), 0);
         assert_eq!(observation.operation_slots(), 0);
         assert!(observation.zero_forbidden_work());
     }
 
     #[test]
     fn malformed_closure_admission_preserves_primary_error_through_marker_cleanup_terminal() {
-        for fail_invalidation in [false, true] {
-            let case = format!("malformed-closure-cleanup-terminal-{fail_invalidation}");
-            let fixture = TempFsCas::new(&case);
-            let observation = malformed_closure_cleanup_terminal_v1(
-                fixture.path(),
-                fail_invalidation,
-            );
-            assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure), "{case}");
-            assert_eq!(observation.first_cause(), Some(PublicationCauseV1::MalformedOccupant), "{case}");
-            assert_eq!(
-                observation.dominant_cause(),
-                Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
-                } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PreparationSpool)
-                }),
-                "{case}"
-            );
-            assert!(observation.malformed_closure_installed(), "{case}");
-            assert_eq!(observation.closure_bytes(), 120, "{case}");
-            assert!(observation.cleanup_calls() > 0, "{case}");
-            assert!(observation.preparation_entries() > 0, "{case}");
-            assert!(observation.invalidated(), "{case}");
-            assert!(observation.stale_invalidated(), "{case}");
-            assert!(observation.zero_forbidden_work(), "{case}");
-        }
+        std::thread::Builder::new()
+            .name("malformed-closure-cleanup-provenance".into())
+            .spawn(|| {
+                for fail_invalidation in [false, true] {
+                    let case = format!("malformed-closure-cleanup-terminal-{fail_invalidation}");
+                    let fixture = TempFsCas::new(&case);
+                    let observation =
+                        malformed_closure_cleanup_terminal_v1(fixture.path(), fail_invalidation);
+                    assert_eq!(
+                        observation.error(),
+                        Some(PublicationErrorV1::TerminalFailure),
+                        "{case}"
+                    );
+                    assert_eq!(
+                        observation.first_cause(),
+                        Some(PublicationCauseV1::MalformedOccupant),
+                        "{case}"
+                    );
+                    assert_eq!(
+                        observation.dominant_cause(),
+                        Some(if fail_invalidation {
+                            PublicationCauseV1::InvalidationFailed
+                        } else {
+                            PublicationCauseV1::CleanupFailed(
+                                PublicationCleanupTargetV1::PreparationSpool,
+                            )
+                        }),
+                        "{case}"
+                    );
+                    assert!(observation.malformed_closure_installed(), "{case}");
+                    assert_eq!(observation.closure_bytes(), 120, "{case}");
+                    assert!(observation.cleanup_calls() > 0, "{case}");
+                    assert!(observation.preparation_entries() > 0, "{case}");
+                    assert!(observation.invalidated(), "{case}");
+                    assert!(observation.stale_invalidated(), "{case}");
+                    assert!(observation.reopen_invalidated(), "{case}");
+                    assert_eq!(observation.operation_slots(), 0, "{case}");
+                    assert!(observation.zero_forbidden_work(), "{case}");
+                }
+            })
+            .expect("spawn malformed-closure semantic owner")
+            .join()
+            .expect("join malformed-closure semantic owner");
     }
 
     #[test]
@@ -2486,11 +3288,9 @@ mod operation_faults_owner {
             CandidateValidationFailureV1::ReadFailure,
         ] {
             let label = format!("candidate-validation-{failure:?}");
-            let (root, bytes) = fault_object(&label, &[0x4d; 64 * 1024 + 17]);
-            let observation = invalidation_probe_failure_before_candidate_validation_v1(
-                PublicationRequestV1::new(root.path(), &[bytes.as_slice()]),
-                failure,
-            );
+            let root = TempFsCas::new(&label);
+            let observation =
+                invalidation_probe_failure_before_candidate_validation_v1(root.path(), failure);
             assert_eq!(
                 observation.error(),
                 Some(PublicationErrorV1::Filesystem),
@@ -2507,11 +3307,12 @@ mod operation_faults_owner {
                 "{label}"
             );
             assert_eq!(observation.preparation_entries(), 0, "{label}");
-            assert_eq!(observation.carrier_entries(), 0, "{label}");
-            assert_eq!(observation.object_entries(), 0, "{label}");
-            assert_eq!(observation.catalog_entries(), 0, "{label}");
+            assert_eq!(observation.immutable_entries(), 0, "{label}");
             assert_eq!(observation.residue_bytes(), 0, "{label}");
-            assert_eq!(observation.admitted_slots(), 0, "{label}");
+            assert_eq!(observation.operation_slots(), 0, "{label}");
+            assert!(observation.control_fired(), "{label}");
+            assert!(observation.bound_invoked(), "{label}");
+            assert!(observation.supply_invoked(), "{label}");
             assert!(!observation.invalidated(), "{label}");
             assert!(observation.zero_forbidden_work(), "{label}");
         }
@@ -2521,14 +3322,19 @@ mod operation_faults_owner {
     fn private_pack_cleanup_failure_is_typed_invalidates_stale_handles_and_retains_exact_residue() {
         let fixture = TempFsCas::new("private-pack-cleanup-failure");
         let observation = private_pack_cleanup_failure_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::TerminalFailure)
+        );
         assert_eq!(
             observation.first_cause(),
             Some(PublicationCauseV1::Core(CoreError::Cancelled))
         );
         assert_eq!(
             observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::PrivatePack))
+            Some(PublicationCauseV1::CleanupFailed(
+                PublicationCleanupTargetV1::PrivatePack
+            ))
         );
         assert!(observation.control_fired());
         assert_eq!(observation.cleanup_calls(), 1);
@@ -2547,14 +3353,19 @@ mod operation_faults_owner {
     fn carrier_cleanup_failure_is_typed_through_sink_and_retains_exact_residue() {
         let fixture = TempFsCas::new("carrier-cleanup-failure-lifecycle");
         let observation = lifecycle_carrier_cleanup_failure_v1(fixture.path());
-        assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
+        assert_eq!(
+            observation.error(),
+            Some(PublicationErrorV1::TerminalFailure)
+        );
         assert_eq!(
             observation.first_cause(),
             Some(PublicationCauseV1::Core(CoreError::Cancelled))
         );
         assert_eq!(
             observation.dominant_cause(),
-            Some(PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::Carrier))
+            Some(PublicationCauseV1::CleanupFailed(
+                PublicationCleanupTargetV1::Carrier
+            ))
         );
         assert!(observation.control_fired());
         assert_eq!(observation.cleanup_calls(), 1);
@@ -2575,7 +3386,10 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("carrier-accounting-poison-{fail_invalidation}"));
             let observation = carrier_accounting_poison_v1(fixture.path(), fail_invalidation);
-            assert_eq!(observation.error(), Some(PublicationErrorV1::TerminalFailure));
+            assert_eq!(
+                observation.error(),
+                Some(PublicationErrorV1::TerminalFailure)
+            );
             assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::Core(CoreError::Cancelled))
@@ -2583,9 +3397,9 @@ mod operation_faults_owner {
             assert_eq!(
                 observation.dominant_cause(),
                 Some(if fail_invalidation {
-                    PublicationCauseV1::Invalidation
+                    PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::Cleanup(PublicationCleanupTargetV1::Carrier)
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
                 })
             );
             assert!(observation.control_fired());

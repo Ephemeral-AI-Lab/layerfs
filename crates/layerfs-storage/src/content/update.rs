@@ -429,18 +429,13 @@ pub mod semantic {
     }
 
     struct Source<'a> {
-        bytes: &'a [u8],
-        offset: usize,
+        reader: &'a mut dyn std::io::Read,
         reads: u64,
     }
 
     impl<'a> Source<'a> {
-        fn new(bytes: &'a [u8]) -> Self {
-            Self {
-                bytes,
-                offset: 0,
-                reads: 0,
-            }
+        fn new(reader: &'a mut dyn std::io::Read) -> Self {
+            Self { reader, reads: 0 }
         }
     }
 
@@ -451,12 +446,9 @@ pub mod semantic {
 
         fn read(&mut self, destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
             self.reads += 1;
-            let amount = destination
-                .len()
-                .min(self.bytes.len().saturating_sub(self.offset));
-            destination[..amount].copy_from_slice(&self.bytes[self.offset..self.offset + amount]);
-            self.offset += amount;
-            Ok(amount)
+            self.reader
+                .read(destination)
+                .map_err(|_| ContentSourceErrorV1::Failure)
         }
     }
 
@@ -767,6 +759,15 @@ pub mod semantic {
     }
 
     pub fn update_v1(request: &UpdateRequestV1<'_>) -> UpdateObservationV1 {
+        let mut reader = std::io::Cursor::new(request.inserted);
+        update_from_reader_v1(request, request.inserted.len() as u64, &mut reader)
+    }
+
+    pub fn update_from_reader_v1(
+        request: &UpdateRequestV1<'_>,
+        inserted_len: u64,
+        reader: &mut dyn std::io::Read,
+    ) -> UpdateObservationV1 {
         let (logical, physical, chunks) = fixture(request.base, request.mode);
         let (authenticated, evidence_chunks) = if request.mismatched_logical
             || request.mismatched_physical
@@ -809,7 +810,7 @@ pub mod semantic {
         if request.missing_evidence {
             evidence.chunks.pop();
         }
-        let mut source = Source::new(request.inserted);
+        let mut source = Source::new(reader);
         let mut base_bytes = BaseBytes {
             bytes: request.base,
             calls: 0,
@@ -828,7 +829,7 @@ pub mod semantic {
             request.mode,
             authenticated,
             range,
-            request.inserted.len() as u64,
+            inserted_len,
             &mut source,
             &mut base_bytes,
             &mut evidence,
@@ -876,10 +877,6 @@ pub mod semantic {
             publication_authority_dispatches: counters.publication_authority_dispatches,
             update_failures: counters.update_failures,
         }
-    }
-
-    pub const fn base_budget_bytes() -> u64 {
-        BASE_LEDGER_BYTES
     }
 
     pub const fn identity_hasher_bytes() -> u64 {

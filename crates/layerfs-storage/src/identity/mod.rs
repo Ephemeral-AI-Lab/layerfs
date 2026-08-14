@@ -7,8 +7,14 @@
 //! Raw digest bytes cannot construct an identity:
 //!
 //! ```compile_fail
-//! use layerfs_storage::identity::LogicalChunkIdV1;
+//! use layerfs_storage::identity::{
+//!     ExplicitDirectoryNodeV1,
+//!     ImplicitRootDirectoryV1,
+//!     LogicalChunkIdV1,
+//! };
 //! let _ = LogicalChunkIdV1::from_digest([0; 32]);
+//! let _ = ExplicitDirectoryNodeV1::from_digest([0; 32]);
+//! let _ = ImplicitRootDirectoryV1::from_digest([0; 32]);
 //! ```
 //!
 //! Logical and physical domains cannot be crossed:
@@ -64,7 +70,7 @@ macro_rules! typed_id {
             }
 
             #[allow(dead_code)]
-            pub const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
+            pub(crate) const fn from_digest(bytes: [u8; DIGEST_BYTES]) -> Self {
                 Self(bytes)
             }
         }

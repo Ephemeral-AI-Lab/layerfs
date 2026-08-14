@@ -161,10 +161,12 @@ pub mod semantic {
         last_level_one_entry_count: u32,
         wrapper_mode: u16,
         wrapper_entry_count: u32,
-        wrapper_has_root_page: bool,
+        wrapper_root_page_absent: bool,
+        leaf_counts_match_expected: bool,
         committed_objects: u32,
         tree_nodes_created: u64,
         memory_high_water: u64,
+        ledger_admitted_slots: u64,
     }
 
     impl TreeBuildObservationV1 {
@@ -212,8 +214,12 @@ pub mod semantic {
             self.wrapper_entry_count
         }
 
-        pub const fn wrapper_has_root_page(self) -> bool {
-            self.wrapper_has_root_page
+        pub const fn wrapper_root_page_absent(self) -> bool {
+            self.wrapper_root_page_absent
+        }
+
+        pub const fn leaf_counts_match_expected(self) -> bool {
+            self.leaf_counts_match_expected
         }
 
         pub const fn committed_objects(self) -> u32 {
@@ -227,6 +233,10 @@ pub mod semantic {
         pub const fn memory_high_water(self) -> u64 {
             self.memory_high_water
         }
+
+        pub const fn ledger_admitted_slots(self) -> u64 {
+            self.ledger_admitted_slots
+        }
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -235,6 +245,9 @@ pub mod semantic {
         unsorted_sink_begins: u32,
         sorted_matches_canonical: bool,
         duplicate_error: Option<CoreError>,
+        expected_build_ledger_admitted_slots: u64,
+        sorted_build_ledger_admitted_slots: u64,
+        duplicate_build_ledger_admitted_slots: u64,
     }
 
     impl CanonicalOrderObservationV1 {
@@ -252,6 +265,18 @@ pub mod semantic {
 
         pub const fn duplicate_error(self) -> Option<CoreError> {
             self.duplicate_error
+        }
+
+        pub const fn expected_build_ledger_admitted_slots(self) -> u64 {
+            self.expected_build_ledger_admitted_slots
+        }
+
+        pub const fn sorted_build_ledger_admitted_slots(self) -> u64 {
+            self.sorted_build_ledger_admitted_slots
+        }
+
+        pub const fn duplicate_build_ledger_admitted_slots(self) -> u64 {
+            self.duplicate_build_ledger_admitted_slots
         }
     }
 
@@ -350,7 +375,12 @@ pub mod semantic {
     fn run_build(
         mode: DirectoryBuildModeV1,
         entries: &[CanonicalTreeEntryV1<'_>],
-    ) -> CoreResult<(CanonicalDirectoryTreeV1, RecordingSink, OperationCountersV1)> {
+    ) -> CoreResult<(
+        CanonicalDirectoryTreeV1,
+        RecordingSink,
+        OperationCountersV1,
+        u64,
+    )> {
         let mut sink = RecordingSink::default();
         let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
         let mut counters = OperationCountersV1::default();
@@ -365,7 +395,7 @@ pub mod semantic {
             &mut object_scratch,
             &mut page_scratch,
         )?;
-        Ok((directory, sink, counters))
+        Ok((directory, sink, counters, ledger.admitted_slots()))
     }
 
     pub fn build_v1(request: &TreeBuildRequestV1) -> CoreResult<TreeBuildObservationV1> {
@@ -381,12 +411,12 @@ pub mod semantic {
             TreeModeV1::ImplicitRoot => DirectoryBuildModeV1::ImplicitRoot,
             TreeModeV1::Explicit(mode) => DirectoryBuildModeV1::Explicit(mode),
         };
-        let (directory, sink, counters) = run_build(mode, &entries)?;
+        let (directory, sink, counters, ledger_admitted_slots) = run_build(mode, &entries)?;
         let mut leaf_counts = Vec::new();
         let mut level_one_counts = Vec::new();
         let mut wrapper_mode = 0;
         let mut wrapper_entry_count = 0;
-        let mut wrapper_has_root_page = false;
+        let mut wrapper_root_page_absent = false;
         for (_, bytes) in &sink.committed {
             let decoded = decode_physical_object_v1(bytes, &mut DiscardStrongEdgesV1)?;
             match decoded.payload() {
@@ -401,11 +431,14 @@ pub mod semantic {
                 PhysicalObjectPayloadV1::Tree(TreeRecordV1::Directory(wrapper)) => {
                     wrapper_mode = wrapper.mode;
                     wrapper_entry_count = wrapper.entry_count;
-                    wrapper_has_root_page = wrapper.root_page_id.is_some();
+                    wrapper_root_page_absent = wrapper.root_page_id.is_none();
                 }
                 _ => {}
             }
         }
+        let expected_leaf_counts = (0..count.div_ceil(192))
+            .map(|leaf| (count - leaf * 192).min(192) as u32)
+            .collect::<Vec<_>>();
         Ok(TreeBuildObservationV1 {
             entry_count: directory.entry_count(),
             page_depth: directory.page_depth(),
@@ -426,10 +459,12 @@ pub mod semantic {
                 .unwrap_or(0),
             wrapper_mode,
             wrapper_entry_count,
-            wrapper_has_root_page,
+            wrapper_root_page_absent,
+            leaf_counts_match_expected: leaf_counts == expected_leaf_counts,
             committed_objects: sink.committed.len() as u32,
             tree_nodes_created: counters.tree_nodes_created,
             memory_high_water: counters.memory_high_water,
+            ledger_admitted_slots,
         })
     }
 
@@ -438,7 +473,8 @@ pub mod semantic {
             .map(|index| format!("n{index:07}").into_bytes())
             .collect::<Vec<_>>();
         let canonical = fixed_entries(&names);
-        let (expected, _, _) = run_build(DirectoryBuildModeV1::Explicit(0o755), &canonical)?;
+        let (expected, _, _, expected_ledger_slots) =
+            run_build(DirectoryBuildModeV1::Explicit(0o755), &canonical)?;
 
         names.swap(0, 2);
         let permuted = fixed_entries(&names);
@@ -461,15 +497,31 @@ pub mod semantic {
 
         names.sort_by(|left, right| left.cmp(right));
         let sorted = fixed_entries(&names);
-        let (sorted_tree, _, _) = run_build(DirectoryBuildModeV1::Explicit(0o755), &sorted)?;
+        let (sorted_tree, _, _, sorted_ledger_slots) =
+            run_build(DirectoryBuildModeV1::Explicit(0o755), &sorted)?;
 
         let duplicate = [sorted[0], sorted[0]];
-        let duplicate_error = run_build(DirectoryBuildModeV1::Explicit(0o755), &duplicate).err();
+        let mut duplicate_sink = RecordingSink::default();
+        let duplicate_ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
+        let mut duplicate_counters = OperationCountersV1::default();
+        let duplicate_error = build_canonical_directory_v1(
+            DirectoryBuildModeV1::Explicit(0o755),
+            &duplicate,
+            &mut duplicate_sink,
+            &duplicate_ledger,
+            &mut duplicate_counters,
+            &mut [0_u8; MAX_TREE_OBJECT_BYTES],
+            &mut [None; MAX_TREE_PAGE_SUMMARIES],
+        )
+        .err();
         Ok(CanonicalOrderObservationV1 {
             unsorted_error,
             unsorted_sink_begins,
             sorted_matches_canonical: sorted_tree == expected,
             duplicate_error,
+            expected_build_ledger_admitted_slots: expected_ledger_slots,
+            sorted_build_ledger_admitted_slots: sorted_ledger_slots,
+            duplicate_build_ledger_admitted_slots: duplicate_ledger.admitted_slots(),
         })
     }
 
@@ -565,19 +617,25 @@ pub mod semantic {
         emitted_objects: u32,
         tree_nodes_created: u64,
         tree_nodes_reused: u64,
-        sink_objects: u32,
+        sink_committed_len: u32,
         sink_begins: u32,
-        ledger_slots: u64,
+        ledger_admitted_slots: u64,
+        base_build_ledger_admitted_slots: u64,
+        result_build_ledger_admitted_slots: u64,
         bytes_read: u64,
         base_reads: u64,
         result_reads: u64,
         created_bytes: u64,
         proof_window_bytes: u64,
         proof_node_count: u32,
+        middle_len: u32,
+        old_tail_prefix_nonempty: bool,
         affected_entries: u32,
         leaf_group: u32,
         level_one_group: u32,
         changed_leaf_id_differs: bool,
+        directory_logical_differs_from_base: bool,
+        directory_physical_differs_from_base: bool,
         unchanged_leaf_reused: bool,
         logical_matches_rebuild: bool,
         physical_matches_rebuild: bool,
@@ -626,16 +684,24 @@ pub mod semantic {
             self.tree_nodes_reused
         }
 
-        pub const fn sink_objects(self) -> u32 {
-            self.sink_objects
+        pub const fn sink_committed_len(self) -> u32 {
+            self.sink_committed_len
         }
 
         pub const fn sink_begins(self) -> u32 {
             self.sink_begins
         }
 
-        pub const fn ledger_slots(self) -> u64 {
-            self.ledger_slots
+        pub const fn ledger_admitted_slots(self) -> u64 {
+            self.ledger_admitted_slots
+        }
+
+        pub const fn base_build_ledger_admitted_slots(self) -> u64 {
+            self.base_build_ledger_admitted_slots
+        }
+
+        pub const fn result_build_ledger_admitted_slots(self) -> u64 {
+            self.result_build_ledger_admitted_slots
         }
 
         pub const fn bytes_read(self) -> u64 {
@@ -662,6 +728,21 @@ pub mod semantic {
             self.proof_node_count
         }
 
+        pub const fn middle_len(self) -> u32 {
+            self.middle_len
+        }
+
+        pub const fn old_tail_prefix_nonempty(self) -> bool {
+            self.old_tail_prefix_nonempty
+        }
+
+        pub const fn outcome(self) -> CoreResult<()> {
+            match self.error {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        }
+
         pub const fn affected_entries(self) -> u32 {
             self.affected_entries
         }
@@ -676,6 +757,14 @@ pub mod semantic {
 
         pub const fn changed_leaf_id_differs(self) -> bool {
             self.changed_leaf_id_differs
+        }
+
+        pub const fn directory_logical_differs_from_base(self) -> bool {
+            self.directory_logical_differs_from_base
+        }
+
+        pub const fn directory_physical_differs_from_base(self) -> bool {
+            self.directory_physical_differs_from_base
         }
 
         pub const fn unchanged_leaf_reused(self) -> bool {
@@ -702,8 +791,10 @@ pub mod semantic {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct TreeIdentityObservationV1 {
         logical_equal: bool,
-        physical_equal: bool,
+        physical_ids_differ: bool,
         implicit_root: bool,
+        first_build_ledger_admitted_slots: u64,
+        second_build_ledger_admitted_slots: u64,
     }
 
     impl TreeIdentityObservationV1 {
@@ -711,12 +802,20 @@ pub mod semantic {
             self.logical_equal
         }
 
-        pub const fn physical_equal(self) -> bool {
-            self.physical_equal
+        pub const fn physical_ids_differ(self) -> bool {
+            self.physical_ids_differ
         }
 
         pub const fn implicit_root(self) -> bool {
             self.implicit_root
+        }
+
+        pub const fn first_build_ledger_admitted_slots(self) -> u64 {
+            self.first_build_ledger_admitted_slots
+        }
+
+        pub const fn second_build_ledger_admitted_slots(self) -> u64 {
+            self.second_build_ledger_admitted_slots
         }
     }
 
@@ -828,6 +927,7 @@ pub mod semantic {
         directory: CanonicalDirectoryTreeV1,
         leaves: Vec<TreePageSummaryV1>,
         level_one: Vec<TreePageSummaryV1>,
+        ledger_admitted_slots: u64,
     }
 
     struct ReplacementEvidence<'a> {
@@ -891,6 +991,7 @@ pub mod semantic {
     }
 
     fn file_child_with_partition(data: &[u8], partition: &[&[u8]]) -> CanonicalTreeChildV1 {
+        assert_eq!(partition.concat(), data);
         let logical_chunk = derive_logical_chunk_v1(data).expect("fixed chunk");
         let logical_file = derive_logical_file_v1(
             data.len() as u64,
@@ -963,6 +1064,7 @@ pub mod semantic {
                 .copied()
                 .map(Option::unwrap)
                 .collect(),
+            ledger_admitted_slots: ledger.admitted_slots(),
         })
     }
 
@@ -1005,6 +1107,9 @@ pub mod semantic {
         mut offset: usize,
         end: usize,
     ) -> Vec<DirectoryHashSubtreeV1> {
+        assert!(offset <= end && end <= preimage.len());
+        assert!(offset == end || offset % blake3::CHUNK_LEN == 0);
+        assert!(end == preimage.len() || end % blake3::CHUNK_LEN == 0);
         let mut result = Vec::new();
         while offset < end {
             let chunk_index = offset / blake3::CHUNK_LEN;
@@ -1083,6 +1188,7 @@ pub mod semantic {
             .min(bytes.len());
         let prefix = hash_subtrees(&bytes, 0, window_offset);
         let suffix = hash_subtrees(&bytes, window_end, bytes.len());
+        assert!(prefix.len() + suffix.len() <= MAX_DIRECTORY_HASH_PROOF_NODES);
         ReplacementEvidence {
             affected_leaf_index: leaf_index as u32,
             affected_entries: &entries[first..end],
@@ -1189,10 +1295,7 @@ pub mod semantic {
         mode: DirectoryBuildModeV1,
         entries: &[CanonicalTreeEntryV1<'_>],
         index: usize,
-        callback: impl FnOnce(
-            CanonicalDirectoryTreeV1,
-            AuthenticatedTreeReplacementEvidenceV1<'_>,
-        ) -> R,
+        callback: impl FnOnce(CanonicalDirectoryTreeV1, AuthenticatedTreeReplacementEvidenceV1<'_>) -> R,
     ) -> CoreResult<R> {
         let built = build_tree(mode, entries)?;
         let evidence = replacement_evidence(mode, entries, &built, index);
@@ -1223,6 +1326,36 @@ pub mod semantic {
         )
     }
 
+    pub(crate) fn with_mutation_evidence_v1<R>(
+        mode: DirectoryBuildModeV1,
+        base_entries: &[CanonicalTreeEntryV1<'_>],
+        result_entries: &[CanonicalTreeEntryV1<'_>],
+        index: usize,
+        callback: impl FnOnce(
+            CanonicalDirectoryTreeV1,
+            CanonicalDirectoryTreeV1,
+            AuthenticatedTreeMutationEvidenceV1<'_>,
+            &mut dyn CanonicalTreeMutationSourceV1,
+        ) -> R,
+    ) -> CoreResult<R> {
+        let base = build_tree(mode, base_entries)?;
+        let result = build_tree(mode, result_entries)?;
+        let evidence = mutation_evidence(mode, base_entries, &base, index);
+        let mut source = MutationSource {
+            base: base_entries,
+            result: result_entries,
+            resident_bytes: core::mem::size_of::<MutationSource<'_>>() as u64,
+            base_reads: 0,
+            result_reads: 0,
+        };
+        Ok(callback(
+            base.directory,
+            result.directory,
+            mutation_evidence_value(&evidence, base.directory),
+            &mut source,
+        ))
+    }
+
     fn mutation_name(index: usize, action: TreeMutationActionV1) -> Vec<u8> {
         match action {
             TreeMutationActionV1::Add if index == 0 => b"a0000000".to_vec(),
@@ -1242,14 +1375,19 @@ pub mod semantic {
         sink: &MutationSink,
         source: Option<&MutationSource<'_>>,
         counters: &OperationCountersV1,
+        operation_ledger_admitted_slots: u64,
         evidence_window_bytes: u64,
         proof_node_count: u32,
+        middle_len: u32,
+        old_tail_prefix_nonempty: bool,
         affected_entries: u32,
         leaf_group: u32,
         level_one_group: u32,
         changed_leaf_index: u32,
         first_changed_leaf: u32,
         changed_leaf_id_differs: bool,
+        directory_logical_differs_from_base: bool,
+        directory_physical_differs_from_base: bool,
         unchanged_leaf_reused: bool,
         emitted_objects: u32,
         reused_leaves: u32,
@@ -1282,9 +1420,15 @@ pub mod semantic {
             emitted_objects,
             tree_nodes_created: counters.tree_nodes_created,
             tree_nodes_reused: counters.tree_nodes_reused,
-            sink_objects: sink.committed.len() as u32,
+            sink_committed_len: sink.committed.len() as u32,
             sink_begins: sink.begins,
-            ledger_slots: 0,
+            ledger_admitted_slots: operation_ledger_admitted_slots
+                .saturating_add(base.ledger_admitted_slots)
+                .saturating_add(result.map(|tree| tree.ledger_admitted_slots).unwrap_or(0)),
+            base_build_ledger_admitted_slots: base.ledger_admitted_slots,
+            result_build_ledger_admitted_slots: result
+                .map(|tree| tree.ledger_admitted_slots)
+                .unwrap_or(0),
             bytes_read: counters.bytes_read,
             base_reads: source.map(|source| source.base_reads).unwrap_or(0),
             result_reads: source.map(|source| source.result_reads).unwrap_or(0),
@@ -1295,10 +1439,14 @@ pub mod semantic {
                 .sum(),
             proof_window_bytes: evidence_window_bytes,
             proof_node_count,
+            middle_len,
+            old_tail_prefix_nonempty,
             affected_entries,
             leaf_group,
             level_one_group,
             changed_leaf_id_differs,
+            directory_logical_differs_from_base,
+            directory_physical_differs_from_base,
             unchanged_leaf_reused,
             logical_matches_rebuild,
             physical_matches_rebuild,
@@ -1363,15 +1511,22 @@ pub mod semantic {
             &mut [0_u8; COMPARISON_WINDOW_BYTES],
         );
         let error = outcome.as_ref().err().copied();
-        let (changed_leaf_index, changed_leaf_id_differs) = outcome
+        let (
+            changed_leaf_index,
+            changed_leaf_id_differs,
+            directory_logical_differs_from_base,
+            directory_physical_differs_from_base,
+        ) = outcome
             .as_ref()
             .map(|cow| {
                 (
                     cow.changed_leaf_index(),
                     cow.changed_leaf().id() != base.leaves[cow.changed_leaf_index() as usize].id(),
+                    cow.directory().logical() != base.directory.logical(),
+                    cow.directory().physical() != base.directory.physical(),
                 )
             })
-            .unwrap_or((0, false));
+            .unwrap_or((0, false, false, false));
         let (logical_matches_rebuild, physical_matches_rebuild) = outcome
             .as_ref()
             .map(|cow| {
@@ -1390,14 +1545,19 @@ pub mod semantic {
             &sink,
             None,
             &counters,
+            ledger.admitted_slots(),
             proof_window_bytes,
             proof_node_count,
+            0,
+            false,
             affected_entries,
             leaf_group,
             level_one_group,
             changed_leaf_index,
             0,
             changed_leaf_id_differs,
+            directory_logical_differs_from_base,
+            directory_physical_differs_from_base,
             false,
             sink.committed.len() as u32,
             counters.tree_nodes_reused as u32,
@@ -1559,6 +1719,15 @@ pub mod semantic {
                     && cow.structurally_reused_leaves() > 0
             })
             .unwrap_or(false);
+        let (directory_logical_differs_from_base, directory_physical_differs_from_base) = outcome
+            .as_ref()
+            .map(|cow| {
+                (
+                    cow.directory().logical() != base.directory.logical(),
+                    cow.directory().physical() != base.directory.physical(),
+                )
+            })
+            .unwrap_or((false, false));
         Ok(make_observation(
             request,
             Some(&result_entries),
@@ -1568,8 +1737,11 @@ pub mod semantic {
             &sink,
             Some(&source),
             &counters,
+            ledger.admitted_slots(),
             0,
             proof_node_count,
+            evidence.middle.len() as u32,
+            !evidence.old_tail_prefix.is_empty(),
             evidence
                 .affected_leaf
                 .map(|leaf| leaf.subtree_entry_count())
@@ -1579,6 +1751,8 @@ pub mod semantic {
             0,
             first_changed_leaf,
             false,
+            directory_logical_differs_from_base,
+            directory_physical_differs_from_base,
             unchanged_leaf_reused,
             outcome
                 .as_ref()
@@ -1628,6 +1802,7 @@ pub mod semantic {
             index,
         );
         let mut sink = MutationSink::default();
+        let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
         let mut counters = OperationCountersV1::default();
         let outcome = replace_directory_entry_cow_v1(
             base.directory,
@@ -1635,7 +1810,7 @@ pub mod semantic {
             index,
             updated[index],
             &mut sink,
-            &ResourceLedgerV1::new(32 * 1024 * 1024),
+            &ledger,
             &mut counters,
             &mut [0_u8; MAX_TREE_OBJECT_BYTES],
             &mut [0_u8; COMPARISON_WINDOW_BYTES],
@@ -1649,14 +1824,19 @@ pub mod semantic {
             &sink,
             None,
             &counters,
+            ledger.admitted_slots(),
             evidence.old_window.len() as u64,
             (evidence.prefix.len() + evidence.suffix.len()) as u32,
+            0,
+            false,
             evidence.affected_entries.len() as u32,
             evidence.leaf_group.len() as u32,
             evidence.level_one_group.len() as u32,
             outcome.changed_leaf_index(),
             0,
             outcome.changed_leaf().id() != base.leaves[outcome.changed_leaf_index() as usize].id(),
+            outcome.directory().logical() != base.directory.logical(),
+            outcome.directory().physical() != base.directory.physical(),
             false,
             sink.committed.len() as u32,
             counters.tree_nodes_reused as u32,
@@ -1671,12 +1851,17 @@ pub mod semantic {
         let names = vec![b"file".to_vec()];
         let one = entries(&names, file_child_with_partition(b"ab", &[b"ab"]));
         let two = entries(&names, file_child_with_partition(b"ab", &[b"a", b"b"]));
-        let first = build_tree(DirectoryBuildModeV1::ImplicitRoot, &one)?.directory;
-        let second = build_tree(DirectoryBuildModeV1::ImplicitRoot, &two)?.directory;
+        let first = build_tree(DirectoryBuildModeV1::ImplicitRoot, &one)?;
+        let second = build_tree(DirectoryBuildModeV1::ImplicitRoot, &two)?;
         Ok(TreeIdentityObservationV1 {
-            logical_equal: first.logical() == second.logical(),
-            physical_equal: first.physical() == second.physical(),
-            implicit_root: matches!(first.logical(), DirectoryLogicalIdentityV1::ImplicitRoot(_)),
+            logical_equal: first.directory.logical() == second.directory.logical(),
+            physical_ids_differ: first.directory.physical() != second.directory.physical(),
+            implicit_root: matches!(
+                first.directory.logical(),
+                DirectoryLogicalIdentityV1::ImplicitRoot(_)
+            ),
+            first_build_ledger_admitted_slots: first.ledger_admitted_slots,
+            second_build_ledger_admitted_slots: second.ledger_admitted_slots,
         })
     }
 }

@@ -1339,8 +1339,8 @@ const fn map_spool_port(error: PackPortErrorV1) -> CoreError {
 pub mod semantic {
     use super::{
         build_dense_pack_v1, validate_pack_v1, PackIndexEntryV1, PackIndexSpoolV1,
-        PackObjectSourceV1, PackPortErrorV1, PackReadPortV1, PrivatePackPortV1,
-        SealedPackV1, MAX_PACK_BYTES,
+        PackObjectSourceV1, PackPortErrorV1, PackReadPortV1, PrivatePackPortV1, SealedPackV1,
+        MAX_PACK_BYTES,
     };
     use crate::limits::{OperationCountersV1, ResourceLedgerV1, OPERATION_SLOT_BYTES};
     use crate::object::{decode_physical_object_v1, DiscardStrongEdgesV1, TypedPhysicalObjectIdV1};
@@ -1635,11 +1635,8 @@ pub mod semantic {
             let end = start
                 .checked_add(destination.len())
                 .ok_or(PackPortErrorV1::Failure)?;
-            destination.copy_from_slice(
-                self.bytes
-                    .get(start..end)
-                    .ok_or(PackPortErrorV1::Failure)?,
-            );
+            destination
+                .copy_from_slice(self.bytes.get(start..end).ok_or(PackPortErrorV1::Failure)?);
             Ok(())
         }
     }
@@ -1671,10 +1668,7 @@ pub mod semantic {
             self.bytes.extend_from_slice(bytes);
             Ok(())
         }
-        fn seal_private(
-            &mut self,
-            _id: crate::identity::PackIdV1,
-        ) -> Result<(), PackPortErrorV1> {
+        fn seal_private(&mut self, _id: crate::identity::PackIdV1) -> Result<(), PackPortErrorV1> {
             if u64::try_from(self.bytes.len()).map_err(|_| PackPortErrorV1::Failure)?
                 != self.expected_len
             {
@@ -1757,17 +1751,15 @@ pub mod semantic {
         sealed: Option<SealedPackV1>,
         ledger: ResourceLedgerV1,
     ) -> PackObservationV1 {
-        let (pack_len, record_count, index_offset, pack_id) = sealed.map_or(
-            (0, 0, 0, [0; 32]),
-            |sealed| {
+        let (pack_len, record_count, index_offset, pack_id) =
+            sealed.map_or((0, 0, 0, [0; 32]), |sealed| {
                 (
                     sealed.pack_len(),
                     sealed.record_count(),
                     sealed.index_offset(),
                     *sealed.id().as_bytes(),
                 )
-            },
-        );
+            });
         PackObservationV1 {
             error,
             bytes: pack.bytes,

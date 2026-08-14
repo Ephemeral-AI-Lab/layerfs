@@ -1980,7 +1980,16 @@ pub(crate) enum CounterFieldV1 {
 /// Bounded observations for the default resource-owner tests. The request is
 /// semantic; ledger, plan, and counter values never cross the L1 boundary.
 pub mod resources {
-    use crate::error::CoreResult;
+    use crate::error::{CoreError, CoreResult};
+
+    pub use super::{
+        ObservationScopeV1, OptionalObservationStatusV1, OptionalU64ObservationV1,
+        TerminalOptionalObservationsV1,
+    };
+
+    pub const fn terminal_optional_observations_v1() -> TerminalOptionalObservationsV1 {
+        TerminalOptionalObservationsV1::portable_l155_unavailable()
+    }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum MemoryBudgetV1 {
@@ -2029,7 +2038,7 @@ pub mod resources {
         admitted_slots: u64,
         high_water_bytes: u64,
         planned_high_water_bytes: u64,
-        over_capacity_refused: bool,
+        over_capacity_error: Option<CoreError>,
         cleaned_up: bool,
     }
 
@@ -2047,7 +2056,10 @@ pub mod resources {
             self.planned_high_water_bytes
         }
         pub const fn over_capacity_refused(self) -> bool {
-            self.over_capacity_refused
+            matches!(self.over_capacity_error, Some(CoreError::ResourceRefused))
+        }
+        pub const fn over_capacity_error(self) -> Option<CoreError> {
+            self.over_capacity_error
         }
         pub const fn cleaned_up(self) -> bool {
             self.cleaned_up
@@ -2078,13 +2090,13 @@ pub mod resources {
         let reservations: Vec<_> = (0..capacity_slots)
             .map(|_| ledger.reserve_operation_with_plan(plan))
             .collect::<CoreResult<_>>()?;
-        let over_capacity_refused = ledger.reserve_operation_with_plan(plan).is_err();
+        let over_capacity_error = ledger.reserve_operation_with_plan(plan).err();
         let observation = MemoryProfileObservationV1 {
             capacity_slots,
             admitted_slots: ledger.admitted_slots(),
             high_water_bytes: ledger.high_water_bytes(),
             planned_high_water_bytes: ledger.planned_high_water_bytes(),
-            over_capacity_refused,
+            over_capacity_error,
             cleaned_up: false,
         };
         drop(reservations);
@@ -2097,8 +2109,8 @@ pub mod resources {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct MemoryPlanObservationV1 {
         comparison_window_present: bool,
-        duplicate_resource_refused: bool,
-        slot_overflow_refused: bool,
+        duplicate_resource_error: Option<CoreError>,
+        slot_overflow_error: Option<CoreError>,
         total_bytes: u64,
     }
 
@@ -2107,10 +2119,19 @@ pub mod resources {
             self.comparison_window_present
         }
         pub const fn duplicate_resource_refused(self) -> bool {
-            self.duplicate_resource_refused
+            matches!(
+                self.duplicate_resource_error,
+                Some(CoreError::ResourceRefused)
+            )
         }
         pub const fn slot_overflow_refused(self) -> bool {
-            self.slot_overflow_refused
+            matches!(self.slot_overflow_error, Some(CoreError::ResourceRefused))
+        }
+        pub const fn duplicate_resource_error(self) -> Option<CoreError> {
+            self.duplicate_resource_error
+        }
+        pub const fn slot_overflow_error(self) -> Option<CoreError> {
+            self.slot_overflow_error
         }
         pub const fn total_bytes(self) -> u64 {
             self.total_bytes
@@ -2122,15 +2143,15 @@ pub mod resources {
             .charge(super::MemoryComponentV1::ComparisonWindow, 65_536)?;
         Ok(MemoryPlanObservationV1 {
             comparison_window_present: once.contains(super::MemoryComponentV1::ComparisonWindow),
-            duplicate_resource_refused: once
+            duplicate_resource_error: once
                 .charge(super::MemoryComponentV1::ComparisonWindow, 1)
-                .is_err(),
-            slot_overflow_refused: super::OperationMemoryPlanV1::empty()
+                .err(),
+            slot_overflow_error: super::OperationMemoryPlanV1::empty()
                 .charge(
                     super::MemoryComponentV1::ObjectScratch,
                     super::OPERATION_SLOT_BYTES + 1,
                 )
-                .is_err(),
+                .err(),
             total_bytes: once.total_bytes(),
         })
     }

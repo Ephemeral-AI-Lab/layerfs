@@ -34,3 +34,9 @@ impl<'a> CountingSource<'a> {
         self.bytes_read
     }
 }
+
+impl std::io::Read for CountingSource<'_> {
+    fn read(&mut self, destination: &mut [u8]) -> std::io::Result<usize> {
+        Ok(CountingSource::read(self, destination))
+    }
+}

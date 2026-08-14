@@ -48,9 +48,8 @@ pub mod semantic {
     use crate::{CoreError, CoreResult};
 
     pub use super::update::semantic::{
-        base_budget_bytes as update_base_budget_bytes, expected_planned_high_water,
-        first_chunk_end, max_update_resynchronization_bytes, update_v1, UpdateObservationV1,
-        UpdateRequestV1,
+        expected_planned_high_water, first_chunk_end, max_update_resynchronization_bytes,
+        update_from_reader_v1, update_v1, UpdateObservationV1, UpdateRequestV1,
     };
 
     const BUFFER_BYTES: usize = crate::cdc::MAXIMUM_CHUNK_BYTES;
@@ -134,6 +133,7 @@ pub mod semantic {
         logical_id: [u8; DIGEST_BYTES],
         physical_id: [u8; DIGEST_BYTES],
         bytes_read: u64,
+        source_remaining: u64,
         source_read_calls: u64,
         bytes_copied: u64,
         ring_fills: u64,
@@ -150,7 +150,9 @@ pub mod semantic {
         source_max_request: u64,
         sink_max_segment: u64,
         object_count: u64,
+        file_object_observed: bool,
         memory_high_water: u64,
+        ledger_high_water: u64,
         planned_high_water: u64,
         logical_len: u64,
         chunk_count: u32,
@@ -172,6 +174,10 @@ pub mod semantic {
 
         pub const fn bytes_read(self) -> u64 {
             self.bytes_read
+        }
+
+        pub const fn source_remaining(self) -> u64 {
+            self.source_remaining
         }
 
         pub const fn source_read_calls(self) -> u64 {
@@ -238,8 +244,16 @@ pub mod semantic {
             self.object_count
         }
 
+        pub const fn file_object_observed(self) -> bool {
+            self.file_object_observed
+        }
+
         pub const fn memory_high_water(self) -> u64 {
             self.memory_high_water
+        }
+
+        pub const fn ledger_high_water(self) -> u64 {
+            self.ledger_high_water
         }
 
         pub const fn planned_high_water(self) -> u64 {
@@ -280,6 +294,7 @@ pub mod semantic {
         error: CoreError,
         source_reads: u64,
         sink_active: bool,
+        sink_completed: bool,
         sink_aborts: u64,
         spool_aborted: bool,
         admitted_slots: u64,
@@ -298,6 +313,10 @@ pub mod semantic {
 
         pub const fn sink_active(self) -> bool {
             self.sink_active
+        }
+
+        pub const fn sink_completed(self) -> bool {
+            self.sink_completed
         }
 
         pub const fn sink_aborts(self) -> u64 {
@@ -529,6 +548,7 @@ pub mod semantic {
             logical_id: *created.logical_file().id().as_bytes(),
             physical_id: *created.physical_file().as_bytes(),
             bytes_read: counters.bytes_read,
+            source_remaining: source.bytes.len().saturating_sub(source.offset) as u64,
             source_read_calls: counters.source_read_calls,
             bytes_copied: counters.bytes_copied,
             ring_fills: counters.ring_fills,
@@ -545,7 +565,12 @@ pub mod semantic {
             source_max_request: source.max_request,
             sink_max_segment: sink.max_segment,
             object_count: sink.objects.len() as u64,
+            file_object_observed: sink
+                .objects
+                .iter()
+                .any(|(id, _)| matches!(id, TypedPhysicalObjectIdV1::File(_))),
             memory_high_water: counters.memory_high_water,
+            ledger_high_water: ledger.high_water_bytes(),
             planned_high_water: ledger.planned_high_water_bytes(),
             logical_len: request.declared_len,
             chunk_count: created.chunk_count(),
@@ -668,6 +693,7 @@ pub mod semantic {
             error,
             source_reads: source.reads,
             sink_active: sink.active,
+            sink_completed: sink.completed.is_some(),
             sink_aborts: sink.aborts,
             spool_aborted: spool.aborted,
             admitted_slots: ledger.admitted_slots(),

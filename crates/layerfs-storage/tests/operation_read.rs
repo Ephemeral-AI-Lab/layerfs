@@ -2,139 +2,117 @@ mod support;
 
 #[cfg(feature = "operation-polymorphism")]
 mod mutation_read_owner {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{mpsc, Arc, Barrier};
-    use std::time::Duration;
-
-    use layerfs_storage::qualification::cas::semantic::{
-        read_v1, ReadObjectKindV1, ReadRequestV1,
-    };
-    use layerfs_storage::qualification::content::semantic::{
-        create_v1, update_v1, ContentRequestV1, UpdateRequestV1,
+    use layerfs_storage::qualification::lifecycle::semantic::{
+        reopened_mutation_read_crossings_v1, ConcurrentOperationCountersObservationV1,
+        MutationReadKindObservationV1,
     };
 
-    use crate::support::counting_sink::CountingSink;
+    use crate::support::temp_fs_cas::TempFsCas;
 
-    fn chunk_object(payload: &[u8]) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(52 + payload.len());
-        bytes.extend_from_slice(b"ELSOBJ01");
-        bytes.extend_from_slice(&1_u16.to_be_bytes());
-        bytes.push(0x05);
-        bytes.push(0);
-        bytes.extend_from_slice(layerfs_storage::profile::ProfileSpecV1::frozen().id().as_bytes());
-        bytes.extend_from_slice(&(payload.len() as u64).to_be_bytes());
-        bytes.extend_from_slice(payload);
-        bytes
+    fn assert_read_storage_terminal(counters: ConcurrentOperationCountersObservationV1) {
+        assert_eq!(counters.storage_bytes_requested, 0);
+        assert_eq!(counters.storage_bytes_reserved, 0);
+        assert_eq!(counters.storage_bytes_released, 0);
+        assert_eq!(counters.storage_bytes_committed, 0);
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_requested, 0);
+        assert_eq!(counters.storage_inodes_reserved, 0);
+        assert_eq!(counters.storage_inodes_released, 0);
+        assert_eq!(counters.storage_inodes_committed, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+        assert_eq!(counters.preparation_bytes_after_cleanup, 0);
+        assert_eq!(counters.preparation_inodes_after_cleanup, 0);
+        assert_eq!(counters.mutable_residue_bytes, 0);
+        assert_eq!(counters.mutable_residue_inodes, 0);
+        assert!(counters.visibility_lock_acquisitions > 0);
+        assert_eq!(counters.publication_lock_acquisitions, 0);
+        assert!(counters.zero_forbidden_work);
+    }
+
+    fn assert_mutation_storage_terminal(counters: ConcurrentOperationCountersObservationV1) {
+        assert!(counters.storage_bytes_requested > 0);
+        assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters.storage_bytes_released
+                + counters.storage_bytes_committed
+                + counters.storage_bytes_retained
+        );
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
+        assert!(counters.root_reserved_bytes_high_water >= counters.storage_bytes_reserved);
+        assert!(counters.root_reserved_inodes_high_water >= counters.storage_inodes_reserved);
+        assert!(counters.storage_bytes_committed > 0);
+        assert!(counters.storage_inodes_committed > 0);
+        assert_eq!(counters.storage_bytes_retained, 0);
+        assert_eq!(counters.storage_inodes_retained, 0);
+        assert_eq!(counters.mutable_residue_bytes, 0);
+        assert_eq!(counters.mutable_residue_inodes, 0);
+        assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+        assert!(counters.zero_forbidden_work);
     }
 
     #[test]
     fn mutation_crosses_reopened_full_and_exact_range_reads_without_serializing_payload_delivery() {
-        let base: Vec<u8> = (0..48_123).map(|index| (index * 37) as u8).collect();
-        let replacement: Vec<u8> = (0..57_321).map(|index| (index * 19 + 7) as u8).collect();
-        let created = create_v1(&ContentRequestV1::new(b"b.bin", 0o644, &base))
-            .expect("bounded base content");
-
-        for (label, selected) in [
-            ("mutation-full-read", &base[..16_777]),
-            ("mutation-range-read", &base[817..18_594]),
+        let root = TempFsCas::new("mutation-read-crossing");
+        root.create_dir();
+        let observations = reopened_mutation_read_crossings_v1(root.path());
+        for (observation, range, offset, len) in [
+            (observations[0], false, 0, 48_123),
+            (observations[1], true, 817, 17_777),
         ] {
-            let selected_object = chunk_object(selected);
-            let base_ref = base.as_slice();
-            let replacement_ref = replacement.as_slice();
-            let selected_object_ref = selected_object.as_slice();
-            let gate = Arc::new(Barrier::new(2));
-            let read_entered = Arc::new(AtomicBool::new(false));
-            let mutation_entered = Arc::new(AtomicBool::new(false));
-            let (read_started_tx, read_started_rx) = mpsc::sync_channel(1);
-            let (mutation_started_tx, mutation_started_rx) = mpsc::sync_channel(1);
-
-            let (read, mutation) = std::thread::scope(|scope| {
-                let read_gate = Arc::clone(&gate);
-                let read_flag = Arc::clone(&read_entered);
-                let read_thread = scope.spawn(move || {
-                    read_gate.wait();
-                    read_flag.store(true, Ordering::Release);
-                    read_started_tx.send(()).expect("read start receiver");
-                    read_v1(ReadRequestV1::new(
-                        ReadObjectKindV1::Chunk,
-                        selected_object_ref,
-                    ))
-                });
-
-                let mutation_gate = Arc::clone(&gate);
-                let mutation_flag = Arc::clone(&mutation_entered);
-                let mutation_thread = scope.spawn(move || {
-                    mutation_gate.wait();
-                    mutation_flag.store(true, Ordering::Release);
-                    mutation_started_tx
-                        .send(())
-                        .expect("mutation start receiver");
-                    update_v1(&UpdateRequestV1::new(
-                        base_ref,
-                        0,
-                        base_ref.len() as u64,
-                        replacement_ref,
-                    ))
-                });
-
-                read_started_rx
-                    .recv_timeout(Duration::from_secs(5))
-                    .unwrap_or_else(|error| panic!("{label}: read did not start: {error}"));
-                mutation_started_rx
-                    .recv_timeout(Duration::from_secs(5))
-                    .unwrap_or_else(|error| panic!("{label}: mutation did not start: {error}"));
-                (
-                    read_thread.join().expect("read thread"),
-                    mutation_thread.join().expect("mutation thread"),
-                )
-            });
-
-            assert!(read_entered.load(Ordering::Acquire));
-            assert!(mutation_entered.load(Ordering::Acquire));
-            assert_eq!(read.error(), None);
-            assert!(read.id_matches_expected());
-            assert_eq!(read.canonical_len(), selected_object_ref.len() as u64);
-            assert_eq!(read.output_len(), selected_object_ref.len() as u64);
             assert_eq!(
-                read.output_digest(),
-                *blake3::hash(selected_object_ref).as_bytes()
+                observation.kind,
+                if range {
+                    MutationReadKindObservationV1::ExactRange
+                } else {
+                    MutationReadKindObservationV1::FullExtraction
+                }
             );
-            assert!(read.sink_finished());
-            assert_eq!(read.sink_begins(), 1);
-            assert_eq!(read.sink_aborts(), 0);
-            assert!(read.sink_writes() > 0);
-            assert!(read.bytes_read() >= selected_object_ref.len() as u64);
-            assert_eq!(read.bytes_written(), selected_object_ref.len() as u64);
-
-            let mut sink = CountingSink::new(selected.len());
-            sink.begin();
-            assert!(sink.write(selected));
-            assert!(sink.finish_file());
-            assert!(sink.finish());
-            assert_eq!(sink.bytes(), selected);
-            assert!(sink.finished());
-            assert!(!sink.aborted());
-
-            assert_eq!(mutation.error(), None);
-            assert_eq!(mutation.base_bytes_read(), 0);
-            assert_eq!(mutation.base_read_calls(), 0);
-            assert!(mutation.inserted_reads() > 0);
-            assert!(mutation.sink_completed());
-            assert!(!mutation.output_aborted());
-            assert_eq!(mutation.update_failures(), 0);
-            assert_ne!(mutation.physical_id(), created.physical_id());
-            assert!(mutation.planned_memory_high_water() > 0);
-            assert_eq!(mutation.admitted_slots(), 0);
+            assert!(observation.initial_root_matches);
+            assert_eq!(observation.payload_bytes, len);
+            assert!(observation.payload_matches);
+            assert_eq!(observation.selected_offset, offset);
+            assert_eq!(observation.selected_len, len);
+            assert!(observation.sink_finished);
+            assert!(!observation.sink_aborted);
+            assert!(observation.mutation_completed_while_read_blocked);
+            assert!(observation.mutation_root_changed);
+            assert_read_storage_terminal(observation.read_counters);
+            assert_mutation_storage_terminal(observation.mutation_counters);
+            assert!(observation.read_storage_terminal);
+            assert!(observation.mutation_storage_terminal);
+            assert!(observation.overlap_high_water >= 2);
+            assert_eq!(observation.operation_admitted_slots, 0);
+            assert_eq!(observation.operation_active, 0);
+            assert_eq!(observation.storage_active, (0, 0, 0));
+            assert_eq!(observation.preparation_entries, 0);
+            assert!(observation.authority_clean);
+            assert!(observation.root_usable);
+            assert!(observation.reopened_usable);
+            assert!(observation.namespace_entries_are_regular);
         }
     }
 }
 
 #[cfg(feature = "operation-polymorphism")]
 mod l1_cas_read {
-    use layerfs_storage::qualification::cas::semantic::{
-        read_v1, ReadObjectKindV1, ReadRequestV1,
-    };
+    use crate::support::counting_sink::CountingSink;
     use layerfs_storage::profile::ProfileSpecV1;
+    use layerfs_storage::qualification::cas::semantic::{
+        read_v1_to_writer, ReadObjectKindV1, ReadRequestV1,
+    };
     use layerfs_storage::CoreError;
 
     fn object(kind: u8, payload: &[u8]) -> Vec<u8> {
@@ -168,7 +146,18 @@ mod l1_cas_read {
     fn complete_read_validates_before_bounded_sink_delivery() {
         let bytes = large_valid_file(2_000);
         assert!(bytes.len() > 65_536);
-        let observation = read_v1(ReadRequestV1::new(ReadObjectKindV1::File, &bytes));
+        let mut sink = CountingSink::new(bytes.len());
+        sink.begin();
+        let observation = read_v1_to_writer(
+            ReadRequestV1::new(ReadObjectKindV1::File, &bytes),
+            &mut sink,
+        );
+        assert!(sink.finish_file());
+        assert!(sink.finish());
+        assert!(sink.finished());
+        assert!(!sink.aborted());
+        assert_eq!(sink.bytes(), bytes);
+        assert_eq!(sink.writes(), observation.sink_writes());
         assert_eq!(observation.error(), None);
         assert!(observation.id_matches_expected());
         assert_eq!(observation.canonical_len(), bytes.len() as u64);
@@ -188,10 +177,15 @@ mod l1_cas_read {
 
         let mut corrupt = bytes.clone();
         *corrupt.last_mut().unwrap() ^= 1;
-        let observation =
-            read_v1(ReadRequestV1::new(ReadObjectKindV1::File, &bytes).with_occupied(&corrupt));
+        let mut sink = CountingSink::new(bytes.len());
+        let observation = read_v1_to_writer(
+            ReadRequestV1::new(ReadObjectKindV1::File, &bytes).with_occupied(&corrupt),
+            &mut sink,
+        );
         assert_eq!(observation.error(), Some(CoreError::IdMismatch));
         assert!(!observation.id_matches_expected());
+        assert!(sink.bytes().is_empty());
+        assert_eq!(sink.writes(), 0);
         assert_eq!(observation.output_len(), 0);
         assert_eq!(observation.output_digest(), [0; 32]);
         assert_eq!(observation.sink_begins(), 0);
@@ -201,17 +195,21 @@ mod l1_cas_read {
     #[test]
     fn complete_read_charges_occupied_and_sink_residency_before_lookup_or_delivery() {
         let bytes = object(5, b"bounded");
-        let slot = layerfs_storage::resources::operation_slot_bytes_v1();
+        let slot = layerfs_storage::qualification::resources::operation_slot_bytes_v1();
         for oversized_occupied in [true, false] {
-            let observation = read_v1(
+            let mut sink = CountingSink::new(bytes.len());
+            sink.begin();
+            let observation = read_v1_to_writer(
                 ReadRequestV1::new(ReadObjectKindV1::Chunk, &bytes).with_residency(
                     if oversized_occupied { slot } else { 0 },
                     if oversized_occupied { 0 } else { slot },
                 ),
+                &mut sink,
             );
             assert_eq!(observation.error(), Some(CoreError::ResourceRefused));
             assert_eq!(observation.occupied_lookups(), 0);
             assert_eq!(observation.occupied_reads(), 0);
+            assert!(sink.bytes().is_empty());
             assert_eq!(observation.sink_begins(), 0);
             assert_eq!(observation.sink_aborts(), 0);
             assert_eq!(observation.output_len(), 0);
@@ -310,6 +308,10 @@ mod l1_object_read {
         let leaf_object = object(2, &leaf);
         let observation = decode_v1(ObjectDecodeRequestV1::new(&leaf_object));
         assert_eq!(observation.object_kind(), Some(ObjectKindV1::Tree));
+        assert_eq!(observation.edge_kinds().len(), 3);
+        assert_eq!(observation.edge_kinds()[0], EdgeKindV1::Tree);
+        assert_eq!(observation.edge_kinds()[1], EdgeKindV1::File);
+        assert_eq!(observation.edge_kinds()[2], EdgeKindV1::Symlink);
         assert_eq!(
             observation.edge_kinds(),
             &[EdgeKindV1::Tree, EdgeKindV1::File, EdgeKindV1::Symlink]
@@ -328,6 +330,8 @@ mod l1_object_read {
         let file_object = object(3, &file);
         let observation = decode_v1(ObjectDecodeRequestV1::new(&file_object));
         assert_eq!(observation.object_kind(), Some(ObjectKindV1::File));
+        assert_eq!(observation.file_logical_len(), Some(3));
+        assert_eq!(observation.file_chunk_ref_count(), Some(1));
         assert_eq!(observation.edge_kinds(), &[EdgeKindV1::Chunk]);
     }
 
@@ -396,7 +400,7 @@ mod l1_object_read {
         let observation = decode_v1(ObjectDecodeRequestV1::new(&object(2, &late_trailing_leaf)));
         assert_eq!(observation.error(), Some(CoreError::TrailingBytes));
         assert!(observation.edge_kinds().is_empty());
-        assert_eq!(observation.pending_edges(), 0);
+        assert!(observation.pending_edges() == 0);
         assert_eq!(observation.aborts(), 1);
 
         let mut refused = vec![2, 0, 0, 1];
@@ -452,6 +456,7 @@ mod l1_object_read {
         );
         assert_eq!(streamed.canonical_len(), borrowed.canonical_len());
         assert_eq!(streamed.complete_len(), borrowed.complete_len());
+        assert_eq!(streamed.edge_kinds().len(), 2);
         assert_eq!(streamed.edge_kinds(), &[EdgeKindV1::Tree, EdgeKindV1::File]);
         assert!(
             streamed.reads() > 1,
