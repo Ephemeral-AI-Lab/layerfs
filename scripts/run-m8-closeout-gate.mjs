@@ -112,14 +112,14 @@ async function runCommand(spec, candidate, computerCandidate) {
 }
 
 function testTotals(source, name) {
-  const fsMatch = source.match(
-    /tests (\d+)\s*\r?\n[^\r\n]*pass (\d+)\s*\r?\n[^\r\n]*fail (\d+)/u,
-  );
-  if (fsMatch)
+  const fsTests = source.match(/tests (\d+)/u);
+  const fsPass = source.match(/pass (\d+)/u);
+  const fsFail = source.match(/fail (\d+)/u);
+  if (fsTests && fsPass && fsFail)
     return {
-      tests: Number(fsMatch[1]),
-      passed: Number(fsMatch[2]),
-      failed: Number(fsMatch[3]),
+      tests: Number(fsTests[1]),
+      passed: Number(fsPass[1]),
+      failed: Number(fsFail[1]),
       skipped: 0,
     };
   const computerMatch = source.match(
