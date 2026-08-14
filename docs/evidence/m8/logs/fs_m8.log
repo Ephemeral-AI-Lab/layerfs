@@ -2,52 +2,52 @@
 > ephemeral-ai-fs-workspace@0.1.0-rc.0 test:m8 C:\Users\yifan\code\Ephemeral-AI-Lab\ephemeral-ai-fs-m7-audit
 > node scripts/run-test-suite.mjs tests/replication
 
-✔ computer carrier profile freezes the 17.25 MiB reservation (0.7242ms)
-✔ process-global admission is strict FIFO and occurs before endpoint construction (0.6629ms)
-✔ queued admission aborts without constructing an endpoint (0.2823ms)
-✔ admitted target exposes only exchange, bounds bytes, and close waits active (0.364ms)
-✔ carrier maps endpoint failures and enforces decoded response bounds (0.3051ms)
-✔ endpoint-open and close faults release process admission exactly once (0.332ms)
-(node:19108) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+✔ computer carrier profile freezes the 17.25 MiB reservation (0.7649ms)
+✔ process-global admission is strict FIFO and occurs before endpoint construction (0.7418ms)
+✔ queued admission aborts without constructing an endpoint (0.2471ms)
+✔ admitted target exposes only exchange, bounds bytes, and close waits active (0.3509ms)
+✔ carrier maps endpoint failures and enforces decoded response bounds (0.3001ms)
+✔ endpoint-open and close faults release process admission exactly once (0.2799ms)
+(node:14228) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-✔ durable sessions bind operation, identity, policy, plan, profile, and limits (75.0322ms)
-✔ active session admission is aggregate, serialized, and released by terminal state (56.2194ms)
-✔ retry-aborted sessions release their durable row and retained receipts (54.247ms)
-✔ terminal sessions remain charged to the retained session-row aggregate (52.6754ms)
-✔ aggregate replication metadata admission rejects session and receipt growth atomically (49.9646ms)
-✔ batch receipt, cursor, counters, and exact acknowledgement commit atomically (58.4443ms)
-✔ receipt compaction and maintenance are bounded and durable (56.0656ms)
-✔ retry budget and terminal result survive restart without clock rollback extension (70.9924ms)
-✔ one public runtime owns bound filesystem, branch VFS, and durable replication (68.8229ms)
-✔ durable replica identity makes main read-only while private branches remain writable (134.7315ms)
-✔ unbound runtime exposes only resumable provisioning replication (48.1734ms)
-✔ lost outbound responses replay from a durable receipt and bind the request digest (54.6894ms)
-✔ replication SHA-256 is incremental-compatible with standard vectors (0.647ms)
-✔ canonical version 1 envelopes and digests match all golden categories (5.196ms)
-✔ session identifiers are package-generated 128-bit lowercase hex (0.3461ms)
-✔ batch acknowledgement binds the complete request and committed cursor (0.9366ms)
-✔ authorization encoding canonicalizes plan order and binds identity, policy, and limits (0.5131ms)
-✔ the endpoint returns its own authenticated policy record (0.7078ms)
-✔ capability digest binds both the advertised row and effective limits (0.345ms)
-✔ limit negotiation uses minima for ceilings, maximum retry floor, and rejects cross-field hazards (0.432ms)
-✔ the normative global role-flow matrix accepts only its four rows (0.7721ms)
-✔ fresh replica negotiation permits only authenticated authority-main provisioning (1.228ms)
-✔ semantic errors survive canonical response records without thrown-object preservation (0.2306ms)
-✔ decoded carrier boundary is exact at 3 MiB and rejects one byte over (1.586ms)
-✔ decoder rejects corrupt, noncanonical, truncated, trailing, and oversized envelopes (0.9467ms)
-(node:19032) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+✔ durable sessions bind operation, identity, policy, plan, profile, and limits (75.7627ms)
+✔ active session admission is aggregate, serialized, and released by terminal state (58.8183ms)
+✔ retry-aborted sessions release their durable row and retained receipts (54.8072ms)
+✔ terminal sessions remain charged to the retained session-row aggregate (55.4115ms)
+✔ aggregate replication metadata admission rejects session and receipt growth atomically (51.6602ms)
+✔ batch receipt, cursor, counters, and exact acknowledgement commit atomically (61.5574ms)
+✔ receipt compaction and maintenance are bounded and durable (57.6293ms)
+✔ retry budget and terminal result survive restart without clock rollback extension (72.4041ms)
+✔ one public runtime owns bound filesystem, branch VFS, and durable replication (69.7858ms)
+✔ durable replica identity makes main read-only while private branches remain writable (138.0005ms)
+✔ unbound runtime exposes only resumable provisioning replication (53.5688ms)
+✔ lost outbound responses replay from a durable receipt and bind the request digest (56.9291ms)
+✔ replication SHA-256 is incremental-compatible with standard vectors (0.6151ms)
+✔ canonical version 1 envelopes and digests match all golden categories (5.2033ms)
+✔ session identifiers are package-generated 128-bit lowercase hex (0.4576ms)
+✔ batch acknowledgement binds the complete request and committed cursor (0.8721ms)
+✔ authorization encoding canonicalizes plan order and binds identity, policy, and limits (0.5091ms)
+✔ the endpoint returns its own authenticated policy record (0.6496ms)
+✔ capability digest binds both the advertised row and effective limits (0.3403ms)
+✔ limit negotiation uses minima for ceilings, maximum retry floor, and rejects cross-field hazards (0.4686ms)
+✔ the normative global role-flow matrix accepts only its four rows (0.8486ms)
+✔ fresh replica negotiation permits only authenticated authority-main provisioning (1.1725ms)
+✔ semantic errors survive canonical response records without thrown-object preservation (0.2234ms)
+✔ decoded carrier boundary is exact at 3 MiB and rejects one byte over (1.7218ms)
+✔ decoder rejects corrupt, noncanonical, truncated, trailing, and oversized envelopes (0.9699ms)
+(node:44892) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-✔ authority main transfers to an authenticated replica through the wire (588.7166ms)
-✔ main transfer resumes after a dropped response and restart without a second revision (383.3639ms)
-✔ provisioning adopts the authority genesis into an unbound replica (349.3851ms)
-✔ authority branch transfer preserves the selected generation and private content (670.8838ms)
-✔ replica branch returns, publishes with a generation guard, and returns the terminal result (691.9439ms)
-(node:53508) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+✔ authority main transfers to an authenticated replica through the wire (553.5542ms)
+✔ main transfer resumes after a dropped response and restart without a second revision (387.4427ms)
+✔ provisioning adopts the authority genesis into an unbound replica (363.2591ms)
+✔ authority branch transfer preserves the selected generation and private content (686.0265ms)
+✔ replica branch returns, publishes with a generation guard, and returns the terminal result (702.4911ms)
+(node:48640) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-✔ unbound replica initialization persists only schema identity and its marker (59.6061ms)
-✔ unbound replica initialization rejects unrelated nonempty and bound databases (73.4541ms)
-✔ unbound replica uses the runtime-owned durable identity representation (46.5241ms)
-✔ every unbound initialization statement fault rolls back to a physically empty database (8252.9372ms)
+✔ unbound replica initialization persists only schema identity and its marker (61.3732ms)
+✔ unbound replica initialization rejects unrelated nonempty and bound databases (75.8236ms)
+✔ unbound replica uses the runtime-owned durable identity representation (46.0111ms)
+✔ every unbound initialization statement fault rolls back to a physically empty database (8817.3776ms)
 ℹ tests 40
 ℹ suites 0
 ℹ pass 40
@@ -55,6 +55,6 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 12340.6394
+ℹ duration_ms 12950.5539
 
-M8_LOG_META name=fs-m8 exitCode=0 elapsedMs=12694 candidate=47b41bea2c955ef24a1968286509778938714f93 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=fs_m8
+M8_LOG_META name=fs-m8 exitCode=0 elapsedMs=13296 candidate=04e51df33781d005169ce6e1f0f178acd81aa537 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=fs_m8

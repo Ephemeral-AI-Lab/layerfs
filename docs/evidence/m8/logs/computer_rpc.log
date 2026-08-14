@@ -27,21 +27,21 @@
   resetFetchCursor: [33mfalse[39m
 }
 
- [32m✓[39m src/sync-driver.test.ts [2m([22m[2m38 tests[22m[2m)[22m[33m 392[2mms[22m[39m
- [32m✓[39m tests/wire.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 176[2mms[22m[39m
+ [32m✓[39m src/sync-driver.test.ts [2m([22m[2m38 tests[22m[2m)[22m[33m 368[2mms[22m[39m
+ [32m✓[39m tests/wire.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 181[2mms[22m[39m
  [32m✓[39m tests/shell-and-composite.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 90[2mms[22m[39m
- [32m✓[39m tests/replication-carrier.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m tests/replication-carrier.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 24[2mms[22m[39m
  [32m✓[39m src/interface.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
  [32m✓[39m tests/debug.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m6 passed[39m[22m[90m (6)[39m
 [2m      Tests [22m [1m[32m70 passed[39m[22m[90m (70)[39m
-[2m   Start at [22m 22:40:41
-[2m   Duration [22m 14.08s[2m (transform 2.14s, setup 0ms, import 3.69s, tests 689ms, environment 0ms)[22m
+[2m   Start at [22m 22:50:53
+[2m   Duration [22m 13.94s[2m (transform 2.06s, setup 0ms, import 3.60s, tests 668ms, environment 0ms)[22m
 
 
 [stderr]
-(node:624) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:628) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
 [90mstderr[2m | src/sync-driver.test.ts[2m > [22m[2mSyncRPC server — afterApply hook[2m > [22m[2ma thrown hook does not fail the push
 [22m[39m[SyncRPCServer] afterApply hook failed: Error: settle blew up
@@ -66,9 +66,9 @@
     at file:///mnt/c/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-computer/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2326:20
     at new Promise (<anonymous>)
 
-(node:632) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:638) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:646) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:650) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-M8_LOG_META name=computer-rpc exitCode=0 elapsedMs=22991 candidate=47b41bea2c955ef24a1968286509778938714f93 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=computer_rpc
+M8_LOG_META name=computer-rpc exitCode=0 elapsedMs=23011 candidate=04e51df33781d005169ce6e1f0f178acd81aa537 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=computer_rpc

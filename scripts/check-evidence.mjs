@@ -2090,6 +2090,7 @@ async function validateOptionalM8Evidence() {
     recordCommit !== "fatal: bad revision 'HEAD'" &&
     !process.env.M8_PRECOMMIT
   ) {
+    // Pin the verifier alongside the M8 record so later audits use the same rules.
     const evidenceParents = (
       await execute("git", ["show", "-s", "--format=%P", recordCommit], {
         cwd: root,
