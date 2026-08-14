@@ -222,6 +222,13 @@ mod operation_lifecycle_owner {
     fn final_handoff_admission_release_failure_retains_exact_immutable_set() {
         let fixture = fresh_root("final-handoff-admission-release");
         let observation = final_handoff_admission_poison_v1(fixture.path(), false);
+        let counters = observation;
+        let immutable_bytes = observation.immutable_bytes();
+        let carrier_bytes = observation.carrier_bytes();
+        let locator_bytes = observation.locator_bytes();
+        let catalog_bytes = observation.catalog_bytes();
+        let closure_bytes = observation.closure_bytes();
+        let unreachable_installed_residue_bytes = counters.residue_bytes();
         assert!(matches!(
             observation.error(),
             Some(PublicationErrorV1::SynchronizationPoisoned)
@@ -269,6 +276,13 @@ mod operation_lifecycle_owner {
         assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
         assert_eq!(observation.residue_bytes(), observation.immutable_bytes());
         assert_eq!(
+            immutable_bytes,
+            carrier_bytes + locator_bytes + catalog_bytes + closure_bytes
+        );
+        assert_eq!(counters.storage_bytes_retained(), immutable_bytes);
+        assert_eq!(counters.immutable_residue_bytes(), immutable_bytes);
+        assert_eq!(unreachable_installed_residue_bytes, immutable_bytes);
+        assert_eq!(
             observation.residue_bytes(),
             observation.storage_bytes_retained()
         );
@@ -282,6 +296,13 @@ mod operation_lifecycle_owner {
     fn admission_terminal_invalidation_unwind_retains_first_cause_and_reclassifies_commit() {
         let fixture = fresh_root("admission-terminal-invalidation-unwind");
         let observation = final_handoff_admission_poison_v1(fixture.path(), true);
+        let cas = observation;
+        let counters = observation;
+        let preparation_bytes = observation.preparation_bytes();
+        let preparation_inodes = observation.preparation_entries();
+        let immutable_bytes = observation.immutable_bytes();
+        let immutable_inodes = observation.immutable_entries();
+        let unreachable_installed_residue_bytes = counters.residue_bytes();
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::SynchronizationPoisoned)
@@ -308,12 +329,53 @@ mod operation_lifecycle_owner {
         assert!(matches!(observation.invalidated(), true));
         assert!(matches!(observation.stale_invalidated(), true));
         assert!(matches!(observation.reopen_invalidated(), true));
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+        assert!(immutable_bytes > 0);
+        assert!(immutable_inodes > 0);
+        assert_eq!(counters.immutable_residue_bytes(), immutable_bytes);
+        assert_eq!(counters.immutable_residue_inodes(), immutable_inodes);
+        assert_eq!(unreachable_installed_residue_bytes, immutable_bytes);
+        assert_eq!(
+            (
+                cas.storage_active_operations(),
+                cas.storage_active_bytes(),
+                cas.storage_active_inodes()
+            ),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            counters.storage_bytes_requested(),
+            counters.storage_bytes_reserved()
+        );
+        assert_eq!(
+            counters.storage_inodes_requested(),
+            counters.storage_inodes_reserved()
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved(),
+            counters.storage_bytes_released()
+                + counters.storage_bytes_committed()
+                + counters.storage_bytes_retained()
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved(),
+            counters.storage_inodes_released()
+                + counters.storage_inodes_committed()
+                + counters.storage_inodes_retained()
+        );
     }
 
     #[test]
     fn final_handoff_storage_poison_terminalizes_exact_immutable_set() {
         let fixture = fresh_root("final-handoff-storage-poison");
         let observation = final_handoff_storage_poison_v1(fixture.path(), false);
+        let counters = observation;
+        let immutable_bytes = observation.immutable_bytes();
+        let carrier_bytes = observation.carrier_bytes();
+        let locator_bytes = observation.locator_bytes();
+        let catalog_bytes = observation.catalog_bytes();
+        let closure_bytes = observation.closure_bytes();
+        let unreachable_installed_residue_bytes = counters.residue_bytes();
         assert!(matches!(
             observation.error(),
             Some(PublicationErrorV1::SynchronizationPoisoned)
@@ -362,6 +424,13 @@ mod operation_lifecycle_owner {
         assert_eq!(observation.residue_bytes(), observation.immutable_bytes());
         assert!(observation.immutable_entries() >= 1);
         assert!(observation.immutable_bytes() >= 1);
+        assert_eq!(
+            immutable_bytes,
+            carrier_bytes + locator_bytes + catalog_bytes + closure_bytes
+        );
+        assert_eq!(counters.storage_bytes_retained(), immutable_bytes);
+        assert_eq!(counters.immutable_residue_bytes(), immutable_bytes);
+        assert_eq!(unreachable_installed_residue_bytes, immutable_bytes);
         assert!(observation.zero_forbidden_work());
         assert!(matches!(observation.invalidated(), true));
         assert!(matches!(observation.stale_invalidated(), true));
@@ -372,6 +441,9 @@ mod operation_lifecycle_owner {
     fn storage_terminal_invalidation_unwind_still_releases_authority_and_persists_failure() {
         let fixture = fresh_root("storage-terminal-invalidation-unwind");
         let observation = final_handoff_storage_poison_v1(fixture.path(), true);
+        let counters = observation;
+        let immutable_bytes = observation.immutable_bytes();
+        let unreachable_installed_residue_bytes = counters.residue_bytes();
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::SynchronizationPoisoned)
@@ -415,6 +487,8 @@ mod operation_lifecycle_owner {
             observation.storage_inodes_retained(),
             observation.immutable_entries()
         );
+        assert_eq!(counters.immutable_residue_bytes(), immutable_bytes);
+        assert_eq!(unreachable_installed_residue_bytes, immutable_bytes);
         assert!(observation.zero_forbidden_work());
         assert!(matches!(observation.invalidated(), true));
         assert!(matches!(observation.stale_invalidated(), true));
@@ -425,6 +499,8 @@ mod operation_lifecycle_owner {
     fn final_handoff_unwind_retains_installed_carriers_and_fails_root_closed() {
         let fixture = fresh_root("final-handoff-unwind");
         let observation = final_handoff_unwind_v1(fixture.path(), false);
+        let counters = observation;
+        let immutable_bytes = observation.immutable_bytes();
         assert!(observation.panicked());
         assert!(observation.control_fired());
         assert_eq!(observation.operation_slots(), 0);
@@ -465,6 +541,7 @@ mod operation_lifecycle_owner {
         assert_eq!(observation.residue_bytes(), observation.immutable_bytes());
         assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
         assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+        assert_eq!(counters.immutable_residue_bytes(), immutable_bytes);
         assert!(observation.zero_forbidden_work());
         assert!(fixture.path().join("invalidated").is_dir());
         assert!(matches!(observation.invalidated(), true));
@@ -476,6 +553,8 @@ mod operation_lifecycle_owner {
     fn final_handoff_and_invalidation_double_unwind_still_terminalizes_operation() {
         let fixture = fresh_root("final-handoff-invalidation-double-unwind");
         let observation = final_handoff_unwind_v1(fixture.path(), true);
+        let counters = observation;
+        let immutable_bytes = observation.immutable_bytes();
         assert!(observation.panicked());
         assert!(observation.control_fired());
         assert_eq!(observation.operation_slots(), 0);
@@ -516,6 +595,7 @@ mod operation_lifecycle_owner {
         );
         assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
         assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+        assert_eq!(counters.immutable_residue_bytes(), immutable_bytes);
         assert!(observation.zero_forbidden_work());
         assert!(matches!(observation.invalidated(), true));
         assert!(matches!(observation.stale_invalidated(), true));
@@ -590,6 +670,7 @@ mod operation_lifecycle_owner {
             .spawn(|| {
                 let fixture = fresh_root("preparation-cleanup-failure");
                 let observation = preparation_cleanup_failure_lifecycle_v1(fixture.path());
+                let preparation_inodes = observation.preparation_entries();
                 assert_eq!(observation.error(), Some(PublicationErrorV1::CleanupFailed));
                 assert_eq!(observation.first_cause(), observation.dominant_cause());
                 assert_eq!(
@@ -601,6 +682,7 @@ mod operation_lifecycle_owner {
                 assert!(observation.control_fired());
                 assert_eq!(observation.cleanup_calls(), 1);
                 assert_eq!(observation.preparation_entries(), 1);
+                assert_eq!(preparation_inodes, 1);
                 assert_eq!(
                     observation.preparation_residue(),
                     PreparationResidueV1::GlobalSeen
@@ -719,6 +801,7 @@ mod operation_lifecycle_owner {
                 let fixture = fresh_root("preparation-cleanup-unwind");
                 let observation =
                     preparation_cleanup_unwind_v1(fixture.path(), boundary, fail_invalidation);
+                let preparation_inodes = observation.preparation_entries();
                 let expected = if fail_invalidation {
                     PublicationErrorV1::TerminalFailure
                 } else {
@@ -745,6 +828,7 @@ mod operation_lifecycle_owner {
                 );
                 assert_create_fault_authority_baseline(observation);
                 assert_eq!(observation.preparation_entries(), 1);
+                assert_eq!(preparation_inodes, 1);
                 assert_eq!(observation.carrier_entries(), 1);
                 assert_eq!(observation.residue_bytes(), observation.immutable_bytes());
                 assert_create_fault_storage_equations(observation);
@@ -797,6 +881,8 @@ mod operation_lifecycle_owner {
         assert_eq!(observation.dominant_cause(), Some(dominant));
         assert_create_fault_authority_baseline(observation);
         assert_eq!(observation.preparation_entries(), 1);
+        let preparation_inodes = observation.preparation_entries();
+        assert_eq!(preparation_inodes, 1);
         assert_eq!(
             observation.preparation_residue(),
             PreparationResidueV1::PrivatePack
@@ -867,6 +953,9 @@ mod operation_lifecycle_owner {
         ] {
             let fixture = fresh_root("all-preparation-cleanup-boundaries");
             let observation = preparation_cleanup_boundary_failure_v1(fixture.path(), boundary);
+            let counters = observation;
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
             assert_eq!(observation.error(), Some(PublicationErrorV1::CleanupFailed));
             assert_eq!(
                 observation.first_cause(),
@@ -879,6 +968,7 @@ mod operation_lifecycle_owner {
             assert_eq!(observation.cleanup_calls(), 7);
             assert_create_fault_authority_baseline(observation);
             assert_eq!(observation.preparation_entries(), 1);
+            assert_eq!(preparation_inodes, 1);
             assert!(observation.preparation_bytes() > 0);
             assert_eq!(observation.preparation_residue(), residue);
             assert_eq!(
@@ -888,6 +978,14 @@ mod operation_lifecycle_owner {
             assert_eq!(
                 observation.preparation_entries(),
                 observation.mutable_preparation_residue_inodes()
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes(),
+                preparation_bytes
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes(),
+                preparation_inodes
             );
             assert_eq!(observation.storage_bytes_committed(), 0);
             assert_eq!(observation.storage_inodes_committed(), 0);
@@ -918,6 +1016,7 @@ mod operation_lifecycle_owner {
     ) {
         let fixture = fresh_root("cleanup-invalidation-double-fault");
         let observation = preparation_cleanup_and_invalidation_failure_v1(fixture.path(), true);
+        let error = observation;
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::TerminalFailure)
@@ -931,6 +1030,16 @@ mod operation_lifecycle_owner {
         assert_eq!(
             observation.dominant_cause(),
             Some(PublicationCauseV1::InvalidationFailed)
+        );
+        assert_eq!(
+            (error.error(), error.first_cause(), error.dominant_cause()),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool
+                )),
+                Some(PublicationCauseV1::InvalidationFailed)
+            )
         );
         assert!(observation.control_fired());
         assert_eq!(observation.invalidation_attempts(), 1);
@@ -1039,6 +1148,8 @@ mod operation_lifecycle_owner {
             let fixture = fresh_root("carrier-post-link-unwind");
             let observation =
                 carrier_post_link_unwind_v1(fixture.path(), cleanup, fail_invalidation, overflow);
+            let control = observation;
+            let overflow_counter_transfer = overflow;
             if overflow {
                 assert_eq!(
                     observation.error(),
@@ -1076,6 +1187,7 @@ mod operation_lifecycle_owner {
             }
             assert!(observation.control_fired());
             assert_eq!(observation.poisoned(), overflow);
+            assert_eq!(control.poisoned(), overflow_counter_transfer);
             assert_eq!(observation.cleanup_calls(), 1);
             assert_eq!(observation.terminal_hook_calls(), 1);
             assert_eq!(observation.invalidation_attempts(), u32::from(retained));
@@ -1120,6 +1232,7 @@ mod operation_lifecycle_owner {
     fn locator_cleanup_residue_retains_its_carrier_without_unlink_attempt() {
         let fixture = fresh_root("locator-carrier-double-fault");
         let observation = locator_cleanup_residue_v1(fixture.path());
+        let result = observation;
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::TerminalFailure)
@@ -1133,6 +1246,20 @@ mod operation_lifecycle_owner {
             Some(PublicationCauseV1::CleanupFailed(
                 PublicationCleanupTargetV1::ObjectLocator
             ))
+        );
+        assert_eq!(
+            (
+                result.error(),
+                result.first_cause(),
+                result.dominant_cause()
+            ),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::ObjectLocator
+                ))
+            )
         );
         assert!(observation.control_fired());
         assert!(observation.bound_invoked());
@@ -1190,6 +1317,16 @@ mod operation_lifecycle_owner {
                 let fixture = fresh_root("locator-rollback-directional-faults");
                 let observation =
                     locator_rollback_directional_fault_v1(fixture.path(), mode, fail_invalidation);
+                let result = observation;
+                let counters = observation;
+                let immutable_inodes = observation.immutable_entries();
+                let carrier_inodes = observation.carrier_entries();
+                let locator_inodes = observation.locator_entries();
+                let expected_dominant = if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
+                } else {
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::ObjectLocator)
+                };
                 assert_eq!(
                     observation.error(),
                     Some(PublicationErrorV1::TerminalFailure)
@@ -1198,13 +1335,18 @@ mod operation_lifecycle_owner {
                     observation.first_cause(),
                     Some(PublicationCauseV1::Core(CoreError::Cancelled))
                 );
+                assert_eq!(observation.dominant_cause(), Some(expected_dominant));
                 assert_eq!(
-                    observation.dominant_cause(),
-                    Some(if fail_invalidation {
-                        PublicationCauseV1::InvalidationFailed
-                    } else {
-                        PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::ObjectLocator)
-                    })
+                    (
+                        result.error(),
+                        result.first_cause(),
+                        result.dominant_cause()
+                    ),
+                    (
+                        Some(PublicationErrorV1::TerminalFailure),
+                        Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                        Some(expected_dominant)
+                    )
                 );
                 assert!(observation.control_fired());
                 assert!(observation.bound_invoked());
@@ -1224,6 +1366,7 @@ mod operation_lifecycle_owner {
                     observation.immutable_entries(),
                     observation.carrier_entries() + observation.locator_entries()
                 );
+                assert_eq!(immutable_inodes, carrier_inodes + locator_inodes);
                 assert_eq!(observation.storage_bytes_committed(), 0);
                 assert_eq!(observation.storage_inodes_committed(), 0);
                 assert_eq!(
@@ -1234,6 +1377,7 @@ mod operation_lifecycle_owner {
                     observation.storage_inodes_retained(),
                     observation.immutable_entries()
                 );
+                assert_eq!(counters.storage_inodes_retained(), immutable_inodes);
                 assert_eq!(observation.residue_bytes(), observation.immutable_bytes());
                 assert_eq!(
                     observation.immutable_residue_bytes(),
@@ -1243,6 +1387,7 @@ mod operation_lifecycle_owner {
                     observation.immutable_residue_inodes(),
                     observation.immutable_entries()
                 );
+                assert_eq!(counters.immutable_residue_inodes(), immutable_inodes);
                 assert!(observation.zero_forbidden_work());
                 assert!(observation.invalidated());
                 assert!(observation.stale_invalidated());
@@ -1257,6 +1402,12 @@ mod operation_lifecycle_owner {
             let fixture = fresh_root("locator-rollback-accounting-poison");
             let observation =
                 locator_rollback_accounting_poison_v1(fixture.path(), fail_invalidation);
+            let result = observation;
+            let expected_dominant = if fail_invalidation {
+                PublicationCauseV1::InvalidationFailed
+            } else {
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
+            };
             assert_eq!(
                 observation.error(),
                 Some(PublicationErrorV1::TerminalFailure)
@@ -1265,13 +1416,18 @@ mod operation_lifecycle_owner {
                 observation.first_cause(),
                 Some(PublicationCauseV1::Core(CoreError::Cancelled))
             );
+            assert_eq!(observation.dominant_cause(), Some(expected_dominant));
             assert_eq!(
-                observation.dominant_cause(),
-                Some(if fail_invalidation {
-                    PublicationCauseV1::InvalidationFailed
-                } else {
-                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
-                })
+                (
+                    result.error(),
+                    result.first_cause(),
+                    result.dominant_cause()
+                ),
+                (
+                    Some(PublicationErrorV1::TerminalFailure),
+                    Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                    Some(expected_dominant)
+                )
             );
             assert!(observation.poisoned());
             assert!(observation.control_fired());
@@ -1309,6 +1465,21 @@ mod operation_lifecycle_owner {
                         inject_accounting,
                         fail_invalidation,
                     );
+                    let error = observation;
+                    let counters = observation;
+                    let immutable_inodes = observation.immutable_entries();
+                    let carrier_inodes = observation.carrier_entries();
+                    let locator_inodes = observation.locator_entries();
+                    let expected_dominant = if fail_invalidation {
+                        PublicationCauseV1::InvalidationFailed
+                    } else {
+                        PublicationCauseV1::CleanupFailed(match target {
+                            RollbackCleanupTargetV1::ObjectLocator => {
+                                PublicationCleanupTargetV1::ObjectLocator
+                            }
+                            RollbackCleanupTargetV1::Carrier => PublicationCleanupTargetV1::Carrier,
+                        })
+                    };
                     assert_eq!(
                         observation.error(),
                         Some(PublicationErrorV1::TerminalFailure)
@@ -1317,20 +1488,14 @@ mod operation_lifecycle_owner {
                         observation.first_cause(),
                         Some(PublicationCauseV1::Core(CoreError::Cancelled))
                     );
+                    assert_eq!(observation.dominant_cause(), Some(expected_dominant));
                     assert_eq!(
-                        observation.dominant_cause(),
-                        Some(if fail_invalidation {
-                            PublicationCauseV1::InvalidationFailed
-                        } else {
-                            PublicationCauseV1::CleanupFailed(match target {
-                                RollbackCleanupTargetV1::ObjectLocator => {
-                                    PublicationCleanupTargetV1::ObjectLocator
-                                }
-                                RollbackCleanupTargetV1::Carrier => {
-                                    PublicationCleanupTargetV1::Carrier
-                                }
-                            })
-                        })
+                        (error.error(), error.first_cause(), error.dominant_cause()),
+                        (
+                            Some(PublicationErrorV1::TerminalFailure),
+                            Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                            Some(expected_dominant)
+                        )
                     );
                     assert!(observation.control_fired());
                     assert_eq!(observation.poisoned(), inject_accounting);
@@ -1357,6 +1522,7 @@ mod operation_lifecycle_owner {
                         observation.immutable_entries(),
                         observation.carrier_entries() + observation.locator_entries()
                     );
+                    assert_eq!(immutable_inodes, carrier_inodes + locator_inodes);
                     let expected_direct_residue =
                         if inject_accounting && target == RollbackCleanupTargetV1::Carrier {
                             0
@@ -1374,6 +1540,7 @@ mod operation_lifecycle_owner {
                         observation.storage_inodes_retained(),
                         observation.immutable_entries()
                     );
+                    assert_eq!(counters.storage_inodes_retained(), immutable_inodes);
                     assert_eq!(
                         observation.immutable_residue_bytes(),
                         observation.immutable_bytes()
@@ -1382,6 +1549,7 @@ mod operation_lifecycle_owner {
                         observation.immutable_residue_inodes(),
                         observation.immutable_entries()
                     );
+                    assert_eq!(counters.immutable_residue_inodes(), immutable_inodes);
                     assert!(observation.zero_forbidden_work());
                     assert!(observation.invalidated());
                     assert!(observation.stale_invalidated());
@@ -1393,67 +1561,95 @@ mod operation_lifecycle_owner {
 
     #[test]
     fn post_link_alias_cleanup_failure_retains_visible_dependencies_and_invalidates_reopen() {
-        let fixture = fresh_root("post-link-alias-cleanup");
-        let observation = post_link_marker_secondary_v1(
-            fixture.path(),
-            false,
-            PostLinkAliasCleanupV1::Fails,
-            false,
-        );
-        assert_eq!(observation.error(), Some(PublicationErrorV1::CleanupFailed));
-        assert!(
-            observation.first_cause()
-                == Some(PublicationCauseV1::CleanupFailed(
-                    PublicationCleanupTargetV1::PublishedMarkerAlias
-                ))
-        );
-        assert_eq!(observation.cleanup_calls(), 1);
-        assert_eq!(observation.operation_slots(), 0);
-        assert!(observation.preparation_entries() >= 1);
-        assert_eq!(observation.storage_bytes_committed(), 0);
-        assert_eq!(observation.storage_inodes_committed(), 0);
-        assert!(observation.preparation_bytes() > 0);
-        assert!(observation.immutable_entries() >= 1);
-        assert_eq!(
-            observation.storage_bytes_retained(),
-            observation.preparation_bytes() + observation.immutable_bytes()
-        );
-        assert_eq!(
-            observation.storage_inodes_retained(),
-            observation.preparation_entries() + observation.immutable_entries()
-        );
-        assert_eq!(
-            observation.storage_bytes_requested(),
-            observation.storage_bytes_reserved()
-        );
-        assert_eq!(
-            observation.storage_inodes_requested(),
-            observation.storage_inodes_reserved()
-        );
-        assert_eq!(
-            observation.storage_bytes_reserved(),
-            observation.storage_bytes_released()
-                + observation.storage_bytes_committed()
-                + observation.storage_bytes_retained()
-        );
-        assert_eq!(
-            observation.storage_inodes_reserved(),
-            observation.storage_inodes_released()
-                + observation.storage_inodes_committed()
-                + observation.storage_inodes_retained()
-        );
-        assert_eq!(
-            observation.mutable_preparation_residue_bytes(),
-            observation.preparation_bytes()
-        );
-        assert_eq!(
-            observation.mutable_preparation_residue_inodes(),
-            observation.preparation_entries()
-        );
-        assert!(observation.zero_forbidden_work());
-        assert!(matches!(observation.invalidated(), true));
-        assert!(matches!(observation.stale_invalidated(), true));
-        assert!(matches!(observation.reopen_invalidated(), true));
+        for (target, catalog_visible, closure_visible) in [
+            (PostLinkMarkerTargetV1::ObjectLocator, false, false),
+            (PostLinkMarkerTargetV1::Catalog, true, false),
+            (PostLinkMarkerTargetV1::Closure, true, true),
+        ] {
+            let fixture = fresh_root("post-link-alias-cleanup");
+            let observation = post_link_marker_secondary_v1(
+                fixture.path(),
+                target,
+                false,
+                PostLinkAliasCleanupV1::Fails,
+                false,
+            );
+            let error = observation;
+            let counters = observation;
+            let preparation_inodes = observation.preparation_entries();
+            let catalog_inodes = observation.catalog_entries();
+            let closure_inodes = observation.closure_entries();
+            assert_eq!(observation.error(), Some(PublicationErrorV1::CleanupFailed));
+            assert!(
+                observation.first_cause()
+                    == Some(PublicationCauseV1::CleanupFailed(
+                        PublicationCleanupTargetV1::PublishedMarkerAlias
+                    ))
+            );
+            assert_eq!(
+                (error.error(), error.first_cause()),
+                (
+                    Some(PublicationErrorV1::CleanupFailed),
+                    Some(PublicationCauseV1::CleanupFailed(
+                        PublicationCleanupTargetV1::PublishedMarkerAlias
+                    ))
+                )
+            );
+            assert_eq!(observation.cleanup_calls(), 1);
+            assert_eq!(observation.operation_slots(), 0);
+            assert!(observation.preparation_entries() >= 1);
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert!(observation.preparation_bytes() > 0);
+            assert_eq!(preparation_inodes, 1);
+            assert!(observation.immutable_entries() >= 1);
+            assert_eq!(
+                observation.storage_bytes_retained(),
+                observation.preparation_bytes() + observation.immutable_bytes()
+            );
+            assert_eq!(
+                observation.storage_inodes_retained(),
+                observation.preparation_entries() + observation.immutable_entries()
+            );
+            assert_eq!(
+                observation.storage_bytes_requested(),
+                observation.storage_bytes_reserved()
+            );
+            assert_eq!(
+                observation.storage_inodes_requested(),
+                observation.storage_inodes_reserved()
+            );
+            assert_eq!(
+                observation.storage_bytes_reserved(),
+                observation.storage_bytes_released()
+                    + observation.storage_bytes_committed()
+                    + observation.storage_bytes_retained()
+            );
+            assert_eq!(
+                observation.storage_inodes_reserved(),
+                observation.storage_inodes_released()
+                    + observation.storage_inodes_committed()
+                    + observation.storage_inodes_retained()
+            );
+            assert_eq!(
+                observation.mutable_preparation_residue_bytes(),
+                observation.preparation_bytes()
+            );
+            assert_eq!(
+                observation.mutable_preparation_residue_inodes(),
+                observation.preparation_entries()
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes(),
+                preparation_inodes
+            );
+            assert_eq!(catalog_inodes, u64::from(catalog_visible));
+            assert_eq!(closure_inodes, u64::from(closure_visible));
+            assert!(observation.zero_forbidden_work());
+            assert!(matches!(observation.invalidated(), true));
+            assert!(matches!(observation.stale_invalidated(), true));
+            assert!(matches!(observation.reopen_invalidated(), true));
+        }
     }
 
     #[test]
@@ -1462,10 +1658,19 @@ mod operation_lifecycle_owner {
             let fixture = fresh_root("visible-locator-residue-accounting");
             let observation = post_link_marker_secondary_v1(
                 fixture.path(),
+                PostLinkMarkerTargetV1::ObjectLocator,
                 false,
                 PostLinkAliasCleanupV1::Fails,
                 fail_invalidation,
             );
+            let counters = observation;
+            let preparation_inodes = observation.preparation_entries();
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
+            let carrier_bytes = observation.carrier_bytes();
+            let carrier_inodes = observation.carrier_entries();
+            let locator_bytes = observation.locator_bytes();
+            let locator_inodes = observation.locator_entries();
             let expected = if fail_invalidation {
                 PublicationErrorV1::TerminalFailure
             } else {
@@ -1496,6 +1701,7 @@ mod operation_lifecycle_owner {
             assert_eq!(observation.storage_bytes_committed(), 0);
             assert_eq!(observation.storage_inodes_committed(), 0);
             assert!(observation.preparation_bytes() > 0);
+            assert_eq!(preparation_inodes, 1);
             assert_eq!(
                 observation.storage_bytes_retained(),
                 observation.preparation_bytes() + observation.immutable_bytes()
@@ -1538,6 +1744,17 @@ mod operation_lifecycle_owner {
                 observation.mutable_preparation_residue_bytes() + observation.immutable_bytes()
             );
             assert_eq!(observation.preparation_entries(), 1);
+            assert_eq!(immutable_bytes, carrier_bytes + locator_bytes);
+            assert_eq!(immutable_inodes, carrier_inodes + locator_inodes);
+            assert_eq!(
+                counters.storage_inodes_retained(),
+                preparation_inodes + immutable_inodes
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes(),
+                preparation_inodes
+            );
+            assert_eq!(counters.immutable_residue_inodes(), immutable_inodes);
             assert_eq!(observation.source_bytes_read(), 1);
             assert!(observation.zero_forbidden_work());
             assert!(matches!(observation.invalidated(), true));
@@ -1562,6 +1779,12 @@ mod operation_lifecycle_owner {
                         directional_first_error,
                         fail_invalidation,
                     );
+                    let counters = observation;
+                    let preparation_inodes = observation.preparation_entries();
+                    let immutable_inodes = observation.immutable_entries();
+                    let carrier_inodes = observation.carrier_entries();
+                    let locator_inodes = observation.locator_entries();
+                    let catalog_inodes = observation.catalog_entries();
                     let cleanup = PublicationCauseV1::CleanupFailed(
                         PublicationCleanupTargetV1::PublishedMarkerAlias,
                     );
@@ -1609,6 +1832,7 @@ mod operation_lifecycle_owner {
                     assert_eq!(observation.closure_bytes(), 0);
                     assert!(observation.preparation_bytes() > 0);
                     assert_eq!(observation.preparation_entries(), 1);
+                    assert_eq!(preparation_inodes, 1);
                     assert_eq!(
                         observation.immutable_bytes(),
                         observation.carrier_bytes()
@@ -1621,6 +1845,10 @@ mod operation_lifecycle_owner {
                             + observation.locator_entries()
                             + observation.catalog_entries()
                     );
+                    assert_eq!(
+                        immutable_inodes,
+                        carrier_inodes + locator_inodes + catalog_inodes
+                    );
                     assert_eq!(observation.storage_bytes_committed(), 0);
                     assert_eq!(observation.storage_inodes_committed(), 0);
                     assert_eq!(
@@ -1631,6 +1859,15 @@ mod operation_lifecycle_owner {
                         observation.storage_inodes_retained(),
                         observation.preparation_entries() + observation.immutable_entries()
                     );
+                    assert_eq!(
+                        counters.storage_inodes_retained(),
+                        preparation_inodes + immutable_inodes
+                    );
+                    assert_eq!(
+                        counters.mutable_preparation_residue_inodes(),
+                        preparation_inodes
+                    );
+                    assert_eq!(counters.immutable_residue_inodes(), immutable_inodes);
                     assert_eq!(
                         observation.storage_bytes_requested(),
                         observation.storage_bytes_reserved()
@@ -1708,6 +1945,12 @@ mod operation_lifecycle_owner {
                         accounting_boundary,
                         fail_invalidation,
                     );
+                    let control = observation;
+                    let counters = observation;
+                    let immutable_inodes = observation.immutable_entries();
+                    let carrier_inodes = observation.carrier_entries();
+                    let locator_inodes = observation.locator_entries();
+                    let catalog_inodes = observation.catalog_entries();
                     let first = PublicationCauseV1::Core(match control_failure {
                         PostCatalogControlFailureV1::Cancelled => CoreError::Cancelled,
                         PostCatalogControlFailureV1::Deadline => CoreError::Deadline,
@@ -1735,6 +1978,7 @@ mod operation_lifecycle_owner {
                     assert!(observation.control_fired());
                     assert_eq!(observation.poisoned(), accounting_boundary.is_some());
                     assert_eq!(observation.cleanup_calls(), 0);
+                    assert!(!control.alias_injected());
                     assert_eq!(
                         observation.invalidation_attempts(),
                         u32::from(accounting_boundary.is_some())
@@ -1767,6 +2011,10 @@ mod operation_lifecycle_owner {
                             + observation.locator_entries()
                             + observation.catalog_entries()
                     );
+                    assert_eq!(
+                        immutable_inodes,
+                        carrier_inodes + locator_inodes + catalog_inodes
+                    );
                     assert_eq!(observation.storage_bytes_committed(), 0);
                     assert_eq!(observation.storage_inodes_committed(), 0);
                     assert_eq!(
@@ -1777,6 +2025,7 @@ mod operation_lifecycle_owner {
                         observation.storage_inodes_retained(),
                         observation.immutable_entries()
                     );
+                    assert_eq!(counters.storage_inodes_retained(), immutable_inodes);
                     assert_eq!(
                         observation.storage_bytes_requested(),
                         observation.storage_bytes_reserved()
@@ -1807,6 +2056,7 @@ mod operation_lifecycle_owner {
                         observation.immutable_residue_inodes(),
                         observation.immutable_entries()
                     );
+                    assert_eq!(counters.immutable_residue_inodes(), immutable_inodes);
                     let missed_bytes = match accounting_boundary {
                         None => 0,
                         Some(ResidueAccountingBoundaryV1::CatalogMarker) => {
@@ -1955,9 +2205,15 @@ mod operation_lifecycle_owner {
                 panic_boundary == AdmissionPanicBoundaryV1::PublicationLockAcquired;
             let invalidation_expected =
                 !publication_lock || private_cleanup != AdmissionUnwindPrivateCleanupV1::Clean;
+            let control = observation;
+            let private_cleanup_calls = u64::from(control.cleanup_calls());
             assert!(observation.control_fired());
             assert_eq!(observation.poisoned(), accounting_boundary.is_some());
             assert_eq!(observation.cleanup_calls(), u32::from(publication_lock));
+            assert_eq!(
+                private_cleanup_calls,
+                u64::from(panic_boundary == AdmissionPanicBoundaryV1::PublicationLockAcquired)
+            );
             assert_eq!(
                 observation.terminal_hook_calls(),
                 u32::from(publication_lock)
@@ -2039,6 +2295,14 @@ mod operation_lifecycle_owner {
                 } else {
                     assert!(observation.preparation_bytes() > 0);
                     assert_eq!(observation.preparation_entries(), 1);
+                    let counters = observation;
+                    let preparation_inodes = observation.preparation_entries();
+                    assert_eq!(preparation_inodes, 1);
+                    assert_eq!(counters.storage_inodes_retained(), preparation_inodes);
+                    assert_eq!(
+                        counters.mutable_preparation_residue_inodes(),
+                        preparation_inodes
+                    );
                 }
                 assert_eq!(
                     observation.storage_bytes_retained(),

@@ -230,8 +230,14 @@ pub mod semantic {
         source_read_calls: u64,
         preparation_entries: u64,
         immutable_entries: u64,
+        storage_bytes_requested: u64,
+        storage_bytes_reserved: u64,
+        storage_bytes_released: u64,
         storage_bytes_committed: u64,
         storage_bytes_retained: u64,
+        storage_inodes_requested: u64,
+        storage_inodes_reserved: u64,
+        storage_inodes_released: u64,
         storage_inodes_committed: u64,
         storage_inodes_retained: u64,
         operation_slots: u64,
@@ -273,12 +279,36 @@ pub mod semantic {
             self.immutable_entries
         }
 
+        pub const fn storage_bytes_requested(self) -> u64 {
+            self.storage_bytes_requested
+        }
+
+        pub const fn storage_bytes_reserved(self) -> u64 {
+            self.storage_bytes_reserved
+        }
+
+        pub const fn storage_bytes_released(self) -> u64 {
+            self.storage_bytes_released
+        }
+
         pub const fn storage_bytes_committed(self) -> u64 {
             self.storage_bytes_committed
         }
 
         pub const fn storage_bytes_retained(self) -> u64 {
             self.storage_bytes_retained
+        }
+
+        pub const fn storage_inodes_requested(self) -> u64 {
+            self.storage_inodes_requested
+        }
+
+        pub const fn storage_inodes_reserved(self) -> u64 {
+            self.storage_inodes_reserved
+        }
+
+        pub const fn storage_inodes_released(self) -> u64 {
+            self.storage_inodes_released
         }
 
         pub const fn storage_inodes_committed(self) -> u64 {
@@ -445,12 +475,19 @@ pub mod semantic {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct CreateFaultObservationV1 {
         error: Option<PublicationErrorV1>,
+        operation_error: Option<PublicationErrorV1>,
+        terminal_error: Option<PublicationErrorV1>,
+        marker_fault_boundaries: (bool, bool, bool, bool, bool),
+        marker_cleanup_observation: (Option<u64>, Option<u64>, bool, bool, bool, bool),
+        setup_storage: (u64, u64, u64, u64, u64, u64, u64, u64, u64, u64),
+        incumbent_marker_bytes: (Option<[u8; 8]>, Option<[u8; 8]>),
         filesystem_failure: Option<FilesystemFaultFailureV1>,
         first_cause: Option<PublicationCauseV1>,
         dominant_cause: Option<PublicationCauseV1>,
         panicked: bool,
         panic_payload: Option<&'static str>,
         control_fired: bool,
+        alias_injected: bool,
         cleanup_calls: u32,
         carrier_installed: bool,
         poisoned: bool,
@@ -479,6 +516,7 @@ pub mod semantic {
         mutable_preparation_residue_bytes: u64,
         mutable_preparation_residue_inodes: u64,
         source_read_calls: u64,
+        catalog_operations: u64,
         source_bytes_read: u64,
         global_seen_lookups: u64,
         global_seen_probes: u64,
@@ -675,7 +713,8 @@ pub mod semantic {
     pub enum CompleteMutationTerminalV1 {
         Succeeded,
         IntegerOverflow,
-        UnauthenticatedBase,
+        FsCas,
+        IdMismatch,
     }
 
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -719,19 +758,37 @@ pub mod semantic {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct CompleteMutationObservationV1 {
         pub terminal: CompleteMutationTerminalV1,
-        pub expected_roots_matched: u32,
+        pub accepted_root: Option<PhysicalTreeIdV1>,
+        pub base_tree: Option<PhysicalTreeIdV1>,
+        pub replaced_root: Option<PhysicalTreeIdV1>,
+        pub replacement_tree: Option<PhysicalTreeIdV1>,
+        pub metadata_file: Option<PhysicalFileIdV1>,
+        pub replacement_file: Option<PhysicalFileIdV1>,
+        pub metadata_root: Option<PhysicalTreeIdV1>,
+        pub metadata_tree: Option<PhysicalTreeIdV1>,
+        pub added_root: Option<PhysicalTreeIdV1>,
+        pub added_tree: Option<PhysicalTreeIdV1>,
+        pub moved_root: Option<PhysicalTreeIdV1>,
+        pub moved_tree: Option<PhysicalTreeIdV1>,
+        pub removed_root: Option<PhysicalTreeIdV1>,
+        pub removed_tree: Option<PhysicalTreeIdV1>,
+        pub updated_root: Option<PhysicalTreeIdV1>,
+        pub update_tree: Option<PhysicalTreeIdV1>,
         pub completed_operations: u32,
         pub final_root_returns_to_base: bool,
         pub algorithm_is_fastcdc: bool,
+        pub update_algorithm: Option<CdcAlgorithmV1>,
         pub validated_handoffs: u32,
         pub storage_terminals: u32,
         pub source_offset: u64,
-        pub namespace_unchanged: bool,
+        pub namespace_before: Option<((u64, u64), (u64, u64))>,
+        pub exact_operation_namespace_usage: Option<((u64, u64), (u64, u64))>,
         pub authority_clean: bool,
         pub namespace_entries_are_regular: bool,
         pub root_usable: bool,
         pub stale_usable: bool,
-        pub accepted_version_differs: bool,
+        pub accepted_version: Option<PhysicalVersionRecordIdV1>,
+        pub wrong_version: Option<PhysicalVersionRecordIdV1>,
         pub counters: CompleteMutationCountersV1,
         pub operation_counters: [CompleteMutationCountersV1; 3],
         pub operation_counter_count: u32,
@@ -837,12 +894,19 @@ pub mod semantic {
 
     create_fault_getters! {
         error: error => Option<PublicationErrorV1>,
+        operation_error: operation_error => Option<PublicationErrorV1>,
+        finish_terminal_v1: terminal_error => Option<PublicationErrorV1>,
+        marker_fault_boundaries: marker_fault_boundaries => (bool, bool, bool, bool, bool),
+        marker_cleanup_observation: marker_cleanup_observation => (Option<u64>, Option<u64>, bool, bool, bool, bool),
+        setup_storage: setup_storage => (u64, u64, u64, u64, u64, u64, u64, u64, u64, u64),
+        incumbent_marker_bytes: incumbent_marker_bytes => (Option<[u8; 8]>, Option<[u8; 8]>),
         filesystem_failure: filesystem_failure => Option<FilesystemFaultFailureV1>,
         first_cause: first_cause => Option<PublicationCauseV1>,
         dominant_cause: dominant_cause => Option<PublicationCauseV1>,
         panicked: panicked => bool,
         panic_payload: panic_payload => Option<&'static str>,
         control_fired: control_fired => bool,
+        alias_injected: alias_injected => bool,
         cleanup_calls: cleanup_calls => u32,
         carrier_installed: carrier_installed => bool,
         poisoned: poisoned => bool,
@@ -871,6 +935,7 @@ pub mod semantic {
         mutable_preparation_residue_bytes: mutable_preparation_residue_bytes => u64,
         mutable_preparation_residue_inodes: mutable_preparation_residue_inodes => u64,
         source_read_calls: source_read_calls => u64,
+        catalog_operations: catalog_operations => u64,
         source_bytes_read: source_bytes_read => u64,
         global_seen_lookups: global_seen_lookups => u64,
         global_seen_probes: global_seen_probes => u64,
@@ -909,6 +974,11 @@ pub mod semantic {
     }
 
     impl CreateFaultObservationV1 {
+        const fn with_alias_injected(mut self, alias_injected: bool) -> Self {
+            self.alias_injected = alias_injected;
+            self
+        }
+
         pub const fn unwind_authority(self) -> (u64, u64, (u64, u64, u64), (u64, u64, u64), bool) {
             self.unwind_authority
         }
@@ -1418,8 +1488,14 @@ pub mod semantic {
             source_read_calls: counters.source_read_calls,
             preparation_entries,
             immutable_entries,
+            storage_bytes_requested: counters.storage_bytes_requested,
+            storage_bytes_reserved: counters.storage_bytes_reserved,
+            storage_bytes_released: counters.storage_bytes_released,
             storage_bytes_committed: counters.storage_bytes_committed,
             storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_requested: counters.storage_inodes_requested,
+            storage_inodes_reserved: counters.storage_inodes_reserved,
+            storage_inodes_released: counters.storage_inodes_released,
             storage_inodes_committed: counters.storage_inodes_committed,
             storage_inodes_retained: counters.storage_inodes_retained,
             operation_slots: cas.operation_admitted_slots_v1(),
@@ -2185,23 +2261,39 @@ pub mod semantic {
             directory_usage(&root.join("preparation")),
             immutable_usage(root),
         );
+        let unwind_authority = (
+            cas.operation_admitted_slots_v1(),
+            cas.operation_admission_active_for_test_v1(),
+            cas.operation_admission_queue_for_test_v1(),
+            cas.storage_admission_active_for_test_v1(),
+            cas.occupied().is_ok(),
+        );
+        let mut followup_observation = None;
         let (attempt, followup_succeeded) = if poison_terminal {
             (attempt, false)
         } else {
+            let followup_bound = Arc::new(AtomicBool::new(false));
+            let followup_supply = Arc::new(AtomicBool::new(false));
             let mut followup_counters = OperationCountersV1::default();
+            let mut followup_control = ContinueFaultControl;
             let followup = run_create_fault_attempt(
                 &cas,
                 0x904,
                 1,
                 CallbackSupplier {
-                    bound_invoked: Arc::clone(&bound_invoked),
-                    supply_invoked: Arc::clone(&supply_invoked),
+                    bound_invoked: Arc::clone(&followup_bound),
+                    supply_invoked: Arc::clone(&followup_supply),
                     len: 1,
                 },
-                &mut control,
+                &mut followup_control,
                 &mut followup_counters,
             );
             let followup_succeeded = followup.error.is_none() && !followup.panicked;
+            followup_observation = Some((
+                followup_bound.load(Ordering::Acquire),
+                followup_supply.load(Ordering::Acquire),
+                followup_counters,
+            ));
             let error = attempt.error.or(followup.error);
             (
                 CreateFaultAttempt {
@@ -2239,6 +2331,25 @@ pub mod semantic {
                 ),
                 (observation.immutable_bytes, observation.immutable_entries),
             ) = fault_usage;
+            observation.unwind_authority = unwind_authority;
+            let (followup_bound, followup_supply, followup_counters) =
+                followup_observation.expect("clean unwind performs a followup");
+            observation.followup_bound_invoked = followup_bound;
+            observation.followup_supply_invoked = followup_supply;
+            observation.followup_preparation_entries = directory_usage(&root.join("preparation")).1;
+            observation.followup_storage = (
+                followup_counters.storage_bytes_requested,
+                followup_counters.storage_bytes_reserved,
+                followup_counters.storage_bytes_released,
+                followup_counters.storage_bytes_committed,
+                followup_counters.storage_bytes_retained,
+                followup_counters.storage_inodes_requested,
+                followup_counters.storage_inodes_reserved,
+                followup_counters.storage_inodes_released,
+                followup_counters.storage_inodes_committed,
+                followup_counters.storage_inodes_retained,
+            );
+            observation.followup_zero_forbidden_work = followup_counters.has_zero_forbidden_work();
         }
         observation
     }
@@ -2794,6 +2905,52 @@ pub mod semantic {
         }
     }
 
+    struct FailCarrierAliasPreparationAccountingControl {
+        cas: FsCasV1,
+        armed: bool,
+        invalidation_attempts: u32,
+        fail_invalidation: bool,
+    }
+
+    impl CdcControlV1 for FailCarrierAliasPreparationAccountingControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl FsCasControlV1 for FailCarrierAliasPreparationAccountingControl {
+        fn cancellation_requested(&mut self) -> bool {
+            false
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if boundary == FsCasFilesystemBoundaryV1::CarrierAliasUnlink && !self.armed {
+                self.armed = true;
+                self.cas.fail_next_preparation_remove_for_test_v1();
+            }
+            None
+        }
+
+        fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
+            if target == FsCasCleanupTargetV1::RootInvalidation {
+                self.invalidation_attempts += 1;
+                return self.fail_invalidation;
+            }
+            false
+        }
+    }
+
     fn run_create_fault_attempt<C, S>(
         cas: &FsCasV1,
         cancellation_key: u64,
@@ -2988,12 +3145,19 @@ pub mod semantic {
             cas.storage_admission_active_for_test_v1();
         CreateFaultObservationV1 {
             error: attempt.error.map(publication_error_v1),
+            operation_error: attempt.error.map(publication_error_v1),
+            terminal_error: None,
+            marker_fault_boundaries: (false, false, false, false, false),
+            marker_cleanup_observation: (None, None, false, false, false, false),
+            setup_storage: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            incumbent_marker_bytes: (None, None),
             filesystem_failure: filesystem_failure_v1(attempt.error),
             first_cause,
             dominant_cause,
             panicked: attempt.panicked,
             panic_payload: attempt.panic_payload,
             control_fired: control.control_fired,
+            alias_injected: false,
             cleanup_calls: control.cleanup_calls,
             carrier_installed: control.carrier_installed,
             poisoned: control.poisoned,
@@ -3022,6 +3186,7 @@ pub mod semantic {
             mutable_preparation_residue_bytes: counters.mutable_preparation_residue_bytes,
             mutable_preparation_residue_inodes: counters.mutable_preparation_residue_inodes,
             source_read_calls: counters.source_read_calls,
+            catalog_operations: counters.fscas_catalog_operations,
             source_bytes_read: counters.source_bytes_read,
             global_seen_lookups: counters.global_seen_lookups,
             global_seen_probes: counters.global_seen_probes,
@@ -4863,9 +5028,9 @@ pub mod semantic {
     struct MalformedClosureControl {
         destination: PathBuf,
         malformed_installed: bool,
-        cleanup_calls: u32,
-        cleanup_injected: bool,
-        invalidation_attempts: u32,
+        preparation_cleanup_calls: u32,
+        preparation_cleanup_injected: bool,
+        root_invalidation_calls: u32,
         fail_invalidation: bool,
     }
 
@@ -4901,16 +5066,16 @@ pub mod semantic {
         fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
             match target {
                 FsCasCleanupTargetV1::PreparationSpool => {
-                    self.cleanup_calls += 1;
-                    if !self.cleanup_injected {
-                        self.cleanup_injected = true;
+                    self.preparation_cleanup_calls += 1;
+                    if !self.preparation_cleanup_injected {
+                        self.preparation_cleanup_injected = true;
                         true
                     } else {
                         false
                     }
                 }
                 FsCasCleanupTargetV1::RootInvalidation => {
-                    self.invalidation_attempts += 1;
+                    self.root_invalidation_calls += 1;
                     self.fail_invalidation
                 }
                 _ => false,
@@ -5016,7 +5181,37 @@ pub mod semantic {
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
             .err();
-        observe_direct_fault(
+        assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+        assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
+        let (preparation_bytes, preparation_inodes) = directory_usage(&root.join("preparation"));
+        assert_eq!(preparation_inodes, 1);
+        assert_eq!(preparation_bytes, u64::from(equal_incumbent) * 8);
+        let (immutable_bytes, immutable_inodes) = immutable_usage(root);
+        assert_eq!(
+            (immutable_bytes, immutable_inodes),
+            if equal_incumbent { (8, 1) } else { (0, 0) }
+        );
+        assert_eq!(
+            (&counters).storage_bytes_requested,
+            (&counters).storage_bytes_reserved
+        );
+        assert_eq!(
+            (&counters).storage_inodes_requested,
+            (&counters).storage_inodes_reserved
+        );
+        assert_eq!(
+            (&counters).storage_bytes_reserved,
+            (&counters).storage_bytes_released
+                + (&counters).storage_bytes_committed
+                + (&counters).storage_bytes_retained
+        );
+        assert_eq!(
+            (&counters).storage_inodes_reserved,
+            (&counters).storage_inodes_released
+                + (&counters).storage_inodes_committed
+                + (&counters).storage_inodes_retained
+        );
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -5030,7 +5225,20 @@ pub mod semantic {
             },
             control.invalidation_calls,
             &counters,
-        )
+        );
+        observation.setup_storage = (
+            setup_counters.storage_bytes_requested,
+            setup_counters.storage_bytes_reserved,
+            setup_counters.storage_bytes_released,
+            setup_counters.storage_bytes_committed,
+            setup_counters.storage_bytes_retained,
+            setup_counters.storage_inodes_requested,
+            setup_counters.storage_inodes_reserved,
+            setup_counters.storage_inodes_released,
+            setup_counters.storage_inodes_committed,
+            setup_counters.storage_inodes_retained,
+        );
+        observation
     }
 
     pub fn pre_link_marker_callback_cleanup_v1(
@@ -5071,6 +5279,12 @@ pub mod semantic {
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
+        assert_eq!(
+            (&counters).storage_inodes_reserved,
+            (&counters).storage_inodes_released
+                + (&counters).storage_inodes_committed
+                + (&counters).storage_inodes_retained
+        );
         observe_direct_fault(
             root,
             &cas,
@@ -5153,7 +5367,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -5171,7 +5385,20 @@ pub mod semantic {
                 poisoned: false,
             },
             &counters,
-        )
+        );
+        assert_eq!(
+            (&counters).storage_bytes_reserved,
+            (&counters).storage_bytes_released
+                + (&counters).storage_bytes_committed
+                + (&counters).storage_bytes_retained
+        );
+        assert_eq!(
+            (&counters).storage_inodes_reserved,
+            (&counters).storage_inodes_released
+                + (&counters).storage_inodes_committed
+                + (&counters).storage_inodes_retained
+        );
+        observation
     }
 
     pub fn alias_cleanup_invalidation_double_fault_v1(root: &Path) -> CreateFaultObservationV1 {
@@ -5196,7 +5423,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -5216,7 +5443,9 @@ pub mod semantic {
                 poisoned: false,
             },
             &counters,
-        )
+        );
+        assert_eq!(fs::read(root.join("owner")).unwrap()[8], 1);
+        observation
     }
 
     pub fn carrier_pre_link_unwind_v1(root: &Path) -> CreateFaultObservationV1 {
@@ -5585,6 +5814,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
+        let alias_injected = control.alias_injected;
         observe_create_fault_with_control(
             root,
             &cas,
@@ -5604,6 +5834,7 @@ pub mod semantic {
             },
             &counters,
         )
+        .with_alias_injected(alias_injected)
     }
 
     pub fn post_catalog_control_terminal_v1(
@@ -5639,6 +5870,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
+        let alias_injected = control.alias_injected;
         observe_create_fault_with_control(
             root,
             &cas,
@@ -5658,6 +5890,7 @@ pub mod semantic {
             },
             &counters,
         )
+        .with_alias_injected(alias_injected)
     }
 
     pub fn admission_callback_unwind_v1(
@@ -5745,7 +5978,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -5763,11 +5996,14 @@ pub mod semantic {
                 poisoned: false,
             },
             &counters,
-        )
+        );
+        assert_storage_equations(&counters);
+        observation
     }
 
     pub fn post_link_marker_secondary_v1(
         root: &Path,
+        target: PostLinkMarkerTargetV1,
         boundary_unwind: bool,
         alias_cleanup: PostLinkAliasCleanupV1,
         fail_invalidation: bool,
@@ -5776,7 +6012,7 @@ pub mod semantic {
         let bound_invoked = Arc::new(AtomicBool::new(false));
         let supply_invoked = Arc::new(AtomicBool::new(false));
         let mut control = PostLinkMarkerCleanupControl {
-            target: FsCasBoundaryV1::AfterClosureMarkerLink,
+            target: target.boundary(),
             boundary_unwind,
             alias_cleanup,
             fail_invalidation,
@@ -5798,7 +6034,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -5816,7 +6052,13 @@ pub mod semantic {
                 poisoned: false,
             },
             &counters,
-        )
+        );
+        assert_eq!(control.invalidation_calls, 1);
+        assert_eq!(cas.operation_admitted_slots_v1(), 0);
+        assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+        assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
+        assert_storage_equations(&counters);
+        observation
     }
 
     pub fn pre_link_marker_unwind_v1(
@@ -5847,7 +6089,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -5865,7 +6107,12 @@ pub mod semantic {
                 poisoned: false,
             },
             &counters,
-        )
+        );
+        assert_eq!(
+            counters.unreachable_installed_residue_bytes,
+            observation.carrier_bytes
+        );
+        observation
     }
 
     pub fn post_link_alias_directional_failure_v1(
@@ -5898,7 +6145,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -5916,7 +6163,9 @@ pub mod semantic {
                 poisoned: false,
             },
             &counters,
-        )
+        );
+        assert_storage_equations(&counters);
+        observation
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -6097,13 +6346,16 @@ pub mod semantic {
         let catalog_entries = directory_usage(&root.join("catalog")).1;
         let object_entries = directory_usage(&root.join("objects")).1;
         fs::remove_file(&closure).expect("remove seeded closure for race");
+        let (before_preparation_bytes, before_preparation_inodes) =
+            directory_usage(&root.join("preparation"));
+        let (before_immutable_bytes, before_immutable_inodes) = immutable_usage(root);
 
         let mut control = MalformedClosureControl {
             destination: closure.clone(),
             malformed_installed: false,
-            cleanup_calls: 0,
-            cleanup_injected: !fail_cleanup,
-            invalidation_attempts: 0,
+            preparation_cleanup_calls: 0,
+            preparation_cleanup_injected: !fail_cleanup,
+            root_invalidation_calls: 0,
             fail_invalidation,
         };
         let mut counters = OperationCountersV1::default();
@@ -6124,8 +6376,44 @@ pub mod semantic {
             .map(publication_causes_v1)
             .map(|(first, dominant)| (Some(first), Some(dominant)))
             .unwrap_or((None, None));
-        let (preparation_bytes, preparation_entries) = directory_usage(&root.join("preparation"));
-        let (immutable_bytes, immutable_entries) = immutable_usage(root);
+        let (after_preparation_bytes, after_preparation_inodes) =
+            directory_usage(&root.join("preparation"));
+        let (after_immutable_bytes, after_immutable_inodes) = immutable_usage(root);
+        if fail_cleanup {
+            assert_eq!(
+                (before_preparation_bytes, before_preparation_inodes),
+                (0, 0)
+            );
+            assert!(control.preparation_cleanup_injected);
+            assert_eq!(control.preparation_cleanup_calls, 6);
+            assert_eq!(control.root_invalidation_calls, 1);
+            assert_eq!(fs::read(&closure).unwrap(), [0_u8; 120]);
+
+            let preparation_bytes = after_preparation_bytes - before_preparation_bytes;
+            let preparation_inodes = after_preparation_inodes - before_preparation_inodes;
+            assert!(preparation_bytes > 0);
+            assert_eq!(preparation_inodes, 1);
+            assert_eq!(after_immutable_bytes, before_immutable_bytes + 120);
+            assert_eq!(after_immutable_inodes, before_immutable_inodes + 1);
+            assert_eq!(counters.storage_bytes_retained, preparation_bytes);
+            assert_eq!(counters.storage_inodes_retained, preparation_inodes);
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes,
+                preparation_bytes
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes,
+                preparation_inodes
+            );
+            assert_eq!(counters.immutable_residue_bytes, 0);
+            assert_eq!(counters.immutable_residue_inodes, 0);
+            assert_eq!(counters.unreachable_installed_residue_bytes, 0);
+            assert_eq!(cas.operation_admitted_slots_v1(), 0);
+            assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+            assert_eq!(cas.operation_admission_queue_for_test_v1(), (0, 0, 0));
+            assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
+            assert_storage_equations(&counters);
+        }
         MalformedClosureObservationV1 {
             error: attempt.error.map(publication_error_v1),
             first_cause,
@@ -6140,12 +6428,12 @@ pub mod semantic {
             object_entries_preserved: directory_usage(&root.join("objects")).1 == object_entries,
             closure_fences: counters.closure_fences,
             residue_bytes: counters.unreachable_installed_residue_bytes,
-            cleanup_calls: control.cleanup_calls,
-            invalidation_attempts: control.invalidation_attempts,
-            preparation_bytes,
-            preparation_entries,
-            immutable_bytes,
-            immutable_entries,
+            cleanup_calls: control.preparation_cleanup_calls,
+            invalidation_attempts: control.root_invalidation_calls,
+            preparation_bytes: after_preparation_bytes,
+            preparation_entries: after_preparation_inodes,
+            immutable_bytes: after_immutable_bytes,
+            immutable_entries: after_immutable_inodes,
             storage_bytes_committed: counters.storage_bytes_committed,
             storage_inodes_committed: counters.storage_inodes_committed,
             storage_bytes_retained: counters.storage_bytes_retained,
@@ -6269,7 +6557,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -6285,7 +6573,20 @@ pub mod semantic {
                 ..CreateFaultControlObservation::default()
             },
             &counters,
-        )
+        );
+        assert_eq!(cas.operation_admitted_slots_v1(), 0);
+        assert_eq!(cas.operation_admission_active_for_test_v1(), 0);
+        assert_eq!(cas.operation_admission_queue_for_test_v1(), (0, 0, 0));
+        assert_eq!(cas.storage_admission_active_for_test_v1(), (0, 0, 0));
+        assert_eq!(fs::read_dir(root.join("preparation")).unwrap().count(), 0);
+        assert_storage_equations(&counters);
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
+        observation
     }
 
     struct DirectPrivatePackCreateControl {
@@ -6710,6 +7011,7 @@ pub mod semantic {
     pub struct PackFaultObservationV1 {
         operation_error: Option<PublicationErrorV1>,
         cleanup_error: Option<PublicationErrorV1>,
+        cleanup_retry_error: Option<PublicationErrorV1>,
         operation_first_cause: Option<PublicationCauseV1>,
         operation_dominant_cause: Option<PublicationCauseV1>,
         cleanup_first_cause: Option<PublicationCauseV1>,
@@ -6717,19 +7019,35 @@ pub mod semantic {
         logical_length: u64,
         physical_length: Option<u64>,
         accounted_length: u64,
+        physical_is_directory: bool,
+        physical_is_missing: bool,
         preparation_bytes: u64,
         preparation_entries: u64,
+        immutable_bytes: u64,
+        immutable_entries: u64,
+        storage_bytes_requested: u64,
+        storage_bytes_reserved: u64,
         storage_bytes_released: u64,
         storage_bytes_committed: u64,
         storage_bytes_retained: u64,
+        storage_inodes_requested: u64,
+        storage_inodes_reserved: u64,
         storage_inodes_released: u64,
         storage_inodes_committed: u64,
         storage_inodes_retained: u64,
+        mutable_preparation_residue_bytes: u64,
+        mutable_preparation_residue_inodes: u64,
+        unreachable_installed_residue_bytes: u64,
         operation_slots: u64,
+        operation_active: u64,
+        operation_queue: (u64, u64, u64),
+        storage_active: (u64, u64, u64),
         invalidated: bool,
         stale_invalidated: bool,
         reopen_invalidated: bool,
         root_usable: bool,
+        stale_usable: bool,
+        reopen_usable: bool,
         zero_forbidden_work: bool,
     }
 
@@ -6744,6 +7062,7 @@ pub mod semantic {
     pack_fault_getters! {
         operation_error: operation_error => Option<PublicationErrorV1>,
         cleanup_error: cleanup_error => Option<PublicationErrorV1>,
+        cleanup_retry_error: cleanup_retry_error => Option<PublicationErrorV1>,
         operation_first_cause: operation_first_cause => Option<PublicationCauseV1>,
         operation_dominant_cause: operation_dominant_cause => Option<PublicationCauseV1>,
         cleanup_first_cause: cleanup_first_cause => Option<PublicationCauseV1>,
@@ -6751,19 +7070,35 @@ pub mod semantic {
         logical_length: logical_length => u64,
         physical_length: physical_length => Option<u64>,
         accounted_length: accounted_length => u64,
+        physical_is_directory: physical_is_directory => bool,
+        physical_is_missing: physical_is_missing => bool,
         preparation_bytes: preparation_bytes => u64,
         preparation_entries: preparation_entries => u64,
+        immutable_bytes: immutable_bytes => u64,
+        immutable_entries: immutable_entries => u64,
+        storage_bytes_requested: storage_bytes_requested => u64,
+        storage_bytes_reserved: storage_bytes_reserved => u64,
         storage_bytes_released: storage_bytes_released => u64,
         storage_bytes_committed: storage_bytes_committed => u64,
         storage_bytes_retained: storage_bytes_retained => u64,
+        storage_inodes_requested: storage_inodes_requested => u64,
+        storage_inodes_reserved: storage_inodes_reserved => u64,
         storage_inodes_released: storage_inodes_released => u64,
         storage_inodes_committed: storage_inodes_committed => u64,
         storage_inodes_retained: storage_inodes_retained => u64,
+        mutable_preparation_residue_bytes: mutable_preparation_residue_bytes => u64,
+        mutable_preparation_residue_inodes: mutable_preparation_residue_inodes => u64,
+        unreachable_installed_residue_bytes: unreachable_installed_residue_bytes => u64,
         operation_slots: operation_slots => u64,
+        operation_active: operation_active => u64,
+        operation_queue: operation_queue => (u64, u64, u64),
+        storage_active: storage_active => (u64, u64, u64),
         invalidated: invalidated => bool,
         stale_invalidated: stale_invalidated => bool,
         reopen_invalidated: reopen_invalidated => bool,
         root_usable: root_usable => bool,
+        stale_usable: stale_usable => bool,
+        reopen_usable: reopen_usable => bool,
         zero_forbidden_work: zero_forbidden_work => bool,
     }
 
@@ -6789,6 +7124,13 @@ pub mod semantic {
             .ok()
             .filter(|metadata| metadata.file_type().is_file())
             .map(|metadata| metadata.len())
+    }
+
+    fn preparation_path_kind(path: &Path) -> (bool, bool) {
+        match fs::symlink_metadata(path) {
+            Ok(metadata) => (metadata.file_type().is_dir(), false),
+            Err(error) => (false, error.kind() == std::io::ErrorKind::NotFound),
+        }
     }
 
     #[cfg(unix)]
@@ -6825,8 +7167,11 @@ pub mod semantic {
         stale: &FsCasV1,
         operation_error: Option<FsCasErrorV1>,
         cleanup_error: Option<FsCasErrorV1>,
+        cleanup_retry_error: Option<FsCasErrorV1>,
         logical_length: u64,
         physical_length: Option<u64>,
+        physical_is_directory: bool,
+        physical_is_missing: bool,
         accounted_length: u64,
         counters: &OperationCountersV1,
     ) -> PackFaultObservationV1 {
@@ -6840,9 +7185,12 @@ pub mod semantic {
             .unwrap_or((None, None));
         let (preparation_bytes, preparation_entries) =
             lossy_preparation_usage(&root.join("preparation"));
+        let (immutable_bytes, immutable_entries) = immutable_usage(root);
+        let reopen = FsCasV1::open_existing(root);
         PackFaultObservationV1 {
             operation_error: operation_error.map(publication_error_v1),
             cleanup_error: cleanup_error.map(publication_error_v1),
+            cleanup_retry_error: cleanup_retry_error.map(publication_error_v1),
             operation_first_cause,
             operation_dominant_cause,
             cleanup_first_cause,
@@ -6850,22 +7198,38 @@ pub mod semantic {
             logical_length,
             physical_length,
             accounted_length,
+            physical_is_directory,
+            physical_is_missing,
             preparation_bytes,
             preparation_entries,
+            immutable_bytes,
+            immutable_entries,
+            storage_bytes_requested: counters.storage_bytes_requested,
+            storage_bytes_reserved: counters.storage_bytes_reserved,
             storage_bytes_released: counters.storage_bytes_released,
             storage_bytes_committed: counters.storage_bytes_committed,
             storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_requested: counters.storage_inodes_requested,
+            storage_inodes_reserved: counters.storage_inodes_reserved,
             storage_inodes_released: counters.storage_inodes_released,
             storage_inodes_committed: counters.storage_inodes_committed,
             storage_inodes_retained: counters.storage_inodes_retained,
+            mutable_preparation_residue_bytes: counters.mutable_preparation_residue_bytes,
+            mutable_preparation_residue_inodes: counters.mutable_preparation_residue_inodes,
+            unreachable_installed_residue_bytes: counters.unreachable_installed_residue_bytes,
             operation_slots: cas.operation_admitted_slots_v1(),
+            operation_active: cas.operation_admission_active_for_test_v1(),
+            operation_queue: cas.operation_admission_queue_for_test_v1(),
+            storage_active: cas.storage_admission_active_for_test_v1(),
             invalidated: matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)),
             stale_invalidated: matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
             reopen_invalidated: matches!(
-                FsCasV1::open_existing(root),
+                &reopen,
                 Err(FsCasErrorV1::Invalidated | FsCasErrorV1::Busy)
             ),
             root_usable: cas.occupied().is_ok(),
+            stale_usable: stale.occupied().is_ok(),
+            reopen_usable: reopen.is_ok(),
             zero_forbidden_work: counters.has_zero_forbidden_work(),
         }
     }
@@ -6916,12 +7280,13 @@ pub mod semantic {
             attempts: 0,
         };
         let cleanup_error = spool.cleanup_controlled_v1(&mut control).err();
+        let cleanup_retry_error = spool.cleanup_controlled_v1(&mut control).err();
         assert_eq!(
-            spool.cleanup_controlled_v1(&mut control).err(),
-            cleanup_error,
+            cleanup_retry_error, cleanup_error,
             "operation-spool accounting cleanup changed on retry"
         );
         let physical_length = regular_file_length(&spool_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&spool_path);
         drop(spool);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
@@ -6932,8 +7297,11 @@ pub mod semantic {
             &stale,
             None,
             cleanup_error,
+            cleanup_retry_error,
             SPOOL_BYTES,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             SPOOL_BYTES,
             &counters,
         )
@@ -6986,12 +7354,19 @@ pub mod semantic {
             fail_invalidation,
         };
         let cleanup_error = spool.cleanup_controlled_v1(&mut control).err();
+        let cleanup_retry_error = spool.cleanup_controlled_v1(&mut control).err();
         assert_eq!(
-            spool.cleanup_controlled_v1(&mut control).err(),
-            cleanup_error,
+            cleanup_retry_error, cleanup_error,
             "operation-spool metadata cleanup changed on retry"
         );
+        if matches!(mode, PreparationMetadataFaultModeV1::Missing) {
+            assert_eq!(
+                fs::symlink_metadata(&spool_path).unwrap_err().kind(),
+                std::io::ErrorKind::NotFound,
+            );
+        }
         let physical_length = regular_file_length(&spool_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&spool_path);
         drop(spool);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
@@ -7002,8 +7377,11 @@ pub mod semantic {
             &stale,
             None,
             cleanup_error,
+            cleanup_retry_error,
             SPOOL_BYTES,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             SPOOL_BYTES,
             &counters,
         )
@@ -7072,7 +7450,22 @@ pub mod semantic {
                 | PreparationMetadataFaultModeV1::Missing => {}
             }
         }
+        match mode {
+            Some(PreparationMetadataFaultModeV1::WrongType) => {
+                assert_eq!(fs::read_dir(&preparation).unwrap().count(), 1);
+            }
+            Some(PreparationMetadataFaultModeV1::Missing) => {
+                assert_eq!(
+                    fs::symlink_metadata(&spool_path).unwrap_err().kind(),
+                    std::io::ErrorKind::NotFound,
+                );
+            }
+            None
+            | Some(PreparationMetadataFaultModeV1::PermissionDenied)
+            | Some(PreparationMetadataFaultModeV1::ReadFailure) => {}
+        }
         let physical_length = regular_file_length(&spool_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&spool_path);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
             .expect("operation-spool drop metadata terminal");
@@ -7082,8 +7475,11 @@ pub mod semantic {
             &stale,
             None,
             None,
+            None,
             LOGICAL_BYTES,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             if mode.is_some() { LOGICAL_BYTES } else { 0 },
             &counters,
         )
@@ -7137,12 +7533,21 @@ pub mod semantic {
             fail_invalidation,
         };
         let cleanup_error = spool.cleanup_controlled_v1(&mut control).err();
+        let cleanup_retry_error = spool.cleanup_controlled_v1(&mut control).err();
         assert_eq!(
-            spool.cleanup_controlled_v1(&mut control).err(),
-            cleanup_error,
+            cleanup_retry_error, cleanup_error,
             "operation-spool unlink cleanup changed on retry"
         );
+        if matches!(mode, PreparationUnlinkFaultModeV1::Missing) {
+            assert_eq!(
+                fs::symlink_metadata(&spool_path).unwrap_err().kind(),
+                std::io::ErrorKind::NotFound,
+            );
+        } else {
+            assert_eq!(fs::read_dir(&preparation).unwrap().count(), 1);
+        }
         let physical_length = regular_file_length(&spool_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&spool_path);
         drop(spool);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
@@ -7153,8 +7558,11 @@ pub mod semantic {
             &stale,
             None,
             cleanup_error,
+            cleanup_retry_error,
             SPOOL_BYTES,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             SPOOL_BYTES,
             &counters,
         )
@@ -7200,19 +7608,45 @@ pub mod semantic {
         let held_preparation = root.join("preparation-held-for-private-read");
         apply_preparation_metadata_fault(&preparation, &pack_path, &held_preparation, mode);
         let mut control = RestorePreparationMetadataAuthorityV1 {
-            preparation,
+            preparation: preparation.clone(),
             held_preparation,
             mode,
             restored: false,
             fail_invalidation,
         };
         let cleanup_error = private_pack.cleanup_controlled_v1(&mut control).err();
+        let cleanup_retry_error = private_pack.cleanup_controlled_v1(&mut control).err();
         assert_eq!(
-            private_pack.cleanup_controlled_v1(&mut control).err(),
-            cleanup_error,
+            cleanup_retry_error, cleanup_error,
             "private-pack metadata cleanup changed on retry"
         );
+        assert_eq!(
+            fs::read_dir(&preparation).unwrap().count(),
+            usize::from(!matches!(mode, PreparationMetadataFaultModeV1::Missing)),
+        );
+        match mode {
+            PreparationMetadataFaultModeV1::WrongType => {
+                assert!(fs::symlink_metadata(&pack_path)
+                    .unwrap()
+                    .file_type()
+                    .is_dir());
+            }
+            PreparationMetadataFaultModeV1::Missing => {
+                assert_eq!(
+                    fs::symlink_metadata(&pack_path).unwrap_err().kind(),
+                    std::io::ErrorKind::NotFound,
+                );
+            }
+            PreparationMetadataFaultModeV1::PermissionDenied
+            | PreparationMetadataFaultModeV1::ReadFailure => {
+                assert_eq!(fs::metadata(&pack_path).unwrap().len(), PACK_HEADER_BYTES);
+            }
+        }
+        for immutable in ["carriers", "objects", "catalog", "closures"] {
+            assert_eq!(fs::read_dir(root.join(immutable)).unwrap().count(), 0);
+        }
         let physical_length = regular_file_length(&pack_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&pack_path);
         drop(private_pack);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
@@ -7223,8 +7657,11 @@ pub mod semantic {
             &stale,
             None,
             cleanup_error,
+            cleanup_retry_error,
             PACK_CEILING,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             PACK_HEADER_BYTES,
             &counters,
         )
@@ -7293,7 +7730,35 @@ pub mod semantic {
                 | PreparationMetadataFaultModeV1::Missing => {}
             }
         }
+        for immutable in ["carriers", "objects", "catalog", "closures"] {
+            assert_eq!(fs::read_dir(root.join(immutable)).unwrap().count(), 0);
+        }
+        match mode {
+            Some(PreparationMetadataFaultModeV1::WrongType) => {
+                assert_eq!(fs::read_dir(&preparation).unwrap().count(), 1);
+                assert!(fs::symlink_metadata(&pack_path)
+                    .unwrap()
+                    .file_type()
+                    .is_dir());
+            }
+            Some(PreparationMetadataFaultModeV1::Missing) => {
+                assert_eq!(fs::read_dir(&preparation).unwrap().count(), 0);
+                assert_eq!(
+                    fs::symlink_metadata(&pack_path).unwrap_err().kind(),
+                    std::io::ErrorKind::NotFound,
+                );
+            }
+            Some(
+                PreparationMetadataFaultModeV1::PermissionDenied
+                | PreparationMetadataFaultModeV1::ReadFailure,
+            ) => {
+                assert_eq!(fs::read_dir(&preparation).unwrap().count(), 1);
+                assert_eq!(fs::metadata(&pack_path).unwrap().len(), PHYSICAL_BYTES);
+            }
+            None => assert_eq!(fs::read_dir(&preparation).unwrap().count(), 0),
+        }
         let physical_length = regular_file_length(&pack_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&pack_path);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
             .expect("private-pack drop metadata terminal");
@@ -7303,8 +7768,11 @@ pub mod semantic {
             &stale,
             None,
             None,
+            None,
             PACK_CEILING,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             if mode.is_some() { PACK_HEADER_BYTES } else { 0 },
             &counters,
         )
@@ -7358,12 +7826,26 @@ pub mod semantic {
             fail_invalidation,
         };
         let cleanup_error = private_pack.cleanup_controlled_v1(&mut control).err();
+        let cleanup_retry_error = private_pack.cleanup_controlled_v1(&mut control).err();
         assert_eq!(
-            private_pack.cleanup_controlled_v1(&mut control).err(),
-            cleanup_error,
+            cleanup_retry_error, cleanup_error,
             "private-pack unlink cleanup changed on retry"
         );
+        if matches!(mode, PreparationUnlinkFaultModeV1::Missing) {
+            assert_eq!(
+                fs::symlink_metadata(&pack_path).unwrap_err().kind(),
+                std::io::ErrorKind::NotFound,
+            );
+            assert_eq!(fs::read_dir(&preparation).unwrap().count(), 0);
+        } else {
+            assert_eq!(fs::metadata(&pack_path).unwrap().len(), PACK_HEADER_BYTES);
+            assert_eq!(fs::read_dir(&preparation).unwrap().count(), 1);
+        }
+        for immutable in ["carriers", "objects", "catalog", "closures"] {
+            assert_eq!(fs::read_dir(root.join(immutable)).unwrap().count(), 0);
+        }
         let physical_length = regular_file_length(&pack_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&pack_path);
         drop(private_pack);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
@@ -7374,8 +7856,11 @@ pub mod semantic {
             &stale,
             None,
             cleanup_error,
+            cleanup_retry_error,
             PACK_CEILING,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             PACK_HEADER_BYTES,
             &counters,
         )
@@ -7412,6 +7897,12 @@ pub mod semantic {
         private_pack
             .begin_direct_controlled_v1(PACK_CEILING, &mut setup_control)
             .expect("private-pack accounting initialization");
+        let pack_path = fs::read_dir(root.join("preparation"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
         if truncate {
             private_pack
                 .append_controlled_v1(&[0x5a; APPEND_BYTES as usize], &mut setup_control)
@@ -7434,11 +7925,15 @@ pub mod semantic {
         let operation_error = private_pack.take_first_error_typed_v1();
         let (physical_length, accounted_length) = private_pack.direct_lengths_for_test_v1();
         let cleanup_error = private_pack.cleanup_controlled_v1(&mut setup_control).err();
+        let cleanup_retry_error = private_pack.cleanup_controlled_v1(&mut setup_control).err();
         assert_eq!(
-            private_pack.cleanup_controlled_v1(&mut setup_control).err(),
-            cleanup_error,
+            cleanup_retry_error, cleanup_error,
             "private-pack accounting cleanup changed on retry"
         );
+        for immutable in ["carriers", "objects", "catalog", "closures"] {
+            assert_eq!(fs::read_dir(root.join(immutable)).unwrap().count(), 0);
+        }
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&pack_path);
         drop(private_pack);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
@@ -7449,8 +7944,11 @@ pub mod semantic {
             &stale,
             operation_error,
             cleanup_error,
+            cleanup_retry_error,
             physical_length.unwrap_or_default(),
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             accounted_length,
             &counters,
         )
@@ -7501,12 +7999,16 @@ pub mod semantic {
             attempts: 0,
         };
         let cleanup_error = private_pack.cleanup_controlled_v1(&mut control).err();
+        let cleanup_retry_error = private_pack.cleanup_controlled_v1(&mut control).err();
         assert_eq!(
-            private_pack.cleanup_controlled_v1(&mut control).err(),
-            cleanup_error,
+            cleanup_retry_error, cleanup_error,
             "private-pack accounting cleanup changed on retry"
         );
+        for immutable in ["carriers", "objects", "catalog", "closures"] {
+            assert_eq!(fs::read_dir(root.join(immutable)).unwrap().count(), 0);
+        }
         let physical_length = regular_file_length(&pack_path);
+        let (physical_is_directory, physical_is_missing) = preparation_path_kind(&pack_path);
         drop(private_pack);
         capability
             .finish_terminal_v1(false, &mut counters, &mut setup_control)
@@ -7517,8 +8019,11 @@ pub mod semantic {
             &stale,
             None,
             cleanup_error,
+            cleanup_retry_error,
             PACK_CEILING,
             physical_length,
+            physical_is_directory,
+            physical_is_missing,
             PACK_HEADER_BYTES,
             &counters,
         )
@@ -7539,7 +8044,7 @@ pub mod semantic {
             (Some(error), None) | (None, Some(error)) => Some(error),
             (None, None) => None,
         };
-        observe_create_fault_with_control(
+        let mut observation = observe_create_fault_with_control(
             root,
             cas,
             stale,
@@ -7556,7 +8061,10 @@ pub mod semantic {
             false,
             control,
             counters,
-        )
+        );
+        observation.operation_error = operation_error.map(publication_error_v1);
+        observation.terminal_error = terminal_error.map(publication_error_v1);
+        observation
     }
 
     /// Scalar custody for the file-backed operation-spool fault owner.  The
@@ -7565,22 +8073,41 @@ pub mod semantic {
     pub struct OperationSpoolFaultObservationV1 {
         operation_error: Option<PublicationErrorV1>,
         cleanup_error: Option<PublicationErrorV1>,
+        cleanup_retry_error: Option<PublicationErrorV1>,
+        operation_first_cause: Option<PublicationCauseV1>,
+        operation_dominant_cause: Option<PublicationCauseV1>,
+        cleanup_first_cause: Option<PublicationCauseV1>,
+        cleanup_dominant_cause: Option<PublicationCauseV1>,
         logical_length: u64,
         physical_length: u64,
+        physical_first_byte: Option<u8>,
         bytes_read: u64,
         read_calls: u64,
         bytes_written: u64,
         preparation_bytes: u64,
         preparation_entries: u64,
+        immutable_bytes: u64,
+        immutable_entries: u64,
+        storage_bytes_requested: u64,
+        storage_bytes_reserved: u64,
         storage_bytes_released: u64,
         storage_bytes_committed: u64,
         storage_bytes_retained: u64,
+        storage_inodes_requested: u64,
+        storage_inodes_reserved: u64,
         storage_inodes_released: u64,
         storage_inodes_committed: u64,
         storage_inodes_retained: u64,
+        operation_slots: u64,
+        operation_active: u64,
+        operation_queue: (u64, u64, u64),
+        storage_active: (u64, u64, u64),
         invalidated: bool,
         stale_invalidated: bool,
         reopen_invalidated: bool,
+        root_usable: bool,
+        stale_usable: bool,
+        reopen_usable: bool,
         zero_forbidden_work: bool,
     }
 
@@ -7593,12 +8120,36 @@ pub mod semantic {
             self.cleanup_error
         }
 
+        pub const fn cleanup_retry_error(self) -> Option<PublicationErrorV1> {
+            self.cleanup_retry_error
+        }
+
+        pub const fn operation_first_cause(self) -> Option<PublicationCauseV1> {
+            self.operation_first_cause
+        }
+
+        pub const fn operation_dominant_cause(self) -> Option<PublicationCauseV1> {
+            self.operation_dominant_cause
+        }
+
+        pub const fn cleanup_first_cause(self) -> Option<PublicationCauseV1> {
+            self.cleanup_first_cause
+        }
+
+        pub const fn cleanup_dominant_cause(self) -> Option<PublicationCauseV1> {
+            self.cleanup_dominant_cause
+        }
+
         pub const fn logical_length(self) -> u64 {
             self.logical_length
         }
 
         pub const fn physical_length(self) -> u64 {
             self.physical_length
+        }
+
+        pub const fn physical_first_byte(self) -> Option<u8> {
+            self.physical_first_byte
         }
 
         pub const fn direct_storage_observation(self) -> (u64, u64, u64) {
@@ -7613,6 +8164,22 @@ pub mod semantic {
             self.preparation_entries
         }
 
+        pub const fn immutable_bytes(self) -> u64 {
+            self.immutable_bytes
+        }
+
+        pub const fn immutable_entries(self) -> u64 {
+            self.immutable_entries
+        }
+
+        pub const fn storage_bytes_requested(self) -> u64 {
+            self.storage_bytes_requested
+        }
+
+        pub const fn storage_bytes_reserved(self) -> u64 {
+            self.storage_bytes_reserved
+        }
+
         pub const fn storage_bytes_released(self) -> u64 {
             self.storage_bytes_released
         }
@@ -7623,6 +8190,14 @@ pub mod semantic {
 
         pub const fn storage_bytes_retained(self) -> u64 {
             self.storage_bytes_retained
+        }
+
+        pub const fn storage_inodes_requested(self) -> u64 {
+            self.storage_inodes_requested
+        }
+
+        pub const fn storage_inodes_reserved(self) -> u64 {
+            self.storage_inodes_reserved
         }
 
         pub const fn storage_inodes_released(self) -> u64 {
@@ -7637,6 +8212,22 @@ pub mod semantic {
             self.storage_inodes_retained
         }
 
+        pub const fn operation_slots(self) -> u64 {
+            self.operation_slots
+        }
+
+        pub const fn operation_active(self) -> u64 {
+            self.operation_active
+        }
+
+        pub const fn operation_queue(self) -> (u64, u64, u64) {
+            self.operation_queue
+        }
+
+        pub const fn storage_active(self) -> (u64, u64, u64) {
+            self.storage_active
+        }
+
         pub const fn invalidated(self) -> bool {
             self.invalidated
         }
@@ -7647,6 +8238,22 @@ pub mod semantic {
 
         pub const fn reopen_invalidated(self) -> bool {
             self.reopen_invalidated
+        }
+
+        pub const fn usable_handles(self) -> (bool, bool, bool) {
+            (self.root_usable, self.stale_usable, self.reopen_usable)
+        }
+
+        pub const fn root_usable(self) -> bool {
+            self.root_usable
+        }
+
+        pub const fn stale_usable(self) -> bool {
+            self.stale_usable
+        }
+
+        pub const fn reopen_usable(self) -> bool {
+            self.reopen_usable
         }
 
         pub const fn zero_forbidden_work(self) -> bool {
@@ -7665,40 +8272,80 @@ pub mod semantic {
             .len()
     }
 
+    fn preparation_file_first_byte(root: &Path) -> Option<u8> {
+        let path = fs::read_dir(root.join("preparation"))
+            .ok()?
+            .next()?
+            .ok()?
+            .path();
+        fs::read(path).ok()?.first().copied()
+    }
+
     fn observe_operation_spool_fault(
         root: &Path,
         cas: &FsCasV1,
         stale: &FsCasV1,
         operation_error: Option<FsCasErrorV1>,
         cleanup_error: Option<FsCasErrorV1>,
+        cleanup_retry_error: Option<FsCasErrorV1>,
         logical_length: u64,
         physical_length: u64,
+        physical_first_byte: Option<u8>,
         direct_storage: (u64, u64, u64),
         counters: &OperationCountersV1,
     ) -> OperationSpoolFaultObservationV1 {
+        let (operation_first_cause, operation_dominant_cause) = operation_error
+            .map(publication_causes_v1)
+            .map(|(first, dominant)| (Some(first), Some(dominant)))
+            .unwrap_or((None, None));
+        let (cleanup_first_cause, cleanup_dominant_cause) = cleanup_error
+            .map(publication_causes_v1)
+            .map(|(first, dominant)| (Some(first), Some(dominant)))
+            .unwrap_or((None, None));
         let (preparation_bytes, preparation_entries) = directory_usage(&root.join("preparation"));
+        let (immutable_bytes, immutable_entries) = immutable_usage(root);
+        let reopen = FsCasV1::open_existing(root);
         OperationSpoolFaultObservationV1 {
             operation_error: operation_error.map(publication_error_v1),
             cleanup_error: cleanup_error.map(publication_error_v1),
+            cleanup_retry_error: cleanup_retry_error.map(publication_error_v1),
+            operation_first_cause,
+            operation_dominant_cause,
+            cleanup_first_cause,
+            cleanup_dominant_cause,
             logical_length,
             physical_length,
+            physical_first_byte,
             bytes_read: direct_storage.0,
             read_calls: direct_storage.1,
             bytes_written: direct_storage.2,
             preparation_bytes,
             preparation_entries,
+            immutable_bytes,
+            immutable_entries,
+            storage_bytes_requested: counters.storage_bytes_requested,
+            storage_bytes_reserved: counters.storage_bytes_reserved,
             storage_bytes_released: counters.storage_bytes_released,
             storage_bytes_committed: counters.storage_bytes_committed,
             storage_bytes_retained: counters.storage_bytes_retained,
+            storage_inodes_requested: counters.storage_inodes_requested,
+            storage_inodes_reserved: counters.storage_inodes_reserved,
             storage_inodes_released: counters.storage_inodes_released,
             storage_inodes_committed: counters.storage_inodes_committed,
             storage_inodes_retained: counters.storage_inodes_retained,
+            operation_slots: cas.operation_admitted_slots_v1(),
+            operation_active: cas.operation_admission_active_for_test_v1(),
+            operation_queue: cas.operation_admission_queue_for_test_v1(),
+            storage_active: cas.storage_admission_active_for_test_v1(),
             invalidated: matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)),
             stale_invalidated: matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)),
             reopen_invalidated: matches!(
-                FsCasV1::open_existing(root),
+                &reopen,
                 Err(FsCasErrorV1::Invalidated | FsCasErrorV1::Busy)
             ),
+            root_usable: cas.occupied().is_ok(),
+            stale_usable: stale.occupied().is_ok(),
+            reopen_usable: reopen.is_ok(),
             zero_forbidden_work: counters.has_zero_forbidden_work(),
         }
     }
@@ -8022,7 +8669,9 @@ pub mod semantic {
             .err();
         let logical_length = spool.logical_len_for_test_v1();
         let physical_length = preparation_file_length(root);
+        let physical_first_byte = preparation_file_first_byte(root);
         let cleanup_error = spool.cleanup_controlled_v1(&mut admission_control).err();
+        let cleanup_retry_error = spool.cleanup_controlled_v1(&mut admission_control).err();
         drop(spool);
         capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
@@ -8033,8 +8682,10 @@ pub mod semantic {
             &stale,
             operation_error,
             cleanup_error,
+            cleanup_retry_error,
             logical_length,
             physical_length,
+            physical_first_byte,
             (0, 0, 0),
             &counters,
         )
@@ -8075,8 +8726,10 @@ pub mod semantic {
             "operation-spool write control did not fire"
         );
         let physical_length = preparation_file_length(root);
+        let physical_first_byte = preparation_file_first_byte(root);
         let direct_storage = spool.direct_storage_observation();
         let cleanup_error = spool.cleanup_controlled_v1(&mut admission_control).err();
+        let cleanup_retry_error = spool.cleanup_controlled_v1(&mut admission_control).err();
         drop(spool);
         capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
@@ -8087,8 +8740,10 @@ pub mod semantic {
             &stale,
             operation_error,
             cleanup_error,
+            cleanup_retry_error,
             1,
             physical_length,
+            physical_first_byte,
             direct_storage,
             &counters,
         )
@@ -8133,7 +8788,9 @@ pub mod semantic {
         );
         let direct_storage = spool.direct_storage_observation();
         let physical_length = preparation_file_length(root);
+        let physical_first_byte = preparation_file_first_byte(root);
         let cleanup_error = spool.cleanup_controlled_v1(&mut admission_control).err();
+        let cleanup_retry_error = spool.cleanup_controlled_v1(&mut admission_control).err();
         drop(spool);
         capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
@@ -8144,8 +8801,10 @@ pub mod semantic {
             &stale,
             operation_error,
             cleanup_error,
+            cleanup_retry_error,
             1,
             physical_length,
+            physical_first_byte,
             direct_storage,
             &counters,
         )
@@ -8172,8 +8831,10 @@ pub mod semantic {
         let token = capability
             .storage_token_v1()
             .expect("marker cleanup length token");
-        cas.prepare_test_marker_cleanup_mismatch_v1(token)
+        let temporary = cas
+            .prepare_test_marker_cleanup_mismatch_v1(token)
             .expect("marker cleanup length fixture");
+        let before_length = fs::metadata(&temporary).ok().map(|metadata| metadata.len());
         cas.clear_active_preparation_bytes_for_test_v1();
         let mut control = RestoreMarkerCleanupAccountingControl {
             cas: cas.clone(),
@@ -8183,10 +8844,11 @@ pub mod semantic {
         let cleanup_error = cas
             .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
             .err();
+        let after_length = fs::metadata(&temporary).ok().map(|metadata| metadata.len());
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
-        observe_direct_fault(
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -8200,7 +8862,16 @@ pub mod semantic {
             },
             u32::from(control.accounting_restored),
             &counters,
-        )
+        );
+        observation.marker_cleanup_observation = (
+            before_length,
+            after_length,
+            false,
+            false,
+            false,
+            control.accounting_restored,
+        );
+        observation
     }
 
     pub fn marker_cleanup_metadata_fault_v1(
@@ -8239,10 +8910,17 @@ pub mod semantic {
         let cleanup_error = cas
             .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
             .err();
+        let physical = fs::symlink_metadata(&temporary);
+        let is_directory = physical
+            .as_ref()
+            .is_ok_and(|metadata| metadata.file_type().is_dir());
+        let is_missing = physical
+            .as_ref()
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
-        observe_direct_fault(
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -8256,7 +8934,10 @@ pub mod semantic {
             },
             control.attempts,
             &counters,
-        )
+        );
+        observation.marker_cleanup_observation =
+            (None, None, is_directory, is_missing, false, false);
+        observation
     }
 
     #[cfg(unix)]
@@ -8297,11 +8978,11 @@ pub mod semantic {
         let cleanup_error = cas
             .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
             .err();
+        let after_length = fs::metadata(&temporary).ok().map(|metadata| metadata.len());
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
-        let _ = fs::metadata(&temporary);
-        observe_direct_fault(
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -8315,7 +8996,16 @@ pub mod semantic {
             },
             u32::from(control.fail_invalidation && control.armed),
             &counters,
-        )
+        );
+        observation.marker_cleanup_observation = (
+            None,
+            after_length,
+            false,
+            false,
+            control.armed,
+            control.restored,
+        );
+        observation
     }
 
     pub fn marker_cleanup_post_unlink_fault_v1(
@@ -8350,11 +9040,13 @@ pub mod semantic {
         let cleanup_error = cas
             .cleanup_test_marker_mismatch_borrowed_v1(token, &mut control)
             .err();
+        let is_missing = fs::symlink_metadata(&temporary)
+            .as_ref()
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
-        let _ = fs::symlink_metadata(&temporary);
-        observe_direct_fault(
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -8368,7 +9060,9 @@ pub mod semantic {
             },
             control.attempts,
             &counters,
-        )
+        );
+        observation.marker_cleanup_observation = (None, None, false, is_missing, false, false);
+        observation
     }
 
     pub fn private_pack_precharge_poison_v1(
@@ -8583,7 +9277,7 @@ pub mod semantic {
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
-        observe_direct_fault(
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -8597,7 +9291,15 @@ pub mod semantic {
             },
             control.invalidation_attempts,
             &counters,
-        )
+        );
+        observation.marker_fault_boundaries = (
+            control.corrupted,
+            control.restored_for_cleanup,
+            control.payload_or_link_seen,
+            false,
+            false,
+        );
+        observation
     }
 
     pub fn marker_immutable_precharge_v1(
@@ -8633,7 +9335,7 @@ pub mod semantic {
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
-        observe_direct_fault(
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -8647,7 +9349,15 @@ pub mod semantic {
             },
             control.invalidation_attempts,
             &counters,
-        )
+        );
+        observation.marker_fault_boundaries = (
+            false,
+            false,
+            false,
+            control.marker_write_seen,
+            control.marker_link_boundary_seen,
+        );
+        observation
     }
 
     pub fn equal_marker_incumbent_rollback_v1(
@@ -8676,6 +9386,10 @@ pub mod semantic {
         setup
             .finish_terminal_v1(true, &mut setup_counters, &mut setup_control)
             .expect("marker incumbent setup terminal");
+        let marker_path = root.join("closures/test-marker");
+        let incumbent_before = fs::read(&marker_path)
+            .ok()
+            .and_then(|bytes| bytes.try_into().ok());
 
         let stale = FsCasV1::open_existing(root).expect("marker incumbent stale owner");
         let mut counters = OperationCountersV1::default();
@@ -8702,10 +9416,13 @@ pub mod semantic {
         let operation_error = cas
             .publish_test_marker_borrowed_v1(token, &mut control)
             .err();
+        let incumbent_after = fs::read(&marker_path)
+            .ok()
+            .and_then(|bytes| bytes.try_into().ok());
         let terminal_error = capability
             .finish_terminal_v1(false, &mut counters, &mut admission_control)
             .err();
-        observe_direct_fault(
+        let mut observation = observe_direct_fault(
             root,
             &cas,
             &stale,
@@ -8719,7 +9436,21 @@ pub mod semantic {
             },
             control.attempts,
             &counters,
-        )
+        );
+        observation.setup_storage = (
+            setup_counters.storage_bytes_requested,
+            setup_counters.storage_bytes_reserved,
+            setup_counters.storage_bytes_released,
+            setup_counters.storage_bytes_committed,
+            setup_counters.storage_bytes_retained,
+            setup_counters.storage_inodes_requested,
+            setup_counters.storage_inodes_reserved,
+            setup_counters.storage_inodes_released,
+            setup_counters.storage_inodes_committed,
+            setup_counters.storage_inodes_retained,
+        );
+        observation.incumbent_marker_bytes = (incumbent_before, incumbent_after);
+        observation
     }
 
     pub fn marker_hard_link_fault_v1(
@@ -9042,7 +9773,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault(
+        observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -9053,6 +9784,10 @@ pub mod semantic {
             0,
             control.invalidation_attempts,
             false,
+            CreateFaultControlObservation {
+                control_fired: control.preparation_cleanup_injected,
+                ..CreateFaultControlObservation::default()
+            },
             &counters,
         )
     }
@@ -9101,7 +9836,7 @@ pub mod semantic {
         )
     }
 
-    pub fn carrier_cleanup_failure_v1(root: &Path) -> CreateFaultObservationV1 {
+    pub fn lifecycle_carrier_cleanup_failure_v1(root: &Path) -> CreateFaultObservationV1 {
         const BODY_BYTES: u64 = 64 * 1024 + 17;
         let (cas, stale) = new_fault_root(root);
         let bound_invoked = Arc::new(AtomicBool::new(false));
@@ -9125,7 +9860,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -9143,7 +9878,94 @@ pub mod semantic {
                 poisoned: false,
             },
             &counters,
-        )
+        );
+        assert!(matches!(cas.occupied(), Err(FsCasErrorV1::Invalidated)));
+        assert!(matches!(stale.occupied(), Err(FsCasErrorV1::Invalidated)));
+        assert!(matches!(
+            FsCasV1::open_existing(root),
+            Err(FsCasErrorV1::Invalidated)
+        ));
+        let exact_residue_bytes = observation.carrier_bytes();
+        assert_eq!(
+            counters.unreachable_installed_residue_bytes,
+            exact_residue_bytes
+        );
+        observation
+    }
+
+    pub fn carrier_alias_post_unlink_accounting_v1(
+        root: &Path,
+        fail_invalidation: bool,
+    ) -> CreateFaultObservationV1 {
+        const BODY_BYTES: u64 = 64 * 1024 + 17;
+        let (cas, stale) = new_fault_root(root);
+        let bound_invoked = Arc::new(AtomicBool::new(false));
+        let supply_invoked = Arc::new(AtomicBool::new(false));
+        let mut control = FailCarrierAliasPreparationAccountingControl {
+            cas: cas.clone(),
+            armed: false,
+            invalidation_attempts: 0,
+            fail_invalidation,
+        };
+        let mut counters = OperationCountersV1::default();
+        let attempt = run_create_fault_attempt(
+            &cas,
+            0x0011_5573 + u64::from(fail_invalidation),
+            BODY_BYTES,
+            CallbackSupplier {
+                bound_invoked: Arc::clone(&bound_invoked),
+                supply_invoked: Arc::clone(&supply_invoked),
+                len: BODY_BYTES,
+            },
+            &mut control,
+            &mut counters,
+        );
+        let observation = observe_create_fault_with_control(
+            root,
+            &cas,
+            &stale,
+            attempt,
+            bound_invoked.load(Ordering::Acquire),
+            supply_invoked.load(Ordering::Acquire),
+            false,
+            0,
+            control.invalidation_attempts,
+            false,
+            CreateFaultControlObservation {
+                control_fired: control.armed,
+                cleanup_calls: 0,
+                carrier_installed: false,
+                poisoned: false,
+            },
+            &counters,
+        );
+        assert_eq!((&cas).operation_admitted_slots_v1(), 0);
+        assert_eq!((&cas).operation_admission_active_for_test_v1(), 0);
+        assert_eq!((&cas).operation_admission_queue_for_test_v1(), (0, 0, 0));
+        assert_eq!((&cas).storage_admission_active_for_test_v1(), (0, 0, 0));
+        assert_eq!(fs::read_dir(root.join("preparation")).unwrap().count(), 0);
+        assert_storage_equations(&counters);
+        assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters.storage_bytes_released
+                + counters.storage_bytes_committed
+                + counters.storage_bytes_retained
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
+        observation
     }
 
     pub fn carrier_accounting_poison_v1(
@@ -9175,7 +9997,7 @@ pub mod semantic {
             &mut control,
             &mut counters,
         );
-        observe_create_fault_with_control(
+        let observation = observe_create_fault_with_control(
             root,
             &cas,
             &stale,
@@ -9193,7 +10015,34 @@ pub mod semantic {
                 poisoned: control.poisoned,
             },
             &counters,
-        )
+        );
+        assert_eq!((&cas).operation_admitted_slots_v1(), 0);
+        assert_eq!((&cas).operation_admission_active_for_test_v1(), 0);
+        assert_eq!((&cas).operation_admission_queue_for_test_v1(), (0, 0, 0));
+        assert_eq!((&cas).storage_admission_active_for_test_v1(), (0, 0, 0));
+        assert_eq!(fs::read_dir(root.join("preparation")).unwrap().count(), 0);
+        assert_storage_equations(&counters);
+        assert_eq!(
+            counters.storage_bytes_requested,
+            counters.storage_bytes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved,
+            counters.storage_bytes_released
+                + counters.storage_bytes_committed
+                + counters.storage_bytes_retained
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
+        observation
     }
 
     #[derive(Clone, Copy)]
@@ -12703,30 +13552,51 @@ pub mod semantic {
         root: &Path,
         counters: &OperationCountersV1,
     ) -> CompleteMutationObservationV1 {
+        let preparation_entries = fs::read_dir(root.join("preparation"))
+            .expect("mutation semantic preparation namespace")
+            .count() as u64;
+        let root_usable = cas.occupied().is_ok();
+        let stale_usable = stale.is_none_or(|stale| stale.occupied().is_ok());
         CompleteMutationObservationV1 {
             terminal,
-            expected_roots_matched: 0,
+            accepted_root: None,
+            base_tree: None,
+            replaced_root: None,
+            replacement_tree: None,
+            metadata_file: None,
+            replacement_file: None,
+            metadata_root: None,
+            metadata_tree: None,
+            added_root: None,
+            added_tree: None,
+            moved_root: None,
+            moved_tree: None,
+            removed_root: None,
+            removed_tree: None,
+            updated_root: None,
+            update_tree: None,
             completed_operations: 0,
             final_root_returns_to_base: false,
             algorithm_is_fastcdc: false,
+            update_algorithm: None,
             validated_handoffs: 0,
             storage_terminals: 0,
             source_offset: 0,
-            namespace_unchanged: false,
+            namespace_before: None,
+            exact_operation_namespace_usage: None,
             authority_clean: operation_authority_is_clean(cas, root),
             namespace_entries_are_regular: namespace_entries_are_regular(root),
-            root_usable: cas.occupied().is_ok(),
-            stale_usable: stale.is_none_or(|cas| cas.occupied().is_ok()),
-            accepted_version_differs: false,
+            root_usable,
+            stale_usable,
+            accepted_version: None,
+            wrong_version: None,
             counters: complete_mutation_counters(counters),
             operation_counters: [CompleteMutationCountersV1::default(); 3],
             operation_counter_count: 0,
             operation_admitted_slots: cas.operation_admitted_slots_v1(),
             operation_admission_active: cas.operation_admission_active_for_test_v1(),
             storage_admission_active: cas.storage_admission_active_for_test_v1(),
-            preparation_entries: fs::read_dir(root.join("preparation"))
-                .expect("mutation semantic preparation namespace")
-                .count() as u64,
+            preparation_entries,
         }
     }
 
@@ -12856,14 +13726,14 @@ pub mod semantic {
                                     root,
                                     &metadata_counters,
                                 );
-                                observation.expected_roots_matched =
-                                    u32::from(accepted_root == base_tree.physical())
-                                        + u32::from(
-                                            replaced.root_tree() == replacement_tree.physical(),
-                                        )
-                                        + u32::from(
-                                            metadata.root_tree() == metadata_tree.physical(),
-                                        );
+                                observation.accepted_root = Some(accepted_root);
+                                observation.base_tree = Some(base_tree.physical());
+                                observation.replaced_root = Some(replaced.root_tree());
+                                observation.replacement_tree = Some(replacement_tree.physical());
+                                observation.metadata_file = Some(metadata_file.physical);
+                                observation.replacement_file = Some(replacement_file.physical);
+                                observation.metadata_root = Some(metadata.root_tree());
+                                observation.metadata_tree = Some(metadata_tree.physical());
                                 observation.completed_operations = 2;
                                 observation.algorithm_is_fastcdc = replaced.algorithm()
                                     == CdcAlgorithmV1::FastCdc
@@ -12949,7 +13819,6 @@ pub mod semantic {
                     &mut add_counters,
                 )
                 .expect("real complete Add handoff");
-
                 with_mutation_evidence_v1(
                     DirectoryBuildModeV1::ImplicitRoot,
                     &added_entries,
@@ -12975,7 +13844,6 @@ pub mod semantic {
                             &mut move_counters,
                         )
                         .expect("real complete Move handoff");
-
                         with_mutation_evidence_v1(
                             DirectoryBuildModeV1::ImplicitRoot,
                             &moved_entries,
@@ -13006,11 +13874,14 @@ pub mod semantic {
                                     root,
                                     &remove_counters,
                                 );
-                                observation.expected_roots_matched =
-                                    u32::from(accepted_root == base_tree.physical())
-                                        + u32::from(added.root_tree() == added_tree.physical())
-                                        + u32::from(moved.root_tree() == moved_tree.physical())
-                                        + u32::from(removed.root_tree() == removed_tree.physical());
+                                observation.accepted_root = Some(accepted_root);
+                                observation.base_tree = Some(base_tree.physical());
+                                observation.added_root = Some(added.root_tree());
+                                observation.added_tree = Some(added_tree.physical());
+                                observation.moved_root = Some(moved.root_tree());
+                                observation.moved_tree = Some(moved_tree.physical());
+                                observation.removed_root = Some(removed.root_tree());
+                                observation.removed_tree = Some(removed_tree.physical());
                                 observation.completed_operations = 3;
                                 observation.final_root_returns_to_base =
                                     removed.root_tree() == base_tree.physical();
@@ -13141,9 +14012,10 @@ pub mod semantic {
                                     root,
                                     &counters,
                                 );
-                                observation.expected_roots_matched =
-                                    u32::from(accepted_root == root_base.physical())
-                                        + u32::from(moved.root_tree() == root_result.physical());
+                                observation.accepted_root = Some(accepted_root);
+                                observation.base_tree = Some(root_base.physical());
+                                observation.moved_root = Some(moved.root_tree());
+                                observation.moved_tree = Some(root_result.physical());
                                 observation.completed_operations = 1;
                                 observation.algorithm_is_fastcdc =
                                     moved.algorithm() == CdcAlgorithmV1::FastCdc;
@@ -13267,6 +14139,10 @@ pub mod semantic {
                         } else {
                             CompleteMutationTerminalV1::Succeeded
                         };
+                        let exact_operation_namespace_usage = (
+                            directory_usage(&root.join("preparation")),
+                            immutable_usage(root),
+                        );
                         let mut observation = mutation_observation(
                             expected_terminal,
                             &cas,
@@ -13274,14 +14150,15 @@ pub mod semantic {
                             root,
                             &counters,
                         );
-                        observation.expected_roots_matched =
-                            u32::from(accepted_root == base_tree.physical());
-                        if let Ok(handoff) = terminal {
-                            observation.expected_roots_matched +=
-                                u32::from(handoff.root_tree() == result_tree.physical());
+                        observation.accepted_root = Some(accepted_root);
+                        observation.base_tree = Some(base_tree.physical());
+                        if let Ok(updated) = terminal {
+                            observation.updated_root = Some(updated.root_tree());
+                            observation.update_tree = Some(result_tree.physical());
                             observation.completed_operations = 1;
                             observation.algorithm_is_fastcdc =
-                                handoff.algorithm() == CdcAlgorithmV1::FastCdc;
+                                updated.algorithm() == CdcAlgorithmV1::FastCdc;
+                            observation.update_algorithm = Some(updated.algorithm());
                             observation.storage_terminals =
                                 u32::from(mutation_storage_terminal(&counters));
                         }
@@ -13296,11 +14173,9 @@ pub mod semantic {
                         observation.source_offset = inserted_source.offset as u64;
                         observation.operation_counters[0] = complete_mutation_counters(&counters);
                         observation.operation_counter_count = 1;
-                        observation.namespace_unchanged = namespace_before
-                            == (
-                                directory_usage(&root.join("preparation")),
-                                immutable_usage(root),
-                            );
+                        observation.namespace_before = Some(namespace_before);
+                        observation.exact_operation_namespace_usage =
+                            Some(exact_operation_namespace_usage);
                         observation
                     },
                 )
@@ -13332,7 +14207,7 @@ pub mod semantic {
                 let mut cow_logical = boxed_zeroes::<COMPARISON_WINDOW_BYTES>();
                 let mut control = MutationTraceControlV1::default();
                 let mut counters = OperationCountersV1::default();
-                let terminal = run_complete_replace_v1(
+                let error = run_complete_replace_v1(
                     &cas,
                     0x541,
                     CdcAlgorithmV1::FastCdc,
@@ -13348,27 +14223,26 @@ pub mod semantic {
                     &mut cow_logical,
                     &mut control,
                     &mut counters,
-                );
-                assert!(matches!(
-                    terminal,
-                    Err(OperationErrorV1::FsCas(_))
-                        | Err(OperationErrorV1::Core(CoreError::IdMismatch))
-                ));
-                let mut observation = mutation_observation(
-                    CompleteMutationTerminalV1::UnauthenticatedBase,
-                    &cas,
-                    None,
-                    root,
-                    &counters,
-                );
-                observation.expected_roots_matched = u32::from(accepted_root == tree.physical());
+                )
+                .expect_err("unaccepted version must fail closed");
+                let terminal = match error {
+                    OperationErrorV1::FsCas(_) => CompleteMutationTerminalV1::FsCas,
+                    OperationErrorV1::Core(CoreError::IdMismatch) => {
+                        CompleteMutationTerminalV1::IdMismatch
+                    }
+                    other => panic!("unexpected unauthenticated base error: {other:?}"),
+                };
+                let mut observation = mutation_observation(terminal, &cas, None, root, &counters);
+                observation.accepted_root = Some(accepted_root);
+                observation.base_tree = Some(tree.physical());
                 observation.source_offset = source.offset as u64;
-                observation.namespace_unchanged = namespace_before
-                    == (
-                        directory_usage(&root.join("preparation")),
-                        immutable_usage(root),
-                    );
-                observation.accepted_version_differs = version != wrong_version;
+                observation.namespace_before = Some(namespace_before);
+                observation.exact_operation_namespace_usage = Some((
+                    directory_usage(&root.join("preparation")),
+                    immutable_usage(root),
+                ));
+                observation.accepted_version = Some(version);
+                observation.wrong_version = Some(wrong_version);
                 observation
             },
         )

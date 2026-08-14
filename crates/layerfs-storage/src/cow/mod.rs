@@ -1772,14 +1772,18 @@ pub mod semantic {
         ))
     }
 
-    pub fn file_replacement_v1(index: u32) -> CoreResult<TreeMutationObservationV1> {
+    pub fn file_replacement_v1(
+        index: u32,
+        old_bytes: [u8; 3],
+        new_bytes: [u8; 3],
+    ) -> CoreResult<TreeMutationObservationV1> {
         let count = 300;
         let index = usize::try_from(index).map_err(|_| CoreError::IntegerOverflow)?;
         let names = names(count);
         let mut base_entries = entries(&names, symlink_child(0));
         let stable = file_child(0);
-        let old = file_child(1);
-        let new = file_child(2);
+        let old = file_child_with_partition(&old_bytes, &[&old_bytes]);
+        let new = file_child_with_partition(&new_bytes, &[&new_bytes]);
         base_entries[0] = CanonicalTreeEntryV1::new(
             ValidatedComponent::new(&names[0]).map_err(|_| CoreError::Name)?,
             stable,

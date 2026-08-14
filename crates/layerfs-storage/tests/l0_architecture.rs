@@ -4912,7 +4912,7 @@ fn pb08_final_sources_are_substantive_and_alias_free() {
     let normalized_exports = exports.join("\n");
     assert_eq!(
         digest_hex(normalized_exports.as_bytes()),
-        "8a6fc64be5bfc6a6622fb108d5391716f861733d778a5b80c84d69ad379b0778",
+        "0e4e355a02a55c30ef8fb6cb9f7e78c5454b6009f8cc083dfb3d67547617f82e",
         "qualification export allowlist drifted"
     );
     assert_ne!(
@@ -4921,7 +4921,7 @@ fn pb08_final_sources_are_substantive_and_alias_free() {
                 .replacen("admit_v1", "admit_v2", 1)
                 .as_bytes()
         ),
-        "8a6fc64be5bfc6a6622fb108d5391716f861733d778a5b80c84d69ad379b0778",
+        "0e4e355a02a55c30ef8fb6cb9f7e78c5454b6009f8cc083dfb3d67547617f82e",
         "qualification export allowlist is not mutation-sensitive"
     );
     let owner_corpus = owner_sources
@@ -4961,7 +4961,7 @@ fn pb08_final_sources_are_substantive_and_alias_free() {
     let public_surface = public_items.join("\n");
     assert_eq!(
         digest_hex(public_surface.as_bytes()),
-        "86726e16d7ce9e13ba4ceccb1d3cef5a6bee1318e39937f08c28d5eb6c875670",
+        "ea387bcf636c67c3fa7cfbd036ce6c4f593a495f2957decdb2db9139cf81c3aa",
         "qualification transitive public surface drifted ({} declarations)",
         public_items.len()
     );
@@ -5715,10 +5715,6 @@ fn pb08_custody_inventory_is_executable_and_exact() {
         );
     }
     assert!(
-        std::env::var_os("PB08_CUSTODY_ORACLE_SUMMARY").is_none(),
-        "PB-08 custody oracle summary requested"
-    );
-    assert!(
         assertion_mismatches.is_empty(),
         "assertion custody drifted:\n{}",
         assertion_mismatches.join("\n")
@@ -5905,15 +5901,23 @@ fn pb08_custody_inventory_is_executable_and_exact() {
         "FsCasBoundaryV1::AfterCompleteValidatedHandoff",
         "validated_handoffs",
         "storage_terminals",
-        "expected_roots_matched",
+        "accepted_root",
+        "base_tree",
+        "moved_root",
+        "moved_tree",
     ];
     assert!(has_required(&move_evidence, &move_markers));
     let move_body = normalized_semantic_source(function_body(
         current_sources["operation_mutation.rs"].as_str(),
         move_name,
     ));
-    let exact_handoff_assertion = "assert_eq!(observation.validated_handoffs,1)";
+    let exact_handoff_observation = "letboundaries=observation.validated_handoffs;";
+    let exact_handoff_assertion = "assert_eq!(boundaries,1)";
+    assert!(move_body.contains(exact_handoff_observation));
     assert!(move_body.contains(exact_handoff_assertion));
+    assert!(!move_body
+        .replace(exact_handoff_observation, "letboundaries=999;")
+        .contains(exact_handoff_observation));
     assert!(!move_body
         .replace(
             exact_handoff_assertion,

@@ -21,39 +21,38 @@ mod operation_faults_owner {
     };
     use layerfs_storage::qualification::lifecycle::semantic::{
         alias_cleanup_invalidation_double_fault_v1, atomic_closure_malformed_occupant_v1,
-        carrier_accounting_poison_v1, carrier_alias_unlink_cleanup_v1,
-        carrier_cleanup_failure_v1 as lifecycle_carrier_cleanup_failure_v1,
-        carrier_exists_fault_v1, carrier_link_fault_v1, closure_unwind_fault_v1,
-        equal_marker_incumbent_rollback_v1, filesystem_fault_v1,
+        carrier_accounting_poison_v1, carrier_alias_post_unlink_accounting_v1,
+        carrier_alias_unlink_cleanup_v1, carrier_exists_fault_v1, carrier_link_fault_v1,
+        closure_unwind_fault_v1, equal_marker_incumbent_rollback_v1, filesystem_fault_v1,
         invalidation_probe_failure_before_candidate_validation_v1,
-        malformed_closure_cleanup_terminal_v1, marker_cleanup_length_fault_v1,
-        marker_cleanup_metadata_fault_v1, marker_cleanup_post_unlink_fault_v1,
-        marker_create_fault_v1, marker_hard_link_fault_v1, marker_immutable_precharge_v1,
-        marker_length_precharge_v1, marker_write_cleanup_terminal_v1,
-        operation_spool_cleanup_accounting_fault_v1, operation_spool_cleanup_metadata_fault_v1,
-        operation_spool_drop_metadata_fault_v1, operation_spool_read_observation_overflow_v1,
-        operation_spool_resize_fault_v1, operation_spool_unlink_fault_v1,
-        operation_spool_write_observation_overflow_v1, post_install_cleanup_v1,
-        post_link_alias_directional_failure_v1, post_link_marker_secondary_v1,
-        post_link_marker_unwind_v1, pre_link_marker_callback_cleanup_v1,
-        pre_link_marker_terminal_cleanup_v1, pre_link_marker_unwind_v1,
-        preparation_accounting_poison_fault_v1, preparation_construction_unwind_fault_v1,
-        preparation_create_cleanup_fault_v1, preparation_free_terminalization_v1,
-        preparation_free_unwind_v1, preparation_initialization_cleanup_fault_v1,
-        preparation_initialization_unwind_fault_v1, preparation_open_accounting_fault_v1,
-        preparation_permission_cleanup_fault_v1, private_pack_cleanup_accounting_fault_v1,
-        private_pack_cleanup_failure_v1, private_pack_cleanup_metadata_fault_v1,
-        private_pack_create_failure_v1, private_pack_drop_metadata_fault_v1,
-        private_pack_precharge_poison_v1, private_pack_truncate_accounting_fault_v1,
-        private_pack_unlink_fault_v1, published_locator_alias_unlink_v1,
-        typed_body_cleanup_dominance_v1, typed_complete_body_error_v1,
-        typed_complete_global_seen_error_v1, typed_complete_storage_counter_error_v1,
-        typed_preparation_free_error_v1, CandidateValidationFailureV1, CarrierLinkFaultFailureV1,
-        CreateFaultObservationV1, FilesystemFaultCaseV1, FilesystemFaultErrorV1,
-        FilesystemFaultFailureV1, MalformedClosureObservationV1, OperationSpoolFaultObservationV1,
-        PackFaultObservationV1, PostInstallCleanupObservationV1, PostInstallCleanupRequestV1,
-        PostLinkAliasCleanupV1, PostLinkMarkerTargetV1, PreLinkMarkerPanicPointV1,
-        PreparationConstructionCaseV1,
+        lifecycle_carrier_cleanup_failure_v1, malformed_closure_cleanup_terminal_v1,
+        marker_cleanup_length_fault_v1, marker_cleanup_metadata_fault_v1,
+        marker_cleanup_post_unlink_fault_v1, marker_create_fault_v1, marker_hard_link_fault_v1,
+        marker_immutable_precharge_v1, marker_length_precharge_v1,
+        marker_write_cleanup_terminal_v1, operation_spool_cleanup_accounting_fault_v1,
+        operation_spool_cleanup_metadata_fault_v1, operation_spool_drop_metadata_fault_v1,
+        operation_spool_read_observation_overflow_v1, operation_spool_resize_fault_v1,
+        operation_spool_unlink_fault_v1, operation_spool_write_observation_overflow_v1,
+        post_install_cleanup_v1, post_link_alias_directional_failure_v1,
+        post_link_marker_secondary_v1, post_link_marker_unwind_v1,
+        pre_link_marker_callback_cleanup_v1, pre_link_marker_terminal_cleanup_v1,
+        pre_link_marker_unwind_v1, preparation_accounting_poison_fault_v1,
+        preparation_construction_unwind_fault_v1, preparation_create_cleanup_fault_v1,
+        preparation_free_terminalization_v1, preparation_free_unwind_v1,
+        preparation_initialization_cleanup_fault_v1, preparation_initialization_unwind_fault_v1,
+        preparation_open_accounting_fault_v1, preparation_permission_cleanup_fault_v1,
+        private_pack_cleanup_accounting_fault_v1, private_pack_cleanup_failure_v1,
+        private_pack_cleanup_metadata_fault_v1, private_pack_create_failure_v1,
+        private_pack_drop_metadata_fault_v1, private_pack_precharge_poison_v1,
+        private_pack_truncate_accounting_fault_v1, private_pack_unlink_fault_v1,
+        published_locator_alias_unlink_v1, typed_body_cleanup_dominance_v1,
+        typed_complete_body_error_v1, typed_complete_global_seen_error_v1,
+        typed_complete_storage_counter_error_v1, typed_preparation_free_error_v1,
+        CandidateValidationFailureV1, CarrierLinkFaultFailureV1, CreateFaultObservationV1,
+        FilesystemFaultCaseV1, FilesystemFaultErrorV1, FilesystemFaultFailureV1,
+        MalformedClosureObservationV1, OperationSpoolFaultObservationV1, PackFaultObservationV1,
+        PostInstallCleanupObservationV1, PostInstallCleanupRequestV1, PostLinkAliasCleanupV1,
+        PostLinkMarkerTargetV1, PreLinkMarkerPanicPointV1, PreparationConstructionCaseV1,
     };
     #[cfg(unix)]
     use layerfs_storage::qualification::lifecycle::semantic::{
@@ -61,6 +60,41 @@ mod operation_faults_owner {
         PreparationUnlinkFaultModeV1,
     };
     use layerfs_storage::CoreError;
+    use std::fs;
+    use std::path::Path;
+
+    fn exact_directory_usage(path: &Path) -> (u64, u64) {
+        fs::read_dir(path)
+            .unwrap()
+            .map(|entry| {
+                let metadata = fs::symlink_metadata(entry.unwrap().path()).unwrap();
+                assert!(metadata.file_type().is_file());
+                (metadata.len(), 1_u64)
+            })
+            .fold((0_u64, 0_u64), |(bytes, inodes), (length, one)| {
+                (
+                    bytes.checked_add(length).unwrap(),
+                    inodes.checked_add(one).unwrap(),
+                )
+            })
+    }
+
+    fn exact_operation_namespace_usage(root: &Path) -> ((u64, u64), (u64, u64)) {
+        let preparation = exact_directory_usage(&root.join("preparation"));
+        let immutable = ["carriers", "objects", "catalog", "closures"]
+            .into_iter()
+            .map(|name| exact_directory_usage(&root.join(name)))
+            .fold(
+                (0_u64, 0_u64),
+                |(bytes, inodes), (next_bytes, next_inodes)| {
+                    (
+                        bytes.checked_add(next_bytes).unwrap(),
+                        inodes.checked_add(next_inodes).unwrap(),
+                    )
+                },
+            );
+        (preparation, immutable)
+    }
 
     fn object(payload: &[u8]) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(52 + payload.len());
@@ -85,19 +119,6 @@ mod operation_faults_owner {
         assert!(observation.zero_forbidden_work());
     }
 
-    fn assert_clean_create_fault_observation(observation: CreateFaultObservationV1) {
-        assert_eq!(observation.preparation_entries(), 0);
-        assert_eq!(observation.immutable_entries(), 0);
-        assert_eq!(observation.residue_bytes(), 0);
-        assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
-        assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
-        assert_eq!(observation.operation_active(), 0);
-        assert_eq!(observation.storage_active_operations(), 0);
-        assert_eq!(observation.storage_active_bytes(), 0);
-        assert_eq!(observation.storage_active_inodes(), 0);
-        assert!(observation.zero_forbidden_work());
-    }
-
     fn assert_create_fault_terminal(
         observation: CreateFaultObservationV1,
         error: PublicationErrorV1,
@@ -112,6 +133,78 @@ mod operation_faults_owner {
             ),
             (Some(error), Some(first), Some(dominant))
         );
+    }
+
+    fn assert_create_fault_authority_and_storage(
+        observation: CreateFaultObservationV1,
+        expected_queue_entries: u64,
+    ) {
+        assert_eq!(observation.operation_slots(), 0);
+        assert_eq!(observation.operation_active(), 0);
+        assert_eq!(observation.operation_queue(), (0, 0, 0));
+        assert_eq!(
+            (
+                observation.storage_active_operations(),
+                observation.storage_active_bytes(),
+                observation.storage_active_inodes()
+            ),
+            (0, 0, 0)
+        );
+        assert!(observation.visibility_lock_available());
+        assert!(observation.publication_lock_available());
+        assert_eq!(
+            observation.storage_bytes_requested(),
+            observation.storage_bytes_reserved()
+        );
+        assert_eq!(
+            observation.storage_inodes_requested(),
+            observation.storage_inodes_reserved()
+        );
+        assert_eq!(
+            observation.storage_bytes_reserved(),
+            observation.storage_bytes_released()
+                + observation.storage_bytes_committed()
+                + observation.storage_bytes_retained()
+        );
+        assert_eq!(
+            observation.storage_inodes_reserved(),
+            observation.storage_inodes_released()
+                + observation.storage_inodes_committed()
+                + observation.storage_inodes_retained()
+        );
+        let (queue_entries, queue_refusals, release_failures) = observation.root_admission_queue();
+        assert_eq!(queue_entries, expected_queue_entries);
+        assert_eq!(queue_refusals, 0);
+        assert_eq!(release_failures, 0);
+    }
+
+    fn assert_empty_create_fault_namespace(observation: CreateFaultObservationV1) {
+        assert_eq!(
+            (
+                observation.preparation_bytes(),
+                observation.preparation_entries()
+            ),
+            (0, 0)
+        );
+        assert_eq!(
+            (
+                observation.immutable_bytes(),
+                observation.immutable_entries()
+            ),
+            (0, 0)
+        );
+    }
+
+    fn assert_zero_create_fault_custody(observation: CreateFaultObservationV1) {
+        assert_eq!(observation.storage_bytes_committed(), 0);
+        assert_eq!(observation.storage_inodes_committed(), 0);
+        assert_eq!(observation.storage_bytes_retained(), 0);
+        assert_eq!(observation.storage_inodes_retained(), 0);
+        assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+        assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+        assert_eq!(observation.immutable_residue_bytes(), 0);
+        assert_eq!(observation.immutable_residue_inodes(), 0);
+        assert_eq!(observation.residue_bytes(), 0);
     }
 
     fn assert_usable_create_fault_observation(observation: CreateFaultObservationV1) {
@@ -183,8 +276,35 @@ mod operation_faults_owner {
 
     fn assert_clean_operation_spool(observation: OperationSpoolFaultObservationV1) {
         assert_eq!(observation.cleanup_error(), None);
+        assert_eq!(observation.cleanup_retry_error(), None);
         assert_eq!(observation.preparation_entries(), 0);
         assert_eq!(observation.preparation_bytes(), 0);
+        assert_eq!(observation.immutable_entries(), 0);
+        assert_eq!(observation.immutable_bytes(), 0);
+        assert_eq!(observation.operation_slots(), 0);
+        assert_eq!(observation.operation_active(), 0);
+        assert_eq!(observation.operation_queue(), (0, 0, 0));
+        assert_eq!(observation.storage_active(), (0, 0, 0));
+        assert_eq!(
+            observation.storage_bytes_requested(),
+            observation.storage_bytes_reserved()
+        );
+        assert_eq!(
+            observation.storage_inodes_requested(),
+            observation.storage_inodes_reserved()
+        );
+        assert_eq!(
+            observation.storage_bytes_reserved(),
+            observation.storage_bytes_released()
+                + observation.storage_bytes_committed()
+                + observation.storage_bytes_retained()
+        );
+        assert_eq!(
+            observation.storage_inodes_reserved(),
+            observation.storage_inodes_released()
+                + observation.storage_inodes_committed()
+                + observation.storage_inodes_retained()
+        );
         assert_eq!(observation.storage_bytes_committed(), 0);
         assert_eq!(observation.storage_bytes_retained(), 0);
         assert_eq!(observation.storage_inodes_committed(), 0);
@@ -192,7 +312,40 @@ mod operation_faults_owner {
         assert!(!observation.invalidated());
         assert!(!observation.stale_invalidated());
         assert!(!observation.reopen_invalidated());
+        assert!(observation.root_usable());
+        assert!(observation.stale_usable());
+        assert!(observation.reopen_usable());
         assert!(observation.zero_forbidden_work());
+    }
+
+    fn assert_pack_fault_storage_and_authority(observation: PackFaultObservationV1) {
+        assert_eq!(observation.operation_slots(), 0);
+        assert_eq!(observation.operation_active(), 0);
+        assert_eq!(observation.operation_queue(), (0, 0, 0));
+        assert_eq!(observation.storage_active(), (0, 0, 0));
+        assert_eq!(observation.immutable_bytes(), 0);
+        assert_eq!(observation.immutable_entries(), 0);
+        assert_eq!(observation.unreachable_installed_residue_bytes(), 0);
+        assert_eq!(
+            observation.storage_bytes_requested(),
+            observation.storage_bytes_reserved()
+        );
+        assert_eq!(
+            observation.storage_inodes_requested(),
+            observation.storage_inodes_reserved()
+        );
+        assert_eq!(
+            observation.storage_bytes_reserved(),
+            observation.storage_bytes_released()
+                + observation.storage_bytes_committed()
+                + observation.storage_bytes_retained()
+        );
+        assert_eq!(
+            observation.storage_inodes_reserved(),
+            observation.storage_inodes_released()
+                + observation.storage_inodes_committed()
+                + observation.storage_inodes_retained()
+        );
     }
 
     fn assert_failed_pack_root(observation: PackFaultObservationV1) {
@@ -1071,13 +1224,40 @@ mod operation_faults_owner {
                     PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
                 },
             );
-            assert_eq!(observation.preparation_entries(), 1);
-            assert!(observation.mutable_preparation_residue_bytes() > 0);
-            assert_eq!(observation.mutable_preparation_residue_inodes(), 1);
-            assert_eq!(observation.immutable_entries(), 0);
+            assert!(observation.control_fired());
+            assert_eq!(observation.invalidation_attempts(), 1);
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.residue_bytes(), 0);
+            assert!(observation.preparation_bytes() > 0);
+            let preparation_inodes = observation.preparation_entries();
+            assert_eq!(preparation_inodes, 1);
+            assert_eq!(
+                (
+                    observation.immutable_bytes(),
+                    observation.immutable_entries()
+                ),
+                (0, 0)
+            );
+            assert_eq!(
+                observation.storage_bytes_retained(),
+                observation.preparation_bytes()
+            );
+            assert_eq!(observation.storage_inodes_retained(), preparation_inodes);
+            assert_eq!(
+                observation.mutable_preparation_residue_bytes(),
+                observation.preparation_bytes()
+            );
+            assert_eq!(
+                observation.mutable_preparation_residue_inodes(),
+                preparation_inodes
+            );
+            assert_eq!(observation.immutable_residue_bytes(), 0);
+            assert_eq!(observation.immutable_residue_inodes(), 0);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1170,7 +1350,38 @@ mod operation_faults_owner {
                 assert_eq!(observation.source_read_calls(), 0, "{label}");
             }
             assert_eq!(observation.preparation_entries(), 0, "{label}");
+            assert_eq!(
+                fs::read_dir(fixture.path().join("preparation"))
+                    .unwrap()
+                    .count(),
+                0,
+                "{label}"
+            );
             assert_eq!(observation.immutable_entries(), 0, "{label}");
+            assert_eq!(
+                observation.storage_bytes_requested(),
+                observation.storage_bytes_reserved(),
+                "{label}"
+            );
+            assert_eq!(
+                observation.storage_inodes_requested(),
+                observation.storage_inodes_reserved(),
+                "{label}"
+            );
+            assert_eq!(
+                observation.storage_bytes_reserved(),
+                observation.storage_bytes_released()
+                    + observation.storage_bytes_committed()
+                    + observation.storage_bytes_retained(),
+                "{label}"
+            );
+            assert_eq!(
+                observation.storage_inodes_reserved(),
+                observation.storage_inodes_released()
+                    + observation.storage_inodes_committed()
+                    + observation.storage_inodes_retained(),
+                "{label}"
+            );
             assert_eq!(observation.storage_bytes_committed(), 0, "{label}");
             assert_eq!(observation.storage_bytes_retained(), 0, "{label}");
             assert_eq!(observation.storage_inodes_committed(), 0, "{label}");
@@ -1222,10 +1433,22 @@ mod operation_faults_owner {
                 assert!(observation.poisoned(), "{label}");
                 assert!(observation.bound_invoked(), "{label}");
                 assert!(observation.supply_invoked(), "{label}");
-                assert_clean_create_fault_observation(observation);
+                assert_create_fault_authority_and_storage(observation, 1);
+                let preparation_bytes = observation.preparation_bytes();
+                let preparation_inodes = observation.preparation_entries();
+                let immutable_bytes = observation.immutable_bytes();
+                let immutable_inodes = observation.immutable_entries();
+                assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{label}");
+                assert_eq!((immutable_bytes, immutable_inodes), (0, 0), "{label}");
+                assert_eq!(observation.storage_bytes_committed(), 0, "{label}");
+                assert_eq!(observation.storage_inodes_committed(), 0, "{label}");
+                assert_eq!(observation.storage_bytes_retained(), 0, "{label}");
+                assert_eq!(observation.storage_inodes_retained(), 0, "{label}");
+                assert_eq!(observation.residue_bytes(), 0, "{label}");
+                assert!(observation.zero_forbidden_work(), "{label}");
                 assert!(observation.invalidated(), "{label}");
                 assert!(observation.stale_invalidated(), "{label}");
-                assert!(observation.reopen_invalidated(), "{label}");
+                assert!(observation.reopen_rejected(), "{label}");
             }
         }
     }
@@ -1249,16 +1472,34 @@ mod operation_faults_owner {
             assert!(observation.control_fired(), "{label}");
             assert!(observation.carrier_installed(), "{label}");
             assert!(observation.poisoned(), "{label}");
-            assert_eq!(observation.immutable_entries(), 1, "{label}");
             assert!(observation.bound_invoked(), "{label}");
             assert!(observation.supply_invoked(), "{label}");
-            assert_eq!(observation.preparation_entries(), 0, "{label}");
+            assert_create_fault_authority_and_storage(observation, 1);
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
+            let carrier_bytes = observation.carrier_bytes();
+            let carrier_inodes = observation.carrier_entries();
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{label}");
+            assert_eq!(
+                (immutable_bytes, immutable_inodes),
+                (carrier_bytes, 1),
+                "{label}"
+            );
+            assert_eq!(carrier_inodes, 1, "{label}");
+            assert_eq!(observation.locator_entries(), 0, "{label}");
+            assert_eq!(observation.catalog_entries(), 0, "{label}");
+            assert_eq!(observation.closure_entries(), 0, "{label}");
+            assert_eq!(observation.catalog_operations(), 0, "{label}");
             assert_eq!(observation.residue_bytes(), 0, "{label}");
             assert_eq!(observation.storage_bytes_committed(), 0, "{label}");
             assert_eq!(observation.storage_inodes_committed(), 0, "{label}");
+            assert_eq!(observation.storage_bytes_retained(), 0, "{label}");
+            assert_eq!(observation.storage_inodes_retained(), 0, "{label}");
             assert!(observation.invalidated(), "{label}");
             assert!(observation.stale_invalidated(), "{label}");
-            assert!(observation.reopen_invalidated(), "{label}");
+            assert!(observation.reopen_rejected(), "{label}");
             assert!(observation.zero_forbidden_work(), "{label}");
         }
     }
@@ -1267,36 +1508,45 @@ mod operation_faults_owner {
     fn preparation_construction_preserves_first_failure_when_cleanup_dominates() {
         let fixture = TempFsCas::new("preparation-create-cleanup-dual-cause");
         let observation = preparation_create_cleanup_fault_v1(fixture.path());
-        assert_create_fault_terminal(
-            observation,
-            PublicationErrorV1::TerminalFailure,
-            PublicationCauseV1::Filesystem,
-            PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool),
+        assert_eq!(
+            (
+                observation.error(),
+                observation.first_cause(),
+                observation.filesystem_failure(),
+                observation.dominant_cause()
+            ),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Filesystem),
+                Some(FilesystemFaultFailureV1::NoSpace),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool
+                ))
+            )
         );
         assert!(observation.control_fired());
         assert_eq!(observation.cleanup_calls(), 1);
         assert!(observation.bound_invoked());
         assert!(!observation.supply_invoked());
         assert_eq!(observation.source_read_calls(), 0);
-        assert_eq!(observation.preparation_entries(), 1);
-        assert_eq!(observation.immutable_entries(), 0);
+        assert_create_fault_authority_and_storage(observation, 1);
+        let preparation_bytes = observation.preparation_bytes();
+        let preparation_inodes = observation.preparation_entries();
+        let immutable_bytes = observation.immutable_bytes();
+        let immutable_inodes = observation.immutable_entries();
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 1));
+        assert_eq!((immutable_bytes, immutable_inodes), (0, 0));
         assert_eq!(observation.storage_bytes_committed(), 0);
         assert_eq!(observation.storage_inodes_committed(), 0);
-        assert_eq!(
-            observation.storage_bytes_retained(),
-            observation.preparation_bytes()
-        );
-        assert_eq!(
-            observation.storage_inodes_retained(),
-            observation.preparation_entries()
-        );
+        assert_eq!(observation.storage_bytes_retained(), preparation_bytes);
+        assert_eq!(observation.storage_inodes_retained(), preparation_inodes);
         assert_eq!(
             observation.mutable_preparation_residue_bytes(),
-            observation.preparation_bytes()
+            preparation_bytes
         );
         assert_eq!(
             observation.mutable_preparation_residue_inodes(),
-            observation.preparation_entries()
+            preparation_inodes
         );
         assert!(observation.invalidated());
         assert!(observation.stale_invalidated());
@@ -1342,11 +1592,31 @@ mod operation_faults_owner {
                 assert_eq!(observation.cleanup_calls(), 1);
                 assert!(observation.bound_invoked());
                 assert!(!observation.supply_invoked());
-                assert_eq!(observation.preparation_entries(), 1);
-                assert_eq!(observation.immutable_entries(), 0);
+                assert_eq!(observation.source_read_calls(), 0);
+                assert_eq!(observation.invalidation_attempts(), 1);
+                assert_create_fault_authority_and_storage(observation, 1);
+                let preparation_bytes = observation.preparation_bytes();
+                let preparation_inodes = observation.preparation_entries();
+                let immutable_bytes = observation.immutable_bytes();
+                let immutable_inodes = observation.immutable_entries();
+                assert_eq!((preparation_bytes, preparation_inodes), (0, 1));
+                assert_eq!((immutable_bytes, immutable_inodes), (0, 0));
+                assert_eq!(observation.storage_bytes_committed(), 0);
+                assert_eq!(observation.storage_inodes_committed(), 0);
+                assert_eq!(observation.storage_bytes_retained(), preparation_bytes);
+                assert_eq!(observation.storage_inodes_retained(), preparation_inodes);
+                assert_eq!(
+                    observation.mutable_preparation_residue_bytes(),
+                    preparation_bytes
+                );
+                assert_eq!(
+                    observation.mutable_preparation_residue_inodes(),
+                    preparation_inodes
+                );
+                assert_eq!(observation.residue_bytes(), 0);
                 assert!(observation.invalidated());
                 assert!(observation.stale_invalidated());
-                assert!(observation.reopen_invalidated());
+                assert!(observation.reopen_rejected());
                 assert!(observation.zero_forbidden_work());
             }
         }
@@ -1372,10 +1642,29 @@ mod operation_faults_owner {
                 assert!(!observation.panicked());
                 assert!(observation.bound_invoked());
                 assert!(!observation.supply_invoked());
-                assert_eq!(observation.immutable_entries(), 0);
+                assert_eq!(observation.source_read_calls(), 0);
+                assert_eq!(observation.invalidation_attempts(), 1);
+                assert_create_fault_authority_and_storage(observation, 1);
+                let expected_physical_inodes = u64::from(
+                    case != PreparationConstructionCaseV1::PreCreateAccountingReleaseFails,
+                );
+                let preparation_bytes = observation.preparation_bytes();
+                let preparation_inodes = observation.preparation_entries();
+                let immutable_bytes = observation.immutable_bytes();
+                let immutable_inodes = observation.immutable_entries();
+                assert_eq!(preparation_bytes, 0);
+                assert_eq!(preparation_inodes, expected_physical_inodes);
+                assert_eq!((immutable_bytes, immutable_inodes), (0, 0));
+                assert_eq!(observation.storage_bytes_committed(), 0);
+                assert_eq!(observation.storage_inodes_committed(), 0);
+                assert_eq!(observation.storage_bytes_retained(), 0);
+                assert_eq!(observation.storage_inodes_retained(), 1);
+                assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+                assert_eq!(observation.mutable_preparation_residue_inodes(), 1);
+                assert_eq!(observation.residue_bytes(), 0);
                 assert!(observation.invalidated());
                 assert!(observation.stale_invalidated());
-                assert!(observation.reopen_invalidated());
+                assert!(observation.reopen_rejected());
                 assert!(observation.zero_forbidden_work());
                 assert_eq!(
                     observation.cleanup_calls(),
@@ -1434,9 +1723,89 @@ mod operation_faults_owner {
             clean_observation.panic_payload(),
             Some("injected preparation initialization unwind before outer terminal")
         );
+        assert!(clean_observation.control_fired());
+        assert_eq!(clean_observation.cleanup_calls(), 4);
+        assert_eq!(clean_observation.invalidation_attempts(), 0);
         assert!(clean_observation.bound_invoked());
-        assert!(clean_observation.supply_invoked());
+        assert!(!clean_observation.supply_invoked());
+        let (unwind_slots, unwind_active, unwind_queue, unwind_storage_active, unwind_owner_usable) =
+            clean_observation.unwind_authority();
+        assert_eq!(unwind_slots, 0);
+        assert_eq!(unwind_active, 0);
+        assert_eq!(unwind_queue, (0, 0, 0));
+        assert_eq!(unwind_storage_active, (0, 0, 0));
+        assert!(unwind_owner_usable);
+        let preparation_bytes = clean_observation.preparation_bytes();
+        let preparation_inodes = clean_observation.preparation_entries();
+        let immutable_bytes = clean_observation.immutable_bytes();
+        let immutable_inodes = clean_observation.immutable_entries();
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+        assert_eq!((immutable_bytes, immutable_inodes), (0, 0));
+        assert_eq!(clean_observation.storage_bytes_committed(), 0);
+        assert_eq!(clean_observation.storage_inodes_committed(), 0);
+        assert_eq!(clean_observation.storage_bytes_retained(), 0);
+        assert_eq!(clean_observation.storage_inodes_retained(), 0);
+        assert_eq!(
+            clean_observation.storage_bytes_requested(),
+            clean_observation.storage_bytes_reserved()
+        );
+        assert_eq!(
+            clean_observation.storage_inodes_requested(),
+            clean_observation.storage_inodes_reserved()
+        );
+        assert_eq!(
+            clean_observation.storage_bytes_reserved(),
+            clean_observation.storage_bytes_released()
+                + clean_observation.storage_bytes_committed()
+                + clean_observation.storage_bytes_retained()
+        );
+        assert_eq!(
+            clean_observation.storage_inodes_reserved(),
+            clean_observation.storage_inodes_released()
+                + clean_observation.storage_inodes_committed()
+                + clean_observation.storage_inodes_retained()
+        );
+        assert_eq!(clean_observation.mutable_preparation_residue_bytes(), 0);
+        assert_eq!(clean_observation.mutable_preparation_residue_inodes(), 0);
+        assert_eq!(clean_observation.residue_bytes(), 0);
+        assert!(clean_observation.visibility_lock_available());
+        assert!(clean_observation.publication_lock_available());
+        assert_eq!(clean_observation.usable_handles(), (true, true, true));
         assert!(clean_observation.zero_forbidden_work());
+
+        let (
+            followup_bound,
+            followup_supply,
+            followup_preparation_entries,
+            followup_storage,
+            followup_zero_forbidden_work,
+        ) = clean_observation.followup_observation();
+        assert!(followup_bound);
+        assert!(followup_supply);
+        assert_eq!(followup_preparation_entries, 0);
+        let (
+            storage_bytes_requested,
+            storage_bytes_reserved,
+            storage_bytes_released,
+            storage_bytes_committed,
+            storage_bytes_retained,
+            storage_inodes_requested,
+            storage_inodes_reserved,
+            storage_inodes_released,
+            storage_inodes_committed,
+            storage_inodes_retained,
+        ) = followup_storage;
+        assert_eq!(storage_bytes_requested, storage_bytes_reserved);
+        assert_eq!(storage_inodes_requested, storage_inodes_reserved);
+        assert_eq!(
+            storage_bytes_reserved,
+            storage_bytes_released + storage_bytes_committed + storage_bytes_retained
+        );
+        assert_eq!(
+            storage_inodes_reserved,
+            storage_inodes_released + storage_inodes_committed + storage_inodes_retained
+        );
+        assert!(followup_zero_forbidden_work);
 
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!(
@@ -1468,9 +1837,28 @@ mod operation_faults_owner {
             assert!(observation.control_fired());
             assert!(observation.poisoned());
             assert!(!observation.followup_succeeded());
+            assert_eq!(observation.cleanup_calls(), 4);
+            assert_eq!(observation.invalidation_attempts(), 1);
+            assert!(observation.bound_invoked());
+            assert!(!observation.supply_invoked());
+            assert_eq!(observation.source_read_calls(), 0);
+            assert_create_fault_authority_and_storage(observation, 1);
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+            assert_eq!((immutable_bytes, immutable_inodes), (0, 0));
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.storage_bytes_retained(), 0);
+            assert_eq!(observation.storage_inodes_retained(), 0);
+            assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+            assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+            assert_eq!(observation.residue_bytes(), 0);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1486,6 +1874,33 @@ mod operation_faults_owner {
             clean_observation.panic_payload(),
             Some("injected closure-fence unwind before outer terminal")
         );
+        assert!(clean_observation.control_fired());
+        assert_eq!(clean_observation.cleanup_calls(), 5);
+        assert_eq!(clean_observation.invalidation_attempts(), 0);
+        assert_create_fault_authority_and_storage(clean_observation, 1);
+        let preparation_bytes = clean_observation.preparation_bytes();
+        let preparation_inodes = clean_observation.preparation_entries();
+        let immutable_bytes = clean_observation.immutable_bytes();
+        let immutable_inodes = clean_observation.immutable_entries();
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+        assert!(immutable_bytes > 0);
+        assert!(immutable_inodes > 0);
+        assert_eq!(clean_observation.storage_bytes_committed(), 0);
+        assert_eq!(clean_observation.storage_inodes_committed(), 0);
+        assert_eq!(clean_observation.storage_bytes_retained(), immutable_bytes);
+        assert_eq!(
+            clean_observation.storage_inodes_retained(),
+            immutable_inodes
+        );
+        assert_eq!(clean_observation.mutable_preparation_residue_bytes(), 0);
+        assert_eq!(clean_observation.mutable_preparation_residue_inodes(), 0);
+        assert_eq!(clean_observation.immutable_residue_bytes(), immutable_bytes);
+        assert_eq!(
+            clean_observation.immutable_residue_inodes(),
+            immutable_inodes
+        );
+        assert_eq!(clean_observation.residue_bytes(), immutable_bytes);
+        assert_eq!(clean_observation.usable_handles(), (true, true, true));
         assert!(clean_observation.zero_forbidden_work());
 
         for fail_invalidation in [false, true] {
@@ -1516,9 +1931,30 @@ mod operation_faults_owner {
             );
             assert!(observation.control_fired());
             assert!(observation.poisoned());
+            assert_eq!(observation.cleanup_calls(), 5);
+            assert_eq!(observation.invalidation_attempts(), 1);
+            assert!(observation.bound_invoked());
+            assert!(observation.supply_invoked());
+            assert_create_fault_authority_and_storage(observation, 1);
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+            assert!(immutable_bytes > 0);
+            assert!(immutable_inodes > 0);
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.storage_bytes_retained(), immutable_bytes);
+            assert_eq!(observation.storage_inodes_retained(), immutable_inodes);
+            assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+            assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+            assert_eq!(observation.immutable_residue_bytes(), immutable_bytes);
+            assert_eq!(observation.immutable_residue_inodes(), immutable_inodes);
+            assert_eq!(observation.residue_bytes(), immutable_bytes);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1559,11 +1995,33 @@ mod operation_faults_owner {
             assert_eq!(observation.invalidation_attempts(), 1);
             assert!(observation.bound_invoked());
             assert!(!observation.supply_invoked());
-            assert_eq!(observation.preparation_entries(), 1);
-            assert_eq!(observation.immutable_entries(), 0);
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_eq!(
+                (
+                    observation.preparation_bytes(),
+                    observation.preparation_entries()
+                ),
+                (0, 1)
+            );
+            assert_eq!(
+                (
+                    observation.immutable_bytes(),
+                    observation.immutable_entries()
+                ),
+                (0, 0)
+            );
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.storage_bytes_retained(), 0);
+            assert_eq!(observation.storage_inodes_retained(), 1);
+            assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+            assert_eq!(observation.mutable_preparation_residue_inodes(), 1);
+            assert_eq!(observation.immutable_residue_bytes(), 0);
+            assert_eq!(observation.immutable_residue_inodes(), 0);
+            assert_eq!(observation.residue_bytes(), 0);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1598,9 +2056,20 @@ mod operation_faults_owner {
             );
             assert!(observation.bound_invoked());
             assert!(!observation.supply_invoked());
+            assert_create_fault_authority_and_storage(observation, 1);
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+            assert_eq!((immutable_bytes, immutable_inodes), (0, 0));
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.storage_bytes_retained(), 0);
+            assert_eq!(observation.storage_inodes_retained(), 0);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1610,28 +2079,35 @@ mod operation_faults_owner {
         let fixture = TempFsCas::new("preparation-open-accounting-cleanup");
         let observation = preparation_open_accounting_fault_v1(fixture.path());
         assert_eq!(
-            observation.error(),
-            Some(PublicationErrorV1::TerminalFailure)
-        );
-        assert_eq!(
-            observation.first_cause(),
-            Some(PublicationCauseV1::Filesystem)
-        );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::CleanupFailed(
-                PublicationCleanupTargetV1::PreparationSpool
-            ))
-        );
-        assert_eq!(
-            observation.filesystem_failure(),
-            Some(FilesystemFaultFailureV1::NoSpace)
+            (
+                observation.error(),
+                observation.first_cause(),
+                observation.filesystem_failure(),
+                observation.dominant_cause()
+            ),
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Filesystem),
+                Some(FilesystemFaultFailureV1::NoSpace),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool
+                ))
+            )
         );
         assert!(observation.control_fired());
         assert!(observation.bound_invoked());
         assert!(!observation.supply_invoked());
-        assert_eq!(observation.preparation_entries(), 0);
-        assert_eq!(observation.immutable_entries(), 0);
+        assert_create_fault_authority_and_storage(observation, 1);
+        let preparation_bytes = observation.preparation_bytes();
+        let preparation_inodes = observation.preparation_entries();
+        let immutable_bytes = observation.immutable_bytes();
+        let immutable_inodes = observation.immutable_entries();
+        assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+        assert_eq!((immutable_bytes, immutable_inodes), (0, 0));
+        assert_eq!(observation.storage_bytes_committed(), 0);
+        assert_eq!(observation.storage_inodes_committed(), 0);
+        assert_eq!(observation.storage_bytes_retained(), 0);
+        assert_eq!(observation.storage_inodes_retained(), 0);
         assert!(observation.invalidated());
         assert!(observation.stale_invalidated());
         assert!(observation.reopen_invalidated());
@@ -1643,14 +2119,14 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("private-pack-precharge-{fail_invalidation}"));
             let observation = private_pack_precharge_poison_v1(fixture.path(), fail_invalidation);
-            assert_eq!(
-                observation.error(),
-                Some(if fail_invalidation {
-                    PublicationErrorV1::TerminalFailure
-                } else {
-                    PublicationErrorV1::SynchronizationPoisoned
-                })
-            );
+            let expected = Some(if fail_invalidation {
+                PublicationErrorV1::TerminalFailure
+            } else {
+                PublicationErrorV1::SynchronizationPoisoned
+            });
+            assert_eq!(observation.error(), expected);
+            assert_eq!(observation.operation_error(), expected);
+            assert_eq!(observation.finish_terminal_v1(), expected);
             assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::SynchronizationPoisoned)
@@ -1664,11 +2140,14 @@ mod operation_faults_owner {
                 })
             );
             assert!(observation.poisoned());
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_empty_create_fault_namespace(observation);
+            assert_eq!(observation.storage_bytes_requested(), 0);
+            assert_eq!(observation.storage_inodes_requested(), 1);
+            assert_zero_create_fault_custody(observation);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
-            assert_eq!(observation.preparation_entries(), 0);
-            assert_eq!(observation.immutable_entries(), 0);
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1684,32 +2163,38 @@ mod operation_faults_owner {
                 let fixture = TempFsCas::new(&label);
                 let observation =
                     private_pack_create_failure_v1(fixture.path(), failure, fail_invalidation);
+                let dominant = if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
+                } else {
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack)
+                };
                 assert_eq!(
                     observation.error(),
                     Some(PublicationErrorV1::TerminalFailure),
                     "{label}"
                 );
+                assert_eq!(
+                    observation.operation_error(),
+                    observation.error(),
+                    "{label}"
+                );
+                assert_eq!(observation.finish_terminal_v1(), None, "{label}");
                 assert_eq!(observation.filesystem_failure(), Some(failure), "{label}");
                 assert_eq!(
                     observation.first_cause(),
                     Some(PublicationCauseV1::Filesystem),
                     "{label}"
                 );
-                assert_eq!(
-                    observation.dominant_cause(),
-                    Some(if fail_invalidation {
-                        PublicationCauseV1::InvalidationFailed
-                    } else {
-                        PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack)
-                    }),
-                    "{label}"
-                );
+                assert_eq!(observation.dominant_cause(), Some(dominant), "{label}");
                 assert!(observation.control_fired(), "{label}");
+                assert_create_fault_authority_and_storage(observation, 1);
+                assert_empty_create_fault_namespace(observation);
+                assert_eq!(observation.storage_bytes_requested(), 0, "{label}");
+                assert_eq!(observation.storage_inodes_requested(), 1, "{label}");
+                assert_zero_create_fault_custody(observation);
                 assert!(observation.invalidated(), "{label}");
                 assert!(observation.stale_invalidated(), "{label}");
-                assert!(observation.reopen_invalidated(), "{label}");
-                assert_eq!(observation.preparation_entries(), 0, "{label}");
-                assert_eq!(observation.immutable_entries(), 0, "{label}");
+                assert!(observation.reopen_rejected(), "{label}");
                 assert!(observation.zero_forbidden_work(), "{label}");
             }
         }
@@ -1751,15 +2236,14 @@ mod operation_faults_owner {
                 break_accounting,
                 fail_invalidation,
             );
-            assert_eq!(
-                observation.error(),
-                Some(if break_accounting {
-                    PublicationErrorV1::TerminalFailure
-                } else {
-                    PublicationErrorV1::Filesystem
-                }),
-                "{label}"
-            );
+            let expected = Some(if break_accounting {
+                PublicationErrorV1::TerminalFailure
+            } else {
+                PublicationErrorV1::Filesystem
+            });
+            assert_eq!(observation.error(), expected, "{label}");
+            assert_eq!(observation.operation_error(), expected, "{label}");
+            assert_eq!(observation.finish_terminal_v1(), None, "{label}");
             assert_eq!(observation.filesystem_failure(), Some(failure), "{label}");
             assert_eq!(
                 observation.first_cause(),
@@ -1768,13 +2252,16 @@ mod operation_faults_owner {
             );
             assert_eq!(observation.dominant_cause(), Some(dominant), "{label}");
             assert!(observation.control_fired(), "{label}");
-            assert_eq!(observation.preparation_entries(), 0, "{label}");
-            assert_eq!(observation.immutable_entries(), 0, "{label}");
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_empty_create_fault_namespace(observation);
+            assert_zero_create_fault_custody(observation);
             assert!(observation.zero_forbidden_work(), "{label}");
             if break_accounting {
                 assert!(observation.invalidated(), "{label}");
                 assert!(observation.stale_invalidated(), "{label}");
-                assert!(observation.reopen_invalidated(), "{label}");
+                assert!(observation.reopen_rejected(), "{label}");
+            } else {
+                assert_eq!(observation.usable_handles(), (true, true, true), "{label}");
             }
         }
     }
@@ -1784,14 +2271,14 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-length-{fail_invalidation}"));
             let observation = marker_length_precharge_v1(fixture.path(), fail_invalidation);
-            assert_eq!(
-                observation.error(),
-                Some(if fail_invalidation {
-                    PublicationErrorV1::TerminalFailure
-                } else {
-                    PublicationErrorV1::Integrity
-                })
-            );
+            let expected = Some(if fail_invalidation {
+                PublicationErrorV1::TerminalFailure
+            } else {
+                PublicationErrorV1::Integrity
+            });
+            assert_eq!(observation.error(), expected);
+            assert_eq!(observation.operation_error(), expected);
+            assert_eq!(observation.finish_terminal_v1(), None);
             assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::Integrity)
@@ -1804,12 +2291,17 @@ mod operation_faults_owner {
                     PublicationCauseV1::Integrity
                 })
             );
-            assert!(observation.control_fired());
+            let (corrupted, restored_for_cleanup, payload_or_link_seen, _, _) =
+                observation.marker_fault_boundaries();
+            assert!(corrupted);
+            assert!(restored_for_cleanup);
+            assert!(!payload_or_link_seen);
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_empty_create_fault_namespace(observation);
+            assert_zero_create_fault_custody(observation);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
-            assert_eq!(observation.preparation_entries(), 0);
-            assert_eq!(observation.immutable_entries(), 0);
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1819,14 +2311,14 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-immutable-{fail_invalidation}"));
             let observation = marker_immutable_precharge_v1(fixture.path(), fail_invalidation);
-            assert_eq!(
-                observation.error(),
-                Some(if fail_invalidation {
-                    PublicationErrorV1::TerminalFailure
-                } else {
-                    PublicationErrorV1::Integrity
-                })
-            );
+            let expected = Some(if fail_invalidation {
+                PublicationErrorV1::TerminalFailure
+            } else {
+                PublicationErrorV1::Integrity
+            });
+            assert_eq!(observation.error(), expected);
+            assert_eq!(observation.operation_error(), expected);
+            assert_eq!(observation.finish_terminal_v1(), None);
             assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::Integrity)
@@ -1839,12 +2331,16 @@ mod operation_faults_owner {
                     PublicationCauseV1::Integrity
                 })
             );
-            assert!(observation.control_fired());
+            let (_, _, _, marker_write_seen, marker_link_boundary_seen) =
+                observation.marker_fault_boundaries();
+            assert!(marker_write_seen);
+            assert!(marker_link_boundary_seen);
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_empty_create_fault_namespace(observation);
+            assert_zero_create_fault_custody(observation);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
-            assert_eq!(observation.preparation_entries(), 0);
-            assert_eq!(observation.immutable_entries(), 0);
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1854,13 +2350,16 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-incumbent-{fail_invalidation}"));
             let observation = equal_marker_incumbent_rollback_v1(fixture.path(), fail_invalidation);
+            let expected = Some(if fail_invalidation {
+                PublicationErrorV1::TerminalFailure
+            } else {
+                PublicationErrorV1::SynchronizationPoisoned
+            });
+            assert_eq!(observation.error(), expected);
+            assert_eq!(observation.operation_error(), expected);
             assert_eq!(
-                observation.error(),
-                Some(if fail_invalidation {
-                    PublicationErrorV1::TerminalFailure
-                } else {
-                    PublicationErrorV1::SynchronizationPoisoned
-                })
+                observation.finish_terminal_v1(),
+                Some(PublicationErrorV1::SynchronizationPoisoned)
             );
             assert_eq!(
                 observation.first_cause(),
@@ -1875,10 +2374,43 @@ mod operation_faults_owner {
                 })
             );
             assert!(observation.poisoned());
+            let (
+                storage_bytes_requested,
+                storage_bytes_reserved,
+                storage_bytes_released,
+                storage_bytes_committed,
+                storage_bytes_retained,
+                storage_inodes_requested,
+                storage_inodes_reserved,
+                storage_inodes_released,
+                storage_inodes_committed,
+                storage_inodes_retained,
+            ) = observation.setup_storage();
+            assert_eq!(storage_bytes_requested, storage_bytes_reserved);
+            assert_eq!(storage_inodes_requested, storage_inodes_reserved);
+            assert_eq!(
+                storage_bytes_reserved,
+                storage_bytes_released + storage_bytes_committed + storage_bytes_retained
+            );
+            assert_eq!(
+                storage_inodes_reserved,
+                storage_inodes_released + storage_inodes_committed + storage_inodes_retained
+            );
+            assert_eq!(storage_bytes_committed, 8);
+            assert_eq!(storage_inodes_committed, 1);
+            let (incumbent_before, incumbent_after) = observation.incumbent_marker_bytes();
+            assert_eq!(incumbent_before, Some([0x6d; 8]));
+            assert_eq!(incumbent_after, Some([0x6d; 8]));
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_eq!(observation.preparation_entries(), 0);
+            assert_eq!(
+                (observation.closure_bytes(), observation.closure_entries()),
+                (8, 1)
+            );
+            assert_zero_create_fault_custody(observation);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
-            assert_eq!(observation.preparation_entries(), 0);
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1888,9 +2420,13 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-hard-link-{fail_invalidation}"));
             let observation = marker_hard_link_fault_v1(fixture.path(), fail_invalidation);
+            let expected = Some(PublicationErrorV1::TerminalFailure);
+            let terminal = observation.operation_error();
+            assert_eq!(observation.error(), expected);
+            assert_eq!(terminal, expected);
             assert_eq!(
-                observation.error(),
-                Some(PublicationErrorV1::TerminalFailure)
+                observation.finish_terminal_v1(),
+                Some(PublicationErrorV1::SynchronizationPoisoned)
             );
             assert_eq!(
                 observation.first_cause(),
@@ -1904,13 +2440,18 @@ mod operation_faults_owner {
                     PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
                 })
             );
+            assert_eq!(
+                observation.filesystem_failure(),
+                Some(FilesystemFaultFailureV1::WriteFailure)
+            );
             assert!(observation.control_fired());
             assert!(observation.poisoned());
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_empty_create_fault_namespace(observation);
+            assert_zero_create_fault_custody(observation);
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
-            assert_eq!(observation.preparation_entries(), 0);
-            assert_eq!(observation.immutable_entries(), 0);
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1920,10 +2461,10 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("marker-cleanup-length-{fail_invalidation}"));
             let observation = marker_cleanup_length_fault_v1(fixture.path(), fail_invalidation);
-            assert_eq!(
-                observation.error(),
-                Some(PublicationErrorV1::TerminalFailure)
-            );
+            let expected = Some(PublicationErrorV1::TerminalFailure);
+            assert_eq!(observation.operation_error(), expected);
+            assert_eq!(observation.error(), expected);
+            assert_eq!(observation.finish_terminal_v1(), None);
             assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::Integrity)
@@ -1936,12 +2477,39 @@ mod operation_faults_owner {
                     PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
                 })
             );
+            let (before_length, after_length, is_directory, is_missing, _, accounting_restored) =
+                observation.marker_cleanup_observation();
+            assert_eq!(before_length, Some(9));
+            assert_eq!(after_length, Some(9));
+            assert!(!is_directory);
+            assert!(!is_missing);
+            assert!(accounting_restored);
             assert!(observation.control_fired());
             assert_eq!(observation.preparation_entries(), 1);
             assert_eq!(observation.preparation_bytes(), 9);
+            let temporary = fs::read_dir(fixture.path().join("preparation"))
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path();
+            assert_eq!(fs::metadata(temporary).unwrap().len(), 9);
+            assert_eq!(observation.immutable_bytes(), 0);
+            assert_eq!(observation.immutable_entries(), 0);
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_eq!(observation.storage_bytes_requested(), 9);
+            assert_eq!(observation.storage_inodes_requested(), 1);
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.storage_bytes_retained(), 9);
+            assert_eq!(observation.storage_inodes_retained(), 1);
+            assert_eq!(
+                exact_operation_namespace_usage(fixture.path()),
+                ((9, 1), (0, 0))
+            );
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
@@ -1958,10 +2526,13 @@ mod operation_faults_owner {
                 ));
                 let observation =
                     marker_cleanup_metadata_fault_v1(fixture.path(), wrong_type, fail_invalidation);
+                let expected = Some(PublicationErrorV1::TerminalFailure);
                 assert_eq!(
-                    observation.error(),
+                    observation.operation_error(),
                     Some(PublicationErrorV1::TerminalFailure)
                 );
+                assert_eq!(observation.error(), expected);
+                assert_eq!(observation.finish_terminal_v1(), None);
                 assert_eq!(observation.first_cause(), Some(first));
                 assert_eq!(
                     observation.dominant_cause(),
@@ -1973,10 +2544,37 @@ mod operation_faults_owner {
                         )
                     })
                 );
-                assert!(observation.control_fired());
+                let (_, _, is_directory, is_missing, _, _) =
+                    observation.marker_cleanup_observation();
+                assert_eq!(is_directory, wrong_type);
+                assert_eq!(is_missing, !wrong_type);
+                assert_eq!(observation.preparation_entries(), u64::from(wrong_type));
+                if wrong_type {
+                    let temporary = fs::read_dir(fixture.path().join("preparation"))
+                        .unwrap()
+                        .next()
+                        .unwrap()
+                        .unwrap()
+                        .path();
+                    assert!(fs::symlink_metadata(temporary)
+                        .unwrap()
+                        .file_type()
+                        .is_dir());
+                }
+                assert_eq!(observation.carrier_entries(), 0);
+                assert_eq!(observation.locator_entries(), 0);
+                assert_eq!(observation.catalog_entries(), 0);
+                assert_eq!(observation.closure_entries(), 0);
+                assert_create_fault_authority_and_storage(observation, 1);
+                assert_eq!(observation.storage_bytes_requested(), 8);
+                assert_eq!(observation.storage_inodes_requested(), 1);
+                assert_eq!(observation.storage_bytes_committed(), 0);
+                assert_eq!(observation.storage_inodes_committed(), 0);
+                assert_eq!(observation.storage_bytes_retained(), 8);
+                assert_eq!(observation.storage_inodes_retained(), 1);
                 assert!(observation.invalidated());
                 assert!(observation.stale_invalidated());
-                assert!(observation.reopen_invalidated());
+                assert!(observation.reopen_rejected());
                 assert!(observation.zero_forbidden_work());
             }
         }
@@ -2006,16 +2604,16 @@ mod operation_faults_owner {
                 ));
                 let observation =
                     marker_cleanup_unlink_fault_v1(fixture.path(), mode, fail_invalidation);
-                assert_eq!(
-                    observation.error(),
-                    Some(
-                        if fail_invalidation || mode != MarkerCleanupUnlinkModeV1::Injected {
-                            PublicationErrorV1::TerminalFailure
-                        } else {
-                            PublicationErrorV1::CleanupFailed
-                        }
-                    )
+                let expected = Some(
+                    if fail_invalidation || mode != MarkerCleanupUnlinkModeV1::Injected {
+                        PublicationErrorV1::TerminalFailure
+                    } else {
+                        PublicationErrorV1::CleanupFailed
+                    },
                 );
+                assert_eq!(observation.operation_error(), expected);
+                assert_eq!(observation.error(), expected);
+                assert_eq!(observation.finish_terminal_v1(), None);
                 assert_eq!(observation.first_cause(), first);
                 assert_eq!(
                     observation.dominant_cause(),
@@ -2027,10 +2625,50 @@ mod operation_faults_owner {
                         )
                     })
                 );
-                assert!(observation.control_fired());
+                assert_eq!(
+                    observation.filesystem_failure(),
+                    match mode {
+                        MarkerCleanupUnlinkModeV1::PermissionDenied => {
+                            Some(FilesystemFaultFailureV1::PermissionDenied)
+                        }
+                        MarkerCleanupUnlinkModeV1::NonDirectory => {
+                            Some(FilesystemFaultFailureV1::WriteFailure)
+                        }
+                        MarkerCleanupUnlinkModeV1::Injected => None,
+                    }
+                );
+                let (_, after_length, is_directory, is_missing, armed, restored) =
+                    observation.marker_cleanup_observation();
+                assert_eq!(after_length, Some(8));
+                assert!(!is_directory);
+                assert!(!is_missing);
+                assert!(armed);
+                assert!(restored);
+                assert_eq!(observation.preparation_bytes(), 8);
+                assert_eq!(observation.preparation_entries(), 1);
+                let temporary = fs::read_dir(fixture.path().join("preparation"))
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .path();
+                assert_eq!(fs::metadata(temporary).unwrap().len(), 8);
+                assert_eq!(observation.immutable_bytes(), 0);
+                assert_eq!(observation.immutable_entries(), 0);
+                assert_create_fault_authority_and_storage(observation, 1);
+                assert_eq!(observation.storage_bytes_requested(), 8);
+                assert_eq!(observation.storage_inodes_requested(), 1);
+                assert_eq!(observation.storage_bytes_committed(), 0);
+                assert_eq!(observation.storage_inodes_committed(), 0);
+                assert_eq!(observation.storage_bytes_retained(), 8);
+                assert_eq!(observation.storage_inodes_retained(), 1);
+                assert_eq!(
+                    exact_operation_namespace_usage(fixture.path()),
+                    ((8, 1), (0, 0))
+                );
                 assert!(observation.invalidated());
                 assert!(observation.stale_invalidated());
-                assert!(observation.reopen_invalidated());
+                assert!(observation.reopen_rejected());
                 assert!(observation.zero_forbidden_work());
             }
         }
@@ -2043,10 +2681,10 @@ mod operation_faults_owner {
                 TempFsCas::new(&format!("marker-cleanup-post-unlink-{fail_invalidation}"));
             let observation =
                 marker_cleanup_post_unlink_fault_v1(fixture.path(), fail_invalidation);
-            assert_eq!(
-                observation.error(),
-                Some(PublicationErrorV1::TerminalFailure)
-            );
+            let expected = Some(PublicationErrorV1::TerminalFailure);
+            assert_eq!(observation.operation_error(), expected);
+            assert_eq!(observation.error(), expected);
+            assert_eq!(observation.finish_terminal_v1(), None);
             assert_eq!(
                 observation.first_cause(),
                 Some(PublicationCauseV1::Integrity)
@@ -2059,16 +2697,35 @@ mod operation_faults_owner {
                     PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PreparationSpool)
                 })
             );
-            assert!(observation.control_fired());
+            let (_, _, is_directory, is_missing, _, _) = observation.marker_cleanup_observation();
+            assert!(!is_directory);
+            assert!(is_missing);
+            assert_eq!(observation.preparation_bytes(), 0);
+            assert_eq!(observation.preparation_entries(), 0);
+            assert_eq!(observation.immutable_bytes(), 0);
+            assert_eq!(observation.immutable_entries(), 0);
+            assert_create_fault_authority_and_storage(observation, 1);
+            assert_eq!(observation.storage_bytes_requested(), 8);
+            assert_eq!(observation.storage_inodes_requested(), 1);
+            assert_eq!(observation.storage_bytes_committed(), 0);
+            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.storage_bytes_retained(), 8);
+            assert_eq!(observation.storage_inodes_retained(), 1);
+            assert_eq!(
+                exact_operation_namespace_usage(fixture.path()),
+                ((0, 0), (0, 0))
+            );
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
-            assert!(observation.reopen_invalidated());
+            assert!(observation.reopen_rejected());
             assert!(observation.zero_forbidden_work());
         }
     }
 
     #[test]
     fn operation_spool_resize_accounting_failure_preserves_physical_state_and_invalidation_cause() {
+        const ORIGINAL_BYTES: u64 = 17;
+        const TRUNCATED_BYTES: u64 = 9;
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("operation-spool-resize-{fail_invalidation}"));
             let observation = operation_spool_resize_fault_v1(fixture.path(), fail_invalidation);
@@ -2080,22 +2737,122 @@ mod operation_faults_owner {
                     PublicationErrorV1::Integrity
                 })
             );
-            assert_eq!(observation.logical_length(), 9);
-            assert_eq!(observation.physical_length(), 9);
-            assert_eq!(observation.preparation_bytes(), 9);
-            assert_eq!(observation.preparation_entries(), 1);
-            assert_eq!(observation.storage_bytes_committed(), 0);
-            assert_eq!(observation.storage_inodes_committed(), 0);
+            assert_eq!(observation.logical_length(), TRUNCATED_BYTES);
+            assert_eq!(observation.physical_length(), TRUNCATED_BYTES);
+            assert_eq!(
+                observation.operation_first_cause(),
+                Some(PublicationCauseV1::Integrity)
+            );
+            assert_eq!(
+                observation.operation_dominant_cause(),
+                Some(if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
+                } else {
+                    PublicationCauseV1::Integrity
+                })
+            );
+            let (preparation_bytes, preparation_inodes) = (
+                observation.preparation_bytes(),
+                observation.preparation_entries(),
+            );
+            assert_eq!(
+                (preparation_bytes, preparation_inodes),
+                (TRUNCATED_BYTES, 1)
+            );
+            assert_eq!(observation.immutable_bytes(), 0);
+            assert_eq!(observation.immutable_entries(), 0);
+            assert_eq!(observation.storage_bytes_requested(), ORIGINAL_BYTES);
+            assert_eq!(observation.storage_bytes_reserved(), ORIGINAL_BYTES);
+            assert_eq!(observation.storage_inodes_requested(), 1);
+            assert_eq!(observation.storage_inodes_reserved(), 1);
             assert_eq!(observation.storage_bytes_retained(), 0);
             assert_eq!(observation.storage_inodes_retained(), 1);
+            struct StorageCounters {
+                storage_bytes_requested: u64,
+                storage_bytes_reserved: u64,
+                storage_bytes_released: u64,
+                storage_bytes_committed: u64,
+                storage_bytes_retained: u64,
+                storage_inodes_requested: u64,
+                storage_inodes_reserved: u64,
+                storage_inodes_released: u64,
+                storage_inodes_committed: u64,
+                storage_inodes_retained: u64,
+            }
+            let counters = StorageCounters {
+                storage_bytes_requested: observation.storage_bytes_requested(),
+                storage_bytes_reserved: observation.storage_bytes_reserved(),
+                storage_bytes_released: observation.storage_bytes_released(),
+                storage_bytes_committed: observation.storage_bytes_committed(),
+                storage_bytes_retained: observation.storage_bytes_retained(),
+                storage_inodes_requested: observation.storage_inodes_requested(),
+                storage_inodes_reserved: observation.storage_inodes_reserved(),
+                storage_inodes_released: observation.storage_inodes_released(),
+                storage_inodes_committed: observation.storage_inodes_committed(),
+                storage_inodes_retained: observation.storage_inodes_retained(),
+            };
+            assert_eq!(counters.storage_bytes_released, ORIGINAL_BYTES);
+            assert_eq!(counters.storage_inodes_released, 0);
+            assert_eq!(counters.storage_bytes_committed, 0);
+            assert_eq!(counters.storage_inodes_committed, 0);
+            assert_eq!(
+                (&counters).storage_bytes_requested,
+                (&counters).storage_bytes_reserved
+            );
+            assert_eq!(
+                (&counters).storage_inodes_requested,
+                (&counters).storage_inodes_reserved
+            );
+            assert_eq!(
+                (&counters).storage_bytes_reserved,
+                (&counters).storage_bytes_released
+                    + (&counters).storage_bytes_committed
+                    + (&counters).storage_bytes_retained,
+            );
+            assert_eq!(
+                (&counters).storage_inodes_reserved,
+                (&counters).storage_inodes_released
+                    + (&counters).storage_inodes_committed
+                    + (&counters).storage_inodes_retained,
+            );
+            assert_eq!(
+                counters.storage_bytes_requested,
+                counters.storage_bytes_released
+                    + counters.storage_bytes_committed
+                    + counters.storage_bytes_retained,
+            );
+            assert_eq!(
+                counters.storage_inodes_requested,
+                counters.storage_inodes_released
+                    + counters.storage_inodes_committed
+                    + counters.storage_inodes_retained,
+            );
             assert_eq!(observation.direct_storage_observation(), (0, 0, 0));
+            assert_eq!(observation.operation_slots(), 0);
+            assert_eq!(observation.operation_active(), 0);
+            assert_eq!(observation.storage_active(), (0, 0, 0));
             assert!(observation.invalidated());
             assert!(observation.stale_invalidated());
             assert!(observation.reopen_invalidated());
             assert!(observation.zero_forbidden_work());
-            assert_eq!(
+            let cleanup = (
                 observation.cleanup_error(),
-                Some(PublicationErrorV1::TerminalFailure)
+                observation.cleanup_first_cause(),
+                observation.cleanup_dominant_cause(),
+            );
+            assert_eq!(
+                cleanup,
+                (
+                    Some(PublicationErrorV1::TerminalFailure),
+                    Some(PublicationCauseV1::Integrity),
+                    Some(PublicationCauseV1::CleanupFailed(
+                        PublicationCleanupTargetV1::PreparationSpool
+                    )),
+                )
+            );
+            assert_eq!(
+                observation.cleanup_retry_error(),
+                observation.cleanup_error()
             );
         }
     }
@@ -2110,7 +2867,10 @@ mod operation_faults_owner {
         );
         assert_eq!(observation.logical_length(), 1);
         assert_eq!(observation.physical_length(), 1);
+        assert_eq!(observation.physical_first_byte(), Some(0x5a));
         assert_eq!(observation.direct_storage_observation(), (0, 0, u64::MAX));
+        assert_eq!(observation.storage_bytes_requested(), 1);
+        assert_eq!(observation.storage_inodes_requested(), 1);
         assert_eq!(observation.storage_bytes_released(), 1);
         assert_eq!(observation.storage_inodes_released(), 1);
         assert_clean_operation_spool(observation);
@@ -2126,7 +2886,10 @@ mod operation_faults_owner {
         );
         assert_eq!(observation.logical_length(), 1);
         assert_eq!(observation.physical_length(), 1);
+        assert_eq!(observation.physical_first_byte(), Some(0x5a));
         assert_eq!(observation.direct_storage_observation(), (73, u64::MAX, 1));
+        assert_eq!(observation.storage_bytes_requested(), 1);
+        assert_eq!(observation.storage_inodes_requested(), 1);
         assert_eq!(observation.storage_bytes_released(), 1);
         assert_eq!(observation.storage_inodes_released(), 1);
         assert_clean_operation_spool(observation);
@@ -2162,6 +2925,11 @@ mod operation_faults_owner {
                 "{case}"
             );
             assert_eq!(
+                observation.cleanup_retry_error(),
+                observation.cleanup_error(),
+                "{case}"
+            );
+            assert_eq!(
                 observation.cleanup_first_cause(),
                 Some(PublicationCauseV1::Integrity),
                 "{case}"
@@ -2188,6 +2956,12 @@ mod operation_faults_owner {
                 u64::from(before_unlink),
                 "{case}"
             );
+            assert!(!observation.physical_is_directory(), "{case}");
+            assert_eq!(observation.physical_is_missing(), !before_unlink, "{case}");
+            assert_eq!(observation.storage_bytes_requested(), 17, "{case}");
+            assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+            assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
             assert_eq!(
                 observation.storage_bytes_retained(),
                 if before_unlink { 0 } else { 17 },
@@ -2198,6 +2972,21 @@ mod operation_faults_owner {
                 u64::from(before_unlink),
                 "{case}"
             );
+            if before_unlink {
+                assert_eq!(
+                    (
+                        observation.preparation_bytes(),
+                        observation.preparation_entries()
+                    ),
+                    (17, 1),
+                    "{case}"
+                );
+                assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
+            } else {
+                assert_eq!(observation.preparation_entries(), 0, "{case}");
+                assert_eq!(observation.storage_inodes_retained(), 0, "{case}");
+            }
+            assert_pack_fault_storage_and_authority(observation);
             assert_failed_pack_root(observation);
         }
     }
@@ -2250,6 +3039,11 @@ mod operation_faults_owner {
                 );
                 assert_eq!(observation.cleanup_first_cause(), Some(first), "{case}");
                 assert_eq!(
+                    observation.cleanup_retry_error(),
+                    observation.cleanup_error(),
+                    "{case}"
+                );
+                assert_eq!(
                     observation.cleanup_dominant_cause(),
                     Some(if fail_invalidation {
                         PublicationCauseV1::InvalidationFailed
@@ -2269,8 +3063,23 @@ mod operation_faults_owner {
                     preparation_entries,
                     "{case}"
                 );
+                assert_eq!(
+                    observation.physical_is_directory(),
+                    matches!(mode, PreparationMetadataFaultModeV1::WrongType),
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.physical_is_missing(),
+                    matches!(mode, PreparationMetadataFaultModeV1::Missing),
+                    "{case}"
+                );
+                assert_eq!(observation.storage_bytes_requested(), 19, "{case}");
+                assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+                assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+                assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
                 assert_eq!(observation.storage_bytes_retained(), 19, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
+                assert_pack_fault_storage_and_authority(observation);
                 assert_failed_pack_root(observation);
             }
         }
@@ -2308,23 +3117,62 @@ mod operation_faults_owner {
                 "{case}"
             );
             assert_eq!(observation.physical_length(), path_length, "{case}");
+            assert_eq!(
+                observation.physical_is_directory(),
+                matches!(mode, Some(PreparationMetadataFaultModeV1::WrongType)),
+                "{case}"
+            );
+            assert_eq!(
+                observation.physical_is_missing(),
+                matches!(mode, None | Some(PreparationMetadataFaultModeV1::Missing)),
+                "{case}"
+            );
             assert_eq!(observation.preparation_bytes(), preparation_bytes, "{case}");
             assert_eq!(
                 observation.preparation_entries(),
                 preparation_entries,
                 "{case}"
             );
+            assert_eq!(observation.storage_bytes_requested(), 23, "{case}");
+            assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+            assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(
+                observation.unreachable_installed_residue_bytes(),
+                0,
+                "{case}"
+            );
+            assert_pack_fault_storage_and_authority(observation);
             if mode.is_some() {
                 assert_eq!(observation.storage_bytes_retained(), 23, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
+                assert_eq!(
+                    observation.mutable_preparation_residue_bytes(),
+                    23,
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.mutable_preparation_residue_inodes(),
+                    1,
+                    "{case}"
+                );
                 assert_failed_pack_root(observation);
             } else {
                 assert!(observation.root_usable(), "{case}");
+                assert!(observation.stale_usable(), "{case}");
+                assert!(observation.reopen_usable(), "{case}");
                 assert!(!observation.invalidated(), "{case}");
                 assert_eq!(observation.storage_bytes_released(), 23, "{case}");
-                assert_eq!(observation.storage_inodes_released(), 1, "{case}");
+                let counters = &observation;
+                assert_eq!(counters.storage_inodes_released(), 1, "{case}");
                 assert_eq!(observation.storage_bytes_retained(), 0, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 0, "{case}");
+                assert_eq!(observation.mutable_preparation_residue_bytes(), 0, "{case}");
+                assert_eq!(
+                    observation.mutable_preparation_residue_inodes(),
+                    0,
+                    "{case}"
+                );
                 assert!(observation.zero_forbidden_work(), "{case}");
             }
         }
@@ -2378,6 +3226,11 @@ mod operation_faults_owner {
                     ),
                     "{case}"
                 );
+                assert_eq!(
+                    observation.cleanup_retry_error(),
+                    observation.cleanup_error(),
+                    "{case}"
+                );
                 assert_eq!(observation.cleanup_first_cause(), first, "{case}");
                 assert_eq!(
                     observation.cleanup_dominant_cause(),
@@ -2393,8 +3246,24 @@ mod operation_faults_owner {
                 assert_eq!(observation.logical_length(), 23, "{case}");
                 assert_eq!(observation.accounted_length(), 23, "{case}");
                 assert_eq!(observation.physical_length(), path_length, "{case}");
+                assert!(!observation.physical_is_directory(), "{case}");
+                assert_eq!(
+                    observation.physical_is_missing(),
+                    matches!(mode, PreparationUnlinkFaultModeV1::Missing),
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.preparation_entries(),
+                    u64::from(!matches!(mode, PreparationUnlinkFaultModeV1::Missing)),
+                    "{case}"
+                );
+                assert_eq!(observation.storage_bytes_requested(), 23, "{case}");
+                assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+                assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+                assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
                 assert_eq!(observation.storage_bytes_retained(), 23, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
+                assert_pack_fault_storage_and_authority(observation);
                 assert_failed_pack_root(observation);
             }
         }
@@ -2403,6 +3272,8 @@ mod operation_faults_owner {
     #[cfg(unix)]
     #[test]
     fn private_pack_cleanup_metadata_failure_preserves_first_cause_and_stable_custody() {
+        const PACK_CEILING: u64 = 128;
+        const PACK_HEADER_BYTES: u64 = 64;
         for (mode, first, path_length, preparation_bytes, preparation_entries) in [
             (
                 PreparationMetadataFaultModeV1::WrongType,
@@ -2448,6 +3319,11 @@ mod operation_faults_owner {
                 );
                 assert_eq!(observation.cleanup_first_cause(), Some(first), "{case}");
                 assert_eq!(
+                    observation.cleanup_retry_error(),
+                    observation.cleanup_error(),
+                    "{case}"
+                );
+                assert_eq!(
                     observation.cleanup_dominant_cause(),
                     Some(if fail_invalidation {
                         PublicationCauseV1::InvalidationFailed
@@ -2456,17 +3332,40 @@ mod operation_faults_owner {
                     }),
                     "{case}"
                 );
-                assert_eq!(observation.logical_length(), 128, "{case}");
-                assert_eq!(observation.accounted_length(), 64, "{case}");
+                assert_eq!(observation.logical_length(), PACK_CEILING, "{case}");
+                assert_eq!(observation.accounted_length(), PACK_HEADER_BYTES, "{case}");
                 assert_eq!(observation.physical_length(), path_length, "{case}");
+                assert_eq!(
+                    observation.physical_is_directory(),
+                    matches!(mode, PreparationMetadataFaultModeV1::WrongType),
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.physical_is_missing(),
+                    matches!(mode, PreparationMetadataFaultModeV1::Missing),
+                    "{case}"
+                );
                 assert_eq!(observation.preparation_bytes(), preparation_bytes, "{case}");
                 assert_eq!(
                     observation.preparation_entries(),
                     preparation_entries,
                     "{case}"
                 );
-                assert_eq!(observation.storage_bytes_retained(), 64, "{case}");
+                assert_eq!(
+                    observation.storage_bytes_requested(),
+                    PACK_CEILING,
+                    "{case}"
+                );
+                assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+                assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+                assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
+                assert_eq!(
+                    observation.storage_bytes_retained(),
+                    PACK_HEADER_BYTES,
+                    "{case}"
+                );
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
+                assert_pack_fault_storage_and_authority(observation);
                 assert_failed_pack_root(observation);
             }
         }
@@ -2475,20 +3374,23 @@ mod operation_faults_owner {
     #[cfg(unix)]
     #[test]
     fn private_pack_drop_never_substitutes_a_failed_metadata_observation() {
+        const PACK_CEILING: u64 = 128;
+        const PACK_HEADER_BYTES: u64 = 64;
+        const PHYSICAL_BYTES: u64 = 7;
         for (mode, path_length, preparation_bytes, preparation_entries) in [
             (None, None, 0, 0),
             (Some(PreparationMetadataFaultModeV1::WrongType), None, 0, 1),
             (Some(PreparationMetadataFaultModeV1::Missing), None, 0, 0),
             (
                 Some(PreparationMetadataFaultModeV1::PermissionDenied),
-                Some(7),
-                7,
+                Some(PHYSICAL_BYTES),
+                PHYSICAL_BYTES,
                 1,
             ),
             (
                 Some(PreparationMetadataFaultModeV1::ReadFailure),
-                Some(7),
-                7,
+                Some(PHYSICAL_BYTES),
+                PHYSICAL_BYTES,
                 1,
             ),
         ] {
@@ -2497,30 +3399,76 @@ mod operation_faults_owner {
                 private_pack_drop_metadata_fault_v1(TempFsCas::new(&case).path(), mode);
             assert_eq!(observation.operation_error(), None, "{case}");
             assert_eq!(observation.cleanup_error(), None, "{case}");
-            assert_eq!(observation.logical_length(), 128, "{case}");
+            assert_eq!(observation.logical_length(), PACK_CEILING, "{case}");
             assert_eq!(
                 observation.accounted_length(),
-                if mode.is_some() { 64 } else { 0 },
+                if mode.is_some() { PACK_HEADER_BYTES } else { 0 },
                 "{case}"
             );
             assert_eq!(observation.physical_length(), path_length, "{case}");
+            assert_eq!(
+                observation.physical_is_directory(),
+                matches!(mode, Some(PreparationMetadataFaultModeV1::WrongType)),
+                "{case}"
+            );
+            assert_eq!(
+                observation.physical_is_missing(),
+                matches!(mode, None | Some(PreparationMetadataFaultModeV1::Missing)),
+                "{case}"
+            );
             assert_eq!(observation.preparation_bytes(), preparation_bytes, "{case}");
             assert_eq!(
                 observation.preparation_entries(),
                 preparation_entries,
                 "{case}"
             );
+            assert_eq!(
+                observation.storage_bytes_requested(),
+                PACK_CEILING,
+                "{case}"
+            );
+            assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+            assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(
+                observation.unreachable_installed_residue_bytes(),
+                0,
+                "{case}"
+            );
+            assert_pack_fault_storage_and_authority(observation);
             if mode.is_some() {
-                assert_eq!(observation.storage_bytes_retained(), 64, "{case}");
+                assert_eq!(
+                    observation.storage_bytes_retained(),
+                    PACK_HEADER_BYTES,
+                    "{case}"
+                );
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
+                assert_eq!(
+                    observation.mutable_preparation_residue_bytes(),
+                    PACK_HEADER_BYTES,
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.mutable_preparation_residue_inodes(),
+                    1,
+                    "{case}"
+                );
                 assert_failed_pack_root(observation);
             } else {
                 assert!(observation.root_usable(), "{case}");
+                assert!(observation.stale_usable(), "{case}");
+                assert!(observation.reopen_usable(), "{case}");
                 assert!(!observation.invalidated(), "{case}");
-                assert_eq!(observation.storage_bytes_released(), 128, "{case}");
+                assert_eq!(observation.storage_bytes_released(), PACK_CEILING, "{case}");
                 assert_eq!(observation.storage_inodes_released(), 1, "{case}");
                 assert_eq!(observation.storage_bytes_retained(), 0, "{case}");
                 assert_eq!(observation.storage_inodes_retained(), 0, "{case}");
+                assert_eq!(observation.mutable_preparation_residue_bytes(), 0, "{case}");
+                assert_eq!(
+                    observation.mutable_preparation_residue_inodes(),
+                    0,
+                    "{case}"
+                );
                 assert!(observation.zero_forbidden_work(), "{case}");
             }
         }
@@ -2529,6 +3477,8 @@ mod operation_faults_owner {
     #[cfg(unix)]
     #[test]
     fn private_pack_unlink_failure_preserves_directional_cause_and_stable_custody() {
+        const PACK_CEILING: u64 = 128;
+        const PACK_HEADER_BYTES: u64 = 64;
         for (mode, first, path_length) in [
             (
                 PreparationUnlinkFaultModeV1::Missing,
@@ -2574,6 +3524,11 @@ mod operation_faults_owner {
                     ),
                     "{case}"
                 );
+                assert_eq!(
+                    observation.cleanup_retry_error(),
+                    observation.cleanup_error(),
+                    "{case}"
+                );
                 assert_eq!(observation.cleanup_first_cause(), first, "{case}");
                 assert_eq!(
                     observation.cleanup_dominant_cause(),
@@ -2584,11 +3539,44 @@ mod operation_faults_owner {
                     }),
                     "{case}"
                 );
-                assert_eq!(observation.logical_length(), 128, "{case}");
-                assert_eq!(observation.accounted_length(), 64, "{case}");
+                assert_eq!(observation.logical_length(), PACK_CEILING, "{case}");
+                assert_eq!(observation.accounted_length(), PACK_HEADER_BYTES, "{case}");
                 assert_eq!(observation.physical_length(), path_length, "{case}");
-                assert_eq!(observation.storage_bytes_retained(), 64, "{case}");
+                assert!(!observation.physical_is_directory(), "{case}");
+                assert_eq!(
+                    observation.physical_is_missing(),
+                    matches!(mode, PreparationUnlinkFaultModeV1::Missing),
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.preparation_bytes(),
+                    if matches!(mode, PreparationUnlinkFaultModeV1::Missing) {
+                        0
+                    } else {
+                        PACK_HEADER_BYTES
+                    },
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.preparation_entries(),
+                    u64::from(!matches!(mode, PreparationUnlinkFaultModeV1::Missing)),
+                    "{case}"
+                );
+                assert_eq!(
+                    observation.storage_bytes_requested(),
+                    PACK_CEILING,
+                    "{case}"
+                );
+                assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+                assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+                assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
+                assert_eq!(
+                    observation.storage_bytes_retained(),
+                    PACK_HEADER_BYTES,
+                    "{case}"
+                );
                 assert_eq!(observation.storage_inodes_retained(), 1, "{case}");
+                assert_pack_fault_storage_and_authority(observation);
                 assert_failed_pack_root(observation);
             }
         }
@@ -2596,6 +3584,10 @@ mod operation_faults_owner {
 
     #[test]
     fn private_pack_truncate_and_append_accounting_failures_preserve_invalidation_cause() {
+        const PACK_CEILING: u64 = 128;
+        const PACK_HEADER_BYTES: u64 = 64;
+        const APPEND_BYTES: u64 = 16;
+        const TRUNCATED_BYTES: u64 = PACK_HEADER_BYTES + 6;
         for (truncate, fail_invalidation) in
             [(true, false), (true, true), (false, false), (false, true)]
         {
@@ -2628,50 +3620,104 @@ mod operation_faults_owner {
                 }),
                 "{case}"
             );
-            assert_eq!(
+            let cleanup = (
                 observation.cleanup_error(),
-                Some(PublicationErrorV1::TerminalFailure),
-                "{case}"
-            );
-            assert_eq!(
                 observation.cleanup_first_cause(),
-                Some(PublicationCauseV1::Integrity),
+                observation.cleanup_dominant_cause(),
+            );
+            assert_eq!(
+                cleanup,
+                (
+                    Some(PublicationErrorV1::TerminalFailure),
+                    Some(PublicationCauseV1::Integrity),
+                    Some(PublicationCauseV1::CleanupFailed(
+                        PublicationCleanupTargetV1::PrivatePack,
+                    )),
+                ),
                 "{case}"
             );
             assert_eq!(
-                observation.cleanup_dominant_cause(),
-                Some(PublicationCauseV1::CleanupFailed(
-                    PublicationCleanupTargetV1::PrivatePack
-                )),
+                observation.cleanup_retry_error(),
+                observation.cleanup_error(),
                 "{case}"
             );
             assert_eq!(
                 observation.logical_length(),
-                if truncate { 70 } else { 64 },
+                if truncate {
+                    TRUNCATED_BYTES
+                } else {
+                    PACK_HEADER_BYTES
+                },
                 "{case}"
             );
             assert_eq!(
                 observation.physical_length(),
-                Some(if truncate { 70 } else { 64 }),
+                Some(if truncate {
+                    TRUNCATED_BYTES
+                } else {
+                    PACK_HEADER_BYTES
+                }),
                 "{case}"
             );
             assert_eq!(
                 observation.accounted_length(),
-                if truncate { 80 } else { 64 },
+                if truncate {
+                    PACK_HEADER_BYTES + APPEND_BYTES
+                } else {
+                    PACK_HEADER_BYTES
+                },
                 "{case}"
             );
             assert_eq!(
                 observation.preparation_bytes(),
-                if truncate { 70 } else { 64 },
+                if truncate {
+                    TRUNCATED_BYTES
+                } else {
+                    PACK_HEADER_BYTES
+                },
                 "{case}"
             );
             assert_eq!(observation.preparation_entries(), 1, "{case}");
+            assert_eq!(
+                (
+                    observation.preparation_bytes(),
+                    observation.preparation_entries()
+                ),
+                (
+                    if truncate {
+                        TRUNCATED_BYTES
+                    } else {
+                        PACK_HEADER_BYTES
+                    },
+                    1
+                ),
+                "{case}"
+            );
+            assert_eq!(
+                (
+                    observation.immutable_bytes(),
+                    observation.immutable_entries()
+                ),
+                (0, 0),
+                "{case}"
+            );
+            assert_eq!(
+                observation.storage_bytes_requested(),
+                PACK_CEILING,
+                "{case}"
+            );
+            assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+            assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
+            assert_pack_fault_storage_and_authority(observation);
             assert_failed_pack_root(observation);
         }
     }
 
     #[test]
     fn private_pack_cleanup_accounting_failure_is_stable_before_and_after_unlink() {
+        const PACK_BYTES: u64 = 128;
+        const PACK_HEADER_BYTES: u64 = 64;
         for (before_unlink, fail_invalidation, dominant) in [
             (
                 true,
@@ -2709,16 +3755,23 @@ mod operation_faults_owner {
                 Some(dominant),
                 "{case}"
             );
-            assert_eq!(observation.logical_length(), 128, "{case}");
-            assert_eq!(observation.accounted_length(), 64, "{case}");
             assert_eq!(
-                observation.physical_length(),
-                before_unlink.then_some(64),
+                observation.cleanup_retry_error(),
+                observation.cleanup_error(),
                 "{case}"
             );
+            assert_eq!(observation.logical_length(), PACK_BYTES, "{case}");
+            assert_eq!(observation.accounted_length(), PACK_HEADER_BYTES, "{case}");
+            assert_eq!(
+                observation.physical_length(),
+                before_unlink.then_some(PACK_HEADER_BYTES),
+                "{case}"
+            );
+            assert!(!observation.physical_is_directory(), "{case}");
+            assert_eq!(observation.physical_is_missing(), !before_unlink, "{case}");
             assert_eq!(
                 observation.preparation_bytes(),
-                if before_unlink { 64 } else { 0 },
+                if before_unlink { PACK_HEADER_BYTES } else { 0 },
                 "{case}"
             );
             assert_eq!(
@@ -2727,8 +3780,32 @@ mod operation_faults_owner {
                 "{case}"
             );
             assert_eq!(
+                (
+                    observation.preparation_bytes(),
+                    observation.preparation_entries()
+                ),
+                if before_unlink {
+                    (PACK_HEADER_BYTES, 1)
+                } else {
+                    (0, 0)
+                },
+                "{case}"
+            );
+            assert_eq!(
+                (
+                    observation.immutable_bytes(),
+                    observation.immutable_entries()
+                ),
+                (0, 0),
+                "{case}"
+            );
+            assert_eq!(observation.storage_bytes_requested(), PACK_BYTES, "{case}");
+            assert_eq!(observation.storage_inodes_requested(), 1, "{case}");
+            assert_eq!(observation.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(observation.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(
                 observation.storage_bytes_retained(),
-                if before_unlink { 0 } else { 64 },
+                if before_unlink { 0 } else { PACK_HEADER_BYTES },
                 "{case}"
             );
             assert_eq!(
@@ -2736,6 +3813,7 @@ mod operation_faults_owner {
                 u64::from(before_unlink),
                 "{case}"
             );
+            assert_pack_fault_storage_and_authority(observation);
             assert_failed_pack_root(observation);
         }
     }
@@ -2744,27 +3822,67 @@ mod operation_faults_owner {
     fn marker_write_failure_survives_pre_link_cleanup_failure() {
         let fixture = TempFsCas::new("marker-write-cleanup-dual-cause");
         let observation = marker_write_cleanup_terminal_v1(fixture.path());
-        assert_eq!(
+        let result = (
             observation.error(),
-            Some(PublicationErrorV1::TerminalFailure)
+            observation.filesystem_failure(),
+            observation.dominant_cause(),
+        );
+        assert_eq!(
+            result,
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(FilesystemFaultFailureV1::NoSpace),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PreparationSpool
+                )),
+            )
         );
         assert_eq!(
             observation.first_cause(),
             Some(PublicationCauseV1::Filesystem)
         );
-        assert_eq!(
-            observation.dominant_cause(),
-            Some(PublicationCauseV1::CleanupFailed(
-                PublicationCleanupTargetV1::PreparationSpool
-            ))
-        );
         assert!(observation.control_fired());
         assert_eq!(observation.cleanup_calls(), 1);
         assert!(observation.bound_invoked());
         assert!(observation.supply_invoked());
-        assert_eq!(observation.preparation_bytes(), 0);
-        assert_eq!(observation.preparation_entries(), 1);
+        let preparation_bytes = observation.preparation_bytes();
+        let preparation_inodes = observation.preparation_entries();
+        assert_eq!(preparation_bytes, 0);
+        assert_eq!(preparation_inodes, 1);
         assert_eq!(observation.immutable_entries(), 0);
+        let counters = observation;
+        assert_eq!(counters.storage_bytes_committed(), 0);
+        assert_eq!(counters.storage_inodes_committed(), 0);
+        assert_eq!(counters.storage_bytes_retained(), preparation_bytes);
+        assert_eq!(counters.storage_inodes_retained(), preparation_inodes);
+        assert_eq!(
+            counters.mutable_preparation_residue_bytes(),
+            preparation_bytes
+        );
+        assert_eq!(
+            counters.mutable_preparation_residue_inodes(),
+            preparation_inodes
+        );
+        assert_eq!(
+            counters.storage_bytes_requested(),
+            counters.storage_bytes_reserved()
+        );
+        assert_eq!(
+            counters.storage_inodes_requested(),
+            counters.storage_inodes_reserved()
+        );
+        assert_eq!(
+            counters.storage_bytes_reserved(),
+            counters.storage_bytes_released()
+                + counters.storage_bytes_committed()
+                + counters.storage_bytes_retained()
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved(),
+            counters.storage_inodes_released()
+                + counters.storage_inodes_committed()
+                + counters.storage_inodes_retained()
+        );
         assert!(observation.invalidated());
         assert!(observation.stale_invalidated());
         assert!(observation.reopen_invalidated());
@@ -2809,15 +3927,108 @@ mod operation_faults_owner {
                 equal_incumbent,
                 fail_invalidation,
             );
+            let (
+                setup_storage_bytes_requested,
+                setup_storage_bytes_reserved,
+                setup_storage_bytes_released,
+                setup_storage_bytes_committed,
+                setup_storage_bytes_retained,
+                setup_storage_inodes_requested,
+                setup_storage_inodes_reserved,
+                setup_storage_inodes_released,
+                setup_storage_inodes_committed,
+                setup_storage_inodes_retained,
+            ) = observation.setup_storage();
+            if equal_incumbent {
+                assert_eq!(
+                    setup_storage_bytes_requested, setup_storage_bytes_reserved,
+                    "{case}"
+                );
+                assert_eq!(
+                    setup_storage_inodes_requested, setup_storage_inodes_reserved,
+                    "{case}"
+                );
+                assert_eq!(
+                    setup_storage_bytes_reserved,
+                    setup_storage_bytes_released
+                        + setup_storage_bytes_committed
+                        + setup_storage_bytes_retained,
+                    "{case}"
+                );
+                assert_eq!(
+                    setup_storage_inodes_reserved,
+                    setup_storage_inodes_released
+                        + setup_storage_inodes_committed
+                        + setup_storage_inodes_retained,
+                    "{case}"
+                );
+                assert_eq!(setup_storage_bytes_committed, 8, "{case}");
+                assert_eq!(setup_storage_inodes_committed, 1, "{case}");
+            }
             assert_eq!(observation.error(), Some(expected), "{case}");
             assert_eq!(observation.dominant_cause(), Some(dominant), "{case}");
             assert!(observation.control_fired(), "{case}");
             assert_eq!(observation.cleanup_calls(), 1, "{case}");
             assert_eq!(observation.invalidation_attempts(), 1, "{case}");
-            assert_eq!(observation.preparation_entries(), 1, "{case}");
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            assert_eq!(preparation_inodes, 1, "{case}");
+            assert_eq!(preparation_bytes, u64::from(equal_incumbent) * 8, "{case}");
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
             assert_eq!(
-                observation.immutable_entries(),
-                u64::from(equal_incumbent),
+                (immutable_bytes, immutable_inodes),
+                if equal_incumbent { (8, 1) } else { (0, 0) },
+                "{case}"
+            );
+            let counters = observation;
+            assert_eq!(counters.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(counters.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_retained(),
+                preparation_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_retained(),
+                preparation_inodes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes(),
+                preparation_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes(),
+                preparation_inodes,
+                "{case}"
+            );
+            assert_eq!(counters.immutable_residue_bytes(), 0, "{case}");
+            assert_eq!(counters.immutable_residue_inodes(), 0, "{case}");
+            assert_eq!(counters.residue_bytes(), 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_requested(),
+                counters.storage_bytes_reserved(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_requested(),
+                counters.storage_inodes_reserved(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved(),
+                counters.storage_bytes_released()
+                    + counters.storage_bytes_committed()
+                    + counters.storage_bytes_retained(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved(),
+                counters.storage_inodes_released()
+                    + counters.storage_inodes_committed()
+                    + counters.storage_inodes_retained(),
                 "{case}"
             );
             assert!(observation.invalidated(), "{case}");
@@ -2881,7 +4092,46 @@ mod operation_faults_owner {
             assert!(observation.control_fired(), "{case}");
             assert_eq!(observation.cleanup_calls(), 1, "{case}");
             assert_eq!(observation.invalidation_attempts(), 1, "{case}");
-            assert_eq!(observation.preparation_entries(), 1, "{case}");
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 1), "{case}");
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
+            assert_eq!((immutable_bytes, immutable_inodes), (0, 0), "{case}");
+            let counters = observation;
+            assert_eq!(counters.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(counters.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(counters.storage_bytes_retained(), 0, "{case}");
+            assert_eq!(counters.storage_inodes_retained(), 1, "{case}");
+            assert_eq!(counters.mutable_preparation_residue_bytes(), 0, "{case}");
+            assert_eq!(counters.mutable_preparation_residue_inodes(), 1, "{case}");
+            assert_eq!(counters.immutable_residue_bytes(), 0, "{case}");
+            assert_eq!(counters.immutable_residue_inodes(), 0, "{case}");
+            assert_eq!(counters.residue_bytes(), 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_requested(),
+                counters.storage_bytes_reserved(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_requested(),
+                counters.storage_inodes_reserved(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved(),
+                counters.storage_bytes_released()
+                    + counters.storage_bytes_committed()
+                    + counters.storage_bytes_retained(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved(),
+                counters.storage_inodes_released()
+                    + counters.storage_inodes_committed()
+                    + counters.storage_inodes_retained(),
+                "{case}"
+            );
             assert!(observation.invalidated(), "{case}");
             assert!(observation.stale_invalidated(), "{case}");
             assert!(observation.zero_forbidden_work(), "{case}");
@@ -2892,9 +4142,20 @@ mod operation_faults_owner {
     fn carrier_alias_unlink_failure_is_typed_cleanup_with_exact_preparation_residue() {
         let fixture = TempFsCas::new("carrier-alias-unlink-enospc");
         let observation = carrier_alias_unlink_cleanup_v1(fixture.path());
-        assert_eq!(
+        let result = (
             observation.error(),
-            Some(PublicationErrorV1::TerminalFailure)
+            observation.filesystem_failure(),
+            observation.dominant_cause(),
+        );
+        assert_eq!(
+            result,
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(FilesystemFaultFailureV1::NoSpace),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PrivatePack,
+                )),
+            )
         );
         assert_eq!(
             observation.first_cause(),
@@ -2912,6 +4173,24 @@ mod operation_faults_owner {
         assert_eq!(observation.preparation_entries(), 1);
         assert!(observation.preparation_bytes() > 0);
         assert_eq!(observation.immutable_entries(), 0);
+        let residue_bytes = observation.preparation_bytes();
+        let counters = observation;
+        assert_eq!(counters.storage_bytes_retained(), residue_bytes);
+        assert_eq!(counters.storage_inodes_retained(), 1);
+        assert_eq!(counters.mutable_preparation_residue_bytes(), residue_bytes);
+        assert_eq!(counters.mutable_preparation_residue_inodes(), 1);
+        assert_eq!(
+            counters.storage_bytes_requested(),
+            counters.storage_bytes_released()
+                + counters.storage_bytes_committed()
+                + counters.storage_bytes_retained()
+        );
+        assert_eq!(
+            counters.storage_inodes_requested(),
+            counters.storage_inodes_released()
+                + counters.storage_inodes_committed()
+                + counters.storage_inodes_retained()
+        );
         assert!(observation.invalidated());
         assert!(observation.stale_invalidated());
         assert!(observation.reopen_invalidated());
@@ -2923,7 +4202,8 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let case = format!("carrier-alias-post-unlink-accounting-{fail_invalidation}");
             let fixture = TempFsCas::new(&case);
-            let observation = carrier_accounting_poison_v1(fixture.path(), fail_invalidation);
+            let observation =
+                carrier_alias_post_unlink_accounting_v1(fixture.path(), fail_invalidation);
             assert_eq!(
                 observation.error(),
                 Some(PublicationErrorV1::TerminalFailure),
@@ -2931,7 +4211,7 @@ mod operation_faults_owner {
             );
             assert_eq!(
                 observation.first_cause(),
-                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::Integrity),
                 "{case}"
             );
             assert_eq!(
@@ -2939,13 +4219,41 @@ mod operation_faults_owner {
                 Some(if fail_invalidation {
                     PublicationCauseV1::InvalidationFailed
                 } else {
-                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
+                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::PrivatePack)
                 }),
                 "{case}"
             );
             assert!(observation.control_fired(), "{case}");
-            assert!(observation.carrier_installed(), "{case}");
-            assert!(observation.poisoned(), "{case}");
+            let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+                exact_operation_namespace_usage(fixture.path());
+            let (carrier_bytes, carrier_inodes) =
+                exact_directory_usage(&fixture.path().join("carriers"));
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{case}");
+            assert!(carrier_bytes > 0, "{case}");
+            assert_eq!(carrier_inodes, 1, "{case}");
+            assert_eq!(
+                (immutable_bytes, immutable_inodes),
+                (carrier_bytes, 1),
+                "{case}"
+            );
+            let counters = observation;
+            assert_eq!(counters.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(counters.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes(),
+                carrier_bytes,
+                "{case}"
+            );
+            assert_eq!(counters.mutable_preparation_residue_inodes(), 1, "{case}");
+            assert_eq!(counters.immutable_residue_bytes(), carrier_bytes, "{case}");
+            assert_eq!(counters.immutable_residue_inodes(), 1, "{case}");
+            assert_eq!(
+                counters.storage_bytes_retained(),
+                carrier_bytes * 2,
+                "{case}"
+            );
+            assert_eq!(counters.storage_inodes_retained(), 2, "{case}");
+            assert_eq!(counters.residue_bytes(), carrier_bytes, "{case}");
             assert!(observation.invalidated(), "{case}");
             assert!(observation.stale_invalidated(), "{case}");
             assert!(observation.reopen_invalidated(), "{case}");
@@ -2957,9 +4265,20 @@ mod operation_faults_owner {
     fn published_locator_alias_unlink_failure_retains_dependencies_and_exact_residue() {
         let fixture = TempFsCas::new("locator-alias-unlink-edquot");
         let observation = published_locator_alias_unlink_v1(fixture.path());
-        assert_eq!(
+        let result = (
             observation.error(),
-            Some(PublicationErrorV1::TerminalFailure)
+            observation.filesystem_failure(),
+            observation.dominant_cause(),
+        );
+        assert_eq!(
+            result,
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(FilesystemFaultFailureV1::Quota),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PublishedMarkerAlias,
+                )),
+            )
         );
         assert_eq!(
             observation.first_cause(),
@@ -2977,6 +4296,49 @@ mod operation_faults_owner {
         assert_eq!(observation.preparation_entries(), 1);
         assert!(observation.preparation_bytes() > 0);
         assert!(observation.immutable_entries() > 0);
+        let preparation_bytes = observation.preparation_bytes();
+        let preparation_inodes = observation.preparation_entries();
+        let immutable_bytes = observation.immutable_bytes();
+        let immutable_inodes = observation.immutable_entries();
+        let residue_bytes = preparation_bytes;
+        assert_eq!(preparation_bytes, residue_bytes);
+        assert_eq!(preparation_inodes, 1);
+        let counters = observation;
+        assert_eq!(counters.storage_bytes_committed(), 0);
+        assert_eq!(counters.storage_inodes_committed(), 0);
+        assert_eq!(
+            counters.storage_bytes_retained(),
+            preparation_bytes + immutable_bytes
+        );
+        assert_eq!(
+            counters.storage_inodes_retained(),
+            preparation_inodes + immutable_inodes
+        );
+        assert_eq!(counters.mutable_preparation_residue_bytes(), residue_bytes);
+        assert_eq!(counters.mutable_preparation_residue_inodes(), 1);
+        assert_eq!(counters.immutable_residue_inodes(), immutable_inodes);
+        assert_eq!(counters.residue_bytes(), immutable_bytes);
+        assert_eq!(counters.immutable_residue_bytes(), immutable_bytes);
+        assert_eq!(
+            (&counters).storage_bytes_requested(),
+            (&counters).storage_bytes_reserved()
+        );
+        assert_eq!(
+            (&counters).storage_inodes_requested(),
+            (&counters).storage_inodes_reserved()
+        );
+        assert_eq!(
+            (&counters).storage_bytes_reserved(),
+            (&counters).storage_bytes_released()
+                + (&counters).storage_bytes_committed()
+                + (&counters).storage_bytes_retained()
+        );
+        assert_eq!(
+            (&counters).storage_inodes_reserved(),
+            (&counters).storage_inodes_released()
+                + (&counters).storage_inodes_committed()
+                + (&counters).storage_inodes_retained()
+        );
         assert!(observation.invalidated());
         assert!(observation.stale_invalidated());
         assert!(observation.reopen_invalidated());
@@ -2987,9 +4349,18 @@ mod operation_faults_owner {
     fn alias_cleanup_and_invalidation_persistence_double_fault_stays_fail_closed() {
         let fixture = TempFsCas::new("alias-invalidation-double-fault");
         let observation = alias_cleanup_invalidation_double_fault_v1(fixture.path());
-        assert_eq!(
+        let result = (
             observation.error(),
-            Some(PublicationErrorV1::TerminalFailure)
+            observation.filesystem_failure(),
+            observation.dominant_cause(),
+        );
+        assert_eq!(
+            result,
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(FilesystemFaultFailureV1::NoSpace),
+                Some(PublicationCauseV1::InvalidationFailed),
+            )
         );
         assert_eq!(
             observation.first_cause(),
@@ -3028,6 +4399,83 @@ mod operation_faults_owner {
             assert!(observation.supply_invoked(), "{case}");
             assert_eq!(observation.operation_slots(), 0, "{case}");
             assert!(observation.immutable_entries() > 0, "{case}");
+            let catalog_visible = target != PostLinkMarkerTargetV1::ObjectLocator;
+            let closure_visible = target == PostLinkMarkerTargetV1::Closure;
+            assert_eq!(
+                fs::read_dir(fixture.path().join("carriers"))
+                    .unwrap()
+                    .count(),
+                1,
+                "{target:?}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("catalog"))
+                    .unwrap()
+                    .count(),
+                usize::from(catalog_visible),
+                "{target:?}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("closures"))
+                    .unwrap()
+                    .count(),
+                usize::from(closure_visible),
+                "{target:?}"
+            );
+            let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+                exact_operation_namespace_usage(fixture.path());
+            let (_carrier_bytes, carrier_inodes) =
+                exact_directory_usage(&fixture.path().join("carriers"));
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
+            assert_eq!(carrier_inodes, 1);
+            let counters = observation;
+            assert_eq!(counters.residue_bytes(), immutable_bytes, "{target:?}");
+            assert_eq!(counters.storage_bytes_committed(), 0, "{target:?}");
+            assert_eq!(counters.storage_inodes_committed(), 0, "{target:?}");
+            assert_eq!(
+                counters.storage_bytes_requested(),
+                counters.storage_bytes_reserved(),
+                "{target:?}"
+            );
+            assert_eq!(
+                counters.storage_inodes_requested(),
+                counters.storage_inodes_reserved(),
+                "{target:?}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved(),
+                counters.storage_bytes_released()
+                    + counters.storage_bytes_committed()
+                    + counters.storage_bytes_retained(),
+                "{target:?}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved(),
+                counters.storage_inodes_released()
+                    + counters.storage_inodes_committed()
+                    + counters.storage_inodes_retained(),
+                "{target:?}"
+            );
+            assert_eq!(
+                counters.storage_bytes_retained(),
+                immutable_bytes,
+                "{target:?}"
+            );
+            assert_eq!(
+                counters.storage_inodes_retained(),
+                immutable_inodes,
+                "{target:?}"
+            );
+            assert_eq!(
+                counters.immutable_residue_bytes(),
+                immutable_bytes,
+                "{target:?}"
+            );
+            assert_eq!(
+                counters.immutable_residue_inodes(),
+                immutable_inodes,
+                "{target:?}"
+            );
             assert!(observation.invalidated(), "{case}");
             assert!(observation.stale_invalidated(), "{case}");
             assert!(observation.zero_forbidden_work(), "{case}");
@@ -3087,6 +4535,7 @@ mod operation_faults_owner {
             let fixture = TempFsCas::new(&case);
             let observation = post_link_marker_secondary_v1(
                 fixture.path(),
+                PostLinkMarkerTargetV1::Closure,
                 boundary_unwind,
                 alias_cleanup,
                 fail_invalidation,
@@ -3099,6 +4548,71 @@ mod operation_faults_owner {
             assert!(observation.bound_invoked(), "{case}");
             assert!(observation.supply_invoked(), "{case}");
             assert_eq!(observation.operation_slots(), 0, "{case}");
+            assert_eq!(observation.invalidation_attempts(), 1, "{case}");
+            assert_eq!(
+                fs::read_dir(fixture.path().join("carriers"))
+                    .unwrap()
+                    .count(),
+                1,
+                "{case}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("catalog"))
+                    .unwrap()
+                    .count(),
+                1,
+                "{case}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("closures"))
+                    .unwrap()
+                    .count(),
+                1,
+                "{case}"
+            );
+            let ((preparation_bytes, preparation_inodes), (immutable_bytes, immutable_inodes)) =
+                exact_operation_namespace_usage(fixture.path());
+            let cleanup_succeeded = alias_cleanup == PostLinkAliasCleanupV1::Succeeds;
+            assert_eq!(preparation_inodes, u64::from(!cleanup_succeeded), "{case}");
+            if cleanup_succeeded {
+                assert_eq!(preparation_bytes, 0, "{case}");
+            } else {
+                assert!(preparation_bytes > 0, "{case}");
+            }
+            let counters = observation;
+            assert_eq!(counters.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(counters.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_retained(),
+                preparation_bytes + immutable_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_retained(),
+                preparation_inodes + immutable_inodes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes(),
+                preparation_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes(),
+                preparation_inodes,
+                "{case}"
+            );
+            assert_eq!(counters.residue_bytes(), immutable_bytes, "{case}");
+            assert_eq!(
+                counters.immutable_residue_bytes(),
+                immutable_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.immutable_residue_inodes(),
+                immutable_inodes,
+                "{case}"
+            );
             // The boundary panic is terminal even when alias cleanup succeeds and
             // invalidation itself does not add a secondary error.  The historical
             // test therefore requires the candidate to be invalidated for every
@@ -3138,13 +4652,95 @@ mod operation_faults_owner {
             assert!(observation.supply_invoked(), "{case}");
             assert_eq!(observation.operation_slots(), 0, "{case}");
             assert_eq!(
-                observation.preparation_entries(),
-                u64::from(retain_marker),
+                fs::read_dir(fixture.path().join("objects"))
+                    .unwrap()
+                    .count(),
+                0,
                 "{case}"
             );
             assert_eq!(
-                observation.immutable_entries(),
-                u64::from(!retain_marker),
+                fs::read_dir(fixture.path().join("catalog"))
+                    .unwrap()
+                    .count(),
+                0,
+                "{case}"
+            );
+            assert_eq!(
+                fs::read_dir(fixture.path().join("closures"))
+                    .unwrap()
+                    .count(),
+                0,
+                "{case}"
+            );
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            assert_eq!(preparation_inodes, u64::from(retain_marker), "{case}");
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
+            let carrier_bytes = observation.carrier_bytes();
+            let carrier_inodes = observation.carrier_entries();
+            let expected_carrier_inodes = u64::from(!retain_marker);
+            assert_eq!(carrier_inodes, expected_carrier_inodes, "{case}");
+            assert_eq!(
+                (immutable_bytes, immutable_inodes),
+                (carrier_bytes, expected_carrier_inodes)
+            );
+            let counters = observation;
+            assert_eq!(counters.residue_bytes(), carrier_bytes, "{case}");
+            assert_eq!(
+                counters.storage_bytes_requested(),
+                counters.storage_bytes_reserved(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_requested(),
+                counters.storage_inodes_reserved(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_bytes_reserved(),
+                counters.storage_bytes_released()
+                    + counters.storage_bytes_committed()
+                    + counters.storage_bytes_retained(),
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_reserved(),
+                counters.storage_inodes_released()
+                    + counters.storage_inodes_committed()
+                    + counters.storage_inodes_retained(),
+                "{case}"
+            );
+            assert_eq!(counters.storage_bytes_committed(), 0, "{case}");
+            assert_eq!(counters.storage_inodes_committed(), 0, "{case}");
+            assert_eq!(
+                counters.storage_bytes_retained(),
+                preparation_bytes + immutable_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.storage_inodes_retained(),
+                preparation_inodes + immutable_inodes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_bytes(),
+                preparation_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.mutable_preparation_residue_inodes(),
+                preparation_inodes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.immutable_residue_bytes(),
+                immutable_bytes,
+                "{case}"
+            );
+            assert_eq!(
+                counters.immutable_residue_inodes(),
+                immutable_inodes,
                 "{case}"
             );
             assert_eq!(
@@ -3173,9 +4769,25 @@ mod operation_faults_owner {
                     target,
                     fail_invalidation,
                 );
-                assert_eq!(
+                let expected_dominant = if fail_invalidation {
+                    PublicationCauseV1::InvalidationFailed
+                } else {
+                    PublicationCauseV1::CleanupFailed(
+                        PublicationCleanupTargetV1::PublishedMarkerAlias,
+                    )
+                };
+                let result = (
                     observation.error(),
-                    Some(PublicationErrorV1::TerminalFailure),
+                    observation.filesystem_failure(),
+                    observation.dominant_cause(),
+                );
+                assert_eq!(
+                    result,
+                    (
+                        Some(PublicationErrorV1::TerminalFailure),
+                        Some(FilesystemFaultFailureV1::PermissionDenied),
+                        Some(expected_dominant),
+                    ),
                     "{case}"
                 );
                 assert_eq!(
@@ -3197,6 +4809,87 @@ mod operation_faults_owner {
                 assert!(observation.control_fired(), "{case}");
                 assert!(observation.bound_invoked(), "{case}");
                 assert!(observation.supply_invoked(), "{case}");
+                let catalog_visible = target != PostLinkMarkerTargetV1::ObjectLocator;
+                let closure_visible = target == PostLinkMarkerTargetV1::Closure;
+                assert_eq!(
+                    fs::read_dir(fixture.path().join("catalog"))
+                        .unwrap()
+                        .count(),
+                    usize::from(catalog_visible),
+                    "{case}"
+                );
+                assert_eq!(
+                    fs::read_dir(fixture.path().join("closures"))
+                        .unwrap()
+                        .count(),
+                    usize::from(closure_visible),
+                    "{case}"
+                );
+                let preparation: Vec<_> = fs::read_dir(fixture.path().join("preparation"))
+                    .unwrap()
+                    .map(|entry| entry.unwrap())
+                    .collect();
+                assert_eq!(preparation.len(), 1, "{case}");
+                let preparation_bytes = observation.preparation_bytes();
+                let preparation_inodes = observation.preparation_entries();
+                let immutable_bytes = observation.immutable_bytes();
+                let immutable_inodes = observation.immutable_entries();
+                assert!(preparation_bytes > 0, "{case}");
+                assert_eq!(preparation_inodes, 1, "{case}");
+                let counters = observation;
+                assert_eq!(counters.storage_bytes_committed(), 0, "{case}");
+                assert_eq!(counters.storage_inodes_committed(), 0, "{case}");
+                assert_eq!(
+                    counters.storage_bytes_retained(),
+                    preparation_bytes + immutable_bytes,
+                    "{case}"
+                );
+                assert_eq!(
+                    counters.storage_inodes_retained(),
+                    preparation_inodes + immutable_inodes,
+                    "{case}"
+                );
+                assert_eq!(
+                    counters.mutable_preparation_residue_bytes(),
+                    preparation_bytes,
+                    "{case}"
+                );
+                assert_eq!(
+                    counters.mutable_preparation_residue_inodes(),
+                    preparation_inodes,
+                    "{case}"
+                );
+                assert_eq!(counters.residue_bytes(), immutable_bytes, "{case}");
+                assert_eq!(
+                    counters.immutable_residue_bytes(),
+                    immutable_bytes,
+                    "{case}"
+                );
+                assert_eq!(
+                    counters.immutable_residue_inodes(),
+                    immutable_inodes,
+                    "{case}"
+                );
+                assert_eq!(
+                    (&counters).storage_bytes_requested(),
+                    (&counters).storage_bytes_reserved()
+                );
+                assert_eq!(
+                    (&counters).storage_inodes_requested(),
+                    (&counters).storage_inodes_reserved()
+                );
+                assert_eq!(
+                    (&counters).storage_bytes_reserved(),
+                    (&counters).storage_bytes_released()
+                        + (&counters).storage_bytes_committed()
+                        + (&counters).storage_bytes_retained()
+                );
+                assert_eq!(
+                    (&counters).storage_inodes_reserved(),
+                    (&counters).storage_inodes_released()
+                        + (&counters).storage_inodes_committed()
+                        + (&counters).storage_inodes_retained()
+                );
                 assert!(observation.invalidated(), "{case}");
                 assert!(observation.stale_invalidated(), "{case}");
                 assert!(observation.zero_forbidden_work(), "{case}");
@@ -3291,6 +4984,10 @@ mod operation_faults_owner {
             let root = TempFsCas::new(&label);
             let observation =
                 invalidation_probe_failure_before_candidate_validation_v1(root.path(), failure);
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            let immutable_bytes = observation.immutable_bytes();
+            let immutable_inodes = observation.immutable_entries();
             assert_eq!(
                 observation.error(),
                 Some(PublicationErrorV1::Filesystem),
@@ -3306,8 +5003,8 @@ mod operation_faults_owner {
                 Some(PublicationCauseV1::Filesystem),
                 "{label}"
             );
-            assert_eq!(observation.preparation_entries(), 0, "{label}");
-            assert_eq!(observation.immutable_entries(), 0, "{label}");
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0), "{label}");
+            assert_eq!((immutable_bytes, immutable_inodes), (0, 0), "{label}");
             assert_eq!(observation.residue_bytes(), 0, "{label}");
             assert_eq!(observation.operation_slots(), 0, "{label}");
             assert!(observation.control_fired(), "{label}");
@@ -3322,6 +5019,21 @@ mod operation_faults_owner {
     fn private_pack_cleanup_failure_is_typed_invalidates_stale_handles_and_retains_exact_residue() {
         let fixture = TempFsCas::new("private-pack-cleanup-failure");
         let observation = private_pack_cleanup_failure_v1(fixture.path());
+        let error = (
+            observation.error(),
+            observation.first_cause(),
+            observation.dominant_cause(),
+        );
+        assert_eq!(
+            error,
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::PrivatePack,
+                )),
+            )
+        );
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::TerminalFailure)
@@ -3353,6 +5065,21 @@ mod operation_faults_owner {
     fn carrier_cleanup_failure_is_typed_through_sink_and_retains_exact_residue() {
         let fixture = TempFsCas::new("carrier-cleanup-failure-lifecycle");
         let observation = lifecycle_carrier_cleanup_failure_v1(fixture.path());
+        let error = (
+            observation.error(),
+            observation.first_cause(),
+            observation.dominant_cause(),
+        );
+        assert_eq!(
+            error,
+            (
+                Some(PublicationErrorV1::TerminalFailure),
+                Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                Some(PublicationCauseV1::CleanupFailed(
+                    PublicationCleanupTargetV1::Carrier,
+                )),
+            )
+        );
         assert_eq!(
             observation.error(),
             Some(PublicationErrorV1::TerminalFailure)
@@ -3375,6 +5102,36 @@ mod operation_faults_owner {
         assert_eq!(observation.preparation_entries(), 0);
         assert_eq!(observation.immutable_entries(), 1);
         assert!(observation.immutable_bytes() > 0);
+        let exact_residue_bytes = observation.carrier_bytes();
+        assert!(exact_residue_bytes > 0);
+        assert_eq!(observation.residue_bytes(), exact_residue_bytes);
+        assert_eq!(
+            observation.storage_bytes_requested(),
+            observation.storage_bytes_released()
+                + observation.storage_bytes_committed()
+                + observation.storage_bytes_retained()
+        );
+        assert_eq!(
+            observation.storage_inodes_requested(),
+            observation.storage_inodes_released()
+                + observation.storage_inodes_committed()
+                + observation.storage_inodes_retained()
+        );
+        assert_eq!(observation.storage_bytes_committed(), 0);
+        assert_eq!(observation.storage_inodes_committed(), 0);
+        let preparation_bytes = observation.preparation_bytes();
+        let preparation_inodes = observation.preparation_entries();
+        let immutable_bytes = observation.immutable_bytes();
+        let immutable_inodes = observation.immutable_entries();
+        assert_eq!(preparation_bytes, 0);
+        assert_eq!(preparation_inodes, 0);
+        assert_eq!(immutable_bytes, exact_residue_bytes);
+        assert_eq!(immutable_inodes, 1);
+        assert_eq!(observation.storage_bytes_retained(), immutable_bytes);
+        assert_eq!(observation.storage_inodes_retained(), immutable_inodes);
+        assert_eq!(observation.mutable_preparation_residue_bytes(), 0);
+        assert_eq!(observation.mutable_preparation_residue_inodes(), 0);
+        assert_eq!(observation.immutable_residue_inodes(), immutable_inodes);
         assert!(observation.invalidated());
         assert!(observation.stale_invalidated());
         assert!(observation.reopen_invalidated());
@@ -3386,6 +5143,24 @@ mod operation_faults_owner {
         for fail_invalidation in [false, true] {
             let fixture = TempFsCas::new(&format!("carrier-accounting-poison-{fail_invalidation}"));
             let observation = carrier_accounting_poison_v1(fixture.path(), fail_invalidation);
+            let expected_dominant = if fail_invalidation {
+                PublicationCauseV1::InvalidationFailed
+            } else {
+                PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
+            };
+            let error = (
+                observation.error(),
+                observation.first_cause(),
+                observation.dominant_cause(),
+            );
+            assert_eq!(
+                error,
+                (
+                    Some(PublicationErrorV1::TerminalFailure),
+                    Some(PublicationCauseV1::Core(CoreError::Cancelled)),
+                    Some(expected_dominant),
+                )
+            );
             assert_eq!(
                 observation.error(),
                 Some(PublicationErrorV1::TerminalFailure)
@@ -3394,14 +5169,10 @@ mod operation_faults_owner {
                 observation.first_cause(),
                 Some(PublicationCauseV1::Core(CoreError::Cancelled))
             );
-            assert_eq!(
-                observation.dominant_cause(),
-                Some(if fail_invalidation {
-                    PublicationCauseV1::InvalidationFailed
-                } else {
-                    PublicationCauseV1::CleanupFailed(PublicationCleanupTargetV1::Carrier)
-                })
-            );
+            assert_eq!(observation.dominant_cause(), Some(expected_dominant));
+            let preparation_bytes = observation.preparation_bytes();
+            let preparation_inodes = observation.preparation_entries();
+            assert_eq!((preparation_bytes, preparation_inodes), (0, 0));
             assert!(observation.control_fired());
             assert!(observation.carrier_installed());
             assert!(observation.poisoned());

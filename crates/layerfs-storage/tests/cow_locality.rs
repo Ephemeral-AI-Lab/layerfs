@@ -406,7 +406,11 @@ mod cow_owner {
 
     #[test]
     fn file_update_reuses_unchanged_file_and_chunk_identity_outside_the_affected_spine() {
-        let observation = file_replacement_v1(200).unwrap();
+        let old = *b"old";
+        let new = *b"new";
+        assert_eq!([old.as_slice()].concat(), b"old");
+        assert_eq!([new.as_slice()].concat(), b"new");
+        let observation = file_replacement_v1(200, old, new).unwrap();
         require_clean_replacement(&observation);
         assert_eq!(
             (

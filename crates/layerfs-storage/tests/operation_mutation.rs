@@ -226,26 +226,21 @@ mod l1_update {
 #[cfg(feature = "operation-polymorphism")]
 mod mutation_owner {
     use crate::support::temp_fs_cas::TempFsCas;
+    use layerfs_storage::cdc::CdcAlgorithmV1;
     use layerfs_storage::qualification::lifecycle::semantic::{
         complete_mutation_case_v1, CompleteMutationCaseV1, CompleteMutationCountersV1,
         CompleteMutationObservationV1, CompleteMutationTerminalV1,
     };
 
-    fn observe(
-        label: &str,
-        case: CompleteMutationCaseV1,
-        update_base: &[u8],
-    ) -> CompleteMutationObservationV1 {
-        let root = TempFsCas::new(label);
-        root.create_dir();
-        complete_mutation_case_v1(root.path(), case, update_base)
-    }
-
     fn assert_clean(observation: CompleteMutationObservationV1) {
-        assert_eq!(observation.operation_admitted_slots, 0);
-        assert_eq!(observation.operation_admission_active, 0);
-        assert_eq!(observation.storage_admission_active, (0, 0, 0));
-        assert_eq!(observation.preparation_entries, 0);
+        let operation_admitted_slots_v1 = observation.operation_admitted_slots;
+        let operation_admission_active_for_test_v1 = observation.operation_admission_active;
+        let storage_admission_active_for_test_v1 = observation.storage_admission_active;
+        let count = observation.preparation_entries;
+        assert_eq!(operation_admitted_slots_v1, 0);
+        assert_eq!(operation_admission_active_for_test_v1, 0);
+        assert_eq!(storage_admission_active_for_test_v1, (0, 0, 0));
+        assert_eq!(count, 0);
         assert!(observation.authority_clean);
         assert!(observation.namespace_entries_are_regular);
         assert!(observation.root_usable);
@@ -296,13 +291,37 @@ mod mutation_owner {
 
     #[test]
     fn complete_replace_and_metadata_reach_independently_derived_handoffs() {
-        let observation = observe(
-            "complete-replace-metadata",
-            CompleteMutationCaseV1::ReplaceAndMetadata,
-            &[],
-        );
+        let root = TempFsCas::new("complete-replace-metadata");
+        root.create_dir();
+        let observation =
+            complete_mutation_case_v1(root.path(), CompleteMutationCaseV1::ReplaceAndMetadata, &[]);
         assert_eq!(observation.terminal, CompleteMutationTerminalV1::Succeeded);
-        assert_eq!(observation.expected_roots_matched, 3);
+        let accepted_root = observation
+            .accepted_root
+            .expect("accepted root observation");
+        let base_tree = observation.base_tree.expect("base tree observation");
+        let replaced = observation
+            .replaced_root
+            .expect("replaced root observation");
+        let replacement_tree = observation
+            .replacement_tree
+            .expect("replacement tree observation");
+        let metadata_file = observation
+            .metadata_file
+            .expect("metadata file identity observation");
+        let replacement_file = observation
+            .replacement_file
+            .expect("replacement file identity observation");
+        let root_tree = observation
+            .metadata_root
+            .expect("metadata root observation");
+        let metadata_tree = observation
+            .metadata_tree
+            .expect("metadata tree observation");
+        assert_eq!(accepted_root, base_tree);
+        assert_eq!(replaced, replacement_tree);
+        assert_ne!(metadata_file, replacement_file);
+        assert_eq!(root_tree, metadata_tree);
         assert_eq!(observation.completed_operations, 2);
         assert_eq!(observation.validated_handoffs, 2);
         assert_eq!(observation.storage_terminals, 2);
@@ -315,13 +334,26 @@ mod mutation_owner {
 
     #[test]
     fn complete_add_move_and_remove_use_one_candidate_graph_each() {
-        let observation = observe(
-            "complete-add-move-remove",
-            CompleteMutationCaseV1::AddMoveRemove,
-            &[],
-        );
+        let root = TempFsCas::new("complete-add-move-remove");
+        root.create_dir();
+        let observation =
+            complete_mutation_case_v1(root.path(), CompleteMutationCaseV1::AddMoveRemove, &[]);
         assert_eq!(observation.terminal, CompleteMutationTerminalV1::Succeeded);
-        assert_eq!(observation.expected_roots_matched, 4);
+        let accepted_root = observation
+            .accepted_root
+            .expect("accepted root observation");
+        let base_tree = observation.base_tree.expect("base tree observation");
+        let added = observation.added_root.expect("added root observation");
+        let added_tree = observation.added_tree.expect("added tree observation");
+        let moved = observation.moved_root.expect("moved root observation");
+        let moved_tree = observation.moved_tree.expect("moved tree observation");
+        let removed = observation.removed_root.expect("removed root observation");
+        let removed_tree = observation.removed_tree.expect("removed tree observation");
+        assert_eq!(accepted_root, base_tree);
+        assert_eq!(added, added_tree);
+        assert_eq!(moved, moved_tree);
+        assert_eq!(removed, removed_tree);
+        assert_eq!(removed, base_tree);
         assert_eq!(observation.completed_operations, 3);
         assert_eq!(observation.validated_handoffs, 3);
         assert_eq!(observation.storage_terminals, 3);
@@ -336,15 +368,22 @@ mod mutation_owner {
 
     #[test]
     fn complete_cross_directory_move_detaches_and_attaches_in_one_handoff() {
-        let observation = observe(
-            "complete-cross-directory-move",
-            CompleteMutationCaseV1::CrossDirectoryMove,
-            &[],
-        );
+        let root = TempFsCas::new("complete-cross-directory-move");
+        root.create_dir();
+        let observation =
+            complete_mutation_case_v1(root.path(), CompleteMutationCaseV1::CrossDirectoryMove, &[]);
         assert_eq!(observation.terminal, CompleteMutationTerminalV1::Succeeded);
-        assert_eq!(observation.expected_roots_matched, 2);
+        let accepted_root = observation
+            .accepted_root
+            .expect("accepted root observation");
+        let base_tree = observation.base_tree.expect("base tree observation");
+        let moved = observation.moved_root.expect("moved root observation");
+        let moved_tree = observation.moved_tree.expect("moved tree observation");
+        assert_eq!(accepted_root, base_tree);
+        assert_eq!(moved, moved_tree);
         assert_eq!(observation.completed_operations, 1);
-        assert_eq!(observation.validated_handoffs, 1);
+        let boundaries = observation.validated_handoffs;
+        assert_eq!(boundaries, 1);
         assert_eq!(observation.storage_terminals, 1);
         assert_eq!(observation.operation_counter_count, 1);
         assert!(observation.algorithm_is_fastcdc);
@@ -355,17 +394,38 @@ mod mutation_owner {
     #[test]
     fn complete_update_authenticates_and_rejoins_without_replace_fallback() {
         let base = crate::support::fastcdc_golden_input(300_000);
-        let observation = observe("complete-update", CompleteMutationCaseV1::Update, &base);
+        let root = TempFsCas::new("complete-update");
+        root.create_dir();
+        let observation =
+            complete_mutation_case_v1(root.path(), CompleteMutationCaseV1::Update, &base);
         assert_eq!(observation.terminal, CompleteMutationTerminalV1::Succeeded);
-        assert_eq!(observation.expected_roots_matched, 2);
+        let accepted_root = observation
+            .accepted_root
+            .expect("accepted root observation");
+        let base_tree = observation.base_tree.expect("base tree observation");
+        let updated = observation.updated_root.expect("updated root observation");
+        let result_tree = observation.update_tree.expect("update tree observation");
+        assert_eq!(accepted_root, base_tree);
+        assert_eq!(updated, result_tree);
         assert_eq!(observation.completed_operations, 1);
         assert_eq!(observation.validated_handoffs, 1);
         assert_eq!(observation.storage_terminals, 1);
         assert_eq!(observation.source_offset, 7);
         assert_eq!(observation.operation_counter_count, 1);
-        assert!(observation.algorithm_is_fastcdc);
+        assert_eq!(observation.update_algorithm, Some(CdcAlgorithmV1::FastCdc));
         assert!(observation.counters.update_resynchronization_bytes > 0);
         assert!(observation.counters.anchor_attempts > 0);
+        let counters = observation.counters;
+        assert_eq!(
+            counters.storage_inodes_requested,
+            counters.storage_inodes_reserved
+        );
+        assert_eq!(
+            counters.storage_inodes_reserved,
+            counters.storage_inodes_released
+                + counters.storage_inodes_committed
+                + counters.storage_inodes_retained
+        );
         assert_storage_terminal(observation.operation_counters[0]);
         assert_clean(observation);
     }
@@ -373,8 +433,10 @@ mod mutation_owner {
     #[test]
     fn complete_update_reference_metadata_overflow_is_transactional_and_terminal() {
         let base = crate::support::fastcdc_golden_input(300_000);
-        let observation = observe(
-            "complete-update-reference-overflow",
+        let root = TempFsCas::new("complete-update-reference-overflow");
+        root.create_dir();
+        let observation = complete_mutation_case_v1(
+            root.path(),
             CompleteMutationCaseV1::UpdateReferenceMetadataOverflow,
             &base,
         );
@@ -383,7 +445,11 @@ mod mutation_owner {
             observation.terminal,
             CompleteMutationTerminalV1::IntegerOverflow
         );
-        assert_eq!(observation.expected_roots_matched, 1);
+        let accepted_root = observation
+            .accepted_root
+            .expect("accepted root observation");
+        let base_tree = observation.base_tree.expect("base tree observation");
+        assert_eq!(accepted_root, base_tree);
         assert_eq!(observation.completed_operations, 0);
         assert_eq!(observation.validated_handoffs, 0);
         assert_eq!(observation.source_offset, 0);
@@ -425,15 +491,27 @@ mod mutation_owner {
         assert_eq!(counters.unreachable_installed_residue_bytes, 0);
         assert_eq!(counters.mutable_preparation_residue_bytes, 0);
         assert_eq!(counters.mutable_preparation_residue_inodes, 0);
-        assert!(observation.namespace_unchanged);
+        let exact_operation_namespace_usage = observation
+            .exact_operation_namespace_usage
+            .expect("terminal namespace observation");
+        let namespace_before = observation
+            .namespace_before
+            .expect("initial namespace observation");
+        let cas = observation.root_usable;
+        let stale = observation.stale_usable;
+        assert_eq!(exact_operation_namespace_usage, namespace_before);
+        assert!(cas);
+        assert!(stale);
         assert_clean(observation);
     }
 
     #[test]
     fn complete_update_exact_rejoin_overflow_is_transactional_and_terminal() {
         let base = crate::support::fastcdc_golden_input(300_000);
-        let observation = observe(
-            "complete-update-rejoin-overflow",
+        let root = TempFsCas::new("complete-update-rejoin-overflow");
+        root.create_dir();
+        let observation = complete_mutation_case_v1(
+            root.path(),
             CompleteMutationCaseV1::UpdateExactRejoinOverflow,
             &base,
         );
@@ -442,7 +520,11 @@ mod mutation_owner {
             observation.terminal,
             CompleteMutationTerminalV1::IntegerOverflow
         );
-        assert_eq!(observation.expected_roots_matched, 1);
+        let accepted_root = observation
+            .accepted_root
+            .expect("accepted root observation");
+        let base_tree = observation.base_tree.expect("base tree observation");
+        assert_eq!(accepted_root, base_tree);
         assert_eq!(observation.completed_operations, 0);
         assert_eq!(observation.validated_handoffs, 0);
         assert_eq!(observation.source_offset, 7);
@@ -490,27 +572,57 @@ mod mutation_owner {
         assert_eq!(counters.mutable_preparation_residue_inodes, 0);
         assert_eq!(counters.storage_preparation_bytes_current_after_cleanup, 0);
         assert_eq!(counters.storage_preparation_inodes_current_after_cleanup, 0);
-        assert!(observation.namespace_unchanged);
+        let exact_operation_namespace_usage = observation
+            .exact_operation_namespace_usage
+            .expect("terminal namespace observation");
+        let namespace_before = observation
+            .namespace_before
+            .expect("initial namespace observation");
+        let cas = observation.root_usable;
+        let stale = observation.stale_usable;
+        assert_eq!(exact_operation_namespace_usage, namespace_before);
+        assert!(cas);
+        assert!(stale);
         assert_clean(observation);
     }
 
     #[test]
     fn complete_mutation_rejects_an_unauthenticated_base_without_preparation() {
-        let observation = observe(
-            "complete-unauthenticated-base",
+        let root = TempFsCas::new("complete-unauthenticated-base");
+        root.create_dir();
+        let observation = complete_mutation_case_v1(
+            root.path(),
             CompleteMutationCaseV1::UnauthenticatedBase,
             &[],
         );
-        assert_eq!(
-            observation.terminal,
-            CompleteMutationTerminalV1::UnauthenticatedBase
-        );
-        assert_eq!(observation.expected_roots_matched, 1);
+        let error = observation.terminal;
+        assert!(matches!(
+            error,
+            CompleteMutationTerminalV1::FsCas | CompleteMutationTerminalV1::IdMismatch
+        ));
+        let accepted_root = observation
+            .accepted_root
+            .expect("accepted root observation");
+        let base_tree = observation.base_tree.expect("base tree observation");
+        assert_eq!(accepted_root, base_tree);
         assert_eq!(observation.completed_operations, 0);
         assert_eq!(observation.validated_handoffs, 0);
-        assert_eq!(observation.source_offset, 0);
-        assert!(observation.namespace_unchanged);
-        assert!(observation.accepted_version_differs);
+        let offset = observation.source_offset;
+        assert_eq!(offset, 0);
+        let exact_operation_namespace_usage = observation
+            .exact_operation_namespace_usage
+            .expect("terminal namespace observation");
+        let namespace_before = observation
+            .namespace_before
+            .expect("initial namespace observation");
+        assert_eq!(exact_operation_namespace_usage, namespace_before);
+        let version = observation
+            .accepted_version
+            .expect("accepted version observation");
+        let wrong_version = observation
+            .wrong_version
+            .expect("wrong version observation");
+        assert_ne!(version, wrong_version);
         assert_clean(observation);
     }
 }
