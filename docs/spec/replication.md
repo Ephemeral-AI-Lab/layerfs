@@ -704,19 +704,20 @@ MUST be incremental or use bounded codec blocks; it MUST NOT allocate a second c
 batch representation. Golden vectors MUST cover every record type before a stable
 release.
 
-Before code may persist a receipt, a normative version 1 wire document MUST freeze the
-envelope magic, protocol version field, byte order, integer widths, record tags and
-ordering, string normalization and UTF-8 rejection rules, optional-field representation,
-length domains, digest domain separators, and unknown-field behavior. Independently
-versioned Node and Durable Object builds MUST produce the same bytes for every golden
-vector. A software upgrade MUST NOT turn an acknowledged version 1 batch into
+Before code may persist a receipt, the normative
+[`replication-wire-v1.md`](./replication-wire-v1.md) document MUST freeze the envelope
+magic, protocol version field, byte order, integer widths, record tags and ordering,
+string normalization and UTF-8 rejection rules, optional-field representation, length
+domains, digest domain separators, and unknown-field behavior. Independently versioned
+Node and Durable Object builds MUST produce the same bytes for every golden vector. A
+software upgrade MUST NOT turn an acknowledged version 1 batch into
 `BatchReplayMismatch`.
 
 The destination MUST record one receipt for each accepted sequence. Replaying the same
-sequence and payload digest MUST return the original acknowledgement without duplicating
-a row or advancing progress again. Reusing a sequence with a different digest, count,
-byte length, cursor, or phase MUST fail with `BatchReplayMismatch` and MUST NOT change
-state.
+sequence and full canonical batch-envelope digest MUST return the original
+acknowledgement without duplicating a row or advancing progress again. Reusing a
+sequence with a different digest, count, byte length, cursor, or phase MUST fail with
+`BatchReplayMismatch` and MUST NOT change state.
 
 A batch is atomic. A limit error, integrity error, constraint failure, busy failure,
 injected crash, or abort MUST leave its receipt, cursor, staging membership, and
@@ -732,7 +733,10 @@ The batch-acceptance transaction MUST update durable cumulative counters and thi
 summary:
 
 ```text
-chainDigest = SHA256(previousDigest || sequence || batchDigest)
+chainDigest = SHA256(
+  ASCII("efs-replication-v1/receipt-chain\0") ||
+  previousDigest || uint64(sequence) || fullBatchEnvelopeDigest
+)
 acceptedEntries += batchEntries
 acceptedBytes += batchBytes
 ```
