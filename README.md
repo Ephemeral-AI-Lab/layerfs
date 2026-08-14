@@ -26,6 +26,26 @@ stored content or directory structure.
 - **Copy-on-write** creates a new layer while sharing unchanged filesystem
   structure with its parent.
 
+## Project status
+
+> **Development status:** the private storage engine is implemented and under
+> correctness qualification. The public SDK and agent-facing filesystem
+> projection are planned; LayerFS is not yet a production-ready filesystem.
+
+| Stage | Status | Current result |
+|---|---|---|
+| Storage foundations | ✅ Implemented · provisional | CAS, CDC, canonical objects, manifests, packs, verified reads, and structural COW |
+| Storage operations | ✅ Implemented · provisional | Create, Replace, Update, Add, Remove, Move, Metadata, full reads, and range reads |
+| Architecture and owner verification | ✅ PB-08 checkpoint | 262/262 owner tests and 20/20 architecture checks |
+| Work-amplification closure | 🟡 In progress | Reducing duplicate reconstruction, validation, and range-read work |
+| Deterministic scale wall | ⏳ Next | Large-object, concurrency, lifecycle, race, and fault coverage |
+| Final qualification and benchmarks | ⏳ Pending | Final unchanged-source custody, benchmark registry, smoke, and release qualification |
+| Public SDK and filesystem projection | ⏳ Planned | Agent-facing LayerStack checkout, publication, and filesystem integration |
+
+The current milestone builds and qualifies the private storage engine. It does
+not yet claim a stable public SDK, mounted filesystem projection, cross-platform
+support, native materialization, garbage collection, or production performance.
+
 ## Components
 
 - `layerfs-storage` — identities, canonical objects, CDC, file manifests,
