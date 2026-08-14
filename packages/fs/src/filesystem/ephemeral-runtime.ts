@@ -35,7 +35,6 @@ export class EphemeralRuntime {
   readonly filesystem: PublicEphemeralFS | null;
   readonly replication: ReplicationFilesystemBridge;
   readonly #operations: OperationsFilesystem | null;
-  readonly #storage: ReturnType<typeof createSqliteOperationsStorage>;
   readonly #markReplicationClosed: () => void;
   #closed = false;
 
@@ -50,7 +49,6 @@ export class EphemeralRuntime {
     this.provisioningState = options.provisioningState;
     this.identity = options.identity;
     this.#operations = options.operations;
-    this.#storage = options.storage;
     this.filesystem = options.operations as unknown as PublicEphemeralFS | null;
     this.replication = options.replication;
     this.#markReplicationClosed = options.markReplicationClosed ?? (() => undefined);

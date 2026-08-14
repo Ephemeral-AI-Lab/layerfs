@@ -345,8 +345,7 @@ export async function replicate(
 ): Promise<ReplicationRunResult> {
   const { bridge, transport, authorization, plan, operationId, signal } = options;
   const destinationAuthorization = options.destinationAuthorization ?? authorization;
-  let existing: Awaited<ReturnType<ReplicationFilesystemBridge["findSession"]>> | null =
-    null;
+  let existing: Awaited<ReturnType<ReplicationFilesystemBridge["findSession"]>> | null;
   let sessionId = randomSessionId();
   let resumeKey: Uint8Array = options.resumeKey ?? randomBytes(32);
   let ownerNonce: Uint8Array = randomBytes(16);
@@ -978,7 +977,6 @@ async function runContentNegotiation(state: DriverState): Promise<void> {
       now: Date.now(),
     });
     if (offer.records.length === 0) {
-      offersComplete = true;
       break;
     }
     offered += offer.records.length;

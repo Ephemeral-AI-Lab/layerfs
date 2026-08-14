@@ -65,10 +65,12 @@ async function git(cwd, args) {
   ).stdout.trim();
 }
 
+const ansiEscape = new RegExp(`${String.fromCharCode(0x1b)}\\[[0-?]*[ -/]*[@-~]`, "gu");
+
 async function runCommand(spec, candidate, computerCandidate) {
   const started = Date.now();
-  let stdout = "";
-  let stderr = "";
+  let stdout;
+  let stderr;
   let exitCode = 0;
   try {
     const executable =
@@ -112,7 +114,7 @@ async function runCommand(spec, candidate, computerCandidate) {
 }
 
 function testTotals(source, name) {
-  const normalized = source.replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "");
+  const normalized = source.replace(ansiEscape, "");
   const fsTests = normalized.match(/tests (\d+)/u);
   const fsPass = normalized.match(/pass (\d+)/u);
   const fsFail = normalized.match(/fail (\d+)/u);

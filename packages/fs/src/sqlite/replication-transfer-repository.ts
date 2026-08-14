@@ -233,6 +233,22 @@ function readU64(bytes: Uint8Array, offset: number, name: string): number {
   return Number(value);
 }
 
+function readNullableParentU64(
+  bytes: Uint8Array,
+  offset: number,
+  name: string,
+): number | null {
+  if (offset + 8 > bytes.byteLength) throw new RangeError(`truncated ${name}`);
+  const value = new DataView(bytes.buffer, bytes.byteOffset + offset, 8).getBigUint64(
+    0,
+    false,
+  );
+  if (value === 0xffff_ffff_ffff_ffffn) return null;
+  if (value > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new RangeError(`${name} exceeds the safe integer envelope`);
+  return Number(value);
+}
+
 function readU32(bytes: Uint8Array, offset: number, name: string): number {
   if (offset + 4 > bytes.byteLength)
     throw transferError("IntegrityFailure", `truncated ${name}`);
@@ -713,6 +729,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     );
   }
 
+  // Kept as a diagnostic accessor for durable lease inspection.
+  // eslint-disable-next-line no-unused-private-class-members
   #exportLease(sessionId: string): Readonly<{
     readonly leaseId: string;
     readonly ownerId: string;
@@ -1188,7 +1206,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     // cursor and page rows commit together, so a statement fault retries the
     // same page without skipping or duplicating source rows.
     while (cursor.kind <= 6) {
-      let rowCount = 0;
+      let rowCount: number;
       if (cursor.kind === 1) {
         const rows = this.#tx.all<
           {
@@ -1995,6 +2013,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return digestRows ? hexBytes(digestRows) : ZERO_DIGEST;
   }
 
+  // Superseded by the bounded namespace keyset cursor.
+  // eslint-disable-next-line no-unused-private-class-members
   #readNamespaceRows(
     sessionId: string,
     revision: number,
@@ -2073,6 +2093,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return rows;
   }
 
+  // Superseded by the bounded branch keyset cursor.
+  // eslint-disable-next-line no-unused-private-class-members
   #readBranchRows(
     sessionId: string,
     branchId: string,
@@ -2244,9 +2266,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const refTable = checkpoint
       ? "efs_checkpoint_manifest_roots"
       : "efs_revision_manifest_roots";
-    let fetched: readonly SqliteRow[] = [];
     if (cursor.kind === 1) {
-      fetched = this.#tx.all<
+      const fetched = this.#tx.all<
         { inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow
       >(
         cursor.inodeId === null
@@ -2309,7 +2330,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       });
     }
     if (cursor.kind === 2) {
-      fetched = this.#tx.all<
+      const fetched = this.#tx.all<
         {
           parent_inode: string;
           name_sort: Uint8Array;
@@ -2374,7 +2395,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         revisionComplete: false,
       });
     }
-    fetched = this.#tx.all<{ inode_id: string; manifest_hash: Uint8Array } & SqliteRow>(
+    const fetched = this.#tx.all<
+      { inode_id: string; manifest_hash: Uint8Array } & SqliteRow
+    >(
       cursor.inodeId === null
         ? `SELECT inode_id,manifest_hash FROM ${refTable} WHERE ${keyColumn}=? ORDER BY inode_id LIMIT ?`
         : `SELECT inode_id,manifest_hash FROM ${refTable} WHERE ${keyColumn}=? AND inode_id>? ORDER BY inode_id LIMIT ?`,
@@ -3589,11 +3612,12 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
           );
         }
         if (revision > meta.main_revision) {
-          const parentValue = readU64(row.value!, 0, "staged parent revision");
-          const parent =
-            revision === 0 || parentValue === 0xffff_ffff_ffff_ffff
-              ? null
-              : parentValue;
+          const parentValue = readNullableParentU64(
+            row.value!,
+            0,
+            "staged parent revision",
+          );
+          const parent = revision === 0 ? null : parentValue;
           const writerBytes = row.value!.subarray(24);
           let writerId: string;
           try {
@@ -3794,6 +3818,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     throw transferError("IntegrityFailure", "unknown replication activation phase");
   }
 
+  // Superseded by the bounded activation state machine.
+  // eslint-disable-next-line no-unused-private-class-members
   #finalizeMain(
     options: {
       readonly sessionId: string;
@@ -3896,9 +3922,12 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     let maintenanceBytes = 0;
     for (const header of newHeaders) {
       const revision = readU64(header.key, 1, "staged revision");
-      const parentValue = readU64(header.value!, 0, "staged parent revision");
-      const parent =
-        revision === 0 || parentValue === 0xffff_ffff_ffff_ffff ? null : parentValue;
+      const parentValue = readNullableParentU64(
+        header.value!,
+        0,
+        "staged parent revision",
+      );
+      const parent = revision === 0 ? null : parentValue;
       const createdAtMs = readU64(header.value!, 8, "staged creation time");
       const changeCount = readU64(header.value!, 16, "staged change count");
       const writerBytes = header.value!.subarray(24);
@@ -4671,6 +4700,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     throw transferError("IntegrityFailure", "unknown branch activation phase");
   }
 
+  // Superseded by the bounded activation state machine.
+  // eslint-disable-next-line no-unused-private-class-members
   #finalizeBranch(
     options: {
       readonly sessionId: string;
@@ -5512,6 +5543,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return hexBytes(digest);
   }
 
+  // Superseded by the bounded activation state machine.
+  // eslint-disable-next-line no-unused-private-class-members
   #finalizeGenesis(
     options: {
       readonly sessionId: string;
