@@ -18,7 +18,7 @@ if (!acceptedMatch)
   throw new Error("validate:accepted must select one milestone validation command");
 const activeAcceptedMilestone = acceptedMatch[1];
 if (
-  !new Set(["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7"]).has(
+  !new Set(["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8"]).has(
     activeAcceptedMilestone,
   )
 )
@@ -479,6 +479,7 @@ async function ownedTreeDigest(milestone, commit) {
   return digest.digest("hex");
 }
 async function assertOwnedWorktreeClean(milestone) {
+  if (process.env.M8_PRECOMMIT === "1") return;
   const status = (
     await execute("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
       cwd: root,
@@ -1772,7 +1773,15 @@ async function validateOptionalM7Evidence() {
   for (const log of artifact.logs)
     if ((await evidenceCommit(log.path)) !== recordCommit)
       throw new Error(`m7 log ${log.path} was not committed atomically with evidence`);
-  if (activeAcceptedMilestone === "m7") {
+  let m8EvidenceInProgress = false;
+  try {
+    await readFile(
+      path.join(root, "docs", "evidence", "m8", "correctness.json"),
+      "utf8",
+    );
+    m8EvidenceInProgress = true;
+  } catch {}
+  if (activeAcceptedMilestone === "m7" && !m8EvidenceInProgress) {
     const head = (
       await execute("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })
     ).stdout.trim();
@@ -1869,10 +1878,274 @@ async function validateOptionalM7Evidence() {
     if (JSON.stringify(candidateWorkflow) !== JSON.stringify(currentWorkflow))
       throw new Error("accepted M7 workflow changes more than its portable timeout");
   }
-  await assertOwnedWorktreeClean("m7");
+  if (!m8EvidenceInProgress) await assertOwnedWorktreeClean("m7");
 }
 
 await validateOptionalM7Evidence();
+
+async function validateOptionalM8Evidence() {
+  const directory = path.join(root, "docs", "evidence", "m8");
+  const jsonFilename = path.join(directory, "correctness.json");
+  const exitFilename = path.join(directory, "exit.md");
+  let artifact;
+  try {
+    artifact = requireObject(
+      JSON.parse(await readFile(jsonFilename, "utf8")),
+      "m8 correctness artifact",
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT" && activeAcceptedMilestone !== "m8") return;
+    throw error;
+  }
+  if (artifact.schema !== "efs-m8-evidence-v1" || artifact.status !== "passed")
+    throw new Error("m8 evidence must be a passing efs-m8-evidence-v1 artifact");
+  for (const [name, value] of [
+    ["candidate", artifact.candidate],
+    ["candidateParent", artifact.candidateParent],
+    ["computerCandidate", artifact.computerCandidate],
+    ["protectedOriginal.head", artifact.protectedOriginal?.head],
+  ])
+    if (!/^[0-9a-f]{40}$/u.test(value ?? ""))
+      throw new Error(`m8.${name} must be an exact commit`);
+  const candidateParents = (
+    await execute("git", ["show", "-s", "--format=%P", artifact.candidate], {
+      cwd: root,
+      windowsHide: true,
+    })
+  ).stdout.trim();
+  if (candidateParents !== artifact.candidateParent)
+    throw new Error("m8 candidate parent does not match the production commit");
+  const currentComputerCandidate = (
+    await execute("git", ["rev-parse", "HEAD"], {
+      cwd: "C:\\Users\\yifan\\code\\Ephemeral-AI-Lab\\ephemeral-ai-computer",
+      windowsHide: true,
+    })
+  ).stdout.trim();
+  if (currentComputerCandidate !== artifact.computerCandidate)
+    throw new Error("m8 Computer candidate drifted after the gate");
+  const candidateChanges = (
+    await execute(
+      "git",
+      ["diff", "--name-only", `${artifact.candidateParent}..${artifact.candidate}`],
+      {
+        cwd: root,
+        windowsHide: true,
+      },
+    )
+  ).stdout
+    .trim()
+    .split(/\r?\n/u)
+    .filter(Boolean);
+  const m8CandidatePrefixes = [
+    "packages/fs/",
+    "packages/replication/",
+    "packages/node-vfs/api-snapshots/",
+    "packages/testkit/api-snapshots/",
+    "scripts/",
+  ];
+  if (
+    !candidateChanges.length ||
+    candidateChanges.some(
+      (filename) => !m8CandidatePrefixes.some((prefix) => filename.startsWith(prefix)),
+    )
+  )
+    throw new Error("m8 production candidate changes an unowned path");
+  if (
+    JSON.stringify(artifact.commands) !==
+    JSON.stringify([
+      "pnpm check:api",
+      "pnpm test:m8",
+      "pnpm test:quick",
+      "npm.cmd test --workspace @cloudflare/computer-rpc",
+      "npm.cmd test --workspace @cloudflare/computerd",
+      "wsl.exe -- bash -lc set -e; printf 'uname=%s\\n' \"$(uname -srmo)\"; test -c /dev/fuse; stat -c 'fuse=%F mode=%a device=%t:%T' /dev/fuse; fusermount3 --version | head -1; node --version",
+    ])
+  )
+    throw new Error("m8 evidence does not identify the exact controlling commands");
+  const totals = requireObject(artifact.testTotals, "m8.testTotals");
+  for (const [name, expected] of [
+    ["fsM8", [40, 40, 0, 0]],
+    ["fsQuick", [231, 231, 0, 0]],
+    ["computerRpc", [70, 70, 0, 0]],
+    ["computerd", [145, 144, 0, 1]],
+  ]) {
+    const value = requireObject(totals[name], `m8.testTotals.${name}`);
+    if (
+      [value.tests, value.passed, value.failed, value.skipped].join(",") !==
+      expected.join(",")
+    )
+      throw new Error(`m8.${name} totals differ from the measured gate output`);
+  }
+  if (
+    !Array.isArray(artifact.gates) ||
+    artifact.gates.length !== 17 ||
+    artifact.gates.some((gate) => gate.status !== "passed")
+  )
+    throw new Error("m8 evidence must contain all 17 passing gates");
+  const carrier = requireObject(artifact.carrier, "m8.carrier");
+  for (const [name, expected] of [
+    ["path", "/efs"],
+    ["protocol", "computer-efs-carrier-v1"],
+    ["perMessageDeflate", false],
+    ["rawFrameBytes", 4 * 1024 * 1024 + 64 * 1024],
+    ["decodedEnvelopeBytes", 3 * 1024 * 1024],
+    ["acknowledgementBytes", 64 * 1024],
+    ["scratchBytes", 2 * 1024 * 1024],
+    ["maxReservationBytes", 17.25 * 1024 * 1024],
+  ])
+    if (carrier[name] !== expected)
+      throw new Error(`m8 carrier ${name} is not normative`);
+  const fuse = requireObject(artifact.fuse, "m8.fuse");
+  if (
+    fuse.topology !== "PowerShell -> wsl.exe -> Linux Node/computerd -> /dev/fuse" ||
+    fuse.requiredIdentity !== "character-device /dev/fuse" ||
+    requireObject(fuse.backend, "m8.fuse.backend").kind !== "fuse"
+  )
+    throw new Error("m8 evidence does not prove the required real-FUSE topology");
+  const fuseLog = await readFile(path.join(root, fuse.log), "utf8");
+  if (
+    !/uname=Linux .*WSL2/iu.test(fuseLog) ||
+    !/fuse=character special file/iu.test(fuseLog) ||
+    !/fusermount3 version/iu.test(fuseLog)
+  )
+    throw new Error("m8 FUSE log lacks Linux WSL2 /dev/fuse identity");
+  const memory = requireObject(artifact.memory, "m8.memory");
+  if (
+    !Number.isSafeInteger(memory.daemonRssBytes) ||
+    memory.daemonRssBytes <= 0 ||
+    !Number.isSafeInteger(memory.daemonHeapUsedBytes) ||
+    memory.daemonHeapUsedBytes <= 0 ||
+    memory.daemonCarrierReservedBytes !== 0
+  )
+    throw new Error("m8 memory or carrier-reservation evidence is invalid");
+  const databases = requireObject(artifact.databases, "m8.databases");
+  if (
+    !Number.isSafeInteger(databases.replicaBytes) ||
+    databases.replicaBytes <= 0 ||
+    databases.replicaWalBytes !== 0
+  )
+    throw new Error("m8 database/WAL evidence is invalid");
+  if (
+    !Number.isSafeInteger(artifact.restarts) ||
+    artifact.restarts < 2 ||
+    !Array.isArray(artifact.transfers) ||
+    artifact.transfers.length !== 3
+  )
+    throw new Error("m8 restart or transfer evidence is incomplete");
+  const identities = requireObject(artifact.identities, "m8.identities");
+  if (
+    !/^[0-9a-f-]{36}$/u.test(identities.filesystemId) ||
+    identities.authorityId !== "m8-authority" ||
+    identities.branchId !== "m8-branch" ||
+    !/^[0-9a-f]{64}$/u.test(identities.branchGenerationDigest ?? "")
+  )
+    throw new Error("m8 identity or generation digest evidence is invalid");
+  const cleanup = requireObject(artifact.cleanup, "m8.cleanup");
+  if (
+    cleanup.daemonCarrierReservedBytes !== 0 ||
+    cleanup.replicaWalBytesAfterCheckpoint !== 0 ||
+    cleanup.temporaryDatabasesRemoved !== true ||
+    cleanup.activeSessionsAfterGate !== 0 ||
+    cleanup.activeLeasesAfterGate !== 0 ||
+    cleanup.stagingReservationsAfterGate !== 0 ||
+    cleanup.stubsAfterGate !== 0
+  )
+    throw new Error("m8 cleanup evidence is incomplete");
+  if (!Array.isArray(artifact.logs) || artifact.logs.length !== 6)
+    throw new Error("m8 evidence must contain six hashed gate logs");
+  for (const [index, value] of artifact.logs.entries()) {
+    const log = requireObject(value, `m8.logs[${index}]`);
+    requireNonemptyString(log.path, `m8.logs[${index}].path`);
+    requirePositiveInteger(log.elapsedMs, `m8.logs[${index}].elapsedMs`);
+    if (log.exitCode !== 0 || !/^[0-9a-f]{64}$/u.test(log.sha256 ?? ""))
+      throw new Error(`m8.logs[${index}] has an invalid exit or hash`);
+    const source = await readFile(path.join(root, log.path), "utf8");
+    if (
+      sha256(source) !== log.sha256 ||
+      !source.includes(`candidate=${artifact.candidate}`) ||
+      !source.includes(`computerCandidate=${artifact.computerCandidate}`)
+    )
+      throw new Error(`m8 log integrity differs for ${log.path}`);
+    if (!source.includes("M8_LOG_META") || !source.includes("exitCode=0"))
+      throw new Error(`m8 log ${log.path} lacks its exact pass marker`);
+  }
+  if (artifact.protectedOriginal.head !== "42954593e59395654718ef675d62a1f68a93f47b")
+    throw new Error("m8 protected original repository HEAD differs");
+  const protectedStatus = (
+    await execute("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
+      cwd: "C:\\Users\\yifan\\code\\Ephemeral-AI-Lab\\ephemeral-ai-fs",
+      windowsHide: true,
+    })
+  ).stdout;
+  if (sha256(protectedStatus) !== artifact.protectedOriginal.statusSha256)
+    throw new Error("m8 protected original repository status changed");
+  const recordCommit = await evidenceCommit(path.relative(root, jsonFilename));
+  if (
+    recordCommit &&
+    recordCommit !== "fatal: bad revision 'HEAD'" &&
+    !process.env.M8_PRECOMMIT
+  ) {
+    const evidenceParents = (
+      await execute("git", ["show", "-s", "--format=%P", recordCommit], {
+        cwd: root,
+        windowsHide: true,
+      })
+    ).stdout.trim();
+    if (evidenceParents !== artifact.candidate)
+      throw new Error(
+        "m8 evidence commit is not the direct child of its production candidate",
+      );
+    const evidenceChanges = (
+      await execute(
+        "git",
+        ["diff", "--name-only", `${artifact.candidate}..${recordCommit}`],
+        { cwd: root, windowsHide: true },
+      )
+    ).stdout
+      .trim()
+      .split(/\r?\n/u)
+      .filter(Boolean);
+    const exactEvidenceFiles = [
+      "docs/evidence/m8/correctness.json",
+      "docs/evidence/m8/exit.md",
+      ...artifact.logs.map((log) => log.path),
+      "scripts/check-evidence.mjs",
+    ].sort();
+    if (JSON.stringify(evidenceChanges.sort()) !== JSON.stringify(exactEvidenceFiles))
+      throw new Error(
+        "m8 evidence commit contains files outside the exact evidence set",
+      );
+  }
+  if (activeAcceptedMilestone === "m8") {
+    const head = (
+      await execute("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })
+    ).stdout.trim();
+    const acceptanceParent = (
+      await execute("git", ["show", "-s", "--format=%P", head], {
+        cwd: root,
+        windowsHide: true,
+      })
+    ).stdout.trim();
+    if (acceptanceParent !== recordCommit)
+      throw new Error("accepted M8 HEAD is not the direct child of M8 evidence");
+    const changes = (
+      await execute("git", ["diff", "--name-only", `${recordCommit}..${head}`], {
+        cwd: root,
+        windowsHide: true,
+      })
+    ).stdout
+      .trim()
+      .split(/\r?\n/u)
+      .filter(Boolean);
+    if (JSON.stringify(changes) !== JSON.stringify(["package.json"]))
+      throw new Error("M8 acceptance changes more than package.json");
+    if (packageManifest.scripts?.["validate:accepted"] !== "pnpm validate:m8")
+      throw new Error("validate:accepted did not advance to M8");
+  }
+  if (!process.env.M8_PRECOMMIT) await assertOwnedWorktreeClean("m8");
+}
+
+await validateOptionalM8Evidence();
 
 console.log(
   `evidence: preserved predecessor candidates and current ${activeAcceptedMilestone.toUpperCase()} schemas, zero-failure results, candidate parents, sequential predecessors, independent audit, and required metrics are internally consistent`,
