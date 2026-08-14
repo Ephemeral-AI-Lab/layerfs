@@ -16,6 +16,30 @@
       ]
     },
     {
+      "name": "createNodeVfsProvider",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "createNodeVfsSynchronousFileSystem",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/synchronous-adapter.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
       "name": "FlushOptions",
       "kinds": [
         "type"
@@ -119,6 +143,18 @@
       "declarations": [
         {
           "file": "packages/node-vfs/dist/index.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsSynchronousFileSystem",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/node-vfs/dist/synchronous-adapter.d.ts",
           "kind": "InterfaceDeclaration"
         }
       ]

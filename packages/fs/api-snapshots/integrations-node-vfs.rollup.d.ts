@@ -122,6 +122,100 @@ import type { FilesystemSQLiteDriver, SQLiteDriverCapabilities } from "../sqlite
 import type { BranchConfiguration, FilesystemLimits, RuntimeLimits, StorageLimits } from "../resources/limits.js";
 import type { CowPageBytes } from "../cow/pages.js";
 import type { FilesystemErrorCode } from "./errors.js";
+export type ReplicationTransferRecord = {
+    readonly kind: "object-descriptor";
+    readonly digest: Uint8Array;
+    readonly byteLength: number;
+} | {
+    readonly kind: "object-payload";
+    readonly digest: Uint8Array;
+    readonly byteLength: number;
+    readonly bytes: Uint8Array;
+} | {
+    readonly kind: "manifest-root-descriptor";
+    readonly format: string;
+    readonly digest: Uint8Array;
+    readonly encodedLength: number;
+    readonly logicalFileLength: number;
+    readonly entryCount: number;
+    readonly rootNodeDigest: Uint8Array;
+} | {
+    readonly kind: "manifest-node-descriptor";
+    readonly digest: Uint8Array;
+    readonly nodeKind: "leaf" | "internal";
+    readonly encodedLength: number;
+    readonly logicalSpan: number;
+    readonly entryCount: number;
+} | {
+    readonly kind: "missing-content";
+    readonly contentKind: "object" | "manifest-root" | "manifest-node";
+    readonly digest: Uint8Array;
+} | {
+    readonly kind: "revision-fragment";
+    readonly revisionId: string;
+    readonly parentRevisionId: string | null;
+    readonly fragmentIndex: number;
+    readonly fragmentCount: number;
+    readonly fragmentBytes: Uint8Array;
+} | {
+    readonly kind: "checkpoint-fragment";
+    readonly checkpointId: string;
+    readonly revisionId: string;
+    readonly fragmentIndex: number;
+    readonly fragmentCount: number;
+    readonly fragmentBytes: Uint8Array;
+} | {
+    readonly kind: "branch-generation-fragment";
+    readonly branchId: string;
+    readonly baseRevision: string;
+    readonly generation: number;
+    readonly generationDigest: Uint8Array;
+    readonly fragmentIndex: number;
+    readonly fragmentCount: number;
+    readonly fragmentBytes: Uint8Array;
+} | {
+    readonly kind: "terminal-result";
+    readonly operationId: string;
+    readonly branchId: string | null;
+    readonly generation: number | null;
+    readonly generationDigest: Uint8Array | null;
+    readonly resultDigest: Uint8Array;
+    readonly resultBytes: Uint8Array;
+};
+export interface ReplicationExportMeta {
+    readonly filesystemId: string;
+    readonly rootInode: string;
+    readonly mainRevision: number;
+    readonly rootMutationGeneration: number;
+    readonly nextAllocationSequence: number;
+    readonly cowPageBytes: number;
+    readonly createdAtMs: number;
+    readonly maxManifestEntries: number;
+    readonly maxManifestDepth: number;
+    readonly maxFileBytes: number;
+    readonly writerProfile: string;
+    readonly manifestFormat: string;
+    readonly chunkerFormat: string;
+    readonly fastCdcMinimum: number;
+    readonly fastCdcAverage: number;
+    readonly fastCdcMaximum: number;
+    readonly rootInodeType: number;
+    readonly rootMode: number;
+    readonly rootBirthtimeMs: number;
+    readonly rootMtimeMs: number;
+    readonly rootCtimeMs: number;
+    readonly rootToken: number;
+}
+export type ReplicationAuthorityResult = {
+    readonly kind: "publication";
+    readonly operationId: string;
+    readonly outcome: "merged" | "conflict";
+    readonly resultDigest: Uint8Array;
+} | {
+    readonly kind: "discard";
+    readonly operationId: string | null;
+    readonly resultDigest: Uint8Array;
+};
 export type FileType = "file" | "directory" | "symlink";
 export type FileContent = string | Uint8Array | ReadableStream<Uint8Array>;
 export interface FileStat {
@@ -341,9 +435,551 @@ export interface EphemeralFilesystemAdministration {
     readonly capabilities: FilesystemCapabilities;
     readonly maintenance: FilesystemMaintenance;
 }
+export type ReplicationFlow = "authority-main-to-replica" | "authority-branch-to-replica" | "replica-branch-to-authority" | "replica-branch-to-replica";
+export type ReplicationRole = "main-authority" | "replica";
+export interface ReplicationFastCdcConfiguration {
+    readonly minimum: number;
+    readonly average: number;
+    readonly maximum: number;
+}
+export interface ReplicationBridgeFeatures {
+    readonly authorityMainToReplica: boolean;
+    readonly authorityBranchToReplica: boolean;
+    readonly replicaBranchToAuthority: boolean;
+    readonly replicaBranchToReplica: boolean;
+    readonly checkpointBootstrap: boolean;
+    readonly segmentedMerkleManifestTransfer: boolean;
+    readonly durableStagingLeases: boolean;
+    readonly physicalRestartRecovery: boolean;
+    readonly terminalResultReplication: boolean;
+    readonly freshReplicaProvisioning: boolean;
+}
+export interface ReplicationBridgeLimits {
+    readonly maxBatchEntries: number;
+    readonly maxBatchBytes: number;
+    readonly maxRequestBytes: number;
+    readonly maxResponseBytes: number;
+    readonly maxBufferedBytes: number;
+    readonly maxInFlightBatches: number;
+    readonly maxConcurrentSessions: number;
+    readonly maxStagingBytesPerSession: number;
+    readonly maxReplicationSessionRows: number;
+    readonly maxReplicationMetadataBytes: number;
+    readonly maxReceiptsPerSession: number;
+    readonly maxReceiptBytesPerSession: number;
+    readonly maxCursorBytes: number;
+    readonly maxTerminalResultBytes: number;
+    readonly maxCursorAgeMs: number;
+    readonly stagingLeaseMs: number;
+    readonly resultRetentionMs: number;
+    readonly maxRetryAttempts: number;
+    readonly maxRetryElapsedMs: number;
+    readonly minRetryDelayMs: number;
+    readonly maxRetryDelayMs: number;
+}
+export interface ReplicationBridgeStorageCapabilities {
+    readonly maxBlobBytes: number;
+    readonly maxManifestNodeBytes: number;
+    readonly maxManifestDepth: number;
+    readonly maxManagedPayloadBytes: number;
+    readonly maxStagingPayloadBytes: number;
+    readonly maxMaintenanceBytes: number;
+    readonly maintenanceReserveBytes: number;
+    readonly maxPermanentIdentifiers: number;
+    readonly maxFinalTransactionRows: number;
+    readonly maxFinalTransactionBytes: number;
+}
+export interface ReplicationBridgeCapabilities {
+    readonly provisioningState: "bound" | "unbound-replica";
+    readonly filesystemId: string | null;
+    readonly authorityId: string | null;
+    readonly applicationId: number;
+    readonly filesystemSchemaVersion: number | null;
+    readonly storageUserVersion: number;
+    readonly storageMigrationState: "none";
+    readonly readableFilesystemSchemaVersions: readonly number[];
+    readonly writableFilesystemSchemaVersion: number;
+    readonly role: ReplicationRole;
+    readonly activeManifestFormat: string | null;
+    readonly supportedManifestFormats: readonly string[];
+    readonly activeChunkerFormat: string | null;
+    readonly supportedChunkerFormats: readonly string[];
+    readonly fastCdc: ReplicationFastCdcConfiguration | null;
+    readonly supportedFastCdcConfigurations: readonly ReplicationFastCdcConfiguration[];
+    readonly copyOnWritePageBytes: 4096 | 8192 | 16384 | null;
+    readonly supportedCopyOnWritePageBytes: readonly (4096 | 8192 | 16384)[];
+    readonly features: ReplicationBridgeFeatures;
+    readonly limits: ReplicationBridgeLimits;
+    readonly storage: ReplicationBridgeStorageCapabilities;
+}
+export interface ReplicationFilesystemIdentity {
+    readonly filesystemId: string;
+    readonly authorityId: string;
+    readonly role: ReplicationRole;
+}
+export type ReplicationPhase = "handshake" | "plan-selection" | "content-offer" | "missing-content" | "content-transfer" | "state-transfer" | "activation" | "result-acknowledgement" | "cleanup";
+export interface ReplicationSessionBinding {
+    readonly operationId: string;
+    readonly sessionId: string;
+    readonly resumeKey: Uint8Array;
+    readonly ownerNonce: Uint8Array;
+    readonly flow: ReplicationFlow;
+    readonly branchId: string | null;
+    readonly sourceFilesystemId: string;
+    readonly destinationFilesystemId: string;
+    readonly sourceRole: ReplicationRole;
+    readonly destinationRole: ReplicationRole;
+    readonly sourceAuthorizationDigest: Uint8Array;
+    readonly destinationAuthorizationDigest: Uint8Array;
+    readonly sourceCapabilityDigest: Uint8Array;
+    readonly destinationCapabilityDigest: Uint8Array;
+    readonly effectiveLimitsDigest: Uint8Array;
+    readonly maxBatchEntries: number;
+    readonly maxBatchBytes: number;
+    readonly maxRequestBytes: number;
+    readonly maxResponseBytes: number;
+    readonly maxBufferedBytes: number;
+    readonly maxInFlightBatches: number;
+    readonly maxConcurrentSessions: number;
+    readonly maxCursorBytes: number;
+    readonly maxReplicationSessionRows: number;
+    readonly maxReplicationMetadataBytes: number;
+    readonly maxReceiptsPerSession: number;
+    readonly maxReceiptBytesPerSession: number;
+    readonly maxStagingBytesPerSession: number;
+    readonly maxAcknowledgementBytes: number;
+    readonly maxTerminalResultBytes: number;
+    readonly maxCursorAgeMs: number;
+    readonly stagingLeaseMs: number;
+    readonly maxRetryAttempts: number;
+    readonly maxRetryElapsedMs: number;
+    readonly minRetryDelayMs: number;
+    readonly maxRetryDelayMs: number;
+    readonly resultRetentionMs: number;
+}
+export interface CreateReplicationSessionRequest {
+    readonly binding: ReplicationSessionBinding;
+    readonly phase: ReplicationPhase;
+    readonly cursor: Uint8Array;
+    readonly cursorDigest: Uint8Array;
+    readonly now: number;
+    readonly expiresAtMs: number;
+}
+export interface ReplicationSessionSnapshot {
+    readonly operationId: string;
+    readonly sessionId: string;
+    readonly phase: ReplicationPhase;
+    readonly cursor: Uint8Array;
+    readonly cursorDigest: Uint8Array;
+    readonly nextSequence: number;
+    readonly chainDigest: Uint8Array;
+    readonly acceptedEntries: number;
+    readonly acceptedBytes: number;
+    readonly stagedBytes: number;
+    readonly attempts: number;
+    readonly elapsedRetryMs: number;
+    readonly lastWallClockMs: number;
+    readonly retryDeadlineMs: number;
+    readonly terminal: boolean;
+}
+export interface ReplicationExportSelection {
+    readonly selectedRevision: number;
+    readonly selectedGeneration: number | null;
+    readonly destinationHead: number;
+    readonly rootMutationGeneration: number;
+    readonly nextAllocationSequence: number;
+    readonly rootInode: string;
+}
+export interface ReplicationExportBatch {
+    readonly records: readonly ReplicationTransferRecord[];
+    readonly complete: boolean;
+    readonly offered: number;
+    readonly reused: number;
+}
+export interface ReplicationExportSummary {
+    readonly selectedRevision: number;
+    readonly selectedGeneration: number | null;
+    readonly generationDigest: Uint8Array | null;
+    readonly baseRevision: number;
+    readonly rootCount: number;
+    readonly nodeCount: number;
+    readonly objectCount: number;
+    readonly objectBytes: number;
+    readonly stateRows: number;
+    readonly complete: boolean;
+}
+export interface ReplicationGenesisCapture {
+    readonly meta: ReplicationExportMeta;
+    readonly rows: readonly {
+        readonly inodeId: string;
+        readonly tombstone: boolean;
+        readonly encoded: Uint8Array | null;
+    }[];
+}
+export interface ReplicationImportApply {
+    readonly stagedBytesDelta: number;
+    readonly insertedObjects: number;
+    readonly reusedObjects: number;
+    readonly insertedNodes: number;
+    readonly reusedNodes: number;
+    readonly insertedRoots: number;
+    readonly reusedRoots: number;
+    readonly missingCount: number;
+    readonly transferredCount: number;
+}
+export interface ReplicationBatchAcceptanceRequest {
+    readonly operationId: string;
+    readonly sessionId: string;
+    readonly ownerNonce: Uint8Array;
+    readonly sequence: number;
+    readonly phase: ReplicationPhase;
+    readonly priorCursorDigest: Uint8Array;
+    /** SHA-256 of the complete canonical v1 batch envelope, computed by the package. */
+    readonly batchEnvelopeDigest: Uint8Array;
+    readonly payloadDigest: Uint8Array;
+    readonly entryCount: number;
+    readonly payloadByteCount: number;
+    readonly nextPhase: ReplicationPhase;
+    readonly nextCursor: Uint8Array;
+    readonly nextCursorDigest: Uint8Array;
+    /** Exact canonical v1 batch-acknowledgement envelope. */
+    readonly acknowledgement: Uint8Array;
+    readonly stagedBytesDelta: number;
+    readonly now: number;
+}
+export interface ReplicationSessionStore {
+    filesystemIdentity(): ReplicationFilesystemIdentity | undefined;
+    bindFilesystemIdentity(identity: ReplicationFilesystemIdentity): ReplicationFilesystemIdentity;
+    createOrResume(request: CreateReplicationSessionRequest): Readonly<{
+        created: boolean;
+        session: ReplicationSessionSnapshot;
+    }>;
+    resume(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly resumeKey: Uint8Array;
+    }): ReplicationSessionSnapshot;
+    findSession(request: {
+        readonly operationId: string;
+        readonly resumeKey: Uint8Array;
+    }): Readonly<{
+        readonly binding: ReplicationSessionBinding;
+        readonly session: ReplicationSessionSnapshot;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+    }>;
+    loadSession(request: {
+        readonly operationId: string;
+    }): Readonly<{
+        readonly binding: ReplicationSessionBinding;
+        readonly session: ReplicationSessionSnapshot;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+    }>;
+    acceptBatch(request: ReplicationBatchAcceptanceRequest): Readonly<{
+        replayed: boolean;
+        acknowledgement: Uint8Array;
+        session: ReplicationSessionSnapshot;
+    }>;
+    compactReceipts(request: {
+        readonly operationId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly throughSequence: number;
+        readonly maxRows: number;
+    }): Readonly<{
+        readonly compactedThrough: number;
+        readonly deletedRows: number;
+        readonly deletedBytes: number;
+    }>;
+    maintenance(request: {
+        readonly now: number;
+        readonly maxRows: number;
+    }): Readonly<{
+        readonly expiredSessions: number;
+    }>;
+    abortSession(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly now: number;
+    }): void;
+    consumeAttempt(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly wallNowMs: number;
+        readonly monotonicElapsedMs: number;
+        readonly delayMs: number;
+    }): Readonly<{
+        attempts: number;
+        elapsedRetryMs: number;
+        lastWallClockMs: number;
+        exhausted: boolean;
+    }>;
+    recordOutboundBatch(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly sequence: number;
+        readonly phase: ReplicationPhase;
+        readonly nextPhase: ReplicationPhase;
+    }): ReplicationSessionSnapshot;
+    storeTerminalResult(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly result: Uint8Array;
+        readonly now: number;
+    }): Uint8Array;
+    replayTerminalResult(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly resumeKey: Uint8Array;
+        readonly now: number;
+    }): Uint8Array;
+}
+/**
+ * Schema-free durable session seam consumed by the protocol package. Content,
+ * revision, checkpoint, and branch transfer commands run through the typed
+ * core transfer store; no SQL, table, repository, standalone CAS insertion,
+ * or standalone COW mutation is exposed here.
+ */
+export interface ReplicationFilesystemBridge {
+    readonly capabilities: ReplicationBridgeCapabilities;
+    createOrResumeSession(request: CreateReplicationSessionRequest): Promise<Readonly<{
+        created: boolean;
+        session: ReplicationSessionSnapshot;
+    }>>;
+    resumeSession(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly resumeKey: Uint8Array;
+    }): Promise<ReplicationSessionSnapshot>;
+    findSession(request: {
+        readonly operationId: string;
+        readonly resumeKey: Uint8Array;
+    }): Promise<Readonly<{
+        readonly binding: ReplicationSessionBinding;
+        readonly session: ReplicationSessionSnapshot;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+    }>>;
+    loadSession(request: {
+        readonly operationId: string;
+    }): Promise<Readonly<{
+        readonly binding: ReplicationSessionBinding;
+        readonly session: ReplicationSessionSnapshot;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+    }>>;
+    recordOutboundBatch(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly sequence: number;
+        readonly phase: ReplicationPhase;
+        readonly nextPhase: ReplicationPhase;
+        readonly nextCursor: Uint8Array;
+        readonly nextCursorDigest: Uint8Array;
+    }): Promise<ReplicationSessionSnapshot>;
+    acceptBatch(request: ReplicationBatchAcceptanceRequest & {
+        readonly records?: readonly ReplicationTransferRecord[];
+    }): Promise<Readonly<{
+        replayed: boolean;
+        acknowledgement: Uint8Array;
+        session: ReplicationSessionSnapshot;
+        apply?: ReplicationImportApply;
+    }>>;
+    compactReceipts(request: {
+        readonly operationId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly throughSequence: number;
+        readonly maxRows: number;
+    }): Promise<Readonly<{
+        readonly compactedThrough: number;
+        readonly deletedRows: number;
+        readonly deletedBytes: number;
+    }>>;
+    maintenance(request: {
+        readonly now: number;
+        readonly maxRows: number;
+    }): Promise<Readonly<{
+        readonly expiredSessions: number;
+        readonly expiredLeases: number;
+        readonly cleanupPasses: number;
+    }>>;
+    consumeAttempt(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly wallNowMs: number;
+        readonly monotonicElapsedMs: number;
+        readonly delayMs: number;
+    }): Promise<Readonly<{
+        attempts: number;
+        elapsedRetryMs: number;
+        lastWallClockMs: number;
+        exhausted: boolean;
+    }>>;
+    recordOutboundBatch(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly sequence: number;
+        readonly phase: ReplicationPhase;
+        readonly nextPhase: ReplicationPhase;
+        readonly nextCursor: Uint8Array;
+        readonly nextCursorDigest: Uint8Array;
+    }): Promise<ReplicationSessionSnapshot>;
+    storeTerminalResult(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly result: Uint8Array;
+        readonly now: number;
+    }): Promise<Uint8Array>;
+    replayTerminalResult(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly resumeKey: Uint8Array;
+        readonly now: number;
+    }): Promise<Uint8Array>;
+    captureExport(request: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+        readonly destinationHead: number;
+        readonly now: number;
+    }): Promise<ReplicationExportSelection>;
+    captureGenesis(request: {
+        readonly sessionId: string;
+        readonly now: number;
+    }): Promise<ReplicationGenesisCapture>;
+    readExportBatch(request: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+        readonly now: number;
+    }): Promise<ReplicationExportBatch>;
+    readExportPayloads(request: {
+        readonly sessionId: string;
+        readonly requested: readonly {
+            readonly contentKind: "object" | "manifest-root" | "manifest-node";
+            readonly digest: Uint8Array;
+        }[];
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+        readonly now: number;
+    }): Promise<{
+        readonly records: readonly ReplicationTransferRecord[];
+    }>;
+    readExportStateBatch(request: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+        readonly now: number;
+        readonly checkpoint: boolean;
+        readonly allowTerminal: boolean;
+    }): Promise<Readonly<{
+        readonly records: readonly ReplicationTransferRecord[];
+        readonly complete: boolean;
+        readonly terminalResult: Readonly<{
+            readonly operationId: string;
+            readonly branchId: string | null;
+            readonly generation: number;
+            readonly generationDigest: Uint8Array;
+            readonly resultBytes: Uint8Array;
+        }> | null;
+    }>>;
+    exportSummary(request: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+    }): Promise<ReplicationExportSummary>;
+    beginImport(request: {
+        readonly sessionId: string;
+        readonly kind: 0 | 1 | 2;
+        readonly leaseId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly branchId: string | null;
+        readonly baseRevision: number | null;
+        readonly generation: number | null;
+        readonly expectedGenerationDigest: Uint8Array | null;
+        readonly now: number;
+        readonly expiresAt: number;
+        readonly maxStagingBytesPerSession: number;
+        readonly resultRetentionMs: number;
+    }): Promise<void>;
+    readMissingContent(request: {
+        readonly sessionId: string;
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+    }): Promise<{
+        readonly records: readonly ReplicationTransferRecord[];
+    }>;
+    finalizeImport(request: {
+        readonly sessionId: string;
+        readonly kind: 0 | 1 | 2;
+        readonly expectedRevision: number;
+        readonly expectedRootMutationGeneration: number;
+        readonly expectedNextAllocationSequence: number;
+        readonly expectedRootInode: string;
+        readonly expectedRevisionCount: number;
+        readonly expectedStateRows: number;
+        readonly expectedClosureRoots: number;
+        readonly expectedClosureNodes: number;
+        readonly expectedClosureObjects: number;
+        readonly expectedClosureObjectBytes: number;
+        readonly branchId: string | null;
+        readonly baseRevision: string | null;
+        readonly generation: number | null;
+        readonly generationDigest: Uint8Array | null;
+        readonly checkpoint: boolean;
+        readonly terminalState: 0 | 1 | 2;
+        readonly terminalResultOperationId: string | null;
+        readonly terminalResultBytes: Uint8Array | null;
+        readonly genesisMeta: ReplicationExportMeta | null;
+        readonly genesisRows: readonly {
+            readonly inodeId: string;
+            readonly tombstone: boolean;
+            readonly encoded: Uint8Array | null;
+        }[];
+        readonly now: number;
+    }): Promise<ReplicationFinalization>;
+    renewImportLease(request: {
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly now: number;
+        readonly expiresAt: number;
+    }): Promise<boolean>;
+    abortImport(request: {
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly now: number;
+    }): Promise<void>;
+    abortSession(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly now: number;
+    }): Promise<void>;
+}
+export interface ReplicationFinalization {
+    readonly revision: string;
+    readonly branchId: string | null;
+    readonly baseRevision: string | null;
+    readonly generation: number;
+    readonly generationDigest: Uint8Array | null;
+    readonly state: 0 | 1 | 2;
+    readonly authorityResult: ReplicationAuthorityResult | null;
+    readonly reusedBytes: number;
+}
 
 /* ===== packages/fs/dist/integrations/node-vfs.d.ts ===== */
-import type { OpenFilesystemOptions, StorageFormatOptions } from "../filesystem/types.js";
+import type { EphemeralFilesystem, OpenFilesystemOptions, StorageFormatOptions } from "../filesystem/types.js";
 import type { EphemeralFS as PublicEphemeralFS } from "../filesystem/ephemeral-fs.js";
 import { type NodeVfsFilesystemBridge, type NodeVfsManagedSlab, type NodeVfsPreparedContent, type NodeVfsPinnedReadBridge, type SynchronousContentSource } from "../operations/node-vfs-bridge.js";
 import type { FilesystemLimits, RuntimeLimits, StorageLimits } from "../resources/limits.js";
@@ -358,15 +994,21 @@ export interface CreateNodeVfsBridgeOptions {
     readonly clock?: () => number;
 }
 export interface OpenNodeVfsBridgeResult {
-    readonly filesystem: PublicEphemeralFS;
+    /** Async view matching the bridge: main, or the selected private branch. */
+    readonly filesystem: EphemeralFilesystem;
+    /** Owner of the shared cache, admission controller, and all branch handles. */
+    readonly runtime: PublicEphemeralFS;
     readonly bridge: NodeVfsFilesystemBridge;
+}
+export interface OpenNodeVfsBridgeOptions extends OpenFilesystemOptions {
+    readonly branchId?: string;
 }
 /**
  * Open the portable filesystem and its synchronous bridge as one core instance.
  * This is the production Node VFS composition root: both views share limits,
  * caches, concurrency, and the aggregate admission controller.
  */
-export declare function openNodeVfsBridge(options: OpenFilesystemOptions): Promise<OpenNodeVfsBridgeResult>;
+export declare function openNodeVfsBridge(options: OpenNodeVfsBridgeOptions): Promise<OpenNodeVfsBridgeResult>;
 /** Compose the public bridge with the private SQLite storage implementation. */
 export declare function createNodeVfsBridge(options: CreateNodeVfsBridgeOptions): NodeVfsFilesystemBridge;
 export type { NodeVfsFilesystemBridge, NodeVfsManagedSlab, NodeVfsPreparedContent, NodeVfsPinnedReadBridge, SynchronousContentSource, };
@@ -469,6 +1111,8 @@ export interface NodeVfsPinnedReadBridge {
     readonly inodeId: string;
     readonly stat: FileStat;
     readonly size: number;
+    /** Branch generation pinned by this read, absent for the main view. */
+    readonly generation?: number;
     readIntoSync(destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
     closeSync(): void;
 }
@@ -485,6 +1129,36 @@ export interface NodeVfsResolvedPath {
     readonly canonicalPath: string;
     readonly stat: FileStat;
 }
+/** Core-private semantic branch view used by the synchronous bridge. */
+export interface NodeVfsBranchOperations {
+    version(): number;
+    resolve(path: string, followFinal: boolean): NodeVfsResolvedPath;
+    openPinnedRead(path: string): NodeVfsPinnedReadBridge;
+    readdir(path: string): DirectoryEntry[];
+    readlink(path: string): string;
+    readInto(path: string, destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
+    /** Branch-visible COW preparation; the bytes always compose base+overlay. */
+    prepareOverwriteSync?: (path: string, offset: number, source: SynchronousContentSource) => SyncPreparedContent | undefined;
+    prepareOverwritesSync?: (path: string, edits: readonly NodeVfsOverwriteEdit[]) => SyncPreparedContent | undefined;
+    commitPrepared(path: string, prepared: SyncPreparedContent, options: {
+        create?: boolean;
+        exclusive?: boolean;
+        mode?: number;
+        inodeId?: string;
+        aliases?: readonly string[];
+        expectedGeneration?: number;
+    }): NodeVfsCommitResult;
+    mkdir(path: string, options: {
+        recursive?: boolean;
+        mode?: number;
+    }): void;
+    chmod(path: string, mode: number): void;
+    link(existingPath: string, newPath: string): void;
+    symlink(target: string, path: string): void;
+    rename(oldPath: string, newPath: string): void;
+    unlink(path: string): void;
+    rmdir(path: string): void;
+}
 export interface NodeVfsOperationsBridgeOptions {
     readonly port: OperationsStorage;
     readonly filesystem?: Partial<FilesystemLimits>;
@@ -492,6 +1166,9 @@ export interface NodeVfsOperationsBridgeOptions {
     readonly runtime?: Partial<RuntimeLimits>;
     readonly format?: StorageFormatOptions;
     readonly clock?: () => number;
+    readonly branch?: NodeVfsBranchOperations;
+    /** Core-derived execution-replica policy for the main view only. */
+    readonly mainReadOnly?: boolean;
     /** Core-owned bounded COW preparation; never exposed outside this bridge. */
     readonly prepareOverwriteSync?: (path: string, offset: number, source: SynchronousContentSource) => SyncPreparedContent | undefined;
     readonly prepareOverwritesSync?: (path: string, edits: readonly NodeVfsOverwriteEdit[]) => SyncPreparedContent | undefined;
@@ -510,6 +1187,9 @@ export interface NodeVfsFilesystemBridge {
     readonly storageLimits: Readonly<StorageLimits>;
     readonly runtimeLimits: Readonly<RuntimeLimits>;
     readonly cowPageBytes: 4096 | 8192 | 16384;
+    /** True for the main view of an execution replica; false for branch views. */
+    readonly mainReadOnly: boolean;
+    activationVersionSync(): number;
     canonicalPathSync(path: string, syscall?: string): string;
     resolvePathSync(path: string, followFinal?: boolean): NodeVfsResolvedPath;
     openPinnedReadSync(path: string): NodeVfsPinnedReadBridge;
@@ -535,6 +1215,7 @@ export interface NodeVfsFilesystemBridge {
         mode?: number;
         inodeId?: string;
         aliases?: readonly string[];
+        expectedGeneration?: number;
     }): NodeVfsCommitResult;
     writeFileSync(path: string, bytes: Uint8Array, options?: {
         create?: boolean;
@@ -562,6 +1243,8 @@ import type { CowPage, CowPageBytes } from "../cow/pages.js";
 import type { ContentCache } from "../cache/content-cache.js";
 import type { ManifestNode, ManifestParameters } from "../manifests/codec.js";
 import type { HashFunction } from "../cas/sha256.js";
+import type { ReplicationAuthorityResult, ReplicationExportMeta, ReplicationFlow, ReplicationSessionStore, ReplicationTransferRecord } from "../filesystem/types.js";
+export type { ReplicationAuthorityResult, ReplicationExportMeta, ReplicationTransferRecord, } from "../filesystem/types.js";
 export type StorageTransactionMode = "read" | "write" | "exclusive";
 export interface StorageWorkBudget {
     readonly maxRows: number;
@@ -876,6 +1559,7 @@ export interface BranchResultRow {
     readonly expires_at_ms: number | null;
 }
 export interface BranchStore {
+    filesystemId(): string;
     rootInodeId(): string;
     historyEntries(parentInode: string, revision: number): readonly BranchHistoryEntryRow[];
     historicEntry(parentInode: string, nameSort: Uint8Array, revision: number): BranchHistoryRow | undefined;
@@ -888,8 +1572,10 @@ export interface BranchStore {
     revisionExists(revision: number): boolean;
     create(id: string, baseRevision: number, now: number): BranchRow;
     row(id: string): BranchRow | undefined;
+    terminalGenerationDigest(branchId: string, generation: number): string | undefined;
+    putTerminalGenerationDigest(branchId: string, generation: number, digest: string): void;
     operationResult(operationId: string, maxBytes: number): BranchResultRow | undefined;
-    reserveOperation(operationId: string, branchId: string, generation: number, now: number, reservationExpiresAt: number, reservationNonce: Uint8Array): void;
+    reserveOperation(operationId: string, branchId: string, generation: number, now: number, reservationExpiresAt: number, reservationNonce: Uint8Array, requestBinding: Uint8Array): void;
     reclaimOperation(operationId: string, branchId: string, generation: number, now: number, reservationExpiresAt: number, reservationNonce: Uint8Array): boolean;
     expireOperation(operationId: string, reservationNonce: Uint8Array, now: number): void;
     releaseOperation(operationId: string, reservationNonce?: Uint8Array): void;
@@ -1260,6 +1946,213 @@ export interface OverlayStore {
         readonly reclaimedPayloadBytes: number;
     };
 }
+export interface ReplicationExportState {
+    readonly selectedRevision: number;
+    readonly selectedGeneration: number | null;
+    readonly destinationHead: number;
+    readonly rootMutationGeneration: number;
+    readonly nextAllocationSequence: number;
+    readonly rootInode: string;
+    readonly complete: boolean;
+}
+export interface ReplicationImportSummary {
+    readonly leaseId: string;
+    readonly kind: 0 | 1 | 2;
+    readonly branchId: string | null;
+    readonly baseRevision: number | null;
+    readonly generation: number | null;
+    readonly stagedRows: number;
+    readonly stagedBytes: number;
+    readonly missingCount: number;
+    readonly sealed: boolean;
+}
+/**
+ * Durable, schema-free transfer seam used by the replication bridge. Every
+ * command runs inside one storage transaction; export cursors and import
+ * staging survive restart and are owned exclusively by SQLite.
+ */
+export interface ReplicationTransferStore {
+    captureExport(options: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+        readonly destinationHead: number;
+        readonly now: number;
+        readonly expiresAt: number;
+    }): ReplicationExportState;
+    captureGenesis(options: {
+        readonly sessionId: string;
+        readonly now: number;
+        readonly expiresAt: number;
+    }): Readonly<{
+        readonly meta: ReplicationExportMeta;
+        readonly rows: readonly {
+            readonly inodeId: string;
+            readonly tombstone: boolean;
+            readonly encoded: Uint8Array | null;
+        }[];
+    }>;
+    readExportBatch(options: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+        readonly now: number;
+    }): Readonly<{
+        readonly records: readonly ReplicationTransferRecord[];
+        readonly complete: boolean;
+        readonly offered: number;
+        readonly reused: number;
+    }>;
+    readExportPayloads(options: {
+        readonly sessionId: string;
+        readonly requested: readonly {
+            readonly contentKind: "object" | "manifest-root" | "manifest-node";
+            readonly digest: Uint8Array;
+        }[];
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+        readonly now: number;
+    }): Readonly<{
+        readonly records: readonly ReplicationTransferRecord[];
+        readonly complete: boolean;
+    }>;
+    readExportStateBatch(options: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+        readonly branchId: string | null;
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+        readonly now: number;
+        readonly checkpoint: boolean;
+        readonly allowTerminal: boolean;
+    }): Readonly<{
+        readonly records: readonly ReplicationTransferRecord[];
+        readonly complete: boolean;
+        readonly terminalResult: Readonly<{
+            readonly operationId: string;
+            readonly branchId: string | null;
+            readonly generation: number;
+            readonly generationDigest: Uint8Array;
+            readonly resultBytes: Uint8Array;
+        }> | null;
+    }>;
+    exportSummary(options: {
+        readonly sessionId: string;
+        readonly flow: ReplicationFlow;
+    }): Readonly<{
+        readonly selectedRevision: number;
+        readonly selectedGeneration: number | null;
+        readonly generationDigest: Uint8Array | null;
+        readonly baseRevision: number;
+        readonly rootCount: number;
+        readonly nodeCount: number;
+        readonly objectCount: number;
+        readonly objectBytes: number;
+        readonly stateRows: number;
+        readonly complete: boolean;
+    }>;
+    beginImport(options: {
+        readonly sessionId: string;
+        readonly kind: 0 | 1 | 2;
+        readonly leaseId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly branchId: string | null;
+        readonly baseRevision: number | null;
+        readonly generation: number | null;
+        readonly expectedGenerationDigest: Uint8Array | null;
+        readonly now: number;
+        readonly expiresAt: number;
+        readonly ingestReservationBytes: number;
+        readonly metadataReservationBytes: number;
+        readonly resultRetentionMs?: number;
+    }): void;
+    applyImportRecords(options: {
+        readonly sessionId: string;
+        readonly records: readonly ReplicationTransferRecord[];
+        readonly now: number;
+    }): Readonly<{
+        readonly stagedBytesDelta: number;
+        readonly insertedObjects: number;
+        readonly reusedObjects: number;
+        readonly insertedNodes: number;
+        readonly reusedNodes: number;
+        readonly insertedRoots: number;
+        readonly reusedRoots: number;
+        readonly missingCount: number;
+        readonly transferredCount: number;
+    }>;
+    readMissingContent(options: {
+        readonly sessionId: string;
+        readonly maxEntries: number;
+        readonly maxBytes: number;
+    }): Readonly<{
+        readonly records: readonly ReplicationTransferRecord[];
+        readonly complete: boolean;
+    }>;
+    finalizeImport(options: {
+        readonly sessionId: string;
+        readonly kind: 0 | 1 | 2;
+        readonly expectedRevision: number;
+        readonly expectedRootMutationGeneration: number;
+        readonly expectedNextAllocationSequence: number;
+        readonly expectedRootInode: string;
+        readonly expectedRevisionCount: number;
+        readonly expectedStateRows: number;
+        readonly expectedClosureRoots: number;
+        readonly expectedClosureNodes: number;
+        readonly expectedClosureObjects: number;
+        readonly expectedClosureObjectBytes: number;
+        readonly branchId: string | null;
+        readonly baseRevision: string | null;
+        readonly generation: number | null;
+        readonly generationDigest: Uint8Array | null;
+        readonly checkpoint: boolean;
+        readonly terminalState: 0 | 1 | 2;
+        readonly terminalResultOperationId: string | null;
+        readonly terminalResultBytes: Uint8Array | null;
+        readonly genesisMeta: ReplicationExportMeta | null;
+        readonly genesisRows: readonly {
+            readonly inodeId: string;
+            readonly tombstone: boolean;
+            readonly encoded: Uint8Array | null;
+        }[];
+        readonly now: number;
+    }): Readonly<{
+        readonly revision: string;
+        readonly branchId: string | null;
+        readonly baseRevision: string | null;
+        readonly generation: number;
+        readonly generationDigest: Uint8Array | null;
+        readonly state: 0 | 1 | 2;
+        readonly authorityResult: ReplicationAuthorityResult | null;
+        readonly reusedBytes: number;
+    }>;
+    renewLease(options: {
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly now: number;
+        readonly expiresAt: number;
+    }): boolean;
+    abortImport(options: {
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly now: number;
+    }): void;
+    abortImportIfPresent(options: {
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly now: number;
+    }): boolean;
+    maintenance(options: {
+        readonly now: number;
+        readonly limit: number;
+    }): Readonly<{
+        readonly expiredLeases: number;
+        readonly cleanupPasses: number;
+    }>;
+}
 export interface StorageTransactionPorts {
     content(limits: StorageLimits, cache?: ContentCache): ContentStore;
     manifestTree(limits: StorageLimits, cache?: ContentCache): ManifestTreeStore;
@@ -1268,6 +2161,8 @@ export interface StorageTransactionPorts {
     staging(limits: StorageLimits, cache?: ContentCache): StagingStore;
     maintenance(limits: StorageLimits): MaintenanceStore;
     overlay(limits: StorageLimits, pageBytes: CowPageBytes): OverlayStore;
+    replication(limits?: StorageLimits): ReplicationSessionStore;
+    replicationTransfer(limits?: StorageLimits, cache?: ContentCache, branchDigest?: (branchId: string, generation: number) => string): ReplicationTransferStore;
 }
 export interface OperationsStorage {
     readonly readOnly: boolean;
@@ -1278,8 +2173,7 @@ export interface OperationsStorage {
      * do so; every other host falls back to the byte-identical pure-JS
      * implementation in `cas/sha256.ts`, so digests never depend on the host.
      */
-    readonly hashBytes: HashFunction;
-    /**
+    readonly hashBytes: HashFunction; /**
      * Optional asynchronous SHA-256 hasher (WebCrypto on workerd) used by the
      * streaming write pipeline to hash chunk batches concurrently with bounded
      * parallelism. Digest output is byte-identical to `hashBytes`.

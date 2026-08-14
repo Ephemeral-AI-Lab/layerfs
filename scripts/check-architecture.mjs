@@ -544,6 +544,8 @@ const restrictedCoreEdges = new Map([
     "filesystem->sqlite",
     new Set([
       "filesystem/ephemeral-fs.ts->sqlite/operations-storage.ts",
+      "filesystem/ephemeral-runtime.ts->sqlite/operations-storage.ts",
+      "filesystem/ephemeral-runtime.ts->sqlite/schema.ts",
       "filesystem/types.ts->sqlite/driver.ts",
     ]),
   ],
@@ -552,11 +554,16 @@ const restrictedCoreEdges = new Map([
     new Set([
       "integrations/node-vfs.ts->sqlite/driver.ts",
       "integrations/node-vfs.ts->sqlite/operations-storage.ts",
+      "integrations/replication.ts->sqlite/transfer-codec.ts",
     ]),
   ],
   [
     "sqlite->operations",
-    new Set(["sqlite/operations-storage.ts->operations/storage-ports.ts"]),
+    new Set([
+      "sqlite/operations-storage.ts->operations/storage-ports.ts",
+      "sqlite/replication-transfer-repository.ts->operations/storage-ports.ts",
+      "sqlite/replication-transfer-repository.ts->operations/generation-digest.ts",
+    ]),
   ],
 ]);
 
@@ -643,7 +650,16 @@ for (const sourceInfo of coreFiles) {
     );
     if (reason)
       violations.push(`${relative(sourceInfo.logical)}:${reference.line} ${reason}`);
-    if (fromArea === "sqlite" && toArea === "operations" && !reference.typeOnly) {
+    const sharedDigestRuntimeEdge =
+      fromArea === "sqlite" &&
+      toArea === "operations" &&
+      coreRelative(target.logical) === "operations/generation-digest.ts";
+    if (
+      fromArea === "sqlite" &&
+      toArea === "operations" &&
+      !reference.typeOnly &&
+      !sharedDigestRuntimeEdge
+    ) {
       violations.push(
         `${relative(sourceInfo.logical)}:${reference.line} must use a type-only SQLite -> operations storage-port edge`,
       );

@@ -23,6 +23,10 @@
     "./integrations/node-vfs": {
       "types": "./dist/integrations/node-vfs.d.ts",
       "import": "./dist/integrations/node-vfs.js"
+    },
+    "./integrations/runtime": {
+      "types": "./dist/integrations/runtime.d.ts",
+      "import": "./dist/integrations/runtime.js"
     }
   },
   "scripts": {

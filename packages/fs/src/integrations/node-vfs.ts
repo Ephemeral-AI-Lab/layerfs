@@ -1,4 +1,5 @@
 import type {
+  EphemeralFilesystem,
   OpenFilesystemOptions,
   StorageFormatOptions,
 } from "../filesystem/types.js";
@@ -31,8 +32,14 @@ export interface CreateNodeVfsBridgeOptions {
 }
 
 export interface OpenNodeVfsBridgeResult {
-  readonly filesystem: PublicEphemeralFS;
+  /** Async view matching the bridge: main, or the selected private branch. */
+  readonly filesystem: EphemeralFilesystem;
+  /** Owner of the shared cache, admission controller, and all branch handles. */
+  readonly runtime: PublicEphemeralFS;
   readonly bridge: NodeVfsFilesystemBridge;
+}
+export interface OpenNodeVfsBridgeOptions extends OpenFilesystemOptions {
+  readonly branchId?: string;
 }
 
 /**
@@ -41,16 +48,26 @@ export interface OpenNodeVfsBridgeResult {
  * caches, concurrency, and the aggregate admission controller.
  */
 export async function openNodeVfsBridge(
-  options: OpenFilesystemOptions,
+  options: OpenNodeVfsBridgeOptions,
 ): Promise<OpenNodeVfsBridgeResult> {
+  const { branchId, ...filesystemOptions } = options;
   const filesystem = await OperationsFilesystem.open(
-    options,
-    createSqliteOperationsStorage(options.database),
+    filesystemOptions,
+    createSqliteOperationsStorage(filesystemOptions.database),
   );
-  return Object.freeze({
-    filesystem: filesystem as unknown as PublicEphemeralFS,
-    bridge: filesystem.createNodeVfsBridge(),
-  });
+  try {
+    const bridge = filesystem.createNodeVfsBridge(branchId);
+    const view =
+      branchId === undefined ? filesystem : await filesystem.branches.open(branchId);
+    return Object.freeze({
+      filesystem: view,
+      runtime: filesystem as unknown as PublicEphemeralFS,
+      bridge,
+    });
+  } catch (error) {
+    await filesystem.close();
+    throw error;
+  }
 }
 
 /** Compose the public bridge with the private SQLite storage implementation. */

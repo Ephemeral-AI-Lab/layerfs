@@ -1,6 +1,7 @@
 import {
   FilesystemError,
   type EphemeralFS,
+  type EphemeralFilesystem,
   type FileStat,
   type RuntimeLimits,
 } from "@ephemeralai/fs";
@@ -80,10 +81,17 @@ export interface NodeVfsProvider {
   closeSync(): void;
 }
 export interface NodeVfsHandle {
-  readonly filesystem: EphemeralFS;
+  readonly filesystem: EphemeralFilesystem;
+  /** Owning core runtime; differs from `filesystem` for a branch-scoped handle. */
+  readonly runtime: EphemeralFS;
   readonly provider: NodeVfsProvider;
   close(): Promise<void>;
 }
+
+export {
+  createNodeVfsSynchronousFileSystem,
+  type NodeVfsSynchronousFileSystem,
+} from "./synchronous-adapter.js";
 export interface NodeVfsMetricsSnapshot {
   readonly openSessions: number;
   readonly peakOpenSessions: number;
@@ -631,10 +639,12 @@ class Provider implements NodeVfsProvider {
   };
   #sequence = 0;
   #sessionOrder = 0;
+  #activationVersion: number;
   #closed = false;
   constructor(bridge: NodeVfsFilesystemBridge, observer?: NodeVfsObserver) {
     this.#bridge = bridge;
     this.#observer = observer;
+    this.#activationVersion = bridge.activationVersionSync();
     this.capabilities = Object.freeze({
       cowPageBytes: bridge.cowPageBytes,
       runtime: bridge.runtimeLimits,
@@ -720,6 +730,8 @@ class Provider implements NodeVfsProvider {
     const writable = options.writable ?? options.create ?? false;
     if ((options.create || options.exclusive || options.truncate) && !writable)
       fail("EINVAL", "create, exclusive, and truncate require a writable session");
+    if (writable && this.#bridge.mainReadOnly)
+      fail("EROFS", "replica main is read-only", "openFileSync", canonical);
     let coordinator = this.resolveOverlayCoordinator(canonical);
     let pinned: NodeVfsPinnedReadBridge | undefined;
     if (!coordinator) {
@@ -1175,6 +1187,7 @@ class Provider implements NodeVfsProvider {
     }
   }
   commitSession(session: Session, reason: FlushReason): void {
+    this.#assertOpen();
     const coordinator = session.coordinator;
     if (!coordinator) fail("EBADF", "session has no writable inode coordinator");
     const cutoff = session.requiredSequence ?? 0;
@@ -1271,6 +1284,9 @@ class Provider implements NodeVfsProvider {
         exclusive: coordinator.pendingCreate ? coordinator.exclusive : false,
         mode: coordinator.mode,
         inodeId: coordinator.inodeId,
+        ...(coordinator.base?.pinned.generation === undefined
+          ? {}
+          : { expectedGeneration: coordinator.base.pinned.generation }),
         aliases: coordinator.pendingCreate
           ? paths.filter((candidate) => candidate !== primary)
           : [],
@@ -1560,12 +1576,74 @@ class Provider implements NodeVfsProvider {
   }
   #assertOpen(): void {
     if (this.#closed) fail("EBADF", "Node VFS provider is closed");
+    this.refreshActivation();
+  }
+  private refreshActivation(): void {
+    const nextVersion = this.#bridge.activationVersionSync();
+    if (nextVersion === this.#activationVersion) return;
+    for (const coordinator of [...this.#coordinators.values()]) {
+      if (coordinator.pendingCreate || coordinator.admissions.length) continue;
+      let pinned: NodeVfsPinnedReadBridge | undefined;
+      for (const path of [...coordinator.paths]) {
+        let candidate: NodeVfsPinnedReadBridge | undefined;
+        try {
+          candidate = this.#bridge.openPinnedReadSync(path);
+        } catch (error) {
+          if (
+            !(error instanceof FilesystemError) ||
+            (error.code !== "ENOENT" && error.code !== "EISDIR")
+          )
+            throw error;
+        }
+        if (!candidate || candidate.inodeId !== coordinator.inodeId) {
+          candidate?.closeSync();
+          if (this.#paths.get(path) === coordinator) this.#paths.delete(path);
+          coordinator.paths.delete(path);
+          coordinator.pathReleases.get(path)?.();
+          coordinator.pathReleases.delete(path);
+          continue;
+        }
+        if (!pinned) {
+          pinned = candidate;
+          coordinator.primaryPath = path;
+        } else {
+          candidate.closeSync();
+        }
+      }
+      if (!pinned) {
+        if (coordinator.sessions.size === 0) this.disposeCoordinator(coordinator);
+        continue;
+      }
+      const oldBase = coordinator.base;
+      coordinator.base = new PinnedBase(pinned);
+      coordinator.baseSize = pinned.size;
+      coordinator.mode = pinned.stat.mode;
+      coordinator.nlink = pinned.stat.nlink;
+      coordinator.mtimeMs = pinned.stat.mtimeMs;
+      coordinator.ctimeMs = pinned.stat.ctimeMs;
+      coordinator.birthtimeMs = pinned.stat.birthtimeMs;
+      oldBase?.release();
+    }
+    this.#activationVersion = nextVersion;
+  }
+  assertWritableView(coordinator: InodeCoordinator | undefined): void {
+    this.#assertOpen();
+    if (coordinator && !coordinator.pendingCreate && coordinator.paths.size === 0)
+      fail("EAGAIN", "the open inode no longer has an active branch path", "writeSync");
   }
   #emit(event: NodeVfsObservation): void {
     try {
       this.#observer?.(event);
     } catch {}
   }
+}
+
+/** Create a provider from a bridge owned by an already-open shared core runtime. */
+export function createNodeVfsProvider(
+  bridge: NodeVfsFilesystemBridge,
+  observer?: NodeVfsObserver,
+): NodeVfsProvider {
+  return new Provider(bridge, observer);
 }
 
 class Session implements NodeFileSession {
@@ -1867,30 +1945,33 @@ class Session implements NodeFileSession {
   #assertWritable(): void {
     this.#assertOpen();
     if (!this.writable) fail("EBADF", "Node file session is not writable");
+    this.#provider.assertWritableView(this.coordinator);
   }
 }
 
 export async function openNodeVfs(options: OpenNodeVfsOptions): Promise<NodeVfsHandle> {
-  if (options.branchId !== undefined)
-    fail(
-      "EINVAL",
-      "synchronous branch mounts are not enabled in version 0.1",
-      "openNodeVfs",
-    );
   const opened = await openNodeVfsBridge({
     database: options.database,
+    ...(options.branchId === undefined ? {} : { branchId: options.branchId }),
     ...(options.runtime === undefined ? {} : { runtime: options.runtime }),
     ownsDatabase: false,
   });
-  const provider = new Provider(opened.bridge, options.observer);
+  let provider: Provider;
+  try {
+    provider = new Provider(opened.bridge, options.observer);
+  } catch (error) {
+    await opened.runtime.close();
+    throw error;
+  }
   let closed = false;
   return Object.freeze({
     filesystem: opened.filesystem,
+    runtime: opened.runtime,
     provider,
     async close() {
       if (closed) return;
       provider.closeAllSync();
-      await opened.filesystem.close();
+      await opened.runtime.close();
       if (options.ownsDatabase) await options.database.close();
       closed = true;
     },

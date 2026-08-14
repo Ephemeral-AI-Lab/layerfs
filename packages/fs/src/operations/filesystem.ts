@@ -69,6 +69,8 @@ import type {
   ReadStreamOptions,
   ReadTextOptions,
   ReaddirOptions,
+  ReplicationFilesystemIdentity,
+  ReplicationRole,
   RmOptions,
   WriteFileOptions,
 } from "../filesystem/types.js";
@@ -81,6 +83,9 @@ import {
   createNodeVfsOperationsBridge,
   type NodeVfsFilesystemBridge,
 } from "./node-vfs-bridge.js";
+import { createReplicationOperationsBridge } from "./replication-bridge.js";
+import { buildBoundReplicationCapabilities } from "./replication-capabilities.js";
+import type { ReplicationFilesystemBridge } from "../filesystem/types.js";
 import type {
   AuthenticatedManifestCursor,
   ClosureCertificate,
@@ -93,6 +98,20 @@ import type {
   StorageTransactionPorts,
   ValidatedSealedLease,
 } from "./storage-ports.js";
+
+const MAIN_MUTATION_OPERATIONS = new Set([
+  "writeFile",
+  "writeRange",
+  "replaceRange",
+  "truncate",
+  "mkdir",
+  "chmod",
+  "link",
+  "symlink",
+  "rename",
+  "unlink",
+  "rm",
+]);
 
 function inodeType(value: number): FileType {
   if (value === 0) return "file";
@@ -209,6 +228,8 @@ export class EphemeralFS implements EphemeralFilesystem {
   >();
   #closing = false;
   #closed = false;
+  #mainReadOnly = false;
+  #replicationIdentity: ReplicationFilesystemIdentity | null = null;
   #closePromise?: Promise<void>;
 
   private constructor(
@@ -370,7 +391,7 @@ export class EphemeralFS implements EphemeralFilesystem {
         }),
       ),
     ]);
-    return new EphemeralFS(
+    const opened = new EphemeralFS(
       options,
       Object.freeze({
         adapter: storagePort.capabilities,
@@ -384,15 +405,71 @@ export class EphemeralFS implements EphemeralFilesystem {
       }),
       storagePort,
     );
+    const identity = storagePort.transaction(
+      "read",
+      { maxRows: 2, maxBytes: 4096 },
+      (ports) => {
+        const filesystemId = ports.branches(storage).filesystemId();
+        const bound = ports.replication().filesystemIdentity();
+        if (bound && bound.filesystemId !== filesystemId)
+          throw fsError(
+            "ECORRUPT",
+            "open",
+            undefined,
+            "replication identity does not match the filesystem identity",
+          );
+        return bound;
+      },
+    );
+    if (identity) opened.#applyReplicationIdentity(identity);
+    return opened;
+  }
+
+  configureReplicationIdentity(requested?: {
+    readonly authorityId: string;
+    readonly role: ReplicationRole;
+  }): ReplicationFilesystemIdentity {
+    if (this.#closing || this.#closed)
+      throw fsError("EBADF", "bindReplicationIdentity", undefined, "filesystem is closing");
+    const identity = this.#transaction("write", (ports) => {
+      const filesystemId = ports.branches(this.#storageLimits).filesystemId();
+      const repository = ports.replication(this.#storageLimits);
+      const existing = repository.filesystemIdentity();
+      if (existing && existing.filesystemId !== filesystemId)
+        throw fsError(
+          "ECORRUPT",
+          "bindReplicationIdentity",
+          undefined,
+          "replication identity does not match the filesystem identity",
+        );
+      return repository.bindFilesystemIdentity({
+        filesystemId,
+        authorityId: requested?.authorityId ?? existing?.authorityId ?? filesystemId,
+        role: requested?.role ?? existing?.role ?? "main-authority",
+      });
+    });
+    this.#applyReplicationIdentity(identity);
+    return identity;
+  }
+
+  #applyReplicationIdentity(identity: ReplicationFilesystemIdentity): void {
+    this.#replicationIdentity = identity;
+    this.#mainReadOnly = identity.role === "replica";
+    (this.branches as BranchManager).setMainReadOnly(this.#mainReadOnly);
   }
 
   /** Supported integration seam; it shares this instance's caches and admission. */
-  createNodeVfsBridge(): NodeVfsFilesystemBridge {
+  createNodeVfsBridge(branchId?: string): NodeVfsFilesystemBridge {
     if (this.#closing || this.#closed)
       throw fsError("EBADF", "openNodeVfs", undefined, "filesystem is closing");
     return createNodeVfsOperationsBridge({
       port: this.#storagePort,
       clock: this.#clock,
+      ...(branchId === undefined
+        ? {}
+        : {
+            branch: (this.branches as BranchManager).createNodeVfsOperations(branchId),
+          }),
       shared: {
         filesystemLimits: this.#filesystemLimits,
         storageLimits: this.#storageLimits,
@@ -401,10 +478,51 @@ export class EphemeralFS implements EphemeralFilesystem {
         admission: this.#admission,
         cache: this.#cache,
       },
+      mainReadOnly: branchId === undefined && this.#mainReadOnly,
       prepareOverwriteSync: (path, offset, source) =>
         this.#prepareNodeVfsOverwriteSync(path, offset, source),
       prepareOverwritesSync: (path, edits) =>
         this.#prepareNodeVfsOverwritesSync(path, edits),
+    });
+  }
+
+  /** Durable protocol seam sharing this instance's admission and mutation limits. */
+  createReplicationBridge(): ReplicationFilesystemBridge {
+    if (this.#closing || this.#closed)
+      throw fsError("EBADF", "replicate", undefined, "filesystem is closing");
+    const identity = this.#replicationIdentity;
+    if (!identity)
+      throw fsError(
+        "EINVAL",
+        "replicate",
+        undefined,
+        "a replication identity must be configured before replication",
+      );
+    return createReplicationOperationsBridge({
+      capabilities: buildBoundReplicationCapabilities({
+        identity,
+        storage: this.#storageLimits,
+        cowPageBytes: this.capabilities.format.cowPageBytes,
+        maxManifestEntries: this.#storageLimits.maxManifestEntries,
+        maxManifestDepth: this.#storageLimits.maxManifestDepth,
+        maxFileBytes: this.#storageLimits.maxFileBytes,
+        writerProfile: persistedWriterProfile(
+          this.#filesystemLimits,
+          this.#storageLimits,
+          this.#branchLimits,
+        ),
+      }),
+      storage: this.#storagePort,
+      storageLimits: this.#storageLimits,
+      admission: this.#admission,
+      concurrency: this.#concurrency,
+      cache: this.#cache,
+      assertOpen: () => {
+        if (this.#closing || this.#closed)
+          throw fsError("EBADF", "replicate", undefined, "filesystem is closing");
+      },
+      branchDigest: (tx, branchId) =>
+        (this.branches as BranchManager).generationDigestInTransaction(tx, branchId),
     });
   }
 
@@ -2276,6 +2394,10 @@ export class EphemeralFS implements EphemeralFilesystem {
     if (this.#closing || this.#closed)
       return Promise.reject(
         fsError("EBADF", operation, path, "filesystem is closed or closing"),
+      );
+    if (this.#mainReadOnly && MAIN_MUTATION_OPERATIONS.has(operation))
+      return Promise.reject(
+        fsError("EROFS", operation, path, "replica main is read-only"),
       );
     if (signal?.aborted) return Promise.reject(abortError());
     const releaseOperation = this.#concurrency.tryAcquireOperation();

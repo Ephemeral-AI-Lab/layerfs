@@ -4,25 +4,445 @@
   "entry": "packages/fs/dist/integrations/replication.d.ts",
   "symbols": [
     {
+      "name": "CreateReplicationSessionRequest",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "decodeActivationRequest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "decodeActivationResult",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeActivationRequest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeActivationResult",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeBranchGenerationFragment",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeCheckpointFragment",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeGenesisFragment",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeRevisionFragment",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationAuthorityResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBatchAcceptanceRequest",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBridgeCapabilities",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBridgeFeatures",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBridgeLimits",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBridgeStorageCapabilities",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationExportBatch",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationExportMeta",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationExportSelection",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationExportSummary",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationFastCdcConfiguration",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "ReplicationFilesystemBridge",
       "kinds": [
         "type"
       ],
       "declarations": [
         {
-          "file": "packages/fs/dist/integrations/replication.d.ts",
+          "file": "packages/fs/dist/filesystem/types.d.ts",
           "kind": "InterfaceDeclaration"
         }
       ]
     },
     {
-      "name": "ReplicationPlan",
+      "name": "ReplicationFinalization",
       "kinds": [
         "type"
       ],
       "declarations": [
         {
-          "file": "packages/fs/dist/integrations/replication.d.ts",
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationFlow",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationGenesisCapture",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationImportApply",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationPhase",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationRole",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationSessionBinding",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationSessionSnapshot",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationTransferRecord",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransferActivationRequest",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransferActivationResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransferAuthorityResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransferBranchGenerationFragment",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransferCheckpointFragment",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransferGenesisFragment",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "TransferRevisionFragment",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/sqlite/transfer-codec.d.ts",
           "kind": "InterfaceDeclaration"
         }
       ]

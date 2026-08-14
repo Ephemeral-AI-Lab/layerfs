@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { EphemeralFS } from "../../packages/fs/dist/index.js";
-import { openNodeVfs } from "../../packages/node-vfs/dist/index.js";
+import { EphemeralRuntime } from "../../packages/fs/dist/integrations/runtime.js";
+import {
+  createNodeVfsProvider,
+  openNodeVfs,
+} from "../../packages/node-vfs/dist/index.js";
 import { openNodeSqlite } from "../../packages/sqlite-node/dist/index.js";
 import {
   createStatementFaultController,
@@ -478,5 +482,262 @@ test("process restart discards unflushed memory and keeps hidden staging invisib
     reopenedDatabase.close();
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("branch-scoped Node VFS preserves base visibility, isolation, and reconnect", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-vfs-branch-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    let database = await openNodeSqlite({ filename });
+    let filesystem = await EphemeralFS.open({ database });
+    await filesystem.writeFile("/base", "authority");
+    const branch = await filesystem.branches.create("execution-a");
+    const sibling = await filesystem.branches.create("execution-b");
+    await sibling.writeFile("/sibling-private", "hidden");
+    await branch.close();
+    await sibling.close();
+    await filesystem.close();
+    database.close();
+
+    database = await openNodeSqlite({ filename });
+    let handle = await openNodeVfs({ database, branchId: "execution-a" });
+    const provider = handle.provider;
+    assert.equal(
+      new TextDecoder().decode(provider.readRangeSync("/base", 0, 9)),
+      "authority",
+    );
+    assert.equal(provider.existsSync("/sibling-private"), false);
+    provider.mkdirSync("/private");
+    const session = provider.openFileSync("/private/file", {
+      writable: true,
+      create: true,
+      mode: 0o640,
+    });
+    session.writeSync(new TextEncoder().encode("branch-value"), 0);
+    session.flushSync();
+    session.truncateSync(6);
+    session.closeSync();
+    provider.linkSync("/private/file", "/private/hard");
+    provider.symlinkSync("file", "/private/sym");
+    provider.renameSync("/private/hard", "/private/renamed");
+    provider.chmodSync("/private/file", 0o600);
+    assert.equal(provider.statSync("/private/file").mode & 0o777, 0o600);
+    assert.equal(
+      provider.statSync("/private/file").id,
+      provider.statSync("/private/renamed").id,
+    );
+    assert.equal(provider.readlinkSync("/private/sym"), "file");
+    const directSession = provider.openFileSync("/private/file");
+    const directDestination = new Uint8Array(12).fill(0xff);
+    assert.equal(directSession.readIntoSync(directDestination, 3, 0, 6), 6);
+    assert.deepEqual(
+      directDestination.subarray(3, 9),
+      new TextEncoder().encode("branch"),
+    );
+    directSession.closeSync();
+    assert.equal(
+      await handle.filesystem.readFile("/private/file", { encoding: "utf8" }),
+      "branch",
+    );
+    await assert.rejects(handle.runtime.stat("/private/file"), { code: "ENOENT" });
+    assert.equal(
+      await handle.runtime.readFile("/base", { encoding: "utf8" }),
+      "authority",
+    );
+    await handle.close();
+    database.close();
+
+    database = await openNodeSqlite({ filename });
+    handle = await openNodeVfs({ database, branchId: "execution-a" });
+    assert.equal(
+      new TextDecoder().decode(handle.provider.readRangeSync("/private/file", 0, 6)),
+      "branch",
+    );
+    await handle.close();
+    await assert.rejects(
+      openNodeVfs({ database, branchId: "missing" }),
+      (error) => error?.code === "ENOENT",
+    );
+    filesystem = await EphemeralFS.open({ database });
+    assert.equal(await filesystem.stat("/base").then(() => true), true);
+    await assert.rejects(filesystem.stat("/private/file"), { code: "ENOENT" });
+    const reopened = await filesystem.branches.open("execution-a");
+    assert.equal(
+      await reopened.readFile("/private/file", { encoding: "utf8" }),
+      "branch",
+    );
+    await reopened.discard();
+    await reopened.close();
+    await filesystem.close();
+    await assert.rejects(
+      openNodeVfs({ database, branchId: "execution-a" }),
+      (error) => error?.code === "EROFS",
+    );
+    database.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("live branch activation preserves pinned reads and rejects dirty divergence", async () => {
+  const database = await openNodeSqlite({ filename: ":memory:" });
+  let filesystem = await EphemeralFS.open({ database });
+  await filesystem.writeFile("/live", "before");
+  const created = await filesystem.branches.create("live-activation");
+  await created.close();
+  await filesystem.close();
+  const handle = await openNodeVfs({ database, branchId: "live-activation" });
+  try {
+    const provider = handle.provider;
+    const pinned = provider.openFileSync("/live");
+    const branch = await handle.runtime.branches.open("live-activation");
+    await branch.writeFile("/live", "activated");
+    assert.equal(
+      new TextDecoder().decode(provider.readRangeSync("/live", 0, 9)),
+      "activated",
+    );
+    assert.equal(new TextDecoder().decode(pinned.readRangeSync(0, 6)), "before");
+    pinned.closeSync();
+
+    const writer = provider.openFileSync("/live", { writable: true });
+    writer.writeSync(new TextEncoder().encode("local"), 0);
+    await branch.writeFile("/live", "remote-next");
+    assert.throws(
+      () => writer.flushSync(),
+      (error) => error?.code === "EAGAIN",
+    );
+    assert.equal(new TextDecoder().decode(writer.readRangeSync(0, 9)), "localated");
+    writer.abortSync();
+    assert.equal(
+      new TextDecoder().decode(provider.readRangeSync("/live", 0, 11)),
+      "remote-next",
+    );
+    const cleanWriter = provider.openFileSync("/live", { writable: true });
+    provider.linkSync("/live", "/activated-alias");
+    assert.equal(provider.existsSync("/activated-alias"), true);
+    await branch.unlink("/activated-alias");
+    assert.equal(provider.existsSync("/activated-alias"), false);
+    cleanWriter.closeSync();
+    await branch.mkdir("/activated-directory");
+    assert.equal(provider.readdirSync("/").includes("activated-directory"), true);
+
+    const terminalPinned = provider.openFileSync("/live");
+    const terminalWriter = provider.openFileSync("/live", { writable: true });
+    terminalWriter.writeSync(new TextEncoder().encode("pending"), 0);
+    await branch.discard();
+    assert.equal(
+      new TextDecoder().decode(terminalPinned.readRangeSync(0, 11)),
+      "remote-next",
+    );
+    assert.throws(() => terminalWriter.flushSync(), { code: "EROFS" });
+    terminalWriter.abortSync();
+    terminalPinned.closeSync();
+    assert.throws(() => provider.existsSync("/live"), { code: "EROFS" });
+    await branch.close();
+  } finally {
+    await handle.close();
+    await database.close();
+  }
+});
+
+test("a shared runtime can create a branch provider without a second core open", async () => {
+  const database = await openNodeSqlite({ filename: ":memory:" });
+  const runtime = await EphemeralRuntime.open({ database });
+  try {
+    await runtime.filesystem.writeFile("/base", "authority");
+    const branch = await runtime.filesystem.branches.create("shared-runtime-branch");
+    await branch.close();
+    const provider = createNodeVfsProvider(
+      runtime.openNodeVfs({ branchId: "shared-runtime-branch" }),
+    );
+    const writer = provider.openFileSync("/private", {
+      writable: true,
+      create: true,
+    });
+    writer.writeSync(new TextEncoder().encode("private"), 0);
+    writer.closeSync();
+    const branchView = await runtime.filesystem.branches.open("shared-runtime-branch");
+    assert.equal(
+      await branchView.readFile("/private", { encoding: "utf8" }),
+      "private",
+    );
+    await assert.rejects(runtime.filesystem.stat("/private"), { code: "ENOENT" });
+    await branchView.close();
+    provider.closeSync();
+  } finally {
+    await runtime.close();
+    database.close();
+  }
+});
+
+test("branch overwrite preparation composes branch-visible content without a lost update", async () => {
+  const database = await openNodeSqlite({ filename: ":memory:" });
+  let filesystem = await EphemeralFS.open({ database });
+  await filesystem.writeFile("/mixed", "abcdef");
+  const branch = await filesystem.branches.create("overwrite-branch");
+  await branch.writeFile("/mixed", "abXdef");
+  await branch.close();
+  await filesystem.close();
+
+  const handle = await openNodeVfs({ database, branchId: "overwrite-branch" });
+  try {
+    const provider = handle.provider;
+    const session = provider.openFileSync("/mixed", { writable: true });
+    assert.equal(
+      new TextDecoder().decode(session.readRangeSync(0, 6)),
+      "abXdef",
+    );
+    session.writeSync(new TextEncoder().encode("ZZ"), 0);
+    session.flushSync();
+    session.closeSync();
+    assert.throws(() => session.readRangeSync(0, 6), { code: "EBADF" });
+    assert.equal(
+      new TextDecoder().decode(provider.readRangeSync("/mixed", 0, 6)),
+      "ZZXdef",
+    );
+    const verified = await handle.filesystem.readFile("/mixed", {
+      encoding: "utf8",
+    });
+    assert.equal(verified, "ZZXdef");
+  } finally {
+    await handle.close();
+    database.close();
+  }
+});
+
+test("writable open on replica main fails EROFS before pending state", async () => {
+  const database = await openNodeSqlite({ filename: ":memory:" });
+  let filesystem = await EphemeralFS.open({ database });
+  await filesystem.writeFile("/readonly", "content");
+  await filesystem.close();
+  const runtime = await EphemeralRuntime.open({
+    database,
+    replicationIdentity: { authorityId: "authority-a", role: "replica" },
+  });
+  try {
+    const provider = createNodeVfsProvider(runtime.openNodeVfs());
+    assert.equal(provider.existsSync("/readonly"), true);
+    assert.throws(
+      () => provider.openFileSync("/readonly", { writable: true }),
+      (error) => error?.code === "EROFS",
+    );
+    assert.throws(
+      () => provider.openFileSync("/new", { writable: true, create: true }),
+      (error) => error?.code === "EROFS",
+    );
+    assert.throws(() => provider.mkdirSync("/dir"), {
+      code: "EROFS",
+    });
+    const pinned = provider.openFileSync("/readonly");
+    assert.equal(
+      new TextDecoder().decode(pinned.readRangeSync(0, 7)),
+      "content",
+    );
+    pinned.closeSync();
+    provider.closeSync();
+  } finally {
+    await runtime.close();
+    database.close();
   }
 });

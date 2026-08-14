@@ -88,6 +88,18 @@
       ]
     },
     {
+      "name": "OpenNodeVfsBridgeOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/integrations/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "OpenNodeVfsBridgeResult",
       "kinds": [
         "type"

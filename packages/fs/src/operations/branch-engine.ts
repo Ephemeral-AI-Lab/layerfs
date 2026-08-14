@@ -12,7 +12,13 @@ import {
   validateSymlinkTarget,
   type CanonicalPath,
 } from "../namespace/paths.js";
-import { bytesToHex, equalBytes, hexToBytes } from "../cas/bytes.js";
+import { bytesToHex, copyBytes, equalBytes, hexToBytes, intrinsicByteRange } from "../cas/bytes.js";
+import {
+  branchPatchInsertDigest,
+  computeBranchGenerationDigest,
+  type BranchGenerationExpectation,
+  type BranchGenerationNode,
+} from "./generation-digest.js";
 import { encodeUtf8, utf8ByteLength } from "../namespace/utf8.js";
 import {
   prepareContent,
@@ -20,9 +26,18 @@ import {
   readManifestRange,
   type PreparedManifest,
 } from "../operations/manifest-io.js";
+import {
+  tryPrepareDurableEditedContentSync,
+  type DurableContentEdit,
+  type DurableEditSource,
+} from "./durable-edit-prepare.js";
+import type { SynchronousContentSource } from "./streaming-prepare.js";
 import { checkedInteger, checkedAdd } from "../resources/safe-integers.js";
 import type { CowPage, CowPageBytes } from "../cow/pages.js";
-import { decodeManifestRoot } from "../manifests/codec.js";
+import {
+  decodeManifestRoot,
+  type ManifestParameters,
+} from "../manifests/codec.js";
 import { fsError } from "../filesystem/errors.js";
 import { ContentCache } from "../cache/content-cache.js";
 import type {
@@ -51,6 +66,13 @@ import type {
   RmOptions,
   WriteFileOptions,
 } from "../filesystem/types.js";
+import type {
+  NodeVfsBranchOperations,
+  NodeVfsCommitResult,
+  NodeVfsOverwriteEdit,
+  NodeVfsPinnedReadBridge,
+  SyncPreparedContent,
+} from "./node-vfs-bridge.js";
 import {
   BranchError,
   type BranchInfo,
@@ -127,6 +149,7 @@ interface BranchStreamSnapshot {
   readonly ownerNonce: Uint8Array;
   expiresAt: number;
   readonly size: number;
+  readonly generation: number;
   readonly releaseAdmission: () => void;
 }
 interface BranchContentStream {
@@ -163,6 +186,78 @@ function encode(value: unknown): Uint8Array {
 }
 function decode<T>(value: Uint8Array): T {
   return JSON.parse(decoder.decode(value)) as T;
+}
+
+interface PublicationRequestBinding {
+  readonly hasExpectation: boolean;
+  readonly expectedGeneration: number | null;
+  readonly expectedGenerationDigest: string | null;
+}
+interface StoredPublicationEnvelope {
+  readonly kind: "efs-publication-result-v2";
+  readonly request: PublicationRequestBinding;
+  readonly result: PublishResult;
+}
+function publicationRequest(options: PublishOptions): PublicationRequestBinding {
+  const hasGeneration = options.expectedGeneration !== undefined;
+  const hasDigest = options.expectedGenerationDigest !== undefined;
+  if (hasGeneration !== hasDigest)
+    throw new BranchError(
+      "InvalidPublicationExpectation",
+      "expected generation and digest must be supplied together",
+    );
+  if (!hasGeneration)
+    return Object.freeze({
+      hasExpectation: false,
+      expectedGeneration: null,
+      expectedGenerationDigest: null,
+    });
+  if (
+    !Number.isSafeInteger(options.expectedGeneration) ||
+    options.expectedGeneration! < 0 ||
+    !/^[0-9a-f]{64}$/u.test(options.expectedGenerationDigest!)
+  )
+    throw new BranchError(
+      "InvalidPublicationExpectation",
+      "publication expectation is malformed",
+    );
+  return Object.freeze({
+    hasExpectation: true,
+    expectedGeneration: options.expectedGeneration!,
+    expectedGenerationDigest: options.expectedGenerationDigest!,
+  });
+}
+function samePublicationRequest(
+  left: PublicationRequestBinding,
+  right: PublicationRequestBinding,
+): boolean {
+  return (
+    left.hasExpectation === right.hasExpectation &&
+    left.expectedGeneration === right.expectedGeneration &&
+    left.expectedGenerationDigest === right.expectedGenerationDigest
+  );
+}
+function compatiblePublicationRequest(
+  stored: PublicationRequestBinding | undefined,
+  requested: PublicationRequestBinding,
+): boolean {
+  // M7 terminal results did not persist a request envelope. They represent the
+  // unguarded request only; never let a guarded M8 retry claim one.
+  return stored ? samePublicationRequest(stored, requested) : !requested.hasExpectation;
+}
+function storedPublication(bytes: Uint8Array): {
+  readonly request?: PublicationRequestBinding;
+  readonly result: PublishResult;
+} {
+  const value = decode<PublishResult | StoredPublicationEnvelope>(bytes);
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    value.kind === "efs-publication-result-v2"
+  )
+    return { request: value.request, result: value.result };
+  return { result: value as PublishResult };
 }
 
 function createEditedStream(
@@ -364,12 +459,13 @@ function fromDesired(value: DesiredNode, token: number): InodeRow {
     token,
   };
 }
-function info(row: BranchRow): BranchInfo {
+function info(row: BranchRow, generationDigest: string): BranchInfo {
   return Object.freeze({
     id: row.id,
     baseRevision: String(row.base_revision),
     state: row.state === 0 ? "active" : row.state === 1 ? "merged" : "discarded",
     generation: row.generation,
+    generationDigest,
     createdAt: row.created_at_ms,
     terminalAt: row.terminal_at_ms,
     mergedRevision: row.merged_revision === null ? null : String(row.merged_revision),
@@ -651,6 +747,7 @@ export class BranchManager implements Branches {
   readonly #concurrency: RuntimeConcurrency;
   readonly #cache: ContentCache;
   readonly #pageBytes: number;
+  #mainReadOnly = false;
   #handles = 0;
   #ownerClosed = false;
   readonly #branchHandles = new Set<BranchHandle>();
@@ -677,6 +774,9 @@ export class BranchManager implements Branches {
     this.#concurrency = concurrency;
     this.#cache = cache;
     this.#pageBytes = cowPageBytes;
+  }
+  setMainReadOnly(value: boolean): void {
+    this.#mainReadOnly = value;
   }
   async close(): Promise<void> {
     this.#ownerClosed = true;
@@ -792,12 +892,7 @@ export class BranchManager implements Branches {
     this.#assertOwnerOpen();
     this.#validateId(id, "branch");
     return this.#runManagement("branches.get", id, () => {
-      const row = this.#transaction("read", (tx) => this.#row(tx, id));
-      if (!row)
-        throw new BranchError("BranchNotFound", "branch does not exist", {
-          branchId: id,
-        });
-      return info(row);
+      return this.branchInfo(id);
     });
   }
   async replay(operationId: string, branchId?: string): Promise<PublishResult> {
@@ -823,13 +918,7 @@ export class BranchManager implements Branches {
             "operation is bound to another branch",
             { branchId, operationId },
           );
-        if (!row.encoded) {
-          if (row.outcome !== -1)
-            throw new BranchError(
-              "OperationResultExpired",
-              "operation result has expired",
-              { operationId },
-            );
+        if (row.outcome === -1) {
           if (row.expires_at_ms !== null && row.expires_at_ms <= this.#now())
             throw new BranchError(
               "OperationResultExpired",
@@ -842,13 +931,19 @@ export class BranchManager implements Branches {
             { operationId },
           );
         }
+        if (!row.encoded)
+          throw new BranchError(
+            "OperationResultExpired",
+            "operation result has expired",
+            { operationId },
+          );
         if (row.expires_at_ms === null || row.expires_at_ms <= this.#now())
           throw new BranchError(
             "OperationResultExpired",
             "operation result has expired",
             { operationId },
           );
-        return decode<PublishResult>(row.encoded);
+        return storedPublication(row.encoded).result;
       });
     });
   }
@@ -859,6 +954,999 @@ export class BranchManager implements Branches {
         branchId: id,
       });
     return row;
+  }
+  branchInfo(id: string): BranchInfo {
+    return this.#transaction("read", (tx) => {
+      const row = this.#row(tx, id);
+      if (!row)
+        throw new BranchError("BranchNotFound", "branch does not exist", {
+          branchId: id,
+        });
+      return info(
+        row,
+        (row.state === 0
+          ? undefined
+          : tx.branches(this.#storage).terminalGenerationDigest(id, row.generation)) ??
+          this.#generationDigest(tx, row),
+      );
+    });
+  }
+  generationDigest(id: string): string {
+    return this.#transaction("read", (tx) => {
+      const row = this.#row(tx, id);
+      if (!row)
+        throw new BranchError("BranchNotFound", "branch does not exist", {
+          branchId: id,
+        });
+      return (
+        (row.state === 0
+          ? undefined
+          : tx.branches(this.#storage).terminalGenerationDigest(id, row.generation)) ??
+        this.#generationDigest(tx, row)
+      );
+    });
+  }
+
+  generationDigestInTransaction(tx: StorageTransactionPorts, id: string): string {
+    const row = this.#row(tx, id);
+    if (!row)
+      throw new BranchError("BranchNotFound", "branch does not exist", {
+        branchId: id,
+      });
+    return (
+      (row.state === 0
+        ? undefined
+        : tx.branches(this.#storage).terminalGenerationDigest(id, row.generation)) ??
+      this.#generationDigest(tx, row)
+    );
+  }
+
+  #generationDigest(tx: StorageTransactionPorts, branch: BranchRow): string {
+    const repository = tx.branches(this.#storage);
+    const view = new BranchView(tx, branch, this.#filesystem, this.#storage);
+    const changes = view.allChanges();
+    const nodes = new Map<string, BranchGenerationNode>();
+    const expectations: BranchGenerationExpectation[] = [];
+    const references = new Map<string, Uint8Array>();
+    const overlay = tx.overlay(this.#storage, this.#pageBytes as CowPageBytes);
+    for (const change of changes) {
+      const path = decoder.decode(change.path);
+      const encoded = change.encoded ? decode<DesiredNode>(change.encoded) : undefined;
+      const value = encoded ? view.visibleDesired(encoded) : undefined;
+      expectations.push({
+        reason:
+          value?.conflictRole === "source"
+            ? "source-changed"
+            : value?.conflictRole === "destination"
+              ? "destination-changed"
+              : "entry-changed",
+        path,
+        expectedRevision: null,
+        expectedToken:
+          change.expected_token === null ? null : String(change.expected_token),
+      });
+      if (!value) continue;
+      if (value.expectedInodeToken !== null)
+        expectations.push({
+          reason:
+            value.conflictRole === "source"
+              ? "source-changed"
+              : value.conflictRole === "destination"
+                ? "destination-changed"
+                : "node-changed",
+          path,
+          expectedRevision: null,
+          expectedToken: String(value.expectedInodeToken),
+        });
+      if (value.sourcePath !== undefined)
+        expectations.push({
+          reason: "source-changed",
+          path: value.sourcePath,
+          expectedRevision: null,
+          expectedToken:
+            value.sourceInodeToken === null || value.sourceInodeToken === undefined
+              ? null
+              : String(value.sourceInodeToken),
+        });
+      if (value.subtreeGuard)
+        expectations.push({
+          reason: "subtree-changed",
+          path,
+          expectedRevision: String(branch.base_revision),
+          expectedToken: null,
+        });
+      for (const ancestor of value.ancestorTokens ?? [])
+        expectations.push({
+          reason: "ancestor-changed",
+          path: ancestor.path,
+          expectedRevision: null,
+          expectedToken:
+            ancestor.entryToken === null ? null : String(ancestor.entryToken),
+        });
+      if (value.inodeId.length === 0) continue;
+      const manifestHash = value.manifestHash
+        ? hexToBytes(value.manifestHash, 32)
+        : null;
+      if (manifestHash) references.set(bytesToHex(manifestHash), manifestHash);
+      const logicalSize = value.size ?? 0;
+      const pageCount = Math.ceil(logicalSize / this.#pageBytes);
+      const pages: CowPage[] = [];
+      if (value.type === 0)
+        for (let first = 0; first < pageCount; first += this.#storage.maxQueryBatchSize)
+          pages.push(
+            ...overlay.headPages(
+              branch.id,
+              value.inodeId,
+              first,
+              Math.min(pageCount - 1, first + this.#storage.maxQueryBatchSize - 1),
+            ),
+          );
+      const patches =
+        value.type === 0
+          ? overlay.patches(
+              branch.id,
+              value.inodeId,
+              (value.overlayBaseGeneration ?? 0) - 1,
+            )
+          : [];
+      const generationPatches = patches.map((patch) => ({
+        order: patch.sequence,
+        offset: patch.offset,
+        deleteLength: patch.deleteLength,
+        insertManifestDigest: branchPatchInsertDigest(patch.segments),
+      }));
+      for (const patch of generationPatches)
+        if (patch.insertManifestDigest)
+          references.set(
+            bytesToHex(patch.insertManifestDigest),
+            patch.insertManifestDigest,
+          );
+      nodes.set(value.inodeId, {
+        inodeId: value.inodeId,
+        kind: value.type === 0 ? "file" : value.type === 1 ? "directory" : "symlink",
+        mode: value.mode,
+        birthtimeMs: value.birthtimeMs,
+        mtimeMs: value.mtimeMs,
+        ctimeMs: value.ctimeMs,
+        logicalSize,
+        manifestHash,
+        pages: pages.map((page) => ({ index: page.index, bytes: page.bytes })),
+        patches: generationPatches,
+        symlinkTarget: value.symlinkTarget,
+      });
+    }
+    return computeBranchGenerationDigest({
+      filesystemId: repository.filesystemId(),
+      branchId: branch.id,
+      baseRevision: String(branch.base_revision),
+      generation: branch.generation,
+      namespace: changes.map((change) => {
+        const value = change.encoded ? decode<DesiredNode>(change.encoded) : undefined;
+        return {
+          path: decoder.decode(change.path),
+          disposition:
+            change.kind === 0 ? ("present" as const) : ("tombstone" as const),
+          inodeId: change.kind === 0 && value ? value.inodeId : null,
+        };
+      }),
+      nodes: [...nodes.values()],
+      expectations,
+      immutableReferences: [...references.values()].map((digest) => ({
+        kind: "manifest" as const,
+        digest,
+      })),
+    });
+  }
+
+  createNodeVfsOperations(id: string): NodeVfsBranchOperations {
+    const opening = this.#transaction("read", (tx) => this.#row(tx, id));
+    if (!opening) throw fsError("ENOENT", "openNodeVfs", id, "branch does not exist");
+    if (opening.state !== 0)
+      throw fsError("EROFS", "openNodeVfs", id, "branch is terminal");
+    const assertParent = (path: CanonicalPath, syscall: string): void => {
+      if (path.segments.length <= 1) return;
+      this.view(id, (view) => {
+        const parent = view.resolve(
+          `/${path.segments.slice(0, -1).join("/")}`,
+          true,
+          true,
+          syscall,
+        );
+        if (parent.inode.type !== 1)
+          throw fsError("ENOTDIR", syscall, path.value, "parent is not a directory");
+      });
+    };
+    const resolve = (path: string, followFinal: boolean) => {
+      const selected = this.view(id, (view) =>
+        view.resolve(path, followFinal, true, "nodeVfs"),
+      );
+      return Object.freeze({
+        canonicalPath: selected.path.value,
+        stat: stat(selected),
+      });
+    };
+    const openPinnedRead = (path: string): NodeVfsPinnedReadBridge => {
+      const selected = this.view(id, (view) =>
+        view.resolve(path, true, true, "openFileSync"),
+      );
+      if (selected.inode.type !== 0)
+        throw fsError(
+          selected.inode.type === 1 ? "EISDIR" : "EINVAL",
+          "openFileSync",
+          path,
+          "path is not a regular file",
+        );
+      const snapshot = this.openStreamSnapshot(
+        id,
+        selected.path.value,
+        0,
+        selected.inode.size!,
+      );
+      let closed = false;
+      return Object.freeze({
+        canonicalPath: selected.path.value,
+        inodeId: selected.inode.id,
+        stat: stat(selected),
+        size: snapshot.size,
+        generation: snapshot.generation,
+        readIntoSync: (
+          destination: Uint8Array,
+          destinationOffset: number,
+          position: number,
+          length: number,
+        ): number => {
+          if (closed)
+            throw fsError("EBADF", "readIntoSync", path, "pinned read is closed");
+          return this.readStreamSnapshotInto(
+            snapshot,
+            destination,
+            destinationOffset,
+            position,
+            length,
+          );
+        },
+        closeSync: (): void => {
+          if (closed) return;
+          closed = true;
+          this.releaseStreamSnapshot(snapshot);
+          snapshot.releaseAdmission();
+        },
+      });
+    };
+    const commitPrepared = (
+      path: string,
+      prepared: SyncPreparedContent,
+      options: {
+        create?: boolean;
+        exclusive?: boolean;
+        mode?: number;
+        inodeId?: string;
+        aliases?: readonly string[];
+        expectedGeneration?: number;
+      },
+    ): NodeVfsCommitResult => {
+      const canonical = canonicalizePath(path, this.#filesystem, "commitVisibleSync");
+      const selected = this.view(id, (view, _tx, branch) => ({
+        destination: view.optional(canonical, false, true, "commitVisibleSync"),
+        existing: view.optional(canonical, true, true, "commitVisibleSync"),
+        generation: branch.generation,
+      }));
+      const existing = selected.existing;
+      if (existing?.inode.type === 1)
+        throw fsError(
+          "EISDIR",
+          "commitVisibleSync",
+          path,
+          "destination is a directory",
+        );
+      if (
+        options.inodeId !== undefined &&
+        existing?.inode.id !== options.inodeId &&
+        !(options.create && !existing)
+      )
+        throw fsError(
+          "EBUSY",
+          "commitVisibleSync",
+          path,
+          "open inode identity no longer matches the commit path",
+        );
+      const alreadyCommitted = Boolean(
+        existing?.inode.type === 0 &&
+        existing.inode.id === options.inodeId &&
+        existing.inode.size === prepared.size &&
+        existing.inode.manifest_hash !== null &&
+        equalBytes(existing.inode.manifest_hash, prepared.manifestHash),
+      );
+      if (options.exclusive && selected.destination && !alreadyCommitted)
+        throw fsError("EEXIST", "commitVisibleSync", path, "destination exists");
+      if (!existing && options.create === false)
+        throw fsError("ENOENT", "commitVisibleSync", path, "file does not exist");
+      if (alreadyCommitted) {
+        this.#transaction("write", (tx) => {
+          this.#active(tx, id);
+          this.#releasePrepared(tx, prepared.certificate);
+        });
+        return Object.freeze({ pinned: openPinnedRead(path) });
+      }
+      if (
+        options.expectedGeneration !== undefined &&
+        options.expectedGeneration !== selected.generation
+      )
+        throw fsError(
+          "EAGAIN",
+          "commitVisibleSync",
+          path,
+          "branch changed while the write session was dirty",
+        );
+      const targetPath = existing?.path ?? canonical;
+      assertParent(targetPath, "commitVisibleSync");
+      const now = this.#now();
+      const inodeId =
+        existing?.inode.id ?? options.inodeId ?? globalThis.crypto.randomUUID();
+      const aliases = (options.aliases ?? [])
+        .map((alias) => canonicalizePath(alias, this.#filesystem, "commitVisibleSync"))
+        .filter((alias) => alias.value !== targetPath.value);
+      for (const alias of aliases) {
+        assertParent(alias, "commitVisibleSync");
+        if (this.view(id, (view) => view.optional(alias, false)))
+          throw fsError("EEXIST", "commitVisibleSync", alias.value, "alias exists");
+      }
+      const node: DesiredNode = existing
+        ? {
+            ...desired(existing.inode),
+            size: prepared.size,
+            manifestHash: bytesToHex(prepared.manifestHash),
+            nlink: existing.inode.nlink + aliases.length,
+            mtimeMs: now,
+            ctimeMs: now,
+          }
+        : {
+            inodeId,
+            type: 0,
+            mode: (options.mode ?? 0o644) & 0o7777,
+            birthtimeMs: now,
+            mtimeMs: now,
+            ctimeMs: now,
+            nlink: 1 + aliases.length,
+            size: prepared.size,
+            manifestHash: bytesToHex(prepared.manifestHash),
+            symlinkTarget: null,
+            expectedInodeToken: null,
+          };
+      this.mutate(
+        id,
+        [
+          {
+            path: targetPath.value,
+            node,
+            touchesParent: !existing,
+            mutationTimeMs: now,
+          },
+          ...aliases.map((alias) => ({
+            path: alias.value,
+            node,
+            touchesParent: true,
+            mutationTimeMs: now,
+          })),
+        ],
+        prepared.certificate,
+        selected.generation,
+      );
+      return Object.freeze({ pinned: openPinnedRead(targetPath.value) });
+    };
+    const branchEditSource = (
+      state: OverlayFileState,
+      rootBytes: Uint8Array,
+      parameters: ManifestParameters,
+    ): DurableEditSource => {
+      let cachedWindow:
+        | {
+            readonly offset: number;
+            readonly bytes: Uint8Array;
+            readonly release: () => void;
+          }
+        | undefined;
+      const maxReadWindowBytes = Math.max(
+        64 * 1024,
+        Math.min(
+          2 * 1024 * 1024,
+          this.#storage.maxFinalTransactionBytes,
+          this.#filesystem.maxMaterializedBytes,
+        ),
+      );
+      let readTransactions = 0;
+      const readSlice = (offset: number, length: number): Uint8Array => {
+        checkedInteger(offset, "manifest read offset");
+        checkedInteger(length, "manifest read length");
+        if (length === 0) return new Uint8Array(0);
+        const end = checkedAdd(offset, length, "manifest read end");
+        const cachedEnd = cachedWindow
+          ? checkedAdd(cachedWindow.offset, cachedWindow.bytes.byteLength)
+          : -1;
+        if (!cachedWindow || offset < cachedWindow.offset || end > cachedEnd) {
+          cachedWindow?.release();
+          cachedWindow = undefined;
+          const windowLength = Math.max(length, maxReadWindowBytes);
+          const maxOffset = Math.max(0, state.size - windowLength);
+          const windowOffset = Math.min(offset, maxOffset);
+          const available = Math.min(windowLength, state.size - windowOffset);
+          const bytes = this.#transaction("read", (tx) =>
+            this.#composeRangeBytes(tx, state, windowOffset, available),
+          );
+          readTransactions += 1;
+          const release = this.#admission.reserve(bytes.byteLength);
+          cachedWindow = Object.freeze({ offset: windowOffset, bytes, release });
+        }
+        const current = cachedWindow!;
+        const relativeOffset = offset - current.offset;
+        return intrinsicByteRange(
+          current.bytes,
+          relativeOffset,
+          checkedAdd(relativeOffset, length, "manifest cached read end"),
+        );
+      };
+      return Object.freeze({
+        manifestHash: copyBytes(state.baseManifestHash!),
+        rootBytes: copyBytes(rootBytes),
+        size: state.size,
+        parameters,
+        readStorageTransactions: 1,
+        getReadStorageTransactions: () => readTransactions,
+        maxReadWindowBytes,
+        read: readSlice,
+        releaseReadWindow: () => {
+          cachedWindow?.release();
+          cachedWindow = undefined;
+        },
+      });
+    };
+    const plainManifestSource = (
+      manifestHash: Uint8Array,
+      rootBytes: Uint8Array,
+      size: number,
+      parameters: ManifestParameters,
+    ): DurableEditSource => {
+      let cachedWindow:
+        | {
+            readonly offset: number;
+            readonly bytes: Uint8Array;
+            readonly release: () => void;
+          }
+        | undefined;
+      const maxReadWindowBytes = Math.max(
+        64 * 1024,
+        Math.min(
+          2 * 1024 * 1024,
+          this.#storage.maxFinalTransactionBytes,
+          this.#filesystem.maxMaterializedBytes,
+        ),
+      );
+      let readTransactions = 0;
+      const readSlice = (offset: number, length: number): Uint8Array => {
+        checkedInteger(offset, "manifest read offset");
+        checkedInteger(length, "manifest read length");
+        if (length === 0) return new Uint8Array(0);
+        const end = checkedAdd(offset, length, "manifest read end");
+        const cachedEnd = cachedWindow
+          ? checkedAdd(cachedWindow.offset, cachedWindow.bytes.byteLength)
+          : -1;
+        if (!cachedWindow || offset < cachedWindow.offset || end > cachedEnd) {
+          cachedWindow?.release();
+          cachedWindow = undefined;
+          const windowLength = Math.max(length, maxReadWindowBytes);
+          const maxOffset = Math.max(0, size - windowLength);
+          const windowOffset = Math.min(offset, maxOffset);
+          const available = Math.min(windowLength, size - windowOffset);
+          const bytes = this.#transaction("read", (tx) =>
+            readManifestRange(
+              tx.content(this.#storage, this.#cache),
+              manifestHash,
+              windowOffset,
+              available,
+              this.#admission,
+              this.#cache,
+            ),
+          );
+          readTransactions += 1;
+          const release = this.#admission.reserve(bytes.byteLength);
+          cachedWindow = Object.freeze({ offset: windowOffset, bytes, release });
+        }
+        const current = cachedWindow!;
+        const relativeOffset = offset - current.offset;
+        return intrinsicByteRange(
+          current.bytes,
+          relativeOffset,
+          checkedAdd(relativeOffset, length, "manifest cached read end"),
+        );
+      };
+      return Object.freeze({
+        manifestHash: copyBytes(manifestHash),
+        rootBytes: copyBytes(rootBytes),
+        size,
+        parameters,
+        readStorageTransactions: 1,
+        getReadStorageTransactions: () => readTransactions,
+        maxReadWindowBytes,
+        read: readSlice,
+        releaseReadWindow: () => {
+          cachedWindow?.release();
+          cachedWindow = undefined;
+        },
+      });
+    };
+    const prepareOverwriteSync = (
+      path: string,
+      offset: number,
+      insertion: SynchronousContentSource,
+    ): SyncPreparedContent | undefined => {
+      checkedInteger(offset, "offset");
+      const canonical = canonicalizePath(path, this.#filesystem, "commitVisibleSync");
+      let selected:
+        | {
+            readonly state: OverlayFileState;
+            readonly rootBytes: Uint8Array;
+            readonly parameters: ManifestParameters;
+          }
+        | undefined;
+      this.#transaction("read", (tx) => {
+        const branch = this.#active(tx, id);
+        const view = new BranchView(tx, branch, this.#filesystem, this.#storage);
+        const state = this.#overlayFileState(
+          tx,
+          id,
+          view,
+          canonical,
+          "commitVisibleSync",
+        );
+        if (
+          insertion.size === 0 ||
+          offset > state.size ||
+          insertion.size > state.size - offset
+        )
+          return undefined;
+        if (state.baseManifestHash === null)
+          throw new Error("ECORRUPT: branch-visible base manifest is missing");
+        const rootBytes = tx
+          .content(this.#storage, this.#cache)
+          .withManifestRoot(state.baseManifestHash, (encoded) => copyBytes(encoded));
+        if (!rootBytes)
+          throw new Error("ECORRUPT: branch-visible manifest root is missing");
+        selected = Object.freeze({
+          state,
+          rootBytes,
+          parameters: decodeManifestRoot(rootBytes, state.baseManifestHash).parameters,
+        });
+        return undefined;
+      });
+      if (!selected) return undefined;
+      const edit: DurableContentEdit = Object.freeze({
+        offset,
+        deleteLength: insertion.size,
+        insertLength: insertion.size,
+        retainedBytes: insertion.size,
+        readInsert: (position: number, length: number): Uint8Array => {
+          const output = new Uint8Array(length);
+          const read = insertion.readInto(output, 0, position, length);
+          if (read !== length)
+            throw new Error("Node VFS overwrite source returned an incomplete range");
+          return output;
+        },
+      });
+      let prepared;
+      prepared = tryPrepareDurableEditedContentSync(
+        this.#port,
+        branchEditSource(selected.state, selected.rootBytes, selected.parameters),
+        edit,
+        this.#storage,
+        this.#runtime,
+        this.#admission,
+        this.#cache,
+        this.#clock,
+      );
+      if (!prepared) return undefined;
+      if (prepared.mode === "streamed-fallback") {
+        this.abandonPrepared(prepared.certificate);
+        return undefined;
+      }
+      return Object.freeze({
+        manifestHash: prepared.hash,
+        size: prepared.size,
+        certificate: prepared.certificate,
+        preparationMode: prepared.mode === "durable-path-copy" ? "durable-path-copy" : "local-rebuild",
+        sourceBytesRead:
+          prepared.localRebuildMetrics?.sourceBytesRead ??
+          prepared.pathCopyMetrics?.sourceBytesRead ??
+          0,
+      });
+    };
+    const prepareOverwritesSync = (
+      path: string,
+      edits: readonly NodeVfsOverwriteEdit[],
+    ): SyncPreparedContent | undefined => {
+      if (edits.length === 0) return undefined;
+      if (edits.length === 1)
+        return prepareOverwriteSync(path, edits[0]!.offset, edits[0]!.source);
+      const canonical = canonicalizePath(path, this.#filesystem, "commitVisibleSync");
+      let source:
+        | {
+            readonly state: OverlayFileState;
+            readonly rootBytes: Uint8Array;
+            readonly parameters: ManifestParameters;
+          }
+        | undefined;
+      this.#transaction("read", (tx) => {
+        const branch = this.#active(tx, id);
+        const view = new BranchView(tx, branch, this.#filesystem, this.#storage);
+        const state = this.#overlayFileState(
+          tx,
+          id,
+          view,
+          canonical,
+          "commitVisibleSync",
+        );
+        if (state.baseManifestHash === null)
+          throw new Error("ECORRUPT: branch-visible base manifest is missing");
+        const rootBytes = tx
+          .content(this.#storage, this.#cache)
+          .withManifestRoot(state.baseManifestHash, (encoded) => copyBytes(encoded));
+        if (!rootBytes)
+          throw new Error("ECORRUPT: branch-visible manifest root is missing");
+        source = Object.freeze({
+          state,
+          rootBytes,
+          parameters: decodeManifestRoot(rootBytes, state.baseManifestHash).parameters,
+        });
+        return undefined;
+      });
+      if (!source) return undefined;
+      let current: SyncPreparedContent | undefined;
+      let currentHash = copyBytes(source.state.baseManifestHash!);
+      let currentRoot = copyBytes(source.rootBytes);
+      let currentSize = source.state.size;
+      let currentParameters = source.parameters;
+      try {
+        for (let index = 0; index < edits.length; index += 1) {
+          const edit = edits[index]!;
+          checkedInteger(edit.offset, "offset");
+          if (
+            edit.source.size === 0 ||
+            edit.offset > currentSize ||
+            edit.source.size > currentSize - edit.offset
+          )
+            return undefined;
+          const prepared = tryPrepareDurableEditedContentSync(
+            this.#port,
+            index === 0
+              ? branchEditSource(source.state, currentRoot, currentParameters)
+              : plainManifestSource(
+                  currentHash,
+                  currentRoot,
+                  currentSize,
+                  currentParameters,
+                ),
+            Object.freeze({
+              offset: edit.offset,
+              deleteLength: edit.source.size,
+              insertLength: edit.source.size,
+              retainedBytes: edit.source.size,
+              readInsert: (position: number, length: number): Uint8Array => {
+                const output = new Uint8Array(length);
+                const read = edit.source.readInto(output, 0, position, length);
+                if (read !== length)
+                  throw new Error(
+                    "Node VFS overwrite source returned an incomplete range",
+                  );
+                return output;
+              },
+            }),
+            this.#storage,
+            this.#runtime,
+            this.#admission,
+            this.#cache,
+            this.#clock,
+          );
+          if (!prepared || prepared.mode === "streamed-fallback") {
+            if (prepared) this.abandonPrepared(prepared.certificate);
+            if (current) this.abandonPrepared(current.certificate);
+            return undefined;
+          }
+          if (current) this.abandonPrepared(current.certificate);
+          current = Object.freeze({
+            manifestHash: prepared.hash,
+            size: prepared.size,
+            certificate: prepared.certificate,
+            preparationMode:
+              prepared.mode === "durable-path-copy"
+                ? "durable-path-copy"
+                : "local-rebuild",
+            sourceBytesRead:
+              prepared.localRebuildMetrics?.sourceBytesRead ??
+              prepared.pathCopyMetrics?.sourceBytesRead ??
+              0,
+          });
+          if (index + 1 === edits.length) break;
+          const rootBytes = this.#transaction("read", (tx) =>
+            tx
+              .content(this.#storage, this.#cache)
+              .withManifestRoot(prepared.hash, (encoded) => copyBytes(encoded)),
+          );
+          if (!rootBytes) throw new Error("ECORRUPT: missing staged manifest root");
+          currentHash = copyBytes(prepared.hash);
+          currentRoot = copyBytes(rootBytes);
+          currentSize = prepared.size;
+          currentParameters = decodeManifestRoot(rootBytes, prepared.hash).parameters;
+        }
+        return current;
+      } catch (error) {
+        if (current) this.abandonPrepared(current.certificate);
+        throw error;
+      }
+    };
+    const unlink = (path: string, directory: boolean): void => {
+      const source = this.view(id, (view) =>
+        view.resolve(path, false, true, "nodeVfs"),
+      );
+      if (source.path.value === "/")
+        throw fsError(
+          directory ? "EBUSY" : "EPERM",
+          directory ? "rmdirSync" : "unlinkSync",
+          path,
+          "root cannot be removed",
+        );
+      if (directory) {
+        if (source.inode.type !== 1)
+          throw fsError("ENOTDIR", "rmdirSync", path, "path is not a directory");
+        if (this.view(id, (view) => view.children(source.path).length) !== 0)
+          throw fsError("ENOTEMPTY", "rmdirSync", path, "directory is not empty");
+      } else if (source.inode.type === 1)
+        throw fsError("EISDIR", "unlinkSync", path, "path is a directory");
+      this.mutate(id, [
+        {
+          path: source.path.value,
+          node: null,
+          touchesParent: true,
+          mutationTimeMs: this.#now(),
+        },
+      ]);
+    };
+    const operations: NodeVfsBranchOperations = {
+      version: (): number => {
+        const row = this.#transaction("read", (tx) => this.#row(tx, id));
+        if (!row) throw fsError("ENOENT", "nodeVfs", id, "branch is missing");
+        if (row.state !== 0)
+          throw fsError("EROFS", "nodeVfs", id, "branch is terminal");
+        return row.generation;
+      },
+      resolve,
+      openPinnedRead,
+      readdir: (path: string): DirectoryEntry[] => {
+        const canonical = canonicalizePath(path, this.#filesystem, "readdirSync");
+        const parent = this.view(id, (view) => view.resolve(canonical, true));
+        if (parent.inode.type !== 1)
+          throw fsError("ENOTDIR", "readdirSync", path, "path is not a directory");
+        const children = this.view(id, (view) => view.children(canonical));
+        if (children.length > this.#filesystem.maxReaddirEntries)
+          throw fsError("EFBIG", "readdirSync", path, "listing exceeds limit");
+        return children.map((node) => {
+          const type = typeName(node.inode.type);
+          return Object.freeze({
+            name: node.path.segments.at(-1)!,
+            parentPath: canonical.value,
+            type,
+            ...predicates(type),
+          });
+        });
+      },
+      readlink: (path: string): string => {
+        const node = this.view(id, (view) => view.resolve(path, false));
+        if (node.inode.type !== 2)
+          throw fsError("EINVAL", "readlinkSync", path, "not a symbolic link");
+        return node.inode.symlink_target!;
+      },
+      readInto: (path, destination, destinationOffset, position, length): number => {
+        return this.composeRangeForBranchInto(
+          id,
+          path,
+          destination,
+          destinationOffset,
+          position,
+          length,
+        );
+      },
+      commitPrepared,
+      prepareOverwriteSync,
+      prepareOverwritesSync,
+      mkdir: (path, options): void => {
+        const canonical = canonicalizePath(path, this.#filesystem, "mkdirSync");
+        if (canonical.value === "/") {
+          if (options.recursive) return;
+          throw fsError("EEXIST", "mkdirSync", path, "root exists");
+        }
+        const prefixes = options.recursive
+          ? canonical.segments.map(
+              (_, index) => `/${canonical.segments.slice(0, index + 1).join("/")}`,
+            )
+          : [canonical.value];
+        if (!options.recursive) assertParent(canonical, "mkdirSync");
+        const now = this.#now();
+        const changes: BranchMutation[] = [];
+        for (const prefix of prefixes) {
+          const existing = this.view(id, (view) => view.optional(prefix, false));
+          if (existing) {
+            if (existing.inode.type !== 1 || !options.recursive)
+              throw fsError("EEXIST", "mkdirSync", prefix, "destination exists");
+            continue;
+          }
+          changes.push({
+            path: prefix,
+            node: {
+              inodeId: globalThis.crypto.randomUUID(),
+              type: 1,
+              mode: (options.mode ?? 0o755) & 0o7777,
+              birthtimeMs: now,
+              mtimeMs: now,
+              ctimeMs: now,
+              nlink: 1,
+              size: null,
+              manifestHash: null,
+              symlinkTarget: null,
+              expectedInodeToken: null,
+            },
+            touchesParent: true,
+            mutationTimeMs: now,
+          });
+        }
+        if (changes.length) this.mutate(id, changes);
+      },
+      chmod: (path, mode): void => {
+        const node = this.view(id, (view) => view.resolve(path, true));
+        const nextMode = mode & 0o7777;
+        if (node.inode.mode === nextMode) return;
+        const now = this.#now();
+        this.mutate(id, [
+          {
+            path: node.path.value,
+            node: { ...desired(node.inode), mode: nextMode, ctimeMs: now },
+            mutationTimeMs: now,
+          },
+        ]);
+      },
+      link: (existingPath, newPath): void => {
+        const source = this.view(id, (view) => view.resolve(existingPath, true));
+        if (source.inode.type !== 0)
+          throw fsError("EPERM", "linkSync", existingPath, "only files can be linked");
+        const destination = canonicalizePath(newPath, this.#filesystem, "linkSync");
+        assertParent(destination, "linkSync");
+        if (this.view(id, (view) => view.optional(destination, false)))
+          throw fsError("EEXIST", "linkSync", newPath, "destination exists");
+        const now = this.#now();
+        const sourceInodeToken = this.view(
+          id,
+          (view) => view.base(source.path, false)?.inode.token ?? null,
+        );
+        this.mutate(id, [
+          {
+            path: destination.value,
+            node: {
+              ...desired(source.inode),
+              nlink: source.inode.nlink + 1,
+              ctimeMs: now,
+            },
+            touchesParent: true,
+            mutationTimeMs: now,
+            conflictRole: "destination",
+            sourcePath: source.path.value,
+            sourceInodeToken,
+          },
+        ]);
+      },
+      symlink: (target, path): void => {
+        validateSymlinkTarget(target, this.#filesystem, "symlinkSync");
+        const destination = canonicalizePath(path, this.#filesystem, "symlinkSync");
+        assertParent(destination, "symlinkSync");
+        if (this.view(id, (view) => view.optional(destination, false)))
+          throw fsError("EEXIST", "symlinkSync", path, "destination exists");
+        const now = this.#now();
+        this.mutate(id, [
+          {
+            path: destination.value,
+            node: {
+              inodeId: globalThis.crypto.randomUUID(),
+              type: 2,
+              mode: 0o777,
+              birthtimeMs: now,
+              mtimeMs: now,
+              ctimeMs: now,
+              nlink: 1,
+              size: null,
+              manifestHash: null,
+              symlinkTarget: target,
+              expectedInodeToken: null,
+            },
+            touchesParent: true,
+            mutationTimeMs: now,
+          },
+        ]);
+      },
+      rename: (oldPath, newPath): void => {
+        const source = this.view(id, (view) => view.resolve(oldPath, false));
+        const destination = canonicalizePath(newPath, this.#filesystem, "renameSync");
+        if (source.path.value === destination.value) return;
+        if (
+          source.inode.type === 1 &&
+          destination.value.startsWith(`${source.path.value}/`)
+        )
+          throw fsError(
+            "EINVAL",
+            "renameSync",
+            oldPath,
+            "directory cannot move into itself",
+          );
+        assertParent(destination, "renameSync");
+        const existing = this.view(id, (view) => view.optional(destination, false));
+        if (existing) {
+          if (source.inode.type === 1 && existing.inode.type !== 1)
+            throw fsError("ENOTDIR", "renameSync", newPath, "type mismatch");
+          if (source.inode.type !== 1 && existing.inode.type === 1)
+            throw fsError("EISDIR", "renameSync", newPath, "type mismatch");
+          if (
+            existing.inode.type === 1 &&
+            this.view(id, (view) => view.children(existing.path).length)
+          )
+            throw fsError("ENOTEMPTY", "renameSync", newPath, "directory is not empty");
+        }
+        const now = this.#now();
+        const changes: BranchMutation[] = [
+          {
+            path: destination.value,
+            node: { ...desired(source.inode), ctimeMs: now },
+            conflictRole: "destination",
+            sourcePath: source.path.value,
+            subtreeGuard: source.inode.type === 1,
+            touchesParent: true,
+            mutationTimeMs: now,
+          },
+          {
+            path: source.path.value,
+            node: null,
+            conflictRole: "source",
+            sourcePath: source.path.value,
+            subtreeGuard: source.inode.type === 1,
+            touchesParent: true,
+            mutationTimeMs: now,
+          },
+        ];
+        if (
+          source.inode.type === 1 &&
+          !this.view(id, (view) => view.base(source.path, false))
+        ) {
+          const descendants: ViewNode[] = [];
+          const pending = [source.path];
+          while (pending.length) {
+            const parent = pending.pop()!;
+            for (const child of this.view(id, (view) => view.children(parent))) {
+              descendants.push(child);
+              if (child.inode.type === 1) pending.push(child.path);
+            }
+          }
+          for (const child of descendants.sort((a, b) =>
+            compareUtf8(a.path.value, b.path.value),
+          )) {
+            const suffix = child.path.value.slice(source.path.value.length);
+            changes.push({
+              path: `${destination.value}${suffix}`,
+              node: desired(child.inode),
+              mutationTimeMs: now,
+            });
+            changes.push({ path: child.path.value, node: null, mutationTimeMs: now });
+          }
+        }
+        this.mutate(id, changes);
+      },
+      unlink: (path): void => unlink(path, false),
+      rmdir: (path): void => unlink(path, true),
+    };
+    return Object.freeze(operations);
   }
   view<T>(
     id: string,
@@ -1084,6 +2172,14 @@ export class BranchManager implements Branches {
     });
   }
   async publish(id: string, options: PublishOptions = {}): Promise<PublishResult> {
+    if (this.#mainReadOnly)
+      throw fsError(
+        "EROFS",
+        "publish",
+        id,
+        "replicas cannot publish into their read-only main view",
+      );
+    const request = publicationRequest(options);
     const operationId = options.operationId ?? null;
     if (options.operationId !== undefined)
       this.#validateId(options.operationId, "operation");
@@ -1104,12 +2200,17 @@ export class BranchManager implements Branches {
             "operation is bound to another branch",
             { branchId: id, operationId },
           );
-        if (!result.encoded) {
-          if (result.outcome !== -1)
+        if (result.outcome === -1) {
+          if (
+            !compatiblePublicationRequest(
+              result.encoded ? decode(result.encoded) : undefined,
+              request,
+            )
+          )
             throw new BranchError(
-              "OperationResultExpired",
-              "operation result has expired",
-              { operationId },
+              "OperationRequestMismatch",
+              "operation is bound to another guarded request",
+              { branchId: id, operationId },
             );
           if (
             !prior.branch ||
@@ -1121,15 +2222,27 @@ export class BranchManager implements Branches {
               "operation reservation is bound to another branch generation",
               { branchId: id, operationId },
             );
-        }
-        if (result.encoded) {
+        } else {
+          if (!result.encoded)
+            throw new BranchError(
+              "OperationResultExpired",
+              "operation result has expired",
+              { operationId },
+            );
           if (result.expires_at_ms === null || result.expires_at_ms <= this.#now())
             throw new BranchError(
               "OperationResultExpired",
               "operation result has expired",
               { operationId },
             );
-          return decode<PublishResult>(result.encoded);
+          const stored = storedPublication(result.encoded);
+          if (!compatiblePublicationRequest(stored.request, request))
+            throw new BranchError(
+              "OperationRequestMismatch",
+              "operation is bound to another guarded request",
+              { branchId: id, operationId },
+            );
+          return stored.result;
         }
       }
     }
@@ -1156,8 +2269,20 @@ export class BranchManager implements Branches {
             state,
           });
       }
+      const generationDigest = this.#generationDigest(tx, row);
+      if (
+        request.hasExpectation &&
+        (request.expectedGeneration !== row.generation ||
+          request.expectedGenerationDigest !== generationDigest)
+      )
+        throw new BranchError(
+          "BranchChanged",
+          "branch does not match the guarded publication generation",
+          { branchId: id, ...(operationId ? { operationId } : {}) },
+        );
       return {
         generation: row.generation,
+        generationDigest,
         byInode,
         changeCount: changes.length,
         changeBytes: changes.reduce(
@@ -1211,16 +2336,40 @@ export class BranchManager implements Branches {
               "operation is bound to another branch",
               { branchId: id, operationId },
             );
-          if (prior.encoded) {
+          if (prior.outcome !== -1) {
+            if (!prior.encoded)
+              throw new BranchError(
+                "OperationResultExpired",
+                "operation result has expired",
+                { operationId },
+              );
             if (prior.expires_at_ms !== null && prior.expires_at_ms <= this.#now())
               throw new BranchError(
                 "OperationResultExpired",
                 "operation result has expired",
                 { operationId },
               );
-            reservedReplay = decode<PublishResult>(prior.encoded);
+            const stored = storedPublication(prior.encoded);
+            if (!compatiblePublicationRequest(stored.request, request))
+              throw new BranchError(
+                "OperationRequestMismatch",
+                "operation is bound to another guarded request",
+                { branchId: id, operationId },
+              );
+            reservedReplay = stored.result;
             return;
           }
+          if (
+            !compatiblePublicationRequest(
+              prior.encoded ? decode(prior.encoded) : undefined,
+              request,
+            )
+          )
+            throw new BranchError(
+              "OperationRequestMismatch",
+              "operation is bound to another guarded request",
+              { branchId: id, operationId },
+            );
           if (prior.generation !== branch.generation)
             throw new BranchError(
               "BranchChanged",
@@ -1259,12 +2408,18 @@ export class BranchManager implements Branches {
           this.#now(),
           this.#now() + Math.min(this.#limits.publicationResultRetentionMs, 5 * 60_000),
           nonce,
+          encode(request),
         );
         reservationNonceForAttempt = nonce;
       });
       if (reservedReplay) return reservedReplay;
       if (waitForReservation)
-        return this.#waitForOperationResult(id, operationId, prepared.generation);
+        return this.#waitForOperationResult(
+          id,
+          operationId,
+          prepared.generation,
+          request,
+        );
     }
     try {
       if (prepared) {
@@ -1317,7 +2472,13 @@ export class BranchManager implements Branches {
                 "operation is bound to another branch",
                 { branchId: id, operationId },
               );
-            if (terminalResult?.encoded) {
+            if (terminalResult && terminalResult.outcome !== -1) {
+              if (!terminalResult.encoded)
+                throw new BranchError(
+                  "OperationResultExpired",
+                  "operation result has expired",
+                  { operationId },
+                );
               if (
                 terminalResult.expires_at_ms !== null &&
                 terminalResult.expires_at_ms <= this.#now()
@@ -1327,7 +2488,14 @@ export class BranchManager implements Branches {
                   "operation result has expired",
                   { operationId },
                 );
-              return decode<PublishResult>(terminalResult.encoded);
+              const stored = storedPublication(terminalResult.encoded);
+              if (!compatiblePublicationRequest(stored.request, request))
+                throw new BranchError(
+                  "OperationRequestMismatch",
+                  "operation is bound to another guarded request",
+                  { branchId: id, operationId },
+                );
+              return stored.result;
             }
             if (terminalResult && terminalResult.outcome !== -1)
               throw new BranchError(
@@ -1347,6 +2515,23 @@ export class BranchManager implements Branches {
             "branch generation changed during publication preparation",
             { branchId: id },
           );
+        const generationDigest = this.#generationDigest(tx, branch);
+        if (prepared !== null && generationDigest !== prepared.generationDigest)
+          throw new BranchError(
+            "BranchChanged",
+            "branch generation digest changed during publication preparation",
+            { branchId: id },
+          );
+        if (
+          request.hasExpectation &&
+          (request.expectedGeneration !== branch.generation ||
+            request.expectedGenerationDigest !== generationDigest)
+        )
+          throw new BranchError(
+            "BranchChanged",
+            "branch does not match the guarded publication generation",
+            { branchId: id, ...(operationId ? { operationId } : {}) },
+          );
         if (operationId) {
           const prior = repository.operationResult(
             operationId,
@@ -1359,20 +2544,38 @@ export class BranchManager implements Branches {
                 "operation is bound to another branch",
                 { branchId: id, operationId },
               );
-            if (prior.encoded) {
+            if (prior.outcome !== -1) {
+              if (!prior.encoded)
+                throw new BranchError(
+                  "OperationResultExpired",
+                  "operation result has expired",
+                  { operationId },
+                );
               if (prior.expires_at_ms !== null && prior.expires_at_ms <= this.#now())
                 throw new BranchError(
                   "OperationResultExpired",
                   "operation result has expired",
                   { operationId },
                 );
-              return decode<PublishResult>(prior.encoded);
+              const stored = storedPublication(prior.encoded);
+              if (!compatiblePublicationRequest(stored.request, request))
+                throw new BranchError(
+                  "OperationRequestMismatch",
+                  "operation is bound to another guarded request",
+                  { branchId: id, operationId },
+                );
+              return stored.result;
             }
-            if (prior.outcome !== -1)
+            if (
+              !compatiblePublicationRequest(
+                prior.encoded ? decode(prior.encoded) : undefined,
+                request,
+              )
+            )
               throw new BranchError(
-                "OperationResultExpired",
-                "operation result has expired",
-                { operationId },
+                "OperationRequestMismatch",
+                "operation is bound to another guarded request",
+                { branchId: id, operationId },
               );
             if (prior.expires_at_ms !== null && prior.expires_at_ms <= this.#now())
               throw new BranchError(
@@ -1543,6 +2746,8 @@ export class BranchManager implements Branches {
             outcome: "conflict",
             branchId: id,
             operationId,
+            branchGeneration: branch.generation,
+            branchGenerationDigest: generationDigest,
             baseRevision: String(branch.base_revision),
             headRevision: String(head),
             revision: null,
@@ -1557,7 +2762,7 @@ export class BranchManager implements Branches {
             ),
           });
           this.#releaseCandidates(tx, candidates);
-          this.#storeResult(tx, operationId, result);
+          this.#storeResult(tx, operationId, request, result);
           return result;
         }
         const live = changes
@@ -1621,19 +2826,22 @@ export class BranchManager implements Branches {
             ns.recordInode(revision, inodeId);
           }
         }
+        repository.putTerminalGenerationDigest(id, branch.generation, generationDigest);
         repository.finish(id, 1, now, revision);
         this.#releaseCandidates(tx, candidates);
         const result: PublishResult = Object.freeze({
           outcome: "merged",
           branchId: id,
           operationId,
+          branchGeneration: branch.generation,
+          branchGenerationDigest: generationDigest,
           baseRevision: String(branch.base_revision),
           parentRevision: String(head),
           revision: String(revision),
           changedPaths: prepared?.changedPaths ?? this.#changedPaths(view, changes),
           conflicts: [] as [],
         });
-        this.#storeResult(tx, operationId, result);
+        this.#storeResult(tx, operationId, request, result);
         return result;
       });
     } catch (error) {
@@ -1647,20 +2855,38 @@ export class BranchManager implements Branches {
   }
   async discard(id: string): Promise<BranchInfo> {
     this.#assertOwnerOpen();
+    if (this.#mainReadOnly)
+      throw fsError(
+        "EROFS",
+        "discard",
+        id,
+        "replicas cannot originate terminal branch state",
+      );
     return this.#transaction("write", (tx) => {
       const branch = this.#row(tx, id);
       if (!branch)
         throw new BranchError("BranchNotFound", "branch does not exist", {
           branchId: id,
         });
-      if (branch.state === 2) return info(branch);
+      if (branch.state === 2)
+        return info(
+          branch,
+          tx.branches(this.#storage).terminalGenerationDigest(id, branch.generation) ??
+            this.#generationDigest(tx, branch),
+        );
       if (branch.state !== 0)
         throw new BranchError("BranchNotActive", "branch is terminal", {
           branchId: id,
         });
       const now = this.#now();
-      tx.branches(this.#storage).finish(id, 2, now);
-      return info({ ...branch, state: 2, terminal_at_ms: now, merged_revision: null });
+      const generationDigest = this.#generationDigest(tx, branch);
+      const repository = tx.branches(this.#storage);
+      repository.putTerminalGenerationDigest(id, branch.generation, generationDigest);
+      repository.finish(id, 2, now);
+      return info(
+        { ...branch, state: 2, terminal_at_ms: now, merged_revision: null },
+        generationDigest,
+      );
     });
   }
   prepare(
@@ -1787,10 +3013,15 @@ export class BranchManager implements Branches {
   #storeResult(
     tx: StorageTransactionPorts,
     operationId: string | null,
+    request: PublicationRequestBinding,
     result: PublishResult,
   ): void {
     if (!operationId) return;
-    const bytes = encode(result);
+    const bytes = encode({
+      kind: "efs-publication-result-v2",
+      request,
+      result,
+    } satisfies StoredPublicationEnvelope);
     if (bytes.byteLength > this.#limits.maxConflictResultBytes)
       throw new BranchError("LimitExceeded", "publication result exceeds limit", {
         operationId,
@@ -1818,6 +3049,7 @@ export class BranchManager implements Branches {
     branchId: string,
     operationId: string,
     generation: number,
+    request: PublicationRequestBinding,
   ): Promise<PublishResult> {
     const deadline = performance.now() + 30_000;
     while (performance.now() < deadline) {
@@ -1833,7 +3065,13 @@ export class BranchManager implements Branches {
           "operation reservation disappeared or changed branch",
           { branchId, operationId },
         );
-      if (state.result.encoded) {
+      if (state.result.outcome !== -1) {
+        if (!state.result.encoded)
+          throw new BranchError(
+            "OperationResultExpired",
+            "operation result has expired",
+            { operationId },
+          );
         if (
           state.result.expires_at_ms !== null &&
           state.result.expires_at_ms <= this.#now()
@@ -1845,13 +3083,25 @@ export class BranchManager implements Branches {
               operationId,
             },
           );
-        return decode<PublishResult>(state.result.encoded);
+        const stored = storedPublication(state.result.encoded);
+        if (!compatiblePublicationRequest(stored.request, request))
+          throw new BranchError(
+            "OperationRequestMismatch",
+            "operation is bound to another guarded request",
+            { branchId, operationId },
+          );
+        return stored.result;
       }
-      if (state.result.outcome !== -1)
+      if (
+        !compatiblePublicationRequest(
+          state.result.encoded ? decode(state.result.encoded) : undefined,
+          request,
+        )
+      )
         throw new BranchError(
-          "OperationResultExpired",
-          "operation result has expired",
-          { operationId },
+          "OperationRequestMismatch",
+          "operation is bound to another guarded request",
+          { branchId, operationId },
         );
       if (
         state.result.expires_at_ms !== null &&
@@ -2019,6 +3269,36 @@ export class BranchManager implements Branches {
       );
     });
   }
+  composeRangeForBranchInto(
+    id: string,
+    path: string,
+    destination: Uint8Array,
+    destinationOffset: number,
+    offset: number,
+    length: number,
+  ): number {
+    checkedInteger(offset, "offset");
+    checkedInteger(length, "length");
+    checkedInteger(destinationOffset, "destinationOffset");
+    if (checkedAdd(destinationOffset, length) > destination.byteLength)
+      throw new RangeError("invalid branch direct-read destination range");
+    const canonical = canonicalizePath(path, this.#filesystem, "readIntoSync");
+    return this.#transaction("read", (tx) => {
+      const branch = this.#active(tx, id);
+      const view = new BranchView(tx, branch, this.#filesystem, this.#storage);
+      const state = this.#overlayFileState(tx, id, view, canonical, "readIntoSync");
+      const available =
+        offset >= state.size ? 0 : Math.min(length, state.size - offset);
+      return this.#composeRangeInto(
+        tx,
+        state,
+        offset,
+        destination,
+        destinationOffset,
+        available,
+      );
+    });
+  }
   composeFileForBranch(id: string, path: string, syscall = "readFile"): Uint8Array {
     const canonical = canonicalizePath(path, this.#filesystem, syscall);
     return this.#transaction("read", (tx) => {
@@ -2158,6 +3438,7 @@ export class BranchManager implements Branches {
           ownerNonce,
           expiresAt,
           size: state.size,
+          generation: branch.generation,
           releaseAdmission,
         };
       });
@@ -2171,6 +3452,26 @@ export class BranchManager implements Branches {
     offset: number,
     length: number,
   ): Uint8Array {
+    const available =
+      offset >= snapshot.size ? 0 : Math.min(length, snapshot.size - offset);
+    const output = new Uint8Array(available);
+    const written = this.readStreamSnapshotInto(snapshot, output, 0, offset, available);
+    if (written !== output.byteLength)
+      throw new Error("ECORRUPT: branch stream direct read ended early");
+    return output;
+  }
+  readStreamSnapshotInto(
+    snapshot: BranchStreamSnapshot,
+    destination: Uint8Array,
+    destinationOffset: number,
+    offset: number,
+    length: number,
+  ): number {
+    checkedInteger(offset, "offset");
+    checkedInteger(length, "length");
+    checkedInteger(destinationOffset, "destinationOffset");
+    if (checkedAdd(destinationOffset, length) > destination.byteLength)
+      throw new RangeError("invalid branch snapshot direct-read destination range");
     const now = this.#now();
     if (now > snapshot.expiresAt)
       throw fsError("EIO", "readStream", "/", "branch stream lease expired");
@@ -2194,12 +3495,16 @@ export class BranchManager implements Branches {
     if (!renewed)
       throw fsError("EIO", "readStream", "/", "branch stream lease renewal failed");
     snapshot.expiresAt = nextExpiresAt;
+    const available =
+      offset >= snapshot.size ? 0 : Math.min(length, snapshot.size - offset);
     return this.#transaction("read", (tx) =>
-      this.#composeRangeBytes(
+      this.#composeRangeInto(
         tx,
         snapshot.state,
         offset,
-        length,
+        destination,
+        destinationOffset,
+        available,
         snapshot.leaseId,
         snapshot.ownerNonce,
       ),
@@ -2575,25 +3880,52 @@ export class BranchManager implements Branches {
     leaseId?: string,
     ownerNonce?: Uint8Array,
   ): Uint8Array {
-    if (length === 0) return new Uint8Array(0);
+    const output = new Uint8Array(length);
+    const written = this.#composeRangeInto(
+      tx,
+      state,
+      offset,
+      output,
+      0,
+      length,
+      leaseId,
+      ownerNonce,
+    );
+    if (written !== output.byteLength)
+      throw new Error("ECORRUPT: composed branch range ended early");
+    return output;
+  }
+  #composeRangeInto(
+    tx: StorageTransactionPorts,
+    state: OverlayFileState,
+    offset: number,
+    destination: Uint8Array,
+    destinationOffset: number,
+    length: number,
+    leaseId?: string,
+    ownerNonce?: Uint8Array,
+  ): number {
+    if (length === 0) return 0;
     if (offset < 0 || length < 0 || offset + length > state.size)
       throw new RangeError("composed range is outside the branch file");
     if (state.baseManifestHash === null)
       throw new Error("ECORRUPT: branch file content lacks a base manifest");
     if (!state.pages && !state.patches)
-      return readManifestRange(
+      return readManifestInto(
         tx.content(this.#storage, this.#cache),
         state.baseManifestHash,
         offset,
+        destination,
+        destinationOffset,
         length,
-        this.#admission,
-        this.#cache,
       );
     if (state.patches) {
-      return this.#composePatchedRangeBytes(
+      return this.#composePatchedRangeInto(
         tx,
         state,
         offset,
+        destination,
+        destinationOffset,
         length,
         leaseId,
         ownerNonce,
@@ -2601,38 +3933,43 @@ export class BranchManager implements Branches {
     }
     const content = tx.content(this.#storage, this.#cache);
     const chunkBytes = this.#pageBytes * (this.#storage.maxQueryBatchSize - 1);
-    const result = new Uint8Array(length);
     let done = 0;
     while (done < length) {
       const chunkLength = Math.min(length - done, chunkBytes);
-      const chunk = readManifestRange(
+      const written = readManifestInto(
         content,
         state.baseManifestHash,
         offset + done,
+        destination,
+        destinationOffset + done,
         chunkLength,
-        this.#admission,
-        this.#cache,
+      );
+      if (written !== chunkLength)
+        throw new Error("ECORRUPT: branch base manifest range ended early");
+      const chunk = destination.subarray(
+        destinationOffset + done,
+        destinationOffset + done + chunkLength,
       );
       this.#applyPageOverrides(
         chunk,
         offset + done,
         this.#pageOverrides(tx, state, offset + done, chunkLength, leaseId, ownerNonce),
       );
-      result.set(chunk, done);
       done += chunkLength;
     }
-    return result;
+    return length;
   }
-  #composePatchedRangeBytes(
+  #composePatchedRangeInto(
     tx: StorageTransactionPorts,
     state: OverlayFileState,
     offset: number,
+    destination: Uint8Array,
+    destinationOffset: number,
     length: number,
     leaseId?: string,
     ownerNonce?: Uint8Array,
-  ): Uint8Array {
+  ): number {
     const pieces = this.#composePieces(tx, state, leaseId, ownerNonce);
-    const output = new Uint8Array(length);
     const content = tx.content(this.#storage, this.#cache);
     const end = offset + length;
     let logical = 0;
@@ -2642,29 +3979,29 @@ export class BranchManager implements Branches {
       const overlapEnd = Math.min(end, logical + pieceLength);
       if (overlapEnd > overlapStart) {
         const pieceOffset = overlapStart - logical;
-        const targetOffset = overlapStart - offset;
+        const targetOffset = destinationOffset + overlapStart - offset;
         if (piece.kind === "bytes")
-          output.set(
+          destination.set(
             piece.bytes.subarray(pieceOffset, pieceOffset + overlapEnd - overlapStart),
             targetOffset,
           );
-        else
-          output.set(
-            readManifestRange(
-              content,
-              state.baseManifestHash!,
-              piece.offset + pieceOffset,
-              overlapEnd - overlapStart,
-              this.#admission,
-              this.#cache,
-            ),
+        else {
+          const written = readManifestInto(
+            content,
+            state.baseManifestHash!,
+            piece.offset + pieceOffset,
+            destination,
             targetOffset,
+            overlapEnd - overlapStart,
           );
+          if (written !== overlapEnd - overlapStart)
+            throw new Error("ECORRUPT: patched branch manifest range ended early");
+        }
       }
       logical += pieceLength;
       if (logical >= end) break;
     }
-    return output;
+    return length;
   }
   #composePieces(
     tx: StorageTransactionPorts,
@@ -3065,7 +4402,7 @@ class BranchHandle implements EphemeralBranch {
     this.#filesystem = filesystem;
   }
   async info(): Promise<BranchInfo> {
-    return this.#run("info", async () => info(this.#manager.branchRow(this.id)));
+    return this.#run("info", async () => this.#manager.branchInfo(this.id));
   }
   async publish(options?: PublishOptions): Promise<PublishResult> {
     return this.#run("publish", () => this.#manager.publish(this.id, options), true);

@@ -25,6 +25,9 @@ export interface NodeVfsFilesystemBridge {
     readonly storageLimits: Readonly<StorageLimits>;
     readonly runtimeLimits: Readonly<RuntimeLimits>;
     readonly cowPageBytes: 4096 | 8192 | 16384;
+    /** True for the main view of an execution replica; false for branch views. */
+    readonly mainReadOnly: boolean;
+    activationVersionSync(): number;
     canonicalPathSync(path: string, syscall?: string): string;
     resolvePathSync(path: string, followFinal?: boolean): NodeVfsResolvedPath;
     openPinnedReadSync(path: string): NodeVfsPinnedReadBridge;
@@ -50,6 +53,7 @@ export interface NodeVfsFilesystemBridge {
         mode?: number;
         inodeId?: string;
         aliases?: readonly string[];
+        expectedGeneration?: number;
     }): NodeVfsCommitResult;
     writeFileSync(path: string, bytes: Uint8Array, options?: {
         create?: boolean;
@@ -82,6 +86,8 @@ export interface NodeVfsPinnedReadBridge {
     readonly inodeId: string;
     readonly stat: FileStat;
     readonly size: number;
+    /** Branch generation pinned by this read, absent for the main view. */
+    readonly generation?: number;
     readIntoSync(destination: Uint8Array, destinationOffset: number, position: number, length: number): number;
     closeSync(): void;
 }
@@ -102,12 +108,21 @@ export interface NodeVfsPreparedContent {
  * This is the production Node VFS composition root: both views share limits,
  * caches, concurrency, and the aggregate admission controller.
  */
-export declare function openNodeVfsBridge(options: OpenFilesystemOptions): Promise<OpenNodeVfsBridgeResult>;
+export declare function openNodeVfsBridge(options: OpenNodeVfsBridgeOptions): Promise<OpenNodeVfsBridgeResult>;
+
+/* export: OpenNodeVfsBridgeOptions; kinds: type */
+/* source: packages/fs/dist/integrations/node-vfs.d.ts */
+export interface OpenNodeVfsBridgeOptions extends OpenFilesystemOptions {
+    readonly branchId?: string;
+}
 
 /* export: OpenNodeVfsBridgeResult; kinds: type */
 /* source: packages/fs/dist/integrations/node-vfs.d.ts */
 export interface OpenNodeVfsBridgeResult {
-    readonly filesystem: PublicEphemeralFS;
+    /** Async view matching the bridge: main, or the selected private branch. */
+    readonly filesystem: EphemeralFilesystem;
+    /** Owner of the shared cache, admission controller, and all branch handles. */
+    readonly runtime: PublicEphemeralFS;
     readonly bridge: NodeVfsFilesystemBridge;
 }
 

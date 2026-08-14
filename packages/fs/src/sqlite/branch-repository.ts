@@ -3,13 +3,20 @@ import {
   MAINTENANCE_TOTAL_EMERGENCY_BYTES,
   type StorageLimits,
 } from "../resources/limits.js";
-import { CHARGED_ROW_BYTES, UsageRepository } from "./usage-repository.js";
 import {
+  beginUsageMutationBatch,
+  CHARGED_ROW_BYTES,
+  flushUsageMutationBatch,
+  UsageRepository,
+} from "./usage-repository.js";
+import {
+  bytesToHex,
   equalBytes,
   hexToBytes,
   intrinsicByteLength,
   intrinsicByteRange,
 } from "../cas/bytes.js";
+import { sha256 } from "../cas/sha256.js";
 import {
   validateBranchIdentifier,
   validateDurableIdentifier,
@@ -19,6 +26,79 @@ import { encodeUtf8 } from "../namespace/utf8.js";
 import { advanceRootMutationGeneration } from "./namespace-repository.js";
 
 const checkpointDecoder = new TextDecoder();
+const TERMINAL_BRANCH_METADATA_STATE = -2;
+const TERMINAL_BRANCH_METADATA_PREFIX = "efs-system-branch-terminal-v1:";
+const TERMINAL_BRANCH_METADATA_MAGIC = Uint8Array.of(
+  0x45,
+  0x46,
+  0x53,
+  0x42,
+  0x54,
+  0x44,
+  0x31,
+  0x00,
+);
+
+function terminalBranchMetadataId(branchId: string): string {
+  validateBranchIdentifier(branchId);
+  return `${TERMINAL_BRANCH_METADATA_PREFIX}${bytesToHex(sha256(encodeUtf8(branchId)))}`;
+}
+
+function encodeTerminalBranchMetadata(
+  branchId: string,
+  generation: number,
+  digest: string,
+): Uint8Array {
+  validateBranchIdentifier(branchId);
+  if (!Number.isSafeInteger(generation) || generation < 0)
+    throw new RangeError("invalid terminal branch generation");
+  if (!/^[0-9a-f]{64}$/.test(digest))
+    throw new RangeError("invalid terminal branch generation digest");
+  const branchBytes = encodeUtf8(branchId);
+  const output = new Uint8Array(8 + 4 + branchBytes.byteLength + 8 + 32);
+  output.set(TERMINAL_BRANCH_METADATA_MAGIC);
+  const view = new DataView(output.buffer);
+  view.setUint32(8, branchBytes.byteLength, false);
+  output.set(branchBytes, 12);
+  view.setBigUint64(12 + branchBytes.byteLength, BigInt(generation), false);
+  output.set(hexToBytes(digest, 32), 20 + branchBytes.byteLength);
+  return output;
+}
+
+function decodeTerminalBranchMetadata(value: Uint8Array): Readonly<{
+  branchId: string;
+  generation: number;
+  digest: string;
+}> {
+  if (
+    !(value instanceof Uint8Array) ||
+    value.byteLength < 52 ||
+    !equalBytes(value.subarray(0, 8), TERMINAL_BRANCH_METADATA_MAGIC)
+  )
+    throw new Error("ECORRUPT: invalid terminal branch metadata");
+  const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
+  const branchLength = view.getUint32(8, false);
+  const expectedLength = 8 + 4 + branchLength + 8 + 32;
+  if (branchLength === 0 || expectedLength !== value.byteLength)
+    throw new Error("ECORRUPT: invalid terminal branch metadata length");
+  let branchId: string;
+  try {
+    branchId = new TextDecoder("utf-8", { fatal: true }).decode(
+      value.subarray(12, 12 + branchLength),
+    );
+  } catch {
+    throw new Error("ECORRUPT: invalid terminal branch metadata identifier");
+  }
+  validateBranchIdentifier(branchId);
+  const generationValue = view.getBigUint64(12 + branchLength, false);
+  if (generationValue > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new Error("ECORRUPT: invalid terminal branch metadata generation");
+  return Object.freeze({
+    branchId,
+    generation: Number(generationValue),
+    digest: bytesToHex(value.subarray(20 + branchLength)),
+  });
+}
 
 export interface BranchRow extends SqliteRow {
   id: string;
@@ -82,6 +162,16 @@ export class BranchRepository {
   constructor(tx: FilesystemSQLiteTransaction, limits: StorageLimits) {
     this.#tx = tx;
     this.#limits = limits;
+  }
+  filesystemId(): string {
+    const value = this.#tx.all<{ filesystem_id: string } & SqliteRow>(
+      "SELECT filesystem_id FROM efs_meta WHERE singleton=1",
+      [],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0]?.filesystem_id;
+    if (typeof value !== "string" || value.length === 0)
+      throw new Error("ECORRUPT: filesystem identifier is missing");
+    return value;
   }
   rootInodeId(): string {
     const value = this.#tx.all<{ root_inode: string } & SqliteRow>(
@@ -230,6 +320,142 @@ export class BranchRepository {
       { maxRows: 1, maxBytes: 4096 },
     )[0];
   }
+  terminalGenerationDigest(branchId: string, generation: number): string | undefined {
+    const id = terminalBranchMetadataId(branchId);
+    const row = this.#tx.all<
+      {
+        state: number;
+        nonce: Uint8Array;
+        cursor: Uint8Array;
+        expires_at_ms: number;
+        staged_bytes: number;
+      } & SqliteRow
+    >(
+      "SELECT state,nonce,cursor,expires_at_ms,staged_bytes FROM efs_replication_sessions WHERE id=?",
+      [id],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (!row) return undefined;
+    if (
+      row.state !== TERMINAL_BRANCH_METADATA_STATE ||
+      !(row.nonce instanceof Uint8Array) ||
+      row.nonce.byteLength !== 16 ||
+      !(row.cursor instanceof Uint8Array) ||
+      row.expires_at_ms !== Number.MAX_SAFE_INTEGER ||
+      row.staged_bytes !== 0 ||
+      !equalBytes(row.nonce, sha256(row.cursor).subarray(0, 16))
+    )
+      throw new Error("ECORRUPT: invalid terminal branch metadata row");
+    const decoded = decodeTerminalBranchMetadata(row.cursor);
+    if (decoded.branchId !== branchId || decoded.generation !== generation)
+      throw new Error("ECORRUPT: terminal branch metadata binding changed");
+    return decoded.digest;
+  }
+  storedGenerationDigest(branchId: string): Readonly<{
+    readonly generation: number;
+    readonly digest: string;
+    readonly cursorBytes: number;
+  }> | undefined {
+    const id = terminalBranchMetadataId(branchId);
+    const row = this.#tx.all<
+      { state: number; nonce: Uint8Array; cursor: Uint8Array; expires_at_ms: number; staged_bytes: number } & SqliteRow
+    >(
+      "SELECT state,nonce,cursor,expires_at_ms,staged_bytes FROM efs_replication_sessions WHERE id=?",
+      [id],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (!row) return undefined;
+    if (
+      row.state !== TERMINAL_BRANCH_METADATA_STATE ||
+      !(row.nonce instanceof Uint8Array) ||
+      row.nonce.byteLength !== 16 ||
+      !(row.cursor instanceof Uint8Array) ||
+      row.expires_at_ms !== Number.MAX_SAFE_INTEGER ||
+      row.staged_bytes !== 0 ||
+      !equalBytes(row.nonce, sha256(row.cursor).subarray(0, 16))
+    )
+      throw new Error("ECORRUPT: invalid terminal branch metadata row");
+    const decoded = decodeTerminalBranchMetadata(row.cursor);
+    if (decoded.branchId !== branchId)
+      throw new Error("ECORRUPT: terminal branch metadata identifier changed");
+    return Object.freeze({
+      generation: decoded.generation,
+      digest: decoded.digest,
+      cursorBytes: row.cursor.byteLength,
+    });
+  }
+  putTerminalGenerationDigest(
+    branchId: string,
+    generation: number,
+    digest: string,
+  ): void {
+    const id = terminalBranchMetadataId(branchId);
+    const cursor = encodeTerminalBranchMetadata(branchId, generation, digest);
+    const priorRow = this.storedGenerationDigest(branchId);
+    if (priorRow && priorRow.generation === generation) {
+      if (priorRow.digest !== digest)
+        throw new Error("ECORRUPT: terminal branch generation digest changed");
+      return;
+    }
+    if (priorRow) {
+      beginUsageMutationBatch(this.#tx, this.#limits);
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { charged_metadata_bytes: cursor.byteLength - priorRow.cursorBytes },
+        "terminal branch generation metadata replacement",
+      );
+      this.#tx.run(
+        "UPDATE efs_replication_sessions SET nonce=?,cursor=? WHERE id=? AND state=?",
+        [sha256(cursor).subarray(0, 16), cursor, id, TERMINAL_BRANCH_METADATA_STATE],
+      );
+      flushUsageMutationBatch(this.#tx, this.#limits);
+      return;
+    }
+    beginUsageMutationBatch(this.#tx, this.#limits);
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        permanent_identifiers: 1,
+        charged_metadata_bytes: CHARGED_ROW_BYTES + cursor.byteLength,
+      },
+      "terminal branch generation metadata",
+    );
+    this.#tx.run(
+      "INSERT INTO efs_replication_sessions(id,state,nonce,cursor,expires_at_ms,staged_bytes) VALUES(?,?,?,?,?,0)",
+      [
+        id,
+        TERMINAL_BRANCH_METADATA_STATE,
+        sha256(cursor).subarray(0, 16),
+        cursor,
+        Number.MAX_SAFE_INTEGER,
+      ],
+    );
+  }
+  #deleteTerminalGenerationDigest(branchId: string): void {
+    const id = terminalBranchMetadataId(branchId);
+    const row = this.#tx.all<{ cursor: Uint8Array } & SqliteRow>(
+      "SELECT cursor FROM efs_replication_sessions WHERE id=? AND state=?",
+      [id, TERMINAL_BRANCH_METADATA_STATE],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (!row) return;
+    if (!(row.cursor instanceof Uint8Array))
+      throw new Error("ECORRUPT: terminal branch metadata row is invalid");
+    const decoded = decodeTerminalBranchMetadata(row.cursor);
+    if (decoded.branchId !== branchId)
+      throw new Error("ECORRUPT: terminal branch metadata identifier changed");
+    const deleted = this.#tx.run(
+      "DELETE FROM efs_replication_sessions WHERE id=? AND state=?",
+      [id, TERMINAL_BRANCH_METADATA_STATE],
+    );
+    if (deleted.changes !== 1)
+      throw new Error("ECORRUPT: terminal branch metadata deletion raced");
+    new UsageRepository(this.#tx, this.#limits).apply(
+      {
+        permanent_identifiers: -1,
+        charged_metadata_bytes: -(CHARGED_ROW_BYTES + row.cursor.byteLength),
+      },
+      "terminal branch generation metadata pruning",
+    );
+  }
   operationResult(operationId: string, maxBytes: number): BranchResultRow | undefined {
     validateOperationIdentifier(operationId);
     return this.#tx.all<BranchResultRow>(
@@ -245,14 +471,19 @@ export class BranchRepository {
     now: number,
     reservationExpiresAt: number,
     reservationNonce: Uint8Array,
+    requestBinding: Uint8Array,
   ): void {
     validateOperationIdentifier(operationId);
     validateBranchIdentifier(branchId);
     if (reservationNonce.byteLength !== 16)
       throw new RangeError("invalid operation reservation nonce");
+    requestBinding = intrinsicByteRange(requestBinding);
+    if (requestBinding.byteLength === 0 || requestBinding.byteLength > 1024)
+      throw new RangeError("invalid operation request binding");
     new UsageRepository(this.#tx, this.#limits).apply(
       {
         permanent_identifiers: 1,
+        result_bytes: requestBinding.byteLength,
         charged_metadata_bytes: 2 * CHARGED_ROW_BYTES,
       },
       "operation identifier",
@@ -262,8 +493,8 @@ export class BranchRepository {
       [operationId, branchId, generation, now, reservationNonce],
     );
     this.#tx.run(
-      "INSERT INTO efs_operation_results(operation_id,outcome,encoded,expires_at_ms,revision) VALUES(?,?,X'',?,NULL)",
-      [operationId, -1, reservationExpiresAt],
+      "INSERT INTO efs_operation_results(operation_id,outcome,encoded,expires_at_ms,revision) VALUES(?,?,?,?,NULL)",
+      [operationId, -1, requestBinding, reservationExpiresAt],
     );
   }
   reclaimOperation(
@@ -279,12 +510,12 @@ export class BranchRepository {
     if (reservationNonce.byteLength !== 16)
       throw new RangeError("invalid operation reservation nonce");
     const updated = this.#tx.run(
-      "UPDATE efs_operation_ids SET reservation_nonce=? WHERE id=? AND branch_id=? AND generation=? AND EXISTS(SELECT 1 FROM efs_operation_results WHERE operation_id=? AND outcome=-1 AND length(encoded)=0 AND expires_at_ms<=?)",
+      "UPDATE efs_operation_ids SET reservation_nonce=? WHERE id=? AND branch_id=? AND generation=? AND EXISTS(SELECT 1 FROM efs_operation_results WHERE operation_id=? AND outcome=-1 AND expires_at_ms<=?)",
       [reservationNonce, operationId, branchId, generation, operationId, now],
     );
     if (updated.changes !== 1) return false;
     this.#tx.run(
-      "UPDATE efs_operation_results SET outcome=-1,expires_at_ms=?,revision=NULL WHERE operation_id=? AND outcome=-1 AND length(encoded)=0",
+      "UPDATE efs_operation_results SET outcome=-1,expires_at_ms=?,revision=NULL WHERE operation_id=? AND outcome=-1",
       [reservationExpiresAt, operationId],
     );
     return true;
@@ -297,10 +528,21 @@ export class BranchRepository {
     validateOperationIdentifier(operationId);
     if (reservationNonce.byteLength !== 16)
       throw new RangeError("invalid operation reservation nonce");
-    this.#tx.run(
-      "UPDATE efs_operation_results SET outcome=2,encoded=X'',expires_at_ms=?,revision=NULL WHERE operation_id=? AND outcome=-1 AND length(encoded)=0 AND EXISTS(SELECT 1 FROM efs_operation_ids i WHERE i.id=? AND i.reservation_nonce=?)",
+    const row = this.#tx.all<{ bytes: number } & SqliteRow>(
+      "SELECT length(encoded) bytes FROM efs_operation_results WHERE operation_id=? AND outcome=-1 AND EXISTS(SELECT 1 FROM efs_operation_ids i WHERE i.id=? AND i.reservation_nonce=?)",
+      [operationId, operationId, reservationNonce],
+      { maxRows: 1, maxBytes: 128 },
+    )[0];
+    if (!row) return;
+    const updated = this.#tx.run(
+      "UPDATE efs_operation_results SET outcome=2,encoded=X'',expires_at_ms=?,revision=NULL WHERE operation_id=? AND outcome=-1 AND EXISTS(SELECT 1 FROM efs_operation_ids i WHERE i.id=? AND i.reservation_nonce=?)",
       [now, operationId, operationId, reservationNonce],
     );
+    if (updated.changes === 1 && row.bytes !== 0)
+      new UsageRepository(this.#tx, this.#limits).apply(
+        { result_bytes: -row.bytes },
+        "expired operation reservation cleanup",
+      );
   }
   putChange(
     branchId: string,
@@ -474,6 +716,7 @@ export class BranchRepository {
     // scale the final publication transaction with the branch write set.
     this.clearChanges(branchId);
     this.clearOverlayPayload(branchId);
+    flushUsageMutationBatch(this.#tx, this.#limits);
   }
   terminalCleanupRows(branchId: string): number {
     const count = this.#tx.all<{ rows: number } & SqliteRow>(
@@ -512,6 +755,22 @@ export class BranchRepository {
     this.#tx.run("DELETE FROM efs_branch_inode_expectations WHERE branch_id=?", [
       branchId,
     ]);
+  }
+  replaceReplicatedPayload(branchId: string): void {
+    this.clearChanges(branchId);
+    this.clearOverlayPayload(branchId);
+    flushUsageMutationBatch(this.#tx, this.#limits);
+  }
+  setReplicatedGeneration(branchId: string, generation: number): void {
+    if (!Number.isSafeInteger(generation) || generation < 0)
+      throw new RangeError("invalid replicated branch generation");
+    const updated = this.#tx.run(
+      "UPDATE efs_branches SET generation=?,state=0,terminal_at_ms=NULL,merged_revision=NULL WHERE id=? AND state=0",
+      [generation, branchId],
+    );
+    if (updated.changes !== 1)
+      throw new Error("ECORRUPT: replicated branch generation update missed the active branch");
+    this.#bumpRoot(1, branchId, true);
   }
   private clearOverlayPayload(branchId: string): void {
     const overlayCounts = (): {
@@ -616,7 +875,7 @@ export class BranchRepository {
       [operationId],
       { maxRows: 1, maxBytes: 1024 },
     )[0];
-    if (prior && prior.bytes === 0 && prior.outcome !== -1)
+    if (prior && prior.outcome !== -1)
       throw new Error("ECORRUPT: completed operation tombstone is immutable");
     new UsageRepository(this.#tx, this.#limits).apply(
       {
@@ -627,7 +886,7 @@ export class BranchRepository {
     );
     if (prior)
       this.#tx.run(
-        "UPDATE efs_operation_results SET outcome=?,encoded=?,expires_at_ms=?,revision=? WHERE operation_id=? AND outcome=-1 AND length(encoded)=0",
+        "UPDATE efs_operation_results SET outcome=?,encoded=?,expires_at_ms=?,revision=? WHERE operation_id=? AND outcome=-1",
         [outcome, encoded, expiresAt, revision, operationId],
       );
     else
@@ -647,7 +906,7 @@ export class BranchRepository {
     )[0];
     if (!row) return;
     const deletedResult = this.#tx.run(
-      `DELETE FROM efs_operation_results WHERE operation_id=? AND outcome=-1 AND length(encoded)=0${reservationNonce ? " AND EXISTS(SELECT 1 FROM efs_operation_ids i WHERE i.id=? AND i.reservation_nonce=?)" : ""}`,
+      `DELETE FROM efs_operation_results WHERE operation_id=? AND outcome=-1${reservationNonce ? " AND EXISTS(SELECT 1 FROM efs_operation_ids i WHERE i.id=? AND i.reservation_nonce=?)" : ""}`,
       reservationNonce ? [operationId, operationId, reservationNonce] : [operationId],
     );
     if (!deletedResult.changes) return;
@@ -659,6 +918,7 @@ export class BranchRepository {
       new UsageRepository(this.#tx, this.#limits).apply(
         {
           permanent_identifiers: -1,
+          result_bytes: -row.bytes,
           charged_metadata_bytes: -2 * CHARGED_ROW_BYTES,
         },
         "operation reservation release",
@@ -718,11 +978,14 @@ export class BranchRepository {
     for (const row of rows) {
       const cleaned = this.#cleanupTerminalBranch(row.id, limit);
       if (cleaned) return 1;
+      beginUsageMutationBatch(this.#tx, this.#limits);
+      this.#deleteTerminalGenerationDigest(row.id);
       this.#tx.run("DELETE FROM efs_branches WHERE id=? AND state<>0", [row.id]);
       new UsageRepository(this.#tx, this.#limits).apply(
         { charged_metadata_bytes: -CHARGED_ROW_BYTES },
         "terminal branch metadata pruning",
       );
+      flushUsageMutationBatch(this.#tx, this.#limits);
     }
     return rows.length;
   }

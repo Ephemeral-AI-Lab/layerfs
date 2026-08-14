@@ -186,10 +186,13 @@ const DIRECT_VARIABLE_METADATA_TERMS = Object.freeze([
   "(SELECT coalesce(sum(metadata_reservation_bytes),0) FROM efs_staging_certificates)",
   "(SELECT coalesce(sum(coalesce(length(encoded),0)),0) FROM efs_checkpoint_inodes)",
   "(SELECT coalesce(sum(length(name_sort)+coalesce(length(encoded),0)),0) FROM efs_checkpoint_entries)",
+  "(SELECT coalesce(sum(length(cursor)),0) FROM efs_replication_sessions WHERE state IN(-2,-3))",
 ] as const);
 export const DIRECT_CHARGED_METADATA_EXPRESSION = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.map(
   (table) => `(SELECT count(*) FROM ${table})`,
-).join("+")})+${DIRECT_VARIABLE_METADATA_TERMS.join("+")}`;
+).join(
+  "+",
+)}+(SELECT count(*) FROM efs_replication_sessions WHERE state IN(-2,-3)))+${DIRECT_VARIABLE_METADATA_TERMS.join("+")}`;
 export const DIRECT_CHARGED_METADATA_EXPRESSION_LEGACY = `${CHARGED_ROW_BYTES}*(${CHARGED_METADATA_TABLES.filter(
   (table) =>
     table !== "efs_manifest_subtree_summaries" &&
@@ -213,6 +216,7 @@ export const DIRECT_INGEST_RESERVATION_SQL =
 
 export const DIRECT_USAGE_TABLES = Object.freeze([
   ...CHARGED_METADATA_TABLES,
+  "efs_replication_sessions",
   "efs_root_journal",
   "efs_gc_runs",
   "efs_gc_marks",
@@ -237,7 +241,7 @@ const DIRECT_USAGE_SQL = `SELECT
   (${DIRECT_INGEST_RESERVATION_SQL.replace(/ value FROM/u, " FROM")}) ingest_reservation_bytes,
   (SELECT coalesce(sum(length(encoded)),0) FROM efs_operation_results) result_bytes,
   ((SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_cas_objects)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_roots)+(SELECT (count(*)*${GC_MARK_RESERVATION_BYTES}) FROM efs_manifest_nodes)+(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_journal)+(SELECT count(*)*512+coalesce(sum(2*length(CAST(id AS BLOB))),0) FROM efs_gc_runs)+(SELECT count(*)*${CHARGED_ROW_BYTES} FROM efs_lease_cleanups)+(SELECT count(*)*${STORAGE_SNAPSHOT_STATE_BYTES} FROM efs_storage_snapshots)+(SELECT count(*)*${CHARGED_ROW_BYTES}+coalesce(sum(length(root_id)),0) FROM efs_root_holds)) maintenance_bytes,
-  ((SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_operation_ids)) permanent_identifiers,
+  ((SELECT count(*) FROM efs_branch_ids)+(SELECT count(*) FROM efs_operation_ids)+(SELECT count(*) FROM efs_replication_sessions WHERE state IN(-2,-3))) permanent_identifiers,
   (${DIRECT_CHARGED_METADATA_EXPRESSION}) charged_metadata_bytes`;
 
 export const USAGE_COUNTER_COLUMNS = Object.freeze([
@@ -614,6 +618,14 @@ const USAGE_RECOUNT_PHASES: readonly RecountPhase[] = Object.freeze([
       key("manifest_hash", "blob"),
     ],
     contributions: metadataContributions(),
+  },
+  {
+    table: "efs_replication_sessions",
+    keys: [key("id", "string")],
+    contributions: {
+      permanent_identifiers: "CASE WHEN t.state IN(-2,-3) THEN 1 ELSE 0 END",
+      charged_metadata_bytes: `CASE WHEN t.state IN(-2,-3) THEN ${CHARGED_ROW_BYTES}+length(t.cursor) ELSE 0 END`,
+    },
   },
   {
     table: "efs_root_journal",

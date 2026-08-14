@@ -1,0 +1,32 @@
+{
+  "package": "@ephemeralai/fs",
+  "subpath": "./integrations/runtime",
+  "entry": "packages/fs/dist/integrations/runtime.d.ts",
+  "symbols": [
+    {
+      "name": "EphemeralRuntime",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/ephemeral-runtime.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "OpenEphemeralRuntimeOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/ephemeral-runtime.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    }
+  ]
+}

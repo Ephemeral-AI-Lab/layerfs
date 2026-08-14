@@ -21,11 +21,18 @@ import {
   USAGE_INTEGRITY_SQL,
   usageIntegrityToken,
 } from "./usage-repository.js";
+import { sha256 } from "../cas/sha256.js";
+import { validateDurableReplicationSessions } from "./replication-repository.js";
 
 export const EFS_APPLICATION_ID = 0x45414653;
 export const EFS_SCHEMA_VERSION = 13;
+export const EFS_UNBOUND_REPLICA_MARKER_ID = "efs-unbound-replica-v1";
 export const EFS_DURABLE_IDENTITY_TABLE = "efs_schema_identity";
 export const EFS_DURABLE_IDENTITY_DDL = `CREATE TABLE ${EFS_DURABLE_IDENTITY_TABLE} (singleton INTEGER PRIMARY KEY CHECK(singleton=1), application_id INTEGER NOT NULL, user_version INTEGER NOT NULL CHECK(user_version>=0))`;
+const EFS_UNBOUND_REPLICA_MARKER_CURSOR = new TextEncoder().encode(
+  "EAFS-UNBOUND-REPLICA-V1",
+);
+const EFS_UNBOUND_REPLICA_MARKER_NONCE = new Uint8Array(16);
 const MAX_ATOMIC_MIGRATION_RECOUNT_ROWS = 100_000;
 const MAX_ATOMIC_LEGACY_TRANSFORM_BYTES =
   MAX_CONTENT_OBJECT_BYTES + CONTENT_OBJECT_TRANSACTION_OVERHEAD_BYTES;
@@ -73,6 +80,11 @@ export const EFS_SCHEMA_V3_CREATE_STATEMENTS = Object.freeze([
   `CREATE TABLE efs_gc_marks (run_id TEXT NOT NULL REFERENCES efs_gc_runs(id) ON DELETE CASCADE, kind INTEGER NOT NULL, hash BLOB NOT NULL, processed INTEGER NOT NULL DEFAULT 0 CHECK(processed IN (0,1)), PRIMARY KEY(run_id,kind,hash)) WITHOUT ROWID`,
   `CREATE TABLE efs_replication_sessions (id TEXT PRIMARY KEY, state INTEGER NOT NULL, nonce BLOB NOT NULL, cursor BLOB, expires_at_ms INTEGER NOT NULL, staged_bytes INTEGER NOT NULL) WITHOUT ROWID`,
   `CREATE TABLE efs_replication_receipts (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, batch_index INTEGER NOT NULL, digest BLOB NOT NULL, encoded BLOB NOT NULL, PRIMARY KEY(session_id,batch_index)) WITHOUT ROWID`,
+  `CREATE TABLE efs_replication_exports (session_id TEXT PRIMARY KEY REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind IN (0,1,2)), selected_identity TEXT NOT NULL, selected_generation INTEGER NOT NULL CHECK(selected_generation>=0), base_revision INTEGER NOT NULL CHECK(base_revision>=0), target_revision INTEGER NOT NULL CHECK(target_revision>=0), root_mutation_generation INTEGER NOT NULL CHECK(root_mutation_generation>=0), next_allocation_sequence INTEGER NOT NULL CHECK(next_allocation_sequence>=1), root_inode TEXT NOT NULL, meta_json BLOB NOT NULL, revision_cursor INTEGER NOT NULL DEFAULT -1 CHECK(revision_cursor>=-1), mark_kind INTEGER NOT NULL DEFAULT 0 CHECK(mark_kind IN (0,1,2)), mark_hash BLOB CHECK(mark_hash IS NULL OR length(mark_hash)=32), mark_edge INTEGER NOT NULL DEFAULT 0 CHECK(mark_edge>=0), root_count INTEGER NOT NULL DEFAULT 0 CHECK(root_count>=0), node_count INTEGER NOT NULL DEFAULT 0 CHECK(node_count>=0), object_count INTEGER NOT NULL DEFAULT 0 CHECK(object_count>=0), object_bytes INTEGER NOT NULL DEFAULT 0 CHECK(object_bytes>=0), offered_roots INTEGER NOT NULL DEFAULT 0 CHECK(offered_roots>=0), offered_nodes INTEGER NOT NULL DEFAULT 0 CHECK(offered_nodes>=0), offered_objects INTEGER NOT NULL DEFAULT 0 CHECK(offered_objects>=0), state_rows INTEGER NOT NULL DEFAULT 0 CHECK(state_rows>=0), done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0,1)) ) WITHOUT ROWID`,
+  `CREATE TABLE efs_replication_export_marks (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind IN (0,1,2)), hash BLOB NOT NULL CHECK(length(hash)=32), edge INTEGER NOT NULL DEFAULT 0 CHECK(edge>=0), PRIMARY KEY(session_id,kind,hash)) WITHOUT ROWID`,
+  `CREATE TABLE efs_replication_export_rows (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, row_index INTEGER NOT NULL CHECK(row_index>=0), kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6), row_key BLOB NOT NULL, value BLOB NOT NULL, PRIMARY KEY(session_id,row_index), UNIQUE(session_id,kind,row_key)) WITHOUT ROWID`,
+  `CREATE TABLE efs_replication_imports (session_id TEXT PRIMARY KEY REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, lease_id TEXT NOT NULL, owner_nonce BLOB NOT NULL CHECK(length(owner_nonce)=16), kind INTEGER NOT NULL CHECK(kind IN (0,1,2)), phase INTEGER NOT NULL CHECK(phase>=0), branch_id TEXT, base_revision INTEGER, generation INTEGER, expected_generation_digest BLOB CHECK(expected_generation_digest IS NULL OR length(expected_generation_digest)=32), closure_object_count INTEGER NOT NULL DEFAULT 0 CHECK(closure_object_count>=0), closure_object_bytes INTEGER NOT NULL DEFAULT 0 CHECK(closure_object_bytes>=0), closure_root_count INTEGER NOT NULL DEFAULT 0 CHECK(closure_root_count>=0), closure_node_count INTEGER NOT NULL DEFAULT 0 CHECK(closure_node_count>=0), transferred_object_count INTEGER NOT NULL DEFAULT 0 CHECK(transferred_object_count>=0), transferred_object_bytes INTEGER NOT NULL DEFAULT 0 CHECK(transferred_object_bytes>=0), transferred_root_count INTEGER NOT NULL DEFAULT 0 CHECK(transferred_root_count>=0), transferred_node_count INTEGER NOT NULL DEFAULT 0 CHECK(transferred_node_count>=0), state_row_count INTEGER NOT NULL DEFAULT 0 CHECK(state_row_count>=0), state_byte_count INTEGER NOT NULL DEFAULT 0 CHECK(state_byte_count>=0), revision_count INTEGER NOT NULL DEFAULT 0 CHECK(revision_count>=0), installed_revision_count INTEGER NOT NULL DEFAULT 0 CHECK(installed_revision_count>=0), sealed INTEGER NOT NULL DEFAULT 0 CHECK(sealed IN (0,1))) WITHOUT ROWID`,
+  `CREATE TABLE efs_replication_import_rows (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, kind INTEGER NOT NULL CHECK(kind BETWEEN 0 AND 12), key BLOB NOT NULL, value BLOB, PRIMARY KEY(session_id,kind,key)) WITHOUT ROWID`,
 ] as const);
 
 const PATCH_SEQUENCE_DELETE_TRIGGER = `CREATE TRIGGER efs_patch_sequence_delete BEFORE DELETE ON efs_patches WHEN (SELECT state FROM efs_branches WHERE id=OLD.branch_id)=0 AND NOT EXISTS(SELECT 1 FROM efs_branch_inode_overlays o WHERE o.branch_id=OLD.branch_id AND o.inode_id=OLD.inode_id AND CAST(json_extract(CAST(o.encoded AS TEXT),'$.overlayBaseGeneration') AS INTEGER)>=OLD.generation) BEGIN SELECT RAISE(ABORT,'active structural patch sequence is immutable'); END`;
@@ -206,6 +218,16 @@ const SCHEMA_V13_STATEMENTS = Object.freeze([
   `CREATE TABLE efs_root_holds (id TEXT PRIMARY KEY, kind INTEGER NOT NULL CHECK(kind IN (0,1)), root_id BLOB NOT NULL CHECK(length(root_id)=32)) WITHOUT ROWID`,
   `CREATE INDEX efs_root_holds_kind ON efs_root_holds(kind,root_id)`,
   `ALTER TABLE efs_gc_runs ADD COLUMN reclaimed_overlay_bytes INTEGER NOT NULL DEFAULT 0 CHECK(reclaimed_overlay_bytes>=0)`,
+  `CREATE TABLE IF NOT EXISTS efs_replication_export_rows (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, row_index INTEGER NOT NULL CHECK(row_index>=0), kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6), row_key BLOB NOT NULL, value BLOB NOT NULL, PRIMARY KEY(session_id,row_index), UNIQUE(session_id,kind,row_key)) WITHOUT ROWID`,
+] as const);
+
+// M7 databases already have storage user_version 13.  The bounded export
+// snapshot table is an additive M8 runtime table, not a schema-version bump;
+// create it on the first writable M8 open so accepted M7 databases remain
+// readable (including read-only opens) while replication can still resume
+// durably after the upgrade.
+const M8_ADDITIVE_STATEMENTS = Object.freeze([
+  `CREATE TABLE IF NOT EXISTS efs_replication_export_rows (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, row_index INTEGER NOT NULL CHECK(row_index>=0), kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6), row_key BLOB NOT NULL, value BLOB NOT NULL, PRIMARY KEY(session_id,row_index), UNIQUE(session_id,kind,row_key)) WITHOUT ROWID`,
 ] as const);
 
 const REQUIRED_V4_SCHEMA_OBJECTS = Object.freeze(
@@ -268,6 +290,42 @@ const OWNED_TABLE_NAMES = Object.freeze(
     const matched = /^CREATE TABLE ([a-z0-9_]+)/u.exec(sql);
     return matched?.[1] ? [matched[1]] : [];
   }),
+);
+const UNBOUND_STAGING_TABLE_NAMES = Object.freeze(
+  [
+    "efs_cas_objects",
+    "efs_manifest_roots",
+    "efs_manifest_nodes",
+    "efs_leases",
+    "efs_lease_manifests",
+    "efs_lease_objects",
+    "efs_lease_staged_manifests",
+    "efs_staging_entries",
+    "efs_staging_level_records",
+    "efs_lease_cow_pages",
+    "efs_lease_patches",
+    "efs_staging_certificates",
+    "efs_staging_reconciliations",
+    "efs_staging_reconciliation_queue",
+    "efs_staging_manifest_validation_queue",
+    "efs_lease_cleanups",
+    "efs_staging_workspaces",
+    "efs_staging_reused_subtrees",
+    "efs_replication_imports",
+    "efs_replication_import_rows",
+    "efs_usage",
+  ] as const,
+);
+const UNBOUND_EMPTY_TABLE_NAMES = Object.freeze(
+  [...new Set(OWNED_TABLE_NAMES)].filter(
+    (name) =>
+      name !== EFS_DURABLE_IDENTITY_TABLE &&
+      name !== "efs_replication_sessions" &&
+      name !== "efs_replication_receipts" &&
+      name !== "efs_replication_exports" &&
+      name !== "efs_replication_export_marks" &&
+      !(UNBOUND_STAGING_TABLE_NAMES as readonly string[]).includes(name),
+  ),
 );
 const REQUIRED_OWNED_TRIGGER_COUNT = REQUIRED_V4_SCHEMA_OBJECTS.filter(({ sql }) =>
   sql.startsWith("CREATE TRIGGER "),
@@ -415,15 +473,46 @@ function inspectForOpen(
 ): ReturnType<typeof inspect> {
   const state = inspect(tx, identityMode);
   if (state.applicationId !== EFS_APPLICATION_ID) return state;
-  const metaVersion = oneNumber(
-    tx,
+  const metaRows = tx.all<ScalarRow>(
     "SELECT schema_version AS value FROM efs_meta WHERE singleton=1",
+    [],
+    { maxRows: 1, maxBytes: 1024 },
   );
+  const metaVersion = metaRows[0]?.value;
+  if (metaVersion === undefined)
+    throw new Error("ESCHEMA: unbound replica does not expose a filesystem view");
+  if (typeof metaVersion !== "number" || !Number.isSafeInteger(metaVersion))
+    throw new Error("ECORRUPT: invalid efs_meta schema version");
   if (metaVersion !== state.userVersion)
     throw new Error(
       "ESCHEMA: selected identity user_version does not match efs_meta.schema_version",
     );
   return state;
+}
+
+function validateRequiredSchemaObjects(tx: FilesystemSQLiteTransaction): void {
+  const schemaMatches = oneNumber(
+    tx,
+    `SELECT count(*) value FROM sqlite_schema WHERE ${REQUIRED_SCHEMA_OBJECTS.map(
+      ({ name, sql }) => `(name=${sqlText(name)} AND sql=${sqlText(sql)})`,
+    ).join(" OR ")}`,
+  );
+  if (schemaMatches === REQUIRED_SCHEMA_OBJECTS.length) return;
+  const actual = new Set(
+    tx
+      .all<{ name: string; sql: string } & SqliteRow>(
+        "SELECT name,sql FROM sqlite_schema WHERE sql IS NOT NULL",
+        [],
+        { maxRows: 256, maxBytes: 128 * 1024 },
+      )
+      .map((row) => `${row.name}\u0000${row.sql}`),
+  );
+  const missing = REQUIRED_SCHEMA_OBJECTS.filter(
+    ({ name, sql }) => !actual.has(`${name}\u0000${sql}`),
+  ).map(({ name }) => name);
+  throw new Error(
+    `ECORRUPT: required schema-v13 table, index, or trigger is missing (${schemaMatches}/${REQUIRED_SCHEMA_OBJECTS.length}): ${missing.join(",")}`,
+  );
 }
 
 function validateCurrent(
@@ -553,29 +642,7 @@ function validateCurrent(
   );
   if (roots.length !== 1)
     throw new Error("ECORRUPT: metadata head references missing root or revision");
-  const schemaMatches = oneNumber(
-    tx,
-    `SELECT count(*) value FROM sqlite_schema WHERE ${REQUIRED_SCHEMA_OBJECTS.map(
-      ({ name, sql }) => `(name=${sqlText(name)} AND sql=${sqlText(sql)})`,
-    ).join(" OR ")}`,
-  );
-  if (schemaMatches !== REQUIRED_SCHEMA_OBJECTS.length) {
-    const actual = new Set(
-      tx
-        .all<{ name: string; sql: string } & SqliteRow>(
-          "SELECT name,sql FROM sqlite_schema WHERE sql IS NOT NULL",
-          [],
-          { maxRows: 256, maxBytes: 128 * 1024 },
-        )
-        .map((row) => `${row.name}\u0000${row.sql}`),
-    );
-    const missing = REQUIRED_SCHEMA_OBJECTS.filter(
-      ({ name, sql }) => !actual.has(`${name}\u0000${sql}`),
-    ).map(({ name }) => name);
-    throw new Error(
-      `ECORRUPT: required schema-v11 table, index, or trigger is missing (${schemaMatches}/${REQUIRED_SCHEMA_OBJECTS.length}): ${missing.join(",")}`,
-    );
-  }
+  validateRequiredSchemaObjects(tx);
   const durableColumns = tx.all(
     "SELECT name FROM pragma_table_info('efs_branches') WHERE name='merged_revision' UNION ALL SELECT name FROM pragma_table_info('efs_operation_results') WHERE name='revision' ORDER BY name",
     [],
@@ -622,6 +689,13 @@ function validateCurrent(
   )
     throw new Error("ECORRUPT: usage integrity token mismatch");
   return meta;
+}
+
+function ensureM8AdditiveSchema(driver: FilesystemSQLiteDriver): void {
+  if (driver.readOnly) return;
+  driver.transaction("exclusive", (tx) => {
+    for (const statement of M8_ADDITIVE_STATEMENTS) tx.run(statement);
+  });
 }
 
 function migrateV1ToV2(
@@ -1262,6 +1336,147 @@ function assertBoundedLegacyMigrationRows(tx: FilesystemSQLiteTransaction): void
   }
 }
 
+export interface UnboundReplicaStorageMetadata {
+  readonly provisioningState: "unbound-replica";
+  readonly applicationId: typeof EFS_APPLICATION_ID;
+  readonly storageUserVersion: typeof EFS_SCHEMA_VERSION;
+}
+
+interface UnboundReplicaMarkerRow extends SqliteRow {
+  readonly id: string;
+  readonly state: number;
+  readonly nonce: Uint8Array;
+  readonly cursor: Uint8Array | null;
+  readonly expires_at_ms: number;
+  readonly staged_bytes: number;
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function validateUnboundReplicaSchema(
+  tx: FilesystemSQLiteTransaction,
+  identityMode: SQLiteSchemaIdentityMode,
+): void {
+  const state = inspect(tx, identityMode);
+  if (state.applicationId !== EFS_APPLICATION_ID)
+    throw new Error("ESCHEMA: wrong SQLite application_id");
+  if (state.userVersion !== EFS_SCHEMA_VERSION)
+    throw new Error("ESCHEMA: unsupported or mismatched schema version");
+  validateRequiredSchemaObjects(tx);
+  const metaRows = oneNumber(tx, "SELECT count(*) value FROM efs_meta");
+  if (metaRows !== 0)
+    throw new Error("ProvisioningRejected: database is already bound to a filesystem");
+  for (const tableName of UNBOUND_EMPTY_TABLE_NAMES) {
+    const rows = oneNumber(tx, `SELECT count(*) value FROM ${tableName}`);
+    if (rows !== 0)
+      throw new Error(
+        `ECORRUPT: unbound replica contains unsupported durable state in ${tableName}`,
+      );
+  }
+  const markers = tx.all<UnboundReplicaMarkerRow>(
+    "SELECT id,state,nonce,cursor,expires_at_ms,staged_bytes FROM efs_replication_sessions WHERE id=?",
+    [EFS_UNBOUND_REPLICA_MARKER_ID],
+    { maxRows: 1, maxBytes: 4096 },
+  );
+  const marker = markers[0];
+  if (
+    markers.length !== 1 ||
+    !marker ||
+    marker.id !== EFS_UNBOUND_REPLICA_MARKER_ID ||
+    marker.state !== -1 ||
+    !(marker.nonce instanceof Uint8Array) ||
+    !equalBytes(marker.nonce, EFS_UNBOUND_REPLICA_MARKER_NONCE) ||
+    !(marker.cursor instanceof Uint8Array) ||
+    !equalBytes(marker.cursor, EFS_UNBOUND_REPLICA_MARKER_CURSOR) ||
+    marker.expires_at_ms !== Number.MAX_SAFE_INTEGER ||
+    marker.staged_bytes !== 0
+  )
+    throw new Error("ECORRUPT: invalid unbound-replica marker");
+  if (
+    oneNumber(
+      tx,
+      "SELECT count(*) value FROM efs_replication_sessions WHERE state=-1",
+    ) !== 1
+  )
+    throw new Error("ECORRUPT: invalid unbound-replica marker cardinality");
+  validateDurableReplicationSessions(tx, sha256);
+}
+
+/**
+ * Creates or recognizes the durable schema-only state used before an exact
+ * authority identity and genesis are adopted. It deliberately exposes no
+ * filesystem view and never generates a local filesystem or root identity.
+ */
+export function initializeOrValidateUnboundReplicaSchema(
+  driver: FilesystemSQLiteDriver,
+): UnboundReplicaStorageMetadata {
+  const identityMode =
+    driver.capabilities.schemaIdentityMode ?? ("sqlite-header" as const);
+  const state = driver.transaction("read", (tx) => inspect(tx, identityMode));
+  if (state.applicationId === EFS_APPLICATION_ID) {
+    driver.transaction("read", (tx) => validateUnboundReplicaSchema(tx, identityMode));
+  } else {
+    if (state.applicationId !== 0)
+      throw new Error("ESCHEMA: wrong SQLite application_id");
+    if (state.objectCount !== 0 || state.userVersion !== 0)
+      throw new Error("ESCHEMA: database is not an empty Ephemeral AI FS database");
+    if (driver.readOnly)
+      throw new Error("EROFS: cannot initialize a read-only database");
+    driver.transaction("exclusive", (tx) => {
+      const recheck = inspect(tx, identityMode);
+      if (
+        recheck.applicationId !== 0 ||
+        recheck.objectCount !== 0 ||
+        recheck.userVersion !== 0
+      )
+        throw new Error("ESCHEMA: database changed during initialization");
+      initializeIdentity(tx, identityMode);
+      for (const statement of EFS_SCHEMA_V3_CREATE_STATEMENTS) tx.run(statement);
+      for (const statements of [
+        SCHEMA_V4_STATEMENTS,
+        SCHEMA_V5_STATEMENTS,
+        SCHEMA_V6_STATEMENTS,
+        SCHEMA_V7_STATEMENTS,
+        SCHEMA_V8_STATEMENTS,
+        SCHEMA_V9_STATEMENTS,
+        SCHEMA_V9_ALTER_STATEMENTS,
+        SCHEMA_V10_STATEMENTS,
+        SCHEMA_V11_STATEMENTS,
+        SCHEMA_V12_STATEMENTS,
+        SCHEMA_V13_STATEMENTS,
+      ] as const) {
+        for (const statement of statements) tx.run(statement);
+      }
+      setUserVersion(tx, identityMode, EFS_SCHEMA_VERSION);
+      tx.run(
+        "INSERT INTO efs_usage(singleton,object_count,object_bytes,manifest_root_count,manifest_root_bytes,manifest_node_count,manifest_node_bytes,page_count,page_bytes,patch_count,patch_bytes,staging_bytes,result_bytes,maintenance_bytes,permanent_identifiers,charged_metadata_bytes) VALUES(1,0,0,0,0,0,0,0,0,0,0,0,0,256,0,0)",
+      );
+      tx.run(`UPDATE efs_usage SET integrity_token=${USAGE_INTEGRITY_SQL}`);
+      tx.run(
+        "INSERT INTO efs_replication_sessions(id,state,nonce,cursor,expires_at_ms,staged_bytes) VALUES(?,-1,?,?,?,0)",
+        [
+          EFS_UNBOUND_REPLICA_MARKER_ID,
+          EFS_UNBOUND_REPLICA_MARKER_NONCE,
+          EFS_UNBOUND_REPLICA_MARKER_CURSOR,
+          Number.MAX_SAFE_INTEGER,
+        ],
+      );
+      validateUnboundReplicaSchema(tx, identityMode);
+    });
+  }
+  return Object.freeze({
+    provisioningState: "unbound-replica",
+    applicationId: EFS_APPLICATION_ID,
+    storageUserVersion: EFS_SCHEMA_VERSION,
+  });
+}
+
 export interface StorageMetadata {
   readonly filesystemId: string;
   readonly mainRevision: number;
@@ -1401,6 +1616,7 @@ export function initializeOrValidateSchema(
         throw new Error("ESCHEMA: schema v12 requires a writable migration");
       driver.transaction("exclusive", (tx) => migrateV12ToV13(tx, identityMode));
     }
+    ensureM8AdditiveSchema(driver);
     const meta = driver.transaction("read", (tx) =>
       validateCurrent(
         tx,

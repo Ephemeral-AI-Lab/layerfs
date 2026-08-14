@@ -72,6 +72,8 @@ export interface NodeVfsPinnedReadBridge {
   readonly inodeId: string;
   readonly stat: FileStat;
   readonly size: number;
+  /** Branch generation pinned by this read, absent for the main view. */
+  readonly generation?: number;
   readIntoSync(
     destination: Uint8Array,
     destinationOffset: number,
@@ -93,6 +95,50 @@ export interface NodeVfsResolvedPath {
   readonly canonicalPath: string;
   readonly stat: FileStat;
 }
+/** Core-private semantic branch view used by the synchronous bridge. */
+export interface NodeVfsBranchOperations {
+  version(): number;
+  resolve(path: string, followFinal: boolean): NodeVfsResolvedPath;
+  openPinnedRead(path: string): NodeVfsPinnedReadBridge;
+  readdir(path: string): DirectoryEntry[];
+  readlink(path: string): string;
+  readInto(
+    path: string,
+    destination: Uint8Array,
+    destinationOffset: number,
+    position: number,
+    length: number,
+  ): number;
+  /** Branch-visible COW preparation; the bytes always compose base+overlay. */
+  prepareOverwriteSync?: (
+    path: string,
+    offset: number,
+    source: SynchronousContentSource,
+  ) => SyncPreparedContent | undefined;
+  prepareOverwritesSync?: (
+    path: string,
+    edits: readonly NodeVfsOverwriteEdit[],
+  ) => SyncPreparedContent | undefined;
+  commitPrepared(
+    path: string,
+    prepared: SyncPreparedContent,
+    options: {
+      create?: boolean;
+      exclusive?: boolean;
+      mode?: number;
+      inodeId?: string;
+      aliases?: readonly string[];
+      expectedGeneration?: number;
+    },
+  ): NodeVfsCommitResult;
+  mkdir(path: string, options: { recursive?: boolean; mode?: number }): void;
+  chmod(path: string, mode: number): void;
+  link(existingPath: string, newPath: string): void;
+  symlink(target: string, path: string): void;
+  rename(oldPath: string, newPath: string): void;
+  unlink(path: string): void;
+  rmdir(path: string): void;
+}
 export interface NodeVfsOperationsBridgeOptions {
   readonly port: OperationsStorage;
   readonly filesystem?: Partial<FilesystemLimits>;
@@ -100,6 +146,9 @@ export interface NodeVfsOperationsBridgeOptions {
   readonly runtime?: Partial<RuntimeLimits>;
   readonly format?: StorageFormatOptions;
   readonly clock?: () => number;
+  readonly branch?: NodeVfsBranchOperations;
+  /** Core-derived execution-replica policy for the main view only. */
+  readonly mainReadOnly?: boolean;
   /** Core-owned bounded COW preparation; never exposed outside this bridge. */
   readonly prepareOverwriteSync?: (
     path: string,
@@ -125,6 +174,9 @@ export interface NodeVfsFilesystemBridge {
   readonly storageLimits: Readonly<StorageLimits>;
   readonly runtimeLimits: Readonly<RuntimeLimits>;
   readonly cowPageBytes: 4096 | 8192 | 16384;
+  /** True for the main view of an execution replica; false for branch views. */
+  readonly mainReadOnly: boolean;
+  activationVersionSync(): number;
   canonicalPathSync(path: string, syscall?: string): string;
   resolvePathSync(path: string, followFinal?: boolean): NodeVfsResolvedPath;
   openPinnedReadSync(path: string): NodeVfsPinnedReadBridge;
@@ -176,6 +228,7 @@ export interface NodeVfsFilesystemBridge {
       mode?: number;
       inodeId?: string;
       aliases?: readonly string[];
+      expectedGeneration?: number;
     },
   ): NodeVfsCommitResult;
   writeFileSync(
@@ -244,10 +297,12 @@ class Bridge implements NodeVfsFilesystemBridge {
   readonly storageLimits: Readonly<StorageLimits>;
   readonly runtimeLimits: Readonly<RuntimeLimits>;
   readonly cowPageBytes: 4096 | 8192 | 16384;
+  readonly mainReadOnly: boolean;
   readonly #port: OperationsStorage;
   readonly #clock: () => number;
   readonly #admission: AdmissionController;
   readonly #cache: ContentCache;
+  readonly #branch: NodeVfsBranchOperations | undefined;
   readonly #prepareOverwriteSync:
     | ((
         path: string,
@@ -265,6 +320,9 @@ class Bridge implements NodeVfsFilesystemBridge {
   constructor(options: NodeVfsOperationsBridgeOptions) {
     this.#port = options.port;
     this.#clock = options.clock ?? Date.now;
+    this.#branch = options.branch;
+    this.mainReadOnly =
+      options.mainReadOnly === true && options.branch === undefined;
     this.#prepareOverwriteSync = options.prepareOverwriteSync;
     this.#prepareOverwritesSync = options.prepareOverwritesSync;
     if (options.shared) {
@@ -328,8 +386,12 @@ class Bridge implements NodeVfsFilesystemBridge {
   canonicalPathSync(path: string, syscall = "nodeVfs"): string {
     return canonicalizePath(path, this.filesystemLimits, syscall).value;
   }
+  activationVersionSync(): number {
+    return this.#branch?.version() ?? 0;
+  }
   resolvePathSync(path: string, followFinal = true): NodeVfsResolvedPath {
     const canonical = canonicalizePath(path, this.filesystemLimits, "resolvePathSync");
+    if (this.#branch) return this.#branch.resolve(canonical.value, followFinal);
     return this.#read(
       (tx) => {
         const selected = tx
@@ -346,6 +408,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   openPinnedReadSync(path: string): NodeVfsPinnedReadBridge {
     const canonical = canonicalizePath(path, this.filesystemLimits, "openFileSync");
+    if (this.#branch) return this.#branch.openPinnedRead(canonical.value);
     const leaseId = globalThis.crypto.randomUUID();
     const ownerId = globalThis.crypto.randomUUID();
     const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
@@ -458,6 +521,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   statSync(path: string, followFinal = true): FileStat {
     const canonical = canonicalizePath(path, this.filesystemLimits, "statSync");
+    if (this.#branch) return this.#branch.resolve(canonical.value, followFinal).stat;
     return this.#read((tx) => {
       const value = tx
         .namespace(this.filesystemLimits, this.storageLimits, "statSync")
@@ -467,6 +531,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   readdirSync(path: string): DirectoryEntry[] {
     const canonical = canonicalizePath(path, this.filesystemLimits, "readdirSync");
+    if (this.#branch) return this.#branch.readdir(canonical.value);
     return this.#read((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "readdirSync");
       const selected = ns.resolve(canonical, true);
@@ -497,6 +562,7 @@ class Bridge implements NodeVfsFilesystemBridge {
   }
   readlinkSync(path: string): string {
     const canonical = canonicalizePath(path, this.filesystemLimits, "readlinkSync");
+    if (this.#branch) return this.#branch.readlink(canonical.value);
     return this.#read((tx) => {
       const value = tx
         .namespace(this.filesystemLimits, this.storageLimits, "readlinkSync")
@@ -528,6 +594,14 @@ class Bridge implements NodeVfsFilesystemBridge {
       "readIntoSync",
       canonical.value,
     );
+    if (this.#branch)
+      return this.#branch.readInto(
+        canonical.value,
+        destination,
+        destinationOffset,
+        position,
+        length,
+      );
     return this.#read(
       (tx) => {
         const inode = tx
@@ -571,6 +645,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     return this.readRangeSync(path, 0, size);
   }
   prepareContentSync(bytes: Uint8Array): NodeVfsPreparedContent {
+    this.#assertMainWritable("prepareContentSync");
     bytes = intrinsicByteRange(bytes);
     return this.prepareContentSourceSync({
       size: intrinsicByteLength(bytes),
@@ -584,6 +659,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   prepareContentSourceSync(source: SynchronousContentSource): NodeVfsPreparedContent {
+    this.#assertMainWritable("prepareContentSourceSync");
     try {
       const prepared = prepareContentSourceSync(
         this.#port,
@@ -621,16 +697,24 @@ class Bridge implements NodeVfsFilesystemBridge {
     offset: number,
     source: SynchronousContentSource,
   ): NodeVfsPreparedContent | undefined {
-    if (!this.#prepareOverwriteSync) return undefined;
-    const prepared = this.#prepareOverwriteSync(path, offset, source);
+    this.#assertMainWritable("prepareOverwriteSync", path);
+    const prepared = this.#branch?.prepareOverwriteSync
+      ? this.#branch.prepareOverwriteSync(path, offset, source)
+      : this.#prepareOverwriteSync
+        ? this.#prepareOverwriteSync(path, offset, source)
+        : undefined;
     return prepared ? this.#wrapPrepared(prepared) : undefined;
   }
   prepareOverwritesSync(
     path: string,
     edits: readonly NodeVfsOverwriteEdit[],
   ): NodeVfsPreparedContent | undefined {
-    if (!this.#prepareOverwritesSync) return undefined;
-    const prepared = this.#prepareOverwritesSync(path, edits);
+    this.#assertMainWritable("prepareOverwritesSync", path);
+    const prepared = this.#branch?.prepareOverwritesSync
+      ? this.#branch.prepareOverwritesSync(path, edits)
+      : this.#prepareOverwritesSync
+        ? this.#prepareOverwritesSync(path, edits)
+        : undefined;
     return prepared ? this.#wrapPrepared(prepared) : undefined;
   }
   abortPreparedSync(handle: NodeVfsPreparedContent): void {
@@ -682,8 +766,10 @@ class Bridge implements NodeVfsFilesystemBridge {
       mode?: number;
       inodeId?: string;
       aliases?: readonly string[];
+      expectedGeneration?: number;
     } = {},
   ): NodeVfsCommitResult {
+    this.#assertMainWritable("commitVisibleSync", path);
     const prepared = this.#requirePrepared(handle);
     const canonical = canonicalizePath(
       path,
@@ -701,6 +787,15 @@ class Bridge implements NodeVfsFilesystemBridge {
       canonicalizePath(alias, this.filesystemLimits, "commitVisibleSync"),
     );
     const mode = validatedMode(options.mode, 0o644);
+    if (this.#branch) {
+      const result = this.#branch.commitPrepared(canonical.value, prepared, {
+        ...options,
+        mode,
+        aliases: aliases.map((alias) => alias.value),
+      });
+      this.#prepared.delete(handle);
+      return result;
+    }
     const leaseId = globalThis.crypto.randomUUID();
     const ownerId = globalThis.crypto.randomUUID();
     const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
@@ -890,15 +985,18 @@ class Bridge implements NodeVfsFilesystemBridge {
     bytes: Uint8Array,
     options?: { create?: boolean; exclusive?: boolean; mode?: number },
   ): void {
+    this.#assertMainWritable("writeFileSync", path);
     this.commitPreparedSync(path, this.prepareContentSync(bytes), options);
   }
   mkdirSync(path: string, options: { recursive?: boolean; mode?: number } = {}): void {
+    this.#assertMainWritable("mkdirSync", path);
     const mode = validatedMode(options.mode, 0o755);
     const canonical = canonicalizePath(path, this.filesystemLimits, "mkdirSync");
     if (canonical.value === "/") {
       if (options.recursive) return;
       throw fsError("EEXIST", "mkdirSync", canonical.value, "root exists");
     }
+    if (this.#branch) return this.#branch.mkdir(canonical.value, { ...options, mode });
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "mkdirSync");
       if (ns.resolveOptional(canonical, false)) {
@@ -933,7 +1031,9 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   chmodSync(path: string, mode: number): void {
+    this.#assertMainWritable("chmodSync", path);
     mode = validatedMode(mode, 0);
+    if (this.#branch) return this.#branch.chmod(path, mode);
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "chmodSync");
       const value = ns.resolve(path, true);
@@ -944,6 +1044,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   linkSync(existingPath: string, newPath: string): void {
+    this.#assertMainWritable("linkSync", newPath);
     const checkedDestination = canonicalizePath(
       newPath,
       this.filesystemLimits,
@@ -951,6 +1052,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     );
     if (checkedDestination.value === "/")
       throw fsError("EPERM", "linkSync", "/", "root cannot be replaced");
+    if (this.#branch) return this.#branch.link(existingPath, checkedDestination.value);
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "linkSync");
       const source = ns.resolve(existingPath, true);
@@ -981,6 +1083,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   symlinkSync(target: string, path: string): void {
+    this.#assertMainWritable("symlinkSync", path);
     validateSymlinkTarget(target, this.filesystemLimits, "symlinkSync");
     const checkedDestination = canonicalizePath(
       path,
@@ -989,6 +1092,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     );
     if (checkedDestination.value === "/")
       throw fsError("EPERM", "symlinkSync", "/", "root cannot be replaced");
+    if (this.#branch) return this.#branch.symlink(target, checkedDestination.value);
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "symlinkSync");
       const destination = checkedDestination;
@@ -1013,6 +1117,7 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   renameSync(oldPath: string, newPath: string): void {
+    this.#assertMainWritable("renameSync", oldPath);
     const sourcePath = canonicalizePath(oldPath, this.filesystemLimits, "renameSync");
     const destination = canonicalizePath(newPath, this.filesystemLimits, "renameSync");
     if (sourcePath.value === "/" || destination.value === "/")
@@ -1023,6 +1128,7 @@ class Bridge implements NodeVfsFilesystemBridge {
         "root cannot be renamed or replaced",
       );
     if (sourcePath.value === destination.value) return;
+    if (this.#branch) return this.#branch.rename(sourcePath.value, destination.value);
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "renameSync");
       const source = ns.resolve(sourcePath, false);
@@ -1098,6 +1204,8 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   unlinkSync(path: string): void {
+    this.#assertMainWritable("unlinkSync", path);
+    if (this.#branch) return this.#branch.unlink(path);
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "unlinkSync");
       const value = ns.resolve(path, false);
@@ -1107,6 +1215,8 @@ class Bridge implements NodeVfsFilesystemBridge {
     });
   }
   rmdirSync(path: string): void {
+    this.#assertMainWritable("rmdirSync", path);
+    if (this.#branch) return this.#branch.rmdir(path);
     this.#write((tx) => {
       const ns = tx.namespace(this.filesystemLimits, this.storageLimits, "rmdirSync");
       const value = ns.resolve(path, false);
@@ -1345,6 +1455,10 @@ class Bridge implements NodeVfsFilesystemBridge {
     const now = this.#clock();
     if (!Number.isSafeInteger(now) || now < 0) throw new Error("invalid clock");
     return now;
+  }
+  #assertMainWritable(syscall: string, path?: string): void {
+    if (this.mainReadOnly)
+      throw fsError("EROFS", syscall, path, "replica main is read-only");
   }
 }
 export function createNodeVfsOperationsBridge(

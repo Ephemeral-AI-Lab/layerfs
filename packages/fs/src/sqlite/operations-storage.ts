@@ -8,6 +8,10 @@ import { StagingRepository } from "./staging-repository.js";
 import { MaintenanceRepository } from "./maintenance-repository.js";
 import { OverlayRepository } from "./overlay-repository.js";
 import { ManifestTreeRepository } from "./manifest-tree-repository.js";
+import { ReplicationSessionRepository } from "./replication-repository.js";
+import {
+  createReplicationTransferRepository,
+} from "./replication-transfer-repository.js";
 import { sha256 } from "../cas/sha256.js";
 import type {
   OperationsStorage,
@@ -78,6 +82,25 @@ export function createSqliteOperationsStorage(
             new MaintenanceRepository(tx, limitsFor(limits)),
           overlay: (limits: StorageLimits, pageBytes: CowPageBytes) =>
             new OverlayRepository(tx, limitsFor(limits), pageBytes),
+          replication: (limits?: StorageLimits) =>
+            new ReplicationSessionRepository(
+              tx,
+              hashBytes,
+              limits === undefined ? undefined : limitsFor(limits),
+            ),
+          replicationTransfer: (
+            limits: StorageLimits,
+            cache?: ContentCache,
+            branchDigest?: (branchId: string, generation: number) => string,
+          ) =>
+            createReplicationTransferRepository(
+              tx,
+              limitsFor(limits),
+              hashBytes,
+              driver.capabilities.maxBindings,
+              branchDigest,
+              cache,
+            ),
         });
         return callback(ports);
       }),

@@ -1,13 +1,45 @@
-export interface ReplicationPlan {
-  readonly pullMain?: boolean;
-  readonly pushBranchId?: string;
-  readonly pullBranchId?: string;
-}
-export interface ReplicationFilesystemBridge {
-  readonly capabilities: Readonly<Record<string, unknown>>;
-  captureExport(plan: ReplicationPlan): Promise<unknown>;
-  readExportBatch(request: unknown): Promise<unknown>;
-  applyImportBatch(batch: unknown): Promise<unknown>;
-  finalizeImport(request: unknown): Promise<void>;
-  abortSession(sessionId: string): Promise<void>;
-}
+export type {
+  CreateReplicationSessionRequest,
+  ReplicationBatchAcceptanceRequest,
+  ReplicationFilesystemBridge,
+  ReplicationFlow,
+  ReplicationPhase,
+  ReplicationRole,
+  ReplicationSessionBinding,
+  ReplicationSessionSnapshot,
+  ReplicationExportSelection,
+  ReplicationExportBatch,
+  ReplicationExportSummary,
+  ReplicationGenesisCapture,
+  ReplicationImportApply,
+  ReplicationFinalization,
+  ReplicationBridgeCapabilities,
+  ReplicationBridgeFeatures,
+  ReplicationBridgeLimits,
+  ReplicationBridgeStorageCapabilities,
+  ReplicationFastCdcConfiguration,
+} from "../filesystem/types.js";
+export type {
+  ReplicationAuthorityResult,
+  ReplicationExportMeta,
+  ReplicationTransferRecord,
+} from "../filesystem/types.js";
+export {
+  encodeActivationRequest,
+  decodeActivationRequest,
+  encodeActivationResult,
+  decodeActivationResult,
+  encodeGenesisFragment,
+  encodeRevisionFragment,
+  encodeCheckpointFragment,
+  encodeBranchGenerationFragment,
+} from "../sqlite/transfer-codec.js";
+export type {
+  TransferActivationRequest,
+  TransferActivationResult,
+  TransferAuthorityResult,
+  TransferGenesisFragment,
+  TransferRevisionFragment,
+  TransferCheckpointFragment,
+  TransferBranchGenerationFragment,
+} from "../sqlite/transfer-codec.js";

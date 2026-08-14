@@ -404,6 +404,61 @@ A branch-generation fragment contains:
 6. `uint32 fragmentCount`; and
 7. `bytes(fragmentBytes)`.
 
+The `fragmentBytes` grammar is frozen as follows. Each semantic fragment starts
+with `uint8 version = 1`; all row counts are `uint32`; all row tags and boolean
+values are `uint8`; and every row is encoded in the order shown below. Namespace
+rows use tags `1 inode`, `2 directory-entry`, and `3 manifest-reference`:
+
+* inode: `text inodeId || boolean tombstone || bytes-or-empty encoded`;
+* directory-entry: `text parentInode || bytes nameSort || boolean tombstone || bytes-or-empty encoded`;
+* manifest-reference: `text inodeId || digest32 manifestHash`.
+
+Branch rows use tags `1 change`, `2 inode-overlay`, `3 COW-page`, `4 patch`,
+`5 expectation`, and `6 manifest-reference`:
+
+* change: `uint8 disposition || bytes path || optional(uint64 expectedToken) || optional(bytes encoded)`;
+* inode-overlay: `text inodeId || optional(uint64 expectedToken) || bytes encoded`;
+* COW-page: `text inodeId || uint64 pageIndex || uint64 generation || bytes bytes || uint64 createdAtMs || boolean head`;
+* patch: `text inodeId || uint64 sequence || uint64 generation || uint64 offset || uint64 deleteLength || uint64 insertLength || uint32 segmentCount || bytes[segmentCount] segments`;
+* expectation: `text inodeId || optional(uint64 expectedToken)`;
+* manifest-reference: `bytes path || digest32 manifestHash`.
+
+The version-1 revision fragment is `version || text revisionId ||
+optional(text parentRevisionId) || uint64 createdAtMs || text writerId ||
+uint64 changeCount || uint32 rowCount || namespace-row[rowCount]`. A checkpoint
+fragment is `version || text revisionId || uint32 rowCount ||
+namespace-row[rowCount]`. A branch-generation fragment is
+`version || text branchId || text baseRevision || uint64 generation ||
+digest32 generationDigest || optional(uint64 previousGeneration) ||
+optional(digest32 previousGenerationDigest) || uint8 state || uint32 rowCount ||
+branch-row[rowCount]`; the two predecessor optionals MUST be both present or
+both absent. The genesis fragment is
+`version || text filesystemId || text rootInode || uint64 mainRevision ||
+uint64 rootMutationGeneration || uint64 nextAllocationSequence ||
+uint32 cowPageBytes || uint64 createdAtMs || uint32 maxManifestEntries ||
+uint32 maxManifestDepth || uint64 maxFileBytes || text writerProfile ||
+text manifestFormat || text chunkerFormat || uint32 fastCdcMinimum ||
+uint32 fastCdcAverage || uint32 fastCdcMaximum || uint8 rootInodeType ||
+uint32 rootMode || uint64 rootBirthtimeMs || uint64 rootMtimeMs ||
+uint64 rootCtimeMs || uint64 rootToken || uint32 rowCount ||
+genesis-row[rowCount]`, where a genesis row is `text inodeId || boolean tombstone ||
+bytes-or-empty encoded`. The activation-result fragment is
+`version || uint8 kind || text revision || optional(text branchId) ||
+optional(text baseRevision) || uint64 generation || optional(digest32 generationDigest) ||
+uint8 state || optional(authority-result)`. An authority result is tag `0x01`
+followed by `text operationId || uint8 outcome || digest32 resultDigest` for
+publication, or tag `0x02` followed by `optional(text operationId) ||
+digest32 resultDigest` for discard. `outcome` is `0x00` merged or `0x01`
+conflict. The generation and generation-digest optionals MUST be paired. No
+implementation may append fields to a version-1 fragment.
+
+The maximum row count is 256 for branch fragments and the maximum patch segment
+count is 64. Empty byte values are encoded with a zero `uint32` length; an
+optional value is exactly `0x00` or `0x01` followed by the encoded value. Unknown
+fragment versions, row tags, boolean values, optional tags, trailing bytes, or
+non-canonical UTF-8 are rejected before any durable state change. The enclosing
+`bytes(fragmentBytes)` limit remains the phase-specific negotiated batch limit.
+
 For every fragment, `fragmentCount` is positive and `fragmentIndex < fragmentCount`.
 `fragmentBytes` is a bounded semantic fragment produced and accepted through the typed
 core replication bridge. It is not SQL, a table row API, a raw manifest insertion API,
