@@ -2102,6 +2102,7 @@ async function validateOptionalM8Evidence() {
   ) {
     // Pin the verifier alongside the M8 record so later audits use the same rules.
     // Keep this audit rule in the atomic evidence commit as well as the candidate.
+    // The direct-child check itself is therefore candidate-bound and reproducible.
     const evidenceParents = (
       await execute("git", ["show", "-s", "--format=%P", recordCommit], {
         cwd: root,

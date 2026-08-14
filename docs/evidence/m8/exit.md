@@ -1,9 +1,9 @@
 # M8 closeout exit
 
 - M8 status: passed
-- Candidate commit: `3409cce081a9c3c1254ec602c56f2d2d5ef94af9`
+- Candidate commit: `b8eb6bb623ebfa0448ba96636864b6c33e9052d6`
 - Computer candidate: `9a82e2699ec8ac50e4a1652eca08f56babe82196`
-- Candidate parent: `bec883c013eea492723f6560a6103f5ab291fc68`
+- Candidate parent: `fdc76b9afd3eabc53a4c6ed9ac150cee70f72cec`
 - Commands: `pnpm check:api`, `pnpm test:m8`, `pnpm test:quick`,
   `npm.cmd test --workspace @cloudflare/computer-rpc`,
   `npm.cmd test --workspace @cloudflare/computerd`,

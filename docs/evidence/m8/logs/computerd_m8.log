@@ -5,66 +5,66 @@
 
 [1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/mnt/c/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-computer/packages/computerd[39m
 
- [32m✓[39m src/cli/computerd.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 27701[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd rejects relative MOUNT_POINT values [33m 1641[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd rejects non-numeric EXEC_LOG_MAX_BYTES values [33m 1643[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd appends to LOG_FILE when set, in addition to stdout/stderr [33m 1652[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd exposes file IO through real FUSE when FUSE_MOUNT=fuse [33m 1767[2mms[22m[39m
-   [33m[2m✓[22m[39m /ws serves a capnweb WorkspaceRPC session [33m 1733[2mms[22m[39m
-   [33m[2m✓[22m[39m /efs uses the uncompressed computer-efs raw frame ceiling [33m 4401[2mms[22m[39m
-   [33m[2m✓[22m[39m /api serves a capnweb HTTP-batch WorkspaceRPC session [33m 1719[2mms[22m[39m
-   [33m[2m✓[22m[39m /__computerd/stats returns DOFS table sizes and process memory [33m 1651[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd exposes file IO through the userspace shim when FUSE_MOUNT=shim [33m 1648[2mms[22m[39m
-   [33m[2m✓[22m[39m FUSE_MOUNT=shim materialises an RPC push under the mount point [33m 1737[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd rejects unknown FUSE_MOUNT values [33m 1609[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd refuses to boot when legacy DISABLE_FUSE is set [33m 1607[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd refuses to boot when legacy FUSE_SHIM is set [33m 1585[2mms[22m[39m
-   [33m[2m✓[22m[39m computerd refuses to boot when legacy WSD_FUSE_BACKEND is set [33m 1589[2mms[22m[39m
-   [33m[2m✓[22m[39m /connect re-dial tears down the prior WebSocket session [33m 1717[2mms[22m[39m
+ [32m✓[39m src/cli/computerd.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 26580[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd rejects relative MOUNT_POINT values [33m 1588[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd rejects non-numeric EXEC_LOG_MAX_BYTES values [33m 1569[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd appends to LOG_FILE when set, in addition to stdout/stderr [33m 1605[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd exposes file IO through real FUSE when FUSE_MOUNT=fuse [33m 1709[2mms[22m[39m
+   [33m[2m✓[22m[39m /ws serves a capnweb WorkspaceRPC session [33m 1672[2mms[22m[39m
+   [33m[2m✓[22m[39m /efs uses the uncompressed computer-efs raw frame ceiling [33m 4168[2mms[22m[39m
+   [33m[2m✓[22m[39m /api serves a capnweb HTTP-batch WorkspaceRPC session [33m 1614[2mms[22m[39m
+   [33m[2m✓[22m[39m /__computerd/stats returns DOFS table sizes and process memory [33m 1600[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd exposes file IO through the userspace shim when FUSE_MOUNT=shim [33m 1597[2mms[22m[39m
+   [33m[2m✓[22m[39m FUSE_MOUNT=shim materialises an RPC push under the mount point [33m 1614[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd rejects unknown FUSE_MOUNT values [33m 1522[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd refuses to boot when legacy DISABLE_FUSE is set [33m 1553[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd refuses to boot when legacy FUSE_SHIM is set [33m 1566[2mms[22m[39m
+   [33m[2m✓[22m[39m computerd refuses to boot when legacy WSD_FUSE_BACKEND is set [33m 1537[2mms[22m[39m
+   [33m[2m✓[22m[39m /connect re-dial tears down the prior WebSocket session [33m 1662[2mms[22m[39m
 [90mstdout[2m | src/cli/m8-carrier.test.ts[2m > [22m[2mM8 uses the real authenticated Cap'n Web carrier with persistent SQLite and restart
-[22m[39m{"schema":"efs-m8-carrier-metrics-v1","filesystemId":"14a97e9a-a92a-4ce6-a6be-595b7f0a3df0","authorityId":"m8-authority","branchId":"m8-branch","branchGeneration":1,"branchGenerationDigest":"0bd49971b6103f85c9eba93f02160e2d776f6173014749b6f165d3476b0c73bc","restarts":2,"fuseBackend":{"kind":"fuse"},"carrier":{"path":"/efs","protocol":"computer-efs-carrier-v1","perMessageDeflate":false,"rawFrameBytes":4259840,"decodedEnvelopeBytes":3145728,"acknowledgementBytes":65536,"scratchBytes":2097152,"maxReservationBytes":18087936},"transfers":[{"phase":"provisioning","sessionId":"6ba3173741af7200d28b30d083877b9b","operationId":"m8-real-carrier-provision","plan":{"flow":"authority-main-to-replica"},"activation":{"kind":"main","revision":"0"},"finalCursor":"0795f7eab18c2c10ba5697d05f24017274c32e243f7c5134ead81ff3e0a79a5a","transferredBytes":0,"reusedBytes":0},{"phase":"main","sessionId":"b75560e4a930690726fb50b1739c77f6","operationId":"m8-real-carrier-main","plan":{"flow":"authority-main-to-replica"},"activation":{"kind":"main","revision":"1"},"finalCursor":"3ce1ea437bca9cbbe7f8af7ae7ecd767631b2baca618d3b1840b6472ae71ddd5","transferredBytes":159,"reusedBytes":0},{"phase":"active-branch","sessionId":"6a1b9613fe8797609ca4953740d17474","operationId":"m8-real-carrier-branch","plan":{"flow":"authority-branch-to-replica","branchId":"m8-branch"},"activation":{"kind":"branch","branchId":"m8-branch","baseRevision":"1","generation":1,"generationDigest":"0bd49971b6103f85c9eba93f02160e2d776f6173014749b6f165d3476b0c73bc","state":"active","authorityResult":null},"finalCursor":"a9af895cdaa2d63047857338e70690aababae4f98b5486408ee02719ca30f518","transferredBytes":155,"reusedBytes":0}],"process":{"daemonRssBytes":84238336,"daemonHeapUsedBytes":13232240,"daemonCarrierReservedBytes":0},"databases":{"authorityBytes":4096,"replicaBytes":471040,"replicaWalBytes":0}}
+[22m[39m{"schema":"efs-m8-carrier-metrics-v1","filesystemId":"baf0eeb3-5e7e-49ef-825d-7425a2ba3a8a","authorityId":"m8-authority","branchId":"m8-branch","branchGeneration":1,"branchGenerationDigest":"d519e0c5c4c57648ecdc03de14d6bdd96fa314f58f8827d1f45ebaeed703ba30","restarts":2,"fuseBackend":{"kind":"fuse"},"carrier":{"path":"/efs","protocol":"computer-efs-carrier-v1","perMessageDeflate":false,"rawFrameBytes":4259840,"decodedEnvelopeBytes":3145728,"acknowledgementBytes":65536,"scratchBytes":2097152,"maxReservationBytes":18087936},"transfers":[{"phase":"provisioning","sessionId":"bbd24c5e86be4f0cb78ec79571e67143","operationId":"m8-real-carrier-provision","plan":{"flow":"authority-main-to-replica"},"activation":{"kind":"main","revision":"0"},"finalCursor":"ee06f26cb5809d4818474a2e80f8a1215a2a83370a7dbde90e8111ff8f52e5d9","transferredBytes":0,"reusedBytes":0},{"phase":"main","sessionId":"b464c1fd90bac678ca772d9776ee779e","operationId":"m8-real-carrier-main","plan":{"flow":"authority-main-to-replica"},"activation":{"kind":"main","revision":"1"},"finalCursor":"d8f098ac867b172e93df80ae0a4a1e88342fe9a17adac09340095b4e6ff6adc7","transferredBytes":159,"reusedBytes":0},{"phase":"active-branch","sessionId":"10c3f48f75c66eb603df44f5c8a5c9f9","operationId":"m8-real-carrier-branch","plan":{"flow":"authority-branch-to-replica","branchId":"m8-branch"},"activation":{"kind":"branch","branchId":"m8-branch","baseRevision":"1","generation":1,"generationDigest":"d519e0c5c4c57648ecdc03de14d6bdd96fa314f58f8827d1f45ebaeed703ba30","state":"active","authorityResult":null},"finalCursor":"3d4cc1e26f6fda48bcc721dab33a019d2d4b7fcc8c4af3e41f1827b55fa3f667","transferredBytes":155,"reusedBytes":0}],"process":{"daemonRssBytes":85139456,"daemonHeapUsedBytes":13233040,"daemonCarrierReservedBytes":0},"databases":{"authorityBytes":4096,"replicaBytes":471040,"replicaWalBytes":0}}
 
- [32m✓[39m src/cli/m8-carrier.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 10581[2mms[22m[39m
-   [33m[2m✓[22m[39m M8 uses the real authenticated Cap'n Web carrier with persistent SQLite and restart [33m 10580[2mms[22m[39m
- [32m✓[39m src/cli/bundle-port.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1998[2mms[22m[39m
-   [33m[2m✓[22m[39m COMPUTERD_DEFAULT_PORT stamps into the SEA bundle [33m 1076[2mms[22m[39m
-   [33m[2m✓[22m[39m missing COMPUTERD_DEFAULT_PORT keeps the in-source 45678 fallback [33m 917[2mms[22m[39m
- [32m✓[39m src/exec/runner.test.ts [2m([22m[2m22 tests[22m[2m)[22m[33m 1814[2mms[22m[39m
+ [32m✓[39m src/cli/m8-carrier.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 10285[2mms[22m[39m
+   [33m[2m✓[22m[39m M8 uses the real authenticated Cap'n Web carrier with persistent SQLite and restart [33m 10284[2mms[22m[39m
+ [32m✓[39m src/cli/bundle-port.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1950[2mms[22m[39m
+   [33m[2m✓[22m[39m COMPUTERD_DEFAULT_PORT stamps into the SEA bundle [33m 1048[2mms[22m[39m
+   [33m[2m✓[22m[39m missing COMPUTERD_DEFAULT_PORT keeps the in-source 45678 fallback [33m 898[2mms[22m[39m
+ [32m✓[39m src/exec/runner.test.ts [2m([22m[2m22 tests[22m[2m)[22m[33m 1808[2mms[22m[39m
    [33m[2m✓[22m[39m reusing a live id throws EEXEC_BUSY [33m 507[2mms[22m[39m
    [33m[2m✓[22m[39m runner emits heartbeat events at the configured interval [33m 306[2mms[22m[39m
- [32m✓[39m src/shim/shim.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1362[2mms[22m[39m
-   [33m[2m✓[22m[39m shim mirrors deletions in both directions [33m 306[2mms[22m[39m
+ [32m✓[39m src/shim/shim.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1358[2mms[22m[39m
+   [33m[2m✓[22m[39m shim mirrors deletions in both directions [33m 308[2mms[22m[39m
    [33m[2m✓[22m[39m shim does not echo identical writes back and forth [33m 656[2mms[22m[39m
- [32m✓[39m src/fuse/vfs.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 301[2mms[22m[39m
+ [32m✓[39m src/fuse/vfs.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 296[2mms[22m[39m
  [32m✓[39m src/fuse/driver.test.ts [2m([22m[2m36 tests[22m[2m)[22m[32m 67[2mms[22m[39m
 [90mstdout[2m | src/cli/logger.test.ts[2m > [22m[2minstallLogging: mirrors console.{log,error} into the log file
 [22m[39minfo via console.log
 
- [32m✓[39m src/cli/logger.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m src/cli/logger.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m src/fuse/options.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 5[2mms[22m[39m
  [32m✓[39m src/fuse/backend.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 6[2mms[22m[39m
  [32m✓[39m src/fuse/tracer.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 6[2mms[22m[39m
- [32m✓[39m src/fuse/options.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 7[2mms[22m[39m
  [2m[90m↓[39m[22m src/exec/runner.fuse.test.ts [2m([22m[2m1 test[22m[2m | [22m[33m1 skipped[39m[2m)[22m
 
 [2m Test Files [22m [1m[32m11 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (12)[39m
 [2m      Tests [22m [1m[32m144 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (145)[39m
-[2m   Start at [22m 22:58:31
-[2m   Duration [22m 69.52s[2m (transform 5.72s, setup 0ms, import 8.02s, tests 43.89s, environment 1ms)[22m
+[2m   Start at [22m 23:06:53
+[2m   Duration [22m 67.22s[2m (transform 5.49s, setup 0ms, import 7.76s, tests 42.42s, environment 1ms)[22m
 
 
 [stderr]
 (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
   - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
 Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
-(node:786) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:789) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:946) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:949) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:1045) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:1053) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:1085) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:1093) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:1096) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:1104) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
 [90mstderr[2m | src/fuse/vfs.test.ts[2m > [22m[2ma replica database without prebound identity cannot create a local filesystem
 [22m[39msync tick failed: Error: cross-side invariant violated: appliedPushCursor ({"rev":0,"path":null}) < pushCursor ({"rev":2,"path":null})
@@ -72,7 +72,7 @@ Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
     at pushOnce (/mnt/c/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-computer/packages/rpc/dist/sync-driver.js:325:5)
     at tick (/mnt/c/Users/yifan/code/Ephemeral-AI-Lab/ephemeral-ai-computer/packages/rpc/dist/sync-driver.js:337:20)
 
-(node:1107) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:1115) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
 [90mstderr[2m | src/fuse/driver.test.ts[2m > [22m[2mnot-yet-implemented FUSE ops invoke their callback with ENOSYS
 [22m[39mcomputerd: FUSE op mknod not implemented; returning ENOSYS
@@ -80,7 +80,7 @@ Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 [90mstderr[2m | src/cli/logger.test.ts[2m > [22m[2minstallLogging: mirrors console.{log,error} into the log file
 [22m[39merror via console.error
 
-(node:1132) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:1147) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-M8_LOG_META name=computerd-m8 exitCode=0 elapsedMs=72621 candidate=3409cce081a9c3c1254ec602c56f2d2d5ef94af9 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=computerd_m8
+M8_LOG_META name=computerd-m8 exitCode=0 elapsedMs=70214 candidate=b8eb6bb623ebfa0448ba96636864b6c33e9052d6 computerCandidate=9a82e2699ec8ac50e4a1652eca08f56babe82196 command=computerd_m8
