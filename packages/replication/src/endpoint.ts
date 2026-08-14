@@ -561,6 +561,15 @@ export function createReplicationEndpoint(options: {
         "CursorMismatch",
         "missing-content request arrived outside the missing-content phase",
       );
+    if (batch.sequence < state.session.nextSequence) {
+      return bridge.replayOutboundBatch({
+        operationId: state.operationId,
+        sessionId: batch.sessionId,
+        ownerNonce: state.ownerNonce,
+        sequence: batch.sequence,
+        requestDigest: batchEnvelopeDigest(batch),
+      });
+    }
     if (batch.sequence !== state.session.nextSequence)
       throw new ReplicationError(
         "CursorMismatch",
@@ -579,6 +588,7 @@ export function createReplicationEndpoint(options: {
       priorCursorDigest: state.session.cursorDigest,
       records: missing.records as ReplicationBatchRecord[],
     });
+    const encodedResponse = encodeCanonicalEnvelope({ kind: "batch", value: response });
     const nextPhase = "content-transfer";
     const responseDigest = batchEnvelopeDigest(response);
     const advanced = await bridge.recordOutboundBatch({
@@ -595,9 +605,11 @@ export function createReplicationEndpoint(options: {
       nextCursorDigest: sha256Of(
         nextSessionCursor(state.session.cursorDigest, responseDigest),
       ),
+      requestDigest: batchEnvelopeDigest(batch),
+      responseBytes: encodedResponse,
     });
     state.session = advanced;
-    return encodeCanonicalEnvelope({ kind: "batch", value: response });
+    return encodedResponse;
   }
 
   async function ensureImport(state: SessionState): Promise<void> {

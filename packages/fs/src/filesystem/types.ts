@@ -622,7 +622,16 @@ export interface ReplicationSessionStore {
     readonly sequence: number;
     readonly phase: ReplicationPhase;
     readonly nextPhase: ReplicationPhase;
+    readonly requestDigest?: Uint8Array;
+    readonly responseBytes?: Uint8Array;
   }): ReplicationSessionSnapshot;
+  replayOutboundBatch(request: {
+    readonly operationId: string;
+    readonly sessionId: string;
+    readonly ownerNonce: Uint8Array;
+    readonly sequence: number;
+    readonly requestDigest: Uint8Array;
+  }): Uint8Array;
   storeTerminalResult(request: {
     readonly operationId: string;
     readonly sessionId: string;
@@ -683,7 +692,16 @@ export interface ReplicationFilesystemBridge {
     readonly nextPhase: ReplicationPhase;
     readonly nextCursor: Uint8Array;
     readonly nextCursorDigest: Uint8Array;
+    readonly requestDigest?: Uint8Array;
+    readonly responseBytes?: Uint8Array;
   }): Promise<ReplicationSessionSnapshot>;
+  replayOutboundBatch(request: {
+    readonly operationId: string;
+    readonly sessionId: string;
+    readonly ownerNonce: Uint8Array;
+    readonly sequence: number;
+    readonly requestDigest: Uint8Array;
+  }): Promise<Uint8Array>;
   acceptBatch(request: ReplicationBatchAcceptanceRequest & {
     readonly records?: readonly ReplicationTransferRecord[];
   }): Promise<
@@ -728,6 +746,8 @@ export interface ReplicationFilesystemBridge {
     readonly nextPhase: ReplicationPhase;
     readonly nextCursor: Uint8Array;
     readonly nextCursorDigest: Uint8Array;
+    readonly requestDigest?: Uint8Array;
+    readonly responseBytes?: Uint8Array;
   }): Promise<ReplicationSessionSnapshot>;
   storeTerminalResult(request: {
     readonly operationId: string;

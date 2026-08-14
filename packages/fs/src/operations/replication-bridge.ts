@@ -233,10 +233,22 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly nextPhase: import("../filesystem/types.js").ReplicationPhase;
     readonly nextCursor: Uint8Array;
     readonly nextCursorDigest: Uint8Array;
+    readonly requestDigest?: Uint8Array;
+    readonly responseBytes?: Uint8Array;
   }) {
     return this.#execute("write", request, (store) =>
       store.recordOutboundBatch(request),
     );
+  }
+
+  replayOutboundBatch(request: {
+    readonly operationId: string;
+    readonly sessionId: string;
+    readonly ownerNonce: Uint8Array;
+    readonly sequence: number;
+    readonly requestDigest: Uint8Array;
+  }) {
+    return this.#execute("read", request, (store) => store.replayOutboundBatch(request), 3 * 1024 * 1024 + 4096);
   }
 
   storeTerminalResult(request: {

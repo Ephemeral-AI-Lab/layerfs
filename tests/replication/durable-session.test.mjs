@@ -825,3 +825,62 @@ test("unbound runtime exposes only resumable provisioning replication", async ()
     await removeTree(directory);
   }
 });
+
+test("lost outbound responses replay from a durable receipt and bind the request digest", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-outbound-receipt-"));
+  const filename = path.join(directory, "filesystem.db");
+  let driver;
+  try {
+    driver = await openNodeSqlite({ filename });
+    initializeOrValidateSchema(driver);
+    withRepository(driver, "write", (repository) =>
+      repository.createOrResume(openRequest()),
+    );
+    const requestDigest = digest("missing-content-request");
+    const responseBytes = bytes("canonical-missing-content-response");
+    withRepository(driver, "write", (repository) =>
+      repository.recordOutboundBatch({
+        operationId: binding().operationId,
+        sessionId: binding().sessionId,
+        ownerNonce: binding().ownerNonce,
+        sequence: 0,
+        phase: "handshake",
+        nextPhase: "plan-selection",
+        nextCursor: cursor(1),
+        nextCursorDigest: sha256(cursor(1)),
+        requestDigest,
+        responseBytes,
+      }),
+    );
+    driver.close();
+    driver = await openNodeSqlite({ filename, create: false });
+    assert.deepEqual(
+      withRepository(driver, "read", (repository) =>
+        repository.replayOutboundBatch({
+          operationId: binding().operationId,
+          sessionId: binding().sessionId,
+          ownerNonce: binding().ownerNonce,
+          sequence: 0,
+          requestDigest,
+        }),
+      ),
+      responseBytes,
+    );
+    assert.throws(
+      () =>
+        withRepository(driver, "read", (repository) =>
+          repository.replayOutboundBatch({
+            operationId: binding().operationId,
+            sessionId: binding().sessionId,
+            ownerNonce: binding().ownerNonce,
+            sequence: 0,
+            requestDigest: digest("different-request"),
+          }),
+        ),
+      /BatchReplayMismatch/,
+    );
+  } finally {
+    try { driver?.close(); } catch {}
+    await removeTree(directory);
+  }
+});

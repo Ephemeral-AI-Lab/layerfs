@@ -90,9 +90,15 @@ function classifyFsSource(relativePath) {
   if (
     relativePath.startsWith("src/integrations/replication") ||
     relativePath.startsWith("src/operations/replication-bridge") ||
+    relativePath.startsWith("src/sqlite/replication-") ||
     relativePath.startsWith("src/replication/")
   ) {
     addTarget("tests/replication");
+    return;
+  }
+  if (relativePath === "src/filesystem/types.ts") {
+    addTarget("tests/replication");
+    addTarget("tests/storage");
     return;
   }
   if (relativePath === "src/index.ts") {

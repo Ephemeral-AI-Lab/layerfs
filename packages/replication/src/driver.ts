@@ -721,6 +721,7 @@ async function runProvisioning(
   await runContentNegotiation(state);
   await runStateTransfer(state);
   if (state.session.phase !== "activation") return;
+  const summary = await bridge.exportSummary({ sessionId, flow: "authority-main-to-replica" });
   const genesisFragment = encodeGenesisFragment({
     filesystemId: genesis.meta.filesystemId,
     rootInode: genesis.meta.rootInode,
@@ -744,7 +745,7 @@ async function runProvisioning(
     rootMtimeMs: genesis.meta.rootMtimeMs,
     rootCtimeMs: genesis.meta.rootCtimeMs,
     rootToken: genesis.meta.rootToken,
-    rows: genesis.rows,
+    rows: [],
   });
   const activationRequest = encodeActivationRequest({
     kind: 2,
@@ -753,7 +754,7 @@ async function runProvisioning(
     expectedNextAllocationSequence: genesis.meta.nextAllocationSequence,
     expectedRootInode: genesis.meta.rootInode,
     expectedRevisionCount: 1,
-    expectedStateRows: genesis.rows.length,
+    expectedStateRows: summary.stateRows,
     expectedClosureRoots: 0,
     expectedClosureNodes: 0,
     expectedClosureObjects: 0,
@@ -789,7 +790,7 @@ async function runProvisioning(
       rootMtimeMs: genesis.meta.rootMtimeMs,
       rootCtimeMs: genesis.meta.rootCtimeMs,
       rootToken: genesis.meta.rootToken,
-      rows: genesis.rows,
+      rows: [],
     },
   });
   await sendActivation(state, activationRequest);

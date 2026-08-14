@@ -67,6 +67,24 @@ interface ExportRow extends SqliteRow {
   readonly done: number;
 }
 
+interface BranchCaptureCursor {
+  readonly kind: 1 | 2 | 3 | 4 | 5 | 6;
+  readonly pathHex: string | null;
+  readonly inodeId: string | null;
+  readonly pageIndex: number | null;
+  readonly generation: number | null;
+  readonly sequence: number | null;
+}
+
+interface RevisionStateCursor {
+  readonly revision: number;
+  readonly kind: 1 | 2 | 3;
+  readonly inodeId: string | null;
+  readonly parentInode: string | null;
+  readonly nameSortHex: string | null;
+  readonly fragmentIndex: number;
+}
+
 interface ImportRow extends SqliteRow {
   readonly session_id: string;
   readonly lease_id: string;
@@ -749,6 +767,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       branchGenerationDigest: selectedBranchDigest,
       branchPreviousGeneration: selectedBranchPreviousGeneration,
       branchPreviousGenerationDigest: selectedBranchPreviousDigest,
+      branchCapture: options.flow === "authority-main-to-replica"
+        ? null
+        : { kind: 1, pathHex: null, inodeId: null, pageIndex: null, generation: null, sequence: null },
+      branchCaptureComplete: options.flow === "authority-main-to-replica",
     });
     this.#tx.run(
       "INSERT INTO efs_replication_exports(session_id,kind,selected_identity,selected_generation,base_revision,target_revision,root_mutation_generation,next_allocation_sequence,root_inode,meta_json,revision_cursor,mark_kind,mark_hash,mark_edge,root_count,node_count,object_count,object_bytes,offered_roots,offered_nodes,offered_objects,state_rows,done) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,0,0,0,0,0,0)",
@@ -789,85 +811,145 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     });
   }
 
-  #snapshotBranchRows(sessionId: string, branchId: string, generation: number): void {
-    let rowIndex = 0;
+  #snapshotBranchRows(sessionId: string, branchId: string, generation: number): boolean {
+    const exportRow = this.#exportRow(sessionId);
+    const metadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
+    if (metadata.branchCaptureComplete === true) return true;
+    const liveBranch = this.#tx.all<BranchRowSql & SqliteRow>(
+      "SELECT base_revision,state,generation,created_at_ms,terminal_at_ms,merged_revision FROM efs_branches WHERE id=?",
+      [branchId],
+      { maxRows: 1, maxBytes: 2048 },
+    )[0];
+    if (!liveBranch || liveBranch.generation !== generation)
+      throw transferError("BranchDiverged", "branch changed during export capture");
+    const raw = metadata.branchCapture as Partial<BranchCaptureCursor> | undefined;
+    let cursor: BranchCaptureCursor = {
+      kind: raw?.kind === 2 || raw?.kind === 3 || raw?.kind === 4 || raw?.kind === 5 || raw?.kind === 6 ? raw.kind : 1,
+      pathHex: typeof raw?.pathHex === "string" ? raw.pathHex : null,
+      inodeId: typeof raw?.inodeId === "string" ? raw.inodeId : null,
+      pageIndex: raw && Number.isSafeInteger(raw.pageIndex) ? raw.pageIndex ?? null : null,
+      generation: raw && Number.isSafeInteger(raw.generation) ? raw.generation ?? null : null,
+      sequence: raw && Number.isSafeInteger(raw.sequence) ? raw.sequence ?? null : null,
+    };
+    const pageSize = Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64));
+    const reset = (kind: 1 | 2 | 3 | 4 | 5 | 6): BranchCaptureCursor => ({
+      kind, pathHex: null, inodeId: null, pageIndex: null, generation: null, sequence: null,
+    });
     const insert = (row: TransferBranchRow): void => {
       const encoded = encodeBranchSnapshotRow(row);
+      const nextIndex = this.#tx.all<{ next_index: number } & SqliteRow>(
+        "SELECT coalesce(max(row_index),-1)+1 next_index FROM efs_replication_export_rows WHERE session_id=?",
+        [sessionId], { maxRows: 1, maxBytes: 256 },
+      )[0]!.next_index;
       this.#tx.run(
         "INSERT INTO efs_replication_export_rows(session_id,row_index,kind,row_key,value) VALUES(?,?,?,?,?)",
-        [sessionId, rowIndex, encoded.kind, encoded.key, encoded.value],
+        [sessionId, nextIndex, encoded.kind, encoded.key, encoded.value],
       );
-      rowIndex += 1;
     };
-    // Keep the SQLite result materialization envelope comfortably below the
-    // final-transaction ceiling even when a driver returns pooled backing
-    // buffers for small BLOB columns.  The transfer itself remains bounded;
-    // this only increases the number of semantic snapshot batches.
-    const pageSize = Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64));
-    for (let offset = 0; ; offset += pageSize) {
-      const rows = this.#tx.all<{ path: Uint8Array; expected_token: number | null; kind: number; encoded: Uint8Array | null } & SqliteRow>(
-        "SELECT path,expected_token,kind,encoded FROM efs_branch_changes WHERE branch_id=? ORDER BY path LIMIT ? OFFSET ?",
-        [branchId, pageSize, offset],
-        { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
-      );
-      for (const row of rows)
-        insert({ kind: 1, path: copyBytes(row.path), disposition: row.kind, expectedToken: row.expected_token, encoded: row.encoded ? copyBytes(row.encoded) : null });
-      if (rows.length < pageSize) break;
-    }
-    for (let offset = 0; ; offset += pageSize) {
-      const rows = this.#tx.all<{ inode_id: string; expected_token: number | null; encoded: Uint8Array } & SqliteRow>(
-        "SELECT inode_id,expected_token,encoded FROM efs_branch_inode_overlays WHERE branch_id=? ORDER BY inode_id LIMIT ? OFFSET ?",
-        [branchId, pageSize, offset],
-        { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
-      );
-      for (const row of rows)
-        insert({ kind: 2, inodeId: row.inode_id, expectedToken: row.expected_token, encoded: copyBytes(row.encoded) });
-      if (rows.length < pageSize) break;
-    }
-    for (let offset = 0; ; offset += pageSize) {
-      const rows = this.#tx.all<{ inode_id: string; page_index: number; generation: number; bytes: Uint8Array; created_at_ms: number; head: number } & SqliteRow>(
-        "SELECT v.inode_id,v.page_index,v.generation,v.bytes,v.created_at_ms,CASE WHEN v.generation=(SELECT max(v2.generation) FROM efs_cow_page_versions v2 WHERE v2.branch_id=v.branch_id AND v2.inode_id=v.inode_id AND v2.page_index=v.page_index AND v2.generation<=?) THEN 1 ELSE 0 END head FROM efs_cow_page_versions v WHERE v.branch_id=? AND v.generation<=? ORDER BY v.inode_id,v.page_index,v.generation LIMIT ? OFFSET ?",
-        [generation, branchId, generation, pageSize, offset],
-        { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
-      );
-      for (const row of rows)
-        insert({ kind: 3, inodeId: row.inode_id, pageIndex: row.page_index, generation: row.generation, bytes: copyBytes(row.bytes), created_at_ms: row.created_at_ms, head: row.head === 1 });
-      if (rows.length < pageSize) break;
-    }
-    for (let offset = 0; ; offset += pageSize) {
-      const rows = this.#tx.all<{ inode_id: string; sequence: number; generation: number; offset: number; delete_length: number; insert_length: number } & SqliteRow>(
-        "SELECT inode_id,sequence,generation,offset,delete_length,insert_length FROM efs_patches WHERE branch_id=? AND generation<=? ORDER BY inode_id,sequence LIMIT ? OFFSET ?",
-        [branchId, generation, pageSize, offset],
-        { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
-      );
-      for (const row of rows) {
-        const segments = this.#tx.all<{ segment_index: number; bytes: Uint8Array } & SqliteRow>(
-          "SELECT segment_index,bytes FROM efs_patch_segments WHERE branch_id=? AND inode_id=? AND sequence=? ORDER BY segment_index",
-          [branchId, row.inode_id, row.sequence],
-          { maxRows: 64, maxBytes: this.#limits.maxFinalTransactionBytes },
+
+    // One durable invocation captures at most one bounded keyset page.  The
+    // cursor and page rows commit together, so a statement fault retries the
+    // same page without skipping or duplicating source rows.
+    while (cursor.kind <= 6) {
+      let rowCount = 0;
+      if (cursor.kind === 1) {
+        const rows = this.#tx.all<{ path: Uint8Array; expected_token: number | null; kind: number; encoded: Uint8Array | null } & SqliteRow>(
+          cursor.pathHex === null
+            ? "SELECT path,expected_token,kind,encoded FROM efs_branch_changes WHERE branch_id=? ORDER BY path LIMIT ?"
+            : "SELECT path,expected_token,kind,encoded FROM efs_branch_changes WHERE branch_id=? AND path>? ORDER BY path LIMIT ?",
+          cursor.pathHex === null ? [branchId, pageSize] : [branchId, hexBytes(cursor.pathHex), pageSize],
+          { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
         );
-        insert({ kind: 4, inodeId: row.inode_id, sequence: row.sequence, generation: row.generation, offset: row.offset, deleteLength: row.delete_length, insertLength: row.insert_length, segments: segments.map((segment) => copyBytes(segment.bytes)) });
+        for (const row of rows) {
+          insert({ kind: 1, path: copyBytes(row.path), disposition: row.kind, expectedToken: row.expected_token, encoded: row.encoded ? copyBytes(row.encoded) : null });
+          cursor = { ...cursor, pathHex: bytesToHex(row.path) };
+        }
+        rowCount = rows.length;
+      } else if (cursor.kind === 2) {
+        const rows = this.#tx.all<{ inode_id: string; expected_token: number | null; encoded: Uint8Array } & SqliteRow>(
+          cursor.inodeId === null
+            ? "SELECT inode_id,expected_token,encoded FROM efs_branch_inode_overlays WHERE branch_id=? ORDER BY inode_id LIMIT ?"
+            : "SELECT inode_id,expected_token,encoded FROM efs_branch_inode_overlays WHERE branch_id=? AND inode_id>? ORDER BY inode_id LIMIT ?",
+          cursor.inodeId === null ? [branchId, pageSize] : [branchId, cursor.inodeId, pageSize],
+          { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
+        );
+        for (const row of rows) {
+          insert({ kind: 2, inodeId: row.inode_id, expectedToken: row.expected_token, encoded: copyBytes(row.encoded) });
+          cursor = { ...cursor, inodeId: row.inode_id };
+        }
+        rowCount = rows.length;
+      } else if (cursor.kind === 3) {
+        const rows = this.#tx.all<{ inode_id: string; page_index: number; generation: number; bytes: Uint8Array; created_at_ms: number; head: number } & SqliteRow>(
+          cursor.inodeId === null
+            ? "SELECT v.inode_id,v.page_index,v.generation,v.bytes,v.created_at_ms,CASE WHEN v.generation=(SELECT max(v2.generation) FROM efs_cow_page_versions v2 WHERE v2.branch_id=v.branch_id AND v2.inode_id=v.inode_id AND v2.page_index=v.page_index AND v2.generation<=?) THEN 1 ELSE 0 END head FROM efs_cow_page_versions v WHERE v.branch_id=? AND v.generation<=? ORDER BY v.inode_id,v.page_index,v.generation LIMIT ?"
+            : "SELECT v.inode_id,v.page_index,v.generation,v.bytes,v.created_at_ms,CASE WHEN v.generation=(SELECT max(v2.generation) FROM efs_cow_page_versions v2 WHERE v2.branch_id=v.branch_id AND v2.inode_id=v.inode_id AND v2.page_index=v.page_index AND v2.generation<=?) THEN 1 ELSE 0 END head FROM efs_cow_page_versions v WHERE v.branch_id=? AND v.generation<=? AND (v.inode_id>? OR (v.inode_id=? AND (v.page_index>? OR (v.page_index=? AND v.generation>?)))) ORDER BY v.inode_id,v.page_index,v.generation LIMIT ?",
+          cursor.inodeId === null
+            ? [generation, branchId, generation, pageSize]
+            : [generation, branchId, generation, cursor.inodeId, cursor.inodeId, cursor.pageIndex, cursor.pageIndex, cursor.generation, pageSize],
+          { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
+        );
+        for (const row of rows) {
+          insert({ kind: 3, inodeId: row.inode_id, pageIndex: row.page_index, generation: row.generation, bytes: copyBytes(row.bytes), created_at_ms: row.created_at_ms, head: row.head === 1 });
+          cursor = { ...cursor, inodeId: row.inode_id, pageIndex: row.page_index, generation: row.generation };
+        }
+        rowCount = rows.length;
+      } else if (cursor.kind === 4) {
+        const rows = this.#tx.all<{ inode_id: string; sequence: number; generation: number; offset: number; delete_length: number; insert_length: number } & SqliteRow>(
+          cursor.inodeId === null
+            ? "SELECT inode_id,sequence,generation,offset,delete_length,insert_length FROM efs_patches WHERE branch_id=? AND generation<=? ORDER BY inode_id,sequence LIMIT ?"
+            : "SELECT inode_id,sequence,generation,offset,delete_length,insert_length FROM efs_patches WHERE branch_id=? AND generation<=? AND (inode_id>? OR (inode_id=? AND sequence>?)) ORDER BY inode_id,sequence LIMIT ?",
+          cursor.inodeId === null ? [branchId, generation, pageSize] : [branchId, generation, cursor.inodeId, cursor.inodeId, cursor.sequence, pageSize],
+          { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
+        );
+        for (const row of rows) {
+          const segments = this.#tx.all<{ segment_index: number; bytes: Uint8Array } & SqliteRow>(
+            "SELECT segment_index,bytes FROM efs_patch_segments WHERE branch_id=? AND inode_id=? AND sequence=? ORDER BY segment_index",
+            [branchId, row.inode_id, row.sequence], { maxRows: 64, maxBytes: this.#limits.maxFinalTransactionBytes },
+          );
+          insert({ kind: 4, inodeId: row.inode_id, sequence: row.sequence, generation: row.generation, offset: row.offset, deleteLength: row.delete_length, insertLength: row.insert_length, segments: segments.map((segment) => copyBytes(segment.bytes)) });
+          cursor = { ...cursor, inodeId: row.inode_id, sequence: row.sequence };
+        }
+        rowCount = rows.length;
+      } else if (cursor.kind === 5) {
+        const rows = this.#tx.all<{ inode_id: string; expected_token: number | null } & SqliteRow>(
+          cursor.inodeId === null
+            ? "SELECT inode_id,expected_token FROM efs_branch_inode_expectations WHERE branch_id=? ORDER BY inode_id LIMIT ?"
+            : "SELECT inode_id,expected_token FROM efs_branch_inode_expectations WHERE branch_id=? AND inode_id>? ORDER BY inode_id LIMIT ?",
+          cursor.inodeId === null ? [branchId, pageSize] : [branchId, cursor.inodeId, pageSize],
+          { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
+        );
+        for (const row of rows) {
+          insert({ kind: 5, inodeId: row.inode_id, expectedToken: row.expected_token });
+          cursor = { ...cursor, inodeId: row.inode_id };
+        }
+        rowCount = rows.length;
+      } else {
+        const rows = this.#tx.all<{ path: Uint8Array; manifest_hash: Uint8Array } & SqliteRow>(
+          cursor.pathHex === null
+            ? "SELECT path,manifest_hash FROM efs_branch_manifest_roots WHERE branch_id=? ORDER BY path LIMIT ?"
+            : "SELECT path,manifest_hash FROM efs_branch_manifest_roots WHERE branch_id=? AND path>? ORDER BY path LIMIT ?",
+          cursor.pathHex === null ? [branchId, pageSize] : [branchId, hexBytes(cursor.pathHex), pageSize],
+          { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
+        );
+        for (const row of rows) {
+          insert({ kind: 6, path: copyBytes(row.path), manifestHash: copyBytes(row.manifest_hash) });
+          cursor = { ...cursor, pathHex: bytesToHex(row.path) };
+        }
+        rowCount = rows.length;
       }
-      if (rows.length < pageSize) break;
+      if (rowCount === pageSize) break;
+      if (cursor.kind === 6) {
+        cursor = reset(6);
+        break;
+      }
+      cursor = reset((cursor.kind + 1) as 1 | 2 | 3 | 4 | 5 | 6);
     }
-    for (let offset = 0; ; offset += pageSize) {
-      const rows = this.#tx.all<{ inode_id: string; expected_token: number | null } & SqliteRow>(
-        "SELECT inode_id,expected_token FROM efs_branch_inode_expectations WHERE branch_id=? ORDER BY inode_id LIMIT ? OFFSET ?",
-        [branchId, pageSize, offset],
-        { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
-      );
-      for (const row of rows) insert({ kind: 5, inodeId: row.inode_id, expectedToken: row.expected_token });
-      if (rows.length < pageSize) break;
-    }
-    for (let offset = 0; ; offset += pageSize) {
-      const rows = this.#tx.all<{ path: Uint8Array; manifest_hash: Uint8Array } & SqliteRow>(
-        "SELECT path,manifest_hash FROM efs_branch_manifest_roots WHERE branch_id=? ORDER BY path LIMIT ? OFFSET ?",
-        [branchId, pageSize, offset],
-        { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
-      );
-      for (const row of rows) insert({ kind: 6, path: copyBytes(row.path), manifestHash: copyBytes(row.manifest_hash) });
-      if (rows.length < pageSize) break;
-    }
+    const complete = cursor.kind === 6 && cursor.pathHex === null;
+    this.#tx.run(
+      "UPDATE efs_replication_exports SET meta_json=? WHERE session_id=?",
+      [encodeJson({ ...metadata, branchCapture: cursor, branchCaptureComplete: complete }), sessionId],
+    );
+    return complete;
   }
 
   #offerNodeChildren(
@@ -1164,9 +1246,14 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       readonly resultBytes: Uint8Array;
     }> | null;
   }> {
-    const exportRow = this.#exportRow(options.sessionId);
+    let exportRow = this.#exportRow(options.sessionId);
     if (exportRow.kind === 1) {
       const branchId = options.branchId!;
+      const captureMetadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
+      if (captureMetadata.branchCaptureComplete !== true) {
+        this.#snapshotBranchRows(options.sessionId, branchId, exportRow.selected_generation);
+        exportRow = this.#exportRow(options.sessionId);
+      }
       const liveRows = this.#tx.all<BranchRowSql & SqliteRow>(
         "SELECT base_revision,state,generation,created_at_ms,terminal_at_ms,merged_revision FROM efs_branches WHERE id=?",
         [branchId],
@@ -1228,7 +1315,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         "UPDATE efs_replication_exports SET revision_cursor=?,state_rows=state_rows+? WHERE session_id=?",
         [nextCursor, branchRows.length, options.sessionId],
       );
-      const complete = this.#tx.all<{ count: number } & SqliteRow>(
+      const captureComplete = (decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {}).branchCaptureComplete === true;
+      const complete = captureComplete && this.#tx.all<{ count: number } & SqliteRow>(
         "SELECT count(*) count FROM efs_replication_export_rows WHERE session_id=? AND row_index>?",
         [options.sessionId, nextCursor],
         { maxRows: 1, maxBytes: 256 },
@@ -1286,6 +1374,13 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         terminalResult: complete ? terminalResult : null,
       });
     }
+    if (exportRow.kind === 2) {
+      return Object.freeze({
+        records: this.#readGenesisState(options.sessionId, options.maxEntries, options.maxBytes),
+        complete: (decodeJson<Record<string, unknown>>(this.#exportRow(options.sessionId).meta_json) ?? {}).genesisComplete === true,
+        terminalResult: null,
+      });
+    }
     const records = this.#readRevisionState(
       options.sessionId,
       options.flow,
@@ -1294,11 +1389,78 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       options.checkpoint,
     );
     const state = this.#exportRow(options.sessionId);
+    const stateMetadata = decodeJson<Record<string, unknown>>(state.meta_json) ?? {};
     return Object.freeze({
       records,
-      complete: state.revision_cursor >= state.target_revision,
+      complete:
+        state.revision_cursor >= state.target_revision &&
+        stateMetadata.stateCursor === undefined,
       terminalResult: null,
     });
+  }
+
+  #readGenesisState(
+    sessionId: string,
+    maxEntries: number,
+    maxBytes: number,
+  ): ReplicationTransferRecord[] {
+    const exportRow = this.#exportRow(sessionId);
+    const metadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
+    const raw = metadata.genesisCursor as Partial<RevisionStateCursor> | undefined;
+    const cursor = {
+      inodeId: typeof raw?.inodeId === "string" ? raw.inodeId : null,
+      fragmentIndex: raw && Number.isSafeInteger(raw.fragmentIndex) ? raw.fragmentIndex ?? 0 : 0,
+    };
+    const limit = Math.max(1, Math.min(maxEntries, 256));
+    const rows = this.#tx.all<{ inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+      cursor.inodeId === null
+        ? "SELECT inode_id,tombstone,encoded FROM efs_inode_revisions WHERE revision=0 ORDER BY inode_id LIMIT ?"
+        : "SELECT inode_id,tombstone,encoded FROM efs_inode_revisions WHERE revision=0 AND inode_id>? ORDER BY inode_id LIMIT ?",
+      cursor.inodeId === null ? [limit + 1] : [cursor.inodeId, limit + 1],
+      { maxRows: limit + 1, maxBytes: maxBytes + 8192 },
+    );
+    const namespaceRows: TransferNamespaceRow[] = rows.slice(0, limit).map((row) => ({
+      kind: 1,
+      inodeId: row.inode_id,
+      tombstone: row.tombstone === 1,
+      encoded: row.encoded ? copyBytes(row.encoded) : null,
+    }));
+    if (namespaceRows.length === 0 && rows.length > 0)
+      throw transferError("ResourceLimit", "one genesis inode exceeds the negotiated batch limit");
+    const header = this.#tx.all<RevisionHeaderRow & SqliteRow>(
+      "SELECT revision,parent_revision,created_at_ms,writer_id,change_count FROM efs_revisions WHERE revision=0",
+      [], { maxRows: 1, maxBytes: 4096 },
+    )[0];
+    if (!header) throw transferError("ECORRUPT", "genesis revision is missing");
+    const fragmentBytes = encodeRevisionFragment({
+      revisionId: "0",
+      parentRevisionId: null,
+      created_at_ms: header.created_at_ms,
+      writerId: header.writer_id,
+      changeCount: header.change_count,
+      rows: namespaceRows,
+    });
+    if (fragmentBytes.byteLength > maxBytes)
+      throw transferError("ResourceLimit", "genesis fragment exceeds the negotiated batch limit");
+    const complete = rows.length <= limit;
+    const lastRow = namespaceRows.at(-1);
+    const nextCursor = complete ? undefined : {
+      inodeId: lastRow?.kind === 1 ? lastRow.inodeId : null,
+      fragmentIndex: cursor.fragmentIndex + 1,
+    };
+    this.#tx.run(
+      "UPDATE efs_replication_exports SET state_rows=state_rows+?,meta_json=? WHERE session_id=?",
+      [namespaceRows.length, encodeJson({ ...metadata, ...(complete ? { genesisComplete: true, genesisCursor: undefined } : { genesisCursor: nextCursor }) }), sessionId],
+    );
+    return [Object.freeze({
+      kind: "revision-fragment" as const,
+      checkpointId: "0",
+      revisionId: "0",
+      parentRevisionId: null,
+      fragmentIndex: cursor.fragmentIndex,
+      fragmentCount: cursor.fragmentIndex + 1,
+      fragmentBytes,
+    })];
   }
 
   #storedBranchDigest(sessionId: string, branchId: string, generation: number): Uint8Array {
@@ -1482,6 +1644,97 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return rows;
   }
 
+  #readNamespaceRowsPage(
+    cursor: RevisionStateCursor,
+    maxEntries: number,
+    maxBytes: number,
+    checkpoint: boolean,
+  ): Readonly<{
+    readonly rows: readonly TransferNamespaceRow[];
+    readonly nextCursor: RevisionStateCursor;
+    readonly revisionComplete: boolean;
+  }> {
+    const rows: TransferNamespaceRow[] = [];
+    const limit = Math.max(1, Math.min(maxEntries, 256));
+    const keyColumn = checkpoint ? "target_revision" : "revision";
+    const inodeTable = checkpoint ? "efs_checkpoint_inodes" : "efs_inode_revisions";
+    const entryTable = checkpoint ? "efs_checkpoint_entries" : "efs_entry_revisions";
+    const refTable = checkpoint ? "efs_checkpoint_manifest_roots" : "efs_revision_manifest_roots";
+    let fetched: readonly SqliteRow[] = [];
+    if (cursor.kind === 1) {
+      fetched = this.#tx.all<{ inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+        cursor.inodeId === null
+          ? `SELECT inode_id,tombstone,encoded FROM ${inodeTable} WHERE ${keyColumn}=? ORDER BY inode_id LIMIT ?`
+          : `SELECT inode_id,tombstone,encoded FROM ${inodeTable} WHERE ${keyColumn}=? AND inode_id>? ORDER BY inode_id LIMIT ?`,
+        cursor.inodeId === null ? [cursor.revision, limit + 1] : [cursor.revision, cursor.inodeId, limit + 1],
+        { maxRows: limit + 1, maxBytes: maxBytes + 8192 },
+      );
+      for (const row of fetched as readonly { inode_id: string; tombstone: number; encoded: Uint8Array | null }[]) {
+        const size = 32 + encoder.encode(row.inode_id).byteLength + (row.encoded?.byteLength ?? 0);
+        if (rows.length >= limit || (rows.length > 0 && size + rows.reduce((total, item) => total + 32 + (item.kind === 1 ? encoder.encode(item.inodeId).byteLength : 0), 0) > maxBytes)) break;
+        if (size > maxBytes && rows.length === 0) throw transferError("ResourceLimit", "one inode row exceeds the negotiated batch limit");
+        rows.push({ kind: 1, inodeId: row.inode_id, tombstone: row.tombstone === 1, encoded: row.encoded ? copyBytes(row.encoded) : null });
+      }
+      const hasMore = fetched.length > rows.length;
+      const last = rows.at(-1);
+      return Object.freeze({
+        rows,
+        nextCursor: hasMore && last !== undefined && last.kind === 1
+          ? { ...cursor, inodeId: last.inodeId }
+          : { revision: cursor.revision, kind: 2 as const, inodeId: null, parentInode: null, nameSortHex: null, fragmentIndex: cursor.fragmentIndex },
+        revisionComplete: false,
+      });
+    }
+    if (cursor.kind === 2) {
+      fetched = this.#tx.all<{ parent_inode: string; name_sort: Uint8Array; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+        cursor.parentInode === null
+          ? `SELECT parent_inode,name_sort,tombstone,encoded FROM ${entryTable} WHERE ${keyColumn}=? ORDER BY parent_inode,name_sort LIMIT ?`
+          : `SELECT parent_inode,name_sort,tombstone,encoded FROM ${entryTable} WHERE ${keyColumn}=? AND (parent_inode>? OR (parent_inode=? AND name_sort>?)) ORDER BY parent_inode,name_sort LIMIT ?`,
+        cursor.parentInode === null
+          ? [cursor.revision, limit + 1]
+          : [cursor.revision, cursor.parentInode, cursor.parentInode, hexBytes(cursor.nameSortHex ?? ""), limit + 1],
+        { maxRows: limit + 1, maxBytes: maxBytes + 8192 },
+      );
+      for (const row of fetched as readonly { parent_inode: string; name_sort: Uint8Array; tombstone: number; encoded: Uint8Array | null }[]) {
+        const size = 32 + row.name_sort.byteLength + (row.encoded?.byteLength ?? 0);
+        if (rows.length >= limit || (rows.length > 0 && size > maxBytes)) break;
+        if (size > maxBytes && rows.length === 0) throw transferError("ResourceLimit", "one entry row exceeds the negotiated batch limit");
+        rows.push({ kind: 2, parentInode: row.parent_inode, nameSort: copyBytes(row.name_sort), tombstone: row.tombstone === 1, encoded: row.encoded ? copyBytes(row.encoded) : null });
+      }
+      const hasMore = fetched.length > rows.length;
+      const last = rows.at(-1);
+      return Object.freeze({
+        rows,
+        nextCursor: hasMore && last !== undefined && last.kind === 2
+          ? { ...cursor, parentInode: last.parentInode, nameSortHex: bytesToHex(last.nameSort) }
+          : { revision: cursor.revision, kind: 3 as const, inodeId: null, parentInode: null, nameSortHex: null, fragmentIndex: cursor.fragmentIndex },
+        revisionComplete: false,
+      });
+    }
+    fetched = this.#tx.all<{ inode_id: string; manifest_hash: Uint8Array } & SqliteRow>(
+      cursor.inodeId === null
+        ? `SELECT inode_id,manifest_hash FROM ${refTable} WHERE ${keyColumn}=? ORDER BY inode_id LIMIT ?`
+        : `SELECT inode_id,manifest_hash FROM ${refTable} WHERE ${keyColumn}=? AND inode_id>? ORDER BY inode_id LIMIT ?`,
+      cursor.inodeId === null ? [cursor.revision, limit + 1] : [cursor.revision, cursor.inodeId, limit + 1],
+      { maxRows: limit + 1, maxBytes: maxBytes + 8192 },
+    );
+    for (const row of fetched as readonly { inode_id: string; manifest_hash: Uint8Array }[]) {
+      if (rows.length >= limit) break;
+      if (rows.length > 0 && (rows.length + 1) * 64 > maxBytes) break;
+      if (64 > maxBytes && rows.length === 0) throw transferError("ResourceLimit", "one manifest reference exceeds the negotiated batch limit");
+      rows.push({ kind: 3, inodeId: row.inode_id, manifestHash: copyBytes(row.manifest_hash) });
+    }
+    const hasMore = fetched.length > rows.length;
+    const last = rows.at(-1);
+    return Object.freeze({
+      rows,
+      nextCursor: hasMore && last !== undefined && last.kind === 3
+        ? { ...cursor, inodeId: last.inodeId }
+        : { revision: cursor.revision + 1, kind: 1 as const, inodeId: null, parentInode: null, nameSortHex: null, fragmentIndex: 0 },
+      revisionComplete: !hasMore && rows.length === fetched.length,
+    });
+  }
+
   #readRevisionState(
     sessionId: string,
     flow: ReplicationFlow,
@@ -1490,61 +1743,80 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     checkpoint: boolean,
   ): ReplicationTransferRecord[] {
     const exportRow = this.#exportRow(sessionId);
+    const metadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
+    const raw = metadata.stateCursor as Partial<RevisionStateCursor> | undefined;
+    let cursor: RevisionStateCursor = {
+      revision: raw && Number.isSafeInteger(raw.revision)
+        ? raw.revision ?? Math.max(exportRow.revision_cursor + 1, exportRow.base_revision + 1)
+        : Math.max(exportRow.revision_cursor + 1, exportRow.base_revision + 1),
+      kind: raw?.kind === 2 ? 2 : raw?.kind === 3 ? 3 : 1,
+      inodeId: typeof raw?.inodeId === "string" ? raw.inodeId : null,
+      parentInode: typeof raw?.parentInode === "string" ? raw.parentInode : null,
+      nameSortHex: typeof raw?.nameSortHex === "string" ? raw.nameSortHex : null,
+      fragmentIndex: raw && Number.isSafeInteger(raw.fragmentIndex) ? raw.fragmentIndex ?? 0 : 0,
+    };
     const records: ReplicationTransferRecord[] = [];
     let bytesUsed = 0;
-    let revision = Math.max(exportRow.revision_cursor + 1, exportRow.base_revision + 1);
     let emitted = 0;
-    while (
-      revision <= exportRow.target_revision &&
-      emitted < maxEntries &&
-      bytesUsed < maxBytes
-    ) {
+    while (cursor.revision <= exportRow.target_revision && emitted < maxEntries && bytesUsed < maxBytes) {
       const headers = this.#tx.all<RevisionHeaderRow & SqliteRow>(
         "SELECT revision,parent_revision,created_at_ms,writer_id,change_count FROM efs_revisions WHERE revision=?",
-        [revision],
-        { maxRows: 1, maxBytes: 4096 },
+        [cursor.revision], { maxRows: 1, maxBytes: 4096 },
       );
-      if (headers.length !== 1)
-        throw transferError("ECORRUPT", "export revision is missing");
+      if (headers.length !== 1) throw transferError("ECORRUPT", "export revision is missing");
       const header = headers[0]!;
-      const rows = this.#readNamespaceRows(
-        sessionId,
-        revision,
-        Math.max(1, maxEntries - emitted),
-        maxBytes - bytesUsed,
-        checkpoint,
+      const page = this.#readNamespaceRowsPage(
+        cursor, Math.max(1, Math.min(maxEntries - emitted, 256)), maxBytes - bytesUsed, checkpoint,
       );
+      if (page.rows.length === 0) {
+        cursor = page.nextCursor;
+        const durableCursor = cursor.revision > exportRow.target_revision ? undefined : cursor;
+        this.#tx.run(
+          "UPDATE efs_replication_exports SET revision_cursor=?,meta_json=? WHERE session_id=?",
+          [page.revisionComplete ? cursor.revision - 1 : exportRow.revision_cursor, encodeJson({ ...metadata, ...(durableCursor === undefined ? { stateCursor: undefined } : { stateCursor: durableCursor }) }), sessionId],
+        );
+        continue;
+      }
       const fragmentBytes = checkpoint
-        ? encodeCheckpointFragment({ revisionId: String(revision), rows })
+        ? encodeCheckpointFragment({ revisionId: String(cursor.revision), rows: page.rows })
         : encodeRevisionFragment({
-            revisionId: String(revision),
-            parentRevisionId:
-              header.parent_revision === null ? null : String(header.parent_revision),
+            revisionId: String(cursor.revision),
+            parentRevisionId: header.parent_revision === null ? null : String(header.parent_revision),
             created_at_ms: header.created_at_ms,
             writerId: header.writer_id,
             changeCount: header.change_count,
-            rows,
+            rows: page.rows,
           });
-      records.push(
-        Object.freeze({
-          kind: checkpoint ? ("checkpoint-fragment" as const) : ("revision-fragment" as const),
-          checkpointId: String(revision),
-          revisionId: String(revision),
-          parentRevisionId:
-            header.parent_revision === null ? null : String(header.parent_revision),
-          fragmentIndex: 0,
-          fragmentCount: 1,
-          fragmentBytes,
-        }),
-      );
+      if (fragmentBytes.byteLength > maxBytes - bytesUsed)
+        throw transferError("ResourceLimit", "one revision fragment exceeds the negotiated batch limit");
+      records.push(Object.freeze({
+        kind: checkpoint ? ("checkpoint-fragment" as const) : ("revision-fragment" as const),
+        checkpointId: String(cursor.revision),
+        revisionId: String(cursor.revision),
+        parentRevisionId: header.parent_revision === null ? null : String(header.parent_revision),
+        fragmentIndex: cursor.fragmentIndex,
+        fragmentCount: cursor.fragmentIndex + 1,
+        fragmentBytes,
+      }));
       emitted += 1;
       bytesUsed += fragmentBytes.byteLength;
+      const next = page.revisionComplete
+        ? {
+            revision: cursor.revision + 1,
+            kind: 1 as const,
+            inodeId: null,
+            parentInode: null,
+            nameSortHex: null,
+            fragmentIndex: 0,
+          }
+        : { ...page.nextCursor, fragmentIndex: cursor.fragmentIndex + 1 };
+      cursor = next;
+      const durableCursor = cursor.revision > exportRow.target_revision ? undefined : cursor;
       this.#tx.run(
-        "UPDATE efs_replication_exports SET revision_cursor=?,state_rows=state_rows+? WHERE session_id=?",
-        [revision, rows.length, sessionId],
+        "UPDATE efs_replication_exports SET revision_cursor=?,state_rows=state_rows+?,meta_json=? WHERE session_id=?",
+        [page.revisionComplete ? cursor.revision - 1 : exportRow.revision_cursor, page.rows.length, encodeJson({ ...metadata, ...(durableCursor === undefined ? { stateCursor: undefined } : { stateCursor: durableCursor }) }), sessionId],
       );
-      revision += 1;
-      if (rows.length === 0) break;
+      if (page.revisionComplete && cursor.revision > exportRow.target_revision) break;
     }
     void flow;
     return records;
@@ -1895,7 +2167,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       } else if (record.kind === "revision-fragment") {
         const decoded = decodeRevisionFragment(record.fragmentBytes);
         const revision = parseIntegerRevision(decoded.revisionId, "revisionId");
-        if (decoded.rows.length === 0)
+        if (decoded.rows.length === 0 && revision !== 0)
           throw transferError("IntegrityFailure", "revision fragment is empty");
         this.#storeRevisionFragment(options.sessionId, revision, decoded, false);
       } else if (record.kind === "checkpoint-fragment") {
@@ -1965,7 +2237,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const revisionKey = u64be(revision);
     const headerKey = keyBytes([u8(1), revisionKey]);
     const headerValue = new Uint8Array([
-      ...u64be(decoded.parentRevisionId === null ? -1 : Number(decoded.parentRevisionId)),
+      ...u64be(decoded.parentRevisionId === null ? 0 : Number(decoded.parentRevisionId)),
       ...u64be(decoded.created_at_ms),
       ...u64be(decoded.changeCount),
       ...encoder.encode(decoded.writerId),
@@ -2145,9 +2417,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
   }): boolean {
     const importRow = this.#importRow(options.sessionId);
     if (!equalBytes(importRow.owner_nonce, options.ownerNonce)) return false;
+    if (!Number.isSafeInteger(options.expiresAt) || options.expiresAt <= options.now)
+      return false;
     const result = this.#tx.run(
-      "UPDATE efs_leases SET last_renewal_at_ms=?,expires_at_ms=? WHERE id=? AND owner_nonce=? AND state=0 AND expires_at_ms<=?",
-      [options.now, options.expiresAt, importRow.lease_id, options.ownerNonce, options.expiresAt],
+      "UPDATE efs_leases SET last_renewal_at_ms=?,expires_at_ms=? WHERE id=? AND owner_nonce=? AND state=0 AND expires_at_ms>?",
+      [options.now, options.expiresAt, importRow.lease_id, options.ownerNonce, options.now],
     );
     return result.changes === 1;
   }
@@ -2419,7 +2693,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     for (const header of newHeaders) {
       const revision = readU64(header.key, 1, "staged revision");
       const parentValue = readU64(header.value!, 0, "staged parent revision");
-      const parent = parentValue === 0xffff_ffff_ffff_ffff ? null : parentValue;
+      const parent = revision === 0 || parentValue === 0xffff_ffff_ffff_ffff ? null : parentValue;
       const createdAtMs = readU64(header.value!, 8, "staged creation time");
       const changeCount = readU64(header.value!, 16, "staged change count");
       const writerBytes = header.value!.subarray(24);
@@ -3419,6 +3693,23 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       throw transferError("ProvisioningRejected", "provisioning adopts revision zero only");
     if (options.expectedRootInode !== genesis.rootInode)
       throw transferError("ProvisioningRejected", "genesis root inode mismatch");
+    const stagedGenesisRows = options.genesisRows.length > 0
+      ? options.genesisRows
+      : this.#stagedRows(options.sessionId, 2).map((row) => {
+          if (row.key.byteLength < 10 || row.key[0] !== 2 || readU64(row.key, 1, "genesis staged revision") !== 0)
+            throw transferError("IntegrityFailure", "staged genesis inode key is invalid");
+          let inodeId: string;
+          try {
+            inodeId = decoder.decode(row.key.subarray(9));
+          } catch {
+            throw transferError("IntegrityFailure", "staged genesis inode id is not UTF-8");
+          }
+          return {
+            inodeId,
+            tombstone: (row.value?.[0] ?? 0) === 1,
+            encoded: row.value && row.value.byteLength > 1 ? copyBytes(row.value.subarray(1)) : null,
+          };
+        });
     this.#tx.run(
       "INSERT INTO efs_meta(singleton,schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,next_allocation_sequence,cow_page_bytes,created_at_ms,last_root_removal_generation,max_manifest_entries,max_manifest_depth,max_file_bytes,writer_profile) VALUES(1,13,?,?,?,?,?,?,?,?,?,?,?,?)",
       [
@@ -3456,7 +3747,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         genesis.rootToken,
       ],
     );
-    for (const row of options.genesisRows) {
+    for (const row of stagedGenesisRows) {
       if (row.tombstone) {
         this.#tx.run(
           "INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(0,?,1,NULL)",
@@ -3535,30 +3826,30 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       rootCtimeMs: root.ctime_ms,
       rootToken: root.token,
     };
-    const rows = this.#tx.all<
-      { inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow
-    >(
-      "SELECT inode_id,tombstone,encoded FROM efs_inode_revisions WHERE revision=0 ORDER BY inode_id",
-      [],
-      { maxRows: 256, maxBytes: 256 * 1024 },
-    );
+    const exportMetadata = {
+      ...exported,
+      genesisCursor: {
+        revision: 0,
+        kind: 1,
+        inodeId: null,
+        parentInode: null,
+        nameSortHex: null,
+        fragmentIndex: 0,
+      },
+      genesisComplete: false,
+    };
     this.#tx.run(
-      "INSERT INTO efs_replication_exports(session_id,kind,selected_identity,selected_generation,base_revision,target_revision,root_mutation_generation,next_allocation_sequence,root_inode,meta_json,revision_cursor,mark_kind,mark_hash,mark_edge,root_count,node_count,object_count,object_bytes,offered_roots,offered_nodes,offered_objects,state_rows,done) VALUES(?,2,?,0,0,0,0,1,?,?,0,0,NULL,0,0,0,0,0,0,0,0,?,1)",
+      "INSERT INTO efs_replication_exports(session_id,kind,selected_identity,selected_generation,base_revision,target_revision,root_mutation_generation,next_allocation_sequence,root_inode,meta_json,revision_cursor,mark_kind,mark_hash,mark_edge,root_count,node_count,object_count,object_bytes,offered_roots,offered_nodes,offered_objects,state_rows,done) VALUES(?,2,?,0,0,0,0,1,?,?,0,0,NULL,0,0,0,0,0,0,0,0,0,0)",
       [
         options.sessionId,
         meta.filesystem_id,
         meta.root_inode,
-        encodeJson(exported),
-        rows.length,
+        encodeJson(exportMetadata),
       ],
     );
     return Object.freeze({
       meta: exported,
-      rows: rows.map((row) => ({
-        inodeId: row.inode_id,
-        tombstone: row.tombstone === 1,
-        encoded: row.encoded ? copyBytes(row.encoded) : null,
-      })),
+      rows: [],
     });
   }
 }

@@ -1471,6 +1471,8 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
     readonly nextPhase: ReplicationPhase;
     readonly nextCursor: Uint8Array;
     readonly nextCursorDigest: Uint8Array;
+    readonly requestDigest?: Uint8Array;
+    readonly responseBytes?: Uint8Array;
   }): ReplicationSessionSnapshot {
     const loaded = this.#load(request.operationId);
     const { row, state } = loaded;
@@ -1511,6 +1513,16 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
     state.cursor = toHex(request.nextCursor);
     state.cursorDigest = toHex(request.nextCursorDigest);
     const encodedState = encodeJson(state);
+    if (request.responseBytes !== undefined) {
+      if (!request.requestDigest || request.requestDigest.byteLength !== 32)
+        throw replicationError("IntegrityFailure", "outbound receipt request digest is invalid");
+      if (request.responseBytes.byteLength > state.binding.maxResponseBytes)
+        throw replicationError("ResourceLimit", "outbound receipt exceeds the response limit");
+      this.#tx.run(
+        "INSERT INTO efs_replication_receipts(session_id,batch_index,digest,encoded) VALUES(?,?,?,?)",
+        [request.operationId, -request.sequence - 2, request.requestDigest, request.responseBytes],
+      );
+    }
     this.#assertAggregateAdmission(state.binding, {
       activeSessions: terminalResultAcknowledgement ? 0 : 1,
       sessionRows: 1,
@@ -1522,6 +1534,27 @@ export class ReplicationSessionRepository implements ReplicationSessionStore {
       [encodedState, request.operationId, request.ownerNonce],
     );
     return snapshot(state, row.staged_bytes);
+  }
+
+  replayOutboundBatch(request: {
+    readonly operationId: string;
+    readonly sessionId: string;
+    readonly ownerNonce: Uint8Array;
+    readonly sequence: number;
+    readonly requestDigest: Uint8Array;
+  }): Uint8Array {
+    if (!Number.isSafeInteger(request.sequence) || request.sequence < 0)
+      throw replicationError("CursorMismatch", "outbound receipt sequence is invalid");
+    const loaded = this.#load(request.operationId);
+    this.#assertOwner(loaded.state, request.sessionId, request.ownerNonce);
+    const row = this.#tx.all<ReceiptRow>(
+      "SELECT digest,encoded FROM efs_replication_receipts WHERE session_id=? AND batch_index=?",
+      [request.operationId, -request.sequence - 2],
+      { maxRows: 1, maxBytes: loaded.state.binding.maxResponseBytes + 4096 },
+    )[0];
+    if (!row || !equalBytes(row.digest, request.requestDigest))
+      throw replicationError("BatchReplayMismatch", "outbound receipt is missing or mismatched");
+    return new Uint8Array(row.encoded);
   }
 
   consumeAttempt(request: {
