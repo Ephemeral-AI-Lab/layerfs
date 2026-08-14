@@ -1108,6 +1108,7 @@ export interface ReplicationTransferStore {
       readonly encoded: Uint8Array | null;
     }[];
   }>;
+  releaseExport(options: { readonly sessionId: string; readonly now: number }): void;
   readExportBatch(options: {
     readonly sessionId: string;
     readonly flow: ReplicationFlow;
@@ -1225,6 +1226,7 @@ export interface ReplicationTransferStore {
     readonly generation: number | null;
     readonly generationDigest: Uint8Array | null;
     readonly checkpoint: boolean;
+    readonly sourceRole?: "main-authority" | "replica";
     readonly terminalState: 0 | 1 | 2;
     readonly terminalResultOperationId: string | null;
     readonly terminalResultBytes: Uint8Array | null;
@@ -1295,7 +1297,7 @@ export interface OperationsStorage {
    * do so; every other host falls back to the byte-identical pure-JS
    * implementation in `cas/sha256.ts`, so digests never depend on the host.
    */
-  readonly hashBytes: HashFunction;  /**
+  readonly hashBytes: HashFunction; /**
    * Optional asynchronous SHA-256 hasher (WebCrypto on workerd) used by the
    * streaming write pipeline to hash chunk batches concurrently with bounded
    * parallelism. Digest output is byte-identical to `hashBytes`.

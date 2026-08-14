@@ -723,7 +723,16 @@ export interface ReplicationSessionStore {
         readonly sequence: number;
         readonly phase: ReplicationPhase;
         readonly nextPhase: ReplicationPhase;
+        readonly requestDigest?: Uint8Array;
+        readonly responseBytes?: Uint8Array;
     }): ReplicationSessionSnapshot;
+    replayOutboundBatch(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly sequence: number;
+        readonly requestDigest: Uint8Array;
+    }): Uint8Array;
     storeTerminalResult(request: {
         readonly operationId: string;
         readonly sessionId: string;
@@ -781,7 +790,16 @@ export interface ReplicationFilesystemBridge {
         readonly nextPhase: ReplicationPhase;
         readonly nextCursor: Uint8Array;
         readonly nextCursorDigest: Uint8Array;
+        readonly requestDigest?: Uint8Array;
+        readonly responseBytes?: Uint8Array;
     }): Promise<ReplicationSessionSnapshot>;
+    replayOutboundBatch(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly sequence: number;
+        readonly requestDigest: Uint8Array;
+    }): Promise<Uint8Array>;
     acceptBatch(request: ReplicationBatchAcceptanceRequest & {
         readonly records?: readonly ReplicationTransferRecord[];
     }): Promise<Readonly<{
@@ -830,6 +848,8 @@ export interface ReplicationFilesystemBridge {
         readonly nextPhase: ReplicationPhase;
         readonly nextCursor: Uint8Array;
         readonly nextCursorDigest: Uint8Array;
+        readonly requestDigest?: Uint8Array;
+        readonly responseBytes?: Uint8Array;
     }): Promise<ReplicationSessionSnapshot>;
     storeTerminalResult(request: {
         readonly operationId: string;
@@ -855,6 +875,10 @@ export interface ReplicationFilesystemBridge {
         readonly sessionId: string;
         readonly now: number;
     }): Promise<ReplicationGenesisCapture>;
+    releaseExport(request: {
+        readonly sessionId: string;
+        readonly now: number;
+    }): Promise<void>;
     readExportBatch(request: {
         readonly sessionId: string;
         readonly flow: ReplicationFlow;
@@ -938,6 +962,8 @@ export interface ReplicationFilesystemBridge {
         readonly generation: number | null;
         readonly generationDigest: Uint8Array | null;
         readonly checkpoint: boolean;
+        /** Authenticated source role; only the main authority may deliver terminal state. */
+        readonly sourceRole?: "main-authority" | "replica";
         readonly terminalState: 0 | 1 | 2;
         readonly terminalResultOperationId: string | null;
         readonly terminalResultBytes: Uint8Array | null;
@@ -968,6 +994,10 @@ export interface ReplicationFilesystemBridge {
     }): Promise<void>;
 }
 export interface ReplicationFinalization {
+    /** False means the core committed one bounded activation page and the
+     * destination endpoint must call finalizeImport again with the same
+     * authenticated request. */
+    readonly complete?: boolean;
     readonly revision: string;
     readonly branchId: string | null;
     readonly baseRevision: string | null;
@@ -1992,6 +2022,10 @@ export interface ReplicationTransferStore {
             readonly encoded: Uint8Array | null;
         }[];
     }>;
+    releaseExport(options: {
+        readonly sessionId: string;
+        readonly now: number;
+    }): void;
     readExportBatch(options: {
         readonly sessionId: string;
         readonly flow: ReplicationFlow;
@@ -2109,6 +2143,7 @@ export interface ReplicationTransferStore {
         readonly generation: number | null;
         readonly generationDigest: Uint8Array | null;
         readonly checkpoint: boolean;
+        readonly sourceRole?: "main-authority" | "replica";
         readonly terminalState: 0 | 1 | 2;
         readonly terminalResultOperationId: string | null;
         readonly terminalResultBytes: Uint8Array | null;

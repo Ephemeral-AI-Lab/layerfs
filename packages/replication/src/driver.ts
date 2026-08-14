@@ -94,20 +94,33 @@ function bytesToHex(bytes: Uint8Array): string {
 /** Read the stable state byte from the core-owned branch fragment envelope. */
 function branchGenerationState(bytes: Uint8Array): 0 | 1 | 2 {
   let offset = 0;
-  if (bytes[offset++] !== 1) throw new ReplicationError("IntegrityFailure", "branch fragment version is invalid");
+  if (bytes[offset++] !== 1)
+    throw new ReplicationError(
+      "IntegrityFailure",
+      "branch fragment version is invalid",
+    );
   const skipText = (name: string): void => {
-    if (offset + 4 > bytes.byteLength) throw new ReplicationError("IntegrityFailure", `${name} is truncated`);
-    const length = new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, false);
+    if (offset + 4 > bytes.byteLength)
+      throw new ReplicationError("IntegrityFailure", `${name} is truncated`);
+    const length = new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(
+      0,
+      false,
+    );
     offset += 4 + length;
-    if (offset > bytes.byteLength) throw new ReplicationError("IntegrityFailure", `${name} is truncated`);
+    if (offset > bytes.byteLength)
+      throw new ReplicationError("IntegrityFailure", `${name} is truncated`);
   };
   skipText("branch fragment id");
   skipText("branch fragment base");
   if (offset + 8 + 32 + 1 > bytes.byteLength)
-    throw new ReplicationError("IntegrityFailure", "branch fragment header is truncated");
+    throw new ReplicationError(
+      "IntegrityFailure",
+      "branch fragment header is truncated",
+    );
   offset += 8 + 32;
   const skipOptional = (name: string, width: number): void => {
-    if (offset >= bytes.byteLength) throw new ReplicationError("IntegrityFailure", `${name} is truncated`);
+    if (offset >= bytes.byteLength)
+      throw new ReplicationError("IntegrityFailure", `${name} is truncated`);
     const tag = bytes[offset++];
     if (tag === 0) return;
     if (tag !== 1 || offset + width > bytes.byteLength)
@@ -117,7 +130,10 @@ function branchGenerationState(bytes: Uint8Array): 0 | 1 | 2 {
   skipOptional("branch predecessor generation", 8);
   skipOptional("branch predecessor digest", 32);
   if (offset >= bytes.byteLength)
-    throw new ReplicationError("IntegrityFailure", "branch fragment state is truncated");
+    throw new ReplicationError(
+      "IntegrityFailure",
+      "branch fragment state is truncated",
+    );
   const state = bytes[offset];
   if (state !== 0 && state !== 1 && state !== 2)
     throw new ReplicationError("IntegrityFailure", "branch fragment state is invalid");
@@ -139,9 +155,13 @@ async function exchange(
     responseBytes = await state.transport.exchange(request);
   } catch (error) {
     if (error instanceof ReplicationError) throw error;
-    throw new ReplicationError("TransportFailure", "replication transport exchange failed", {
-      cause: error,
-    });
+    throw new ReplicationError(
+      "TransportFailure",
+      "replication transport exchange failed",
+      {
+        cause: error,
+      },
+    );
   }
   const response = decodeCanonicalEnvelope(responseBytes, { maxBytes });
   assertNotError(response);
@@ -198,9 +218,7 @@ async function sendBatch(
       batchEnvelopeDigest(batch),
     ),
     nextCursorDigest: createHash("sha256")
-      .update(
-        nextSessionCursor(state.session.cursorDigest, batchEnvelopeDigest(batch)),
-      )
+      .update(nextSessionCursor(state.session.cursorDigest, batchEnvelopeDigest(batch)))
       .digest(),
   });
   state.endpoint.updateLocalSession(state.sessionId, state.session);
@@ -234,8 +252,7 @@ function buildBinding(options: {
     ownerNonce: options.ownerNonce,
     flow,
     branchId: flow === "authority-main-to-replica" ? null : options.plan.branchId,
-    sourceFilesystemId:
-      mine.filesystemId ?? options.authorization.expectedFilesystemId,
+    sourceFilesystemId: mine.filesystemId ?? options.authorization.expectedFilesystemId,
     destinationFilesystemId:
       mine.filesystemId ?? options.authorization.expectedFilesystemId,
     sourceRole: roles.source,
@@ -317,8 +334,7 @@ function bindingMatches(
   left: ReplicationSessionBinding,
   right: ReplicationSessionBinding,
 ): boolean {
-  for (const name of BINDING_SCALARS)
-    if (left[name] !== right[name]) return false;
+  for (const name of BINDING_SCALARS) if (left[name] !== right[name]) return false;
   for (const name of BINDING_BYTES)
     if (!equalBytes(left[name], right[name])) return false;
   return true;
@@ -327,25 +343,22 @@ function bindingMatches(
 export async function replicate(
   options: ReplicateOptions,
 ): Promise<ReplicationRunResult> {
-  const {
-    bridge,
-    transport,
-    authorization,
-    plan,
-    operationId,
-    signal,
-  } = options;
+  const { bridge, transport, authorization, plan, operationId, signal } = options;
   const destinationAuthorization = options.destinationAuthorization ?? authorization;
-  let existing: Awaited<ReturnType<ReplicationFilesystemBridge["findSession"]>> | null = null;
+  let existing: Awaited<ReturnType<ReplicationFilesystemBridge["findSession"]>> | null =
+    null;
   let sessionId = randomSessionId();
   let resumeKey: Uint8Array = options.resumeKey ?? randomBytes(32);
   let ownerNonce: Uint8Array = randomBytes(16);
   let endpoint: ReplicationEndpoint | undefined;
 
   let peerCapabilities: ReplicationCapabilities;
-  let retryNegotiated: import("./authorization.js").NegotiatedReplicationSession | undefined;
+  let retryNegotiated:
+    import("./authorization.js").NegotiatedReplicationSession | undefined;
   const attemptStartedAt = performance?.now() ?? Date.now();
-  const skeleton = (negotiated: import("./authorization.js").NegotiatedReplicationSession | null): DriverState => ({
+  const skeleton = (
+    negotiated: import("./authorization.js").NegotiatedReplicationSession | null,
+  ): DriverState => ({
     bridge,
     transport,
     endpoint: endpoint!,
@@ -373,7 +386,10 @@ export async function replicate(
       PRE_NEGOTIATION_BYTES,
     );
     if (capsResponse.kind !== "capabilities")
-      throw new ReplicationError("ProtocolMismatch", "peer did not return capabilities");
+      throw new ReplicationError(
+        "ProtocolMismatch",
+        "peer did not return capabilities",
+      );
     peerCapabilities = capsResponse.value;
 
     const provisional = negotiateReplicationSession({
@@ -421,14 +437,18 @@ export async function replicate(
     });
     retryNegotiated = negotiated;
     existing = options.resumeKey
-      ? await bridge.findSession({ operationId, resumeKey: options.resumeKey }).catch((error: unknown) => {
-          if (
-            error instanceof Error &&
-            error.message.startsWith("OperationMismatch: replication operation is unknown")
-          )
-            return null;
-          throw error;
-        })
+      ? await bridge
+          .findSession({ operationId, resumeKey: options.resumeKey })
+          .catch((error: unknown) => {
+            if (
+              error instanceof Error &&
+              error.message.startsWith(
+                "OperationMismatch: replication operation is unknown",
+              )
+            )
+              return null;
+            throw error;
+          })
       : null;
     if (existing) {
       sessionId = existing.binding.sessionId;
@@ -510,9 +530,9 @@ export async function replicate(
     });
 
     const provisioning = peerCapabilities.provisioningState === "unbound-replica";
-    let exportSelection:
-      | Awaited<ReturnType<ReplicationFilesystemBridge["captureExport"]>>
-      | null = null;
+    let exportSelection: Awaited<
+      ReturnType<ReplicationFilesystemBridge["captureExport"]>
+    > | null = null;
     let genesisCapture: Awaited<
       ReturnType<ReplicationFilesystemBridge["captureGenesis"]>
     > | null = null;
@@ -531,9 +551,7 @@ export async function replicate(
         // destination finalizer performs the authoritative base-presence and
         // divergence check after the main prefix has been verified.
         destinationHead:
-          plan.flow === "authority-main-to-replica"
-            ? 0
-            : Number.MAX_SAFE_INTEGER,
+          plan.flow === "authority-main-to-replica" ? 0 : Number.MAX_SAFE_INTEGER,
         now: Date.now(),
       });
       state.selectedRootInode = exportSelection.rootInode;
@@ -547,12 +565,11 @@ export async function replicate(
       sourceFilesystemId: binding.sourceFilesystemId,
       destinationFilesystemId: binding.destinationFilesystemId,
       plan,
-      selectedIdentity:
-        provisioning
-          ? authorization.expectedFilesystemId
-          : plan.flow === "authority-main-to-replica"
-            ? String(exportSelection!.selectedRevision)
-            : plan.branchId,
+      selectedIdentity: provisioning
+        ? authorization.expectedFilesystemId
+        : plan.flow === "authority-main-to-replica"
+          ? String(exportSelection!.selectedRevision)
+          : plan.branchId,
       selectedGeneration: exportSelection?.selectedGeneration ?? null,
       phase: "content-offer",
       nextSequence: state.session.nextSequence,
@@ -591,7 +608,9 @@ export async function replicate(
       } catch (error) {
         if (
           !(error instanceof Error) ||
-          !error.message.startsWith("OperationMismatch: terminal result is not available")
+          !error.message.startsWith(
+            "OperationMismatch: terminal result is not available",
+          )
         )
           throw error;
       }
@@ -623,6 +642,7 @@ export async function replicate(
       records: [resultRecord],
     });
     await sendBatch(state, ackBatch);
+    await bridge.releaseExport({ sessionId, now: Date.now() });
     await endpoint!.close();
     return {
       status: "complete",
@@ -639,8 +659,7 @@ export async function replicate(
   } catch (error) {
     await endpoint?.close();
     if (error instanceof ReplicationError && isRetryable(error.code)) {
-      if (retryNegotiated === undefined)
-        throw error;
+      if (retryNegotiated === undefined) throw error;
       let exhausted = false;
       try {
         const accounting = await bridge.consumeAttempt({
@@ -707,7 +726,8 @@ function activationFromDecoded(
     generationDigest: decoded.generationDigest
       ? bytesToHex(decoded.generationDigest)
       : "",
-    state: decoded.state === 0 ? "active" : decoded.state === 1 ? "merged" : "discarded",
+    state:
+      decoded.state === 0 ? "active" : decoded.state === 1 ? "merged" : "discarded",
     authorityResult,
   };
 }
@@ -721,7 +741,10 @@ async function runProvisioning(
   await runContentNegotiation(state);
   await runStateTransfer(state);
   if (state.session.phase !== "activation") return;
-  const summary = await bridge.exportSummary({ sessionId, flow: "authority-main-to-replica" });
+  const summary = await bridge.exportSummary({
+    sessionId,
+    flow: "authority-main-to-replica",
+  });
   const genesisFragment = encodeGenesisFragment({
     filesystemId: genesis.meta.filesystemId,
     rootInode: genesis.meta.rootInode,
@@ -834,21 +857,32 @@ async function runMain(
   void selectedRevision;
 }
 
-async function runBranch(state: DriverState, peerCapabilities: ReplicationCapabilities): Promise<void> {
+async function runBranch(
+  state: DriverState,
+  peerCapabilities: ReplicationCapabilities,
+): Promise<void> {
   const { bridge, sessionId, plan, negotiated } = state;
-  const branchId =
-    plan.flow === "authority-main-to-replica" ? null : plan.branchId;
+  const branchId = plan.flow === "authority-main-to-replica" ? null : plan.branchId;
   if (!branchId)
     throw new ReplicationError("ProtocolMismatch", "branch flow requires a branchId");
   await runContentNegotiation(state);
   if (state.session.phase !== "state-transfer") {
-    if (state.session.phase === "content-offer" || state.session.phase === "missing-content" || state.session.phase === "content-transfer")
-      throw new ReplicationError("CursorMismatch", "branch transfer did not reach state-transfer");
+    if (
+      state.session.phase === "content-offer" ||
+      state.session.phase === "missing-content" ||
+      state.session.phase === "content-transfer"
+    )
+      throw new ReplicationError(
+        "CursorMismatch",
+        "branch transfer did not reach state-transfer",
+      );
   }
   const isReturn =
     plan.flow === "replica-branch-to-authority" ||
     plan.flow === "replica-branch-to-replica";
-  let terminalResult: Awaited<ReturnType<ReplicationFilesystemBridge["readExportStateBatch"]>>["terminalResult"] = null;
+  let terminalResult: Awaited<
+    ReturnType<ReplicationFilesystemBridge["readExportStateBatch"]>
+  >["terminalResult"] = null;
   let complete = state.session.phase !== "state-transfer";
   while (!complete) {
     const stateBatch = await bridge.readExportStateBatch({
@@ -915,9 +949,7 @@ async function runBranch(state: DriverState, peerCapabilities: ReplicationCapabi
     generationDigest: summary.generationDigest,
     terminalState: 0,
     terminalResultOperationId: terminalResult?.operationId ?? null,
-    terminalResultBytes: terminalResult
-      ? terminalResult.resultBytes
-      : null,
+    terminalResultBytes: terminalResult ? terminalResult.resultBytes : null,
     genesis: null,
   });
   await sendActivation(state, activationRequest);
@@ -984,7 +1016,10 @@ async function runContentNegotiation(state: DriverState): Promise<void> {
     });
     await sendBatch(state, marker);
   }
-  if (state.session.phase !== "missing-content" && state.session.phase !== "content-transfer")
+  if (
+    state.session.phase !== "missing-content" &&
+    state.session.phase !== "content-transfer"
+  )
     return;
   while (true) {
     const requestBatch = createCanonicalBatch({
@@ -1020,7 +1055,9 @@ async function runContentNegotiation(state: DriverState): Promise<void> {
     state.sharedCursorDigest = localAck.ack.cursorDigest;
     const requested = missingBatch.records
       .filter(
-        (record): record is Extract<ReplicationBatchRecord, { kind: "missing-content" }> =>
+        (
+          record,
+        ): record is Extract<ReplicationBatchRecord, { kind: "missing-content" }> =>
           record.kind === "missing-content",
       )
       .map((record) => ({
@@ -1082,8 +1119,8 @@ async function acceptLocalBatch(
   readonly ack: import("./types.js").ReplicationBatchAcknowledgement;
   readonly session: ReplicationSessionSnapshot;
 }> {
-    const nextPhase =
-      batch.phase === "missing-content" ? "content-transfer" : nextPhaseFor(batch);
+  const nextPhase =
+    batch.phase === "missing-content" ? "content-transfer" : nextPhaseFor(batch);
   const nextCursor = nextSessionCursor(
     state.session.cursorDigest,
     batchEnvelopeDigest(batch),
@@ -1185,7 +1222,8 @@ async function sendActivation(
   const requestRecord: ReplicationBatchRecord = {
     kind: "terminal-result",
     operationId: state.operationId,
-    branchId: state.plan.flow === "authority-main-to-replica" ? null : state.plan.branchId,
+    branchId:
+      state.plan.flow === "authority-main-to-replica" ? null : state.plan.branchId,
     generation: null,
     generationDigest: null,
     resultDigest: hashBytes(requestBytes),
@@ -1287,7 +1325,9 @@ function authorityResultFor(state: DriverState): ReplicatedAuthorityResult | nul
     return { kind: "discard", operationId: null, resultDigest };
   let outcome: "merged" | "conflict" = "conflict";
   try {
-    const value = JSON.parse(new TextDecoder().decode(state.terminalResult.resultBytes)) as {
+    const value = JSON.parse(
+      new TextDecoder().decode(state.terminalResult.resultBytes),
+    ) as {
       readonly outcome?: unknown;
     };
     if (value.outcome === "merged" || value.outcome === 0) outcome = "merged";

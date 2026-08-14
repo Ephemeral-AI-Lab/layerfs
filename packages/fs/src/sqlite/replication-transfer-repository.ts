@@ -110,6 +110,13 @@ interface ImportRow extends SqliteRow {
   readonly sealed: number;
 }
 
+interface ActivationRow extends SqliteRow {
+  readonly phase: number;
+  readonly cursor: Uint8Array | null;
+  readonly processed_count: number;
+  readonly digest_state: Uint8Array | null;
+}
+
 interface StagedRow extends SqliteRow {
   readonly key: Uint8Array;
   readonly value: Uint8Array | null;
@@ -227,7 +234,8 @@ function readU64(bytes: Uint8Array, offset: number, name: string): number {
 }
 
 function readU32(bytes: Uint8Array, offset: number, name: string): number {
-  if (offset + 4 > bytes.byteLength) throw transferError("IntegrityFailure", `truncated ${name}`);
+  if (offset + 4 > bytes.byteLength)
+    throw transferError("IntegrityFailure", `truncated ${name}`);
   return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, false);
 }
 
@@ -296,7 +304,10 @@ function encodeBranchSnapshotRow(row: TransferBranchRow): Readonly<{
         ...u64be(row.deleteLength),
         ...u64be(row.insertLength),
         ...u32be(row.segments.length),
-        ...row.segments.flatMap((segment) => [...u32be(segment.byteLength), ...segment]),
+        ...row.segments.flatMap((segment) => [
+          ...u32be(segment.byteLength),
+          ...segment,
+        ]),
       ]),
     });
   if (row.kind === 5)
@@ -305,16 +316,25 @@ function encodeBranchSnapshotRow(row: TransferBranchRow): Readonly<{
       key: snapshotTextKey(row.inodeId),
       value: snapshotOptionalU64(row.expectedToken),
     });
-  return Object.freeze({ kind: 6, key: copyBytes(row.path), value: copyBytes(row.manifestHash) });
+  return Object.freeze({
+    kind: 6,
+    key: copyBytes(row.path),
+    value: copyBytes(row.manifestHash),
+  });
 }
 
-function decodeSnapshotTextKey(bytes: Uint8Array, offset: number, name: string): Readonly<{
+function decodeSnapshotTextKey(
+  bytes: Uint8Array,
+  offset: number,
+  name: string,
+): Readonly<{
   readonly value: string;
   readonly next: number;
 }> {
   const length = readU32(bytes, offset, `${name}.length`);
   const start = offset + 4;
-  if (start + length > bytes.byteLength) throw transferError("IntegrityFailure", `truncated ${name}`);
+  if (start + length > bytes.byteLength)
+    throw transferError("IntegrityFailure", `truncated ${name}`);
   let value: string;
   try {
     value = decoder.decode(bytes.subarray(start, start + length));
@@ -324,44 +344,74 @@ function decodeSnapshotTextKey(bytes: Uint8Array, offset: number, name: string):
   return Object.freeze({ value, next: start + length });
 }
 
-function decodeSnapshotOptionalU64(bytes: Uint8Array, offset: number, name: string): Readonly<{
+function decodeSnapshotOptionalU64(
+  bytes: Uint8Array,
+  offset: number,
+  name: string,
+): Readonly<{
   readonly value: number | null;
   readonly next: number;
 }> {
   const tag = bytes[offset];
   if (tag === 0) return Object.freeze({ value: null, next: offset + 1 });
-  if (tag !== 1) throw transferError("IntegrityFailure", `${name} optional tag is invalid`);
+  if (tag !== 1)
+    throw transferError("IntegrityFailure", `${name} optional tag is invalid`);
   return Object.freeze({ value: readU64(bytes, offset + 1, name), next: offset + 9 });
 }
 
-function decodeSnapshotOptionalBytes(bytes: Uint8Array, offset: number, name: string): Readonly<{
+function decodeSnapshotOptionalBytes(
+  bytes: Uint8Array,
+  offset: number,
+  name: string,
+): Readonly<{
   readonly value: Uint8Array | null;
   readonly next: number;
 }> {
   const tag = bytes[offset];
   if (tag === 0) return Object.freeze({ value: null, next: offset + 1 });
-  if (tag !== 1) throw transferError("IntegrityFailure", `${name} optional tag is invalid`);
+  if (tag !== 1)
+    throw transferError("IntegrityFailure", `${name} optional tag is invalid`);
   const length = readU32(bytes, offset + 1, `${name}.length`);
   const start = offset + 5;
-  if (start + length > bytes.byteLength) throw transferError("IntegrityFailure", `truncated ${name}`);
-  return Object.freeze({ value: copyBytes(bytes.subarray(start, start + length)), next: start + length });
+  if (start + length > bytes.byteLength)
+    throw transferError("IntegrityFailure", `truncated ${name}`);
+  return Object.freeze({
+    value: copyBytes(bytes.subarray(start, start + length)),
+    next: start + length,
+  });
 }
 
-function decodeBranchSnapshotRow(kind: number, key: Uint8Array, value: Uint8Array): TransferBranchRow {
+function decodeBranchSnapshotRow(
+  kind: number,
+  key: Uint8Array,
+  value: Uint8Array,
+): TransferBranchRow {
   if (kind === 1) {
     const expected = decodeSnapshotOptionalU64(value, 1, "change expected token");
     const encoded = decodeSnapshotOptionalBytes(value, expected.next, "change encoded");
     if (encoded.next !== value.byteLength || value[0]! > 1)
       throw transferError("IntegrityFailure", "change snapshot row is invalid");
-    return { kind: 1, path: copyBytes(key), disposition: value[0]!, expectedToken: expected.value, encoded: encoded.value };
+    return {
+      kind: 1,
+      path: copyBytes(key),
+      disposition: value[0]!,
+      expectedToken: expected.value,
+      encoded: encoded.value,
+    };
   }
   if (kind === 2) {
     const inode = decodeSnapshotTextKey(key, 0, "overlay inode");
     const expected = decodeSnapshotOptionalU64(value, 0, "overlay expected token");
     const length = readU32(value, expected.next, "overlay encoded.length");
     const start = expected.next + 4;
-    if (start + length !== value.byteLength) throw transferError("IntegrityFailure", "overlay snapshot row is invalid");
-    return { kind: 2, inodeId: inode.value, expectedToken: expected.value, encoded: copyBytes(value.subarray(start)) };
+    if (start + length !== value.byteLength)
+      throw transferError("IntegrityFailure", "overlay snapshot row is invalid");
+    return {
+      kind: 2,
+      inodeId: inode.value,
+      expectedToken: expected.value,
+      encoded: copyBytes(value.subarray(start)),
+    };
   }
   if (kind === 3) {
     const inode = decodeSnapshotTextKey(key, 0, "page inode");
@@ -372,31 +422,62 @@ function decodeBranchSnapshotRow(kind: number, key: Uint8Array, value: Uint8Arra
     const length = readU32(value, 9, "page bytes.length");
     if ((head !== 0 && head !== 1) || 13 + length !== value.byteLength)
       throw transferError("IntegrityFailure", "page snapshot row is invalid");
-    return { kind: 3, inodeId: inode.value, pageIndex, generation, bytes: copyBytes(value.subarray(13)), created_at_ms: created, head: head === 1 };
+    return {
+      kind: 3,
+      inodeId: inode.value,
+      pageIndex,
+      generation,
+      bytes: copyBytes(value.subarray(13)),
+      created_at_ms: created,
+      head: head === 1,
+    };
   }
   if (kind === 4) {
     const inode = decodeSnapshotTextKey(key, 0, "patch inode");
     const sequence = readU64(key, inode.next, "patch sequence");
     let offset = 0;
-    const generation = readU64(value, offset, "patch generation"); offset += 8;
-    const patchOffset = readU64(value, offset, "patch offset"); offset += 8;
-    const deleteLength = readU64(value, offset, "patch delete length"); offset += 8;
-    const insertLength = readU64(value, offset, "patch insert length"); offset += 8;
-    const count = readU32(value, offset, "patch segment count"); offset += 4;
-    if (count > 64) throw transferError("IntegrityFailure", "patch snapshot segment count exceeds limit");
+    const generation = readU64(value, offset, "patch generation");
+    offset += 8;
+    const patchOffset = readU64(value, offset, "patch offset");
+    offset += 8;
+    const deleteLength = readU64(value, offset, "patch delete length");
+    offset += 8;
+    const insertLength = readU64(value, offset, "patch insert length");
+    offset += 8;
+    const count = readU32(value, offset, "patch segment count");
+    offset += 4;
+    if (count > 64)
+      throw transferError(
+        "IntegrityFailure",
+        "patch snapshot segment count exceeds limit",
+      );
     const segments: Uint8Array[] = [];
     for (let index = 0; index < count; index += 1) {
-      const length = readU32(value, offset, "patch segment length"); offset += 4;
-      if (offset + length > value.byteLength) throw transferError("IntegrityFailure", "truncated patch segment");
-      segments.push(copyBytes(value.subarray(offset, offset + length))); offset += length;
+      const length = readU32(value, offset, "patch segment length");
+      offset += 4;
+      if (offset + length > value.byteLength)
+        throw transferError("IntegrityFailure", "truncated patch segment");
+      segments.push(copyBytes(value.subarray(offset, offset + length)));
+      offset += length;
     }
-    if (offset !== value.byteLength) throw transferError("IntegrityFailure", "patch snapshot row has trailing bytes");
-    return { kind: 4, inodeId: inode.value, sequence, generation, offset: patchOffset, deleteLength, insertLength, segments };
+    if (offset !== value.byteLength)
+      throw transferError("IntegrityFailure", "patch snapshot row has trailing bytes");
+    return {
+      kind: 4,
+      inodeId: inode.value,
+      sequence,
+      generation,
+      offset: patchOffset,
+      deleteLength,
+      insertLength,
+      segments,
+    };
   }
   if (kind === 5) {
     const inode = decodeSnapshotTextKey(key, 0, "expectation inode");
     const expected = decodeSnapshotOptionalU64(value, 0, "expectation token");
-    if (expected.next !== value.byteLength) throw transferError("IntegrityFailure", "expectation snapshot row is invalid");
+    if (expected.next !== value.byteLength)
+      throw transferError("IntegrityFailure", "expectation snapshot row is invalid");
     return { kind: 5, inodeId: inode.value, expectedToken: expected.value };
   }
   if (kind === 6 && value.byteLength === 32)
@@ -411,7 +492,8 @@ function u8(value: number): Uint8Array {
 function keyBytes(parts: readonly (Uint8Array | string)[]): Uint8Array {
   let length = 0;
   for (const part of parts)
-    length += typeof part === "string" ? encoder.encode(part).byteLength : part.byteLength;
+    length +=
+      typeof part === "string" ? encoder.encode(part).byteLength : part.byteLength;
   const out = new Uint8Array(length);
   let offset = 0;
   for (const part of parts) {
@@ -451,9 +533,7 @@ function deserializeInode(encoded: Uint8Array): InodeProjectionRow {
     nlink: value.nlink as number,
     size: (value.size as number | null) ?? null,
     manifest_hash:
-      typeof value.manifest_hash === "string"
-        ? hexBytes(value.manifest_hash)
-        : null,
+      typeof value.manifest_hash === "string" ? hexBytes(value.manifest_hash) : null,
     symlink_target: (value.symlink_target as string | null) ?? null,
     token: value.token as number,
   };
@@ -542,7 +622,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return new StagingRepository(
       this.#tx,
       this.#limits,
-       this.#cache,
+      this.#cache,
       this.#hashBytes,
       this.#maxBindings,
     );
@@ -584,7 +664,44 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return rows;
   }
 
-  #pendingMarks(sessionId: string, limit: number): readonly {
+  #activationRow(sessionId: string): ActivationRow {
+    const existing = this.#tx.all<ActivationRow>(
+      "SELECT phase,cursor,processed_count,digest_state FROM efs_replication_activation WHERE session_id=?",
+      [sessionId],
+      { maxRows: 1, maxBytes: 4096 },
+    )[0];
+    if (existing) return existing;
+    this.#tx.run(
+      "INSERT INTO efs_replication_activation(session_id,phase,cursor,processed_count,digest_state) VALUES(?,0,NULL,0,NULL)",
+      [sessionId],
+    );
+    return Object.freeze({
+      phase: 0,
+      cursor: null,
+      processed_count: 0,
+      digest_state: null,
+    });
+  }
+
+  #activationPage(
+    sessionId: string,
+    kind: number,
+    cursor: Uint8Array | null,
+    limit = 64,
+  ): readonly StagedRow[] {
+    return this.#tx.all<StagedRow>(
+      cursor === null
+        ? "SELECT key,value FROM efs_replication_import_rows WHERE session_id=? AND kind=? ORDER BY key LIMIT ?"
+        : "SELECT key,value FROM efs_replication_import_rows WHERE session_id=? AND kind=? AND key>? ORDER BY key LIMIT ?",
+      cursor === null ? [sessionId, kind, limit] : [sessionId, kind, cursor, limit],
+      { maxRows: limit, maxBytes: this.#limits.maxFinalTransactionBytes },
+    );
+  }
+
+  #pendingMarks(
+    sessionId: string,
+    limit: number,
+  ): readonly {
     readonly kind: number;
     readonly hash: Uint8Array;
     readonly edge: number;
@@ -594,6 +711,192 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       [sessionId, limit],
       { maxRows: limit, maxBytes: 256 * 1024 },
     );
+  }
+
+  #exportLease(sessionId: string): Readonly<{
+    readonly leaseId: string;
+    readonly ownerId: string;
+    readonly ownerNonce: Uint8Array;
+    readonly expiresAt: number;
+    readonly state: number;
+  }> {
+    const row = this.#tx.all<
+      {
+        lease_id: string;
+        owner_nonce: Uint8Array;
+        expires_at_ms: number;
+        state: number;
+      } & SqliteRow
+    >(
+      "SELECT lease_id,owner_nonce,expires_at_ms,state FROM efs_replication_export_leases WHERE session_id=?",
+      [sessionId],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (!row) throw transferError("CursorMismatch", "export lease is missing");
+    return Object.freeze({
+      leaseId: row.lease_id,
+      ownerId: `replication-export:${sessionId}`,
+      ownerNonce: copyBytes(row.owner_nonce),
+      expiresAt: row.expires_at_ms,
+      state: row.state,
+    });
+  }
+
+  #ensureExportLease(
+    sessionId: string,
+    now: number,
+    expiresAt: number,
+  ): Readonly<{
+    readonly leaseId: string;
+    readonly ownerId: string;
+    readonly ownerNonce: Uint8Array;
+  }> {
+    const existing = this.#tx.all<
+      {
+        lease_id: string;
+        owner_nonce: Uint8Array;
+        expires_at_ms: number;
+        state: number;
+      } & SqliteRow
+    >(
+      "SELECT lease_id,owner_nonce,expires_at_ms,state FROM efs_replication_export_leases WHERE session_id=?",
+      [sessionId],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    const ownerId = `replication-export:${sessionId}`;
+    if (existing) {
+      if (existing.state !== 1 || existing.expires_at_ms <= now)
+        throw transferError("StagingExpired", "replication export lease is not active");
+      const lease = this.#staging().renewExportLease(
+        existing.lease_id,
+        ownerId,
+        existing.owner_nonce,
+        now,
+        Math.max(existing.expires_at_ms, expiresAt),
+      );
+      if (!lease)
+        throw transferError(
+          "StagingExpired",
+          "replication export lease expired during renewal",
+        );
+      this.#tx.run(
+        "UPDATE efs_replication_export_leases SET expires_at_ms=? WHERE session_id=? AND state=1",
+        [Math.max(existing.expires_at_ms, expiresAt), sessionId],
+      );
+      return Object.freeze({
+        leaseId: existing.lease_id,
+        ownerId,
+        ownerNonce: copyBytes(existing.owner_nonce),
+      });
+    }
+    const leaseId = `replication-export-${sessionId}`;
+    const ownerNonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    this.#staging().acquireExportLease(leaseId, ownerId, ownerNonce, expiresAt);
+    this.#tx.run(
+      "INSERT INTO efs_replication_export_leases(session_id,lease_id,owner_nonce,expires_at_ms,state) VALUES(?,?,?,?,1)",
+      [sessionId, leaseId, ownerNonce, expiresAt],
+    );
+    return Object.freeze({ leaseId, ownerId, ownerNonce: copyBytes(ownerNonce) });
+  }
+
+  releaseExport(options: { readonly sessionId: string; readonly now: number }): void {
+    const row = this.#tx.all<
+      {
+        lease_id: string;
+        owner_nonce: Uint8Array;
+        state: number;
+      } & SqliteRow
+    >(
+      "SELECT lease_id,owner_nonce,state FROM efs_replication_export_leases WHERE session_id=?",
+      [options.sessionId],
+      { maxRows: 1, maxBytes: 1024 },
+    )[0];
+    if (!row) return;
+    if (row.state === 1) {
+      this.#staging().release(row.lease_id, row.owner_nonce, false, undefined, false);
+      this.#tx.run(
+        "UPDATE efs_replication_export_leases SET state=2,expires_at_ms=? WHERE session_id=?",
+        [options.now, options.sessionId],
+      );
+    }
+    this.#tx.run("DELETE FROM efs_replication_export_marks WHERE session_id=?", [
+      options.sessionId,
+    ]);
+    this.#tx.run("DELETE FROM efs_replication_export_rows WHERE session_id=?", [
+      options.sessionId,
+    ]);
+    this.#tx.run("DELETE FROM efs_replication_exports WHERE session_id=?", [
+      options.sessionId,
+    ]);
+  }
+
+  #advanceExportRootCapture(
+    sessionId: string,
+    flow: ReplicationFlow,
+    branchId: string | null,
+    now: number,
+    expiresAt: number,
+  ): boolean {
+    const exportRow = this.#exportRow(sessionId);
+    const metadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
+    if (metadata.rootCaptureComplete === true) return true;
+    const lease = this.#ensureExportLease(sessionId, now, expiresAt);
+    const cursor =
+      typeof metadata.rootCaptureCursorHex === "string"
+        ? hexBytes(metadata.rootCaptureCursorHex)
+        : null;
+    const pageSize = Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64));
+    const rows =
+      flow === "authority-main-to-replica"
+        ? this.#tx.all<{ hash: Uint8Array } & SqliteRow>(
+            cursor === null
+              ? "SELECT DISTINCT manifest_hash hash FROM efs_revision_manifest_roots WHERE revision>? AND revision<=? ORDER BY manifest_hash LIMIT ?"
+              : "SELECT DISTINCT manifest_hash hash FROM efs_revision_manifest_roots WHERE revision>? AND revision<=? AND manifest_hash>? ORDER BY manifest_hash LIMIT ?",
+            cursor === null
+              ? [exportRow.base_revision, exportRow.target_revision, pageSize]
+              : [exportRow.base_revision, exportRow.target_revision, cursor, pageSize],
+            { maxRows: pageSize, maxBytes: Math.max(1024, pageSize * 96) },
+          )
+        : this.#tx.all<{ hash: Uint8Array } & SqliteRow>(
+            cursor === null
+              ? "SELECT DISTINCT manifest_hash hash FROM efs_branch_manifest_roots WHERE branch_id=? ORDER BY manifest_hash LIMIT ?"
+              : "SELECT DISTINCT manifest_hash hash FROM efs_branch_manifest_roots WHERE branch_id=? AND manifest_hash>? ORDER BY manifest_hash LIMIT ?",
+            cursor === null ? [branchId, pageSize] : [branchId, cursor, pageSize],
+            { maxRows: pageSize, maxBytes: Math.max(1024, pageSize * 96) },
+          );
+    let nextCursor = cursor;
+    for (const row of rows) {
+      if (row.hash.byteLength !== 32)
+        throw transferError(
+          "IntegrityFailure",
+          "export manifest root digest is invalid",
+        );
+      this.#tx.run(
+        "INSERT OR IGNORE INTO efs_lease_manifests(lease_id,manifest_hash) VALUES(?,?)",
+        [lease.leaseId, row.hash],
+      );
+      this.#tx.run(
+        "INSERT OR IGNORE INTO efs_replication_export_marks(session_id,kind,hash,edge) VALUES(?,0,?,0)",
+        [sessionId, row.hash],
+      );
+      nextCursor = copyBytes(row.hash);
+    }
+    const complete = rows.length < pageSize;
+    const updated = {
+      ...metadata,
+      ...(complete
+        ? { rootCaptureComplete: true, rootCaptureCursorHex: undefined }
+        : {
+            rootCaptureComplete: false,
+            rootCaptureCursorHex:
+              nextCursor === null ? undefined : bytesToHex(nextCursor),
+          }),
+    };
+    this.#tx.run("UPDATE efs_replication_exports SET meta_json=? WHERE session_id=?", [
+      encodeJson(updated),
+      sessionId,
+    ]);
+    return complete;
   }
 
   captureExport(options: {
@@ -614,35 +917,43 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
   } {
     const meta = this.#meta();
     safeNonnegative(options.destinationHead, "destination head");
-    const prior = this.#tx.all<{
-      kind: number;
-      selected_identity: string;
-      selected_generation: number;
-      base_revision: number;
-      target_revision: number;
-      root_mutation_generation: number;
-      next_allocation_sequence: number;
-      root_inode: string;
-      revision_cursor: number;
-      done: number;
-    } & SqliteRow>(
+    const prior = this.#tx.all<
+      {
+        kind: number;
+        selected_identity: string;
+        selected_generation: number;
+        base_revision: number;
+        target_revision: number;
+        root_mutation_generation: number;
+        next_allocation_sequence: number;
+        root_inode: string;
+        revision_cursor: number;
+        done: number;
+      } & SqliteRow
+    >(
       "SELECT kind,selected_identity,selected_generation,base_revision,target_revision,root_mutation_generation,next_allocation_sequence,root_inode,revision_cursor,done FROM efs_replication_exports WHERE session_id=?",
       [options.sessionId],
       { maxRows: 1, maxBytes: 2048 },
     )[0];
     if (prior) {
       const expectedKind = options.flow === "authority-main-to-replica" ? 0 : 1;
-      const expectedIdentity = expectedKind === 0 ? String(prior.target_revision) : (options.branchId ?? "");
+      const expectedIdentity =
+        expectedKind === 0 ? String(prior.target_revision) : (options.branchId ?? "");
       if (
         prior.kind !== expectedKind ||
         prior.selected_identity !== expectedIdentity ||
         (expectedKind === 0 && prior.revision_cursor !== options.destinationHead)
       )
-        throw transferError("OperationMismatch", "replication export binding changed during resume");
+        throw transferError(
+          "OperationMismatch",
+          "replication export binding changed during resume",
+        );
       return Object.freeze({
-        selectedRevision: expectedKind === 0 ? prior.target_revision : prior.base_revision,
+        selectedRevision:
+          expectedKind === 0 ? prior.target_revision : prior.base_revision,
         selectedGeneration: expectedKind === 0 ? null : prior.selected_generation,
-        destinationHead: expectedKind === 0 ? prior.revision_cursor : options.destinationHead,
+        destinationHead:
+          expectedKind === 0 ? prior.revision_cursor : options.destinationHead,
         rootMutationGeneration: prior.root_mutation_generation,
         nextAllocationSequence: prior.next_allocation_sequence,
         rootInode: prior.root_inode,
@@ -655,7 +966,6 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     let selectedBranchDigest: string | null = null;
     let selectedBranchPreviousGeneration: number | null = null;
     let selectedBranchPreviousDigest: string | null = null;
-    let rootHashes: readonly { readonly hash: Uint8Array }[];
     let state: 0 | 1 | 2 = 0;
     if (options.flow === "authority-main-to-replica") {
       selectedRevision = meta.main_revision;
@@ -664,11 +974,6 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
           "MainDiverged",
           "destination head is ahead of the selected source head",
         );
-      rootHashes = this.#tx.all<{ hash: Uint8Array } & SqliteRow>(
-        "SELECT DISTINCT manifest_hash hash FROM efs_revision_manifest_roots WHERE revision>? AND revision<=? ORDER BY manifest_hash",
-        [options.destinationHead, selectedRevision],
-        { maxRows: 8192, maxBytes: 512 * 1024 },
-      );
     } else {
       const branchId = options.branchId;
       if (!branchId) throw new RangeError("branch flow requires a branchId");
@@ -694,10 +999,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       selectedGeneration = branch.generation;
       const base = branch.base_revision;
       selectedBranchBaseRevision = base;
-      selectedBranchDigest = this.#storedBranchDigest(options.sessionId, branchId, branch.generation).reduce(
-        (output, byte) => output + byte.toString(16).padStart(2, "0"),
-        "",
-      );
+      selectedBranchDigest = this.#storedBranchDigest(
+        options.sessionId,
+        branchId,
+        branch.generation,
+      ).reduce((output, byte) => output + byte.toString(16).padStart(2, "0"), "");
       const prior = this.#branches().storedGenerationDigest(branchId);
       if (prior && prior.generation < branch.generation) {
         selectedBranchPreviousGeneration = prior.generation;
@@ -719,19 +1025,13 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
           "destination does not contain the branch base revision",
         );
       selectedRevision = base;
-      rootHashes = this.#tx.all<{ hash: Uint8Array } & SqliteRow>(
-        "SELECT manifest_hash hash FROM efs_branch_manifest_roots WHERE branch_id=? ORDER BY manifest_hash",
-        [branchId],
-        { maxRows: 8192, maxBytes: 512 * 1024 },
-      );
     }
     const root = this.#tx.all<InodeProjectionRow & SqliteRow>(
       "SELECT id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token FROM efs_inodes WHERE id=?",
       [meta.root_inode],
       { maxRows: 1, maxBytes: 4096 },
     )[0];
-    if (!root)
-      throw transferError("ECORRUPT", "root inode is missing");
+    if (!root) throw transferError("ECORRUPT", "root inode is missing");
     const fastCdc = this.#tx.all<
       { chunk_min: number; chunk_avg: number; chunk_max: number } & SqliteRow
     >(
@@ -767,9 +1067,19 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       branchGenerationDigest: selectedBranchDigest,
       branchPreviousGeneration: selectedBranchPreviousGeneration,
       branchPreviousGenerationDigest: selectedBranchPreviousDigest,
-      branchCapture: options.flow === "authority-main-to-replica"
-        ? null
-        : { kind: 1, pathHex: null, inodeId: null, pageIndex: null, generation: null, sequence: null },
+      rootCaptureComplete: false,
+      rootCaptureCursorHex: undefined,
+      branchCapture:
+        options.flow === "authority-main-to-replica"
+          ? null
+          : {
+              kind: 1,
+              pathHex: null,
+              inodeId: null,
+              pageIndex: null,
+              generation: null,
+              sequence: null,
+            },
       branchCaptureComplete: options.flow === "authority-main-to-replica",
     });
     this.#tx.run(
@@ -793,13 +1103,20 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         0,
       ],
     );
+    this.#ensureExportLease(options.sessionId, options.now, options.expiresAt);
     if (options.flow !== "authority-main-to-replica")
-      this.#snapshotBranchRows(options.sessionId, options.branchId!, selectedGeneration!);
-    for (const row of rootHashes)
-      this.#tx.run(
-        "INSERT OR IGNORE INTO efs_replication_export_marks(session_id,kind,hash,edge) VALUES(?,0,?,0)",
-        [options.sessionId, row.hash],
+      this.#snapshotBranchRows(
+        options.sessionId,
+        options.branchId!,
+        selectedGeneration!,
       );
+    this.#advanceExportRootCapture(
+      options.sessionId,
+      options.flow,
+      options.branchId,
+      options.now,
+      options.expiresAt,
+    );
     return Object.freeze({
       selectedRevision,
       selectedGeneration,
@@ -811,7 +1128,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     });
   }
 
-  #snapshotBranchRows(sessionId: string, branchId: string, generation: number): boolean {
+  #snapshotBranchRows(
+    sessionId: string,
+    branchId: string,
+    generation: number,
+  ): boolean {
     const exportRow = this.#exportRow(sessionId);
     const metadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
     if (metadata.branchCaptureComplete === true) return true;
@@ -824,22 +1145,38 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       throw transferError("BranchDiverged", "branch changed during export capture");
     const raw = metadata.branchCapture as Partial<BranchCaptureCursor> | undefined;
     let cursor: BranchCaptureCursor = {
-      kind: raw?.kind === 2 || raw?.kind === 3 || raw?.kind === 4 || raw?.kind === 5 || raw?.kind === 6 ? raw.kind : 1,
+      kind:
+        raw?.kind === 2 ||
+        raw?.kind === 3 ||
+        raw?.kind === 4 ||
+        raw?.kind === 5 ||
+        raw?.kind === 6
+          ? raw.kind
+          : 1,
       pathHex: typeof raw?.pathHex === "string" ? raw.pathHex : null,
       inodeId: typeof raw?.inodeId === "string" ? raw.inodeId : null,
-      pageIndex: raw && Number.isSafeInteger(raw.pageIndex) ? raw.pageIndex ?? null : null,
-      generation: raw && Number.isSafeInteger(raw.generation) ? raw.generation ?? null : null,
-      sequence: raw && Number.isSafeInteger(raw.sequence) ? raw.sequence ?? null : null,
+      pageIndex:
+        raw && Number.isSafeInteger(raw.pageIndex) ? (raw.pageIndex ?? null) : null,
+      generation:
+        raw && Number.isSafeInteger(raw.generation) ? (raw.generation ?? null) : null,
+      sequence:
+        raw && Number.isSafeInteger(raw.sequence) ? (raw.sequence ?? null) : null,
     };
     const pageSize = Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64));
     const reset = (kind: 1 | 2 | 3 | 4 | 5 | 6): BranchCaptureCursor => ({
-      kind, pathHex: null, inodeId: null, pageIndex: null, generation: null, sequence: null,
+      kind,
+      pathHex: null,
+      inodeId: null,
+      pageIndex: null,
+      generation: null,
+      sequence: null,
     });
     const insert = (row: TransferBranchRow): void => {
       const encoded = encodeBranchSnapshotRow(row);
       const nextIndex = this.#tx.all<{ next_index: number } & SqliteRow>(
         "SELECT coalesce(max(row_index),-1)+1 next_index FROM efs_replication_export_rows WHERE session_id=?",
-        [sessionId], { maxRows: 1, maxBytes: 256 },
+        [sessionId],
+        { maxRows: 1, maxBytes: 256 },
       )[0]!.next_index;
       this.#tx.run(
         "INSERT INTO efs_replication_export_rows(session_id,row_index,kind,row_key,value) VALUES(?,?,?,?,?)",
@@ -853,69 +1190,163 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     while (cursor.kind <= 6) {
       let rowCount = 0;
       if (cursor.kind === 1) {
-        const rows = this.#tx.all<{ path: Uint8Array; expected_token: number | null; kind: number; encoded: Uint8Array | null } & SqliteRow>(
+        const rows = this.#tx.all<
+          {
+            path: Uint8Array;
+            expected_token: number | null;
+            kind: number;
+            encoded: Uint8Array | null;
+          } & SqliteRow
+        >(
           cursor.pathHex === null
             ? "SELECT path,expected_token,kind,encoded FROM efs_branch_changes WHERE branch_id=? ORDER BY path LIMIT ?"
             : "SELECT path,expected_token,kind,encoded FROM efs_branch_changes WHERE branch_id=? AND path>? ORDER BY path LIMIT ?",
-          cursor.pathHex === null ? [branchId, pageSize] : [branchId, hexBytes(cursor.pathHex), pageSize],
+          cursor.pathHex === null
+            ? [branchId, pageSize]
+            : [branchId, hexBytes(cursor.pathHex), pageSize],
           { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
         );
         for (const row of rows) {
-          insert({ kind: 1, path: copyBytes(row.path), disposition: row.kind, expectedToken: row.expected_token, encoded: row.encoded ? copyBytes(row.encoded) : null });
+          insert({
+            kind: 1,
+            path: copyBytes(row.path),
+            disposition: row.kind,
+            expectedToken: row.expected_token,
+            encoded: row.encoded ? copyBytes(row.encoded) : null,
+          });
           cursor = { ...cursor, pathHex: bytesToHex(row.path) };
         }
         rowCount = rows.length;
       } else if (cursor.kind === 2) {
-        const rows = this.#tx.all<{ inode_id: string; expected_token: number | null; encoded: Uint8Array } & SqliteRow>(
+        const rows = this.#tx.all<
+          {
+            inode_id: string;
+            expected_token: number | null;
+            encoded: Uint8Array;
+          } & SqliteRow
+        >(
           cursor.inodeId === null
             ? "SELECT inode_id,expected_token,encoded FROM efs_branch_inode_overlays WHERE branch_id=? ORDER BY inode_id LIMIT ?"
             : "SELECT inode_id,expected_token,encoded FROM efs_branch_inode_overlays WHERE branch_id=? AND inode_id>? ORDER BY inode_id LIMIT ?",
-          cursor.inodeId === null ? [branchId, pageSize] : [branchId, cursor.inodeId, pageSize],
+          cursor.inodeId === null
+            ? [branchId, pageSize]
+            : [branchId, cursor.inodeId, pageSize],
           { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
         );
         for (const row of rows) {
-          insert({ kind: 2, inodeId: row.inode_id, expectedToken: row.expected_token, encoded: copyBytes(row.encoded) });
+          insert({
+            kind: 2,
+            inodeId: row.inode_id,
+            expectedToken: row.expected_token,
+            encoded: copyBytes(row.encoded),
+          });
           cursor = { ...cursor, inodeId: row.inode_id };
         }
         rowCount = rows.length;
       } else if (cursor.kind === 3) {
-        const rows = this.#tx.all<{ inode_id: string; page_index: number; generation: number; bytes: Uint8Array; created_at_ms: number; head: number } & SqliteRow>(
+        const rows = this.#tx.all<
+          {
+            inode_id: string;
+            page_index: number;
+            generation: number;
+            bytes: Uint8Array;
+            created_at_ms: number;
+            head: number;
+          } & SqliteRow
+        >(
           cursor.inodeId === null
             ? "SELECT v.inode_id,v.page_index,v.generation,v.bytes,v.created_at_ms,CASE WHEN v.generation=(SELECT max(v2.generation) FROM efs_cow_page_versions v2 WHERE v2.branch_id=v.branch_id AND v2.inode_id=v.inode_id AND v2.page_index=v.page_index AND v2.generation<=?) THEN 1 ELSE 0 END head FROM efs_cow_page_versions v WHERE v.branch_id=? AND v.generation<=? ORDER BY v.inode_id,v.page_index,v.generation LIMIT ?"
             : "SELECT v.inode_id,v.page_index,v.generation,v.bytes,v.created_at_ms,CASE WHEN v.generation=(SELECT max(v2.generation) FROM efs_cow_page_versions v2 WHERE v2.branch_id=v.branch_id AND v2.inode_id=v.inode_id AND v2.page_index=v.page_index AND v2.generation<=?) THEN 1 ELSE 0 END head FROM efs_cow_page_versions v WHERE v.branch_id=? AND v.generation<=? AND (v.inode_id>? OR (v.inode_id=? AND (v.page_index>? OR (v.page_index=? AND v.generation>?)))) ORDER BY v.inode_id,v.page_index,v.generation LIMIT ?",
           cursor.inodeId === null
             ? [generation, branchId, generation, pageSize]
-            : [generation, branchId, generation, cursor.inodeId, cursor.inodeId, cursor.pageIndex, cursor.pageIndex, cursor.generation, pageSize],
+            : [
+                generation,
+                branchId,
+                generation,
+                cursor.inodeId,
+                cursor.inodeId,
+                cursor.pageIndex,
+                cursor.pageIndex,
+                cursor.generation,
+                pageSize,
+              ],
           { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
         );
         for (const row of rows) {
-          insert({ kind: 3, inodeId: row.inode_id, pageIndex: row.page_index, generation: row.generation, bytes: copyBytes(row.bytes), created_at_ms: row.created_at_ms, head: row.head === 1 });
-          cursor = { ...cursor, inodeId: row.inode_id, pageIndex: row.page_index, generation: row.generation };
+          insert({
+            kind: 3,
+            inodeId: row.inode_id,
+            pageIndex: row.page_index,
+            generation: row.generation,
+            bytes: copyBytes(row.bytes),
+            created_at_ms: row.created_at_ms,
+            head: row.head === 1,
+          });
+          cursor = {
+            ...cursor,
+            inodeId: row.inode_id,
+            pageIndex: row.page_index,
+            generation: row.generation,
+          };
         }
         rowCount = rows.length;
       } else if (cursor.kind === 4) {
-        const rows = this.#tx.all<{ inode_id: string; sequence: number; generation: number; offset: number; delete_length: number; insert_length: number } & SqliteRow>(
+        const rows = this.#tx.all<
+          {
+            inode_id: string;
+            sequence: number;
+            generation: number;
+            offset: number;
+            delete_length: number;
+            insert_length: number;
+          } & SqliteRow
+        >(
           cursor.inodeId === null
             ? "SELECT inode_id,sequence,generation,offset,delete_length,insert_length FROM efs_patches WHERE branch_id=? AND generation<=? ORDER BY inode_id,sequence LIMIT ?"
             : "SELECT inode_id,sequence,generation,offset,delete_length,insert_length FROM efs_patches WHERE branch_id=? AND generation<=? AND (inode_id>? OR (inode_id=? AND sequence>?)) ORDER BY inode_id,sequence LIMIT ?",
-          cursor.inodeId === null ? [branchId, generation, pageSize] : [branchId, generation, cursor.inodeId, cursor.inodeId, cursor.sequence, pageSize],
+          cursor.inodeId === null
+            ? [branchId, generation, pageSize]
+            : [
+                branchId,
+                generation,
+                cursor.inodeId,
+                cursor.inodeId,
+                cursor.sequence,
+                pageSize,
+              ],
           { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
         );
         for (const row of rows) {
-          const segments = this.#tx.all<{ segment_index: number; bytes: Uint8Array } & SqliteRow>(
+          const segments = this.#tx.all<
+            { segment_index: number; bytes: Uint8Array } & SqliteRow
+          >(
             "SELECT segment_index,bytes FROM efs_patch_segments WHERE branch_id=? AND inode_id=? AND sequence=? ORDER BY segment_index",
-            [branchId, row.inode_id, row.sequence], { maxRows: 64, maxBytes: this.#limits.maxFinalTransactionBytes },
+            [branchId, row.inode_id, row.sequence],
+            { maxRows: 64, maxBytes: this.#limits.maxFinalTransactionBytes },
           );
-          insert({ kind: 4, inodeId: row.inode_id, sequence: row.sequence, generation: row.generation, offset: row.offset, deleteLength: row.delete_length, insertLength: row.insert_length, segments: segments.map((segment) => copyBytes(segment.bytes)) });
+          insert({
+            kind: 4,
+            inodeId: row.inode_id,
+            sequence: row.sequence,
+            generation: row.generation,
+            offset: row.offset,
+            deleteLength: row.delete_length,
+            insertLength: row.insert_length,
+            segments: segments.map((segment) => copyBytes(segment.bytes)),
+          });
           cursor = { ...cursor, inodeId: row.inode_id, sequence: row.sequence };
         }
         rowCount = rows.length;
       } else if (cursor.kind === 5) {
-        const rows = this.#tx.all<{ inode_id: string; expected_token: number | null } & SqliteRow>(
+        const rows = this.#tx.all<
+          { inode_id: string; expected_token: number | null } & SqliteRow
+        >(
           cursor.inodeId === null
             ? "SELECT inode_id,expected_token FROM efs_branch_inode_expectations WHERE branch_id=? ORDER BY inode_id LIMIT ?"
             : "SELECT inode_id,expected_token FROM efs_branch_inode_expectations WHERE branch_id=? AND inode_id>? ORDER BY inode_id LIMIT ?",
-          cursor.inodeId === null ? [branchId, pageSize] : [branchId, cursor.inodeId, pageSize],
+          cursor.inodeId === null
+            ? [branchId, pageSize]
+            : [branchId, cursor.inodeId, pageSize],
           { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
         );
         for (const row of rows) {
@@ -924,15 +1355,23 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         }
         rowCount = rows.length;
       } else {
-        const rows = this.#tx.all<{ path: Uint8Array; manifest_hash: Uint8Array } & SqliteRow>(
+        const rows = this.#tx.all<
+          { path: Uint8Array; manifest_hash: Uint8Array } & SqliteRow
+        >(
           cursor.pathHex === null
             ? "SELECT path,manifest_hash FROM efs_branch_manifest_roots WHERE branch_id=? ORDER BY path LIMIT ?"
             : "SELECT path,manifest_hash FROM efs_branch_manifest_roots WHERE branch_id=? AND path>? ORDER BY path LIMIT ?",
-          cursor.pathHex === null ? [branchId, pageSize] : [branchId, hexBytes(cursor.pathHex), pageSize],
+          cursor.pathHex === null
+            ? [branchId, pageSize]
+            : [branchId, hexBytes(cursor.pathHex), pageSize],
           { maxRows: pageSize, maxBytes: this.#limits.maxFinalTransactionBytes },
         );
         for (const row of rows) {
-          insert({ kind: 6, path: copyBytes(row.path), manifestHash: copyBytes(row.manifest_hash) });
+          insert({
+            kind: 6,
+            path: copyBytes(row.path),
+            manifestHash: copyBytes(row.manifest_hash),
+          });
           cursor = { ...cursor, pathHex: bytesToHex(row.path) };
         }
         rowCount = rows.length;
@@ -945,10 +1384,14 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       cursor = reset((cursor.kind + 1) as 1 | 2 | 3 | 4 | 5 | 6);
     }
     const complete = cursor.kind === 6 && cursor.pathHex === null;
-    this.#tx.run(
-      "UPDATE efs_replication_exports SET meta_json=? WHERE session_id=?",
-      [encodeJson({ ...metadata, branchCapture: cursor, branchCaptureComplete: complete }), sessionId],
-    );
+    this.#tx.run("UPDATE efs_replication_exports SET meta_json=? WHERE session_id=?", [
+      encodeJson({
+        ...metadata,
+        branchCapture: cursor,
+        branchCaptureComplete: complete,
+      }),
+      sessionId,
+    ]);
     return complete;
   }
 
@@ -992,7 +1435,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return {
       done:
         nextEdge >=
-        (decoded.kind === "internal" ? decoded.children.length : decoded.entries.length),
+        (decoded.kind === "internal"
+          ? decoded.children.length
+          : decoded.entries.length),
       nextEdge,
     };
   }
@@ -1010,7 +1455,14 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     readonly offered: number;
     readonly reused: number;
   }> {
-    const exportRow = this.#exportRow(options.sessionId);
+    this.#exportRow(options.sessionId);
+    const rootsComplete = this.#advanceExportRootCapture(
+      options.sessionId,
+      options.flow,
+      options.branchId,
+      options.now,
+      options.now + 24 * 60 * 60 * 1000,
+    );
     const records: ReplicationTransferRecord[] = [];
     let offered = 0;
     let bytesUsed = 0;
@@ -1141,6 +1593,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     }
     const state = this.#exportRow(options.sessionId);
     const complete =
+      rootsComplete &&
+      (decodeJson<Record<string, unknown>>(state.meta_json) ?? {})
+        .rootCaptureComplete === true &&
       state.mark_hash === null &&
       this.#tx.all<{ count: number } & SqliteRow>(
         "SELECT count(*) count FROM efs_replication_export_marks WHERE session_id=?",
@@ -1249,9 +1704,14 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     let exportRow = this.#exportRow(options.sessionId);
     if (exportRow.kind === 1) {
       const branchId = options.branchId!;
-      const captureMetadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
+      const captureMetadata =
+        decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
       if (captureMetadata.branchCaptureComplete !== true) {
-        this.#snapshotBranchRows(options.sessionId, branchId, exportRow.selected_generation);
+        this.#snapshotBranchRows(
+          options.sessionId,
+          branchId,
+          exportRow.selected_generation,
+        );
         exportRow = this.#exportRow(options.sessionId);
       }
       const liveRows = this.#tx.all<BranchRowSql & SqliteRow>(
@@ -1278,17 +1738,39 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         typeof selectedDigest !== "string" ||
         !/^[0-9a-f]{64}$/u.test(selectedDigest) ||
         (selectedPreviousGeneration !== null &&
-          (!Number.isSafeInteger(selectedPreviousGeneration) || selectedPreviousGeneration < 0)) ||
-        (selectedPreviousDigest !== null && !/^[0-9a-f]{64}$/u.test(selectedPreviousDigest)) ||
+          (!Number.isSafeInteger(selectedPreviousGeneration) ||
+            selectedPreviousGeneration < 0)) ||
+        (selectedPreviousDigest !== null &&
+          !/^[0-9a-f]{64}$/u.test(selectedPreviousDigest)) ||
         (selectedPreviousGeneration === null) !== (selectedPreviousDigest === null)
       )
-        throw transferError("IntegrityFailure", "branch export snapshot metadata is invalid");
+        throw transferError(
+          "IntegrityFailure",
+          "branch export snapshot metadata is invalid",
+        );
       if (selectedState !== 0 && !options.allowTerminal)
-        throw transferError("UnauthorizedScope", "terminal branch export is not allowed here");
-      const snapshotRows = this.#tx.all<{ row_index: number; kind: number; row_key: Uint8Array; value: Uint8Array } & SqliteRow>(
+        throw transferError(
+          "UnauthorizedScope",
+          "terminal branch export is not allowed here",
+        );
+      const snapshotRows = this.#tx.all<
+        {
+          row_index: number;
+          kind: number;
+          row_key: Uint8Array;
+          value: Uint8Array;
+        } & SqliteRow
+      >(
         "SELECT row_index,kind,row_key,value FROM efs_replication_export_rows WHERE session_id=? AND row_index>? ORDER BY row_index LIMIT ?",
-        [options.sessionId, exportRow.revision_cursor, Math.min(options.maxEntries, 256)],
-        { maxRows: Math.min(options.maxEntries, 256), maxBytes: options.maxBytes + 8192 },
+        [
+          options.sessionId,
+          exportRow.revision_cursor,
+          Math.min(options.maxEntries, 256),
+        ],
+        {
+          maxRows: Math.min(options.maxEntries, 256),
+          maxBytes: options.maxBytes + 8192,
+        },
       );
       const branchRows: TransferBranchRow[] = [];
       let nextCursor = exportRow.revision_cursor;
@@ -1307,7 +1789,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         });
         if (candidate.byteLength > options.maxBytes && branchRows.length > 0) break;
         if (candidate.byteLength > options.maxBytes)
-          throw transferError("ResourceLimit", "one branch snapshot row exceeds the negotiated batch limit");
+          throw transferError(
+            "ResourceLimit",
+            "one branch snapshot row exceeds the negotiated batch limit",
+          );
         branchRows.push(decoded);
         nextCursor = row.row_index;
       }
@@ -1315,12 +1800,16 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         "UPDATE efs_replication_exports SET revision_cursor=?,state_rows=state_rows+? WHERE session_id=?",
         [nextCursor, branchRows.length, options.sessionId],
       );
-      const captureComplete = (decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {}).branchCaptureComplete === true;
-      const complete = captureComplete && this.#tx.all<{ count: number } & SqliteRow>(
-        "SELECT count(*) count FROM efs_replication_export_rows WHERE session_id=? AND row_index>?",
-        [options.sessionId, nextCursor],
-        { maxRows: 1, maxBytes: 256 },
-      )[0]!.count === 0;
+      const captureComplete =
+        (decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {})
+          .branchCaptureComplete === true;
+      const complete =
+        captureComplete &&
+        this.#tx.all<{ count: number } & SqliteRow>(
+          "SELECT count(*) count FROM efs_replication_export_rows WHERE session_id=? AND row_index>?",
+          [options.sessionId, nextCursor],
+          { maxRows: 1, maxBytes: 256 },
+        )[0]!.count === 0;
       const digest = hexBytes(selectedDigest);
       const fragment = encodeBranchGenerationFragment({
         branchId,
@@ -1376,8 +1865,17 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     }
     if (exportRow.kind === 2) {
       return Object.freeze({
-        records: this.#readGenesisState(options.sessionId, options.maxEntries, options.maxBytes),
-        complete: (decodeJson<Record<string, unknown>>(this.#exportRow(options.sessionId).meta_json) ?? {}).genesisComplete === true,
+        records: this.#readGenesisState(
+          options.sessionId,
+          options.maxEntries,
+          options.maxBytes,
+        ),
+        complete:
+          (
+            decodeJson<Record<string, unknown>>(
+              this.#exportRow(options.sessionId).meta_json,
+            ) ?? {}
+          ).genesisComplete === true,
         terminalResult: null,
       });
     }
@@ -1409,10 +1907,13 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const raw = metadata.genesisCursor as Partial<RevisionStateCursor> | undefined;
     const cursor = {
       inodeId: typeof raw?.inodeId === "string" ? raw.inodeId : null,
-      fragmentIndex: raw && Number.isSafeInteger(raw.fragmentIndex) ? raw.fragmentIndex ?? 0 : 0,
+      fragmentIndex:
+        raw && Number.isSafeInteger(raw.fragmentIndex) ? (raw.fragmentIndex ?? 0) : 0,
     };
     const limit = Math.max(1, Math.min(maxEntries, 256));
-    const rows = this.#tx.all<{ inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+    const rows = this.#tx.all<
+      { inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow
+    >(
       cursor.inodeId === null
         ? "SELECT inode_id,tombstone,encoded FROM efs_inode_revisions WHERE revision=0 ORDER BY inode_id LIMIT ?"
         : "SELECT inode_id,tombstone,encoded FROM efs_inode_revisions WHERE revision=0 AND inode_id>? ORDER BY inode_id LIMIT ?",
@@ -1426,10 +1927,14 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       encoded: row.encoded ? copyBytes(row.encoded) : null,
     }));
     if (namespaceRows.length === 0 && rows.length > 0)
-      throw transferError("ResourceLimit", "one genesis inode exceeds the negotiated batch limit");
+      throw transferError(
+        "ResourceLimit",
+        "one genesis inode exceeds the negotiated batch limit",
+      );
     const header = this.#tx.all<RevisionHeaderRow & SqliteRow>(
       "SELECT revision,parent_revision,created_at_ms,writer_id,change_count FROM efs_revisions WHERE revision=0",
-      [], { maxRows: 1, maxBytes: 4096 },
+      [],
+      { maxRows: 1, maxBytes: 4096 },
     )[0];
     if (!header) throw transferError("ECORRUPT", "genesis revision is missing");
     const fragmentBytes = encodeRevisionFragment({
@@ -1441,29 +1946,49 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       rows: namespaceRows,
     });
     if (fragmentBytes.byteLength > maxBytes)
-      throw transferError("ResourceLimit", "genesis fragment exceeds the negotiated batch limit");
+      throw transferError(
+        "ResourceLimit",
+        "genesis fragment exceeds the negotiated batch limit",
+      );
     const complete = rows.length <= limit;
     const lastRow = namespaceRows.at(-1);
-    const nextCursor = complete ? undefined : {
-      inodeId: lastRow?.kind === 1 ? lastRow.inodeId : null,
-      fragmentIndex: cursor.fragmentIndex + 1,
-    };
+    const nextCursor = complete
+      ? undefined
+      : {
+          inodeId: lastRow?.kind === 1 ? lastRow.inodeId : null,
+          fragmentIndex: cursor.fragmentIndex + 1,
+        };
     this.#tx.run(
       "UPDATE efs_replication_exports SET state_rows=state_rows+?,meta_json=? WHERE session_id=?",
-      [namespaceRows.length, encodeJson({ ...metadata, ...(complete ? { genesisComplete: true, genesisCursor: undefined } : { genesisCursor: nextCursor }) }), sessionId],
+      [
+        namespaceRows.length,
+        encodeJson({
+          ...metadata,
+          ...(complete
+            ? { genesisComplete: true, genesisCursor: undefined }
+            : { genesisCursor: nextCursor }),
+        }),
+        sessionId,
+      ],
     );
-    return [Object.freeze({
-      kind: "revision-fragment" as const,
-      checkpointId: "0",
-      revisionId: "0",
-      parentRevisionId: null,
-      fragmentIndex: cursor.fragmentIndex,
-      fragmentCount: cursor.fragmentIndex + 1,
-      fragmentBytes,
-    })];
+    return [
+      Object.freeze({
+        kind: "revision-fragment" as const,
+        checkpointId: "0",
+        revisionId: "0",
+        parentRevisionId: null,
+        fragmentIndex: cursor.fragmentIndex,
+        fragmentCount: cursor.fragmentIndex + 1,
+        fragmentBytes,
+      }),
+    ];
   }
 
-  #storedBranchDigest(sessionId: string, branchId: string, generation: number): Uint8Array {
+  #storedBranchDigest(
+    sessionId: string,
+    branchId: string,
+    generation: number,
+  ): Uint8Array {
     void sessionId;
     if (this.#branchDigest) return hexBytes(this.#branchDigest(branchId, generation));
     const digestRows = this.#branches().terminalGenerationDigest(branchId, generation);
@@ -1485,7 +2010,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const refTable = checkpoint
       ? "efs_checkpoint_manifest_roots"
       : "efs_revision_manifest_roots";
-    const inodes = this.#tx.all<{ inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+    const inodes = this.#tx.all<
+      { inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow
+    >(
       `SELECT inode_id,tombstone,encoded FROM ${inodeTable} WHERE ${checkpoint ? "target_revision" : "revision"}=? ORDER BY inode_id LIMIT ?`,
       [revision, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
@@ -1497,11 +2024,19 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         tombstone: row.tombstone === 1,
         encoded: row.encoded ? copyBytes(row.encoded) : null,
       });
-      bytesUsed += 32 + encoder.encode(row.inode_id).byteLength + (row.encoded?.byteLength ?? 0);
+      bytesUsed +=
+        32 + encoder.encode(row.inode_id).byteLength + (row.encoded?.byteLength ?? 0);
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
     }
-    const entryRows = this.#tx.all<{ parent_inode: string; name_sort: Uint8Array; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+    const entryRows = this.#tx.all<
+      {
+        parent_inode: string;
+        name_sort: Uint8Array;
+        tombstone: number;
+        encoded: Uint8Array | null;
+      } & SqliteRow
+    >(
       `SELECT parent_inode,name_sort,tombstone,encoded FROM ${entryTable} WHERE ${checkpoint ? "target_revision" : "revision"}=? ORDER BY parent_inode,name_sort LIMIT ?`,
       [revision, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
@@ -1518,13 +2053,19 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
     }
-    const refs = this.#tx.all<{ inode_id: string; manifest_hash: Uint8Array } & SqliteRow>(
+    const refs = this.#tx.all<
+      { inode_id: string; manifest_hash: Uint8Array } & SqliteRow
+    >(
       `SELECT inode_id,manifest_hash FROM ${refTable} WHERE ${checkpoint ? "target_revision" : "revision"}=? ORDER BY inode_id LIMIT ?`,
       [revision, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
     );
     for (const row of refs) {
-      rows.push({ kind: 3, inodeId: row.inode_id, manifestHash: copyBytes(row.manifest_hash) });
+      rows.push({
+        kind: 3,
+        inodeId: row.inode_id,
+        manifestHash: copyBytes(row.manifest_hash),
+      });
       bytesUsed += 64;
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
@@ -1542,7 +2083,14 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const rows: TransferBranchRow[] = [];
     let bytesUsed = 0;
     let entries = maxEntries;
-    const changes = this.#tx.all<{ path: Uint8Array; expected_token: number | null; kind: number; encoded: Uint8Array | null } & SqliteRow>(
+    const changes = this.#tx.all<
+      {
+        path: Uint8Array;
+        expected_token: number | null;
+        kind: number;
+        encoded: Uint8Array | null;
+      } & SqliteRow
+    >(
       "SELECT path,expected_token,kind,encoded FROM efs_branch_changes WHERE branch_id=? ORDER BY path LIMIT ?",
       [branchId, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
@@ -1559,7 +2107,13 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
     }
-    const overlays = this.#tx.all<{ inode_id: string; expected_token: number | null; encoded: Uint8Array } & SqliteRow>(
+    const overlays = this.#tx.all<
+      {
+        inode_id: string;
+        expected_token: number | null;
+        encoded: Uint8Array;
+      } & SqliteRow
+    >(
       "SELECT inode_id,expected_token,encoded FROM efs_branch_inode_overlays WHERE branch_id=? ORDER BY inode_id LIMIT ?",
       [branchId, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
@@ -1575,7 +2129,16 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
     }
-    const pages = this.#tx.all<{ inode_id: string; page_index: number; generation: number; bytes: Uint8Array; created_at_ms: number; head: number } & SqliteRow>(
+    const pages = this.#tx.all<
+      {
+        inode_id: string;
+        page_index: number;
+        generation: number;
+        bytes: Uint8Array;
+        created_at_ms: number;
+        head: number;
+      } & SqliteRow
+    >(
       "SELECT v.inode_id,v.page_index,v.generation,v.bytes,v.created_at_ms,EXISTS(SELECT 1 FROM efs_cow_page_heads h WHERE h.branch_id=v.branch_id AND h.inode_id=v.inode_id AND h.page_index=v.page_index AND h.generation=v.generation) head FROM efs_cow_page_versions v WHERE v.branch_id=? AND v.generation<=? ORDER BY v.inode_id,v.page_index,v.generation LIMIT ?",
       [branchId, generation, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
@@ -1594,13 +2157,24 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
     }
-    const patches = this.#tx.all<{ inode_id: string; sequence: number; generation: number; offset: number; delete_length: number; insert_length: number } & SqliteRow>(
+    const patches = this.#tx.all<
+      {
+        inode_id: string;
+        sequence: number;
+        generation: number;
+        offset: number;
+        delete_length: number;
+        insert_length: number;
+      } & SqliteRow
+    >(
       "SELECT inode_id,sequence,generation,offset,delete_length,insert_length FROM efs_patches WHERE branch_id=? AND generation<=? ORDER BY inode_id,sequence LIMIT ?",
       [branchId, generation, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
     );
     for (const row of patches) {
-      const segments = this.#tx.all<{ segment_index: number; bytes: Uint8Array } & SqliteRow>(
+      const segments = this.#tx.all<
+        { segment_index: number; bytes: Uint8Array } & SqliteRow
+      >(
         "SELECT segment_index,bytes FROM efs_patch_segments WHERE branch_id=? AND inode_id=? AND sequence=? ORDER BY segment_index",
         [branchId, row.inode_id, row.sequence],
         { maxRows: 256, maxBytes: maxBytes + 8192 },
@@ -1619,7 +2193,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
     }
-    const expectations = this.#tx.all<{ inode_id: string; expected_token: number | null } & SqliteRow>(
+    const expectations = this.#tx.all<
+      { inode_id: string; expected_token: number | null } & SqliteRow
+    >(
       "SELECT inode_id,expected_token FROM efs_branch_inode_expectations WHERE branch_id=? ORDER BY inode_id LIMIT ?",
       [branchId, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
@@ -1630,13 +2206,19 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
     }
-    const refs = this.#tx.all<{ path: Uint8Array; manifest_hash: Uint8Array } & SqliteRow>(
+    const refs = this.#tx.all<
+      { path: Uint8Array; manifest_hash: Uint8Array } & SqliteRow
+    >(
       "SELECT path,manifest_hash FROM efs_branch_manifest_roots WHERE branch_id=? ORDER BY path LIMIT ?",
       [branchId, entries],
       { maxRows: entries, maxBytes: maxBytes + 8192 },
     );
     for (const row of refs) {
-      rows.push({ kind: 6, path: copyBytes(row.path), manifestHash: copyBytes(row.manifest_hash) });
+      rows.push({
+        kind: 6,
+        path: copyBytes(row.path),
+        manifestHash: copyBytes(row.manifest_hash),
+      });
       bytesUsed += 64;
       entries -= 1;
       if (bytesUsed >= maxBytes || entries <= 0) return rows;
@@ -1659,55 +2241,136 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const keyColumn = checkpoint ? "target_revision" : "revision";
     const inodeTable = checkpoint ? "efs_checkpoint_inodes" : "efs_inode_revisions";
     const entryTable = checkpoint ? "efs_checkpoint_entries" : "efs_entry_revisions";
-    const refTable = checkpoint ? "efs_checkpoint_manifest_roots" : "efs_revision_manifest_roots";
+    const refTable = checkpoint
+      ? "efs_checkpoint_manifest_roots"
+      : "efs_revision_manifest_roots";
     let fetched: readonly SqliteRow[] = [];
     if (cursor.kind === 1) {
-      fetched = this.#tx.all<{ inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+      fetched = this.#tx.all<
+        { inode_id: string; tombstone: number; encoded: Uint8Array | null } & SqliteRow
+      >(
         cursor.inodeId === null
           ? `SELECT inode_id,tombstone,encoded FROM ${inodeTable} WHERE ${keyColumn}=? ORDER BY inode_id LIMIT ?`
           : `SELECT inode_id,tombstone,encoded FROM ${inodeTable} WHERE ${keyColumn}=? AND inode_id>? ORDER BY inode_id LIMIT ?`,
-        cursor.inodeId === null ? [cursor.revision, limit + 1] : [cursor.revision, cursor.inodeId, limit + 1],
+        cursor.inodeId === null
+          ? [cursor.revision, limit + 1]
+          : [cursor.revision, cursor.inodeId, limit + 1],
         { maxRows: limit + 1, maxBytes: maxBytes + 8192 },
       );
-      for (const row of fetched as readonly { inode_id: string; tombstone: number; encoded: Uint8Array | null }[]) {
-        const size = 32 + encoder.encode(row.inode_id).byteLength + (row.encoded?.byteLength ?? 0);
-        if (rows.length >= limit || (rows.length > 0 && size + rows.reduce((total, item) => total + 32 + (item.kind === 1 ? encoder.encode(item.inodeId).byteLength : 0), 0) > maxBytes)) break;
-        if (size > maxBytes && rows.length === 0) throw transferError("ResourceLimit", "one inode row exceeds the negotiated batch limit");
-        rows.push({ kind: 1, inodeId: row.inode_id, tombstone: row.tombstone === 1, encoded: row.encoded ? copyBytes(row.encoded) : null });
+      for (const row of fetched as readonly {
+        inode_id: string;
+        tombstone: number;
+        encoded: Uint8Array | null;
+      }[]) {
+        const size =
+          32 + encoder.encode(row.inode_id).byteLength + (row.encoded?.byteLength ?? 0);
+        if (
+          rows.length >= limit ||
+          (rows.length > 0 &&
+            size +
+              rows.reduce(
+                (total, item) =>
+                  total +
+                  32 +
+                  (item.kind === 1 ? encoder.encode(item.inodeId).byteLength : 0),
+                0,
+              ) >
+              maxBytes)
+        )
+          break;
+        if (size > maxBytes && rows.length === 0)
+          throw transferError(
+            "ResourceLimit",
+            "one inode row exceeds the negotiated batch limit",
+          );
+        rows.push({
+          kind: 1,
+          inodeId: row.inode_id,
+          tombstone: row.tombstone === 1,
+          encoded: row.encoded ? copyBytes(row.encoded) : null,
+        });
       }
       const hasMore = fetched.length > rows.length;
       const last = rows.at(-1);
       return Object.freeze({
         rows,
-        nextCursor: hasMore && last !== undefined && last.kind === 1
-          ? { ...cursor, inodeId: last.inodeId }
-          : { revision: cursor.revision, kind: 2 as const, inodeId: null, parentInode: null, nameSortHex: null, fragmentIndex: cursor.fragmentIndex },
+        nextCursor:
+          hasMore && last !== undefined && last.kind === 1
+            ? { ...cursor, inodeId: last.inodeId }
+            : {
+                revision: cursor.revision,
+                kind: 2 as const,
+                inodeId: null,
+                parentInode: null,
+                nameSortHex: null,
+                fragmentIndex: cursor.fragmentIndex,
+              },
         revisionComplete: false,
       });
     }
     if (cursor.kind === 2) {
-      fetched = this.#tx.all<{ parent_inode: string; name_sort: Uint8Array; tombstone: number; encoded: Uint8Array | null } & SqliteRow>(
+      fetched = this.#tx.all<
+        {
+          parent_inode: string;
+          name_sort: Uint8Array;
+          tombstone: number;
+          encoded: Uint8Array | null;
+        } & SqliteRow
+      >(
         cursor.parentInode === null
           ? `SELECT parent_inode,name_sort,tombstone,encoded FROM ${entryTable} WHERE ${keyColumn}=? ORDER BY parent_inode,name_sort LIMIT ?`
           : `SELECT parent_inode,name_sort,tombstone,encoded FROM ${entryTable} WHERE ${keyColumn}=? AND (parent_inode>? OR (parent_inode=? AND name_sort>?)) ORDER BY parent_inode,name_sort LIMIT ?`,
         cursor.parentInode === null
           ? [cursor.revision, limit + 1]
-          : [cursor.revision, cursor.parentInode, cursor.parentInode, hexBytes(cursor.nameSortHex ?? ""), limit + 1],
+          : [
+              cursor.revision,
+              cursor.parentInode,
+              cursor.parentInode,
+              hexBytes(cursor.nameSortHex ?? ""),
+              limit + 1,
+            ],
         { maxRows: limit + 1, maxBytes: maxBytes + 8192 },
       );
-      for (const row of fetched as readonly { parent_inode: string; name_sort: Uint8Array; tombstone: number; encoded: Uint8Array | null }[]) {
+      for (const row of fetched as readonly {
+        parent_inode: string;
+        name_sort: Uint8Array;
+        tombstone: number;
+        encoded: Uint8Array | null;
+      }[]) {
         const size = 32 + row.name_sort.byteLength + (row.encoded?.byteLength ?? 0);
         if (rows.length >= limit || (rows.length > 0 && size > maxBytes)) break;
-        if (size > maxBytes && rows.length === 0) throw transferError("ResourceLimit", "one entry row exceeds the negotiated batch limit");
-        rows.push({ kind: 2, parentInode: row.parent_inode, nameSort: copyBytes(row.name_sort), tombstone: row.tombstone === 1, encoded: row.encoded ? copyBytes(row.encoded) : null });
+        if (size > maxBytes && rows.length === 0)
+          throw transferError(
+            "ResourceLimit",
+            "one entry row exceeds the negotiated batch limit",
+          );
+        rows.push({
+          kind: 2,
+          parentInode: row.parent_inode,
+          nameSort: copyBytes(row.name_sort),
+          tombstone: row.tombstone === 1,
+          encoded: row.encoded ? copyBytes(row.encoded) : null,
+        });
       }
       const hasMore = fetched.length > rows.length;
       const last = rows.at(-1);
       return Object.freeze({
         rows,
-        nextCursor: hasMore && last !== undefined && last.kind === 2
-          ? { ...cursor, parentInode: last.parentInode, nameSortHex: bytesToHex(last.nameSort) }
-          : { revision: cursor.revision, kind: 3 as const, inodeId: null, parentInode: null, nameSortHex: null, fragmentIndex: cursor.fragmentIndex },
+        nextCursor:
+          hasMore && last !== undefined && last.kind === 2
+            ? {
+                ...cursor,
+                parentInode: last.parentInode,
+                nameSortHex: bytesToHex(last.nameSort),
+              }
+            : {
+                revision: cursor.revision,
+                kind: 3 as const,
+                inodeId: null,
+                parentInode: null,
+                nameSortHex: null,
+                fragmentIndex: cursor.fragmentIndex,
+              },
         revisionComplete: false,
       });
     }
@@ -1715,22 +2378,43 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       cursor.inodeId === null
         ? `SELECT inode_id,manifest_hash FROM ${refTable} WHERE ${keyColumn}=? ORDER BY inode_id LIMIT ?`
         : `SELECT inode_id,manifest_hash FROM ${refTable} WHERE ${keyColumn}=? AND inode_id>? ORDER BY inode_id LIMIT ?`,
-      cursor.inodeId === null ? [cursor.revision, limit + 1] : [cursor.revision, cursor.inodeId, limit + 1],
+      cursor.inodeId === null
+        ? [cursor.revision, limit + 1]
+        : [cursor.revision, cursor.inodeId, limit + 1],
       { maxRows: limit + 1, maxBytes: maxBytes + 8192 },
     );
-    for (const row of fetched as readonly { inode_id: string; manifest_hash: Uint8Array }[]) {
+    for (const row of fetched as readonly {
+      inode_id: string;
+      manifest_hash: Uint8Array;
+    }[]) {
       if (rows.length >= limit) break;
       if (rows.length > 0 && (rows.length + 1) * 64 > maxBytes) break;
-      if (64 > maxBytes && rows.length === 0) throw transferError("ResourceLimit", "one manifest reference exceeds the negotiated batch limit");
-      rows.push({ kind: 3, inodeId: row.inode_id, manifestHash: copyBytes(row.manifest_hash) });
+      if (64 > maxBytes && rows.length === 0)
+        throw transferError(
+          "ResourceLimit",
+          "one manifest reference exceeds the negotiated batch limit",
+        );
+      rows.push({
+        kind: 3,
+        inodeId: row.inode_id,
+        manifestHash: copyBytes(row.manifest_hash),
+      });
     }
     const hasMore = fetched.length > rows.length;
     const last = rows.at(-1);
     return Object.freeze({
       rows,
-      nextCursor: hasMore && last !== undefined && last.kind === 3
-        ? { ...cursor, inodeId: last.inodeId }
-        : { revision: cursor.revision + 1, kind: 1 as const, inodeId: null, parentInode: null, nameSortHex: null, fragmentIndex: 0 },
+      nextCursor:
+        hasMore && last !== undefined && last.kind === 3
+          ? { ...cursor, inodeId: last.inodeId }
+          : {
+              revision: cursor.revision + 1,
+              kind: 1 as const,
+              inodeId: null,
+              parentInode: null,
+              nameSortHex: null,
+              fragmentIndex: 0,
+            },
       revisionComplete: !hasMore && rows.length === fetched.length,
     });
   }
@@ -1746,58 +2430,92 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const metadata = decodeJson<Record<string, unknown>>(exportRow.meta_json) ?? {};
     const raw = metadata.stateCursor as Partial<RevisionStateCursor> | undefined;
     let cursor: RevisionStateCursor = {
-      revision: raw && Number.isSafeInteger(raw.revision)
-        ? raw.revision ?? Math.max(exportRow.revision_cursor + 1, exportRow.base_revision + 1)
-        : Math.max(exportRow.revision_cursor + 1, exportRow.base_revision + 1),
+      revision:
+        raw && Number.isSafeInteger(raw.revision)
+          ? (raw.revision ??
+            Math.max(exportRow.revision_cursor + 1, exportRow.base_revision + 1))
+          : Math.max(exportRow.revision_cursor + 1, exportRow.base_revision + 1),
       kind: raw?.kind === 2 ? 2 : raw?.kind === 3 ? 3 : 1,
       inodeId: typeof raw?.inodeId === "string" ? raw.inodeId : null,
       parentInode: typeof raw?.parentInode === "string" ? raw.parentInode : null,
       nameSortHex: typeof raw?.nameSortHex === "string" ? raw.nameSortHex : null,
-      fragmentIndex: raw && Number.isSafeInteger(raw.fragmentIndex) ? raw.fragmentIndex ?? 0 : 0,
+      fragmentIndex:
+        raw && Number.isSafeInteger(raw.fragmentIndex) ? (raw.fragmentIndex ?? 0) : 0,
     };
     const records: ReplicationTransferRecord[] = [];
     let bytesUsed = 0;
     let emitted = 0;
-    while (cursor.revision <= exportRow.target_revision && emitted < maxEntries && bytesUsed < maxBytes) {
+    while (
+      cursor.revision <= exportRow.target_revision &&
+      emitted < maxEntries &&
+      bytesUsed < maxBytes
+    ) {
       const headers = this.#tx.all<RevisionHeaderRow & SqliteRow>(
         "SELECT revision,parent_revision,created_at_ms,writer_id,change_count FROM efs_revisions WHERE revision=?",
-        [cursor.revision], { maxRows: 1, maxBytes: 4096 },
+        [cursor.revision],
+        { maxRows: 1, maxBytes: 4096 },
       );
-      if (headers.length !== 1) throw transferError("ECORRUPT", "export revision is missing");
+      if (headers.length !== 1)
+        throw transferError("ECORRUPT", "export revision is missing");
       const header = headers[0]!;
       const page = this.#readNamespaceRowsPage(
-        cursor, Math.max(1, Math.min(maxEntries - emitted, 256)), maxBytes - bytesUsed, checkpoint,
+        cursor,
+        Math.max(1, Math.min(maxEntries - emitted, 256)),
+        maxBytes - bytesUsed,
+        checkpoint,
       );
       if (page.rows.length === 0) {
         cursor = page.nextCursor;
-        const durableCursor = cursor.revision > exportRow.target_revision ? undefined : cursor;
+        const durableCursor =
+          cursor.revision > exportRow.target_revision ? undefined : cursor;
         this.#tx.run(
           "UPDATE efs_replication_exports SET revision_cursor=?,meta_json=? WHERE session_id=?",
-          [page.revisionComplete ? cursor.revision - 1 : exportRow.revision_cursor, encodeJson({ ...metadata, ...(durableCursor === undefined ? { stateCursor: undefined } : { stateCursor: durableCursor }) }), sessionId],
+          [
+            page.revisionComplete ? cursor.revision - 1 : exportRow.revision_cursor,
+            encodeJson({
+              ...metadata,
+              ...(durableCursor === undefined
+                ? { stateCursor: undefined }
+                : { stateCursor: durableCursor }),
+            }),
+            sessionId,
+          ],
         );
         continue;
       }
       const fragmentBytes = checkpoint
-        ? encodeCheckpointFragment({ revisionId: String(cursor.revision), rows: page.rows })
+        ? encodeCheckpointFragment({
+            revisionId: String(cursor.revision),
+            rows: page.rows,
+          })
         : encodeRevisionFragment({
             revisionId: String(cursor.revision),
-            parentRevisionId: header.parent_revision === null ? null : String(header.parent_revision),
+            parentRevisionId:
+              header.parent_revision === null ? null : String(header.parent_revision),
             created_at_ms: header.created_at_ms,
             writerId: header.writer_id,
             changeCount: header.change_count,
             rows: page.rows,
           });
       if (fragmentBytes.byteLength > maxBytes - bytesUsed)
-        throw transferError("ResourceLimit", "one revision fragment exceeds the negotiated batch limit");
-      records.push(Object.freeze({
-        kind: checkpoint ? ("checkpoint-fragment" as const) : ("revision-fragment" as const),
-        checkpointId: String(cursor.revision),
-        revisionId: String(cursor.revision),
-        parentRevisionId: header.parent_revision === null ? null : String(header.parent_revision),
-        fragmentIndex: cursor.fragmentIndex,
-        fragmentCount: cursor.fragmentIndex + 1,
-        fragmentBytes,
-      }));
+        throw transferError(
+          "ResourceLimit",
+          "one revision fragment exceeds the negotiated batch limit",
+        );
+      records.push(
+        Object.freeze({
+          kind: checkpoint
+            ? ("checkpoint-fragment" as const)
+            : ("revision-fragment" as const),
+          checkpointId: String(cursor.revision),
+          revisionId: String(cursor.revision),
+          parentRevisionId:
+            header.parent_revision === null ? null : String(header.parent_revision),
+          fragmentIndex: cursor.fragmentIndex,
+          fragmentCount: cursor.fragmentIndex + 1,
+          fragmentBytes,
+        }),
+      );
       emitted += 1;
       bytesUsed += fragmentBytes.byteLength;
       const next = page.revisionComplete
@@ -1811,10 +2529,21 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
           }
         : { ...page.nextCursor, fragmentIndex: cursor.fragmentIndex + 1 };
       cursor = next;
-      const durableCursor = cursor.revision > exportRow.target_revision ? undefined : cursor;
+      const durableCursor =
+        cursor.revision > exportRow.target_revision ? undefined : cursor;
       this.#tx.run(
         "UPDATE efs_replication_exports SET revision_cursor=?,state_rows=state_rows+?,meta_json=? WHERE session_id=?",
-        [page.revisionComplete ? cursor.revision - 1 : exportRow.revision_cursor, page.rows.length, encodeJson({ ...metadata, ...(durableCursor === undefined ? { stateCursor: undefined } : { stateCursor: durableCursor }) }), sessionId],
+        [
+          page.revisionComplete ? cursor.revision - 1 : exportRow.revision_cursor,
+          page.rows.length,
+          encodeJson({
+            ...metadata,
+            ...(durableCursor === undefined
+              ? { stateCursor: undefined }
+              : { stateCursor: durableCursor }),
+          }),
+          sessionId,
+        ],
       );
       if (page.revisionComplete && cursor.revision > exportRow.target_revision) break;
     }
@@ -1844,8 +2573,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       generationDigest:
         exportRow.kind === 1
           ? (() => {
-              const meta = decodeJson<{ readonly branchGenerationDigest?: string }>(exportRow.meta_json);
-              return meta?.branchGenerationDigest && /^[0-9a-f]{64}$/u.test(meta.branchGenerationDigest)
+              const meta = decodeJson<{ readonly branchGenerationDigest?: string }>(
+                exportRow.meta_json,
+              );
+              return meta?.branchGenerationDigest &&
+                /^[0-9a-f]{64}$/u.test(meta.branchGenerationDigest)
                 ? hexBytes(meta.branchGenerationDigest)
                 : null;
             })()
@@ -1876,7 +2608,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     readonly resultRetentionMs?: number;
   }): void {
     if (options.resultRetentionMs !== undefined) {
-      if (!Number.isSafeInteger(options.resultRetentionMs) || options.resultRetentionMs <= 0)
+      if (
+        !Number.isSafeInteger(options.resultRetentionMs) ||
+        options.resultRetentionMs <= 0
+      )
         throw new RangeError("resultRetentionMs is invalid");
       this.#resultRetentionMs = options.resultRetentionMs;
     }
@@ -1890,11 +2625,13 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     if (existing && existing.lease_id !== options.leaseId)
       throw transferError("CursorMismatch", "import lease identity changed");
     if (existing) {
-      const lease = this.#tx.all<{
-        owner_nonce: Uint8Array;
-        state: number;
-        expires_at_ms: number;
-      } & SqliteRow>(
+      const lease = this.#tx.all<
+        {
+          owner_nonce: Uint8Array;
+          state: number;
+          expires_at_ms: number;
+        } & SqliteRow
+      >(
         "SELECT owner_nonce,state,expires_at_ms FROM efs_leases WHERE id=?",
         [options.leaseId],
         { maxRows: 1, maxBytes: 1024 },
@@ -1907,23 +2644,27 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         throw transferError("StagingExpired", "replication import lease is not active");
       this.#tx.run(
         "UPDATE efs_leases SET last_renewal_at_ms=?,expires_at_ms=? WHERE id=? AND owner_nonce=? AND state=0",
-        [options.now, Math.max(lease.expires_at_ms, options.expiresAt), options.leaseId, options.ownerNonce],
+        [
+          options.now,
+          Math.max(lease.expires_at_ms, options.expiresAt),
+          options.leaseId,
+          options.ownerNonce,
+        ],
       );
       return;
     }
-    this.#staging()
-      .begin({
-        leaseId: options.leaseId,
-        ownerId: `replication:${options.sessionId}`,
-        ownerNonce: options.ownerNonce,
-        now: options.now,
-        expiresAt: options.expiresAt,
-        kind: 2,
-        ...(options.branchId === null ? {} : { branchId: options.branchId }),
-        ...(options.generation === null ? {} : { generation: options.generation }),
-        ingestReservationBytes: options.ingestReservationBytes,
-        metadataReservationBytes: options.metadataReservationBytes,
-      });
+    this.#staging().begin({
+      leaseId: options.leaseId,
+      ownerId: `replication:${options.sessionId}`,
+      ownerNonce: options.ownerNonce,
+      now: options.now,
+      expiresAt: options.expiresAt,
+      kind: 2,
+      ...(options.branchId === null ? {} : { branchId: options.branchId }),
+      ...(options.generation === null ? {} : { generation: options.generation }),
+      ingestReservationBytes: options.ingestReservationBytes,
+      metadataReservationBytes: options.metadataReservationBytes,
+    });
     this.#tx.run(
       "INSERT INTO efs_replication_imports(session_id,lease_id,owner_nonce,kind,phase,branch_id,base_revision,generation,expected_generation_digest,closure_object_count,closure_object_bytes,closure_root_count,closure_node_count,transferred_object_count,transferred_object_bytes,transferred_root_count,transferred_node_count,state_row_count,state_byte_count,revision_count,installed_revision_count,sealed) VALUES(?,?,?,?,0,?,?,?,?,0,0,0,0,0,0,0,0,0,0,0,0,0) ON CONFLICT DO NOTHING",
       [
@@ -2124,10 +2865,16 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         if (kindByte === 0) {
           const declared = readU64(missing.value!, 1, "missing object size");
           if (declared !== record.byteLength)
-            throw transferError("IntegrityFailure", "payload size does not match the offer");
+            throw transferError(
+              "IntegrityFailure",
+              "payload size does not match the offer",
+            );
         } else if (kindByte === 1) {
           if (record.byteLength < 68)
-            throw transferError("IntegrityFailure", "manifest root envelope is invalid");
+            throw transferError(
+              "IntegrityFailure",
+              "manifest root envelope is invalid",
+            );
         }
         const actual = this.#hashBytes(record.bytes);
         if (!equalBytes(actual, record.digest))
@@ -2151,7 +2898,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
           });
         } else {
           decodeManifestNode(record.bytes, record.digest);
-          content.putManifestNodesBatch([{ hash: record.digest, encoded: record.bytes }]);
+          content.putManifestNodesBatch([
+            { hash: record.digest, encoded: record.bytes },
+          ]);
           insertedNodes += 1;
           members.push({
             kind: "manifest-node",
@@ -2172,7 +2921,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         this.#storeRevisionFragment(options.sessionId, revision, decoded, false);
       } else if (record.kind === "checkpoint-fragment") {
         const decoded = decodeRevisionFragment(record.fragmentBytes);
-        const revision = parseIntegerRevision(decoded.revisionId, "checkpoint revision");
+        const revision = parseIntegerRevision(
+          decoded.revisionId,
+          "checkpoint revision",
+        );
         this.#storeRevisionFragment(options.sessionId, revision, decoded, true);
       } else if (record.kind === "branch-generation-fragment") {
         this.#storeBranchFragment(options.sessionId, record);
@@ -2182,7 +2934,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
           [
             options.sessionId,
             encoder.encode(record.operationId),
-            new Uint8Array([...u64be(record.resultBytes.byteLength), ...record.resultBytes]),
+            new Uint8Array([
+              ...u64be(record.resultBytes.byteLength),
+              ...record.resultBytes,
+            ]),
           ],
         );
       }
@@ -2191,7 +2946,12 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       // Imported membership is already covered by the durable import/session
       // journal.  Do not create a second root-journal generation here: the
       // finalizer records the authoritative root transition atomically.
-      const certificate = this.#staging().appendBatch(leaseId, ownerNonce, members, false);
+      const certificate = this.#staging().appendBatch(
+        leaseId,
+        ownerNonce,
+        members,
+        false,
+      );
       void certificate;
       this.#tx.run(
         "UPDATE efs_replication_imports SET closure_object_count=closure_object_count+?,closure_object_bytes=closure_object_bytes+?,closure_root_count=closure_root_count+?,closure_node_count=closure_node_count+?,transferred_object_count=transferred_object_count+?,transferred_object_bytes=transferred_object_bytes+?,transferred_root_count=transferred_root_count+?,transferred_node_count=transferred_node_count+? WHERE session_id=? AND lease_id=?",
@@ -2237,7 +2997,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     const revisionKey = u64be(revision);
     const headerKey = keyBytes([u8(1), revisionKey]);
     const headerValue = new Uint8Array([
-      ...u64be(decoded.parentRevisionId === null ? 0 : Number(decoded.parentRevisionId)),
+      ...u64be(
+        decoded.parentRevisionId === null ? 0 : Number(decoded.parentRevisionId),
+      ),
       ...u64be(decoded.created_at_ms),
       ...u64be(decoded.changeCount),
       ...encoder.encode(decoded.writerId),
@@ -2279,7 +3041,13 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       } else if (row.kind === 2) {
         kind = 3;
         const parentBytes = encoder.encode(row.parentInode);
-        key = keyBytes([u8(3), revisionKey, u32be(parentBytes.byteLength), parentBytes, row.nameSort]);
+        key = keyBytes([
+          u8(3),
+          revisionKey,
+          u32be(parentBytes.byteLength),
+          parentBytes,
+          row.nameSort,
+        ]);
         value = new Uint8Array([
           row.tombstone ? 1 : 0,
           ...(row.encoded ? row.encoded : new Uint8Array(0)),
@@ -2325,7 +3093,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       decoded.previousGeneration === null ? 0 : 1,
       ...(decoded.previousGeneration === null ? [] : u64be(decoded.previousGeneration)),
       decoded.previousGenerationDigest === null ? 0 : 1,
-      ...(decoded.previousGenerationDigest === null ? [] : copyBytes(decoded.previousGenerationDigest)),
+      ...(decoded.previousGenerationDigest === null
+        ? []
+        : copyBytes(decoded.previousGenerationDigest)),
       decoded.state,
     ]);
     const existed = this.#tx.run(
@@ -2366,7 +3136,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     } else if (row.kind === 3) {
       kind = 8;
       key = keyBytes([u8(8), row.inodeId, u64be(row.pageIndex), u64be(row.generation)]);
-      value = new Uint8Array([...row.bytes, ...u64be(row.created_at_ms), row.head ? 1 : 0]);
+      value = new Uint8Array([
+        ...row.bytes,
+        ...u64be(row.created_at_ms),
+        row.head ? 1 : 0,
+      ]);
     } else if (row.kind === 4) {
       kind = 9;
       let length = 40;
@@ -2421,7 +3195,13 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       return false;
     const result = this.#tx.run(
       "UPDATE efs_leases SET last_renewal_at_ms=?,expires_at_ms=? WHERE id=? AND owner_nonce=? AND state=0 AND expires_at_ms>?",
-      [options.now, options.expiresAt, importRow.lease_id, options.ownerNonce, options.now],
+      [
+        options.now,
+        options.expiresAt,
+        importRow.lease_id,
+        options.ownerNonce,
+        options.now,
+      ],
     );
     return result.changes === 1;
   }
@@ -2457,25 +3237,47 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     return true;
   }
 
-  maintenance(options: { readonly now: number; readonly limit: number }): Readonly<{ readonly expiredLeases: number; readonly cleanupPasses: number }> {
+  maintenance(options: {
+    readonly now: number;
+    readonly limit: number;
+  }): Readonly<{ readonly expiredLeases: number; readonly cleanupPasses: number }> {
     if (!Number.isSafeInteger(options.now) || options.now < 0)
       throw transferError("ResourceLimit", "maintenance time is invalid");
     if (!Number.isSafeInteger(options.limit) || options.limit <= 0)
       throw transferError("ResourceLimit", "maintenance limit is invalid");
-    const imports = this.#tx.all<{ session_id: string; lease_id: string; owner_nonce: Uint8Array } & SqliteRow>(
+    const imports = this.#tx.all<
+      { session_id: string; lease_id: string; owner_nonce: Uint8Array } & SqliteRow
+    >(
       "SELECT i.session_id,i.lease_id,i.owner_nonce FROM efs_replication_imports i JOIN efs_replication_sessions s ON s.id=i.session_id LEFT JOIN efs_leases l ON l.id=i.lease_id WHERE s.expires_at_ms<=? OR l.expires_at_ms<=? ORDER BY i.session_id LIMIT ?",
       [options.now, options.now, options.limit],
       { maxRows: options.limit, maxBytes: Math.max(1024, options.limit * 512) },
     );
     const staging = this.#staging();
+    const exports = this.#tx.all<
+      {
+        session_id: string;
+        lease_id: string;
+        owner_nonce: Uint8Array;
+      } & SqliteRow
+    >(
+      "SELECT e.session_id,e.lease_id,e.owner_nonce FROM efs_replication_export_leases e JOIN efs_replication_sessions s ON s.id=e.session_id JOIN efs_leases l ON l.id=e.lease_id WHERE e.state=1 AND (s.expires_at_ms<=? OR l.expires_at_ms<=?) ORDER BY e.session_id LIMIT ?",
+      [options.now, options.now, options.limit],
+      { maxRows: options.limit, maxBytes: Math.max(1024, options.limit * 512) },
+    );
+    for (const row of exports)
+      this.releaseExport({ sessionId: row.session_id, now: options.now });
     for (const row of imports) {
       staging.release(row.lease_id, row.owner_nonce, false);
-      this.#tx.run("UPDATE efs_replication_imports SET sealed=2 WHERE session_id=?", [row.session_id]);
+      this.#tx.run("UPDATE efs_replication_imports SET sealed=2 WHERE session_id=?", [
+        row.session_id,
+      ]);
     }
     const expiredLeases = staging.expireBatch(options.now, options.limit);
     let cleanupPasses = 0;
     for (let pass = 0; pass < options.limit; pass += 1) {
-      const progress = staging.cleanupBatch(Math.min(options.limit, this.#limits.maxGcBatchSize));
+      const progress = staging.cleanupBatch(
+        Math.min(options.limit, this.#limits.maxGcBatchSize),
+      );
       if (!progress.worked) break;
       cleanupPasses += 1;
     }
@@ -2500,6 +3302,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     readonly generation: number | null;
     readonly generationDigest: Uint8Array | null;
     readonly checkpoint: boolean;
+    readonly sourceRole?: "main-authority" | "replica";
     readonly terminalState: 0 | 1 | 2;
     readonly terminalResultOperationId: string | null;
     readonly terminalResultBytes: Uint8Array | null;
@@ -2521,8 +3324,12 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     readonly reusedBytes: number;
   }> {
     const importRow = this.#importRow(options.sessionId);
-    if (importRow.sealed === 2)
-      throw transferError("Aborted", "import was aborted");
+    if (options.terminalState !== 0 && options.sourceRole !== "main-authority")
+      throw transferError(
+        "UnauthorizedScope",
+        "only the authenticated main authority may deliver terminal branch state",
+      );
+    if (importRow.sealed === 2) throw transferError("Aborted", "import was aborted");
     if (importRow.kind !== options.kind)
       throw transferError("OperationMismatch", "import kind changed");
     const staging = this.#staging();
@@ -2543,17 +3350,38 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       );
     }
     if (options.kind === 0) {
-      const result = this.#finalizeMain(options, importRow);
-      staging.release(importRow.lease_id, importRow.owner_nonce, false, undefined, false);
+      const result = this.#finalizeMainBounded(options, importRow);
+      if (result.complete !== false)
+        staging.release(
+          importRow.lease_id,
+          importRow.owner_nonce,
+          false,
+          undefined,
+          false,
+        );
       return result;
     }
     if (options.kind === 1) {
-      const result = this.#finalizeBranch(options, importRow);
-      staging.release(importRow.lease_id, importRow.owner_nonce, false, undefined, false);
+      const result = this.#finalizeBranchBounded(options, importRow);
+      if (result.complete !== false)
+        staging.release(
+          importRow.lease_id,
+          importRow.owner_nonce,
+          false,
+          undefined,
+          false,
+        );
       return result;
     }
-    const result = this.#finalizeGenesis(options, importRow);
-    staging.release(importRow.lease_id, importRow.owner_nonce, false, undefined, false);
+    const result = this.#finalizeGenesisBounded(options, importRow);
+    if (result.complete !== false)
+      staging.release(
+        importRow.lease_id,
+        importRow.owner_nonce,
+        false,
+        undefined,
+        false,
+      );
     return result;
   }
 
@@ -2566,36 +3394,404 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
   }
 
   #validateImportedManifest(sessionId: string, importRow: ImportRow): void {
-    const roots = new Map<string, Uint8Array>();
-    for (const row of [
-      ...this.#stagedRows(sessionId, 4),
-      ...this.#stagedRows(sessionId, 11),
-    ]) {
-      if (row.value?.byteLength !== 32)
-        throw transferError("IntegrityFailure", "staged manifest reference is invalid");
-      const key = bytesToHex(row.value);
-      if (!roots.has(key)) roots.set(key, copyBytes(row.value));
-    }
-    if (roots.size === 0) return;
     const staging = this.#staging();
-    for (const manifestHash of roots.values()) {
-      staging.beginReconciliation(importRow.lease_id, importRow.owner_nonce, manifestHash);
-      let progress = staging.reconcileBatch(
-        importRow.lease_id,
-        importRow.owner_nonce,
-        Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 1024)),
-        { validationOnly: true },
+    const pageSize = Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64));
+    let cursor: Uint8Array | null = null;
+    for (;;) {
+      const rows = this.#tx.all<{ manifest_hash: Uint8Array } & SqliteRow>(
+        cursor === null
+          ? "SELECT value manifest_hash FROM efs_replication_import_rows WHERE session_id=? AND kind IN (4,11) GROUP BY value ORDER BY value LIMIT ?"
+          : "SELECT value manifest_hash FROM efs_replication_import_rows WHERE session_id=? AND kind IN (4,11) AND value>? GROUP BY value ORDER BY value LIMIT ?",
+        cursor === null ? [sessionId, pageSize] : [sessionId, cursor, pageSize],
+        { maxRows: pageSize, maxBytes: Math.max(4096, pageSize * 96) },
       );
-      while (!progress.complete) {
-        progress = staging.reconcileBatch(
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        if (row.manifest_hash.byteLength !== 32)
+          throw transferError(
+            "IntegrityFailure",
+            "staged manifest reference is invalid",
+          );
+        staging.beginReconciliation(
+          importRow.lease_id,
+          importRow.owner_nonce,
+          row.manifest_hash,
+        );
+        let progress = staging.reconcileBatch(
           importRow.lease_id,
           importRow.owner_nonce,
           Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 1024)),
           { validationOnly: true },
         );
+        while (!progress.complete) {
+          progress = staging.reconcileBatch(
+            importRow.lease_id,
+            importRow.owner_nonce,
+            Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 1024)),
+            { validationOnly: true },
+          );
+        }
+        staging.clearReconciliation(importRow.lease_id, importRow.owner_nonce);
       }
-      staging.clearReconciliation(importRow.lease_id, importRow.owner_nonce);
+      if (rows.length < pageSize) break;
+      cursor = copyBytes(rows.at(-1)!.manifest_hash);
     }
+  }
+
+  #finalizeMainBounded(
+    options: {
+      readonly sessionId: string;
+      readonly expectedRevision: number;
+      readonly expectedRootMutationGeneration: number;
+      readonly expectedNextAllocationSequence: number;
+      readonly expectedRootInode: string;
+      readonly expectedRevisionCount: number;
+      readonly expectedStateRows: number;
+      readonly checkpoint: boolean;
+      readonly now: number;
+    },
+    importRow: ImportRow,
+  ): Readonly<{
+    readonly complete: boolean;
+    readonly revision: string;
+    readonly branchId: string | null;
+    readonly baseRevision: string | null;
+    readonly generation: number;
+    readonly generationDigest: Uint8Array | null;
+    readonly state: 0 | 1 | 2;
+    readonly authorityResult: ReplicationAuthorityResult | null;
+    readonly reusedBytes: number;
+  }> {
+    const meta = this.#meta();
+    if (meta.main_revision > options.expectedRevision)
+      throw transferError("MainDiverged", "destination head is ahead of the transfer");
+    if (meta.root_inode !== options.expectedRootInode)
+      throw transferError(
+        "FilesystemMismatch",
+        "destination root inode does not match the authority",
+      );
+    if (
+      importRow.state_row_count !== options.expectedStateRows ||
+      importRow.revision_count !== options.expectedRevisionCount
+    )
+      throw transferError("IntegrityFailure", "staged state summary does not match");
+
+    const activation = this.#activationRow(options.sessionId);
+    const result = (
+      complete: boolean,
+    ): Readonly<{
+      readonly complete: boolean;
+      readonly revision: string;
+      readonly branchId: string | null;
+      readonly baseRevision: string | null;
+      readonly generation: number;
+      readonly generationDigest: Uint8Array | null;
+      readonly state: 0 | 1 | 2;
+      readonly authorityResult: ReplicationAuthorityResult | null;
+      readonly reusedBytes: number;
+    }> =>
+      Object.freeze({
+        complete,
+        revision: String(options.expectedRevision),
+        branchId: null,
+        baseRevision: null,
+        generation: 0,
+        generationDigest: null,
+        state: 0,
+        authorityResult: null,
+        reusedBytes: 0,
+      });
+    if (activation.phase === 8) return result(true);
+    if (activation.phase === 7) {
+      const committed = this.#tx.run(
+        "UPDATE efs_meta SET main_revision=?,root_mutation_generation=?,last_root_removal_generation=?,next_allocation_sequence=MAX(next_allocation_sequence,?) WHERE singleton=1 AND main_revision=? AND root_mutation_generation<=? AND next_allocation_sequence>=?",
+        [
+          options.expectedRevision,
+          options.expectedRootMutationGeneration,
+          options.expectedRootMutationGeneration,
+          options.expectedNextAllocationSequence,
+          meta.main_revision,
+          meta.root_mutation_generation,
+          options.expectedNextAllocationSequence,
+        ],
+      );
+      if (committed.changes !== 1)
+        throw transferError(
+          "MainDiverged",
+          "destination metadata changed before activation swap",
+        );
+      this.#tx.run(
+        "UPDATE efs_replication_imports SET installed_revision_count=1 WHERE session_id=?",
+        [options.sessionId],
+      );
+      this.#tx.run("UPDATE efs_replication_activation SET phase=8 WHERE session_id=?", [
+        options.sessionId,
+      ]);
+      return result(true);
+    }
+
+    if (activation.phase === 0 && activation.processed_count === 0) {
+      if (meta.main_revision === options.expectedRevision) {
+        if (
+          meta.root_mutation_generation > options.expectedRootMutationGeneration ||
+          meta.next_allocation_sequence < options.expectedNextAllocationSequence
+        )
+          throw transferError(
+            "MainDiverged",
+            "destination metadata differs at the selected revision",
+          );
+        const headers = this.#tx.all<{ count: number } & SqliteRow>(
+          "SELECT count(*) count FROM efs_replication_import_rows WHERE session_id=? AND kind=1",
+          [options.sessionId],
+          { maxRows: 1, maxBytes: 256 },
+        )[0]!.count;
+        if (headers !== options.expectedRevisionCount)
+          throw transferError(
+            "IntegrityFailure",
+            "staged revision count does not match",
+          );
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET phase=7 WHERE session_id=?",
+          [options.sessionId],
+        );
+        this.#tx.run(
+          "UPDATE efs_replication_imports SET installed_revision_count=1 WHERE session_id=?",
+          [options.sessionId],
+        );
+        return result(true);
+      }
+      // The closure certificate authenticates immutable content before any
+      // pointer is advanced.  Manifest validation is intentionally invoked
+      // only once, before the first bounded activation page.
+      this.#validateImportedManifest(options.sessionId, importRow);
+    }
+
+    const firstRevision = meta.main_revision + 1;
+    const pageLimit = Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64));
+    if (activation.phase === 0) {
+      const rows = this.#activationPage(
+        options.sessionId,
+        1,
+        activation.cursor,
+        pageLimit,
+      );
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index]!;
+        const revision = readU64(row.key, 1, "staged revision");
+        // Main exports are rooted at revision one even when the destination
+        // is already partially caught up.  Validate the complete staged
+        // header keyset while only installing the suffix beyond the current
+        // destination head.
+        if (revision !== 1 + activation.processed_count + index) {
+          throw transferError(
+            "IntegrityFailure",
+            "staged revision range is not contiguous",
+          );
+        }
+        if (revision > meta.main_revision) {
+          const parentValue = readU64(row.value!, 0, "staged parent revision");
+          const parent =
+            revision === 0 || parentValue === 0xffff_ffff_ffff_ffff
+              ? null
+              : parentValue;
+          const writerBytes = row.value!.subarray(24);
+          let writerId: string;
+          try {
+            writerId = decoder.decode(writerBytes);
+          } catch {
+            throw transferError("IntegrityFailure", "staged writer id is not UTF-8");
+          }
+          this.#tx.run(
+            "INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(?,?,?,?,?)",
+            [
+              revision,
+              parent,
+              readU64(row.value!, 8, "staged creation time"),
+              writerId,
+              readU64(row.value!, 16, "staged change count"),
+            ],
+          );
+          this.#tx.run(
+            "INSERT OR IGNORE INTO efs_root_journal(generation,kind,root_id) VALUES(?,0,?)",
+            [revision, String(revision)],
+          );
+        }
+      }
+      const next = activation.processed_count + rows.length;
+      if (rows.length === 0) {
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET phase=1,cursor=NULL,processed_count=0 WHERE session_id=?",
+          [options.sessionId],
+        );
+      } else {
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET cursor=?,processed_count=? WHERE session_id=?",
+          [rows.at(-1)!.key, next, options.sessionId],
+        );
+      }
+      return result(false);
+    }
+    if (activation.phase === 1) {
+      const rows = this.#activationPage(
+        options.sessionId,
+        2,
+        activation.cursor,
+        pageLimit,
+      );
+      const usage = new UsageRepository(this.#tx, this.#limits);
+      let charged = 0;
+      for (const row of rows) {
+        const revision = readU64(row.key, 1, "staged inode revision");
+        if (revision > options.expectedRevision)
+          throw transferError(
+            "IntegrityFailure",
+            "staged inode revision is out of range",
+          );
+        if (revision <= meta.main_revision) continue;
+        const inodeId = decoder.decode(row.key.subarray(9));
+        const tombstone = row.value?.[0] === 1;
+        const encoded = row.value?.subarray(1) ?? new Uint8Array(0);
+        if (tombstone) {
+          this.#tx.run("DELETE FROM efs_inodes WHERE id=?", [inodeId]);
+          this.#tx.run(
+            "INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(?,?,1,NULL) ON CONFLICT DO NOTHING",
+            [revision, inodeId],
+          );
+          charged += CHARGED_ROW_BYTES;
+        } else {
+          const inode = deserializeInode(encoded);
+          if (inode.type === 0 && (inode.manifest_hash === null || inode.size === null))
+            throw transferError("IntegrityFailure", "regular file inode lacks content");
+          this.#tx.run(
+            "INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET type=excluded.type,mode=excluded.mode,birthtime_ms=excluded.birthtime_ms,mtime_ms=excluded.mtime_ms,ctime_ms=excluded.ctime_ms,nlink=excluded.nlink,size=excluded.size,manifest_hash=excluded.manifest_hash,symlink_target=excluded.symlink_target,token=excluded.token",
+            [
+              inode.id,
+              inode.type,
+              inode.mode,
+              inode.birthtime_ms,
+              inode.mtime_ms,
+              inode.ctime_ms,
+              inode.nlink,
+              inode.size,
+              inode.manifest_hash,
+              inode.symlink_target,
+              inode.token,
+            ],
+          );
+          this.#tx.run(
+            "INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(?,?,0,?) ON CONFLICT DO NOTHING",
+            [revision, inode.id, encoded],
+          );
+          charged += CHARGED_ROW_BYTES + encoded.byteLength;
+        }
+      }
+      if (charged)
+        usage.apply({ charged_metadata_bytes: charged }, "replicated main inode page");
+      if (rows.length === 0)
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET phase=2,cursor=NULL WHERE session_id=?",
+          [options.sessionId],
+        );
+      else
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET cursor=? WHERE session_id=?",
+          [rows.at(-1)!.key, options.sessionId],
+        );
+      return result(false);
+    }
+    if (activation.phase === 2) {
+      const rows = this.#activationPage(
+        options.sessionId,
+        3,
+        activation.cursor,
+        pageLimit,
+      );
+      const usage = new UsageRepository(this.#tx, this.#limits);
+      let charged = 0;
+      for (const row of rows) {
+        const revision = readU64(row.key, 1, "staged entry revision");
+        if (revision > options.expectedRevision)
+          throw transferError(
+            "IntegrityFailure",
+            "staged entry revision is out of range",
+          );
+        if (revision <= meta.main_revision) continue;
+        const rest = row.key.subarray(9);
+        const parentLength = readU32Length(rest, 0, "staged entry parent");
+        const parentInode = decoder.decode(rest.subarray(4, 4 + parentLength));
+        const nameSort = copyBytes(rest.subarray(4 + parentLength));
+        const tombstone = row.value?.[0] === 1;
+        const encoded = row.value?.subarray(1) ?? new Uint8Array(0);
+        if (tombstone) {
+          this.#tx.run("DELETE FROM efs_entries WHERE parent_inode=? AND name_sort=?", [
+            parentInode,
+            nameSort,
+          ]);
+          this.#tx.run(
+            "INSERT INTO efs_entry_revisions(revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,1,NULL) ON CONFLICT DO NOTHING",
+            [revision, parentInode, nameSort],
+          );
+        } else {
+          const entry = deserializeEntry(encoded);
+          this.#tx.run(
+            "INSERT INTO efs_entries(parent_inode,name_sort,name,inode_id,token) VALUES(?,?,?,?,?) ON CONFLICT(parent_inode,name_sort) DO UPDATE SET name=excluded.name,inode_id=excluded.inode_id,token=excluded.token",
+            [parentInode, nameSort, entry.name, entry.inode_id, entry.token],
+          );
+          this.#tx.run(
+            "INSERT INTO efs_entry_revisions(revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,0,?) ON CONFLICT DO NOTHING",
+            [revision, parentInode, nameSort, encoded],
+          );
+        }
+        charged += CHARGED_ROW_BYTES + nameSort.byteLength + encoded.byteLength;
+      }
+      if (charged)
+        usage.apply({ charged_metadata_bytes: charged }, "replicated main entry page");
+      if (rows.length === 0)
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET phase=3,cursor=NULL WHERE session_id=?",
+          [options.sessionId],
+        );
+      else
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET cursor=? WHERE session_id=?",
+          [rows.at(-1)!.key, options.sessionId],
+        );
+      return result(false);
+    }
+    if (activation.phase === 3) {
+      const rows = this.#activationPage(
+        options.sessionId,
+        4,
+        activation.cursor,
+        pageLimit,
+      );
+      for (const row of rows) {
+        const revision = readU64(row.key, 1, "staged manifest ref revision");
+        if (revision > options.expectedRevision || row.value?.byteLength !== 32)
+          throw transferError(
+            "IntegrityFailure",
+            "staged manifest reference is invalid",
+          );
+        if (revision <= meta.main_revision) continue;
+        this.#tx.run(
+          "INSERT INTO efs_revision_manifest_roots(revision,inode_id,manifest_hash) VALUES(?,?,?) ON CONFLICT DO NOTHING",
+          [revision, decoder.decode(row.key.subarray(9)), copyBytes(row.value)],
+        );
+      }
+      if (rows.length === 0)
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET phase=7,cursor=NULL WHERE session_id=?",
+          [options.sessionId],
+        );
+      else
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET cursor=? WHERE session_id=?",
+          [rows.at(-1)!.key, options.sessionId],
+        );
+      return result(false);
+    }
+    if (activation.phase === 7) return result(true);
+    throw transferError("IntegrityFailure", "unknown replication activation phase");
   }
 
   #finalizeMain(
@@ -2644,9 +3840,14 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         meta.root_mutation_generation !== options.expectedRootMutationGeneration ||
         meta.next_allocation_sequence < options.expectedNextAllocationSequence
       ) {
-        throw transferError("MainDiverged", "destination metadata differs at the selected revision");
+        throw transferError(
+          "MainDiverged",
+          "destination metadata differs at the selected revision",
+        );
       }
-      if (this.#stagedRows(options.sessionId, 1).length !== options.expectedRevisionCount)
+      if (
+        this.#stagedRows(options.sessionId, 1).length !== options.expectedRevisionCount
+      )
         throw transferError("IntegrityFailure", "staged revision count does not match");
       this.#tx.run(
         "UPDATE efs_replication_imports SET installed_revision_count=1 WHERE session_id=?",
@@ -2678,7 +3879,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     revisions.sort((left, right) => left - right);
     for (let index = 0; index < revisions.length; index += 1)
       if (revisions[index] !== index + 1)
-        throw transferError("IntegrityFailure", "staged revision range is not contiguous");
+        throw transferError(
+          "IntegrityFailure",
+          "staged revision range is not contiguous",
+        );
     const newHeaders = headers.filter(
       (header) => readU64(header.key, 1, "staged revision") >= first,
     );
@@ -2693,7 +3897,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     for (const header of newHeaders) {
       const revision = readU64(header.key, 1, "staged revision");
       const parentValue = readU64(header.value!, 0, "staged parent revision");
-      const parent = revision === 0 || parentValue === 0xffff_ffff_ffff_ffff ? null : parentValue;
+      const parent =
+        revision === 0 || parentValue === 0xffff_ffff_ffff_ffff ? null : parentValue;
       const createdAtMs = readU64(header.value!, 8, "staged creation time");
       const changeCount = readU64(header.value!, 16, "staged change count");
       const writerBytes = header.value!.subarray(24);
@@ -2709,7 +3914,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       ).changes;
       void inserted;
       chargedMetadata += CHARGED_ROW_BYTES + writerBytes.byteLength;
-      maintenanceBytes += CHARGED_ROW_BYTES + encoder.encode(String(revision)).byteLength;
+      maintenanceBytes +=
+        CHARGED_ROW_BYTES + encoder.encode(String(revision)).byteLength;
       this.#tx.run(
         "INSERT OR IGNORE INTO efs_root_journal(generation,kind,root_id) VALUES(?,0,?)",
         [revision, String(revision)],
@@ -2788,10 +3994,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         { maxRows: 1, maxBytes: 256 },
       )[0]!.count;
       if (tombstone) {
-        this.#tx.run(
-          "DELETE FROM efs_entries WHERE parent_inode=? AND name_sort=?",
-          [parentInode, nameSort],
-        );
+        this.#tx.run("DELETE FROM efs_entries WHERE parent_inode=? AND name_sort=?", [
+          parentInode,
+          nameSort,
+        ]);
         this.#tx.run(
           "INSERT INTO efs_entry_revisions(revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,1,NULL) ON CONFLICT DO NOTHING",
           [revision, parentInode, nameSort],
@@ -2839,7 +4045,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         const inodeId = decoder.decode(row.key.subarray(9));
         this.#tx.run(
           "INSERT INTO efs_checkpoint_inodes(target_revision,inode_id,tombstone,encoded) VALUES(?,?,?,?)",
-          [revision, inodeId, (row.value![0] ?? 0), row.value!.subarray(1)],
+          [revision, inodeId, row.value![0] ?? 0, row.value!.subarray(1)],
         );
       }
       for (const row of entryRows) {
@@ -2850,7 +4056,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         const nameSort = copyBytes(rest.subarray(4 + parentLength));
         this.#tx.run(
           "INSERT INTO efs_checkpoint_entries(target_revision,parent_inode,name_sort,tombstone,encoded) VALUES(?,?,?,?,?)",
-          [revision, parentInode, nameSort, (row.value![0] ?? 0), row.value!.subarray(1)],
+          [revision, parentInode, nameSort, row.value![0] ?? 0, row.value!.subarray(1)],
         );
       }
       for (const row of refRows) {
@@ -2870,10 +4076,12 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         {
           charged_metadata_bytes:
             (inodeRows.length + entryRows.length + refRows.length) * CHARGED_ROW_BYTES +
-            inodeRows.reduce((sum, row) => sum + (row.value!.subarray(1).byteLength), 0) +
+            inodeRows.reduce((sum, row) => sum + row.value!.subarray(1).byteLength, 0) +
             entryRows.reduce(
               (sum, row) =>
-                sum + readU32Length(row.key.subarray(9), 0, "entry parent") + row.value!.subarray(1).byteLength,
+                sum +
+                readU32Length(row.key.subarray(9), 0, "entry parent") +
+                row.value!.subarray(1).byteLength,
               0,
             ),
         },
@@ -2903,6 +4111,566 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     });
   }
 
+  #finalizeBranchBounded(
+    options: {
+      readonly sessionId: string;
+      readonly branchId: string | null;
+      readonly baseRevision: string | null;
+      readonly generation: number | null;
+      readonly generationDigest: Uint8Array | null;
+      readonly terminalState: 0 | 1 | 2;
+      readonly terminalResultOperationId: string | null;
+      readonly terminalResultBytes: Uint8Array | null;
+      readonly expectedStateRows: number;
+      readonly now: number;
+    },
+    importRow: ImportRow,
+  ): Readonly<{
+    readonly complete: boolean;
+    readonly revision: string;
+    readonly branchId: string | null;
+    readonly baseRevision: string | null;
+    readonly generation: number;
+    readonly generationDigest: Uint8Array | null;
+    readonly state: 0 | 1 | 2;
+    readonly authorityResult: ReplicationAuthorityResult | null;
+    readonly reusedBytes: number;
+  }> {
+    // The branch header is a durable state row on the destination but is not
+    // included in the source branch payload summary.  The per-kind pages
+    // below validate the complete staged keyset before activation.
+    if (importRow.state_row_count < options.expectedStateRows)
+      throw transferError("IntegrityFailure", "staged branch summary is incomplete");
+    const branchId = options.branchId ?? importRow.branch_id;
+    if (!branchId)
+      throw transferError("BranchIdentityMismatch", "branch identity is missing");
+    const branchRows = this.#activationPage(options.sessionId, 5, null, 2);
+    if (branchRows.length !== 1)
+      throw transferError(
+        "IntegrityFailure",
+        "branch state is not staged exactly once",
+      );
+    const branchValue = branchRows[0]!.value!;
+    const baseRevision = readU64(branchValue, 0, "staged branch base revision");
+    const generation = readU64(branchValue, 8, "staged branch generation");
+    const expectedDigest = copyBytes(branchValue.subarray(16, 48));
+    const priorGenerationTag = branchValue[48];
+    if (priorGenerationTag !== 0 && priorGenerationTag !== 1)
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch predecessor generation tag is invalid",
+      );
+    const priorGeneration =
+      priorGenerationTag === 0
+        ? null
+        : readU64(branchValue, 49, "staged branch predecessor generation");
+    const priorDigestOffset = priorGeneration === null ? 49 : 57;
+    const priorDigestTag = branchValue[priorDigestOffset];
+    if (priorDigestTag !== 0 && priorDigestTag !== 1)
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch predecessor digest tag is invalid",
+      );
+    const priorDigest =
+      priorDigestTag === 0
+        ? null
+        : copyBytes(
+            branchValue.subarray(priorDigestOffset + 1, priorDigestOffset + 33),
+          );
+    const fragmentStateOffset =
+      priorDigest === null ? priorDigestOffset + 1 : priorDigestOffset + 33;
+    const fragmentState = (branchValue[fragmentStateOffset] ?? 0) as 0 | 1 | 2;
+    if (fragmentState > 2 || branchValue.byteLength !== fragmentStateOffset + 1)
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch state envelope is invalid",
+      );
+    if ((priorGeneration === null) !== (priorDigest === null))
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch predecessor is incomplete",
+      );
+    if (
+      options.generationDigest !== null &&
+      !equalBytes(options.generationDigest, expectedDigest)
+    )
+      throw transferError(
+        "BranchIdentityMismatch",
+        "activation generation digest differs from the selected branch snapshot",
+      );
+    const requestedBase = parseIntegerRevision(
+      options.baseRevision ?? "",
+      "base revision",
+    );
+    if (requestedBase !== baseRevision)
+      throw transferError("BranchIdentityMismatch", "branch base revision changed");
+    if (options.generation !== null && options.generation !== generation)
+      throw transferError("BranchIdentityMismatch", "branch generation changed");
+
+    const terminalDetails =
+      fragmentState === 0
+        ? null
+        : (() => {
+            if (
+              options.terminalResultOperationId === null ||
+              options.terminalResultBytes === null
+            )
+              throw transferError(
+                "IntegrityFailure",
+                "terminal branch result is missing from activation",
+              );
+            const resultBytes = options.terminalResultBytes;
+            const decoded = decodeJson<Record<string, unknown>>(resultBytes);
+            const result =
+              decoded &&
+              decoded.kind === "efs-publication-result-v2" &&
+              decoded.result &&
+              typeof decoded.result === "object"
+                ? (decoded.result as Record<string, unknown>)
+                : decoded;
+            const merged =
+              result?.outcome === "merged" ||
+              result?.outcome === 0 ||
+              (typeof result?.outcome === "number" && result.outcome === 0);
+            const revisionValue = result?.revision;
+            const mergedRevision =
+              fragmentState === 1 &&
+              ((typeof revisionValue === "string" && /^\d+$/u.test(revisionValue)) ||
+                (typeof revisionValue === "number" &&
+                  Number.isSafeInteger(revisionValue)))
+                ? Number(revisionValue)
+                : null;
+            if (fragmentState === 1 && mergedRevision === null)
+              throw transferError(
+                "IntegrityFailure",
+                "merged terminal result has no revision",
+              );
+            return {
+              operationId: options.terminalResultOperationId,
+              resultBytes,
+              resultDigest: copyBytes(this.#hashBytes(resultBytes)),
+              merged,
+              mergedRevision,
+              authorityResult:
+                fragmentState === 1
+                  ? {
+                      kind: "publication" as const,
+                      operationId: options.terminalResultOperationId,
+                      outcome: merged ? ("merged" as const) : ("conflict" as const),
+                      resultDigest: copyBytes(this.#hashBytes(resultBytes)),
+                    }
+                  : {
+                      kind: "discard" as const,
+                      operationId: null,
+                      resultDigest: copyBytes(this.#hashBytes(resultBytes)),
+                    },
+            };
+          })();
+    const result = (
+      complete: boolean,
+      authorityResult: ReplicationAuthorityResult | null = null,
+    ): Readonly<{
+      readonly complete: boolean;
+      readonly revision: string;
+      readonly branchId: string;
+      readonly baseRevision: string;
+      readonly generation: number;
+      readonly generationDigest: Uint8Array;
+      readonly state: 0 | 1 | 2;
+      readonly authorityResult: ReplicationAuthorityResult | null;
+      readonly reusedBytes: number;
+    }> =>
+      Object.freeze({
+        complete,
+        revision: String(baseRevision),
+        branchId,
+        baseRevision: String(baseRevision),
+        generation,
+        generationDigest: copyBytes(expectedDigest),
+        state: fragmentState,
+        authorityResult,
+        reusedBytes: 0,
+      });
+    const activation = this.#activationRow(options.sessionId);
+    if (activation.phase === 8)
+      return result(true, terminalDetails?.authorityResult ?? null);
+
+    if (activation.phase === 0) {
+      this.#validateImportedManifest(options.sessionId, importRow);
+      const existing = this.#tx.all<BranchRowSql & SqliteRow>(
+        "SELECT base_revision,state,generation,created_at_ms,terminal_at_ms,merged_revision FROM efs_branches WHERE id=?",
+        [branchId],
+        { maxRows: 1, maxBytes: 2048 },
+      )[0];
+      let replacingExisting = false;
+      if (existing) {
+        if (existing.base_revision !== baseRevision)
+          throw transferError(
+            "BranchIdentityMismatch",
+            "branch identifier is bound to another base revision",
+          );
+        if (existing.generation > generation)
+          throw transferError(
+            "BranchIdentityMismatch",
+            "stale branch generation import is rejected",
+          );
+        if (existing.generation === generation) {
+          if (existing.state !== 0)
+            throw transferError(
+              "BranchIdentityMismatch",
+              "terminal branch state cannot be reimported as active",
+            );
+          const installed = this.#branchDigest
+            ? hexBytes(this.#branchDigest(branchId, generation))
+            : this.#recomputeBranchDigest(
+                options.sessionId,
+                branchId,
+                baseRevision,
+                generation,
+              );
+          if (!equalBytes(installed, expectedDigest))
+            throw transferError(
+              "IntegrityFailure",
+              "staged branch generation digest does not match the installed generation",
+            );
+          if (terminalDetails) {
+            this.#branches().putTerminalGenerationDigest(
+              branchId,
+              generation,
+              bytesToHex(expectedDigest),
+            );
+            this.#branches().finish(
+              branchId,
+              fragmentState as 1 | 2,
+              options.now,
+              terminalDetails.mergedRevision,
+            );
+          }
+          this.#tx.run(
+            "UPDATE efs_replication_activation SET phase=8 WHERE session_id=?",
+            [options.sessionId],
+          );
+          return result(true, terminalDetails?.authorityResult ?? null);
+        }
+        if (existing.state !== 0)
+          throw transferError(
+            "BranchIdentityMismatch",
+            "terminal branch state cannot be advanced by an active generation",
+          );
+        if (
+          priorGeneration === null ||
+          priorDigest === null ||
+          priorGeneration !== existing.generation
+        )
+          throw transferError(
+            "BranchDiverged",
+            "a lower branch generation requires the exact installed predecessor digest",
+          );
+        const installedDigest = this.#branchDigest
+          ? hexBytes(this.#branchDigest(branchId, existing.generation))
+          : (() => {
+              const stored = this.#branches().terminalGenerationDigest(
+                branchId,
+                existing.generation,
+              );
+              return stored ? hexBytes(stored) : null;
+            })();
+        if (installedDigest === null || !equalBytes(installedDigest, priorDigest))
+          throw transferError(
+            "BranchDiverged",
+            "the installed branch generation does not match the advertised predecessor digest",
+          );
+        this.#branches().replaceReplicatedPayload(branchId);
+        this.#branches().setReplicatedGeneration(branchId, generation);
+        replacingExisting = true;
+      }
+      const baseExists = this.#tx.all<{ count: number } & SqliteRow>(
+        "SELECT count(*) count FROM efs_revisions WHERE revision=?",
+        [baseRevision],
+        { maxRows: 1, maxBytes: 256 },
+      )[0]!.count;
+      if (baseExists !== 1)
+        throw transferError(
+          "BaseRevisionMissing",
+          "destination lacks the branch base revision",
+        );
+      const usage = new UsageRepository(this.#tx, this.#limits);
+      if (!replacingExisting) {
+        this.#tx.run(
+          "INSERT OR IGNORE INTO efs_branch_ids(id,created_at_ms) VALUES(?,?)",
+          [branchId, options.now],
+        );
+        this.#tx.run(
+          "INSERT INTO efs_branches(id,base_revision,state,generation,created_at_ms,terminal_at_ms,merged_revision) VALUES(?,?,?,?,?,?,?)",
+          [
+            branchId,
+            baseRevision,
+            fragmentState,
+            generation,
+            options.now,
+            fragmentState === 0 ? null : options.now,
+            null,
+          ],
+        );
+        usage.apply(
+          { charged_metadata_bytes: 2 * CHARGED_ROW_BYTES, permanent_identifiers: 1 },
+          "replicated branch install",
+        );
+      }
+      this.#tx.run(
+        "UPDATE efs_replication_activation SET phase=1,cursor=NULL,processed_count=0 WHERE session_id=?",
+        [options.sessionId],
+      );
+      return result(false);
+    }
+
+    if (activation.phase >= 1 && activation.phase <= 6) {
+      const kind = activation.phase + 5;
+      const rows = this.#activationPage(
+        options.sessionId,
+        kind,
+        activation.cursor,
+        Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64)),
+      );
+      const usage = new UsageRepository(this.#tx, this.#limits);
+      let chargedMetadata = 0;
+      let pageCount = 0;
+      let pageBytes = 0;
+      let patchBytes = 0;
+      let patchCount = 0;
+      for (const row of rows) {
+        const value = row.value!;
+        if (kind === 6) {
+          const changeKind = value[0] ?? 0;
+          const hasToken = (value[1] ?? 0) === 1;
+          const token = hasToken ? readU64(value, 2, "staged change token") : null;
+          const encodedTag = 2 + (hasToken ? 8 : 0);
+          const encoded =
+            (value[encodedTag] ?? 0) === 1 ? value.subarray(encodedTag + 1) : null;
+          this.#tx.run(
+            "INSERT INTO efs_branch_changes(branch_id,path,expected_token,kind,encoded) VALUES(?,?,?,?,?)",
+            [branchId, copyBytes(row.key.subarray(1)), token, changeKind, encoded],
+          );
+          chargedMetadata +=
+            CHARGED_ROW_BYTES +
+            row.key.subarray(1).byteLength +
+            (encoded?.byteLength ?? 0);
+        } else if (kind === 7) {
+          const hasToken = (value[0] ?? 0) === 1;
+          const token = hasToken ? readU64(value, 1, "staged overlay token") : null;
+          const encoded = value.subarray(hasToken ? 9 : 1);
+          this.#tx.run(
+            "INSERT INTO efs_branch_inode_overlays(branch_id,inode_id,expected_token,encoded) VALUES(?,?,?,?)",
+            [branchId, decoder.decode(row.key.subarray(1)), token, encoded],
+          );
+          chargedMetadata += CHARGED_ROW_BYTES + encoded.byteLength;
+        } else if (kind === 8) {
+          const rest = row.key.subarray(1);
+          const inodeLength = readU32Length(rest, 0, "staged page inode");
+          const inodeId = decoder.decode(rest.subarray(4, 4 + inodeLength));
+          const pageIndex = readU64(rest, 4 + inodeLength, "staged page index");
+          const pageGeneration = readU64(
+            rest,
+            12 + inodeLength,
+            "staged page generation",
+          );
+          const pageBytesValue = value.byteLength - 9;
+          const createdAtMs = readU64(
+            value,
+            pageBytesValue,
+            "staged page creation time",
+          );
+          const head = (value[value.byteLength - 1] ?? 0) === 1;
+          this.#tx.run(
+            "INSERT INTO efs_cow_page_versions(branch_id,inode_id,page_index,generation,bytes,created_at_ms) VALUES(?,?,?,?,?,?)",
+            [
+              branchId,
+              inodeId,
+              pageIndex,
+              pageGeneration,
+              value.subarray(0, pageBytesValue),
+              createdAtMs,
+            ],
+          );
+          if (head)
+            this.#tx.run(
+              "INSERT INTO efs_cow_page_heads(branch_id,inode_id,page_index,generation) VALUES(?,?,?,?)",
+              [branchId, inodeId, pageIndex, pageGeneration],
+            );
+          pageCount += 1;
+          pageBytes += pageBytesValue;
+        } else if (kind === 9) {
+          const rest = row.key.subarray(1);
+          const inodeLength = readU32Length(rest, 0, "staged patch inode");
+          const inodeId = decoder.decode(rest.subarray(4, 4 + inodeLength));
+          const sequence = readU64(rest, 4 + inodeLength, "staged patch sequence");
+          const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
+          const patchGeneration = Number(view.getBigUint64(0, false));
+          const offset = Number(view.getBigUint64(8, false));
+          const deleteLength = Number(view.getBigUint64(16, false));
+          const insertLength = Number(view.getBigUint64(24, false));
+          const segmentCount = view.getUint32(32, false);
+          let cursor = 36;
+          for (let segment = 0; segment < segmentCount; segment += 1) {
+            const length = view.getUint32(cursor, false);
+            this.#tx.run(
+              "INSERT INTO efs_patch_segments(branch_id,inode_id,sequence,segment_index,bytes) VALUES(?,?,?,?,?)",
+              [
+                branchId,
+                inodeId,
+                sequence,
+                segment,
+                value.subarray(cursor + 4, cursor + 4 + length),
+              ],
+            );
+            patchBytes += length;
+            cursor += 4 + length;
+          }
+          this.#tx.run(
+            "INSERT INTO efs_patches(branch_id,inode_id,sequence,generation,offset,delete_length,insert_length) VALUES(?,?,?,?,?,?,?)",
+            [
+              branchId,
+              inodeId,
+              sequence,
+              patchGeneration,
+              offset,
+              deleteLength,
+              insertLength,
+            ],
+          );
+          patchCount += 1;
+        } else if (kind === 10) {
+          const hasToken = (value[0] ?? 0) === 1;
+          const token = hasToken ? readU64(value, 1, "staged expectation token") : null;
+          this.#tx.run(
+            "INSERT INTO efs_branch_inode_expectations(branch_id,inode_id,expected_token) VALUES(?,?,?)",
+            [branchId, decoder.decode(row.key.subarray(1)), token],
+          );
+          chargedMetadata += CHARGED_ROW_BYTES;
+        } else {
+          const path = copyBytes(row.key.subarray(1));
+          this.#tx.run(
+            "INSERT INTO efs_branch_manifest_roots(branch_id,path,manifest_hash) VALUES(?,?,?)",
+            [branchId, path, copyBytes(value)],
+          );
+          chargedMetadata += CHARGED_ROW_BYTES + path.byteLength;
+        }
+      }
+      if (kind === 8)
+        usage.apply(
+          {
+            charged_metadata_bytes: rows.length * 2 * CHARGED_ROW_BYTES,
+            page_count: pageCount,
+            page_bytes: pageBytes,
+          },
+          "replicated branch pages install",
+        );
+      else if (kind === 9)
+        usage.apply(
+          {
+            charged_metadata_bytes: rows.length * 2 * CHARGED_ROW_BYTES,
+            patch_count: patchCount,
+            patch_bytes: patchBytes,
+          },
+          "replicated branch patches install",
+        );
+      else if (chargedMetadata)
+        usage.apply(
+          { charged_metadata_bytes: chargedMetadata },
+          "replicated branch state page install",
+        );
+      if (rows.length === 0)
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET phase=?,cursor=NULL,processed_count=0 WHERE session_id=?",
+          [activation.phase + 1, options.sessionId],
+        );
+      else
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET cursor=? WHERE session_id=?",
+          [rows.at(-1)!.key, options.sessionId],
+        );
+      return result(false);
+    }
+
+    if (activation.phase === 7) {
+      const recomputed = this.#branchDigest
+        ? hexBytes(this.#branchDigest(branchId, generation))
+        : this.#recomputeBranchDigest(
+            options.sessionId,
+            branchId,
+            baseRevision,
+            generation,
+          );
+      if (!equalBytes(recomputed, expectedDigest))
+        throw transferError(
+          "IntegrityFailure",
+          "recomputed branch generation digest does not match the authority digest",
+        );
+      this.#branches().putTerminalGenerationDigest(
+        branchId,
+        generation,
+        bytesToHex(recomputed),
+      );
+      if (terminalDetails) {
+        const prior = this.#tx.all<{ encoded: Uint8Array } & SqliteRow>(
+          "SELECT encoded FROM efs_operation_results WHERE operation_id=?",
+          [terminalDetails.operationId],
+          { maxRows: 1, maxBytes: this.#limits.maxFinalTransactionBytes },
+        )[0];
+        if (prior && !equalBytes(prior.encoded, terminalDetails.resultBytes))
+          throw transferError(
+            "IntegrityFailure",
+            "terminal result bytes changed for the operation",
+          );
+        if (!prior) {
+          this.#tx.run(
+            "INSERT OR IGNORE INTO efs_operation_ids(id,branch_id,generation,created_at_ms) VALUES(?,?,?,?)",
+            [terminalDetails.operationId, branchId, generation, options.now],
+          );
+          this.#tx.run(
+            "INSERT INTO efs_operation_results(operation_id,outcome,encoded,expires_at_ms,revision) VALUES(?,?,?,?,?)",
+            [
+              terminalDetails.operationId,
+              terminalDetails.merged ? 1 : 0,
+              terminalDetails.resultBytes,
+              options.now + this.#resultRetentionMs,
+              terminalDetails.mergedRevision,
+            ],
+          );
+          new UsageRepository(this.#tx, this.#limits).apply(
+            {
+              charged_metadata_bytes:
+                2 * CHARGED_ROW_BYTES + terminalDetails.resultBytes.byteLength,
+              permanent_identifiers: 1,
+              result_bytes: terminalDetails.resultBytes.byteLength,
+            },
+            "replicated terminal result install",
+          );
+        }
+        if (fragmentState === 1)
+          this.#tx.run(
+            "UPDATE efs_branches SET merged_revision=? WHERE id=? AND state=1",
+            [terminalDetails.mergedRevision, branchId],
+          );
+        this.#branches().finish(
+          branchId,
+          fragmentState as 1 | 2,
+          options.now,
+          terminalDetails.mergedRevision,
+        );
+      }
+      this.#tx.run(
+        "UPDATE efs_replication_imports SET installed_revision_count=1 WHERE session_id=?",
+        [options.sessionId],
+      );
+      this.#tx.run("UPDATE efs_replication_activation SET phase=8 WHERE session_id=?", [
+        options.sessionId,
+      ]);
+      return result(true, terminalDetails?.authorityResult ?? null);
+    }
+    throw transferError("IntegrityFailure", "unknown branch activation phase");
+  }
+
   #finalizeBranch(
     options: {
       readonly sessionId: string;
@@ -2928,33 +4696,54 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
   }> {
     this.#validateImportedManifest(options.sessionId, importRow);
     const branchId = options.branchId ?? importRow.branch_id;
-    if (!branchId) throw transferError("BranchIdentityMismatch", "branch identity is missing");
+    if (!branchId)
+      throw transferError("BranchIdentityMismatch", "branch identity is missing");
     const branchRows = this.#stagedRows(options.sessionId, 5);
     if (branchRows.length !== 1)
-      throw transferError("IntegrityFailure", "branch state is not staged exactly once");
+      throw transferError(
+        "IntegrityFailure",
+        "branch state is not staged exactly once",
+      );
     const branchValue = branchRows[0]!.value!;
     const baseRevision = readU64(branchValue, 0, "staged branch base revision");
     const generation = readU64(branchValue, 8, "staged branch generation");
     const expectedDigest = copyBytes(branchValue.subarray(16, 48));
     const priorGenerationTag = branchValue[48];
     if (priorGenerationTag !== 0 && priorGenerationTag !== 1)
-      throw transferError("IntegrityFailure", "staged branch predecessor generation tag is invalid");
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch predecessor generation tag is invalid",
+      );
     const priorGeneration =
-      priorGenerationTag === 0 ? null : readU64(branchValue, 49, "staged branch predecessor generation");
+      priorGenerationTag === 0
+        ? null
+        : readU64(branchValue, 49, "staged branch predecessor generation");
     const priorDigestOffset = priorGeneration === null ? 49 : 57;
     const priorDigestTag = branchValue[priorDigestOffset];
     if (priorDigestTag !== 0 && priorDigestTag !== 1)
-      throw transferError("IntegrityFailure", "staged branch predecessor digest tag is invalid");
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch predecessor digest tag is invalid",
+      );
     const priorDigest =
       priorDigestTag === 0
         ? null
-        : copyBytes(branchValue.subarray(priorDigestOffset + 1, priorDigestOffset + 33));
-    const fragmentStateOffset = priorDigest === null ? priorDigestOffset + 1 : priorDigestOffset + 33;
+        : copyBytes(
+            branchValue.subarray(priorDigestOffset + 1, priorDigestOffset + 33),
+          );
+    const fragmentStateOffset =
+      priorDigest === null ? priorDigestOffset + 1 : priorDigestOffset + 33;
     const fragmentState = (branchValue[fragmentStateOffset] ?? 0) as 0 | 1 | 2;
     if (fragmentState > 2 || branchValue.byteLength !== fragmentStateOffset + 1)
-      throw transferError("IntegrityFailure", "staged branch state envelope is invalid");
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch state envelope is invalid",
+      );
     if ((priorGeneration === null) !== (priorDigest === null))
-      throw transferError("IntegrityFailure", "staged branch predecessor is incomplete");
+      throw transferError(
+        "IntegrityFailure",
+        "staged branch predecessor is incomplete",
+      );
     if (
       options.generationDigest !== null &&
       !equalBytes(options.generationDigest, expectedDigest)
@@ -2968,7 +4757,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       [branchId],
       { maxRows: 1, maxBytes: 2048 },
     )[0];
-    const requestedBase = parseIntegerRevision(options.baseRevision ?? "", "base revision");
+    const requestedBase = parseIntegerRevision(
+      options.baseRevision ?? "",
+      "base revision",
+    );
     if (requestedBase !== baseRevision)
       throw transferError("BranchIdentityMismatch", "branch base revision changed");
     if (options.generation !== null && options.generation !== generation)
@@ -2977,16 +4769,24 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       fragmentState === 0
         ? null
         : (() => {
-            if (options.terminalResultOperationId === null || options.terminalResultBytes === null)
-              throw transferError("IntegrityFailure", "terminal branch result is missing from activation");
+            if (
+              options.terminalResultOperationId === null ||
+              options.terminalResultBytes === null
+            )
+              throw transferError(
+                "IntegrityFailure",
+                "terminal branch result is missing from activation",
+              );
             const operationId = options.terminalResultOperationId;
             const resultBytes = options.terminalResultBytes;
             const resultDigest = copyBytes(this.#hashBytes(resultBytes));
             const decoded = decodeJson<Record<string, unknown>>(resultBytes);
             const result =
-              decoded && decoded.kind === "efs-publication-result-v2" && decoded.result &&
+              decoded &&
+              decoded.kind === "efs-publication-result-v2" &&
+              decoded.result &&
               typeof decoded.result === "object"
-                ? decoded.result as Record<string, unknown>
+                ? (decoded.result as Record<string, unknown>)
                 : decoded;
             const merged =
               result?.outcome === "merged" ||
@@ -2996,11 +4796,15 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
             const mergedRevision =
               fragmentState === 1 &&
               ((typeof revisionValue === "string" && /^\d+$/u.test(revisionValue)) ||
-                (typeof revisionValue === "number" && Number.isSafeInteger(revisionValue)))
+                (typeof revisionValue === "number" &&
+                  Number.isSafeInteger(revisionValue)))
                 ? Number(revisionValue)
                 : null;
             if (fragmentState === 1 && mergedRevision === null)
-              throw transferError("IntegrityFailure", "merged terminal result has no revision");
+              throw transferError(
+                "IntegrityFailure",
+                "merged terminal result has no revision",
+              );
             return {
               operationId,
               resultBytes,
@@ -3018,7 +4822,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
                   : { kind: "discard" as const, operationId: null, resultDigest },
             };
           })();
-    const installTerminalResult = (details: NonNullable<typeof terminalDetails>): void => {
+    const installTerminalResult = (
+      details: NonNullable<typeof terminalDetails>,
+    ): void => {
       const prior = this.#tx.all<{ encoded: Uint8Array } & SqliteRow>(
         "SELECT encoded FROM efs_operation_results WHERE operation_id=?",
         [details.operationId],
@@ -3026,7 +4832,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       )[0];
       if (prior) {
         if (!equalBytes(prior.encoded, details.resultBytes))
-          throw transferError("IntegrityFailure", "terminal result bytes changed for the operation");
+          throw transferError(
+            "IntegrityFailure",
+            "terminal result bytes changed for the operation",
+          );
         return;
       }
       this.#tx.run(
@@ -3036,11 +4845,18 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       const expiresAt = options.now + this.#resultRetentionMs;
       this.#tx.run(
         "INSERT INTO efs_operation_results(operation_id,outcome,encoded,expires_at_ms,revision) VALUES(?,?,?,?,?)",
-        [details.operationId, details.merged ? 1 : 0, details.resultBytes, expiresAt, details.mergedRevision],
+        [
+          details.operationId,
+          details.merged ? 1 : 0,
+          details.resultBytes,
+          expiresAt,
+          details.mergedRevision,
+        ],
       );
       new UsageRepository(this.#tx, this.#limits).apply(
         {
-          charged_metadata_bytes: 2 * CHARGED_ROW_BYTES + details.resultBytes.byteLength,
+          charged_metadata_bytes:
+            2 * CHARGED_ROW_BYTES + details.resultBytes.byteLength,
           permanent_identifiers: 1,
           result_bytes: details.resultBytes.byteLength,
         },
@@ -3109,7 +4925,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
           "BranchIdentityMismatch",
           "terminal branch state cannot be advanced by an active generation",
         );
-      if (priorGeneration === null || priorDigest === null || priorGeneration !== existing.generation)
+      if (
+        priorGeneration === null ||
+        priorDigest === null ||
+        priorGeneration !== existing.generation
+      )
         throw transferError(
           "BranchDiverged",
           "a lower branch generation requires the exact installed predecessor digest",
@@ -3117,7 +4937,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       const installedDigest = this.#branchDigest
         ? hexBytes(this.#branchDigest(branchId, existing.generation))
         : (() => {
-            const stored = this.#branches().terminalGenerationDigest(branchId, existing.generation);
+            const stored = this.#branches().terminalGenerationDigest(
+              branchId,
+              existing.generation,
+            );
             return stored ? hexBytes(stored) : null;
           })();
       if (installedDigest === null || !equalBytes(installedDigest, priorDigest))
@@ -3135,7 +4958,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       { maxRows: 1, maxBytes: 256 },
     )[0]!.count;
     if (baseExists !== 1)
-      throw transferError("BaseRevisionMissing", "destination lacks the branch base revision");
+      throw transferError(
+        "BaseRevisionMissing",
+        "destination lacks the branch base revision",
+      );
     const usage = new UsageRepository(this.#tx, this.#limits);
     const createdNow = options.now;
     if (!replacingExisting) {
@@ -3211,18 +5037,21 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       const inodeLength = readU32Length(rest, 0, "staged page inode");
       const inodeId = decoder.decode(rest.subarray(4, 4 + inodeLength));
       const pageIndex = readU64(rest, 4 + inodeLength, "staged page index");
-      const pageGeneration = readU64(
-        rest,
-        12 + inodeLength,
-        "staged page generation",
-      );
+      const pageGeneration = readU64(rest, 12 + inodeLength, "staged page generation");
       const value = row.value!;
       const pageBytesValue = value.byteLength - 9;
       const createdAtMs = readU64(value, pageBytesValue, "staged page creation time");
       const head = (value[value.byteLength - 1] ?? 0) === 1;
       this.#tx.run(
         "INSERT INTO efs_cow_page_versions(branch_id,inode_id,page_index,generation,bytes,created_at_ms) VALUES(?,?,?,?,?,?)",
-        [branchId, inodeId, pageIndex, pageGeneration, value.subarray(0, pageBytesValue), createdAtMs],
+        [
+          branchId,
+          inodeId,
+          pageIndex,
+          pageGeneration,
+          value.subarray(0, pageBytesValue),
+          createdAtMs,
+        ],
       );
       if (head)
         this.#tx.run(
@@ -3262,7 +5091,15 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       }
       this.#tx.run(
         "INSERT INTO efs_patches(branch_id,inode_id,sequence,generation,offset,delete_length,insert_length) VALUES(?,?,?,?,?,?,?)",
-        [branchId, inodeId, sequence, patchGeneration, offset, deleteLength, insertLength],
+        [
+          branchId,
+          inodeId,
+          sequence,
+          patchGeneration,
+          offset,
+          deleteLength,
+          insertLength,
+        ],
       );
       for (let index = 0; index < segments.length; index += 1)
         this.#tx.run(
@@ -3273,7 +5110,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     }
     usage.apply(
       {
-        charged_metadata_bytes: patches.length * (CHARGED_ROW_BYTES + CHARGED_ROW_BYTES),
+        charged_metadata_bytes:
+          patches.length * (CHARGED_ROW_BYTES + CHARGED_ROW_BYTES),
         patch_count: patches.length,
         patch_bytes: patchBytes,
       },
@@ -3317,7 +5155,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         "IntegrityFailure",
         `recomputed branch generation digest does not match the authority digest (expected=${bytesToHex(expectedDigest)}, actual=${bytesToHex(recomputed)}, changes=${changes.length}, overlays=${overlays.length}, pages=${pages.length}, patches=${patches.length}, expectations=${expectations.length}, refs=${refs.length})`,
       );
-    this.#branches().putTerminalGenerationDigest(branchId, generation, bytesToHex(recomputed));
+    this.#branches().putTerminalGenerationDigest(
+      branchId,
+      generation,
+      bytesToHex(recomputed),
+    );
     let authorityResult: ReplicationAuthorityResult | null = null;
     if (terminalDetails !== null) {
       authorityResult = terminalDetails.authorityResult;
@@ -3386,7 +5228,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       const encoded = value.subarray(hasToken ? 9 : 1);
       const inodeId = decoder.decode(row.key.subarray(1));
       const desired = decodeJson<Record<string, unknown>>(encoded);
-      if (!desired) throw transferError("IntegrityFailure", "staged overlay is not JSON");
+      if (!desired)
+        throw transferError("IntegrityFailure", "staged overlay is not JSON");
       overlayDesiredByInode.set(inodeId, desired);
     }
     for (const row of changes) {
@@ -3404,7 +5247,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       } catch {
         throw transferError("IntegrityFailure", "staged change path is not UTF-8");
       }
-      const rawDesired = encoded ? decodeJson<Record<string, unknown>>(encoded) : undefined;
+      const rawDesired = encoded
+        ? decodeJson<Record<string, unknown>>(encoded)
+        : undefined;
       const desired =
         rawDesired && typeof rawDesired.inodeId === "string"
           ? { ...rawDesired, ...overlayDesiredByInode.get(rawDesired.inodeId) }
@@ -3421,7 +5266,10 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         expectedToken: token === null ? null : String(token),
       });
       if (desired && typeof desired === "object") {
-        if (desired.expectedInodeToken !== null && desired.expectedInodeToken !== undefined)
+        if (
+          desired.expectedInodeToken !== null &&
+          desired.expectedInodeToken !== undefined
+        )
           digestExpectations.push({
             reason:
               desired.conflictRole === "source"
@@ -3452,7 +5300,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
             expectedToken: null,
           });
         for (const ancestor of (desired.ancestorTokens as
-          | readonly { path: string; inodeId: string | null; entryToken: number | null }[]
+          | readonly {
+              path: string;
+              inodeId: string | null;
+              entryToken: number | null;
+            }[]
           | undefined) ?? [])
           digestExpectations.push({
             reason: "ancestor-changed" as const,
@@ -3475,11 +5327,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       nodes.set(inodeId, {
         inodeId,
         kind:
-          desired.type === 0
-            ? "file"
-            : desired.type === 1
-              ? "directory"
-              : "symlink",
+          desired.type === 0 ? "file" : desired.type === 1 ? "directory" : "symlink",
         mode: (desired.mode as number) ?? base?.mode ?? 0o755,
         birthtimeMs: (desired.birthtimeMs as number) ?? base?.birthtime_ms ?? 0,
         mtimeMs: (desired.mtimeMs as number) ?? base?.mtime_ms ?? 0,
@@ -3504,7 +5352,8 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         throw transferError("IntegrityFailure", "staged overlay inode is not UTF-8");
       }
       const desired = decodeJson<Record<string, unknown>>(encoded);
-      if (!desired) throw transferError("IntegrityFailure", "staged overlay is not JSON");
+      if (!desired)
+        throw transferError("IntegrityFailure", "staged overlay is not JSON");
       const base = baseInodes.get(inodeId);
       const type = (desired.type as number) ?? base?.type ?? 0;
       const logicalSize = (desired.size as number | null) ?? base?.size ?? 0;
@@ -3545,7 +5394,11 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         if (patchInode !== inodeId) continue;
         const sequence = readU64(rest, 4 + inodeLength, "staged patch sequence");
         const patchValue = patchRow.value!;
-        const view = new DataView(patchValue.buffer, patchValue.byteOffset, patchValue.byteLength);
+        const view = new DataView(
+          patchValue.buffer,
+          patchValue.byteOffset,
+          patchValue.byteLength,
+        );
         const patchOffset = Number(view.getBigUint64(8, false));
         const deleteLength = Number(view.getBigUint64(16, false));
         const segmentCount = view.getUint32(32, false);
@@ -3553,7 +5406,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         const segments: Uint8Array[] = [];
         for (let index = 0; index < segmentCount; index += 1) {
           const length = view.getUint32(cursor, false);
-          segments.push(copyBytes(patchValue.subarray(cursor + 4, cursor + 4 + length)));
+          segments.push(
+            copyBytes(patchValue.subarray(cursor + 4, cursor + 4 + length)),
+          );
           cursor += 4 + length;
         }
         const insertDigest = branchPatchInsertDigest(segments);
@@ -3589,15 +5444,19 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       try {
         inodeId = decoder.decode(row.key.subarray(1));
       } catch {
-        throw transferError("IntegrityFailure", "staged expectation inode is not UTF-8");
+        throw transferError(
+          "IntegrityFailure",
+          "staged expectation inode is not UTF-8",
+        );
       }
       const change = changes.find((changeRow) => {
         const changeValue = changeRow.value!;
-        const changeHasEncoded =
-          changeValue[2 + (changeValue[1] === 1 ? 8 : 0)] === 1;
+        const changeHasEncoded = changeValue[2 + (changeValue[1] === 1 ? 8 : 0)] === 1;
         if (!changeHasEncoded) return false;
         const start = 3 + (changeValue[1] === 1 ? 8 : 0);
-        const desired = decodeJson<Record<string, unknown>>(changeValue.subarray(start));
+        const desired = decodeJson<Record<string, unknown>>(
+          changeValue.subarray(start),
+        );
         return desired?.inodeId === inodeId;
       });
       void change;
@@ -3619,7 +5478,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       const hasEncoded = (value[encodedTag] ?? 0) === 1;
       const encodedStart = encodedTag + 1;
       const encoded = hasEncoded ? value.subarray(encodedStart) : null;
-      const desired = encoded ? decodeJson<Record<string, unknown>>(encoded) : undefined;
+      const desired = encoded
+        ? decodeJson<Record<string, unknown>>(encoded)
+        : undefined;
       let path: string;
       try {
         path = decoder.decode(row.key.subarray(1));
@@ -3690,26 +5551,43 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
     if (genesis.mainRevision !== 0)
       throw transferError("ProvisioningRejected", "genesis is not revision zero");
     if (options.expectedRevision !== 0)
-      throw transferError("ProvisioningRejected", "provisioning adopts revision zero only");
+      throw transferError(
+        "ProvisioningRejected",
+        "provisioning adopts revision zero only",
+      );
     if (options.expectedRootInode !== genesis.rootInode)
       throw transferError("ProvisioningRejected", "genesis root inode mismatch");
-    const stagedGenesisRows = options.genesisRows.length > 0
-      ? options.genesisRows
-      : this.#stagedRows(options.sessionId, 2).map((row) => {
-          if (row.key.byteLength < 10 || row.key[0] !== 2 || readU64(row.key, 1, "genesis staged revision") !== 0)
-            throw transferError("IntegrityFailure", "staged genesis inode key is invalid");
-          let inodeId: string;
-          try {
-            inodeId = decoder.decode(row.key.subarray(9));
-          } catch {
-            throw transferError("IntegrityFailure", "staged genesis inode id is not UTF-8");
-          }
-          return {
-            inodeId,
-            tombstone: (row.value?.[0] ?? 0) === 1,
-            encoded: row.value && row.value.byteLength > 1 ? copyBytes(row.value.subarray(1)) : null,
-          };
-        });
+    const stagedGenesisRows =
+      options.genesisRows.length > 0
+        ? options.genesisRows
+        : this.#stagedRows(options.sessionId, 2).map((row) => {
+            if (
+              row.key.byteLength < 10 ||
+              row.key[0] !== 2 ||
+              readU64(row.key, 1, "genesis staged revision") !== 0
+            )
+              throw transferError(
+                "IntegrityFailure",
+                "staged genesis inode key is invalid",
+              );
+            let inodeId: string;
+            try {
+              inodeId = decoder.decode(row.key.subarray(9));
+            } catch {
+              throw transferError(
+                "IntegrityFailure",
+                "staged genesis inode id is not UTF-8",
+              );
+            }
+            return {
+              inodeId,
+              tombstone: (row.value?.[0] ?? 0) === 1,
+              encoded:
+                row.value && row.value.byteLength > 1
+                  ? copyBytes(row.value.subarray(1))
+                  : null,
+            };
+          });
     this.#tx.run(
       "INSERT INTO efs_meta(singleton,schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,next_allocation_sequence,cow_page_bytes,created_at_ms,last_root_removal_generation,max_manifest_entries,max_manifest_depth,max_file_bytes,writer_profile) VALUES(1,13,?,?,?,?,?,?,?,?,?,?,?,?)",
       [
@@ -3760,10 +5638,9 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         [row.inodeId, row.encoded],
       );
     }
-    this.#tx.run(
-      "DELETE FROM efs_replication_sessions WHERE id=? AND state=-1",
-      ["efs-unbound-replica-v1"],
-    );
+    this.#tx.run("DELETE FROM efs_replication_sessions WHERE id=? AND state=-1", [
+      "efs-unbound-replica-v1",
+    ]);
     return Object.freeze({
       revision: "0",
       branchId: null,
@@ -3774,6 +5651,214 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
       authorityResult: null,
       reusedBytes: 0,
     });
+  }
+
+  #finalizeGenesisBounded(
+    options: {
+      readonly sessionId: string;
+      readonly expectedRevision: number;
+      readonly expectedRootMutationGeneration: number;
+      readonly expectedNextAllocationSequence: number;
+      readonly expectedRootInode: string;
+      readonly expectedStateRows: number;
+      readonly genesisMeta: ReplicationExportMeta | null;
+      readonly genesisRows: readonly {
+        readonly inodeId: string;
+        readonly tombstone: boolean;
+        readonly encoded: Uint8Array | null;
+      }[];
+      readonly now: number;
+    },
+    importRow: ImportRow,
+  ): Readonly<{
+    readonly complete: boolean;
+    readonly revision: string;
+    readonly branchId: string | null;
+    readonly baseRevision: string | null;
+    readonly generation: number;
+    readonly generationDigest: Uint8Array | null;
+    readonly state: 0 | 1 | 2;
+    readonly authorityResult: ReplicationAuthorityResult | null;
+    readonly reusedBytes: number;
+  }> {
+    const result = (
+      complete: boolean,
+    ): Readonly<{
+      readonly complete: boolean;
+      readonly revision: string;
+      readonly branchId: string | null;
+      readonly baseRevision: string | null;
+      readonly generation: number;
+      readonly generationDigest: Uint8Array | null;
+      readonly state: 0 | 1 | 2;
+      readonly authorityResult: ReplicationAuthorityResult | null;
+      readonly reusedBytes: number;
+    }> =>
+      Object.freeze({
+        complete,
+        revision: "0",
+        branchId: null,
+        baseRevision: null,
+        generation: 0,
+        generationDigest: null,
+        state: 0,
+        authorityResult: null,
+        reusedBytes: 0,
+      });
+    const activation = this.#activationRow(options.sessionId);
+    if (activation.phase === 8) return result(true);
+
+    if (activation.phase === 0) {
+      const metaRows = this.#tx.all<{ count: number } & SqliteRow>(
+        "SELECT count(*) count FROM efs_meta",
+        [],
+        { maxRows: 1, maxBytes: 256 },
+      );
+      if (metaRows[0]!.count !== 0)
+        throw transferError("ProvisioningRejected", "database is already bound");
+      const genesis = options.genesisMeta;
+      if (!genesis)
+        throw transferError("ProvisioningRejected", "genesis metadata is missing");
+      if (genesis.mainRevision !== 0 || options.expectedRevision !== 0)
+        throw transferError(
+          "ProvisioningRejected",
+          "provisioning adopts revision zero only",
+        );
+      if (options.expectedRootInode !== genesis.rootInode)
+        throw transferError("ProvisioningRejected", "genesis root inode mismatch");
+      if (importRow.state_row_count !== options.expectedStateRows)
+        throw transferError(
+          "IntegrityFailure",
+          "staged genesis summary does not match",
+        );
+      if (options.genesisRows.length !== 0)
+        throw transferError(
+          "IntegrityFailure",
+          "genesis rows must arrive through durable staging",
+        );
+
+      this.#tx.run(
+        "INSERT INTO efs_meta(singleton,schema_version,filesystem_id,main_revision,root_inode,root_mutation_generation,next_allocation_sequence,cow_page_bytes,created_at_ms,last_root_removal_generation,max_manifest_entries,max_manifest_depth,max_file_bytes,writer_profile) VALUES(1,13,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+          genesis.filesystemId,
+          0,
+          genesis.rootInode,
+          genesis.rootMutationGeneration,
+          genesis.nextAllocationSequence,
+          genesis.cowPageBytes,
+          genesis.createdAtMs,
+          genesis.rootMutationGeneration,
+          genesis.maxManifestEntries,
+          genesis.maxManifestDepth,
+          genesis.maxFileBytes,
+          genesis.writerProfile,
+        ],
+      );
+      this.#tx.run(
+        "INSERT INTO efs_revisions(revision,parent_revision,created_at_ms,writer_id,change_count) VALUES(0,NULL,?,'bootstrap',1)",
+        [genesis.createdAtMs],
+      );
+      this.#tx.run(
+        "INSERT INTO efs_root_journal(generation,kind,root_id) VALUES(0,0,'0')",
+      );
+      this.#tx.run(
+        "INSERT INTO efs_inodes(id,type,mode,birthtime_ms,mtime_ms,ctime_ms,nlink,size,manifest_hash,symlink_target,token) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL,?)",
+        [
+          genesis.rootInode,
+          genesis.rootInodeType,
+          genesis.rootMode,
+          genesis.rootBirthtimeMs,
+          genesis.rootMtimeMs,
+          genesis.rootCtimeMs,
+          1,
+          genesis.rootToken,
+        ],
+      );
+      this.#tx.run(
+        "UPDATE efs_replication_activation SET phase=1,cursor=NULL,processed_count=0 WHERE session_id=?",
+        [options.sessionId],
+      );
+      return result(false);
+    }
+
+    if (activation.phase === 1) {
+      const rows = this.#activationPage(
+        options.sessionId,
+        2,
+        activation.cursor,
+        Math.max(1, Math.min(this.#limits.maxQueryBatchSize, 64)),
+      );
+      for (const row of rows) {
+        if (
+          row.key.byteLength < 10 ||
+          row.key[0] !== 2 ||
+          readU64(row.key, 1, "genesis staged revision") !== 0
+        )
+          throw transferError(
+            "IntegrityFailure",
+            "staged genesis inode key is invalid",
+          );
+        let inodeId: string;
+        try {
+          inodeId = decoder.decode(row.key.subarray(9));
+        } catch {
+          throw transferError(
+            "IntegrityFailure",
+            "staged genesis inode id is not UTF-8",
+          );
+        }
+        const encodedValue = row.value ?? new Uint8Array(0);
+        if (
+          encodedValue.byteLength < 1 ||
+          (encodedValue[0] !== 0 && encodedValue[0] !== 1)
+        )
+          throw transferError(
+            "IntegrityFailure",
+            "staged genesis inode value is invalid",
+          );
+        const tombstone = encodedValue[0] === 1;
+        const encoded = encodedValue.subarray(1);
+        if (tombstone) {
+          if (encoded.byteLength !== 0)
+            throw transferError(
+              "IntegrityFailure",
+              "tombstoned genesis inode has encoded data",
+            );
+          this.#tx.run(
+            "INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(0,?,1,NULL) ON CONFLICT DO NOTHING",
+            [inodeId],
+          );
+        } else {
+          this.#tx.run(
+            "INSERT INTO efs_inode_revisions(revision,inode_id,tombstone,encoded) VALUES(0,?,0,?) ON CONFLICT DO NOTHING",
+            [inodeId, copyBytes(encoded)],
+          );
+        }
+      }
+      if (rows.length === 0) {
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET phase=2,cursor=NULL WHERE session_id=?",
+          [options.sessionId],
+        );
+      } else {
+        this.#tx.run(
+          "UPDATE efs_replication_activation SET cursor=? WHERE session_id=?",
+          [rows.at(-1)!.key, options.sessionId],
+        );
+      }
+      return result(false);
+    }
+
+    if (activation.phase === 2) {
+      this.#tx.run("DELETE FROM efs_replication_sessions WHERE id=? AND state=-1", [
+        "efs-unbound-replica-v1",
+      ]);
+      this.#tx.run("UPDATE efs_replication_activation SET phase=8 WHERE session_id=?", [
+        options.sessionId,
+      ]);
+      return result(true);
+    }
+    throw transferError("IntegrityFailure", "unknown genesis activation phase");
   }
 
   captureGenesis(options: {
@@ -3847,6 +5932,7 @@ export class ReplicationTransferRepository implements ReplicationTransferStore {
         encodeJson(exportMetadata),
       ],
     );
+    this.#ensureExportLease(options.sessionId, options.now, options.expiresAt);
     return Object.freeze({
       meta: exported,
       rows: [],
@@ -3927,10 +6013,16 @@ function decodeBranchGenerationFragment(bytes: Uint8Array): {
   const baseRevision = view.text("base revision");
   const generation = view.uint64("branch generation");
   const generationDigest = view.digest("branch generation digest");
-  const previousGeneration = view.optional(() => view.uint64("branch predecessor generation"));
-  const previousGenerationDigest = view.optional(() => view.digest("branch predecessor digest"));
+  const previousGeneration = view.optional(() =>
+    view.uint64("branch predecessor generation"),
+  );
+  const previousGenerationDigest = view.optional(() =>
+    view.digest("branch predecessor digest"),
+  );
   if ((previousGeneration === null) !== (previousGenerationDigest === null))
-    throw new RangeError("branch predecessor generation and digest must be present together");
+    throw new RangeError(
+      "branch predecessor generation and digest must be present together",
+    );
   const state = view.uint8("branch state");
   if (state > 2) throw new RangeError("branch state is not canonical");
   const rowCount = view.uint32("branch row count");
@@ -4042,11 +6134,18 @@ class FragmentDecoder {
   }
   uint32(name: string): number {
     const bytes = this.#take(4, name);
-    return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, false);
+    return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(
+      0,
+      false,
+    );
   }
   uint64(name: string): number {
     const bytes = this.#take(8, name);
-    const value = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getBigUint64(0, false);
+    const value = new DataView(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength,
+    ).getBigUint64(0, false);
     if (value > BigInt(Number.MAX_SAFE_INTEGER))
       throw new RangeError(`${name} exceeds the safe integer envelope`);
     return Number(value);

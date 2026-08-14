@@ -228,6 +228,8 @@ const SCHEMA_V13_STATEMENTS = Object.freeze([
 // durably after the upgrade.
 const M8_ADDITIVE_STATEMENTS = Object.freeze([
   `CREATE TABLE IF NOT EXISTS efs_replication_export_rows (session_id TEXT NOT NULL REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, row_index INTEGER NOT NULL CHECK(row_index>=0), kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6), row_key BLOB NOT NULL, value BLOB NOT NULL, PRIMARY KEY(session_id,row_index), UNIQUE(session_id,kind,row_key)) WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS efs_replication_export_leases (session_id TEXT PRIMARY KEY REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, lease_id TEXT NOT NULL UNIQUE, owner_nonce BLOB NOT NULL CHECK(length(owner_nonce)=16), expires_at_ms INTEGER NOT NULL CHECK(expires_at_ms>=0), state INTEGER NOT NULL CHECK(state IN (0,1,2))) WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS efs_replication_activation (session_id TEXT PRIMARY KEY REFERENCES efs_replication_sessions(id) ON DELETE CASCADE, phase INTEGER NOT NULL CHECK(phase>=0), cursor BLOB, processed_count INTEGER NOT NULL DEFAULT 0 CHECK(processed_count>=0), digest_state BLOB) WITHOUT ROWID`,
 ] as const);
 
 const REQUIRED_V4_SCHEMA_OBJECTS = Object.freeze(
@@ -291,31 +293,29 @@ const OWNED_TABLE_NAMES = Object.freeze(
     return matched?.[1] ? [matched[1]] : [];
   }),
 );
-const UNBOUND_STAGING_TABLE_NAMES = Object.freeze(
-  [
-    "efs_cas_objects",
-    "efs_manifest_roots",
-    "efs_manifest_nodes",
-    "efs_leases",
-    "efs_lease_manifests",
-    "efs_lease_objects",
-    "efs_lease_staged_manifests",
-    "efs_staging_entries",
-    "efs_staging_level_records",
-    "efs_lease_cow_pages",
-    "efs_lease_patches",
-    "efs_staging_certificates",
-    "efs_staging_reconciliations",
-    "efs_staging_reconciliation_queue",
-    "efs_staging_manifest_validation_queue",
-    "efs_lease_cleanups",
-    "efs_staging_workspaces",
-    "efs_staging_reused_subtrees",
-    "efs_replication_imports",
-    "efs_replication_import_rows",
-    "efs_usage",
-  ] as const,
-);
+const UNBOUND_STAGING_TABLE_NAMES = Object.freeze([
+  "efs_cas_objects",
+  "efs_manifest_roots",
+  "efs_manifest_nodes",
+  "efs_leases",
+  "efs_lease_manifests",
+  "efs_lease_objects",
+  "efs_lease_staged_manifests",
+  "efs_staging_entries",
+  "efs_staging_level_records",
+  "efs_lease_cow_pages",
+  "efs_lease_patches",
+  "efs_staging_certificates",
+  "efs_staging_reconciliations",
+  "efs_staging_reconciliation_queue",
+  "efs_staging_manifest_validation_queue",
+  "efs_lease_cleanups",
+  "efs_staging_workspaces",
+  "efs_staging_reused_subtrees",
+  "efs_replication_imports",
+  "efs_replication_import_rows",
+  "efs_usage",
+] as const);
 const UNBOUND_EMPTY_TABLE_NAMES = Object.freeze(
   [...new Set(OWNED_TABLE_NAMES)].filter(
     (name) =>
@@ -1420,6 +1420,7 @@ export function initializeOrValidateUnboundReplicaSchema(
     driver.capabilities.schemaIdentityMode ?? ("sqlite-header" as const);
   const state = driver.transaction("read", (tx) => inspect(tx, identityMode));
   if (state.applicationId === EFS_APPLICATION_ID) {
+    if (!driver.readOnly) ensureM8AdditiveSchema(driver);
     driver.transaction("read", (tx) => validateUnboundReplicaSchema(tx, identityMode));
   } else {
     if (state.applicationId !== 0)
@@ -1453,6 +1454,7 @@ export function initializeOrValidateUnboundReplicaSchema(
       ] as const) {
         for (const statement of statements) tx.run(statement);
       }
+      for (const statement of M8_ADDITIVE_STATEMENTS) tx.run(statement);
       setUserVersion(tx, identityMode, EFS_SCHEMA_VERSION);
       tx.run(
         "INSERT INTO efs_usage(singleton,object_count,object_bytes,manifest_root_count,manifest_root_bytes,manifest_node_count,manifest_node_bytes,page_count,page_bytes,patch_count,patch_bytes,staging_bytes,result_bytes,maintenance_bytes,permanent_identifiers,charged_metadata_bytes) VALUES(1,0,0,0,0,0,0,0,0,0,0,0,0,256,0,0)",
@@ -1703,6 +1705,7 @@ export function initializeOrValidateSchema(
       requestedWriterProfile,
     );
   });
+  ensureM8AdditiveSchema(driver);
   return Object.freeze({
     filesystemId,
     mainRevision: 0,

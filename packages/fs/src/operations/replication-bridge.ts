@@ -44,8 +44,11 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly concurrency: RuntimeConcurrency;
     readonly cache?: ContentCache;
     readonly assertOpen: () => void;
-    readonly branchDigest?:
-      (tx: StorageTransactionPorts, branchId: string, generation: number) => string;
+    readonly branchDigest?: (
+      tx: StorageTransactionPorts,
+      branchId: string,
+      generation: number,
+    ) => string;
   }) {
     this.capabilities = options.capabilities;
     this.#storage = options.storage;
@@ -154,9 +157,11 @@ class Bridge implements ReplicationFilesystemBridge {
     return loaded;
   }
 
-  acceptBatch(request: ReplicationBatchAcceptanceRequest & {
-    readonly records?: readonly import("./storage-ports.js").ReplicationTransferRecord[];
-  }) {
+  acceptBatch(
+    request: ReplicationBatchAcceptanceRequest & {
+      readonly records?: readonly import("./storage-ports.js").ReplicationTransferRecord[];
+    },
+  ) {
     return this.#execute(
       "write",
       request,
@@ -187,7 +192,10 @@ class Bridge implements ReplicationFilesystemBridge {
 
   maintenance(request: { readonly now: number; readonly maxRows: number }) {
     return this.#execute("write", request, (store, transfer) => {
-      const transferResult = transfer.maintenance({ now: request.now, limit: request.maxRows });
+      const transferResult = transfer.maintenance({
+        now: request.now,
+        limit: request.maxRows,
+      });
       const sessionResult = store.maintenance(request);
       return {
         expiredSessions: sessionResult.expiredSessions,
@@ -248,7 +256,12 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly sequence: number;
     readonly requestDigest: Uint8Array;
   }) {
-    return this.#execute("read", request, (store) => store.replayOutboundBatch(request), 3 * 1024 * 1024 + 4096);
+    return this.#execute(
+      "read",
+      request,
+      (store) => store.replayOutboundBatch(request),
+      3 * 1024 * 1024 + 4096,
+    );
   }
 
   storeTerminalResult(request: {
@@ -311,6 +324,15 @@ class Bridge implements ReplicationFilesystemBridge {
     );
   }
 
+  releaseExport(request: { readonly sessionId: string; readonly now: number }) {
+    return this.#execute("write", request, (_store, transfer) =>
+      transfer.releaseExport({
+        ...request,
+        sessionId: this.#sessionIdOf(request.sessionId),
+      }),
+    );
+  }
+
   readExportBatch(request: {
     readonly sessionId: string;
     readonly flow: import("../filesystem/types.js").ReplicationFlow;
@@ -322,7 +344,11 @@ class Bridge implements ReplicationFilesystemBridge {
     return this.#execute(
       "write",
       request,
-      (_store, transfer) => transfer.readExportBatch({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+      (_store, transfer) =>
+        transfer.readExportBatch({
+          ...request,
+          sessionId: this.#sessionIdOf(request.sessionId),
+        }),
       request.maxBytes + 4096,
     );
   }
@@ -340,7 +366,11 @@ class Bridge implements ReplicationFilesystemBridge {
     return this.#execute(
       "read",
       request,
-      (_store, transfer) => transfer.readExportPayloads({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+      (_store, transfer) =>
+        transfer.readExportPayloads({
+          ...request,
+          sessionId: this.#sessionIdOf(request.sessionId),
+        }),
       request.maxBytes + 4096,
     );
   }
@@ -358,7 +388,11 @@ class Bridge implements ReplicationFilesystemBridge {
     return this.#execute(
       "write",
       request,
-      (_store, transfer) => transfer.readExportStateBatch({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+      (_store, transfer) =>
+        transfer.readExportStateBatch({
+          ...request,
+          sessionId: this.#sessionIdOf(request.sessionId),
+        }),
       request.maxBytes + 4096,
     );
   }
@@ -368,7 +402,10 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly flow: import("../filesystem/types.js").ReplicationFlow;
   }) {
     return this.#execute("read", request, (_store, transfer) =>
-      transfer.exportSummary({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+      transfer.exportSummary({
+        ...request,
+        sessionId: this.#sessionIdOf(request.sessionId),
+      }),
     );
   }
 
@@ -402,8 +439,14 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly maxEntries: number;
     readonly maxBytes: number;
   }) {
-    return this.#execute("read", request, (_store, transfer) =>
-      transfer.readMissingContent({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+    return this.#execute(
+      "read",
+      request,
+      (_store, transfer) =>
+        transfer.readMissingContent({
+          ...request,
+          sessionId: this.#sessionIdOf(request.sessionId),
+        }),
       request.maxBytes + 4096,
     );
   }
@@ -426,6 +469,7 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly generation: number | null;
     readonly generationDigest: Uint8Array | null;
     readonly checkpoint: boolean;
+    readonly sourceRole?: "main-authority" | "replica";
     readonly terminalState: 0 | 1 | 2;
     readonly terminalResultOperationId: string | null;
     readonly terminalResultBytes: Uint8Array | null;
@@ -440,7 +484,11 @@ class Bridge implements ReplicationFilesystemBridge {
     return this.#execute(
       "write",
       request,
-      (_store, transfer) => transfer.finalizeImport({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+      (_store, transfer) =>
+        transfer.finalizeImport({
+          ...request,
+          sessionId: this.#sessionIdOf(request.sessionId),
+        }),
       Math.max(64 * 1024, request.expectedClosureObjectBytes) + 4096,
     );
   }
@@ -452,7 +500,10 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly expiresAt: number;
   }) {
     return this.#execute("write", request, (_store, transfer) =>
-      transfer.renewLease({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+      transfer.renewLease({
+        ...request,
+        sessionId: this.#sessionIdOf(request.sessionId),
+      }),
     );
   }
 
@@ -462,7 +513,10 @@ class Bridge implements ReplicationFilesystemBridge {
     readonly now: number;
   }) {
     return this.#execute("write", request, (_store, transfer) =>
-      transfer.abortImport({ ...request, sessionId: this.#sessionIdOf(request.sessionId) }),
+      transfer.abortImport({
+        ...request,
+        sessionId: this.#sessionIdOf(request.sessionId),
+      }),
     );
   }
 }
@@ -475,8 +529,11 @@ export function createReplicationOperationsBridge(options: {
   readonly concurrency: RuntimeConcurrency;
   readonly cache?: ContentCache;
   readonly assertOpen: () => void;
-  readonly branchDigest?:
-    (tx: StorageTransactionPorts, branchId: string, generation: number) => string;
+  readonly branchDigest?: (
+    tx: StorageTransactionPorts,
+    branchId: string,
+    generation: number,
+  ) => string;
 }): ReplicationFilesystemBridge {
   return new Bridge(options);
 }

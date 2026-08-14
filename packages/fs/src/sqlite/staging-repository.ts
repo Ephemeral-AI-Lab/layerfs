@@ -955,6 +955,46 @@ export class StagingRepository {
     );
     this.bumpRoot(2, leaseId, false);
   }
+
+  /**
+   * Create a bounded export lease before the transfer runtime starts walking
+   * immutable roots.  Export leases deliberately do not use a staging
+   * certificate: their only children are efs_lease_manifests, which are
+   * removed by the same bounded cleanup state machine as read leases.
+   */
+  acquireExportLease(
+    leaseId: string,
+    ownerId: string,
+    ownerNonce: Uint8Array,
+    expiresAt: number,
+  ): void {
+    stagingId(leaseId, "export lease id");
+    stagingId(ownerId, "export lease owner id");
+    if (intrinsicByteLength(ownerNonce) !== 16)
+      throw new RangeError("export lease owner nonce must contain exactly 16 bytes");
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= 0)
+      throw new RangeError("export lease expiry is invalid");
+    this.#tx.run(
+      "INSERT INTO efs_leases(id,kind,owner_id,owner_nonce,branch_id,generation,created_at_ms,last_renewal_at_ms,expires_at_ms,state) VALUES(?,0,?,?,NULL,NULL,?,?,?,1)",
+      [leaseId, ownerId, ownerNonce, expiresAt, expiresAt, expiresAt],
+    );
+  }
+
+  renewExportLease(
+    leaseId: string,
+    ownerId: string,
+    ownerNonce: Uint8Array,
+    now: number,
+    expiresAt: number,
+  ): boolean {
+    if (intrinsicByteLength(ownerNonce) !== 16)
+      throw new RangeError("export lease owner nonce must contain exactly 16 bytes");
+    const result = this.#tx.run(
+      "UPDATE efs_leases SET last_renewal_at_ms=?,expires_at_ms=? WHERE id=? AND kind=0 AND owner_id=? AND owner_nonce=? AND state=1 AND expires_at_ms>?",
+      [now, expiresAt, leaseId, ownerId, ownerNonce, now],
+    );
+    return result.changes === 1;
+  }
   renewReadLease(
     leaseId: string,
     ownerId: string,
@@ -1147,7 +1187,17 @@ export class StagingRepository {
     members: readonly StagingMember[],
     bumpRootJournal = true,
   ): ClosureCertificate {
-    return this.#appendBatch(leaseId, ownerNonce, members, true, undefined, false, undefined, undefined, bumpRootJournal);
+    return this.#appendBatch(
+      leaseId,
+      ownerNonce,
+      members,
+      true,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      bumpRootJournal,
+    );
   }
 
   /**
@@ -2610,20 +2660,18 @@ export class StagingRepository {
       const reconciled = this.#reconciliation(leaseId)!;
       const certificate = this.#row(leaseId);
       if (
-        !options.validationOnly &&
-        reconciled.object_count !== certificate.object_count ||
-        !options.validationOnly &&
-        reconciled.object_bytes !== certificate.object_bytes ||
-        !options.validationOnly &&
-        reconciled.node_count !== certificate.node_count ||
-        !options.validationOnly &&
-        reconciled.node_bytes !== certificate.node_bytes ||
-        !options.validationOnly &&
-        reconciled.membership_count !== certificate.membership_count ||
-        !options.validationOnly &&
-        reconciled.next_sequence !== certificate.membership_count ||
-        !options.validationOnly &&
-        !equalBytes(reconciled.closure_fold, certificate.chain_fold)
+        (!options.validationOnly &&
+          reconciled.object_count !== certificate.object_count) ||
+        (!options.validationOnly &&
+          reconciled.object_bytes !== certificate.object_bytes) ||
+        (!options.validationOnly && reconciled.node_count !== certificate.node_count) ||
+        (!options.validationOnly && reconciled.node_bytes !== certificate.node_bytes) ||
+        (!options.validationOnly &&
+          reconciled.membership_count !== certificate.membership_count) ||
+        (!options.validationOnly &&
+          reconciled.next_sequence !== certificate.membership_count) ||
+        (!options.validationOnly &&
+          !equalBytes(reconciled.closure_fold, certificate.chain_fold))
       ) {
         throw new Error(
           `ECORRUPT: complete manifest closure differs from staged membership (reconciled=${reconciled.object_count}/${reconciled.object_bytes}/${reconciled.node_count}/${reconciled.node_bytes}/${reconciled.membership_count}, certificate=${certificate.object_count}/${certificate.object_bytes}/${certificate.node_count}/${certificate.node_bytes}/${certificate.membership_count})`,
@@ -2664,13 +2712,18 @@ export class StagingRepository {
     const certificate = this.#row(leaseId);
     if (!equalBytes(certificate.owner_nonce, ownerNonce) || certificate.sealed !== 0)
       throw new Error("ECORRUPT: staging owner mismatch or certificate already sealed");
-    const counts = this.#tx.all<{ count: number } & SqliteRow>(
-      "SELECT (SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_manifest_validation_queue WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_reused_subtrees WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?) count",
-      [leaseId, leaseId, leaseId, leaseId],
-      { maxRows: 1, maxBytes: 256 },
-    )[0]?.count ?? 0;
-    this.#tx.run("DELETE FROM efs_staging_reconciliation_queue WHERE lease_id=?", [leaseId]);
-    this.#tx.run("DELETE FROM efs_staging_manifest_validation_queue WHERE lease_id=?", [leaseId]);
+    const counts =
+      this.#tx.all<{ count: number } & SqliteRow>(
+        "SELECT (SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_manifest_validation_queue WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_reused_subtrees WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?) count",
+        [leaseId, leaseId, leaseId, leaseId],
+        { maxRows: 1, maxBytes: 256 },
+      )[0]?.count ?? 0;
+    this.#tx.run("DELETE FROM efs_staging_reconciliation_queue WHERE lease_id=?", [
+      leaseId,
+    ]);
+    this.#tx.run("DELETE FROM efs_staging_manifest_validation_queue WHERE lease_id=?", [
+      leaseId,
+    ]);
     this.#tx.run("DELETE FROM efs_staging_reused_subtrees WHERE lease_id=?", [leaseId]);
     this.#tx.run("DELETE FROM efs_staging_reconciliations WHERE lease_id=?", [leaseId]);
     this.#reconciliationCache.delete(leaseId);

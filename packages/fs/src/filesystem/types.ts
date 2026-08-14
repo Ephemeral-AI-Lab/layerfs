@@ -11,8 +11,17 @@ import type {
 import type { CowPageBytes } from "../cow/pages.js";
 import type { FilesystemErrorCode } from "./errors.js";
 export type ReplicationTransferRecord =
-  | { readonly kind: "object-descriptor"; readonly digest: Uint8Array; readonly byteLength: number }
-  | { readonly kind: "object-payload"; readonly digest: Uint8Array; readonly byteLength: number; readonly bytes: Uint8Array }
+  | {
+      readonly kind: "object-descriptor";
+      readonly digest: Uint8Array;
+      readonly byteLength: number;
+    }
+  | {
+      readonly kind: "object-payload";
+      readonly digest: Uint8Array;
+      readonly byteLength: number;
+      readonly bytes: Uint8Array;
+    }
   | {
       readonly kind: "manifest-root-descriptor";
       readonly format: string;
@@ -30,11 +39,46 @@ export type ReplicationTransferRecord =
       readonly logicalSpan: number;
       readonly entryCount: number;
     }
-  | { readonly kind: "missing-content"; readonly contentKind: "object" | "manifest-root" | "manifest-node"; readonly digest: Uint8Array }
-  | { readonly kind: "revision-fragment"; readonly revisionId: string; readonly parentRevisionId: string | null; readonly fragmentIndex: number; readonly fragmentCount: number; readonly fragmentBytes: Uint8Array }
-  | { readonly kind: "checkpoint-fragment"; readonly checkpointId: string; readonly revisionId: string; readonly fragmentIndex: number; readonly fragmentCount: number; readonly fragmentBytes: Uint8Array }
-  | { readonly kind: "branch-generation-fragment"; readonly branchId: string; readonly baseRevision: string; readonly generation: number; readonly generationDigest: Uint8Array; readonly fragmentIndex: number; readonly fragmentCount: number; readonly fragmentBytes: Uint8Array }
-  | { readonly kind: "terminal-result"; readonly operationId: string; readonly branchId: string | null; readonly generation: number | null; readonly generationDigest: Uint8Array | null; readonly resultDigest: Uint8Array; readonly resultBytes: Uint8Array };
+  | {
+      readonly kind: "missing-content";
+      readonly contentKind: "object" | "manifest-root" | "manifest-node";
+      readonly digest: Uint8Array;
+    }
+  | {
+      readonly kind: "revision-fragment";
+      readonly revisionId: string;
+      readonly parentRevisionId: string | null;
+      readonly fragmentIndex: number;
+      readonly fragmentCount: number;
+      readonly fragmentBytes: Uint8Array;
+    }
+  | {
+      readonly kind: "checkpoint-fragment";
+      readonly checkpointId: string;
+      readonly revisionId: string;
+      readonly fragmentIndex: number;
+      readonly fragmentCount: number;
+      readonly fragmentBytes: Uint8Array;
+    }
+  | {
+      readonly kind: "branch-generation-fragment";
+      readonly branchId: string;
+      readonly baseRevision: string;
+      readonly generation: number;
+      readonly generationDigest: Uint8Array;
+      readonly fragmentIndex: number;
+      readonly fragmentCount: number;
+      readonly fragmentBytes: Uint8Array;
+    }
+  | {
+      readonly kind: "terminal-result";
+      readonly operationId: string;
+      readonly branchId: string | null;
+      readonly generation: number | null;
+      readonly generationDigest: Uint8Array | null;
+      readonly resultDigest: Uint8Array;
+      readonly resultBytes: Uint8Array;
+    };
 
 export interface ReplicationExportMeta {
   readonly filesystemId: string;
@@ -62,8 +106,17 @@ export interface ReplicationExportMeta {
 }
 
 export type ReplicationAuthorityResult =
-  | { readonly kind: "publication"; readonly operationId: string; readonly outcome: "merged" | "conflict"; readonly resultDigest: Uint8Array }
-  | { readonly kind: "discard"; readonly operationId: string | null; readonly resultDigest: Uint8Array };
+  | {
+      readonly kind: "publication";
+      readonly operationId: string;
+      readonly outcome: "merged" | "conflict";
+      readonly resultDigest: Uint8Array;
+    }
+  | {
+      readonly kind: "discard";
+      readonly operationId: string | null;
+      readonly resultDigest: Uint8Array;
+    };
 
 export type FileType = "file" | "directory" | "symlink";
 export type FileContent = string | Uint8Array | ReadableStream<Uint8Array>;
@@ -573,9 +626,7 @@ export interface ReplicationSessionStore {
     readonly flow: ReplicationFlow;
     readonly branchId: string | null;
   }>;
-  loadSession(request: {
-    readonly operationId: string;
-  }): Readonly<{
+  loadSession(request: { readonly operationId: string }): Readonly<{
     readonly binding: ReplicationSessionBinding;
     readonly session: ReplicationSessionSnapshot;
     readonly flow: ReplicationFlow;
@@ -591,7 +642,11 @@ export interface ReplicationSessionStore {
     readonly ownerNonce: Uint8Array;
     readonly throughSequence: number;
     readonly maxRows: number;
-  }): Readonly<{ readonly compactedThrough: number; readonly deletedRows: number; readonly deletedBytes: number }>;
+  }): Readonly<{
+    readonly compactedThrough: number;
+    readonly deletedRows: number;
+    readonly deletedBytes: number;
+  }>;
   maintenance(request: {
     readonly now: number;
     readonly maxRows: number;
@@ -669,20 +724,22 @@ export interface ReplicationFilesystemBridge {
   findSession(request: {
     readonly operationId: string;
     readonly resumeKey: Uint8Array;
-  }): Promise<Readonly<{
-    readonly binding: ReplicationSessionBinding;
-    readonly session: ReplicationSessionSnapshot;
-    readonly flow: ReplicationFlow;
-    readonly branchId: string | null;
-  }>>;
-  loadSession(request: {
-    readonly operationId: string;
-  }): Promise<Readonly<{
-    readonly binding: ReplicationSessionBinding;
-    readonly session: ReplicationSessionSnapshot;
-    readonly flow: ReplicationFlow;
-    readonly branchId: string | null;
-  }>>;
+  }): Promise<
+    Readonly<{
+      readonly binding: ReplicationSessionBinding;
+      readonly session: ReplicationSessionSnapshot;
+      readonly flow: ReplicationFlow;
+      readonly branchId: string | null;
+    }>
+  >;
+  loadSession(request: { readonly operationId: string }): Promise<
+    Readonly<{
+      readonly binding: ReplicationSessionBinding;
+      readonly session: ReplicationSessionSnapshot;
+      readonly flow: ReplicationFlow;
+      readonly branchId: string | null;
+    }>
+  >;
   recordOutboundBatch(request: {
     readonly operationId: string;
     readonly sessionId: string;
@@ -702,9 +759,11 @@ export interface ReplicationFilesystemBridge {
     readonly sequence: number;
     readonly requestDigest: Uint8Array;
   }): Promise<Uint8Array>;
-  acceptBatch(request: ReplicationBatchAcceptanceRequest & {
-    readonly records?: readonly ReplicationTransferRecord[];
-  }): Promise<
+  acceptBatch(
+    request: ReplicationBatchAcceptanceRequest & {
+      readonly records?: readonly ReplicationTransferRecord[];
+    },
+  ): Promise<
     Readonly<{
       replayed: boolean;
       acknowledgement: Uint8Array;
@@ -717,11 +776,20 @@ export interface ReplicationFilesystemBridge {
     readonly ownerNonce: Uint8Array;
     readonly throughSequence: number;
     readonly maxRows: number;
-  }): Promise<Readonly<{ readonly compactedThrough: number; readonly deletedRows: number; readonly deletedBytes: number }>>;
-  maintenance(request: {
-    readonly now: number;
-    readonly maxRows: number;
-  }): Promise<Readonly<{ readonly expiredSessions: number; readonly expiredLeases: number; readonly cleanupPasses: number }>>;
+  }): Promise<
+    Readonly<{
+      readonly compactedThrough: number;
+      readonly deletedRows: number;
+      readonly deletedBytes: number;
+    }>
+  >;
+  maintenance(request: { readonly now: number; readonly maxRows: number }): Promise<
+    Readonly<{
+      readonly expiredSessions: number;
+      readonly expiredLeases: number;
+      readonly cleanupPasses: number;
+    }>
+  >;
   consumeAttempt(request: {
     readonly operationId: string;
     readonly sessionId: string;
@@ -773,6 +841,10 @@ export interface ReplicationFilesystemBridge {
     readonly sessionId: string;
     readonly now: number;
   }): Promise<ReplicationGenesisCapture>;
+  releaseExport(request: {
+    readonly sessionId: string;
+    readonly now: number;
+  }): Promise<void>;
   readExportBatch(request: {
     readonly sessionId: string;
     readonly flow: ReplicationFlow;
@@ -854,6 +926,8 @@ export interface ReplicationFilesystemBridge {
     readonly generation: number | null;
     readonly generationDigest: Uint8Array | null;
     readonly checkpoint: boolean;
+    /** Authenticated source role; only the main authority may deliver terminal state. */
+    readonly sourceRole?: "main-authority" | "replica";
     readonly terminalState: 0 | 1 | 2;
     readonly terminalResultOperationId: string | null;
     readonly terminalResultBytes: Uint8Array | null;
@@ -885,6 +959,10 @@ export interface ReplicationFilesystemBridge {
 }
 
 export interface ReplicationFinalization {
+  /** False means the core committed one bounded activation page and the
+   * destination endpoint must call finalizeImport again with the same
+   * authenticated request. */
+  readonly complete?: boolean;
   readonly revision: string;
   readonly branchId: string | null;
   readonly baseRevision: string | null;

@@ -777,7 +777,16 @@ export interface ReplicationFilesystemBridge {
         readonly nextPhase: ReplicationPhase;
         readonly nextCursor: Uint8Array;
         readonly nextCursorDigest: Uint8Array;
+        readonly requestDigest?: Uint8Array;
+        readonly responseBytes?: Uint8Array;
     }): Promise<ReplicationSessionSnapshot>;
+    replayOutboundBatch(request: {
+        readonly operationId: string;
+        readonly sessionId: string;
+        readonly ownerNonce: Uint8Array;
+        readonly sequence: number;
+        readonly requestDigest: Uint8Array;
+    }): Promise<Uint8Array>;
     acceptBatch(request: ReplicationBatchAcceptanceRequest & {
         readonly records?: readonly ReplicationTransferRecord[];
     }): Promise<Readonly<{
@@ -826,6 +835,8 @@ export interface ReplicationFilesystemBridge {
         readonly nextPhase: ReplicationPhase;
         readonly nextCursor: Uint8Array;
         readonly nextCursorDigest: Uint8Array;
+        readonly requestDigest?: Uint8Array;
+        readonly responseBytes?: Uint8Array;
     }): Promise<ReplicationSessionSnapshot>;
     storeTerminalResult(request: {
         readonly operationId: string;
@@ -851,6 +862,10 @@ export interface ReplicationFilesystemBridge {
         readonly sessionId: string;
         readonly now: number;
     }): Promise<ReplicationGenesisCapture>;
+    releaseExport(request: {
+        readonly sessionId: string;
+        readonly now: number;
+    }): Promise<void>;
     readExportBatch(request: {
         readonly sessionId: string;
         readonly flow: ReplicationFlow;
@@ -934,6 +949,8 @@ export interface ReplicationFilesystemBridge {
         readonly generation: number | null;
         readonly generationDigest: Uint8Array | null;
         readonly checkpoint: boolean;
+        /** Authenticated source role; only the main authority may deliver terminal state. */
+        readonly sourceRole?: "main-authority" | "replica";
         readonly terminalState: 0 | 1 | 2;
         readonly terminalResultOperationId: string | null;
         readonly terminalResultBytes: Uint8Array | null;

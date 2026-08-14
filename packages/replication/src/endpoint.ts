@@ -1,9 +1,9 @@
 import { ReplicationError } from "./errors.js";
-import { negotiateReplicationSession, type NegotiatedReplicationSession } from "./authorization.js";
 import {
-  REPLICATION_PROTOCOL_VERSION,
-  REPLICATION_HOST_PROFILE,
-} from "./types.js";
+  negotiateReplicationSession,
+  type NegotiatedReplicationSession,
+} from "./authorization.js";
+import { REPLICATION_PROTOCOL_VERSION, REPLICATION_HOST_PROFILE } from "./types.js";
 import type {
   AuthorizedReplicationPeer,
   CanonicalAuthorizationRecord,
@@ -75,10 +75,7 @@ export interface ReplicationEndpoint {
     readonly negotiated: NegotiatedReplicationSession;
   }): void;
   /** Internal: keep the local endpoint's session snapshot in sync. */
-  updateLocalSession(
-    sessionId: string,
-    session: ReplicationSessionSnapshot,
-  ): void;
+  updateLocalSession(sessionId: string, session: ReplicationSessionSnapshot): void;
 }
 
 export interface ReplicationResult {
@@ -300,16 +297,15 @@ export function createReplicationEndpoint(options: {
         negotiated: session.negotiated,
       });
     },
-    updateLocalSession(
-      sessionId: string,
-      session: ReplicationSessionSnapshot,
-    ): void {
+    updateLocalSession(sessionId: string, session: ReplicationSessionSnapshot): void {
       const existing = sessions.get(sessionId);
       if (existing) existing.session = session;
     },
     async exchange(request: Uint8Array): Promise<Uint8Array> {
       if (closed)
-        return encodeErrorEnvelope(new ReplicationError("Closed", "endpoint is closed"));
+        return encodeErrorEnvelope(
+          new ReplicationError("Closed", "endpoint is closed"),
+        );
       let envelope: CanonicalReplicationEnvelope;
       try {
         envelope = decodeCanonicalEnvelope(request, {
@@ -385,7 +381,9 @@ export function createReplicationEndpoint(options: {
             .catch((error: unknown) => {
               if (
                 error instanceof Error &&
-                error.message.startsWith("OperationMismatch: replication operation is unknown")
+                error.message.startsWith(
+                  "OperationMismatch: replication operation is unknown",
+                )
               )
                 return null;
               throw error;
@@ -523,7 +521,9 @@ export function createReplicationEndpoint(options: {
     state.session = outcome.session;
     if (batch.phase === "activation" && !outcome.replayed) {
       const requestRecord = batch.records.find(
-        (record): record is Extract<ReplicationBatchRecord, { kind: "terminal-result" }> =>
+        (
+          record,
+        ): record is Extract<ReplicationBatchRecord, { kind: "terminal-result" }> =>
           record.kind === "terminal-result",
       );
       if (requestRecord) {
@@ -533,7 +533,9 @@ export function createReplicationEndpoint(options: {
     }
     if (batch.phase === "result-acknowledgement" && !outcome.replayed) {
       const resultRecord = batch.records.find(
-        (record): record is Extract<ReplicationBatchRecord, { kind: "terminal-result" }> =>
+        (
+          record,
+        ): record is Extract<ReplicationBatchRecord, { kind: "terminal-result" }> =>
           record.kind === "terminal-result",
       );
       if (resultRecord) {
@@ -598,10 +600,7 @@ export function createReplicationEndpoint(options: {
       sequence: batch.sequence,
       phase: "missing-content",
       nextPhase,
-      nextCursor: nextSessionCursor(
-        state.session.cursorDigest,
-        responseDigest,
-      ),
+      nextCursor: nextSessionCursor(state.session.cursorDigest, responseDigest),
       nextCursorDigest: sha256Of(
         nextSessionCursor(state.session.cursorDigest, responseDigest),
       ),
@@ -663,10 +662,7 @@ export function createReplicationEndpoint(options: {
 }
 
 function validateAckShape(acknowledgement: ReplicationBatchAcknowledgement): void {
-  if (
-    acknowledgement.cursor.byteLength < 16 ||
-    acknowledgement.cursor.byteLength > 256
-  )
+  if (acknowledgement.cursor.byteLength < 16 || acknowledgement.cursor.byteLength > 256)
     throw new ReplicationError(
       "ProtocolMismatch",
       "acknowledgement cursor is outside the canonical envelope",
@@ -743,7 +739,7 @@ async function finalizeDestination(
   state: SessionState,
   request: TransferActivationRequest,
 ): Promise<void> {
-  await bridge.finalizeImport({
+  const input = {
     sessionId: state.binding.sessionId,
     kind: request.kind,
     expectedRevision: request.expectedRevision,
@@ -761,6 +757,7 @@ async function finalizeDestination(
     generation: request.generation,
     generationDigest: request.generationDigest ?? null,
     checkpoint: request.checkpoint,
+    sourceRole: state.binding.sourceRole,
     terminalState: request.terminalState,
     terminalResultOperationId: request.terminalResultOperationId,
     terminalResultBytes: request.terminalResultBytes,
@@ -792,7 +789,25 @@ async function finalizeDestination(
       : null,
     genesisRows: request.genesis ? request.genesis.rows : [],
     now: Date.now(),
-  });
+  } as const;
+  // Activation is a core-owned state machine.  Each call commits at most one
+  // bounded durable page; a reconnect or a statement fault therefore resumes
+  // from the same activation cursor without materializing the destination.
+  for (;;) {
+    const result = await bridge.finalizeImport(input);
+    if (result.complete !== false) break;
+    const renewed = await bridge.renewImportLease({
+      sessionId: state.binding.sessionId,
+      ownerNonce: state.ownerNonce,
+      now: Date.now(),
+      expiresAt: Date.now() + state.negotiated.limits.stagingLeaseMs,
+    });
+    if (!renewed)
+      throw new ReplicationError(
+        "StagingExpired",
+        "activation lease expired during bounded activation",
+      );
+  }
 }
 
 export {
