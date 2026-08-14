@@ -863,6 +863,84 @@ fn summary_for(
     Ok(summary)
 }
 
+fn summary_from_row(
+    object_count: i64,
+    object_bytes: i64,
+    node_count: i64,
+    node_bytes: i64,
+    closure_fold: Vec<u8>,
+    chain_digest: Vec<u8>,
+    object_bloom: Vec<u8>,
+    node_bloom: Vec<u8>,
+    object_members: Vec<u8>,
+    node_members: Vec<u8>,
+) -> AppResult<Summary> {
+    if object_count < 0
+        || node_count < 0
+        || object_bytes < 0
+        || node_bytes < 0
+        || closure_fold.len() != 32
+        || chain_digest.len() != 32
+        || object_bloom.len() != 1024
+        || node_bloom.len() != 1024
+        || object_members.len() != object_count as usize * 32
+        || node_members.len() != node_count as usize * 32
+    {
+        return Err("invalid stored subtree summary".into());
+    }
+    let hashes = |bytes: Vec<u8>| -> AppResult<Vec<[u8; 32]>> {
+        bytes
+            .chunks_exact(32)
+            .map(|chunk| Ok(chunk.try_into()?))
+            .collect()
+    };
+    Ok(Summary {
+        object_members: hashes(object_members)?,
+        node_members: hashes(node_members)?,
+        object_bytes: object_bytes as usize,
+        node_bytes: node_bytes as usize,
+        closure_fold: closure_fold
+            .try_into()
+            .map_err(|_| "invalid closure fold")?,
+        chain_digest: chain_digest
+            .try_into()
+            .map_err(|_| "invalid chain digest")?,
+        object_bloom,
+        node_bloom,
+    })
+}
+
+fn load_summary(
+    tx: &Transaction<'_>,
+    hash: [u8; 32],
+    counters: &mut Counters,
+) -> AppResult<Summary> {
+    let summary = tx.query_row(
+        "SELECT object_count,object_bytes,node_count,node_bytes,closure_fold,chain_digest,object_bloom,node_bloom,object_members,node_members FROM efs_manifest_subtree_summaries WHERE node_hash=?",
+        params![hash.as_slice()],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+                row.get(9)?,
+            ))
+        },
+    )?;
+    counters.statements += 1;
+    counters.rows_read += 1;
+    summary_from_row(
+        summary.0, summary.1, summary.2, summary.3, summary.4, summary.5, summary.6, summary.7,
+        summary.8, summary.9,
+    )
+}
+
 fn next_sequence(tx: &Transaction<'_>) -> AppResult<i64> {
     Ok(tx.query_row(
         "SELECT next_allocation_sequence FROM efs_meta WHERE singleton=1",
@@ -1085,11 +1163,24 @@ fn phase2_persist_manifest(
     let mut summary_memo = HashMap::new();
     let summary_seed = sha256(b"efs-subtree-chain-v1");
     let built_nodes = node_map(built);
+    // M7 path-copy only creates summaries for new spine nodes. Untouched
+    // subtrees already have authenticated summaries in SQLite; loading those
+    // rows avoids walking every payload again for a one-byte edit.
     for node in &built.nodes {
+        if old_nodes.contains(&node.hash) {
+            summary_memo.insert(node.hash, load_summary(tx, node.hash, counters)?);
+        }
+    }
+    let mut summary_rows = 0;
+    for node in &built.nodes {
+        if old_nodes.contains(&node.hash) {
+            continue;
+        }
         let summary = summary_for(node.hash, &built_nodes, &mut summary_memo, summary_seed)?;
         counters.rows_inserted += insert_summary(tx, node.hash, &summary)?;
+        summary_rows += 1;
     }
-    counters.statements += built.nodes.len();
+    counters.statements += summary_rows;
     let prior_root: Option<i64> = tx
         .query_row(
             "SELECT length(encoded) FROM efs_manifest_roots WHERE hash=?",
@@ -1356,18 +1447,6 @@ fn entry_offsets(entries: &[Entry]) -> Vec<usize> {
     offsets
 }
 
-fn affected_entry(entries: &[Entry], offset: usize) -> AppResult<(usize, usize)> {
-    let mut current = 0;
-    for (index, entry) in entries.iter().enumerate() {
-        if offset < current + entry.length {
-            return Ok((index, current));
-        }
-        current += entry.length;
-    }
-    let last = entries.last().ok_or("cannot edit an empty manifest")?;
-    Ok((entries.len() - 1, current - last.length))
-}
-
 fn read_source_window(
     conn: &Connection,
     entries: &[Entry],
@@ -1417,7 +1496,9 @@ fn edit_entries(
 ) -> AppResult<(BuiltManifest, HashMap<[u8; 32], Vec<u8>>, serde_json::Value)> {
     let path_nodes_before = counters.node_reads;
     let _ = load_path(conn, built, offset, counters)?;
-    let (affected, chunk_start) = affected_entry(&built.entries, offset)?;
+    let (affected_leaf, affected_leaf_index) = phase2_leaf_context_at_offset(built, offset)?;
+    let affected = affected_leaf.target_entry;
+    let chunk_start = affected_leaf.target_offset;
     let window = read_source_window(
         conn,
         &built.entries,
@@ -1467,11 +1548,17 @@ fn edit_entries(
     if reconnect.is_none() && cursor < edited.len() {
         return Err("M8 bounded source window ended before reconnect".into());
     }
-    let mut entries = Vec::with_capacity(built.entries.len() + output_entries.len());
-    entries.extend_from_slice(&built.entries[..affected]);
-    entries.extend(output_entries.clone());
-    entries.extend_from_slice(&built.entries[reconnect_index..]);
-    let rebuilt = build_manifest(&entries);
+    let (rebuilt, new_manifest_node_count, _) =
+        phase2_local_rebuild(built, affected, reconnect_index, &output_entries)?;
+    if std::env::var_os("PHASE2_M7_CANONICAL_CHECK").is_some() {
+        let mut canonical_bytes = deterministic_bytes(SEED, built.file_size);
+        canonical_bytes[offset] = INSERT_BYTE;
+        let (canonical_entries, _) = chunk_fixture(&canonical_bytes);
+        let canonical = build_manifest(&canonical_entries);
+        if canonical.root_hash != rebuilt.root_hash {
+            return Err("bounded M7 spine root differs from canonical rebuild".into());
+        }
+    }
     let old_node_hashes: HashSet<_> = built.nodes.iter().map(|node| node.hash).collect();
     let reused_nodes = rebuilt
         .nodes
@@ -1483,17 +1570,18 @@ fn edit_entries(
         .keys()
         .filter(|hash| !old_object_hashes.contains(*hash))
         .count();
-    let old_reconnect_offset: usize = built.entries[..reconnect_index]
-        .iter()
-        .map(|entry| entry.length)
-        .sum();
+    let old_reconnect_offset = if reconnect_index == built.entries.len() {
+        built.file_size
+    } else {
+        phase2_leaf_context_for_entry(built, reconnect_index)?.target_offset
+    };
     let metrics = json!({
-        "loadedEntries": reconnect_index.saturating_sub(affected),
+        "loadedEntries": reconnect_index.saturating_sub(affected) + affected_leaf_index,
         "loadedNodes": counters.node_reads - path_nodes_before,
         "affectedEntries": output_entries.len(),
         "newObjectCount": new_object_count,
-        "newManifestNodeCount": rebuilt.nodes.len() - reused_nodes,
-        "reusedSubtrees": reused_nodes,
+        "newManifestNodeCount": new_manifest_node_count,
+        "reusedSubtrees": reused_nodes.saturating_sub(new_manifest_node_count),
         "reusedManifestNodeCount": reused_nodes,
         "scanWindowBytes": cursor,
         "reconnectOldOffset": old_reconnect_offset,
@@ -1517,7 +1605,7 @@ fn phase2_read_source_window(
     let mut output = vec![0u8; length];
     let mut copied = 0;
     let mut index = start_index;
-    let offsets = entry_offsets(entries);
+    let mut object_offset = start_offset;
     while copied < length {
         let bytes = phase2_read_payload(conn, mode, carrier_dir, entries[index].hash)?;
         counters.statements += 1;
@@ -1526,10 +1614,11 @@ fn phase2_read_source_window(
         if bytes.len() != entries[index].length {
             return Err("source object length mismatch".into());
         }
-        let object_start = start_offset.saturating_sub(offsets[index]);
+        let object_start = start_offset.saturating_sub(object_offset);
         let take = usize::min(bytes.len() - object_start, length - copied);
         output[copied..copied + take].copy_from_slice(&bytes[object_start..object_start + take]);
         copied += take;
+        object_offset += bytes.len();
         index += 1;
     }
     counters.source_reads += 1;
@@ -1538,17 +1627,395 @@ fn phase2_read_source_window(
     Ok(output)
 }
 
+#[derive(Clone)]
+struct Phase2LeafContext {
+    leaf: EncodedNode,
+    start_entry: usize,
+    target_entry: usize,
+    target_offset: usize,
+}
+
+fn phase2_leaf_context_for_entry(
+    built: &BuiltManifest,
+    target_entry: usize,
+) -> AppResult<Phase2LeafContext> {
+    if target_entry >= built.entries.len() {
+        return Err("manifest entry index is outside the file".into());
+    }
+    let map = node_map(built);
+    let mut hash: [u8; 32] = built.root[36..68].try_into()?;
+    let mut remaining = target_entry;
+    let mut start_entry = 0;
+    let mut start_offset = 0;
+    loop {
+        let node = map.get(&hash).ok_or("manifest path node missing")?;
+        match &node.node {
+            Node::Leaf { entries, .. } => {
+                let target_offset = start_offset
+                    + entries[..remaining]
+                        .iter()
+                        .map(|entry| entry.length)
+                        .sum::<usize>();
+                return Ok(Phase2LeafContext {
+                    leaf: node.clone(),
+                    start_entry,
+                    target_entry,
+                    target_offset,
+                });
+            }
+            Node::Internal { children, .. } => {
+                let mut selected = None;
+                for child in children {
+                    if remaining < child.entry_count {
+                        selected = Some(child);
+                        break;
+                    }
+                    remaining -= child.entry_count;
+                    start_entry += child.entry_count;
+                    start_offset += child.span;
+                }
+                hash = selected
+                    .ok_or("manifest entry path is outside the tree")?
+                    .hash;
+            }
+        }
+    }
+}
+
+fn phase2_leaf_context_at_offset(
+    built: &BuiltManifest,
+    offset: usize,
+) -> AppResult<(Phase2LeafContext, usize)> {
+    if offset >= built.file_size {
+        let last = built.entries.len().checked_sub(1).ok_or("empty manifest")?;
+        let context = phase2_leaf_context_for_entry(built, last)?;
+        let affected = match &context.leaf.node {
+            Node::Leaf { entries, .. } => entries.len() - 1,
+            Node::Internal { .. } => return Err("leaf context is not a leaf".into()),
+        };
+        return Ok((context, affected));
+    }
+    let map = node_map(built);
+    let mut hash: [u8; 32] = built.root[36..68].try_into()?;
+    let mut remaining = offset;
+    let mut start_entry = 0;
+    let mut start_offset = 0;
+    loop {
+        let node = map.get(&hash).ok_or("manifest offset node missing")?;
+        match &node.node {
+            Node::Leaf { entries, .. } => {
+                let mut relative = remaining;
+                for (index, entry) in entries.iter().enumerate() {
+                    if relative < entry.length {
+                        return Ok((
+                            Phase2LeafContext {
+                                leaf: node.clone(),
+                                start_entry,
+                                target_entry: start_entry + index,
+                                target_offset: start_offset
+                                    + entries[..index]
+                                        .iter()
+                                        .map(|item| item.length)
+                                        .sum::<usize>(),
+                            },
+                            index,
+                        ));
+                    }
+                    relative -= entry.length;
+                }
+                return Err("manifest leaf does not contain the requested offset".into());
+            }
+            Node::Internal { children, .. } => {
+                let mut selected = None;
+                for child in children {
+                    if remaining < child.span {
+                        selected = Some(child);
+                        break;
+                    }
+                    remaining -= child.span;
+                    start_entry += child.entry_count;
+                    start_offset += child.span;
+                }
+                hash = selected
+                    .ok_or("manifest offset path is outside the tree")?
+                    .hash;
+            }
+        }
+    }
+}
+
+fn phase2_collect_leaf_children(
+    map: &HashMap<[u8; 32], EncodedNode>,
+    hash: [u8; 32],
+    output: &mut Vec<Child>,
+) -> AppResult<()> {
+    let node = map.get(&hash).ok_or("leaf traversal node missing")?;
+    match &node.node {
+        Node::Leaf { entries, span } => output.push(Child {
+            hash,
+            span: *span,
+            entry_count: entries.len(),
+        }),
+        Node::Internal { children, .. } => {
+            for child in children {
+                phase2_collect_leaf_children(map, child.hash, output)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn phase2_leaf_index_at_entry(leaves: &[Child], target: usize) -> Option<usize> {
+    let mut start = 0;
+    for (index, leaf) in leaves.iter().enumerate() {
+        if target < start + leaf.entry_count {
+            return Some(index);
+        }
+        start += leaf.entry_count;
+    }
+    None
+}
+
+fn phase2_regroup_leaf_segment(records: &[Entry], at_true_end: bool) -> (Vec<EncodedNode>, bool) {
+    let mut nodes = Vec::new();
+    let mut group = Vec::new();
+    let mut state = 0u64;
+    for record in records {
+        group.push(record.clone());
+        state = advance_group_state(state, &record.hash, record.length, None);
+        if is_boundary(group.len(), state, LEAF_GROUPING) {
+            let (encoded, span) = encode_leaf(&group);
+            let hash = sha256(&encoded);
+            nodes.push(EncodedNode {
+                hash,
+                encoded,
+                node: Node::Leaf {
+                    entries: std::mem::take(&mut group),
+                    span,
+                },
+            });
+            state = 0;
+        }
+    }
+    if !group.is_empty() {
+        if !at_true_end {
+            return (nodes, false);
+        }
+        let (encoded, span) = encode_leaf(&group);
+        let hash = sha256(&encoded);
+        nodes.push(EncodedNode {
+            hash,
+            encoded,
+            node: Node::Leaf {
+                entries: group,
+                span,
+            },
+        });
+    }
+    (nodes, true)
+}
+
+fn phase2_build_internal_tree(leaves: &[Child]) -> AppResult<(Vec<EncodedNode>, Child, usize)> {
+    if leaves.is_empty() {
+        return Err("local rebuild produced no leaves".into());
+    }
+    let mut nodes = Vec::new();
+    let mut current = leaves.to_vec();
+    let mut depth = 1;
+    while current.len() > 1 {
+        let mut next = Vec::new();
+        let mut group = Vec::new();
+        let mut state = 0u64;
+        for child in current {
+            state = advance_group_state(state, &child.hash, child.span, Some(child.entry_count));
+            group.push(child);
+            if is_boundary(group.len(), state, INTERNAL_GROUPING) {
+                let (encoded, span, entry_count) = encode_internal(&group);
+                let hash = sha256(&encoded);
+                nodes.push(EncodedNode {
+                    hash,
+                    encoded,
+                    node: Node::Internal {
+                        children: std::mem::take(&mut group),
+                        span,
+                        entry_count,
+                    },
+                });
+                next.push(Child {
+                    hash,
+                    span,
+                    entry_count,
+                });
+                state = 0;
+            }
+        }
+        if !group.is_empty() {
+            let (encoded, span, entry_count) = encode_internal(&group);
+            let hash = sha256(&encoded);
+            nodes.push(EncodedNode {
+                hash,
+                encoded,
+                node: Node::Internal {
+                    children: group,
+                    span,
+                    entry_count,
+                },
+            });
+            next.push(Child {
+                hash,
+                span,
+                entry_count,
+            });
+        }
+        current = next;
+        depth += 1;
+    }
+    Ok((
+        nodes,
+        current.pop().ok_or("local rebuild root missing")?,
+        depth,
+    ))
+}
+
+fn phase2_encode_root(file_size: usize, entry_count: usize, root_node: [u8; 32]) -> Vec<u8> {
+    let mut root = vec![0u8; 68];
+    root[..4].copy_from_slice(b"EAFR");
+    root[4..6].copy_from_slice(&1u16.to_le_bytes());
+    root[6] = 1;
+    root[7] = 1;
+    put_u32(&mut root, 8, PARAMETERS.0);
+    put_u32(&mut root, 12, PARAMETERS.1);
+    put_u32(&mut root, 16, PARAMETERS.2);
+    put_u64(&mut root, 20, file_size);
+    put_u64(&mut root, 28, entry_count);
+    root[36..68].copy_from_slice(&root_node);
+    root
+}
+
+fn phase2_local_rebuild(
+    built: &BuiltManifest,
+    affected: usize,
+    reconnect_index: usize,
+    replacement: &[Entry],
+) -> AppResult<(BuiltManifest, usize, usize)> {
+    let affected_leaf = phase2_leaf_context_for_entry(built, affected)?;
+    let mut candidate_end = if reconnect_index == built.entries.len() {
+        built.entries.len()
+    } else {
+        let reconnect_leaf = phase2_leaf_context_for_entry(built, reconnect_index)?;
+        reconnect_leaf.start_entry + reconnect_leaf.leaf.entry_count()
+    };
+    let mut rebuilt_leaves = None;
+    // ponytail: the current M7 fixtures reconnect within a few leaf groups;
+    // the bounded ceiling prevents an accidental whole-file regroup.
+    for _ in 0..64 {
+        let prefix_count = affected - affected_leaf.start_entry;
+        let mut records = Vec::new();
+        if let Node::Leaf { entries, .. } = &affected_leaf.leaf.node {
+            records.extend_from_slice(&entries[..prefix_count]);
+        }
+        records.extend_from_slice(replacement);
+        records.extend_from_slice(&built.entries[reconnect_index..candidate_end]);
+        let (leaves, complete) =
+            phase2_regroup_leaf_segment(&records, candidate_end == built.entries.len());
+        if complete {
+            rebuilt_leaves = Some((candidate_end, leaves));
+            break;
+        }
+        if candidate_end == built.entries.len() {
+            break;
+        }
+        let next = phase2_leaf_context_for_entry(built, candidate_end)?;
+        candidate_end = next.start_entry + next.leaf.entry_count();
+    }
+    let (candidate_end, rebuilt_leaves) =
+        rebuilt_leaves.ok_or("M7 bounded leaf regroup did not reconnect")?;
+    let mut entries = Vec::with_capacity(
+        built
+            .entries
+            .len()
+            .saturating_sub(reconnect_index - affected)
+            + replacement.len(),
+    );
+    entries.extend_from_slice(&built.entries[..affected]);
+    entries.extend_from_slice(replacement);
+    entries.extend_from_slice(&built.entries[reconnect_index..]);
+
+    let old_map = node_map(built);
+    let mut old_leaves = Vec::new();
+    phase2_collect_leaf_children(&old_map, built.root[36..68].try_into()?, &mut old_leaves)?;
+    let start_leaf = phase2_leaf_index_at_entry(&old_leaves, affected)
+        .ok_or("affected leaf is not in the current root")?;
+    let reuse_leaf = if candidate_end == built.entries.len() {
+        old_leaves.len()
+    } else {
+        let context = phase2_leaf_context_for_entry(built, candidate_end)?;
+        phase2_leaf_index_at_entry(&old_leaves, context.start_entry)
+            .ok_or("reconnect leaf is not in the current root")?
+    };
+    let rebuilt_leaf_children = rebuilt_leaves
+        .iter()
+        .map(|node| Child {
+            hash: node.hash,
+            span: node.span(),
+            entry_count: node.entry_count(),
+        })
+        .collect::<Vec<_>>();
+    let mut leaves = Vec::new();
+    leaves.extend_from_slice(&old_leaves[..start_leaf]);
+    leaves.extend(rebuilt_leaf_children);
+    leaves.extend_from_slice(&old_leaves[reuse_leaf..]);
+    let (mut generated, root_child, depth) = phase2_build_internal_tree(&leaves)?;
+    generated.extend(rebuilt_leaves);
+    let root = phase2_encode_root(
+        entries.iter().map(|entry| entry.length).sum(),
+        entries.len(),
+        root_child.hash,
+    );
+    let root_hash = sha256(&root);
+    let old_hashes = built
+        .nodes
+        .iter()
+        .map(|node| node.hash)
+        .collect::<HashSet<_>>();
+    let new_nodes = generated
+        .iter()
+        .filter(|node| !old_hashes.contains(&node.hash))
+        .count();
+    let mut nodes = built.nodes.clone();
+    for node in generated {
+        if !nodes.iter().any(|existing| existing.hash == node.hash) {
+            nodes.push(node);
+        }
+    }
+    Ok((
+        BuiltManifest {
+            root_hash,
+            root,
+            entries,
+            nodes,
+            depth,
+            file_size: built.file_size,
+        },
+        new_nodes,
+        old_hashes.len(),
+    ))
+}
+
 fn phase2_edit_entries(
     conn: &Connection,
     mode: StorageMode,
     carrier_dir: &Path,
     built: &BuiltManifest,
     offset: usize,
+    timings: &mut Phase2Timings,
     counters: &mut Counters,
 ) -> AppResult<(BuiltManifest, HashMap<[u8; 32], Vec<u8>>, serde_json::Value)> {
     let path_nodes_before = counters.node_reads;
     let _ = load_path(conn, built, offset, counters)?;
-    let (affected, chunk_start) = affected_entry(&built.entries, offset)?;
+    let (affected_leaf, affected_leaf_index) = phase2_leaf_context_at_offset(built, offset)?;
+    let affected = affected_leaf.target_entry;
+    let chunk_start = affected_leaf.target_offset;
     let window = phase2_read_source_window(
         conn,
         mode,
@@ -1570,6 +2037,7 @@ fn phase2_edit_entries(
     let mut cursor = 0;
     let mut old_index = affected;
     let mut reconnect = None;
+    let chunk_started = Instant::now();
     while cursor < edited.len() {
         let end = find_boundary(&edited, cursor);
         if end == edited.len() && chunk_start + end < built.file_size {
@@ -1597,15 +2065,24 @@ fn phase2_edit_entries(
         }
         old_index += 1;
     }
+    timings.cdc_hash_ns += chunk_started.elapsed().as_nanos();
     let reconnect_index = reconnect.unwrap_or(built.entries.len());
     if reconnect.is_none() && cursor < edited.len() {
         return Err("M7 bounded source window ended before reconnect".into());
     }
-    let mut entries = Vec::with_capacity(built.entries.len() + output_entries.len());
-    entries.extend_from_slice(&built.entries[..affected]);
-    entries.extend(output_entries.clone());
-    entries.extend_from_slice(&built.entries[reconnect_index..]);
-    let rebuilt = build_manifest(&entries);
+    let tree_started = Instant::now();
+    let (rebuilt, new_manifest_node_count, _) =
+        phase2_local_rebuild(built, affected, reconnect_index, &output_entries)?;
+    timings.tree_ns += tree_started.elapsed().as_nanos();
+    if std::env::var_os("PHASE2_M7_CANONICAL_CHECK").is_some() {
+        let mut canonical_bytes = deterministic_bytes(SEED, built.file_size);
+        canonical_bytes[offset] = INSERT_BYTE;
+        let (canonical_entries, _) = chunk_fixture(&canonical_bytes);
+        let canonical = build_manifest(&canonical_entries);
+        if canonical.root_hash != rebuilt.root_hash {
+            return Err("bounded M7 spine root differs from canonical rebuild".into());
+        }
+    }
     let old_node_hashes: HashSet<_> = built.nodes.iter().map(|node| node.hash).collect();
     let reused_nodes = rebuilt
         .nodes
@@ -1617,17 +2094,18 @@ fn phase2_edit_entries(
         .keys()
         .filter(|hash| !old_object_hashes.contains(*hash))
         .count();
-    let old_reconnect_offset: usize = built.entries[..reconnect_index]
-        .iter()
-        .map(|entry| entry.length)
-        .sum();
+    let old_reconnect_offset = if reconnect_index == built.entries.len() {
+        built.file_size
+    } else {
+        phase2_leaf_context_for_entry(built, reconnect_index)?.target_offset
+    };
     let metrics = json!({
-        "loadedEntries": reconnect_index.saturating_sub(affected),
+        "loadedEntries": reconnect_index.saturating_sub(affected) + affected_leaf_index,
         "loadedNodes": counters.node_reads - path_nodes_before,
         "affectedEntries": output_entries.len(),
         "newObjectCount": new_object_count,
-        "newManifestNodeCount": rebuilt.nodes.len() - reused_nodes,
-        "reusedSubtrees": reused_nodes,
+        "newManifestNodeCount": new_manifest_node_count,
+        "reusedSubtrees": reused_nodes.saturating_sub(new_manifest_node_count),
         "reusedManifestNodeCount": reused_nodes,
         "scanWindowBytes": cursor,
         "reconnectOldOffset": old_reconnect_offset,
@@ -2105,13 +2583,17 @@ fn phase2_reopen(
     directory: &Path,
     built: &BuiltManifest,
     expected: [u8; 32],
+    timings: &mut Phase2Timings,
     counters: &mut Counters,
 ) -> AppResult<(Connection, u128)> {
     let started = Instant::now();
     conn.close().map_err(|(_, error)| error)?;
     let reopened = phase2_open(path, mode, false)?;
+    let reopen_ns = started.elapsed().as_nanos();
+    let verification_started = Instant::now();
     phase2_verify(&reopened, mode, directory, built, expected, counters)?;
-    Ok((reopened, started.elapsed().as_nanos()))
+    timings.verification_ns += verification_started.elapsed().as_nanos();
+    Ok((reopened, reopen_ns))
 }
 
 fn phase2_materialize_to(
@@ -2208,22 +2690,25 @@ fn phase2_random_reads(
     let range = built.file_size - 4096;
     for index in 0..reads {
         let offset = (index.wrapping_mul(1_048_573) + 17) % (range + 1);
-        let (entry, _) = affected_entry(&built.entries, offset)?;
+        let (leaf, _) = phase2_leaf_context_at_offset(built, offset)?;
         let bytes = phase2_read_source_window(
             conn,
             mode,
             &directory.join("carriers"),
             &built.entries,
-            entry,
-            offset,
+            leaf.target_entry,
+            leaf.target_offset,
             built.file_size,
-            4096,
+            offset - leaf.target_offset + 4096,
             counters,
         )?;
-        if bytes.len() < 4096 || bytes[..4096] != expected_source[offset..offset + 4096] {
+        let relative = offset - leaf.target_offset;
+        if bytes.len() < relative + 4096
+            || bytes[relative..relative + 4096] != expected_source[offset..offset + 4096]
+        {
             return Err("random-read bytes mismatch".into());
         }
-        digest.update(&bytes[..usize::min(4096, bytes.len())]);
+        digest.update(&bytes[relative..relative + 4096]);
     }
     Ok((started.elapsed().as_nanos(), digest.finalize().into()))
 }
@@ -2289,7 +2774,7 @@ fn phase2_json_timing(t: &Phase2Timings) -> serde_json::Value {
         "carrier_fsync_ms": t.carrier_fsync_ns as f64 / 1e6,
         "sqlite_metadata_ms": t.sqlite_metadata_ns as f64 / 1e6,
         "sqlite_commit_ms": t.sqlite_commit_ns as f64 / 1e6,
-        "close_reopen_verify_ms": t.close_reopen_ns as f64 / 1e6,
+        "close_reopen_ms": t.close_reopen_ns as f64 / 1e6,
         "full_verification_ms": t.verification_ns as f64 / 1e6,
         "checkpoint_ms": t.checkpoint_ns as f64 / 1e6,
     })
@@ -2322,6 +2807,7 @@ fn phase2_create_record(mode: StorageMode, size: usize) -> AppResult<serde_json:
         &directory,
         &built,
         expected,
+        &mut timings,
         &mut counters,
     )?;
     timings.close_reopen_ns += reopen_ns;
@@ -2393,6 +2879,7 @@ fn phase2_edit_record(
         &directory,
         &base,
         expected_base,
+        &mut timings,
         &mut counters,
     )?;
     timings.close_reopen_ns += reopen_ns;
@@ -2414,6 +2901,7 @@ fn phase2_edit_record(
             &directory.join("carriers"),
             &current,
             offset,
+            &mut timings,
             &mut counters,
         )?;
         let old_nodes: HashSet<_> = current.nodes.iter().map(|node| node.hash).collect();
@@ -2442,6 +2930,7 @@ fn phase2_edit_record(
             &directory,
             &rebuilt,
             expected,
+            &mut timings,
             &mut counters,
         )?;
         timings.close_reopen_ns += close_reopen_ns;
@@ -2478,6 +2967,7 @@ fn phase2_read_record(mode: StorageMode, size: usize) -> AppResult<serde_json::V
         &directory,
         &built,
         expected,
+        &mut timings,
         &mut counters,
     )?;
     timings.close_reopen_ns += reopen_ns;
@@ -2534,6 +3024,7 @@ fn phase2_materialize_record(mode: StorageMode, size: usize) -> AppResult<serde_
         &directory,
         &built,
         expected,
+        &mut timings,
         &mut counters,
     )?;
     timings.close_reopen_ns += reopen_ns;
@@ -2560,7 +3051,7 @@ fn phase2_many_materialize_record(mode: StorageMode) -> AppResult<serde_json::Va
     let directory = phase2_directory(mode, workload, size);
     let _ = remove_dir_all(&directory);
     create_dir_all(&directory)?;
-    let (conn, built, original, timings, mut counters) = phase2_base(&directory, mode, size)?;
+    let (conn, built, original, mut timings, mut counters) = phase2_base(&directory, mode, size)?;
     let expected = sha256(&original);
     let db_path = directory.join("fs.db");
     let (conn, _) = phase2_reopen(
@@ -2570,6 +3061,7 @@ fn phase2_many_materialize_record(mode: StorageMode) -> AppResult<serde_json::Va
         &directory,
         &built,
         expected,
+        &mut timings,
         &mut counters,
     )?;
     let materialize_start_counters = counters.clone();
@@ -2610,12 +3102,14 @@ fn phase2_crash_child(
     let (entries, _) = chunk_fixture(&original);
     let built = build_manifest(&entries);
     let mut counters = Counters::default();
+    let mut timings = Phase2Timings::default();
     let (rebuilt, objects, _) = phase2_edit_entries(
         &conn,
         mode,
         &directory.join("carriers"),
         &built,
         size / 2,
+        &mut timings,
         &mut counters,
     )?;
     let old_nodes: HashSet<_> = built.nodes.iter().map(|node| node.hash).collect();
