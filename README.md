@@ -4,6 +4,9 @@ LayerFS V2.1 is a standalone Rust storage and workspace engine for immutable
 content-addressed state, copy-on-write workspaces, structural diff, and
 generic conditional publication.
 
+Learn how the storage engine works in
+[LayerFS: Building Filesystem Storage for AI Agents](https://ephemeral-ai-lab.github.io/layerfs/).
+
 L0 is implemented. It contains the three-crate dependency shape required by
 the V2.1 architecture, the checked M6.1.2 canonical codec/error/path surface,
 and byte-preserved custody fixtures for the frozen M6.0 identity vectors.
