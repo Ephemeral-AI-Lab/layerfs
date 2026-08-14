@@ -114,10 +114,10 @@ impl FilePackIndexSpoolV1 {
         }
         work.begin_pass(counters).map_err(map_work_error_v1)?;
         for end in (1..count).rev() {
-            let first = self.read_entry_controlled(0, &mut work, control, counters)?;
-            let last = self.read_entry_controlled(end, &mut work, control, counters)?;
-            self.write_entry_controlled(0, last, &mut work, control, counters)?;
-            self.write_entry_controlled(end, first, &mut work, control, counters)?;
+            let first = self.read_entry_sort_controlled_v1(0, &mut work, control, counters)?;
+            let last = self.read_entry_sort_controlled_v1(end, &mut work, control, counters)?;
+            self.write_entry_sort_controlled_v1(0, last, &mut work, control, counters)?;
+            self.write_entry_sort_controlled_v1(end, first, &mut work, control, counters)?;
             self.sift_down_controlled(0, end, order, &mut work, control, counters)?;
         }
         work.finish(control, counters).map_err(map_work_error_v1)?;
@@ -125,19 +125,25 @@ impl FilePackIndexSpoolV1 {
         Ok(())
     }
 
-    fn read_entry_controlled(
+    fn read_entry_sort_controlled_v1(
         &mut self,
         ordinal: u32,
         work: &mut FileSortWorkV1,
         control: &mut dyn OperationWorkControlV1,
         counters: &mut OperationCountersV1,
     ) -> Result<PackIndexEntryV1, PackPortErrorV1> {
+        work.poll_storage_boundary_v1(control, counters)
+            .map_err(map_work_error_v1)?;
         work.begin_event(FileSortEventV1::RecordRead, control, counters)
             .map_err(map_work_error_v1)?;
-        self.read_entry(ordinal)
+        let result = self.read_entry(ordinal);
+        let post_poll = work
+            .poll_storage_boundary_v1(control, counters)
+            .map_err(map_work_error_v1);
+        preserve_port_result_v1(result, post_poll)
     }
 
-    fn write_entry_controlled(
+    fn write_entry_sort_controlled_v1(
         &mut self,
         ordinal: u32,
         entry: PackIndexEntryV1,
@@ -145,9 +151,15 @@ impl FilePackIndexSpoolV1 {
         control: &mut dyn OperationWorkControlV1,
         counters: &mut OperationCountersV1,
     ) -> Result<(), PackPortErrorV1> {
+        work.poll_storage_boundary_v1(control, counters)
+            .map_err(map_work_error_v1)?;
         work.begin_event(FileSortEventV1::RecordWrite, control, counters)
             .map_err(map_work_error_v1)?;
-        self.write_entry(ordinal, entry)
+        let result = self.write_entry(ordinal, entry);
+        let post_poll = work
+            .poll_storage_boundary_v1(control, counters)
+            .map_err(map_work_error_v1);
+        preserve_port_result_v1(result, post_poll)
     }
 
     fn compare_entry_controlled(
@@ -183,9 +195,11 @@ impl FilePackIndexSpoolV1 {
             }
             let right = left + 1;
             let mut child = left;
-            let mut child_entry = self.read_entry_controlled(left, work, control, counters)?;
+            let mut child_entry =
+                self.read_entry_sort_controlled_v1(left, work, control, counters)?;
             if right < end {
-                let right_entry = self.read_entry_controlled(right, work, control, counters)?;
+                let right_entry =
+                    self.read_entry_sort_controlled_v1(right, work, control, counters)?;
                 if Self::compare_entry_controlled(
                     child_entry,
                     right_entry,
@@ -199,7 +213,7 @@ impl FilePackIndexSpoolV1 {
                     child_entry = right_entry;
                 }
             }
-            let root_entry = self.read_entry_controlled(root, work, control, counters)?;
+            let root_entry = self.read_entry_sort_controlled_v1(root, work, control, counters)?;
             if Self::compare_entry_controlled(
                 root_entry,
                 child_entry,
@@ -211,8 +225,8 @@ impl FilePackIndexSpoolV1 {
             {
                 return Ok(());
             }
-            self.write_entry_controlled(root, child_entry, work, control, counters)?;
-            self.write_entry_controlled(child, root_entry, work, control, counters)?;
+            self.write_entry_sort_controlled_v1(root, child_entry, work, control, counters)?;
+            self.write_entry_sort_controlled_v1(child, root_entry, work, control, counters)?;
             root = child;
         }
     }
@@ -292,6 +306,26 @@ impl PackIndexSpoolV1 for FilePackIndexSpoolV1 {
         Ok(())
     }
 
+    fn reset_controlled_v1(
+        &mut self,
+        maximum_entries: u32,
+        control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+    ) -> Result<(), PackPortErrorV1> {
+        poll_operation_work_control_v1(control)?;
+        let result = self
+            .storage
+            .set_len(0)
+            .map_err(|error| self.retain_error(error));
+        if result.is_ok() {
+            self.maximum = maximum_entries;
+            self.count = 0;
+            self.cursor = 0;
+        }
+        let post_poll = poll_operation_work_control_v1(control);
+        preserve_port_result_v1(result, post_poll)
+    }
+
     fn push(&mut self, entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1> {
         if self.count >= self.maximum {
             return Err(PackPortErrorV1::Failure);
@@ -299,6 +333,26 @@ impl PackIndexSpoolV1 for FilePackIndexSpoolV1 {
         self.write_entry(self.count, entry)?;
         self.count += 1;
         Ok(())
+    }
+
+    fn push_controlled_v1(
+        &mut self,
+        entry: PackIndexEntryV1,
+        control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+    ) -> Result<(), PackPortErrorV1> {
+        poll_operation_work_control_v1(control)?;
+        let result = if self.count >= self.maximum {
+            Err(PackPortErrorV1::Failure)
+        } else {
+            let ordinal = self.count;
+            let next_count = ordinal.checked_add(1).ok_or(PackPortErrorV1::Failure)?;
+            self.write_entry(ordinal, entry).map(|()| {
+                self.count = next_count;
+            })
+        };
+        let post_poll = poll_operation_work_control_v1(control);
+        preserve_port_result_v1(result, post_poll)
     }
 
     fn sort_by_key(&mut self) -> Result<(), PackPortErrorV1> {
@@ -339,6 +393,26 @@ impl PackIndexSpoolV1 for FilePackIndexSpoolV1 {
         Ok(Some(entry))
     }
 
+    fn next_controlled_v1(
+        &mut self,
+        control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+    ) -> Result<Option<PackIndexEntryV1>, PackPortErrorV1> {
+        poll_operation_work_control_v1(control)?;
+        let result = if self.cursor >= self.count {
+            Ok(None)
+        } else {
+            let ordinal = self.cursor;
+            let next_cursor = ordinal.checked_add(1).ok_or(PackPortErrorV1::Failure)?;
+            self.read_entry(ordinal).map(|entry| {
+                self.cursor = next_cursor;
+                Some(entry)
+            })
+        };
+        let post_poll = poll_operation_work_control_v1(control);
+        preserve_port_result_v1(result, post_poll)
+    }
+
     fn abort(&mut self) {
         if let Err(error) = self.storage.set_len(0) {
             self.first_error.get_or_insert(error);
@@ -355,6 +429,28 @@ const fn map_work_error_v1(error: crate::CoreError) -> PackPortErrorV1 {
         crate::CoreError::Deadline => PackPortErrorV1::Deadline,
         crate::CoreError::ResourceRefused => PackPortErrorV1::WorkExhausted,
         _ => PackPortErrorV1::Failure,
+    }
+}
+
+fn poll_operation_work_control_v1(
+    control: &mut dyn OperationWorkControlV1,
+) -> Result<(), PackPortErrorV1> {
+    if control.cancellation_requested_v1() {
+        return Err(PackPortErrorV1::Cancelled);
+    }
+    if control.deadline_exceeded_v1() {
+        return Err(PackPortErrorV1::Deadline);
+    }
+    Ok(())
+}
+
+fn preserve_port_result_v1<T>(
+    result: Result<T, PackPortErrorV1>,
+    post_poll: Result<(), PackPortErrorV1>,
+) -> Result<T, PackPortErrorV1> {
+    match result {
+        Err(error) => Err(error),
+        Ok(value) => post_poll.map(|()| value),
     }
 }
 
@@ -388,19 +484,20 @@ mod tests {
         }
     }
 
-    struct StopAtSecondPollV1 {
+    struct StopAtPollV1 {
         stop: StopV1,
         polls: u64,
+        stop_at: u64,
     }
 
-    impl OperationWorkControlV1 for StopAtSecondPollV1 {
+    impl OperationWorkControlV1 for StopAtPollV1 {
         fn cancellation_requested_v1(&mut self) -> bool {
             self.polls += 1;
-            matches!(self.stop, StopV1::Cancel) && self.polls >= 2
+            matches!(self.stop, StopV1::Cancel) && self.polls >= self.stop_at
         }
 
         fn deadline_exceeded_v1(&mut self) -> bool {
-            matches!(self.stop, StopV1::Deadline) && self.polls >= 2
+            matches!(self.stop, StopV1::Deadline) && self.polls >= self.stop_at
         }
     }
 
@@ -451,7 +548,11 @@ mod tests {
                 .expect("append index record");
         }
 
-        let mut stop_control = StopAtSecondPollV1 { stop, polls: 0 };
+        let mut stop_control = StopAtPollV1 {
+            stop,
+            polls: 0,
+            stop_at: 3,
+        };
         let expected = match stop {
             StopV1::Cancel => PackPortErrorV1::Cancelled,
             StopV1::Deadline => PackPortErrorV1::Deadline,
@@ -460,8 +561,12 @@ mod tests {
             spool.sort_by_key_controlled(&mut stop_control, &mut counters),
             Err(expected)
         );
-        assert_eq!(counters.file_sort_control_polls, 2);
-        assert!(counters.file_sort_work_units > 0);
+        assert_eq!(counters.file_sort_control_polls, 3);
+        assert_eq!(counters.file_sort_work_units, 1);
+        assert_eq!(counters.file_sort_record_reads, 1);
+        let (bytes_read, read_calls, _) = spool.storage.direct_storage_observation();
+        assert_eq!(bytes_read, PACK_INDEX_ENTRY_BYTES);
+        assert_eq!(read_calls, 1);
         assert!(
             counters.file_sort_work_units < crate::limits::FILE_SORT_CONTROL_POLL_WORK_UNITS_V1
         );

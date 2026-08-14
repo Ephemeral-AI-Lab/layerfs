@@ -232,7 +232,54 @@ pub trait PackIndexSpoolV1 {
         None
     }
     fn reset(&mut self, maximum_entries: u32) -> Result<(), PackPortErrorV1>;
+    fn reset_controlled_v1(
+        &mut self,
+        maximum_entries: u32,
+        control: &mut dyn crate::limits::OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+    ) -> Result<(), PackPortErrorV1> {
+        if control.cancellation_requested_v1() {
+            return Err(PackPortErrorV1::Cancelled);
+        }
+        if control.deadline_exceeded_v1() {
+            return Err(PackPortErrorV1::Deadline);
+        }
+        let result = self.reset(maximum_entries);
+        let post_poll = if control.cancellation_requested_v1() {
+            Err(PackPortErrorV1::Cancelled)
+        } else if control.deadline_exceeded_v1() {
+            Err(PackPortErrorV1::Deadline)
+        } else {
+            Ok(())
+        };
+        match result {
+            Ok(entry) => post_poll.map(|()| entry),
+            Err(error) => Err(error),
+        }
+    }
     fn push(&mut self, entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1>;
+    fn push_controlled_v1(
+        &mut self,
+        entry: PackIndexEntryV1,
+        control: &mut dyn crate::limits::OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+    ) -> Result<(), PackPortErrorV1> {
+        if control.cancellation_requested_v1() {
+            return Err(PackPortErrorV1::Cancelled);
+        }
+        if control.deadline_exceeded_v1() {
+            return Err(PackPortErrorV1::Deadline);
+        }
+        let result = self.push(entry);
+        let post_poll = if control.cancellation_requested_v1() {
+            Err(PackPortErrorV1::Cancelled)
+        } else if control.deadline_exceeded_v1() {
+            Err(PackPortErrorV1::Deadline)
+        } else {
+            Ok(())
+        };
+        result.and(post_poll)
+    }
     fn sort_by_key(&mut self) -> Result<(), PackPortErrorV1>;
     fn sort_by_offset(&mut self) -> Result<(), PackPortErrorV1>;
     fn sort_by_key_controlled(
@@ -277,6 +324,30 @@ pub trait PackIndexSpoolV1 {
     }
     fn rewind(&mut self) -> Result<(), PackPortErrorV1>;
     fn next(&mut self) -> Result<Option<PackIndexEntryV1>, PackPortErrorV1>;
+    fn next_controlled_v1(
+        &mut self,
+        control: &mut dyn crate::limits::OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+    ) -> Result<Option<PackIndexEntryV1>, PackPortErrorV1> {
+        if control.cancellation_requested_v1() {
+            return Err(PackPortErrorV1::Cancelled);
+        }
+        if control.deadline_exceeded_v1() {
+            return Err(PackPortErrorV1::Deadline);
+        }
+        let result = self.next();
+        let post_poll = if control.cancellation_requested_v1() {
+            Err(PackPortErrorV1::Cancelled)
+        } else if control.deadline_exceeded_v1() {
+            Err(PackPortErrorV1::Deadline)
+        } else {
+            Ok(())
+        };
+        match result {
+            Ok(entry) => post_poll.map(|()| entry),
+            Err(error) => Err(error),
+        }
+    }
     fn abort(&mut self);
 }
 
@@ -386,14 +457,39 @@ where
     P: PackReadPortV1 + ?Sized,
     C: crate::limits::OperationWorkControlV1 + ?Sized,
 {
-    poll_work_control_v1(control)?;
-    if pack.len().map_err(map_read_port)? != sealed.pack_len {
+    locate_validated_pack_index_entry_controlled_recorded_v1(
+        pack, sealed, expected, counters, control, None,
+    )
+}
+
+pub(crate) fn locate_validated_pack_index_entry_controlled_recorded_v1<P, C>(
+    pack: &mut P,
+    sealed: SealedPackV1,
+    expected: TypedPhysicalObjectIdV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+) -> CoreResult<Option<PackIndexEntryV1>>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    poll_work_control_recorded_v1(control, counters, record_control_poll, 0)?;
+    let pack_len = pack.len().map_err(map_read_port);
+    let pack_len_work = u64::from(pack_len.is_ok());
+    let pack_len = complete_work_boundary_v1(
+        pack_len,
+        pack_len_work,
+        control,
+        counters,
+        record_control_poll,
+    )?;
+    if pack_len != sealed.pack_len {
         return Err(CoreError::PackInvalid);
     }
     let mut low = 0_u32;
     let mut high = sealed.record_count;
     while low < high {
-        poll_work_control_v1(control)?;
         let middle = low + (high - low) / 2;
         let offset = sealed
             .index_offset
@@ -403,13 +499,40 @@ where
                     .ok_or(CoreError::IntegerOverflow)?,
             )
             .ok_or(CoreError::IntegerOverflow)?;
-        let entry = decode_index_entry(&read_array::<80, _>(pack, offset, counters)?)?;
+        let bytes = read_array_controlled_v1::<80, _, _>(
+            pack,
+            offset,
+            counters,
+            control,
+            record_control_poll,
+            Some(PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_locator_index_read_call_v1,
+                bytes: OperationCountersV1::record_locator_index_read_bytes_v1,
+            }),
+        )?;
+        record_pack_decode_boundary_v1(
+            counters,
+            PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_locator_index_decode_call_v1,
+                bytes: OperationCountersV1::record_locator_index_decode_bytes_v1,
+            },
+            PACK_INDEX_ENTRY_BYTES,
+        )?;
+        let entry = complete_work_boundary_v1(
+            decode_index_entry(&bytes),
+            PACK_INDEX_ENTRY_BYTES,
+            control,
+            counters,
+            record_control_poll,
+        )?;
+        counters.record_locator_index_probe_v1()?;
         match compare_typed_key(entry.id, expected) {
             Ordering::Less => low = middle.checked_add(1).ok_or(CoreError::IntegerOverflow)?,
             Ordering::Greater => high = middle,
             Ordering::Equal => return Ok(Some(entry)),
         }
     }
+    poll_work_control_recorded_v1(control, counters, record_control_poll, 0)?;
     Ok(None)
 }
 
@@ -442,7 +565,13 @@ where
     C: crate::limits::OperationWorkControlV1 + ?Sized,
 {
     poll_work_control_v1(control)?;
-    if ordinal >= sealed.record_count || pack.len().map_err(map_read_port)? != sealed.pack_len {
+    if ordinal >= sealed.record_count {
+        return Err(CoreError::PackInvalid);
+    }
+    let pack_len = pack.len().map_err(map_read_port);
+    let pack_len_work = u64::from(pack_len.is_ok());
+    let pack_len = complete_work_boundary_v1(pack_len, pack_len_work, control, counters, None)?;
+    if pack_len != sealed.pack_len {
         return Err(CoreError::PackInvalid);
     }
     let offset = sealed
@@ -453,7 +582,32 @@ where
                 .ok_or(CoreError::IntegerOverflow)?,
         )
         .ok_or(CoreError::IntegerOverflow)?;
-    decode_index_entry(&read_array::<80, _>(pack, offset, counters)?)
+    let bytes = read_array_controlled_v1::<80, _, _>(
+        pack,
+        offset,
+        counters,
+        control,
+        None,
+        Some(PackStageBoundaryRecordersV1 {
+            call: OperationCountersV1::record_locator_index_read_call_v1,
+            bytes: OperationCountersV1::record_locator_index_read_bytes_v1,
+        }),
+    )?;
+    record_pack_decode_boundary_v1(
+        counters,
+        PackStageBoundaryRecordersV1 {
+            call: OperationCountersV1::record_locator_index_decode_call_v1,
+            bytes: OperationCountersV1::record_locator_index_decode_bytes_v1,
+        },
+        PACK_INDEX_ENTRY_BYTES,
+    )?;
+    complete_work_boundary_v1(
+        decode_index_entry(&bytes),
+        PACK_INDEX_ENTRY_BYTES,
+        control,
+        counters,
+        None,
+    )
 }
 
 /// Revalidate every canonical byte named by one admitted index entry. This is
@@ -483,6 +637,23 @@ where
     P: PackReadPortV1 + ?Sized,
     C: crate::limits::OperationWorkControlV1 + ?Sized,
 {
+    validate_validated_pack_object_controlled_recorded_v1(
+        pack, entry, scratch, counters, control, None,
+    )
+}
+
+pub(crate) fn validate_validated_pack_object_controlled_recorded_v1<P, C>(
+    pack: &mut P,
+    entry: PackIndexEntryV1,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+) -> CoreResult<PackObjectLocationV1>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
     validate_record_controlled_v1(
         pack,
         entry,
@@ -490,6 +661,8 @@ where
         scratch,
         counters,
         control,
+        record_control_poll,
+        PackValidationStageV1::InstalledCarrier,
     )?;
     Ok(PackObjectLocationV1 {
         object_offset: entry
@@ -682,6 +855,7 @@ where
         counters,
         record_count,
         &mut control,
+        PackValidationStageV1::PreInstall,
     )?;
     if validated.id.as_bytes() != &pack_digest
         || validated.record_count != record_count
@@ -704,6 +878,32 @@ pub(crate) fn validate_pack_v1<P, M>(
     maximum_entries: u32,
     ledger: &ResourceLedgerV1,
     counters: &mut OperationCountersV1,
+) -> CoreResult<SealedPackV1>
+where
+    P: PackReadPortV1 + ?Sized,
+    M: PackIndexSpoolV1 + ?Sized,
+{
+    validate_pack_stage_v1(
+        pack,
+        metadata,
+        scratch,
+        maximum_entries,
+        ledger,
+        counters,
+        PackValidationStageV1::PreInstall,
+    )
+}
+
+#[cfg(any(test, feature = "operation-polymorphism"))]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn validate_pack_stage_v1<P, M>(
+    pack: &mut P,
+    metadata: &mut M,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    maximum_entries: u32,
+    ledger: &ResourceLedgerV1,
+    counters: &mut OperationCountersV1,
+    stage: PackValidationStageV1,
 ) -> CoreResult<SealedPackV1>
 where
     P: PackReadPortV1 + ?Sized,
@@ -735,6 +935,7 @@ where
         counters,
         maximum_entries,
         &mut control,
+        stage,
     )
 }
 
@@ -747,6 +948,33 @@ pub(crate) fn validate_pack_borrowed_v1<P, M>(
     reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
     control: &mut dyn crate::limits::OperationWorkControlV1,
+) -> CoreResult<SealedPackV1>
+where
+    P: PackReadPortV1 + ?Sized,
+    M: PackIndexSpoolV1 + ?Sized,
+{
+    validate_pack_borrowed_stage_v1(
+        pack,
+        metadata,
+        scratch,
+        maximum_entries,
+        reservation,
+        counters,
+        control,
+        PackValidationStageV1::PreInstall,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn validate_pack_borrowed_stage_v1<P, M>(
+    pack: &mut P,
+    metadata: &mut M,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    maximum_entries: u32,
+    reservation: &OperationReservationV1<'_>,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
+    stage: PackValidationStageV1,
 ) -> CoreResult<SealedPackV1>
 where
     P: PackReadPortV1 + ?Sized,
@@ -769,7 +997,15 @@ where
         )?
         .charge(MemoryComponentV1::MetadataWindow, metadata_bytes)?;
     reservation.require(memory)?;
-    validate_pack_inner_v1(pack, metadata, scratch, counters, maximum_entries, control)
+    validate_pack_inner_v1(
+        pack,
+        metadata,
+        scratch,
+        counters,
+        maximum_entries,
+        control,
+        stage,
+    )
 }
 
 fn validate_pack_inner_v1<P, M>(
@@ -779,16 +1015,22 @@ fn validate_pack_inner_v1<P, M>(
     counters: &mut OperationCountersV1,
     maximum_entries: u32,
     control: &mut dyn crate::limits::OperationWorkControlV1,
+    stage: PackValidationStageV1,
 ) -> CoreResult<SealedPackV1>
 where
     P: PackReadPortV1 + ?Sized,
     M: PackIndexSpoolV1 + ?Sized,
 {
-    let pack_len = pack.len().map_err(map_read_port)?;
+    poll_validation_control_v1(control, counters, stage, None, 0)?;
+    let pack_len = pack.len().map_err(map_read_port);
+    let pack_len_work = u64::from(pack_len.is_ok());
+    let pack_len =
+        complete_validation_boundary_v1(pack_len, pack_len_work, control, counters, stage, None)?;
     if !(PACK_HEADER_BYTES + PACK_TRAILER_BYTES..=MAX_PACK_BYTES).contains(&pack_len) {
         return Err(CoreError::PackInvalid);
     }
-    let header = read_array::<64, _>(pack, 0, counters)?;
+    let header =
+        read_array_validation_controlled_v1::<64, _, _>(pack, 0, counters, control, stage, None)?;
     if &header[..8] != PACK_MAGIC
         || be_u16(&header[10..12]) != 64
         || be_u32(&header[12..16]) != 0
@@ -827,7 +1069,14 @@ where
     if computed_len != pack_len {
         return Err(CoreError::PackInvalid);
     }
-    let trailer = read_array::<80, _>(pack, trailer_offset, counters)?;
+    let trailer = read_array_validation_controlled_v1::<80, _, _>(
+        pack,
+        trailer_offset,
+        counters,
+        control,
+        stage,
+        None,
+    )?;
     if &trailer[..8] != PACK_TRAILER_MAGIC
         || be_u16(&trailer[10..12]) != 80
         || be_u32(&trailer[12..16]) != 0
@@ -843,13 +1092,23 @@ where
         return Err(CoreError::Schema);
     }
     let checksum_len = pack_len.checked_sub(32).ok_or(CoreError::IntegerOverflow)?;
-    let digest =
-        hash_port_range_controlled_v1(pack, 0, checksum_len, TAG_PACK, scratch, counters, control)?;
+    let digest = hash_port_range_controlled_validation_recorded_v1(
+        pack,
+        0,
+        checksum_len,
+        TAG_PACK,
+        scratch,
+        counters,
+        control,
+        Some(stage.read_recorders()),
+        Some(stage.hash_recorders()),
+        Some(stage),
+    )?;
     if trailer[48..80] != digest {
         return Err(CoreError::IdMismatch);
     }
 
-    metadata.reset(record_count).map_err(map_spool_port)?;
+    reset_validation_spool_v1(metadata, record_count, counters, control, stage)?;
     let validation = validate_index_and_records(
         pack,
         metadata,
@@ -859,9 +1118,12 @@ where
         index_offset,
         profile,
         control,
+        stage,
     );
     if validation.is_err() {
-        metadata.abort();
+        // The validation cause is chronologically earlier than any abort
+        // control/observation failure and therefore remains authoritative.
+        let _ = abort_validation_spool_v1(metadata, counters, control, stage);
     }
     validation?;
     Ok(SealedPackV1 {
@@ -870,6 +1132,76 @@ where
         record_count,
         index_offset,
     })
+}
+
+fn reset_validation_spool_v1<M>(
+    metadata: &mut M,
+    record_count: u32,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
+    stage: PackValidationStageV1,
+) -> CoreResult<()>
+where
+    M: PackIndexSpoolV1 + ?Sized,
+{
+    poll_validation_control_v1(control, counters, stage, None, 0)?;
+    let reset = metadata.reset(record_count).map_err(map_spool_port);
+    let completed_work = u64::from(reset.is_ok());
+    complete_validation_boundary_v1(reset, completed_work, control, counters, stage, None)
+}
+
+fn push_validation_spool_v1<M>(
+    metadata: &mut M,
+    entry: PackIndexEntryV1,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
+    stage: PackValidationStageV1,
+) -> CoreResult<()>
+where
+    M: PackIndexSpoolV1 + ?Sized,
+{
+    poll_validation_control_v1(control, counters, stage, None, 0)?;
+    let push = metadata.push(entry).map_err(map_spool_port);
+    let completed_work = if push.is_ok() {
+        PACK_INDEX_ENTRY_BYTES
+    } else {
+        0
+    };
+    complete_validation_boundary_v1(push, completed_work, control, counters, stage, None)
+}
+
+fn next_validation_spool_v1<M>(
+    metadata: &mut M,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
+    stage: PackValidationStageV1,
+) -> CoreResult<Option<PackIndexEntryV1>>
+where
+    M: PackIndexSpoolV1 + ?Sized,
+{
+    poll_validation_control_v1(control, counters, stage, None, 0)?;
+    let next = metadata.next().map_err(map_spool_port);
+    let completed_work = if matches!(next, Ok(Some(_))) {
+        PACK_INDEX_ENTRY_BYTES
+    } else {
+        0
+    };
+    complete_validation_boundary_v1(next, completed_work, control, counters, stage, None)
+}
+
+fn abort_validation_spool_v1<M>(
+    metadata: &mut M,
+    counters: &mut OperationCountersV1,
+    control: &mut dyn crate::limits::OperationWorkControlV1,
+    stage: PackValidationStageV1,
+) -> CoreResult<()>
+where
+    M: PackIndexSpoolV1 + ?Sized,
+{
+    let pre_poll = poll_validation_control_v1(control, counters, stage, None, 0);
+    metadata.abort();
+    let post_poll = poll_validation_control_v1(control, counters, stage, None, 1);
+    pre_poll.and(post_poll)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -882,6 +1214,7 @@ fn validate_index_and_records<P, M>(
     index_offset: u64,
     profile: ProfileId,
     control: &mut dyn crate::limits::OperationWorkControlV1,
+    stage: PackValidationStageV1,
 ) -> CoreResult<()>
 where
     P: PackReadPortV1 + ?Sized,
@@ -889,7 +1222,7 @@ where
 {
     let mut previous: Option<PackIndexEntryV1> = None;
     for ordinal in 0..record_count {
-        poll_work_control_v1(control)?;
+        poll_validation_control_v1(control, counters, stage, None, 0)?;
         let offset = index_offset
             .checked_add(
                 u64::from(ordinal)
@@ -897,26 +1230,42 @@ where
                     .ok_or(CoreError::IntegerOverflow)?,
             )
             .ok_or(CoreError::IntegerOverflow)?;
-        let bytes = read_array::<80, _>(pack, offset, counters)?;
-        let entry = decode_index_entry(&bytes)?;
+        let bytes = read_array_validation_controlled_v1::<80, _, _>(
+            pack, offset, counters, control, stage, None,
+        )?;
+        record_pack_decode_boundary_v1(counters, stage.decode_recorders(), PACK_INDEX_ENTRY_BYTES)?;
+        let entry = complete_validation_boundary_v1(
+            decode_index_entry(&bytes),
+            PACK_INDEX_ENTRY_BYTES,
+            control,
+            counters,
+            stage,
+            None,
+        )?;
         if previous.is_some_and(|left| left.compare_key(&entry) != Ordering::Less) {
             return Err(CoreError::PackInvalid);
         }
-        metadata.push(entry).map_err(map_spool_port)?;
+        push_validation_spool_v1(metadata, entry, counters, control, stage)?;
         previous = Some(entry);
     }
-    metadata
+    poll_validation_control_v1(control, counters, stage, None, 0)?;
+    let sort = metadata
         .sort_by_offset_controlled(control, counters)
-        .map_err(map_spool_port)?;
+        .map_err(map_spool_port);
+    // The controlled sorter directly owns comparison/read/write/pass work and
+    // its bounded polling cadence. This surrounding validation poll records
+    // only the stage boundary; it must not derive or double-count sort work.
+    complete_validation_boundary_v1(sort, 0, control, counters, stage, None)?;
     metadata.rewind().map_err(map_spool_port)?;
     let mut expected_offset = PACK_HEADER_BYTES;
     let mut consumed = 0_u32;
-    while let Some(entry) = metadata.next().map_err(map_spool_port)? {
-        poll_work_control_v1(control)?;
+    while let Some(entry) = next_validation_spool_v1(metadata, counters, control, stage)? {
         if entry.absolute_offset != expected_offset {
             return Err(CoreError::PackInvalid);
         }
-        validate_record_controlled_v1(pack, entry, profile, scratch, counters, control)?;
+        validate_record_controlled_v1(
+            pack, entry, profile, scratch, counters, control, None, stage,
+        )?;
         expected_offset = expected_offset
             .checked_add(record_len(u64::from(entry.object_len))?)
             .ok_or(CoreError::IntegerOverflow)?;
@@ -948,7 +1297,16 @@ fn validate_record<P: PackReadPortV1 + ?Sized>(
     counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
     let mut control = NeverStopWorkControlV1;
-    validate_record_controlled_v1(pack, entry, profile, scratch, counters, &mut control)
+    validate_record_controlled_v1(
+        pack,
+        entry,
+        profile,
+        scratch,
+        counters,
+        &mut control,
+        None,
+        PackValidationStageV1::PreInstall,
+    )
 }
 
 fn validate_record_controlled_v1<P, C>(
@@ -958,13 +1316,21 @@ fn validate_record_controlled_v1<P, C>(
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     counters: &mut OperationCountersV1,
     control: &mut C,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+    stage: PackValidationStageV1,
 ) -> CoreResult<()>
 where
     P: PackReadPortV1 + ?Sized,
     C: crate::limits::OperationWorkControlV1 + ?Sized,
 {
-    poll_work_control_v1(control)?;
-    let prefix = read_array::<4, _>(pack, entry.absolute_offset, counters)?;
+    let prefix = read_array_validation_controlled_v1::<4, _, _>(
+        pack,
+        entry.absolute_offset,
+        counters,
+        control,
+        stage,
+        record_control_poll,
+    )?;
     if be_u32(&prefix) != entry.object_len {
         return Err(CoreError::PackInvalid);
     }
@@ -987,15 +1353,23 @@ where
             checksum: &mut checksum_hasher,
             next_offset: 0,
             control,
+            record_control_poll,
+            stage,
         };
+        (stage.decode_recorders().call)(object.counters)?;
         let decoded =
             decode_physical_object_from_port_v1(&mut object, &mut DiscardStrongEdgesV1, scratch)
-                .map_err(map_object_validation)?;
-        if object.next_offset != object_len {
-            return Err(CoreError::PackInvalid);
-        }
-        decoded
+                .map_err(map_object_validation);
+        decoded.and_then(|decoded| {
+            if object.next_offset != object_len {
+                Err(CoreError::PackInvalid)
+            } else {
+                Ok(decoded)
+            }
+        })
     };
+    let decoded =
+        complete_validation_boundary_v1(decoded, 0, control, counters, stage, record_control_poll)?;
     let checksum = ObjectChecksumV1::from_digest(checksum_hasher.finish()?);
     if decoded.header().profile_id() != profile || decoded.header().kind() != entry.id.kind() {
         return Err(CoreError::TypeDomain);
@@ -1005,13 +1379,27 @@ where
     }
     let pad = record_padding(object_len)?;
     if pad != 0 {
+        poll_validation_control_v1(control, counters, stage, record_control_poll, 0)?;
         let mut bytes = [0_u8; 7];
         let padding_offset = object_offset
             .checked_add(object_len)
             .ok_or(CoreError::IntegerOverflow)?;
-        pack.read_exact_at(padding_offset, &mut bytes[..usize::from(pad)])
-            .map_err(map_read_port)?;
-        counters.add(CounterFieldV1::BytesRead, u64::from(pad))?;
+        record_pack_stage_call_v1(counters, Some(stage.read_recorders()))?;
+        let padding = pack
+            .read_exact_at(padding_offset, &mut bytes[..usize::from(pad)])
+            .map_err(map_read_port);
+        let padding_work = if padding.is_ok() { u64::from(pad) } else { 0 };
+        let padding = padding.and_then(|()| {
+            record_pack_read_bytes_v1(counters, u64::from(pad), Some(stage.read_recorders()))
+        });
+        complete_validation_boundary_v1(
+            padding,
+            padding_work,
+            control,
+            counters,
+            stage,
+            record_control_poll,
+        )?;
         if bytes[..usize::from(pad)].iter().any(|byte| *byte != 0) {
             return Err(CoreError::PackInvalid);
         }
@@ -1027,6 +1415,8 @@ struct PackObjectReadV1<'a, P: PackReadPortV1 + ?Sized, C: ?Sized> {
     checksum: &'a mut FramedHasherV1,
     next_offset: u64,
     control: &'a mut C,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+    stage: PackValidationStageV1,
 }
 
 impl<P, C> PhysicalObjectReadPortV1 for PackObjectReadV1<'_, P, C>
@@ -1039,7 +1429,13 @@ where
     }
 
     fn read_exact_at(&mut self, offset: u64, destination: &mut [u8]) -> CoreResult<()> {
-        poll_work_control_v1(self.control)?;
+        poll_validation_control_v1(
+            self.control,
+            self.counters,
+            self.stage,
+            self.record_control_poll,
+            0,
+        )?;
         if offset != self.next_offset {
             return Err(CoreError::PackInvalid);
         }
@@ -1054,12 +1450,35 @@ where
             .start
             .checked_add(offset)
             .ok_or(CoreError::IntegerOverflow)?;
-        self.pack
+        record_pack_stage_call_v1(self.counters, Some(self.stage.read_recorders()))?;
+        let read = self
+            .pack
             .read_exact_at(absolute, destination)
-            .map_err(map_read_port)?;
+            .map_err(map_read_port);
+        let completed_work = if read.is_ok() { requested } else { 0 };
+        let read = read.and_then(|()| {
+            record_pack_read_bytes_v1(self.counters, requested, Some(self.stage.read_recorders()))
+        });
+        complete_validation_boundary_v1(
+            read,
+            completed_work,
+            self.control,
+            self.counters,
+            self.stage,
+            self.record_control_poll,
+        )?;
+        record_pack_stage_call_v1(self.counters, Some(self.stage.hash_recorders()))?;
         self.checksum.write(destination)?;
+        (self.stage.hash_recorders().bytes)(self.counters, requested)?;
+        poll_validation_control_v1(
+            self.control,
+            self.counters,
+            self.stage,
+            self.record_control_poll,
+            requested,
+        )?;
+        (self.stage.decode_recorders().bytes)(self.counters, requested)?;
         self.next_offset = end;
-        self.counters.add(CounterFieldV1::BytesRead, requested)?;
         Ok(())
     }
 }
@@ -1215,24 +1634,100 @@ where
     P: PackReadPortV1 + ?Sized,
     C: crate::limits::OperationWorkControlV1 + ?Sized,
 {
+    hash_port_range_controlled_recorded_v1(
+        pack, start, len, tag, scratch, counters, control, None, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn hash_port_range_controlled_recorded_v1<P, C>(
+    pack: &mut P,
+    start: u64,
+    len: u64,
+    tag: u8,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+    record_read: Option<PackStageBoundaryRecordersV1>,
+    record_hash: Option<PackStageBoundaryRecordersV1>,
+) -> CoreResult<[u8; 32]>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    hash_port_range_controlled_validation_recorded_v1(
+        pack,
+        start,
+        len,
+        tag,
+        scratch,
+        counters,
+        control,
+        record_read,
+        record_hash,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn hash_port_range_controlled_validation_recorded_v1<P, C>(
+    pack: &mut P,
+    start: u64,
+    len: u64,
+    tag: u8,
+    scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+    record_read: Option<PackStageBoundaryRecordersV1>,
+    record_hash: Option<PackStageBoundaryRecordersV1>,
+    validation_stage: Option<PackValidationStageV1>,
+) -> CoreResult<[u8; 32]>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
     let mut hasher = FramedHasherV1::new(tag, len);
     let mut consumed = 0_u64;
     while consumed < len {
-        poll_work_control_v1(control)?;
+        if let Some(stage) = validation_stage {
+            poll_validation_control_v1(control, counters, stage, None, 0)?;
+        } else {
+            poll_work_control_v1(control)?;
+        }
         let take = usize::try_from((len - consumed).min(COMPARISON_WINDOW_BYTES as u64))
             .map_err(|_| CoreError::IntegerOverflow)?;
         let offset = start
             .checked_add(consumed)
             .ok_or(CoreError::IntegerOverflow)?;
-        pack.read_exact_at(offset, &mut scratch[..take])
-            .map_err(map_read_port)?;
-        counters.add(CounterFieldV1::BytesRead, take as u64)?;
+        record_pack_stage_call_v1(counters, record_read)?;
+        let read = pack
+            .read_exact_at(offset, &mut scratch[..take])
+            .map_err(map_read_port);
+        let completed_work = if read.is_ok() { take as u64 } else { 0 };
+        let read =
+            read.and_then(|()| record_pack_read_bytes_v1(counters, take as u64, record_read));
+        if let Some(stage) = validation_stage {
+            complete_validation_boundary_v1(read, completed_work, control, counters, stage, None)?;
+        } else {
+            complete_work_boundary_v1(read, completed_work, control, counters, None)?;
+        }
+        record_pack_stage_call_v1(counters, record_hash)?;
         hasher.write(&scratch[..take])?;
+        if let Some(recorders) = record_hash {
+            (recorders.bytes)(counters, take as u64)?;
+        }
+        if let Some(stage) = validation_stage {
+            poll_validation_control_v1(control, counters, stage, None, take as u64)?;
+        }
         consumed = consumed
             .checked_add(take as u64)
             .ok_or(CoreError::IntegerOverflow)?;
     }
-    poll_work_control_v1(control)?;
+    if let Some(stage) = validation_stage {
+        poll_validation_control_v1(control, counters, stage, None, 0)?;
+    } else {
+        poll_work_control_v1(control)?;
+    }
     hasher.finish()
 }
 
@@ -1249,15 +1744,272 @@ where
     }
 }
 
+pub(crate) type PackControlPollRecorderV1 = fn(&mut OperationCountersV1, u64) -> CoreResult<()>;
+type PackStageCallRecorderV1 = fn(&mut OperationCountersV1) -> CoreResult<()>;
+type PackStageBytesRecorderV1 = fn(&mut OperationCountersV1, u64) -> CoreResult<()>;
+
+#[derive(Clone, Copy)]
+pub(crate) struct PackStageBoundaryRecordersV1 {
+    call: PackStageCallRecorderV1,
+    bytes: PackStageBytesRecorderV1,
+}
+
+pub(crate) const PACK_FINALIZATION_READ_RECORDERS_V1: PackStageBoundaryRecordersV1 =
+    PackStageBoundaryRecordersV1 {
+        call: OperationCountersV1::record_pack_finalization_read_call_v1,
+        bytes: OperationCountersV1::record_pack_finalization_read_bytes_v1,
+    };
+pub(crate) const PACK_FINALIZATION_HASH_RECORDERS_V1: PackStageBoundaryRecordersV1 =
+    PackStageBoundaryRecordersV1 {
+        call: OperationCountersV1::record_pack_finalization_hash_call_v1,
+        bytes: OperationCountersV1::record_pack_finalization_hash_bytes_v1,
+    };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PackValidationStageV1 {
+    PreInstall,
+    InstalledCarrier,
+}
+
+impl PackValidationStageV1 {
+    const fn read_recorders(self) -> PackStageBoundaryRecordersV1 {
+        match self {
+            Self::PreInstall => PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_pre_install_validation_read_call_v1,
+                bytes: OperationCountersV1::record_pre_install_validation_read_bytes_v1,
+            },
+            Self::InstalledCarrier => PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_installed_carrier_validation_read_call_v1,
+                bytes: OperationCountersV1::record_installed_carrier_validation_read_bytes_v1,
+            },
+        }
+    }
+
+    const fn hash_recorders(self) -> PackStageBoundaryRecordersV1 {
+        match self {
+            Self::PreInstall => PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_pre_install_validation_hash_call_v1,
+                bytes: OperationCountersV1::record_pre_install_validation_hash_bytes_v1,
+            },
+            Self::InstalledCarrier => PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_installed_carrier_validation_hash_call_v1,
+                bytes: OperationCountersV1::record_installed_carrier_validation_hash_bytes_v1,
+            },
+        }
+    }
+
+    const fn decode_recorders(self) -> PackStageBoundaryRecordersV1 {
+        match self {
+            Self::PreInstall => PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_pre_install_validation_decode_call_v1,
+                bytes: OperationCountersV1::record_pre_install_validation_decode_bytes_v1,
+            },
+            Self::InstalledCarrier => PackStageBoundaryRecordersV1 {
+                call: OperationCountersV1::record_installed_carrier_validation_decode_call_v1,
+                bytes: OperationCountersV1::record_installed_carrier_validation_decode_bytes_v1,
+            },
+        }
+    }
+
+    const fn control_poll_recorder(self) -> PackControlPollRecorderV1 {
+        match self {
+            Self::PreInstall => OperationCountersV1::record_pre_install_validation_control_poll_v1,
+            Self::InstalledCarrier => {
+                OperationCountersV1::record_installed_carrier_validation_control_poll_v1
+            }
+        }
+    }
+}
+
+fn record_pack_stage_call_v1(
+    counters: &mut OperationCountersV1,
+    recorders: Option<PackStageBoundaryRecordersV1>,
+) -> CoreResult<()> {
+    if let Some(recorders) = recorders {
+        (recorders.call)(counters)?;
+    }
+    Ok(())
+}
+
+fn record_pack_decode_boundary_v1(
+    counters: &mut OperationCountersV1,
+    recorders: PackStageBoundaryRecordersV1,
+    bytes: u64,
+) -> CoreResult<()> {
+    let mut checked = *counters;
+    (recorders.call)(&mut checked)?;
+    (recorders.bytes)(&mut checked, bytes)?;
+    *counters = checked;
+    Ok(())
+}
+
+fn record_pack_read_bytes_v1(
+    counters: &mut OperationCountersV1,
+    bytes: u64,
+    recorders: Option<PackStageBoundaryRecordersV1>,
+) -> CoreResult<()> {
+    let mut checked = *counters;
+    checked.add(CounterFieldV1::BytesRead, bytes)?;
+    if let Some(recorders) = recorders {
+        (recorders.bytes)(&mut checked, bytes)?;
+    }
+    *counters = checked;
+    Ok(())
+}
+
+fn poll_work_control_recorded_v1<C>(
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+    completed_work: u64,
+) -> CoreResult<()>
+where
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    if let Some(record) = record_control_poll {
+        record(counters, completed_work)?;
+    }
+    poll_work_control_v1(control)
+}
+
+fn complete_work_boundary_v1<T, C>(
+    result: CoreResult<T>,
+    completed_work: u64,
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+) -> CoreResult<T>
+where
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    let post_poll =
+        poll_work_control_recorded_v1(control, counters, record_control_poll, completed_work);
+    match (result, post_poll) {
+        (Err(error), _) => Err(error),
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+    }
+}
+
+fn poll_validation_control_v1<C>(
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+    stage: PackValidationStageV1,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+    completed_work: u64,
+) -> CoreResult<()>
+where
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    let mut checked = *counters;
+    (stage.control_poll_recorder())(&mut checked, completed_work)?;
+    if let Some(record) = record_control_poll {
+        record(&mut checked, completed_work)?;
+    }
+    *counters = checked;
+    poll_work_control_v1(control)
+}
+
+fn complete_validation_boundary_v1<T, C>(
+    result: CoreResult<T>,
+    completed_work: u64,
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+    stage: PackValidationStageV1,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+) -> CoreResult<T>
+where
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    let post_poll = poll_validation_control_v1(
+        control,
+        counters,
+        stage,
+        record_control_poll,
+        completed_work,
+    );
+    match (result, post_poll) {
+        (Err(error), _) => Err(error),
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+    }
+}
+
+fn read_array_validation_controlled_v1<const N: usize, P, C>(
+    pack: &mut P,
+    offset: u64,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+    stage: PackValidationStageV1,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+) -> CoreResult<[u8; N]>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    poll_validation_control_v1(control, counters, stage, record_control_poll, 0)?;
+    let mut bytes = [0_u8; N];
+    record_pack_stage_call_v1(counters, Some(stage.read_recorders()))?;
+    let read = pack
+        .read_exact_at(offset, &mut bytes)
+        .map_err(map_read_port);
+    let completed_work = if read.is_ok() { N as u64 } else { 0 };
+    let read = read
+        .and_then(|()| record_pack_read_bytes_v1(counters, N as u64, Some(stage.read_recorders())));
+    complete_validation_boundary_v1(
+        read,
+        completed_work,
+        control,
+        counters,
+        stage,
+        record_control_poll,
+    )?;
+    Ok(bytes)
+}
+
+fn read_array_controlled_v1<const N: usize, P, C>(
+    pack: &mut P,
+    offset: u64,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+    record_control_poll: Option<PackControlPollRecorderV1>,
+    record_read: Option<PackStageBoundaryRecordersV1>,
+) -> CoreResult<[u8; N]>
+where
+    P: PackReadPortV1 + ?Sized,
+    C: crate::limits::OperationWorkControlV1 + ?Sized,
+{
+    poll_work_control_recorded_v1(control, counters, record_control_poll, 0)?;
+    let mut bytes = [0_u8; N];
+    record_pack_stage_call_v1(counters, record_read)?;
+    let read = pack
+        .read_exact_at(offset, &mut bytes)
+        .map_err(map_read_port);
+    let completed_work = if read.is_ok() { N as u64 } else { 0 };
+    let read = read.and_then(|()| record_pack_read_bytes_v1(counters, N as u64, record_read));
+    complete_work_boundary_v1(read, completed_work, control, counters, record_control_poll)?;
+    Ok(bytes)
+}
+
 fn read_array<const N: usize, P: PackReadPortV1 + ?Sized>(
     pack: &mut P,
     offset: u64,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<[u8; N]> {
+    read_array_recorded_v1(pack, offset, counters, None)
+}
+
+fn read_array_recorded_v1<const N: usize, P: PackReadPortV1 + ?Sized>(
+    pack: &mut P,
+    offset: u64,
+    counters: &mut OperationCountersV1,
+    record_read: Option<PackStageBoundaryRecordersV1>,
+) -> CoreResult<[u8; N]> {
     let mut bytes = [0_u8; N];
+    record_pack_stage_call_v1(counters, record_read)?;
     pack.read_exact_at(offset, &mut bytes)
         .map_err(map_read_port)?;
-    counters.add(CounterFieldV1::BytesRead, N as u64)?;
+    record_pack_read_bytes_v1(counters, N as u64, record_read)?;
     Ok(bytes)
 }
 
@@ -1875,6 +2627,21 @@ const _: () = assert!(MAX_PHYSICAL_OBJECT_BYTES < u32::MAX as u64);
 mod port_error_mapping_tests {
     use super::*;
 
+    struct StopOnSecondPollV1 {
+        cancellation_checks: u64,
+    }
+
+    impl crate::limits::OperationWorkControlV1 for StopOnSecondPollV1 {
+        fn cancellation_requested_v1(&mut self) -> bool {
+            self.cancellation_checks += 1;
+            self.cancellation_checks >= 2
+        }
+
+        fn deadline_exceeded_v1(&mut self) -> bool {
+            false
+        }
+    }
+
     struct ShapeReadPortV1 {
         bytes: [u8; 144],
         reads: Vec<(u64, usize)>,
@@ -1903,6 +2670,60 @@ mod port_error_mapping_tests {
             self.reads.push((offset, destination.len()));
             Ok(())
         }
+    }
+
+    struct FailingReadPortV1;
+
+    impl PackReadPortV1 for FailingReadPortV1 {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn len(&mut self) -> Result<u64, PackPortErrorV1> {
+            Ok(64)
+        }
+
+        fn read_exact_at(
+            &mut self,
+            _offset: u64,
+            _destination: &mut [u8],
+        ) -> Result<(), PackPortErrorV1> {
+            Err(PackPortErrorV1::Failure)
+        }
+    }
+
+    struct FailingResetSpoolV1;
+
+    impl PackIndexSpoolV1 for FailingResetSpoolV1 {
+        fn resident_memory_bound_bytes(&self, _maximum_entries: u32) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn reset(&mut self, _maximum_entries: u32) -> Result<(), PackPortErrorV1> {
+            Err(PackPortErrorV1::Failure)
+        }
+
+        fn push(&mut self, _entry: PackIndexEntryV1) -> Result<(), PackPortErrorV1> {
+            unreachable!()
+        }
+
+        fn sort_by_key(&mut self) -> Result<(), PackPortErrorV1> {
+            unreachable!()
+        }
+
+        fn sort_by_offset(&mut self) -> Result<(), PackPortErrorV1> {
+            unreachable!()
+        }
+
+        fn rewind(&mut self) -> Result<(), PackPortErrorV1> {
+            unreachable!()
+        }
+
+        fn next(&mut self) -> Result<Option<PackIndexEntryV1>, PackPortErrorV1> {
+            unreachable!()
+        }
+
+        fn abort(&mut self) {}
     }
 
     #[test]
@@ -1945,5 +2766,154 @@ mod port_error_mapping_tests {
         assert_eq!(sealed.record_count(), 7);
         assert_eq!(sealed.index_offset(), 96);
         assert_eq!(port.reads, [(0, 64), (112, 32)]);
+    }
+
+    #[test]
+    fn validation_poll_tuple_is_transactional_when_outer_recorder_overflows() {
+        let mut counters = OperationCountersV1 {
+            pre_install_validation_control_polls: 11,
+            pre_install_validation_maximum_work_between_polls: 13,
+            closure_validation_control_polls: u64::MAX,
+            closure_validation_maximum_work_between_polls: 17,
+            ..OperationCountersV1::default()
+        };
+        let before = counters;
+        let mut control = NeverStopWorkControlV1;
+
+        assert_eq!(
+            poll_validation_control_v1(
+                &mut control,
+                &mut counters,
+                PackValidationStageV1::PreInstall,
+                Some(OperationCountersV1::record_closure_validation_control_poll_v1),
+                19,
+            ),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(counters, before);
+    }
+
+    #[test]
+    fn decoder_call_and_consumed_window_tuple_is_transactional_on_overflow() {
+        let mut counters = OperationCountersV1 {
+            locator_index_decode_calls: 11,
+            locator_index_decode_bytes: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let before = counters;
+
+        assert_eq!(
+            record_pack_decode_boundary_v1(
+                &mut counters,
+                PackStageBoundaryRecordersV1 {
+                    call: OperationCountersV1::record_locator_index_decode_call_v1,
+                    bytes: OperationCountersV1::record_locator_index_decode_bytes_v1,
+                },
+                PACK_INDEX_ENTRY_BYTES,
+            ),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(counters, before);
+    }
+
+    #[test]
+    fn validation_filesystem_and_spool_errors_precede_later_cancellation() {
+        let mut counters = OperationCountersV1::default();
+        let mut control = StopOnSecondPollV1 {
+            cancellation_checks: 0,
+        };
+        assert_eq!(
+            read_array_validation_controlled_v1::<4, _, _>(
+                &mut FailingReadPortV1,
+                0,
+                &mut counters,
+                &mut control,
+                PackValidationStageV1::PreInstall,
+                None,
+            ),
+            Err(CoreError::SourceFailure)
+        );
+        assert_eq!(counters.pre_install_validation_read_calls, 1);
+        assert_eq!(counters.pre_install_validation_read_bytes, 0);
+        assert_eq!(counters.pre_install_validation_control_polls, 2);
+
+        let mut counters = OperationCountersV1::default();
+        let mut control = StopOnSecondPollV1 {
+            cancellation_checks: 0,
+        };
+        assert_eq!(
+            reset_validation_spool_v1(
+                &mut FailingResetSpoolV1,
+                1,
+                &mut counters,
+                &mut control,
+                PackValidationStageV1::InstalledCarrier,
+            ),
+            Err(CoreError::ResourceRefused)
+        );
+        assert_eq!(counters.installed_carrier_validation_control_polls, 2);
+    }
+
+    #[test]
+    fn malformed_index_decode_records_the_consumed_fixed_window() {
+        let mut port = ShapeReadPortV1 {
+            bytes: [0; 144],
+            reads: Vec::new(),
+        };
+        let sealed = SealedPackV1::from_validated_parts(PackIdV1::from_digest([0; 32]), 144, 1, 0);
+        let mut counters = OperationCountersV1::default();
+        let mut control = NeverStopWorkControlV1;
+
+        assert_eq!(
+            read_validated_pack_index_entry_controlled_v1(
+                &mut port,
+                sealed,
+                0,
+                &mut counters,
+                &mut control,
+            ),
+            Err(CoreError::UnknownKind)
+        );
+        assert_eq!(counters.locator_index_read_calls, 1);
+        assert_eq!(counters.locator_index_read_bytes, PACK_INDEX_ENTRY_BYTES);
+        assert_eq!(counters.locator_index_decode_calls, 1);
+        assert_eq!(counters.locator_index_decode_bytes, PACK_INDEX_ENTRY_BYTES);
+    }
+
+    #[test]
+    fn malformed_object_records_successfully_consumed_decoder_prefix_bytes() {
+        let object_len = OBJECT_HEADER_BYTES + 1;
+        let mut bytes = [0_u8; 144];
+        bytes[..4].copy_from_slice(&(object_len as u32).to_be_bytes());
+        let mut port = ShapeReadPortV1 {
+            bytes,
+            reads: Vec::new(),
+        };
+        let entry = PackIndexEntryV1::from_validated_parts(
+            typed_id_from_digest(PhysicalObjectKindV1::Chunk, [0; 32]),
+            0,
+            object_len as u32,
+            ObjectChecksumV1::from_digest([0; 32]),
+        );
+        let mut counters = OperationCountersV1::default();
+        let mut scratch = [0_u8; COMPARISON_WINDOW_BYTES];
+
+        assert!(validate_record(
+            &mut port,
+            entry,
+            ProfileSpecV1::frozen().id(),
+            &mut scratch,
+            &mut counters,
+        )
+        .is_err());
+        assert_eq!(counters.pre_install_validation_decode_calls, 1);
+        assert_eq!(
+            counters.pre_install_validation_decode_bytes,
+            OBJECT_HEADER_BYTES
+        );
+        assert_eq!(
+            counters.pre_install_validation_read_bytes,
+            4 + OBJECT_HEADER_BYTES
+        );
     }
 }

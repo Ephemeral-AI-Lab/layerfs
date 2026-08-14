@@ -7,7 +7,7 @@
 
 use crate::cas::{FsCasControlV1, FsCasErrorV1, FsCasOccupiedV1};
 use crate::limits::{CounterFieldV1, OperationCountersV1};
-use crate::object::{PhysicalObjectReadPortV1, TypedPhysicalObjectIdV1};
+use crate::object::{PhysicalObjectReadPortV1, TypedPhysicalObjectIdV1, OBJECT_HEADER_BYTES};
 use crate::{CoreError, CoreResult};
 
 pub(super) struct OccupiedObjectReaderV1<'a, C: FsCasControlV1 + ?Sized> {
@@ -16,6 +16,7 @@ pub(super) struct OccupiedObjectReaderV1<'a, C: FsCasControlV1 + ?Sized> {
     control: &'a mut C,
     id: TypedPhysicalObjectIdV1,
     len: u64,
+    observe_exact_range_chunk_payload: bool,
 }
 
 impl<'a, C: FsCasControlV1 + ?Sized> OccupiedObjectReaderV1<'a, C> {
@@ -32,6 +33,24 @@ impl<'a, C: FsCasControlV1 + ?Sized> OccupiedObjectReaderV1<'a, C> {
             control,
             id,
             len,
+            observe_exact_range_chunk_payload: false,
+        }
+    }
+
+    pub(super) const fn exact_range_chunk(
+        occupied: &'a mut FsCasOccupiedV1,
+        counters: &'a mut OperationCountersV1,
+        control: &'a mut C,
+        id: TypedPhysicalObjectIdV1,
+        len: u64,
+    ) -> Self {
+        Self {
+            occupied,
+            counters,
+            control,
+            id,
+            len,
+            observe_exact_range_chunk_payload: true,
         }
     }
 
@@ -59,14 +78,25 @@ impl<C: FsCasControlV1 + ?Sized> PhysicalObjectReadPortV1 for OccupiedObjectRead
         if end > self.len {
             return Err(CoreError::Truncated);
         }
+        let payload_bytes = if self.observe_exact_range_chunk_payload && end > OBJECT_HEADER_BYTES {
+            end.checked_sub(offset.max(OBJECT_HEADER_BYTES))
+                .ok_or(CoreError::IntegerOverflow)?
+        } else {
+            0
+        };
         self.occupied
             .read_occupied_exact_at_typed_controlled_v1(self.id, offset, destination, self.control)
             .map_err(|error| {
                 self.occupied.retain_first_error_typed_v1(error);
                 CoreError::SourceFailure
             })?;
-        self.counters
-            .add(CounterFieldV1::BytesRead, destination.len() as u64)
+        let mut checked = *self.counters;
+        checked.add(CounterFieldV1::BytesRead, destination.len() as u64)?;
+        if self.observe_exact_range_chunk_payload {
+            checked.record_exact_range_payload_bytes_v1(payload_bytes)?;
+        }
+        *self.counters = checked;
+        Ok(())
     }
 }
 

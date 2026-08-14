@@ -2,7 +2,11 @@
 
 #[cfg(feature = "operation-polymorphism")]
 use super::{FileClosureObjectSpoolV1, FsCasErrorV1, FsCasOccupiedV1};
-use super::{ImmutablePortErrorV1, OccupiedImmutableReadPortV1};
+use super::{
+    ImmutablePortControlPollV1, ImmutablePortErrorV1, ImmutablePortReadBytesV1,
+    OccupiedImmutableReadPortV1,
+};
+use crate::limits::{OperationCountersV1, OperationWorkControlV1};
 use crate::object::TypedPhysicalObjectIdV1;
 use crate::{CoreError, CoreResult};
 
@@ -28,13 +32,53 @@ pub trait CompleteImmutableClosureReadPortV1 {
         &mut self,
         ordinal: u64,
     ) -> Result<TypedPhysicalObjectIdV1, ImmutablePortErrorV1>;
+    #[doc(hidden)]
+    fn object_id_at_controlled_v1(
+        &mut self,
+        ordinal: u64,
+        _control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+        _record_control_poll: ImmutablePortControlPollV1,
+    ) -> CoreResult<TypedPhysicalObjectIdV1> {
+        self.object_id_at(ordinal)
+            .map_err(|ImmutablePortErrorV1::Failure| CoreError::SourceFailure)
+    }
     fn object_len_at(&mut self, ordinal: u64) -> Result<u64, ImmutablePortErrorV1>;
+    #[doc(hidden)]
+    fn object_len_at_controlled_v1(
+        &mut self,
+        ordinal: u64,
+        _control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+        _record_control_poll: ImmutablePortControlPollV1,
+    ) -> CoreResult<u64> {
+        self.object_len_at(ordinal)
+            .map_err(|ImmutablePortErrorV1::Failure| CoreError::SourceFailure)
+    }
     fn read_object_exact_at(
         &mut self,
         ordinal: u64,
         offset: u64,
         destination: &mut [u8],
     ) -> Result<(), ImmutablePortErrorV1>;
+    #[doc(hidden)]
+    fn read_object_exact_at_controlled_v1(
+        &mut self,
+        ordinal: u64,
+        offset: u64,
+        destination: &mut [u8],
+        _control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+        _record_control_poll: ImmutablePortControlPollV1,
+        record_read_bytes: ImmutablePortReadBytesV1,
+    ) -> CoreResult<()> {
+        self.read_object_exact_at(ordinal, offset, destination)
+            .map_err(|ImmutablePortErrorV1::Failure| CoreError::SourceFailure)?;
+        record_read_bytes(
+            _counters,
+            u64::try_from(destination.len()).map_err(|_| CoreError::IntegerOverflow)?,
+        )
+    }
 }
 
 /// CAS-owned closure-fence adapter. Operation-metadata reads remain separate
@@ -61,6 +105,40 @@ impl<'objects> FsCasClosureSpoolV1<'objects> {
         self.objects
             .take_first_error()
             .or_else(|| self.occupied.first_error_typed_v1())
+    }
+}
+
+#[cfg(feature = "operation-polymorphism")]
+fn poll_closure_port_control_v1(
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
+    record_control_poll: ImmutablePortControlPollV1,
+    completed_work: u64,
+) -> CoreResult<()> {
+    record_control_poll(counters, completed_work)?;
+    if control.cancellation_requested_v1() {
+        Err(CoreError::Cancelled)
+    } else if control.deadline_exceeded_v1() {
+        Err(CoreError::Deadline)
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "operation-polymorphism")]
+fn complete_closure_port_boundary_v1<T>(
+    result: CoreResult<T>,
+    completed_work: u64,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
+    record_control_poll: ImmutablePortControlPollV1,
+) -> CoreResult<T> {
+    let post_poll =
+        poll_closure_port_control_v1(control, counters, record_control_poll, completed_work);
+    match (result, post_poll) {
+        (Err(error), _) => Err(error),
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
     }
 }
 
@@ -99,6 +177,30 @@ impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
             .map_err(|_| ImmutablePortErrorV1::Failure)
     }
 
+    fn object_id_at_controlled_v1(
+        &mut self,
+        ordinal: u64,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+        record_control_poll: ImmutablePortControlPollV1,
+    ) -> CoreResult<TypedPhysicalObjectIdV1> {
+        let ordinal = u32::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
+        poll_closure_port_control_v1(control, counters, record_control_poll, 0)?;
+        let record = self
+            .objects
+            .read(ordinal)
+            .map_err(|_| CoreError::SourceFailure);
+        let completed_work = u64::from(record.is_ok());
+        complete_closure_port_boundary_v1(
+            record,
+            completed_work,
+            control,
+            counters,
+            record_control_poll,
+        )
+        .map(|record| record.id)
+    }
+
     fn object_len_at(&mut self, ordinal: u64) -> Result<u64, ImmutablePortErrorV1> {
         let ordinal = u32::try_from(ordinal).map_err(|_| ImmutablePortErrorV1::Failure)?;
         let record = self
@@ -117,6 +219,48 @@ impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
             self.occupied
                 .retain_first_error_typed_v1(FsCasErrorV1::Integrity);
             return Err(ImmutablePortErrorV1::Failure);
+        }
+        Ok(occupied)
+    }
+
+    fn object_len_at_controlled_v1(
+        &mut self,
+        ordinal: u64,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+        record_control_poll: ImmutablePortControlPollV1,
+    ) -> CoreResult<u64> {
+        let ordinal = u32::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
+        poll_closure_port_control_v1(control, counters, record_control_poll, 0)?;
+        let record = self
+            .objects
+            .read(ordinal)
+            .map_err(|_| CoreError::SourceFailure);
+        let completed_work = u64::from(record.is_ok());
+        let record = complete_closure_port_boundary_v1(
+            record,
+            completed_work,
+            control,
+            counters,
+            record_control_poll,
+        )?;
+        let occupied = match self.occupied.occupied_len_controlled_v1(
+            record.id,
+            control,
+            counters,
+            record_control_poll,
+        )? {
+            Some(occupied) => occupied,
+            None => {
+                self.occupied
+                    .retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+                return Err(CoreError::SourceFailure);
+            }
+        };
+        if occupied != record.complete_len {
+            self.occupied
+                .retain_first_error_typed_v1(FsCasErrorV1::Integrity);
+            return Err(CoreError::SourceFailure);
         }
         Ok(occupied)
     }
@@ -147,6 +291,59 @@ impl CompleteImmutableClosureReadPortV1 for FsCasClosureSpoolV1<'_> {
         }
         self.occupied
             .read_occupied_exact_at(record.id, offset, destination)
+    }
+
+    fn read_object_exact_at_controlled_v1(
+        &mut self,
+        ordinal: u64,
+        offset: u64,
+        destination: &mut [u8],
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+        record_control_poll: ImmutablePortControlPollV1,
+        record_read_bytes: ImmutablePortReadBytesV1,
+    ) -> CoreResult<()> {
+        let ordinal = u32::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
+        poll_closure_port_control_v1(control, counters, record_control_poll, 0)?;
+        let record = self
+            .objects
+            .read(ordinal)
+            .map_err(|_| CoreError::SourceFailure);
+        let completed_work = u64::from(record.is_ok());
+        let record = complete_closure_port_boundary_v1(
+            record,
+            completed_work,
+            control,
+            counters,
+            record_control_poll,
+        )?;
+        let occupied = match self.occupied.occupied_len_controlled_v1(
+            record.id,
+            control,
+            counters,
+            record_control_poll,
+        )? {
+            Some(occupied) => occupied,
+            None => {
+                self.occupied
+                    .retain_first_error_typed_v1(FsCasErrorV1::MissingOccupant);
+                return Err(CoreError::SourceFailure);
+            }
+        };
+        if occupied != record.complete_len {
+            self.occupied
+                .retain_first_error_typed_v1(FsCasErrorV1::Integrity);
+            return Err(CoreError::SourceFailure);
+        }
+        self.occupied.read_occupied_exact_at_controlled_v1(
+            record.id,
+            offset,
+            destination,
+            control,
+            counters,
+            record_control_poll,
+            record_read_bytes,
+        )
     }
 }
 

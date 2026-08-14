@@ -1,6 +1,6 @@
 //! Shared bounded update/resynchronization limits.
 
-use crate::limits::{CounterFieldV1, OperationCountersV1};
+use crate::limits::OperationCountersV1;
 use crate::profile::ChunkerSpecV1;
 use crate::{CoreError, CoreResult};
 
@@ -104,7 +104,7 @@ where
 
 /// Authenticate one candidate rejoin with the bounded exact-byte comparison
 /// required before structural suffix reuse.
-pub(crate) fn verify_rejoin_bytes_v1<'operation, E, F>(
+pub(crate) fn verify_rejoin_bytes_v1<'operation, E, F, P>(
     operation: &'operation RejoinOperationBindingV1,
     evidence: E,
     base_start: u64,
@@ -112,9 +112,11 @@ pub(crate) fn verify_rejoin_bytes_v1<'operation, E, F>(
     candidate: BorrowedChunkV1<'_>,
     counters: &mut OperationCountersV1,
     compare: F,
+    after_compare: P,
 ) -> CoreResult<Option<VerifiedRejoinV1<'operation, E>>>
 where
-    F: FnOnce(u64, &[u8], &[u8]) -> CoreResult<bool>,
+    F: FnOnce(u64, &[u8], &[u8], &mut OperationCountersV1) -> CoreResult<bool>,
+    P: FnOnce(&mut OperationCountersV1) -> CoreResult<()>,
 {
     let len = usize::try_from(expected_len).map_err(|_| CoreError::IntegerOverflow)?;
     if candidate.len() != len {
@@ -131,11 +133,23 @@ where
     if next_resynchronization_bytes > MAX_UPDATE_RESYNCHRONIZATION_BYTES {
         return Err(CoreError::RangeResyncFailed);
     }
-    let equal = compare(base_start, candidate.first(), candidate.second())?;
-    counters.add(CounterFieldV1::BytesRead, len_u64)?;
-    counters.record_update_base_payload(len_u64)?;
-    counters.add(CounterFieldV1::UpdateResynchronizationBytes, len_u64)?;
-    counters.record_exact_rejoin(len_u64, equal)?;
+    let equal = match compare(base_start, candidate.first(), candidate.second(), counters) {
+        Ok(equal) => equal,
+        Err(error) => {
+            let _ = after_compare(counters);
+            return Err(error);
+        }
+    };
+    let read_recorded = counters.record_exact_rejoin_base_bytes_read(len_u64);
+    let outcome_recorded = if read_recorded.is_ok() {
+        counters.record_exact_rejoin(len_u64, equal)
+    } else {
+        Ok(())
+    };
+    let observed = after_compare(counters);
+    read_recorded?;
+    outcome_recorded?;
+    observed?;
     Ok(equal.then(|| VerifiedRejoinV1::new(evidence, operation)))
 }
 
@@ -189,13 +203,14 @@ mod tests {
             3,
             candidate,
             &mut counters,
-            |offset, left, right| {
+            |offset, left, right, _counters| {
                 compared = true;
                 assert_eq!(offset, 17);
                 assert_eq!(left, &[1, 2, 3]);
                 assert!(right.is_empty());
                 Ok(true)
             },
+            |_counters| Ok(()),
         )
         .expect("bounded exact verification should succeed");
 
@@ -225,7 +240,8 @@ mod tests {
             3,
             candidate,
             &mut counters,
-            |_offset, left, right| Ok(left == [1, 2, 3] && right.is_empty()),
+            |_offset, left, right, _counters| Ok(left == [1, 2, 3] && right.is_empty()),
+            |_counters| Ok(()),
         )
         .expect("bounded exact verification should succeed")
         .expect("equal bytes should mint a proof");

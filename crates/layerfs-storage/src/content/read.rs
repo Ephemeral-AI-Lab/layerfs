@@ -48,7 +48,7 @@ impl VerifiedFileSegmentV1 {
 /// Opaque authenticated extent source. Data intersections remain in the
 /// supplied bounded scratch window for immediate delivery.
 pub(crate) trait VerifiedFileRangePortV1 {
-    fn check_control(&mut self) -> CoreResult<()>;
+    fn check_control(&mut self, completed_work: u64) -> CoreResult<()>;
     fn next_intersection(
         &mut self,
         verification_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
@@ -92,7 +92,7 @@ where
             authenticated_payload_bytes,
         } = segment.kind
         {
-            port.check_control()?;
+            port.check_control(0)?;
             let len = usize::try_from(segment.len).map_err(|_| CoreError::IntegerOverflow)?;
             let end = scratch_offset
                 .checked_add(len)
@@ -112,7 +112,11 @@ where
                 .logical_bytes
                 .checked_add(segment.len)
                 .ok_or(CoreError::IntegerOverflow)?;
-            consumer.write_verified_bytes(bytes)?;
+            if let Err(error) = consumer.write_verified_bytes(bytes) {
+                let _ = port.check_control(0);
+                return Err(error);
+            }
+            port.check_control(segment.len)?;
             result = VerifiedFileStreamResultV1 {
                 logical_bytes: next_logical_bytes,
                 payload_direct_bytes: next_payload_direct_bytes,
@@ -122,11 +126,15 @@ where
         }
         let mut emitted = 0_u64;
         while emitted < segment.len {
-            port.check_control()?;
+            port.check_control(0)?;
             let take = usize::try_from((segment.len - emitted).min(scratch.len() as u64))
                 .map_err(|_| CoreError::IntegerOverflow)?;
             scratch[..take].fill(0);
-            consumer.write_verified_bytes(&scratch[..take])?;
+            if let Err(error) = consumer.write_verified_bytes(&scratch[..take]) {
+                let _ = port.check_control(0);
+                return Err(error);
+            }
+            port.check_control(take as u64)?;
             emitted = emitted
                 .checked_add(take as u64)
                 .ok_or(CoreError::IntegerOverflow)?;
@@ -153,7 +161,7 @@ mod tests {
     }
 
     impl VerifiedFileRangePortV1 for ScriptedPort {
-        fn check_control(&mut self) -> CoreResult<()> {
+        fn check_control(&mut self, _completed_work: u64) -> CoreResult<()> {
             self.controls = self
                 .controls
                 .checked_add(1)
@@ -219,7 +227,7 @@ mod tests {
         assert_eq!(result.logical_bytes, 23);
         assert_eq!(result.payload_direct_bytes, 72);
         assert_eq!(result.payload_direct_calls, 2);
-        assert_eq!(port.controls, 3);
+        assert_eq!(port.controls, 6);
         assert_eq!(&consumer.bytes[..17], &(11_u8..28).collect::<Vec<_>>());
         assert_eq!(&consumer.bytes[17..19], &[0, 0]);
         assert_eq!(&consumer.bytes[19..], &[31, 32, 33, 34]);

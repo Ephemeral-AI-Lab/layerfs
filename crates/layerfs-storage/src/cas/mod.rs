@@ -62,6 +62,8 @@ pub(crate) use operation_admission::{
 };
 #[cfg(any(test, feature = "operation-polymorphism"))]
 pub use port::{read_complete_immutable_v1, BoundedImmutableReadSinkV1, ClosureObjectV1};
+#[doc(hidden)]
+pub use port::{ImmutablePortControlPollV1, ImmutablePortReadBytesV1};
 pub use port::{
     ImmutablePortErrorV1, OccupiedImmutableReadPortV1, PreparedImmutableClosurePortV1,
     ValidatedOccupiedObjectV1,
@@ -742,6 +744,7 @@ pub mod semantic {
         sink_resident_bytes: u64,
         ledger_budget_bytes: u64,
         control_failure: Option<CoreError>,
+        control_polls_before_failure: u64,
     }
 
     impl<'a> AdmissionRequestV1<'a> {
@@ -757,6 +760,7 @@ pub mod semantic {
                 sink_resident_bytes: 0,
                 ledger_budget_bytes: 32 * 1024 * 1024,
                 control_failure: None,
+                control_polls_before_failure: 0,
             }
         }
 
@@ -800,6 +804,16 @@ pub mod semantic {
             self.control_failure = Some(failure);
             self
         }
+
+        pub const fn with_control_failure_after_polls(
+            mut self,
+            failure: CoreError,
+            polls: u64,
+        ) -> Self {
+            self.control_failure = Some(failure);
+            self.control_polls_before_failure = polls;
+            self
+        }
     }
 
     /// Immutable admission outcome facts; no storage engine authority or
@@ -828,6 +842,22 @@ pub mod semantic {
         logical_reconstruction_payload_bytes: u64,
         logical_reconstruction_control_polls: u64,
         logical_reconstruction_maximum_work_between_polls: u64,
+        closure_validation_control_polls: u64,
+        closure_validation_maximum_work_between_polls: u64,
+        closure_validation_port_calls: u64,
+        closure_validation_port_bytes: u64,
+        closure_validation_hash_calls: u64,
+        closure_validation_hash_bytes: u64,
+        closure_validation_decode_calls: u64,
+        closure_validation_decode_bytes: u64,
+        candidate_graph_control_polls: u64,
+        candidate_graph_maximum_work_between_polls: u64,
+        candidate_graph_port_calls: u64,
+        candidate_graph_port_bytes: u64,
+        candidate_graph_hash_calls: u64,
+        candidate_graph_hash_bytes: u64,
+        candidate_graph_decode_calls: u64,
+        candidate_graph_decode_bytes: u64,
         bytes_read: u64,
         bytes_copied: u64,
         bytes_written: u64,
@@ -907,6 +937,54 @@ pub mod semantic {
         }
         pub const fn logical_reconstruction_maximum_work_between_polls(&self) -> u64 {
             self.logical_reconstruction_maximum_work_between_polls
+        }
+        pub const fn closure_validation_control_polls(&self) -> u64 {
+            self.closure_validation_control_polls
+        }
+        pub const fn closure_validation_maximum_work_between_polls(&self) -> u64 {
+            self.closure_validation_maximum_work_between_polls
+        }
+        pub const fn closure_validation_port_calls(&self) -> u64 {
+            self.closure_validation_port_calls
+        }
+        pub const fn closure_validation_port_bytes(&self) -> u64 {
+            self.closure_validation_port_bytes
+        }
+        pub const fn closure_validation_hash_calls(&self) -> u64 {
+            self.closure_validation_hash_calls
+        }
+        pub const fn closure_validation_hash_bytes(&self) -> u64 {
+            self.closure_validation_hash_bytes
+        }
+        pub const fn closure_validation_decode_calls(&self) -> u64 {
+            self.closure_validation_decode_calls
+        }
+        pub const fn closure_validation_decode_bytes(&self) -> u64 {
+            self.closure_validation_decode_bytes
+        }
+        pub const fn candidate_graph_control_polls(&self) -> u64 {
+            self.candidate_graph_control_polls
+        }
+        pub const fn candidate_graph_maximum_work_between_polls(&self) -> u64 {
+            self.candidate_graph_maximum_work_between_polls
+        }
+        pub const fn candidate_graph_port_calls(&self) -> u64 {
+            self.candidate_graph_port_calls
+        }
+        pub const fn candidate_graph_port_bytes(&self) -> u64 {
+            self.candidate_graph_port_bytes
+        }
+        pub const fn candidate_graph_hash_calls(&self) -> u64 {
+            self.candidate_graph_hash_calls
+        }
+        pub const fn candidate_graph_hash_bytes(&self) -> u64 {
+            self.candidate_graph_hash_bytes
+        }
+        pub const fn candidate_graph_decode_calls(&self) -> u64 {
+            self.candidate_graph_decode_calls
+        }
+        pub const fn candidate_graph_decode_bytes(&self) -> u64 {
+            self.candidate_graph_decode_bytes
         }
         pub const fn bytes_read(&self) -> u64 {
             self.bytes_read
@@ -2447,6 +2525,8 @@ pub mod semantic {
     struct AdmissionSink {
         resident_memory: u64,
         control_failure: Option<CoreError>,
+        control_polls_before_failure: u64,
+        control_failure_ready: bool,
         begun: u64,
         staged: Vec<TypedPhysicalObjectIdV1>,
         active: Option<(TypedPhysicalObjectIdV1, u64, u64)>,
@@ -2461,11 +2541,18 @@ pub mod semantic {
         }
 
         fn cancellation_requested_v1(&mut self) -> bool {
-            self.control_failure == Some(CoreError::Cancelled)
+            if self.control_failure.is_some() && !self.control_failure_ready {
+                if self.control_polls_before_failure == 0 {
+                    self.control_failure_ready = true;
+                } else {
+                    self.control_polls_before_failure -= 1;
+                }
+            }
+            self.control_failure_ready && self.control_failure == Some(CoreError::Cancelled)
         }
 
         fn deadline_exceeded_v1(&mut self) -> bool {
-            self.control_failure == Some(CoreError::Deadline)
+            self.control_failure_ready && self.control_failure == Some(CoreError::Deadline)
         }
 
         fn begin_private_closure(&mut self, object_count: u64) -> Result<(), ImmutablePortErrorV1> {
@@ -2574,6 +2661,8 @@ pub mod semantic {
         let mut sink = AdmissionSink {
             resident_memory: request.sink_resident_bytes,
             control_failure: request.control_failure,
+            control_polls_before_failure: request.control_polls_before_failure,
+            control_failure_ready: false,
             begun: 0,
             staged: Vec::new(),
             active: None,
@@ -2633,6 +2722,24 @@ pub mod semantic {
             logical_reconstruction_control_polls: counters.logical_reconstruction_control_polls,
             logical_reconstruction_maximum_work_between_polls: counters
                 .logical_reconstruction_maximum_work_between_polls,
+            closure_validation_control_polls: counters.closure_validation_control_polls,
+            closure_validation_maximum_work_between_polls: counters
+                .closure_validation_maximum_work_between_polls,
+            closure_validation_port_calls: counters.closure_validation_port_calls,
+            closure_validation_port_bytes: counters.closure_validation_port_bytes,
+            closure_validation_hash_calls: counters.closure_validation_hash_calls,
+            closure_validation_hash_bytes: counters.closure_validation_hash_bytes,
+            closure_validation_decode_calls: counters.closure_validation_decode_calls,
+            closure_validation_decode_bytes: counters.closure_validation_decode_bytes,
+            candidate_graph_control_polls: counters.candidate_graph_control_polls,
+            candidate_graph_maximum_work_between_polls: counters
+                .candidate_graph_maximum_work_between_polls,
+            candidate_graph_port_calls: counters.candidate_graph_port_calls,
+            candidate_graph_port_bytes: counters.candidate_graph_port_bytes,
+            candidate_graph_hash_calls: counters.candidate_graph_hash_calls,
+            candidate_graph_hash_bytes: counters.candidate_graph_hash_bytes,
+            candidate_graph_decode_calls: counters.candidate_graph_decode_calls,
+            candidate_graph_decode_bytes: counters.candidate_graph_decode_bytes,
             bytes_read: counters.bytes_read,
             bytes_copied: counters.bytes_copied,
             bytes_written: counters.bytes_written,

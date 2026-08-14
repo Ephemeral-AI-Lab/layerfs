@@ -5,7 +5,7 @@
 //! encoding and accounting mechanics.
 
 use crate::cdc::{
-    BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1,
+    sample_control, BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1,
     CdcSourceErrorV1, ChunkBoundaryV1, FastCdcV1, MAXIMUM_CHUNK_BYTES,
 };
 use crate::format::{
@@ -44,6 +44,54 @@ pub trait ContentSourceV1 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PreparedSinkErrorV1 {
     Refused,
+}
+
+const CONTENT_UPDATE_CONTROL_POLL_WORK_UNITS_V1: u64 = 128;
+
+pub(crate) struct ContentUpdateWorkV1 {
+    work_since_poll: u64,
+}
+
+impl ContentUpdateWorkV1 {
+    pub(crate) fn begin<C: CdcControlV1 + ?Sized>(
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<Self> {
+        let mut work = Self { work_since_poll: 0 };
+        work.poll(control, counters)?;
+        Ok(work)
+    }
+
+    pub(crate) fn poll<C: CdcControlV1 + ?Sized>(
+        &mut self,
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        counters.record_content_update_control_poll_v1(self.work_since_poll)?;
+        self.work_since_poll = 0;
+        sample_control(control)
+    }
+
+    pub(crate) fn complete<C: CdcControlV1 + ?Sized>(
+        &mut self,
+        units: u64,
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.work_since_poll = self
+            .work_since_poll
+            .checked_add(units)
+            .ok_or(CoreError::IntegerOverflow)?;
+        if self.work_since_poll >= CONTENT_UPDATE_CONTROL_POLL_WORK_UNITS_V1 {
+            self.poll(control, counters)?;
+        }
+        Ok(())
+    }
+}
+
+struct ContentUpdateControlV1<'a> {
+    work: &'a mut ContentUpdateWorkV1,
+    control: &'a mut dyn CdcControlV1,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -455,38 +503,52 @@ where
                 while remaining != 0 {
                     let request = usize::try_from(remaining.min(MAXIMUM_CHUNK_BYTES as u64))
                         .map_err(|_| CoreError::IntegerOverflow)?;
-                    consumer.counters.add(CounterFieldV1::SourceReadCalls, 1)?;
-                    let read = source
-                        .read(&mut buffers.source[..request])
-                        .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure)?;
-                    if read > request {
-                        return Err(CoreError::SourceFailure);
+                    let mut filled = 0_usize;
+                    while filled < request {
+                        sample_control(control)?;
+                        consumer.counters.add(CounterFieldV1::SourceReadCalls, 1)?;
+                        let read = source
+                            .read(&mut buffers.source[filled..request])
+                            .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure)?;
+                        if read > request - filled {
+                            return Err(CoreError::SourceFailure);
+                        }
+                        if read == 0 {
+                            return Err(CoreError::Truncated);
+                        }
+                        let read_u64 =
+                            u64::try_from(read).map_err(|_| CoreError::IntegerOverflow)?;
+                        let next_remaining = remaining
+                            .checked_sub(read_u64)
+                            .ok_or(CoreError::TrailingBytes)?;
+                        let next_filled =
+                            filled.checked_add(read).ok_or(CoreError::IntegerOverflow)?;
+                        consumer
+                            .counters
+                            .record_source_bytes_read_and_copied(read_u64)?;
+                        remaining = next_remaining;
+                        filled = next_filled;
+                        sample_control(control)?;
                     }
-                    if read == 0 {
-                        return Err(CoreError::Truncated);
-                    }
-                    let read_u64 = u64::try_from(read).map_err(|_| CoreError::IntegerOverflow)?;
-                    consumer.counters.record_source_bytes_read(read_u64)?;
-                    consumer
-                        .counters
-                        .add(CounterFieldV1::BytesCopied, read_u64)?;
-                    remaining = remaining
-                        .checked_sub(read_u64)
-                        .ok_or(CoreError::TrailingBytes)?;
                     if let Err(error) =
-                        stream.push(Ok(&buffers.source[..read]), control, &mut consumer)
+                        stream.push(Ok(&buffers.source[..filled]), control, &mut consumer)
                     {
                         return Err(consumer.failure.take().unwrap_or(error));
                     }
                 }
+                sample_control(control)?;
                 consumer.counters.add(CounterFieldV1::SourceReadCalls, 1)?;
                 let probe = source
                     .read(&mut buffers.source[..1])
                     .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure)?;
-                if probe != 0 {
+                if probe > 1 {
+                    return Err(CoreError::SourceFailure);
+                }
+                if probe == 1 {
                     consumer.counters.record_source_bytes_read(1)?;
                     return Err(CoreError::TrailingBytes);
                 }
+                sample_control(control)?;
                 if let Err(error) = stream.finish(control, &mut consumer) {
                     return Err(consumer.failure.take().unwrap_or(error));
                 }
@@ -606,21 +668,51 @@ pub(crate) fn write_chunk_object<O: PreparedObjectSinkV1 + ?Sized>(
     chunk: BorrowedChunkV1<'_>,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<(PhysicalChunkIdV1, ObjectDispositionV1)> {
+    write_chunk_object_inner(objects, chunk, counters, None)
+}
+
+pub(crate) fn write_chunk_object_controlled_v1<O: PreparedObjectSinkV1 + ?Sized>(
+    objects: &mut O,
+    chunk: BorrowedChunkV1<'_>,
+    work: &mut ContentUpdateWorkV1,
+    control: &mut dyn CdcControlV1,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<(PhysicalChunkIdV1, ObjectDispositionV1)> {
+    write_chunk_object_inner(
+        objects,
+        chunk,
+        counters,
+        Some(ContentUpdateControlV1 { work, control }),
+    )
+}
+
+fn write_chunk_object_inner<O: PreparedObjectSinkV1 + ?Sized>(
+    objects: &mut O,
+    chunk: BorrowedChunkV1<'_>,
+    counters: &mut OperationCountersV1,
+    mut update_control: Option<ContentUpdateControlV1<'_>>,
+) -> CoreResult<(PhysicalChunkIdV1, ObjectDispositionV1)> {
     let payload_len = u64::try_from(chunk.len()).map_err(|_| CoreError::IntegerOverflow)?;
     let mut encoder = CanonicalChunkObjectEncoderV1::new(payload_len)?;
-    objects
+    poll_content_update_v1(&mut update_control, counters)?;
+    let result = objects
         .begin_object(PhysicalObjectKindV1::Chunk, encoder.complete_len())
-        .map_err(map_sink)?;
+        .map_err(map_sink);
+    finish_content_update_port_v1(result, &mut update_control, counters)?;
     {
-        let mut emit = |bytes: &[u8]| write_private_segment(objects, bytes, counters);
+        let mut emit =
+            |bytes: &[u8]| write_private_segment(objects, bytes, counters, &mut update_control);
         encoder.emit_header(&mut emit)?;
         encoder.emit_segment(chunk.first(), &mut emit)?;
         encoder.emit_segment(chunk.second(), &mut emit)?;
     }
     let id = encoder.finish()?;
-    let disposition = objects
+    complete_content_update_work_v1(&mut update_control, 1, counters)?;
+    poll_content_update_v1(&mut update_control, counters)?;
+    let result = objects
         .finish_object(TypedPhysicalObjectIdV1::Chunk(id))
-        .map_err(map_sink)?;
+        .map_err(map_sink);
+    let disposition = finish_content_update_port_v1(result, &mut update_control, counters)?;
     count_disposition(counters, disposition)?;
     Ok((id, disposition))
 }
@@ -636,34 +728,100 @@ pub(crate) fn write_file_object_and_logical<
     chunk_count: u64,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<(LogicalFileIdentityV1, PhysicalFileIdV1)> {
+    write_file_object_and_logical_inner(
+        objects,
+        references,
+        mode,
+        logical_len,
+        chunk_count,
+        counters,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_file_object_and_logical_controlled_v1<
+    O: PreparedObjectSinkV1 + ?Sized,
+    R: ChunkReferenceSpoolV1 + ?Sized,
+>(
+    objects: &mut O,
+    references: &mut R,
+    mode: u16,
+    logical_len: u64,
+    chunk_count: u64,
+    work: &mut ContentUpdateWorkV1,
+    control: &mut dyn CdcControlV1,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<(LogicalFileIdentityV1, PhysicalFileIdV1)> {
+    write_file_object_and_logical_inner(
+        objects,
+        references,
+        mode,
+        logical_len,
+        chunk_count,
+        counters,
+        Some(ContentUpdateControlV1 { work, control }),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_file_object_and_logical_inner<
+    O: PreparedObjectSinkV1 + ?Sized,
+    R: ChunkReferenceSpoolV1 + ?Sized,
+>(
+    objects: &mut O,
+    references: &mut R,
+    mode: u16,
+    logical_len: u64,
+    chunk_count: u64,
+    counters: &mut OperationCountersV1,
+    mut update_control: Option<ContentUpdateControlV1<'_>>,
+) -> CoreResult<(LogicalFileIdentityV1, PhysicalFileIdV1)> {
     let mut encoder = CanonicalFileObjectEncoderV1::new(mode, logical_len, chunk_count)?;
-    objects
+    poll_content_update_v1(&mut update_control, counters)?;
+    let result = objects
         .begin_object(PhysicalObjectKindV1::File, encoder.complete_len())
-        .map_err(map_sink)?;
+        .map_err(map_sink);
+    finish_content_update_port_v1(result, &mut update_control, counters)?;
     let mut logical_hasher = LogicalFileHasherV1::new(logical_len, chunk_count)?;
     let logical = {
-        let mut emit = |bytes: &[u8]| write_private_segment(objects, bytes, counters);
-        encoder.begin(&mut emit)?;
+        encoder.begin(&mut |bytes: &[u8]| {
+            write_private_segment(objects, bytes, counters, &mut update_control)
+        })?;
         if chunk_count != 0 {
-            references.rewind().map_err(map_sink)?;
+            poll_content_update_v1(&mut update_control, counters)?;
+            let result = references.rewind().map_err(map_sink);
+            finish_content_update_port_v1(result, &mut update_control, counters)?;
             for _ in 0..chunk_count {
-                let chunk = references
-                    .next()
-                    .map_err(map_sink)?
+                poll_content_update_v1(&mut update_control, counters)?;
+                let result = references.next().map_err(map_sink);
+                let chunk = finish_content_update_port_v1(result, &mut update_control, counters)?
                     .ok_or(CoreError::Truncated)?;
                 logical_hasher.push(chunk.logical_ref())?;
-                encoder.emit_chunk_reference(chunk.len, &chunk.physical_id, &mut emit)?;
+                encoder.emit_chunk_reference(
+                    chunk.len,
+                    &chunk.physical_id,
+                    &mut |bytes: &[u8]| {
+                        write_private_segment(objects, bytes, counters, &mut update_control)
+                    },
+                )?;
+                complete_content_update_work_v1(&mut update_control, 1, counters)?;
             }
-            if references.next().map_err(map_sink)?.is_some() {
+            poll_content_update_v1(&mut update_control, counters)?;
+            let result = references.next().map_err(map_sink);
+            if finish_content_update_port_v1(result, &mut update_control, counters)?.is_some() {
                 return Err(CoreError::TrailingBytes);
             }
         }
         logical_hasher.finish()?
     };
     let id = encoder.finish()?;
-    let disposition = objects
+    complete_content_update_work_v1(&mut update_control, 1, counters)?;
+    poll_content_update_v1(&mut update_control, counters)?;
+    let result = objects
         .finish_object(TypedPhysicalObjectIdV1::File(id))
-        .map_err(map_sink)?;
+        .map_err(map_sink);
+    let disposition = finish_content_update_port_v1(result, &mut update_control, counters)?;
     count_disposition(counters, disposition)?;
     Ok((logical, id))
 }
@@ -672,12 +830,79 @@ fn write_private_segment<O: PreparedObjectSinkV1 + ?Sized>(
     objects: &mut O,
     bytes: &[u8],
     counters: &mut OperationCountersV1,
+    update_control: &mut Option<ContentUpdateControlV1<'_>>,
 ) -> CoreResult<()> {
     let len = u64::try_from(bytes.len()).map_err(|_| CoreError::IntegerOverflow)?;
     counters.add(CounterFieldV1::PhysicalHashBytes, len)?;
     counters.add(CounterFieldV1::PhysicalHashUpdateCalls, 1)?;
-    objects.write_private(bytes).map_err(map_sink)?;
-    counters.add(CounterFieldV1::BytesWritten, len)
+    complete_content_update_work_v1(update_control, 1, counters)?;
+    poll_content_update_v1(update_control, counters)?;
+    let result = objects.write_private(bytes).map_err(map_sink);
+    finish_content_update_observed_port_v1(result, update_control, counters, |(), counters| {
+        counters.add(CounterFieldV1::BytesWritten, len)
+    })
+}
+
+fn poll_content_update_v1(
+    update_control: &mut Option<ContentUpdateControlV1<'_>>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    if let Some(update_control) = update_control {
+        update_control.work.poll(update_control.control, counters)?;
+    }
+    Ok(())
+}
+
+fn complete_content_update_work_v1(
+    update_control: &mut Option<ContentUpdateControlV1<'_>>,
+    units: u64,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    if let Some(update_control) = update_control {
+        update_control
+            .work
+            .complete(units, update_control.control, counters)?;
+    }
+    Ok(())
+}
+
+fn finish_content_update_port_v1<T>(
+    result: CoreResult<T>,
+    update_control: &mut Option<ContentUpdateControlV1<'_>>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<T> {
+    finish_content_update_observed_port_v1(result, update_control, counters, |_value, _counters| {
+        Ok(())
+    })
+}
+
+fn finish_content_update_observed_port_v1<T, F>(
+    result: CoreResult<T>,
+    update_control: &mut Option<ContentUpdateControlV1<'_>>,
+    counters: &mut OperationCountersV1,
+    observe_success: F,
+) -> CoreResult<T>
+where
+    F: FnOnce(&T, &mut OperationCountersV1) -> CoreResult<()>,
+{
+    let direct = match result.as_ref() {
+        Ok(value) => observe_success(value, counters),
+        Err(_) => Ok(()),
+    };
+    let observed = complete_content_update_work_v1(update_control, 1, counters)
+        .and_then(|()| poll_content_update_v1(update_control, counters));
+    match result {
+        Ok(value) => {
+            direct?;
+            observed?;
+            Ok(value)
+        }
+        Err(error) => {
+            let _ = direct;
+            let _ = observed;
+            Err(error)
+        }
+    }
 }
 
 fn count_disposition(

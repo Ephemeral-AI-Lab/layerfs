@@ -639,6 +639,8 @@ pub struct OperationCountersV1 {
     pub logical_reconstruction_payload_bytes: u64,
     pub logical_reconstruction_control_polls: u64,
     pub logical_reconstruction_maximum_work_between_polls: u64,
+    pub content_update_control_polls: u64,
+    pub content_update_maximum_work_between_polls: u64,
     /// Direct COW entry/page work observed between cancellation/deadline
     /// polls. This is counted at the mutation owner rather than inferred from
     /// source-read totals or elapsed operation time.
@@ -648,6 +650,51 @@ pub struct OperationCountersV1 {
     pub closure_validation_maximum_work_between_polls: u64,
     pub candidate_graph_control_polls: u64,
     pub candidate_graph_maximum_work_between_polls: u64,
+    /// Direct named-stage work required by PB-08A. Calls and completed bytes
+    /// are observed together at the owning port or hash/decode boundary; none
+    /// of these values is reconstructed from another aggregate counter.
+    pub pack_finalization_read_calls: u64,
+    pub pack_finalization_read_bytes: u64,
+    pub pack_finalization_hash_calls: u64,
+    pub pack_finalization_hash_bytes: u64,
+    pub pre_install_validation_read_calls: u64,
+    pub pre_install_validation_read_bytes: u64,
+    pub pre_install_validation_hash_calls: u64,
+    pub pre_install_validation_hash_bytes: u64,
+    pub pre_install_validation_decode_calls: u64,
+    pub pre_install_validation_decode_bytes: u64,
+    pub pre_install_validation_control_polls: u64,
+    pub pre_install_validation_maximum_work_between_polls: u64,
+    pub installed_carrier_validation_read_calls: u64,
+    pub installed_carrier_validation_read_bytes: u64,
+    pub installed_carrier_validation_hash_calls: u64,
+    pub installed_carrier_validation_hash_bytes: u64,
+    pub installed_carrier_validation_decode_calls: u64,
+    pub installed_carrier_validation_decode_bytes: u64,
+    pub installed_carrier_validation_control_polls: u64,
+    pub installed_carrier_validation_maximum_work_between_polls: u64,
+    pub closure_validation_port_calls: u64,
+    pub closure_validation_port_bytes: u64,
+    pub closure_validation_hash_calls: u64,
+    pub closure_validation_hash_bytes: u64,
+    pub closure_validation_decode_calls: u64,
+    pub closure_validation_decode_bytes: u64,
+    pub candidate_graph_port_calls: u64,
+    pub candidate_graph_port_bytes: u64,
+    pub candidate_graph_hash_calls: u64,
+    pub candidate_graph_hash_bytes: u64,
+    pub candidate_graph_decode_calls: u64,
+    pub candidate_graph_decode_bytes: u64,
+    pub locator_index_probes: u64,
+    pub locator_index_read_calls: u64,
+    pub locator_index_read_bytes: u64,
+    pub locator_index_decode_calls: u64,
+    pub locator_index_decode_bytes: u64,
+    /// Direct overlapping-chunk validation work for exact-range reads. Calls
+    /// are recorded before the canonical chunk decoder is invoked; bytes are
+    /// recorded only for successful reads of canonical chunk payload bytes.
+    pub exact_range_payload_read_calls: u64,
+    pub exact_range_payload_bytes: u64,
     pub exact_range_control_polls: u64,
     pub exact_range_maximum_work_between_polls: u64,
     /// Direct phase-one/root-admission events. Queue depth counts waiting
@@ -772,6 +819,26 @@ pub struct OperationCountersV1 {
     pub layerfs_open_file_handles_high_water: u64,
 }
 
+macro_rules! named_stage_recorders_v1 {
+    ($call_method:ident, $bytes_method:ident, $calls_field:ident, $bytes_field:ident) => {
+        pub(crate) fn $call_method(&mut self) -> CoreResult<()> {
+            self.$calls_field = self
+                .$calls_field
+                .checked_add(1)
+                .ok_or(CoreError::IntegerOverflow)?;
+            Ok(())
+        }
+
+        pub(crate) fn $bytes_method(&mut self, bytes: u64) -> CoreResult<()> {
+            self.$bytes_field = self
+                .$bytes_field
+                .checked_add(bytes)
+                .ok_or(CoreError::IntegerOverflow)?;
+            Ok(())
+        }
+    };
+}
+
 impl OperationCountersV1 {
     /// Typed availability for host-dependent terminal evidence. This is
     /// callable after success or failure and never changes logical counters.
@@ -879,9 +946,47 @@ impl OperationCountersV1 {
             logical_reconstruction_payload_read_calls,
             logical_reconstruction_payload_bytes,
             logical_reconstruction_control_polls,
+            content_update_control_polls,
             cow_mutation_control_polls,
             closure_validation_control_polls,
             candidate_graph_control_polls,
+            pack_finalization_read_calls,
+            pack_finalization_read_bytes,
+            pack_finalization_hash_calls,
+            pack_finalization_hash_bytes,
+            pre_install_validation_read_calls,
+            pre_install_validation_read_bytes,
+            pre_install_validation_hash_calls,
+            pre_install_validation_hash_bytes,
+            pre_install_validation_decode_calls,
+            pre_install_validation_decode_bytes,
+            pre_install_validation_control_polls,
+            installed_carrier_validation_read_calls,
+            installed_carrier_validation_read_bytes,
+            installed_carrier_validation_hash_calls,
+            installed_carrier_validation_hash_bytes,
+            installed_carrier_validation_decode_calls,
+            installed_carrier_validation_decode_bytes,
+            installed_carrier_validation_control_polls,
+            closure_validation_port_calls,
+            closure_validation_port_bytes,
+            closure_validation_hash_calls,
+            closure_validation_hash_bytes,
+            closure_validation_decode_calls,
+            closure_validation_decode_bytes,
+            candidate_graph_port_calls,
+            candidate_graph_port_bytes,
+            candidate_graph_hash_calls,
+            candidate_graph_hash_bytes,
+            candidate_graph_decode_calls,
+            candidate_graph_decode_bytes,
+            locator_index_probes,
+            locator_index_read_calls,
+            locator_index_read_bytes,
+            locator_index_decode_calls,
+            locator_index_decode_bytes,
+            exact_range_payload_read_calls,
+            exact_range_payload_bytes,
             exact_range_control_polls,
             root_admission_queue_entries,
             root_admission_queue_refusals,
@@ -989,6 +1094,9 @@ impl OperationCountersV1 {
         self.logical_reconstruction_maximum_work_between_polls = self
             .logical_reconstruction_maximum_work_between_polls
             .max(other.logical_reconstruction_maximum_work_between_polls);
+        self.content_update_maximum_work_between_polls = self
+            .content_update_maximum_work_between_polls
+            .max(other.content_update_maximum_work_between_polls);
         self.cow_mutation_maximum_work_between_polls = self
             .cow_mutation_maximum_work_between_polls
             .max(other.cow_mutation_maximum_work_between_polls);
@@ -998,6 +1106,12 @@ impl OperationCountersV1 {
         self.candidate_graph_maximum_work_between_polls = self
             .candidate_graph_maximum_work_between_polls
             .max(other.candidate_graph_maximum_work_between_polls);
+        self.pre_install_validation_maximum_work_between_polls = self
+            .pre_install_validation_maximum_work_between_polls
+            .max(other.pre_install_validation_maximum_work_between_polls);
+        self.installed_carrier_validation_maximum_work_between_polls = self
+            .installed_carrier_validation_maximum_work_between_polls
+            .max(other.installed_carrier_validation_maximum_work_between_polls);
         self.exact_range_maximum_work_between_polls = self
             .exact_range_maximum_work_between_polls
             .max(other.exact_range_maximum_work_between_polls);
@@ -1043,6 +1157,15 @@ impl OperationCountersV1 {
         let mut checked = *self;
         checked.add(CounterFieldV1::SourceBytesRead, bytes)?;
         checked.add(CounterFieldV1::BytesRead, bytes)?;
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_source_bytes_read_and_copied(&mut self, bytes: u64) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.add(CounterFieldV1::SourceBytesRead, bytes)?;
+        checked.add(CounterFieldV1::BytesRead, bytes)?;
+        checked.add(CounterFieldV1::BytesCopied, bytes)?;
         *self = checked;
         Ok(())
     }
@@ -1227,6 +1350,22 @@ impl OperationCountersV1 {
         Ok(())
     }
 
+    pub(crate) fn record_content_update_control_poll_v1(
+        &mut self,
+        completed_work: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.content_update_control_polls = checked
+            .content_update_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.content_update_maximum_work_between_polls = checked
+            .content_update_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
+        Ok(())
+    }
+
     pub(crate) fn record_cow_mutation_poll_v1(&mut self, completed_work: u64) -> CoreResult<()> {
         let mut checked = *self;
         checked.cow_mutation_control_polls = checked
@@ -1272,6 +1411,144 @@ impl OperationCountersV1 {
         Ok(())
     }
 
+    pub(crate) fn record_pre_install_validation_control_poll_v1(
+        &mut self,
+        completed_work: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.pre_install_validation_control_polls = checked
+            .pre_install_validation_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.pre_install_validation_maximum_work_between_polls = checked
+            .pre_install_validation_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_installed_carrier_validation_control_poll_v1(
+        &mut self,
+        completed_work: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.installed_carrier_validation_control_polls = checked
+            .installed_carrier_validation_control_polls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        checked.installed_carrier_validation_maximum_work_between_polls = checked
+            .installed_carrier_validation_maximum_work_between_polls
+            .max(completed_work);
+        *self = checked;
+        Ok(())
+    }
+
+    named_stage_recorders_v1!(
+        record_pack_finalization_read_call_v1,
+        record_pack_finalization_read_bytes_v1,
+        pack_finalization_read_calls,
+        pack_finalization_read_bytes
+    );
+    named_stage_recorders_v1!(
+        record_pack_finalization_hash_call_v1,
+        record_pack_finalization_hash_bytes_v1,
+        pack_finalization_hash_calls,
+        pack_finalization_hash_bytes
+    );
+    named_stage_recorders_v1!(
+        record_pre_install_validation_read_call_v1,
+        record_pre_install_validation_read_bytes_v1,
+        pre_install_validation_read_calls,
+        pre_install_validation_read_bytes
+    );
+    named_stage_recorders_v1!(
+        record_pre_install_validation_hash_call_v1,
+        record_pre_install_validation_hash_bytes_v1,
+        pre_install_validation_hash_calls,
+        pre_install_validation_hash_bytes
+    );
+    named_stage_recorders_v1!(
+        record_pre_install_validation_decode_call_v1,
+        record_pre_install_validation_decode_bytes_v1,
+        pre_install_validation_decode_calls,
+        pre_install_validation_decode_bytes
+    );
+    named_stage_recorders_v1!(
+        record_installed_carrier_validation_read_call_v1,
+        record_installed_carrier_validation_read_bytes_v1,
+        installed_carrier_validation_read_calls,
+        installed_carrier_validation_read_bytes
+    );
+    named_stage_recorders_v1!(
+        record_installed_carrier_validation_hash_call_v1,
+        record_installed_carrier_validation_hash_bytes_v1,
+        installed_carrier_validation_hash_calls,
+        installed_carrier_validation_hash_bytes
+    );
+    named_stage_recorders_v1!(
+        record_installed_carrier_validation_decode_call_v1,
+        record_installed_carrier_validation_decode_bytes_v1,
+        installed_carrier_validation_decode_calls,
+        installed_carrier_validation_decode_bytes
+    );
+    named_stage_recorders_v1!(
+        record_closure_validation_port_call_v1,
+        record_closure_validation_port_bytes_v1,
+        closure_validation_port_calls,
+        closure_validation_port_bytes
+    );
+    named_stage_recorders_v1!(
+        record_closure_validation_hash_call_v1,
+        record_closure_validation_hash_bytes_v1,
+        closure_validation_hash_calls,
+        closure_validation_hash_bytes
+    );
+    named_stage_recorders_v1!(
+        record_closure_validation_decode_call_v1,
+        record_closure_validation_decode_bytes_v1,
+        closure_validation_decode_calls,
+        closure_validation_decode_bytes
+    );
+    named_stage_recorders_v1!(
+        record_candidate_graph_port_call_v1,
+        record_candidate_graph_port_bytes_v1,
+        candidate_graph_port_calls,
+        candidate_graph_port_bytes
+    );
+    named_stage_recorders_v1!(
+        record_candidate_graph_hash_call_v1,
+        record_candidate_graph_hash_bytes_v1,
+        candidate_graph_hash_calls,
+        candidate_graph_hash_bytes
+    );
+    named_stage_recorders_v1!(
+        record_candidate_graph_decode_call_v1,
+        record_candidate_graph_decode_bytes_v1,
+        candidate_graph_decode_calls,
+        candidate_graph_decode_bytes
+    );
+
+    pub(crate) fn record_locator_index_probe_v1(&mut self) -> CoreResult<()> {
+        self.locator_index_probes = self
+            .locator_index_probes
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    named_stage_recorders_v1!(
+        record_locator_index_read_call_v1,
+        record_locator_index_read_bytes_v1,
+        locator_index_read_calls,
+        locator_index_read_bytes
+    );
+    named_stage_recorders_v1!(
+        record_locator_index_decode_call_v1,
+        record_locator_index_decode_bytes_v1,
+        locator_index_decode_calls,
+        locator_index_decode_bytes
+    );
+
     pub(crate) fn record_exact_range_control_poll_v1(
         &mut self,
         completed_work: u64,
@@ -1285,6 +1562,22 @@ impl OperationCountersV1 {
             .exact_range_maximum_work_between_polls
             .max(completed_work);
         *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_exact_range_payload_call_v1(&mut self) -> CoreResult<()> {
+        self.exact_range_payload_read_calls = self
+            .exact_range_payload_read_calls
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        Ok(())
+    }
+
+    pub(crate) fn record_exact_range_payload_bytes_v1(&mut self, bytes: u64) -> CoreResult<()> {
+        self.exact_range_payload_bytes = self
+            .exact_range_payload_bytes
+            .checked_add(bytes)
+            .ok_or(CoreError::IntegerOverflow)?;
         Ok(())
     }
 
@@ -1675,6 +1968,30 @@ impl OperationCountersV1 {
         self.add(CounterFieldV1::UpdateInsertedBytes, bytes)
     }
 
+    pub(crate) fn record_update_inserted_source_bytes(&mut self, bytes: u64) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.record_source_bytes_read_and_copied(bytes)?;
+        checked.record_update_inserted(bytes)?;
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_update_base_bytes_read(
+        &mut self,
+        bytes: u64,
+        resynchronization: bool,
+    ) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.add(CounterFieldV1::BytesRead, bytes)?;
+        checked.add(CounterFieldV1::BytesCopied, bytes)?;
+        checked.record_update_base_payload(bytes)?;
+        if resynchronization {
+            checked.add(CounterFieldV1::UpdateResynchronizationBytes, bytes)?;
+        }
+        *self = checked;
+        Ok(())
+    }
+
     pub fn record_update_reference_metadata(&mut self, records: u64, bytes: u64) -> CoreResult<()> {
         let mut checked = *self;
         checked.add(CounterFieldV1::UpdateReferenceMetadataRecords, records)?;
@@ -1694,6 +2011,15 @@ impl OperationCountersV1 {
             },
             1,
         )?;
+        *self = checked;
+        Ok(())
+    }
+
+    pub(crate) fn record_exact_rejoin_base_bytes_read(&mut self, bytes: u64) -> CoreResult<()> {
+        let mut checked = *self;
+        checked.add(CounterFieldV1::BytesRead, bytes)?;
+        checked.record_update_base_payload(bytes)?;
+        checked.add(CounterFieldV1::UpdateResynchronizationBytes, bytes)?;
         *self = checked;
         Ok(())
     }
@@ -2024,6 +2350,18 @@ impl FileSortWorkV1 {
     }
 
     pub(crate) fn finish<C: OperationWorkControlV1 + ?Sized>(
+        &mut self,
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.poll(control, counters)
+    }
+
+    /// Poll immediately beside one potentially blocking file-backed sort I/O
+    /// boundary. The caller invokes this once before the actual read/write and
+    /// once after its result is known; cadence polling inside [`Self::begin_event`]
+    /// continues to bound comparison-only work.
+    pub(crate) fn poll_storage_boundary_v1<C: OperationWorkControlV1 + ?Sized>(
         &mut self,
         control: &mut C,
         counters: &mut OperationCountersV1,
@@ -2484,6 +2822,23 @@ mod tests {
     }
 
     #[test]
+    fn source_read_and_copy_accounting_is_transactional_on_late_overflow() {
+        let mut destination = OperationCountersV1 {
+            source_bytes_read: 7,
+            bytes_read: 11,
+            bytes_copied: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_source_bytes_read_and_copied(1),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
     fn seqcdc_accumulation_is_transactional_on_late_overflow() {
         let mut destination = OperationCountersV1 {
             seqcdc_comparisons: 7,
@@ -2525,6 +2880,22 @@ mod tests {
     }
 
     #[test]
+    fn content_update_poll_is_transactional_on_counter_overflow() {
+        let mut destination = OperationCountersV1 {
+            content_update_control_polls: u64::MAX,
+            content_update_maximum_work_between_polls: 17,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+
+        assert_eq!(
+            destination.record_content_update_control_poll_v1(29),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
     fn cow_mutation_poll_is_transactional_on_counter_overflow() {
         let mut destination = OperationCountersV1 {
             cow_mutation_control_polls: u64::MAX,
@@ -2542,10 +2913,12 @@ mod tests {
 
     #[test]
     fn remaining_direct_work_polls_are_transactional_on_counter_overflow() {
-        let cases: [fn(&mut OperationCountersV1, u64) -> CoreResult<()>; 3] = [
+        let cases: [fn(&mut OperationCountersV1, u64) -> crate::CoreResult<()>; 5] = [
             OperationCountersV1::record_closure_validation_control_poll_v1,
             OperationCountersV1::record_candidate_graph_control_poll_v1,
             OperationCountersV1::record_exact_range_control_poll_v1,
+            OperationCountersV1::record_pre_install_validation_control_poll_v1,
+            OperationCountersV1::record_installed_carrier_validation_control_poll_v1,
         ];
         for (index, record) in cases.into_iter().enumerate() {
             let mut destination = OperationCountersV1 {
@@ -2555,6 +2928,10 @@ mod tests {
                 candidate_graph_maximum_work_between_polls: 19,
                 exact_range_control_polls: u64::from(index == 2) * u64::MAX,
                 exact_range_maximum_work_between_polls: 23,
+                pre_install_validation_control_polls: u64::from(index == 3) * u64::MAX,
+                pre_install_validation_maximum_work_between_polls: 29,
+                installed_carrier_validation_control_polls: u64::from(index == 4) * u64::MAX,
+                installed_carrier_validation_maximum_work_between_polls: 31,
                 ..OperationCountersV1::default()
             };
             let before = destination;
@@ -2567,8 +2944,55 @@ mod tests {
     }
 
     #[test]
+    fn exact_range_payload_accounting_and_merge_are_transactional_on_overflow() {
+        for (mut destination, record) in [(
+            OperationCountersV1 {
+                exact_range_payload_read_calls: u64::MAX,
+                exact_range_payload_bytes: 17,
+                ..OperationCountersV1::default()
+            },
+            OperationCountersV1::record_exact_range_payload_call_v1
+                as fn(&mut OperationCountersV1) -> crate::CoreResult<()>,
+        )] {
+            let before = destination;
+            assert_eq!(record(&mut destination), Err(CoreError::IntegerOverflow));
+            assert_eq!(destination, before);
+        }
+
+        let mut destination = OperationCountersV1 {
+            exact_range_payload_read_calls: 7,
+            exact_range_payload_bytes: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+        assert_eq!(
+            destination.record_exact_range_payload_bytes_v1(1),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+
+        let mut destination = OperationCountersV1 {
+            exact_range_payload_read_calls: 11,
+            exact_range_payload_bytes: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let before = destination;
+        assert_eq!(
+            destination.accumulate(OperationCountersV1 {
+                exact_range_payload_read_calls: 13,
+                exact_range_payload_bytes: 1,
+                ..OperationCountersV1::default()
+            }),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(destination, before);
+    }
+
+    #[test]
     fn direct_work_poll_accumulation_checked_adds_counts_and_merges_maxima_transactionally() {
         let mut destination = OperationCountersV1 {
+            content_update_control_polls: 1,
+            content_update_maximum_work_between_polls: 7,
             cow_mutation_control_polls: 2,
             cow_mutation_maximum_work_between_polls: 11,
             closure_validation_control_polls: 3,
@@ -2577,10 +3001,16 @@ mod tests {
             candidate_graph_maximum_work_between_polls: 17,
             exact_range_control_polls: 7,
             exact_range_maximum_work_between_polls: 19,
+            pre_install_validation_control_polls: 11,
+            pre_install_validation_maximum_work_between_polls: 23,
+            installed_carrier_validation_control_polls: 13,
+            installed_carrier_validation_maximum_work_between_polls: 29,
             ..OperationCountersV1::default()
         };
         destination
-            .accumulate_from(OperationCountersV1 {
+            .accumulate(OperationCountersV1 {
+                content_update_control_polls: 17,
+                content_update_maximum_work_between_polls: 31,
                 cow_mutation_control_polls: 23,
                 cow_mutation_maximum_work_between_polls: 29,
                 closure_validation_control_polls: 31,
@@ -2589,9 +3019,15 @@ mod tests {
                 candidate_graph_maximum_work_between_polls: 43,
                 exact_range_control_polls: 47,
                 exact_range_maximum_work_between_polls: 53,
+                pre_install_validation_control_polls: 59,
+                pre_install_validation_maximum_work_between_polls: 61,
+                installed_carrier_validation_control_polls: 67,
+                installed_carrier_validation_maximum_work_between_polls: 71,
                 ..OperationCountersV1::default()
             })
             .unwrap();
+        assert_eq!(destination.content_update_control_polls, 18);
+        assert_eq!(destination.content_update_maximum_work_between_polls, 31);
         assert_eq!(destination.cow_mutation_control_polls, 25);
         assert_eq!(destination.cow_mutation_maximum_work_between_polls, 29);
         assert_eq!(destination.closure_validation_control_polls, 34);
@@ -2603,8 +3039,28 @@ mod tests {
         assert_eq!(destination.candidate_graph_maximum_work_between_polls, 43);
         assert_eq!(destination.exact_range_control_polls, 54);
         assert_eq!(destination.exact_range_maximum_work_between_polls, 53);
+        assert_eq!(destination.pre_install_validation_control_polls, 70);
+        assert_eq!(
+            destination.pre_install_validation_maximum_work_between_polls,
+            61
+        );
+        assert_eq!(destination.installed_carrier_validation_control_polls, 80);
+        assert_eq!(
+            destination.installed_carrier_validation_maximum_work_between_polls,
+            71
+        );
 
         for (mut destination, source) in [
+            (
+                OperationCountersV1 {
+                    content_update_control_polls: u64::MAX,
+                    ..OperationCountersV1::default()
+                },
+                OperationCountersV1 {
+                    content_update_control_polls: 1,
+                    ..OperationCountersV1::default()
+                },
+            ),
             (
                 OperationCountersV1 {
                     cow_mutation_control_polls: u64::MAX,
@@ -2645,10 +3101,30 @@ mod tests {
                     ..OperationCountersV1::default()
                 },
             ),
+            (
+                OperationCountersV1 {
+                    pre_install_validation_control_polls: u64::MAX,
+                    ..OperationCountersV1::default()
+                },
+                OperationCountersV1 {
+                    pre_install_validation_control_polls: 1,
+                    ..OperationCountersV1::default()
+                },
+            ),
+            (
+                OperationCountersV1 {
+                    installed_carrier_validation_control_polls: u64::MAX,
+                    ..OperationCountersV1::default()
+                },
+                OperationCountersV1 {
+                    installed_carrier_validation_control_polls: 1,
+                    ..OperationCountersV1::default()
+                },
+            ),
         ] {
             let before = destination;
             assert_eq!(
-                destination.accumulate_from(source),
+                destination.accumulate(source),
                 Err(CoreError::IntegerOverflow)
             );
             assert_eq!(destination, before);
@@ -2876,6 +3352,51 @@ mod tests {
             Err(CoreError::IntegerOverflow)
         );
         assert_eq!(destination, before);
+    }
+
+    #[test]
+    fn update_payload_read_tuples_are_transactional_on_late_overflow() {
+        let mut inserted = OperationCountersV1 {
+            source_bytes_read: 7,
+            bytes_read: 11,
+            bytes_copied: 13,
+            update_inserted_bytes: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let inserted_before = inserted;
+        assert_eq!(
+            inserted.record_update_inserted_source_bytes(1),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(inserted, inserted_before);
+
+        let mut base = OperationCountersV1 {
+            bytes_read: 7,
+            bytes_copied: 11,
+            update_base_payload_bytes: 13,
+            update_resynchronization_bytes: u64::MAX,
+            ..OperationCountersV1::default()
+        };
+        let base_before = base;
+        assert_eq!(
+            base.record_update_base_bytes_read(1, true),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(base, base_before);
+
+        let mut rejoin = OperationCountersV1 {
+            bytes_read: 7,
+            update_base_payload_bytes: 11,
+            update_resynchronization_bytes: u64::MAX,
+            exact_rejoin_bytes: 13,
+            ..OperationCountersV1::default()
+        };
+        let rejoin_before = rejoin;
+        assert_eq!(
+            rejoin.record_exact_rejoin_base_bytes_read(1),
+            Err(CoreError::IntegerOverflow)
+        );
+        assert_eq!(rejoin, rejoin_before);
     }
 
     #[test]

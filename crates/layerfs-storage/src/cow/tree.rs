@@ -16,11 +16,10 @@ use crate::identity::{
     LogicalDirectoryEntryV1, PhysicalFileIdV1, PhysicalSymlinkIdV1, PhysicalTreeIdV1,
     SymlinkNodeIdV1, COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1,
 };
-use crate::limits::OperationReservationV1;
-use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
 };
+use crate::limits::{OperationReservationV1, OperationWorkControlV1, ResourceLedgerV1};
 use crate::object::{
     decode_physical_object_v1, seal_physical_object_in_place_v1, DiscardStrongEdgesV1,
     TypedPhysicalObjectIdV1,
@@ -36,6 +35,78 @@ pub const MAX_DIRECTORY_HASH_PROOF_NODES: usize = 64;
 /// One mutable leaf group plus every possible depth-two root child. General
 /// COW mutation never needs the complete directory page population resident.
 pub const MAX_COW_TREE_PAGE_SUMMARIES: usize = TREE_INDEX_FANOUT + 55;
+
+/// Frozen maximum directly counted COW entry/page work between cooperative
+/// cancellation/deadline polls. Blocking source calls are polled on both
+/// sides independently of this cadence.
+pub(super) const COW_MUTATION_CONTROL_POLL_WORK_UNITS_V1: u64 = 128;
+
+pub(super) struct CowMutationWorkV1 {
+    work_since_poll: u64,
+}
+
+impl CowMutationWorkV1 {
+    pub(super) fn begin(
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<Self> {
+        let mut work = Self { work_since_poll: 0 };
+        work.poll(control, counters)?;
+        Ok(work)
+    }
+
+    pub(super) fn complete(
+        &mut self,
+        units: u64,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.work_since_poll = self
+            .work_since_poll
+            .checked_add(units)
+            .ok_or(CoreError::IntegerOverflow)?;
+        if self.work_since_poll >= COW_MUTATION_CONTROL_POLL_WORK_UNITS_V1 {
+            self.poll(control, counters)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn poll(
+        &mut self,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        counters.record_cow_mutation_poll_v1(self.work_since_poll)?;
+        self.work_since_poll = 0;
+        if control.cancellation_requested_v1() {
+            Err(CoreError::Cancelled)
+        } else if control.deadline_exceeded_v1() {
+            Err(CoreError::Deadline)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(super) fn complete_blocking_call(
+        &mut self,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.work_since_poll = self
+            .work_since_poll
+            .checked_add(1)
+            .ok_or(CoreError::IntegerOverflow)?;
+        self.poll(control, counters)
+    }
+
+    pub(super) fn finish(
+        &mut self,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+    ) -> CoreResult<()> {
+        self.poll(control, counters)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DirectoryBuildModeV1 {
@@ -563,9 +634,20 @@ fn build_directory_inner<S: PreparedTreeSinkV1 + ?Sized>(
 }
 
 pub(super) fn validate_entries(entries: &[CanonicalTreeEntryV1<'_>]) -> CoreResult<()> {
+    validate_entries_with_v1(entries, || Ok(()))
+}
+
+pub(super) fn validate_entries_with_v1<F>(
+    entries: &[CanonicalTreeEntryV1<'_>],
+    mut complete_entry: F,
+) -> CoreResult<()>
+where
+    F: FnMut() -> CoreResult<()>,
+{
     validate_entry_count(u64::try_from(entries.len()).map_err(|_| CoreError::IntegerOverflow)?)?;
     let mut previous: Option<&[u8]> = None;
     for entry in entries {
+        complete_entry()?;
         let name = entry.name.as_bytes();
         if previous.is_some_and(|left| compare_unsigned(left, name) != core::cmp::Ordering::Less) {
             return Err(CoreError::NonCanonicalOrder);
@@ -600,9 +682,47 @@ where
 }
 
 trait CanonicalTreeEntryVisitorV1 {
-    fn visit<F>(&mut self, first_entry: usize, end_entry: usize, emit: &mut F) -> CoreResult<()>
+    fn visit<F>(
+        &mut self,
+        first_entry: usize,
+        end_entry: usize,
+        operation: &mut Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+        counters: &mut OperationCountersV1,
+        emit: &mut F,
+    ) -> CoreResult<()>
     where
         F: for<'entry> FnMut(CanonicalTreeEntryV1<'entry>) -> CoreResult<()>;
+}
+
+fn complete_cow_encode_work_v1(
+    operation: &mut Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+    units: u64,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    if let Some((work, control)) = operation.as_mut() {
+        work.complete(units, &mut **control, counters)?;
+    }
+    Ok(())
+}
+
+fn poll_cow_encode_work_v1(
+    operation: &mut Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    if let Some((work, control)) = operation.as_mut() {
+        work.poll(&mut **control, counters)?;
+    }
+    Ok(())
+}
+
+fn complete_cow_encode_blocking_call_v1(
+    operation: &mut Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    if let Some((work, control)) = operation.as_mut() {
+        work.complete_blocking_call(&mut **control, counters)?;
+    }
+    Ok(())
 }
 
 struct IteratorTreeEntryVisitor<I> {
@@ -613,12 +733,20 @@ impl<'a, I> CanonicalTreeEntryVisitorV1 for IteratorTreeEntryVisitor<I>
 where
     I: Iterator<Item = CoreResult<CanonicalTreeEntryV1<'a>>>,
 {
-    fn visit<F>(&mut self, _first_entry: usize, _end_entry: usize, emit: &mut F) -> CoreResult<()>
+    fn visit<F>(
+        &mut self,
+        _first_entry: usize,
+        _end_entry: usize,
+        operation: &mut Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+        counters: &mut OperationCountersV1,
+        emit: &mut F,
+    ) -> CoreResult<()>
     where
         F: for<'entry> FnMut(CanonicalTreeEntryV1<'entry>) -> CoreResult<()>,
     {
         for entry in self.entries.by_ref() {
             emit(entry?)?;
+            complete_cow_encode_work_v1(operation, 1, counters)?;
         }
         Ok(())
     }
@@ -631,6 +759,34 @@ fn encode_leaf_with_visitor<V, S>(
     sink: &mut S,
     counters: &mut OperationCountersV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    operation: Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+) -> CoreResult<TreePageSummaryV1>
+where
+    V: CanonicalTreeEntryVisitorV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    encode_leaf_with_visitor_inner_v1(
+        visitor,
+        first_entry,
+        end_entry,
+        sink,
+        counters,
+        scratch,
+        operation,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn encode_leaf_with_visitor_inner_v1<V, S>(
+    visitor: &mut V,
+    first_entry: usize,
+    end_entry: usize,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    mut operation: Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+    account_output: bool,
 ) -> CoreResult<TreePageSummaryV1>
 where
     V: CanonicalTreeEntryVisitorV1 + ?Sized,
@@ -663,11 +819,12 @@ where
         writer.write(entry.child.physical_id_ref())?;
         Ok(())
     };
-    visitor.visit(first_entry, end_entry, &mut emit)?;
+    visitor.visit(first_entry, end_entry, &mut operation, counters, &mut emit)?;
     if actual != count {
         return Err(CoreError::Truncated);
     }
-    let (id, object_len) = finish_tree_object(writer, sink, counters)?;
+    let (id, object_len) =
+        finish_tree_object_inner_v1(writer, sink, counters, operation, account_output)?;
     Ok(TreePageSummaryV1 {
         id,
         depth: 0,
@@ -690,12 +847,29 @@ impl<'a, R> CanonicalTreeEntryVisitorV1 for ReaderTreeEntryVisitor<'a, R>
 where
     R: CanonicalTreeEntryReaderV1 + ?Sized,
 {
-    fn visit<F>(&mut self, first_entry: usize, end_entry: usize, emit: &mut F) -> CoreResult<()>
+    fn visit<F>(
+        &mut self,
+        first_entry: usize,
+        end_entry: usize,
+        operation: &mut Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+        counters: &mut OperationCountersV1,
+        emit: &mut F,
+    ) -> CoreResult<()>
     where
         F: for<'entry> FnMut(CanonicalTreeEntryV1<'entry>) -> CoreResult<()>,
     {
         for ordinal in first_entry..end_entry {
-            emit(self.reader.read_entry(ordinal)?)?;
+            poll_cow_encode_work_v1(operation, counters)?;
+            let entry = self.reader.read_entry(ordinal);
+            let after = complete_cow_encode_blocking_call_v1(operation, counters);
+            match entry {
+                Err(error) => return Err(error),
+                Ok(entry) => {
+                    after?;
+                    emit(entry)?;
+                }
+            }
+            complete_cow_encode_work_v1(operation, 1, counters)?;
         }
         Ok(())
     }
@@ -723,22 +897,28 @@ where
         sink,
         counters,
         scratch,
+        None,
     )
 }
 
-pub(super) fn encode_leaf_from_reader<R, S>(
-    reader: &mut R,
+#[allow(clippy::too_many_arguments)]
+pub(super) fn encode_leaf_controlled_v1<'a, I, S>(
+    entries: I,
     first_entry: usize,
     end_entry: usize,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
 ) -> CoreResult<TreePageSummaryV1>
 where
-    R: CanonicalTreeEntryReaderV1 + ?Sized,
+    I: IntoIterator<Item = CanonicalTreeEntryV1<'a>>,
     S: PreparedTreeSinkV1 + ?Sized,
 {
-    let mut visitor = ReaderTreeEntryVisitor { reader };
+    let mut visitor = IteratorTreeEntryVisitor {
+        entries: entries.into_iter().map(Ok),
+    };
     encode_leaf_with_visitor(
         &mut visitor,
         first_entry,
@@ -746,6 +926,65 @@ where
         sink,
         counters,
         scratch,
+        Some((work, control)),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn encode_leaf_verification_controlled_v1<'a, I, S>(
+    entries: I,
+    first_entry: usize,
+    end_entry: usize,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+) -> CoreResult<TreePageSummaryV1>
+where
+    I: IntoIterator<Item = CanonicalTreeEntryV1<'a>>,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    let mut visitor = IteratorTreeEntryVisitor {
+        entries: entries.into_iter().map(Ok),
+    };
+    encode_leaf_with_visitor_inner_v1(
+        &mut visitor,
+        first_entry,
+        end_entry,
+        sink,
+        counters,
+        scratch,
+        Some((work, control)),
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn encode_leaf_from_reader_controlled_v1<R, S>(
+    reader: &mut R,
+    first_entry: usize,
+    end_entry: usize,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+) -> CoreResult<TreePageSummaryV1>
+where
+    R: CanonicalTreeEntryReaderV1 + ?Sized,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    let mut visitor = ReaderTreeEntryVisitor { reader };
+    encode_leaf_with_visitor_inner_v1(
+        &mut visitor,
+        first_entry,
+        end_entry,
+        sink,
+        counters,
+        scratch,
+        Some((work, control)),
+        false,
     )
 }
 pub(super) fn encode_index<I, S>(
@@ -825,12 +1064,64 @@ where
     })
 }
 
-pub(super) fn encode_index_boundaries<'a, I, S>(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn encode_index_boundaries_controlled_v1<'a, I, S>(
+    depth: u8,
+    children: I,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+) -> CoreResult<TreePageSummaryV1>
+where
+    I: IntoIterator<Item = CoreResult<TreePageBoundaryV1<'a>>>,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    encode_index_boundaries_inner_v1(
+        depth,
+        children,
+        sink,
+        counters,
+        scratch,
+        Some((work, control)),
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn encode_index_boundaries_verification_controlled_v1<'a, I, S>(
+    depth: u8,
+    children: I,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+) -> CoreResult<TreePageSummaryV1>
+where
+    I: IntoIterator<Item = CoreResult<TreePageBoundaryV1<'a>>>,
+    S: PreparedTreeSinkV1 + ?Sized,
+{
+    encode_index_boundaries_inner_v1(
+        depth,
+        children,
+        sink,
+        counters,
+        scratch,
+        Some((work, control)),
+        false,
+    )
+}
+
+fn encode_index_boundaries_inner_v1<'a, I, S>(
     depth: u8,
     children: I,
     sink: &mut S,
     counters: &mut OperationCountersV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    mut operation: Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+    account_output: bool,
 ) -> CoreResult<TreePageSummaryV1>
 where
     I: IntoIterator<Item = CoreResult<TreePageBoundaryV1<'a>>>,
@@ -878,12 +1169,14 @@ where
         writer.write(child.id.as_bytes())?;
         first_entry.get_or_insert(child.first_entry);
         last_entry = Some(child.last_entry);
+        complete_cow_encode_work_v1(&mut operation, 1, counters)?;
     }
     if count == 0 {
         return Err(CoreError::CountCap);
     }
     writer.overwrite(count_offset, &count.to_be_bytes())?;
-    let (id, object_len) = finish_tree_object(writer, sink, counters)?;
+    let (id, object_len) =
+        finish_tree_object_inner_v1(writer, sink, counters, operation, account_output)?;
     Ok(TreePageSummaryV1 {
         id,
         depth,
@@ -904,6 +1197,56 @@ pub(super) fn encode_directory<S: PreparedTreeSinkV1 + ?Sized>(
     counters: &mut OperationCountersV1,
     scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
 ) -> CoreResult<PhysicalTreeIdV1> {
+    encode_directory_inner_v1(
+        mode,
+        entry_count,
+        page_depth,
+        root_page,
+        sink,
+        counters,
+        scratch,
+        None,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn encode_directory_verification_controlled_v1<S: PreparedTreeSinkV1 + ?Sized>(
+    mode: u16,
+    entry_count: u32,
+    page_depth: u8,
+    root_page: Option<PhysicalTreeIdV1>,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+) -> CoreResult<PhysicalTreeIdV1> {
+    encode_directory_inner_v1(
+        mode,
+        entry_count,
+        page_depth,
+        root_page,
+        sink,
+        counters,
+        scratch,
+        Some((work, control)),
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn encode_directory_inner_v1<S: PreparedTreeSinkV1 + ?Sized>(
+    mode: u16,
+    entry_count: u32,
+    page_depth: u8,
+    root_page: Option<PhysicalTreeIdV1>,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+    scratch: &mut [u8; MAX_TREE_OBJECT_BYTES],
+    operation: Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+    account_output: bool,
+) -> CoreResult<PhysicalTreeIdV1> {
     if (entry_count == 0) != root_page.is_none() {
         return Err(CoreError::TypedEdge);
     }
@@ -915,13 +1258,23 @@ pub(super) fn encode_directory<S: PreparedTreeSinkV1 + ?Sized>(
     if let Some(id) = root_page {
         writer.write(id.as_bytes())?;
     }
-    finish_tree_object(writer, sink, counters).map(|(id, _)| id)
+    finish_tree_object_inner_v1(writer, sink, counters, operation, account_output).map(|(id, _)| id)
 }
 
 pub(super) fn finish_tree_object<S: PreparedTreeSinkV1 + ?Sized>(
+    writer: TreePayloadWriterV1<'_>,
+    sink: &mut S,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<(PhysicalTreeIdV1, u32)> {
+    finish_tree_object_inner_v1(writer, sink, counters, None, true)
+}
+
+fn finish_tree_object_inner_v1<S: PreparedTreeSinkV1 + ?Sized>(
     mut writer: TreePayloadWriterV1<'_>,
     sink: &mut S,
     counters: &mut OperationCountersV1,
+    mut operation: Option<(&mut CowMutationWorkV1, &mut dyn OperationWorkControlV1)>,
+    account_output: bool,
 ) -> CoreResult<(PhysicalTreeIdV1, u32)> {
     let payload_len = writer.position();
     let (typed_id, complete_len) = seal_physical_object_in_place_v1(
@@ -943,20 +1296,32 @@ pub(super) fn finish_tree_object<S: PreparedTreeSinkV1 + ?Sized>(
         return Err(CoreError::IdMismatch);
     }
     let object_len = u32::try_from(complete_len).map_err(|_| CoreError::IntegerOverflow)?;
-    match sink.admit_private_tree(id, bytes).map_err(map_sink)? {
-        TreeObjectDispositionV1::Created => {
-            counters.add(CounterFieldV1::TreeNodesCreated, 1)?;
-            counters.add(CounterFieldV1::PhysicalObjectsCreated, 1)?;
-            counters.add(CounterFieldV1::BytesWritten, u64::from(object_len))?;
+    poll_cow_encode_work_v1(&mut operation, counters)?;
+    let admitted = (|| {
+        let disposition = sink.admit_private_tree(id, bytes).map_err(map_sink)?;
+        if account_output {
+            match disposition {
+                TreeObjectDispositionV1::Created => {
+                    counters.add(CounterFieldV1::TreeNodesCreated, 1)?;
+                    counters.add(CounterFieldV1::PhysicalObjectsCreated, 1)?;
+                    counters.add(CounterFieldV1::BytesWritten, u64::from(object_len))?;
+                }
+                TreeObjectDispositionV1::Reused => {
+                    counters.add(CounterFieldV1::TreeNodesReused, 1)?;
+                    counters.add(CounterFieldV1::PhysicalObjectsReused, 1)?;
+                    counters.add(
+                        CounterFieldV1::BytesStructurallyReused,
+                        u64::from(object_len),
+                    )?;
+                }
+            }
         }
-        TreeObjectDispositionV1::Reused => {
-            counters.add(CounterFieldV1::TreeNodesReused, 1)?;
-            counters.add(CounterFieldV1::PhysicalObjectsReused, 1)?;
-            counters.add(
-                CounterFieldV1::BytesStructurallyReused,
-                u64::from(object_len),
-            )?;
-        }
+        Ok(())
+    })();
+    let after = complete_cow_encode_blocking_call_v1(&mut operation, counters);
+    match admitted {
+        Err(error) => return Err(error),
+        Ok(()) => after?,
     }
     Ok((id, object_len))
 }
@@ -1074,4 +1439,155 @@ impl TreePlanV1 {
 
 pub(super) const fn map_sink(_: TreeSinkErrorV1) -> CoreError {
     CoreError::SinkRefused
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Copy)]
+    enum StopAtPollV1 {
+        Cancel(u64),
+        Deadline(u64),
+    }
+
+    struct ScheduledControlV1 {
+        stop: StopAtPollV1,
+        polls: u64,
+    }
+
+    impl ScheduledControlV1 {
+        const fn new(stop: StopAtPollV1) -> Self {
+            Self { stop, polls: 0 }
+        }
+    }
+
+    impl OperationWorkControlV1 for ScheduledControlV1 {
+        fn cancellation_requested_v1(&mut self) -> bool {
+            self.polls = self.polls.saturating_add(1);
+            matches!(self.stop, StopAtPollV1::Cancel(poll) if self.polls >= poll)
+        }
+
+        fn deadline_exceeded_v1(&mut self) -> bool {
+            matches!(self.stop, StopAtPollV1::Deadline(poll) if self.polls >= poll)
+        }
+    }
+
+    #[derive(Default)]
+    struct CountingSinkV1 {
+        admissions: u64,
+    }
+
+    impl PreparedTreeSinkV1 for CountingSinkV1 {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn begin_private_tree_set(&mut self, _maximum_objects: u32) -> Result<(), TreeSinkErrorV1> {
+            Ok(())
+        }
+
+        fn admit_private_tree(
+            &mut self,
+            _id: PhysicalTreeIdV1,
+            _canonical_bytes: &[u8],
+        ) -> Result<TreeObjectDispositionV1, TreeSinkErrorV1> {
+            self.admissions = self.admissions.saturating_add(1);
+            Ok(TreeObjectDispositionV1::Created)
+        }
+
+        fn finish_private_tree_set(
+            &mut self,
+            _root: PhysicalTreeIdV1,
+        ) -> Result<(), TreeSinkErrorV1> {
+            Ok(())
+        }
+
+        fn abort_private_tree_set(&mut self) {}
+    }
+
+    fn fixed_entry<'a>(name: &'a [u8]) -> CanonicalTreeEntryV1<'a> {
+        CanonicalTreeEntryV1::new(
+            ValidatedComponent::new(name).expect("fixed component"),
+            CanonicalTreeChildV1::File {
+                logical: FileNodeIdV1::from_digest([0x11; 32]),
+                physical: PhysicalFileIdV1::from_digest([0x22; 32]),
+            },
+        )
+    }
+
+    #[test]
+    fn full_leaf_encoding_observes_cancellation_at_frozen_cadence() {
+        let entry = fixed_entry(b"a");
+        let entries = [entry; TREE_LEAF_FANOUT];
+        let mut sink = CountingSinkV1::default();
+        let mut counters = OperationCountersV1::default();
+        let mut control = ScheduledControlV1::new(StopAtPollV1::Cancel(2));
+        let mut work = CowMutationWorkV1::begin(&mut control, &mut counters).unwrap();
+        let mut scratch = [0_u8; MAX_TREE_OBJECT_BYTES];
+
+        let result = encode_leaf_controlled_v1(
+            entries,
+            0,
+            TREE_LEAF_FANOUT,
+            &mut sink,
+            &mut counters,
+            &mut work,
+            &mut control,
+            &mut scratch,
+        );
+
+        assert_eq!(result, Err(CoreError::Cancelled));
+        assert_eq!(sink.admissions, 0);
+        assert_eq!(counters.cow_mutation_control_polls, 2);
+        assert_eq!(
+            counters.cow_mutation_maximum_work_between_polls,
+            COW_MUTATION_CONTROL_POLL_WORK_UNITS_V1
+        );
+    }
+
+    #[test]
+    fn full_index_encoding_observes_deadline_before_sink_admission() {
+        let names: [[u8; 2]; TREE_INDEX_FANOUT] =
+            core::array::from_fn(|index| [b'a' + (index / 10) as u8, b'0' + (index % 10) as u8]);
+        let mut sink = CountingSinkV1::default();
+        let mut counters = OperationCountersV1::default();
+        let mut control = ScheduledControlV1::new(StopAtPollV1::Deadline(2));
+        let mut work = CowMutationWorkV1::begin(&mut control, &mut counters).unwrap();
+        let mut scratch = [0_u8; MAX_TREE_OBJECT_BYTES];
+
+        let result = encode_index_boundaries_controlled_v1(
+            1,
+            names.iter().enumerate().map(|(index, name)| {
+                let first_entry = u32::try_from(index * TREE_LEAF_FANOUT)
+                    .expect("frozen index coverage fits u32");
+                let name = ValidatedComponent::new(name).expect("fixed component");
+                Ok(TreePageBoundaryV1::new(
+                    TreePageSummaryV1 {
+                        id: PhysicalTreeIdV1::from_digest([index as u8; 32]),
+                        depth: 0,
+                        first_entry,
+                        last_entry: first_entry + TREE_LEAF_FANOUT as u32 - 1,
+                        subtree_entry_count: TREE_LEAF_FANOUT as u32,
+                        object_len: 1,
+                    },
+                    name,
+                    name,
+                ))
+            }),
+            &mut sink,
+            &mut counters,
+            &mut work,
+            &mut control,
+            &mut scratch,
+        );
+
+        assert_eq!(result, Err(CoreError::Deadline));
+        assert_eq!(sink.admissions, 0);
+        assert_eq!(counters.cow_mutation_control_polls, 2);
+        assert_eq!(
+            counters.cow_mutation_maximum_work_between_polls,
+            TREE_INDEX_FANOUT as u64
+        );
+    }
 }

@@ -89,16 +89,15 @@ pub mod semantic {
         run_complete_update_v1, run_create_tree_v1, run_create_v1, FsCasBoundaryV1,
         FsCasCleanupTargetV1, FsCasControlV1, FsCasErrorV1, FsCasV1, FsOperationKindV1,
         FsStorageEnvelopeV1, LifecycleControlV1, OperationBuffersV1, OperationErrorV1,
-        CLOSURE_MARKER_BYTES,
     };
     use crate::cas::semantic::{
         publication_causes_v1, publication_error_v1, PublicationCauseV1,
         PublicationCleanupTargetV1, PublicationErrorV1,
     };
     use crate::cas::{
-        FsCasFailureCauseV1, FsCasFilesystemBoundaryV1, FsCasFilesystemFailureV1,
-        FsCasResidueAccountingBoundaryV1, FsCasResourceV1, ROOT_LOGICAL_STORAGE_BUDGET_V1,
-        ROOT_NAMESPACE_ENTRY_BUDGET_V1,
+        compare_closure_object_ids_v1, FsCasFailureCauseV1, FsCasFilesystemBoundaryV1,
+        FsCasFilesystemFailureV1, FsCasOccupiedV1, FsCasResidueAccountingBoundaryV1,
+        FsCasResourceV1, ROOT_LOGICAL_STORAGE_BUDGET_V1, ROOT_NAMESPACE_ENTRY_BUDGET_V1,
     };
     use crate::cdc::{CdcAlgorithmV1, CdcControlV1, FastCdcV1, MAXIMUM_CHUNK_BYTES};
     use crate::content::update::{
@@ -115,7 +114,7 @@ pub mod semantic {
         DirectoryLogicalIdentityV1, TreePageSummaryV1, MAX_TREE_OBJECT_BYTES,
         MAX_TREE_PAGE_SUMMARIES,
     };
-    use crate::format::{ValidatedComponent, MAX_PATH_BYTES};
+    use crate::format::{PhysicalObjectKindV1, ValidatedComponent, MAX_PATH_BYTES};
     use crate::identity::{
         derive_file_node_v1, derive_logical_chunk_v1, derive_logical_file_v1,
         derive_physical_chunk_id_v1, derive_physical_file_id_v1, LogicalChunkRefV1,
@@ -123,13 +122,17 @@ pub mod semantic {
         COMPARISON_WINDOW_BYTES,
     };
     use crate::limits::{ObservationScopeV1, OperationCountersV1, OptionalObservationStatusV1};
+    use crate::object::{
+        decode_physical_object_from_port_v1, traverse_strong_edges_v1, PhysicalObjectReadPortV1,
+        StrongEdgeTraversalQueueV1, TypedPhysicalObjectIdV1,
+    };
     use crate::pack::{SealedPackV1, PACK_HEADER_BYTES};
     use crate::profile::ProfileSpecV1;
     use crate::read::extraction::{extract_root_v1, read_file_range_impl_v1};
     use crate::read::{
         ReadBuffersV1, ReadKindV1, ReadOperationErrorV1, ReadSinkErrorV1, ReadSinkV1,
     };
-    use crate::CoreError;
+    use crate::{CoreError, CoreResult};
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum OpenExistingObservationV1 {
@@ -624,6 +627,43 @@ pub mod semantic {
         pub logical_reconstruction_maximum_work_between_polls: u64,
         pub cow_mutation_control_polls: u64,
         pub cow_mutation_maximum_work_between_polls: u64,
+        pub closure_validation_control_polls: u64,
+        pub closure_validation_maximum_work_between_polls: u64,
+        pub candidate_graph_control_polls: u64,
+        pub candidate_graph_maximum_work_between_polls: u64,
+        pub pack_finalization_read_calls: u64,
+        pub pack_finalization_read_bytes: u64,
+        pub pack_finalization_hash_calls: u64,
+        pub pack_finalization_hash_bytes: u64,
+        pub pre_install_validation_read_calls: u64,
+        pub pre_install_validation_read_bytes: u64,
+        pub pre_install_validation_hash_calls: u64,
+        pub pre_install_validation_hash_bytes: u64,
+        pub pre_install_validation_decode_calls: u64,
+        pub pre_install_validation_decode_bytes: u64,
+        pub installed_carrier_validation_read_calls: u64,
+        pub installed_carrier_validation_read_bytes: u64,
+        pub installed_carrier_validation_hash_calls: u64,
+        pub installed_carrier_validation_hash_bytes: u64,
+        pub installed_carrier_validation_decode_calls: u64,
+        pub installed_carrier_validation_decode_bytes: u64,
+        pub closure_validation_port_calls: u64,
+        pub closure_validation_port_bytes: u64,
+        pub closure_validation_hash_calls: u64,
+        pub closure_validation_hash_bytes: u64,
+        pub closure_validation_decode_calls: u64,
+        pub closure_validation_decode_bytes: u64,
+        pub candidate_graph_port_calls: u64,
+        pub candidate_graph_port_bytes: u64,
+        pub candidate_graph_hash_calls: u64,
+        pub candidate_graph_hash_bytes: u64,
+        pub candidate_graph_decode_calls: u64,
+        pub candidate_graph_decode_bytes: u64,
+        pub locator_index_probes: u64,
+        pub locator_index_read_calls: u64,
+        pub locator_index_read_bytes: u64,
+        pub locator_index_decode_calls: u64,
+        pub locator_index_decode_bytes: u64,
         pub storage_bytes_requested: u64,
         pub storage_bytes_reserved: u64,
         pub storage_bytes_released: u64,
@@ -694,6 +734,279 @@ pub mod semantic {
         pub counters: CompleteCreateCountersV1,
     }
 
+    const COMPLETE_CREATE_QUALIFICATION_MAX_CLOSURE_OBJECTS_V1: usize = 16;
+
+    #[derive(Clone, Copy)]
+    struct CompleteCreateQualificationClosureEntryV1 {
+        id: TypedPhysicalObjectIdV1,
+        canonical_len: u64,
+        complete: bool,
+    }
+
+    struct CompleteCreateQualificationClosureV1 {
+        entries: [Option<CompleteCreateQualificationClosureEntryV1>;
+            COMPLETE_CREATE_QUALIFICATION_MAX_CLOSURE_OBJECTS_V1],
+        count: u32,
+    }
+
+    impl CompleteCreateQualificationClosureV1 {
+        const fn new() -> Self {
+            Self {
+                entries: [None; COMPLETE_CREATE_QUALIFICATION_MAX_CLOSURE_OBJECTS_V1],
+                count: 0,
+            }
+        }
+
+        fn sorted_entries(
+            &mut self,
+        ) -> CoreResult<&[Option<CompleteCreateQualificationClosureEntryV1>]> {
+            let count = usize::try_from(self.count).map_err(|_| CoreError::IntegerOverflow)?;
+            let entries = self.entries.get_mut(..count).ok_or(CoreError::CountCap)?;
+            if entries
+                .iter()
+                .any(|entry| entry.is_none_or(|entry| !entry.complete))
+            {
+                return Err(CoreError::Truncated);
+            }
+            entries.sort_unstable_by(|left, right| match (*left, *right) {
+                (Some(left), Some(right)) => compare_closure_object_ids_v1(left.id, right.id),
+                _ => core::cmp::Ordering::Equal,
+            });
+            Ok(entries)
+        }
+    }
+
+    impl StrongEdgeTraversalQueueV1 for CompleteCreateQualificationClosureV1 {
+        fn enqueue_if_new_v1(&mut self, id: TypedPhysicalObjectIdV1) -> crate::CoreResult<()> {
+            if self.entries.iter().flatten().any(|entry| entry.id == id) {
+                return Ok(());
+            }
+            let index = usize::try_from(self.count).map_err(|_| CoreError::IntegerOverflow)?;
+            let target = self.entries.get_mut(index).ok_or(CoreError::CountCap)?;
+            *target = Some(CompleteCreateQualificationClosureEntryV1 {
+                id,
+                canonical_len: 0,
+                complete: false,
+            });
+            self.count = self
+                .count
+                .checked_add(1)
+                .ok_or(CoreError::IntegerOverflow)?;
+            Ok(())
+        }
+
+        fn pending_count_v1(&mut self) -> crate::CoreResult<u32> {
+            Ok(self.count)
+        }
+
+        fn pending_id_v1(&mut self, ordinal: u32) -> crate::CoreResult<TypedPhysicalObjectIdV1> {
+            let index = usize::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
+            self.entries
+                .get(index)
+                .copied()
+                .flatten()
+                .map(|entry| entry.id)
+                .ok_or(CoreError::MissingClosureEdge)
+        }
+
+        fn complete_pending_v1(
+            &mut self,
+            ordinal: u32,
+            complete_len: u64,
+        ) -> crate::CoreResult<()> {
+            let index = usize::try_from(ordinal).map_err(|_| CoreError::IntegerOverflow)?;
+            let entry = self
+                .entries
+                .get_mut(index)
+                .and_then(Option::as_mut)
+                .ok_or(CoreError::MissingClosureEdge)?;
+            if entry.complete {
+                return Err(CoreError::NonCanonicalOrder);
+            }
+            entry.canonical_len = complete_len;
+            entry.complete = true;
+            Ok(())
+        }
+    }
+
+    struct CompleteCreateQualificationObjectPortV1<'a> {
+        occupied: &'a mut FsCasOccupiedV1,
+        id: TypedPhysicalObjectIdV1,
+        canonical_len: u64,
+        first_error: &'a mut Option<FsCasErrorV1>,
+    }
+
+    impl PhysicalObjectReadPortV1 for CompleteCreateQualificationObjectPortV1<'_> {
+        fn len(&mut self) -> crate::CoreResult<u64> {
+            Ok(self.canonical_len)
+        }
+
+        fn read_exact_at(&mut self, offset: u64, destination: &mut [u8]) -> crate::CoreResult<()> {
+            match self
+                .occupied
+                .read_occupied_exact_at_typed_v1(self.id, offset, destination)
+            {
+                Ok(()) => Ok(()),
+                Err(error) => {
+                    self.first_error.get_or_insert(error);
+                    Err(match error {
+                        FsCasErrorV1::Core(error) => error,
+                        _ => CoreError::SourceFailure,
+                    })
+                }
+            }
+        }
+    }
+
+    const fn complete_create_qualification_kind_byte_v1(id: TypedPhysicalObjectIdV1) -> u8 {
+        match id {
+            TypedPhysicalObjectIdV1::VersionRecord(_) => 1,
+            TypedPhysicalObjectIdV1::Tree(_) => 2,
+            TypedPhysicalObjectIdV1::File(_) => 3,
+            TypedPhysicalObjectIdV1::Symlink(_) => 4,
+            TypedPhysicalObjectIdV1::Chunk(_) => 5,
+        }
+    }
+
+    impl CompleteCreateObservationV1 {
+        /// Authenticate this observation's closure and read one bounded
+        /// canonical-object window by closure ordinal. The CAS path and read
+        /// authority remain inside the qualification facade; the caller owns
+        /// the only returned byte buffer.
+        pub fn read_authenticated_closure_ordinal_v1(
+            self,
+            root: &Path,
+            ordinal: u64,
+            offset: u64,
+            scratch: &mut [u8; MAXIMUM_CHUNK_BYTES],
+        ) -> Result<(TypedPhysicalObjectIdV1, PhysicalObjectKindV1, u64, usize), PublicationErrorV1>
+        {
+            if self.error.is_some() {
+                return Err(PublicationErrorV1::Core(CoreError::Schema));
+            }
+            let version_record = self
+                .version_record
+                .ok_or(PublicationErrorV1::Core(CoreError::Schema))?;
+            let expected_count = self
+                .closure_object_count
+                .ok_or(PublicationErrorV1::Core(CoreError::Schema))?;
+            let expected_transcript = self
+                .closure_transcript
+                .ok_or(PublicationErrorV1::Core(CoreError::Schema))?;
+            if expected_count
+                > u64::try_from(COMPLETE_CREATE_QUALIFICATION_MAX_CLOSURE_OBJECTS_V1)
+                    .map_err(|_| PublicationErrorV1::Core(CoreError::IntegerOverflow))?
+            {
+                return Err(PublicationErrorV1::Core(CoreError::CountCap));
+            }
+
+            let cas = FsCasV1::open_existing(root).map_err(publication_error_v1)?;
+            let accepted = cas
+                .validate_closure_for_read_v1(version_record)
+                .map_err(publication_error_v1)?;
+            if accepted.version_record() != version_record
+                || accepted.object_count() != expected_count
+                || accepted.transcript() != expected_transcript
+            {
+                return Err(PublicationErrorV1::Integrity);
+            }
+
+            let mut occupied = cas.occupied_private_v1().map_err(publication_error_v1)?;
+            let mut closure = CompleteCreateQualificationClosureV1::new();
+            let mut first_error = None;
+            let mut decode_scratch = [0_u8; COMPARISON_WINDOW_BYTES];
+            let traversal = traverse_strong_edges_v1(
+                &mut closure,
+                TypedPhysicalObjectIdV1::VersionRecord(version_record),
+                |id, collector| {
+                    let canonical_len = match occupied.occupied_len_typed_v1(id) {
+                        Ok(Some(canonical_len)) => canonical_len,
+                        Ok(None) => return Err(CoreError::MissingClosureEdge),
+                        Err(error) => {
+                            first_error.get_or_insert(error);
+                            return Err(match error {
+                                FsCasErrorV1::Core(error) => error,
+                                _ => CoreError::SourceFailure,
+                            });
+                        }
+                    };
+                    let mut port = CompleteCreateQualificationObjectPortV1 {
+                        occupied: &mut occupied,
+                        id,
+                        canonical_len,
+                        first_error: &mut first_error,
+                    };
+                    let decoded = decode_physical_object_from_port_v1(
+                        &mut port,
+                        collector,
+                        &mut decode_scratch,
+                    )?;
+                    if decoded.physical_id() != id
+                        || decoded.header().complete_len() != canonical_len
+                    {
+                        return Err(CoreError::IdMismatch);
+                    }
+                    Ok((canonical_len, ()))
+                },
+                |_ordinal, _id, _canonical_len, ()| Ok(()),
+                || Ok(()),
+            );
+            if let Err(error) = traversal {
+                return Err(first_error
+                    .map(publication_error_v1)
+                    .unwrap_or(PublicationErrorV1::Core(error)));
+            }
+            if u64::from(closure.count) != expected_count {
+                return Err(PublicationErrorV1::Integrity);
+            }
+
+            let entries = closure.sorted_entries().map_err(PublicationErrorV1::Core)?;
+            let mut transcript = blake3::Hasher::new();
+            transcript.update(b"LAYERFS-CLOSURE-TRANSCRIPT-V1\0");
+            transcript.update(&expected_count.to_be_bytes());
+            for (entry_ordinal, entry) in entries.iter().enumerate() {
+                let entry = entry.ok_or(PublicationErrorV1::Core(CoreError::Truncated))?;
+                let entry_ordinal = u64::try_from(entry_ordinal)
+                    .map_err(|_| PublicationErrorV1::Core(CoreError::IntegerOverflow))?;
+                transcript.update(&entry_ordinal.to_be_bytes());
+                transcript.update(&[complete_create_qualification_kind_byte_v1(entry.id)]);
+                transcript.update(entry.id.as_bytes());
+                transcript.update(&entry.canonical_len.to_be_bytes());
+            }
+            if *transcript.finalize().as_bytes() != expected_transcript {
+                return Err(PublicationErrorV1::Integrity);
+            }
+
+            let index = usize::try_from(ordinal)
+                .map_err(|_| PublicationErrorV1::Core(CoreError::IntegerOverflow))?;
+            let entry = entries
+                .get(index)
+                .copied()
+                .flatten()
+                .ok_or(PublicationErrorV1::Core(CoreError::CountCap))?;
+            if offset > entry.canonical_len {
+                return Err(PublicationErrorV1::Core(CoreError::Truncated));
+            }
+            let remaining = entry
+                .canonical_len
+                .checked_sub(offset)
+                .ok_or(PublicationErrorV1::Core(CoreError::IntegerOverflow))?;
+            let read_len = usize::try_from(remaining.min(MAXIMUM_CHUNK_BYTES as u64))
+                .map_err(|_| PublicationErrorV1::Core(CoreError::IntegerOverflow))?;
+            let resolved_len = occupied
+                .occupied_len_typed_v1(entry.id)
+                .map_err(publication_error_v1)?
+                .ok_or(PublicationErrorV1::Core(CoreError::MissingClosureEdge))?;
+            if resolved_len != entry.canonical_len {
+                return Err(PublicationErrorV1::Integrity);
+            }
+            occupied
+                .read_occupied_exact_at_typed_v1(entry.id, offset, &mut scratch[..read_len])
+                .map_err(publication_error_v1)?;
+            Ok((entry.id, entry.id.kind(), entry.canonical_len, read_len))
+        }
+    }
+
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum CompleteCreateCaseV1 {
         StorageCounterMergeOverflow,
@@ -751,6 +1064,14 @@ pub mod semantic {
         pub fscas_read_calls: u64,
         pub fscas_bytes_read: u64,
         pub update_failures: u64,
+        pub content_update_control_polls: u64,
+        pub content_update_maximum_work_between_polls: u64,
+        pub cow_mutation_control_polls: u64,
+        pub cow_mutation_maximum_work_between_polls: u64,
+        pub closure_validation_control_polls: u64,
+        pub closure_validation_maximum_work_between_polls: u64,
+        pub candidate_graph_control_polls: u64,
+        pub candidate_graph_maximum_work_between_polls: u64,
         pub storage_bytes_requested: u64,
         pub storage_bytes_reserved: u64,
         pub storage_bytes_released: u64,
@@ -10268,6 +10589,7 @@ pub mod semantic {
     struct PanicPrivatePackCleanupControl {
         after_catalog_publication: bool,
         publication_poll_passed: bool,
+        private_pack_write_started: bool,
         cleanup_panicked: bool,
     }
 
@@ -10276,11 +10598,8 @@ pub mod semantic {
             if !self.after_catalog_publication {
                 return false;
             }
-            if !self.publication_poll_passed {
-                self.publication_poll_passed = true;
-                return false;
-            }
-            true
+            self.publication_poll_passed = true;
+            self.private_pack_write_started
         }
     }
 
@@ -10307,6 +10626,18 @@ pub mod semantic {
 
         fn deadline_exceeded(&mut self) -> bool {
             false
+        }
+
+        fn inject_filesystem_failure(
+            &mut self,
+            boundary: FsCasFilesystemBoundaryV1,
+        ) -> Option<FsCasErrorV1> {
+            if self.after_catalog_publication
+                && boundary == FsCasFilesystemBoundaryV1::PrivatePackWrite
+            {
+                self.private_pack_write_started = true;
+            }
+            None
         }
 
         fn inject_cleanup_failure(&mut self, target: FsCasCleanupTargetV1) -> bool {
@@ -11107,6 +11438,51 @@ pub mod semantic {
             cow_mutation_control_polls: counters.cow_mutation_control_polls,
             cow_mutation_maximum_work_between_polls: counters
                 .cow_mutation_maximum_work_between_polls,
+            closure_validation_control_polls: counters.closure_validation_control_polls,
+            closure_validation_maximum_work_between_polls: counters
+                .closure_validation_maximum_work_between_polls,
+            candidate_graph_control_polls: counters.candidate_graph_control_polls,
+            candidate_graph_maximum_work_between_polls: counters
+                .candidate_graph_maximum_work_between_polls,
+            pack_finalization_read_calls: counters.pack_finalization_read_calls,
+            pack_finalization_read_bytes: counters.pack_finalization_read_bytes,
+            pack_finalization_hash_calls: counters.pack_finalization_hash_calls,
+            pack_finalization_hash_bytes: counters.pack_finalization_hash_bytes,
+            pre_install_validation_read_calls: counters.pre_install_validation_read_calls,
+            pre_install_validation_read_bytes: counters.pre_install_validation_read_bytes,
+            pre_install_validation_hash_calls: counters.pre_install_validation_hash_calls,
+            pre_install_validation_hash_bytes: counters.pre_install_validation_hash_bytes,
+            pre_install_validation_decode_calls: counters.pre_install_validation_decode_calls,
+            pre_install_validation_decode_bytes: counters.pre_install_validation_decode_bytes,
+            installed_carrier_validation_read_calls: counters
+                .installed_carrier_validation_read_calls,
+            installed_carrier_validation_read_bytes: counters
+                .installed_carrier_validation_read_bytes,
+            installed_carrier_validation_hash_calls: counters
+                .installed_carrier_validation_hash_calls,
+            installed_carrier_validation_hash_bytes: counters
+                .installed_carrier_validation_hash_bytes,
+            installed_carrier_validation_decode_calls: counters
+                .installed_carrier_validation_decode_calls,
+            installed_carrier_validation_decode_bytes: counters
+                .installed_carrier_validation_decode_bytes,
+            closure_validation_port_calls: counters.closure_validation_port_calls,
+            closure_validation_port_bytes: counters.closure_validation_port_bytes,
+            closure_validation_hash_calls: counters.closure_validation_hash_calls,
+            closure_validation_hash_bytes: counters.closure_validation_hash_bytes,
+            closure_validation_decode_calls: counters.closure_validation_decode_calls,
+            closure_validation_decode_bytes: counters.closure_validation_decode_bytes,
+            candidate_graph_port_calls: counters.candidate_graph_port_calls,
+            candidate_graph_port_bytes: counters.candidate_graph_port_bytes,
+            candidate_graph_hash_calls: counters.candidate_graph_hash_calls,
+            candidate_graph_hash_bytes: counters.candidate_graph_hash_bytes,
+            candidate_graph_decode_calls: counters.candidate_graph_decode_calls,
+            candidate_graph_decode_bytes: counters.candidate_graph_decode_bytes,
+            locator_index_probes: counters.locator_index_probes,
+            locator_index_read_calls: counters.locator_index_read_calls,
+            locator_index_read_bytes: counters.locator_index_read_bytes,
+            locator_index_decode_calls: counters.locator_index_decode_calls,
+            locator_index_decode_bytes: counters.locator_index_decode_bytes,
             storage_bytes_requested: counters.storage_bytes_requested,
             storage_bytes_reserved: counters.storage_bytes_reserved,
             storage_bytes_released: counters.storage_bytes_released,
@@ -11145,36 +11521,16 @@ pub mod semantic {
     }
 
     fn complete_closure_marker_observation(
-        root: &Path,
-        successful: bool,
+        cas: &FsCasV1,
+        version_record: Option<PhysicalVersionRecordIdV1>,
     ) -> (Option<u64>, Option<[u8; 32]>) {
-        if !successful {
+        let Some(version_record) = version_record else {
             return (None, None);
-        }
-        let mut entries = fs::read_dir(root.join("closures"))
-            .expect("successful complete Create closure namespace");
-        let marker_path = entries
-            .next()
-            .expect("successful complete Create closure marker")
-            .expect("successful complete Create closure entry")
-            .path();
-        assert!(
-            entries.next().is_none(),
-            "successful complete Create produced extra closure markers"
-        );
-        let bytes = fs::read(marker_path).expect("successful complete Create closure bytes");
-        let marker: [u8; CLOSURE_MARKER_BYTES] = bytes
-            .try_into()
-            .expect("successful complete Create closure marker length");
-        let object_count = u64::from_be_bytes(
-            marker[48..56]
-                .try_into()
-                .expect("closure object-count bytes"),
-        );
-        let transcript = marker[88..120]
-            .try_into()
-            .expect("closure transcript bytes");
-        (Some(object_count), Some(transcript))
+        };
+        let accepted = cas
+            .validate_closure_for_read_v1(version_record)
+            .expect("successful complete Create authenticated closure marker");
+        (Some(accepted.object_count()), Some(accepted.transcript()))
     }
 
     fn observe_complete_create(
@@ -11197,7 +11553,7 @@ pub mod semantic {
         let reference = handoff.map(|value| value.reference_spool_bytes());
         let index = handoff.map(|value| value.index_spool_bytes());
         let (closure_object_count, closure_transcript) =
-            complete_closure_marker_observation(root, handoff.is_some());
+            complete_closure_marker_observation(cas, handoff.map(|value| value.version_record()));
         let (preparation_bytes, preparation_inodes) = directory_usage(&root.join("preparation"));
         let (immutable_bytes, immutable_inodes) = immutable_usage(root);
         let operation_admitted_slots = cas.operation_admitted_slots_v1();
@@ -13742,6 +14098,18 @@ pub mod semantic {
             fscas_read_calls: counters.fscas_read_calls,
             fscas_bytes_read: counters.fscas_bytes_read,
             update_failures: counters.update_failures,
+            content_update_control_polls: counters.content_update_control_polls,
+            content_update_maximum_work_between_polls: counters
+                .content_update_maximum_work_between_polls,
+            cow_mutation_control_polls: counters.cow_mutation_control_polls,
+            cow_mutation_maximum_work_between_polls: counters
+                .cow_mutation_maximum_work_between_polls,
+            closure_validation_control_polls: counters.closure_validation_control_polls,
+            closure_validation_maximum_work_between_polls: counters
+                .closure_validation_maximum_work_between_polls,
+            candidate_graph_control_polls: counters.candidate_graph_control_polls,
+            candidate_graph_maximum_work_between_polls: counters
+                .candidate_graph_maximum_work_between_polls,
             storage_bytes_requested: counters.storage_bytes_requested,
             storage_bytes_reserved: counters.storage_bytes_reserved,
             storage_bytes_released: counters.storage_bytes_released,
@@ -19213,7 +19581,7 @@ where
 
             // This bounded evidence authentication remains preparation-free.
             // Its error/unwind terminal now balances the same root lease.
-            authenticate_base_file_evidence_v1(base_file, chunk_evidence, counters)?;
+            authenticate_base_file_evidence_v1(base_file, chunk_evidence, control, counters)?;
             check_lifecycle_control_v1(control)?;
             Ok((
                 component,
@@ -19238,12 +19606,14 @@ where
         move |storage, control_cell, reservation, buffers, counters| {
             let file = {
                 let (references, sink) = storage.content_parts_v1();
+                let mut metadata_control = SharedOperationControlV1::new(control_cell);
                 reencode_file_metadata_borrowed_v1(
                     new_mode,
                     base_file,
                     chunk_evidence,
                     sink,
                     references,
+                    &mut metadata_control,
                     reservation,
                     counters,
                 )?

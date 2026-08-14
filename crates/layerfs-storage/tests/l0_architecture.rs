@@ -1438,6 +1438,19 @@ fn assertion_bridge_graph(
             start
         })
         .collect::<Vec<_>>();
+    let mut statement_left_start = 0_usize;
+    let statement_left_starts = bytes
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, byte)| {
+            let start = statement_left_start;
+            if matches!(byte, b';' | b'{' | b'}') {
+                statement_left_start = index + 1;
+            }
+            start
+        })
+        .collect::<Vec<_>>();
     let mut right_targets = BTreeMap::<usize, (usize, BTreeSet<String>)>::new();
     let mut assignment_count = 0_usize;
     let mut assignment_right_bytes = 0_usize;
@@ -1458,11 +1471,19 @@ fn assertion_bridge_graph(
             continue;
         }
         let left_source = &source[left_starts[operator]..operator];
+        let statement_left_source = &source[statement_left_starts[operator]..operator];
+        let destructured_let = assignment
+            && statement_left_source
+                .rfind("let ")
+                .map(|start| statement_left_source[start + "let ".len()..].trim_start())
+                .is_some_and(|pattern| pattern.starts_with('(') || pattern.starts_with('['));
         let left = if arm {
             semantic_identifiers(left_source, false)
                 .into_iter()
                 .chain(assertion_value_nodes(left_source))
                 .collect::<Vec<_>>()
+        } else if destructured_let {
+            semantic_identifiers(statement_left_source, false)
         } else if left_source.contains("const ") || left_source.contains("static ") {
             constant_identifiers(left_source)
         } else if left_source.contains('(') || left_source.contains('[') {
@@ -2224,6 +2245,19 @@ fn pb08_assertion_contract_matcher_is_mutation_sensitive() {
         &["assert_eq!(counters.fscas_bytes_written,0)"],
         &["assert_eq!(observation.bytes_written(),1)"],
         counter_field_bridge,
+    ));
+    let tuple_bridge = "let (storage_active_operations,_,_)=\
+                        cas.storage_admission_active_for_test_v1();\
+                        let observation=Observation{storage_active_operations};";
+    assert!(!gap(
+        &["assert_eq!(cas.storage_admission_active_for_test_v1().0,1)"],
+        &["assert_eq!(observation.storage_active_operations,1)"],
+        tuple_bridge,
+    ));
+    assert!(gap(
+        &["assert_eq!(cas.storage_admission_active_for_test_v1().0,1)"],
+        &["assert_eq!(observation.storage_active_operations,0)"],
+        tuple_bridge,
     ));
     assert!(!gap(
         &["assert_eq!(counters.fscas_bytes_written,0)"],
@@ -4783,9 +4817,9 @@ fn pb08_final_sources_are_substantive_and_alias_free() {
     );
     for (relative, expected_tests, expected_feature_gates) in [
         ("cas_admission.rs", 51, 1),
-        ("cow_locality.rs", 17, 1),
+        ("cow_locality.rs", 19, 1),
         ("operation_concurrency.rs", 23, 1),
-        ("operation_create.rs", 47, 3),
+        ("operation_create.rs", 49, 3),
         ("operation_faults.rs", 74, 1),
         ("operation_lifecycle.rs", 31, 1),
         ("operation_mutation.rs", 13, 3),
@@ -4905,19 +4939,28 @@ fn pb08_final_sources_are_substantive_and_alias_free() {
         .collect::<Vec<_>>();
     assert_eq!(
         export_names.len(),
-        262,
+        263,
         "qualification export count drifted"
+    );
+    assert_eq!(
+        export_names
+            .iter()
+            .filter(|name| **name == "TreeMutationControlV1")
+            .count(),
+        1,
+        "PB-08A COW control export drifted"
     );
     assert!(export_names.iter().all(|name| !name.contains(['*', ' '])));
     let normalized_exports = exports.join("\n");
+    let historical_pb08_exports = normalized_exports.replace("TreeMutationControlV1,", "");
     assert_eq!(
-        digest_hex(normalized_exports.as_bytes()),
+        digest_hex(historical_pb08_exports.as_bytes()),
         "0e4e355a02a55c30ef8fb6cb9f7e78c5454b6009f8cc083dfb3d67547617f82e",
-        "qualification export allowlist drifted"
+        "historical PB-08 qualification export allowlist drifted"
     );
     assert_ne!(
         digest_hex(
-            normalized_exports
+            historical_pb08_exports
                 .replacen("admit_v1", "admit_v2", 1)
                 .as_bytes()
         ),
@@ -5279,8 +5322,24 @@ fn pb08_custody_inventory_is_executable_and_exact() {
             "pb08a_move_replace_pair_and_frozen_suffix_work_are_direct_and_exact",
         ),
         (
+            "cow_locality.rs",
+            "replacement_cancellation_is_polled_during_canonical_entry_validation",
+        ),
+        (
+            "cow_locality.rs",
+            "replacement_deadline_is_polled_during_evidence_sizing",
+        ),
+        (
             "operation_create.rs",
             "exact_10_mib_complete_operation_is_the_fast_iteration_path",
+        ),
+        (
+            "operation_create.rs",
+            "complete_create_reconstruction_is_equivalent_across_frozen_fragmentation_schedules",
+        ),
+        (
+            "operation_create.rs",
+            "oversized_eof_probe_is_a_source_failure_without_fabricated_bytes",
         ),
     ] {
         assert!(
@@ -5298,7 +5357,7 @@ fn pb08_custody_inventory_is_executable_and_exact() {
             "PB-08 custody plus PB-08A extensions do not describe the exact registered tests in {owner}"
         );
     }
-    for (owner, expected_count) in owner_names.into_iter().zip([51, 17, 23, 47, 74, 31, 13, 9]) {
+    for (owner, expected_count) in owner_names.into_iter().zip([51, 19, 23, 49, 74, 31, 13, 9]) {
         assert_eq!(
             current_names.get(owner).expect("current owner names").len(),
             expected_count,
@@ -5316,7 +5375,7 @@ fn pb08_custody_inventory_is_executable_and_exact() {
                 .insert(row[3].to_owned());
         }
     }
-    for (owner, expected_count) in owner_names.into_iter().zip([51, 17, 23, 25, 74, 31, 13, 3]) {
+    for (owner, expected_count) in owner_names.into_iter().zip([51, 19, 23, 27, 74, 31, 13, 3]) {
         let actual = feature_gated_test_names(current_sources.get(owner).unwrap());
         let historical = expected_gated.get(owner).cloned().unwrap_or_default();
         assert!(

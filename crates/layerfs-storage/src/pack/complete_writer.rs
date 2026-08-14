@@ -32,10 +32,11 @@ use crate::profile::{ChunkerSpecV1, DigestSpecV1};
 use crate::{CoreError, CoreResult};
 
 use super::{
-    encode_header, encode_index_entry, encode_trailer_prefix, hash_port_range_controlled_v1,
-    record_padding, CompletedPackSetV1, PackIndexEntryV1, PackIndexSpoolV1, PackPortErrorV1,
-    PackReadPortV1, PrivatePackPortV1, SealedPackV1, MAX_PACK_BYTES, MAX_PACK_RECORDS,
-    PACK_INDEX_ENTRY_BYTES, PACK_TRAILER_BYTES,
+    encode_header, encode_index_entry, encode_trailer_prefix,
+    hash_port_range_controlled_recorded_v1, record_padding, CompletedPackSetV1, PackIndexEntryV1,
+    PackIndexSpoolV1, PackPortErrorV1, PackReadPortV1, PrivatePackPortV1, SealedPackV1,
+    MAX_PACK_BYTES, MAX_PACK_RECORDS, PACK_FINALIZATION_HASH_RECORDERS_V1,
+    PACK_FINALIZATION_READ_RECORDERS_V1, PACK_INDEX_ENTRY_BYTES, PACK_TRAILER_BYTES,
 };
 
 struct CurrentObjectV1 {
@@ -230,14 +231,7 @@ where
     }
 
     fn poll_control_v1(&mut self) -> CoreResult<()> {
-        let mut control = SharedOperationControlV1::new(self.control);
-        if crate::limits::OperationWorkControlV1::cancellation_requested_v1(&mut control) {
-            Err(CoreError::Cancelled)
-        } else if crate::limits::OperationWorkControlV1::deadline_exceeded_v1(&mut control) {
-            Err(CoreError::Deadline)
-        } else {
-            Ok(())
-        }
+        poll_borrowed_operation_control_v1(self.control)
     }
 
     fn lookup_global_seen_v1(
@@ -268,10 +262,16 @@ where
         self.direct_read_calls = 0;
         let carrier_record_cap =
             u32::try_from(MAX_PACK_RECORDS).map_err(|_| CoreError::IntegerOverflow)?;
-        if let Err(error) = self
-            .metadata
-            .reset(self.maximum_records.min(carrier_record_cap))
-        {
+        let maximum_entries = self.maximum_records.min(carrier_record_cap);
+        let reset = {
+            let mut shared_control = SharedOperationControlV1::new(self.control);
+            self.metadata.reset_controlled_v1(
+                maximum_entries,
+                &mut shared_control,
+                &mut self.storage_counters,
+            )
+        };
+        if let Err(error) = reset {
             return Err(self.promote_metadata_spool_error_v1(error));
         }
         self.record_count = 0;
@@ -772,12 +772,21 @@ where
         if self.record_count >= self.maximum_records {
             return Err(CoreError::CountCap);
         }
-        if let Err(error) = self.metadata.push(PackIndexEntryV1::from_validated_parts(
+        let index_entry = PackIndexEntryV1::from_validated_parts(
             expected_id,
             current.record_offset,
             u32::try_from(current.complete_len).map_err(|_| CoreError::IntegerOverflow)?,
             checksum,
-        )) {
+        );
+        let push = {
+            let mut shared_control = SharedOperationControlV1::new(self.control);
+            self.metadata.push_controlled_v1(
+                index_entry,
+                &mut shared_control,
+                &mut self.storage_counters,
+            )
+        };
+        if let Err(error) = push {
             return Err(self.promote_metadata_spool_error_v1(error));
         }
         let carrier_ordinal = self.carrier_count;
@@ -819,29 +828,8 @@ where
     fn compare_objects(&mut self, left: u64, right: u64, len: u64) -> CoreResult<bool> {
         let mut offset = 0_u64;
         while offset < len {
-            self.poll_control_v1()?;
             let take = usize::try_from((len - offset).min(COMPARISON_WINDOW_BYTES as u64))
                 .map_err(|_| CoreError::IntegerOverflow)?;
-            self.pack
-                .read_exact_at(left + offset, &mut self.left[..take])
-                .map_err(|error| {
-                    map_private_pack_error_v1(
-                        &mut self.pack,
-                        &mut self.first_fscas_error,
-                        error,
-                        CoreError::SourceFailure,
-                    )
-                })?;
-            self.pack
-                .read_exact_at(right + offset, &mut self.right[..take])
-                .map_err(|error| {
-                    map_private_pack_error_v1(
-                        &mut self.pack,
-                        &mut self.first_fscas_error,
-                        error,
-                        CoreError::SourceFailure,
-                    )
-                })?;
             #[cfg(any(test, feature = "operation-polymorphism"))]
             if self
                 .control
@@ -851,15 +839,38 @@ where
                 self.direct_read_bytes = 71;
                 self.direct_read_calls = u64::MAX;
             }
-            let read_bytes = u64::try_from(take)
-                .map_err(|_| CoreError::IntegerOverflow)?
-                .checked_mul(2)
-                .ok_or(CoreError::IntegerOverflow)?;
-            accumulate_direct_read_observation_v1(
+            let control = self.control;
+            read_private_pack_comparison_controlled_v1(
+                &mut self.pack,
+                left + offset,
+                &mut self.left[..take],
                 &mut self.direct_read_bytes,
                 &mut self.direct_read_calls,
-                read_bytes,
-                2,
+                || poll_borrowed_operation_control_v1(control),
+                |pack, error| {
+                    map_private_pack_error_v1(
+                        pack,
+                        &mut self.first_fscas_error,
+                        error,
+                        CoreError::SourceFailure,
+                    )
+                },
+            )?;
+            read_private_pack_comparison_controlled_v1(
+                &mut self.pack,
+                right + offset,
+                &mut self.right[..take],
+                &mut self.direct_read_bytes,
+                &mut self.direct_read_calls,
+                || poll_borrowed_operation_control_v1(control),
+                |pack, error| {
+                    map_private_pack_error_v1(
+                        pack,
+                        &mut self.first_fscas_error,
+                        error,
+                        CoreError::SourceFailure,
+                    )
+                },
             )?;
             if self.left[..take] != self.right[..take] {
                 return Ok(false);
@@ -916,21 +927,22 @@ where
                 if let Err(error) = occupied_read {
                     return Err(self.map_occupied_fscas_error(error));
                 }
-                self.pack
-                    .read_exact_at(private_offset + offset, &mut self.right[..take])
-                    .map_err(|error| {
+                let control = self.control;
+                read_private_pack_comparison_controlled_v1(
+                    &mut self.pack,
+                    private_offset + offset,
+                    &mut self.right[..take],
+                    &mut self.direct_read_bytes,
+                    &mut self.direct_read_calls,
+                    || poll_borrowed_operation_control_v1(control),
+                    |pack, error| {
                         map_private_pack_error_v1(
-                            &mut self.pack,
+                            pack,
                             &mut self.first_fscas_error,
                             error,
                             CoreError::SourceFailure,
                         )
-                    })?;
-                accumulate_direct_read_observation_v1(
-                    &mut self.direct_read_bytes,
-                    &mut self.direct_read_calls,
-                    u64::try_from(take).map_err(|_| CoreError::IntegerOverflow)?,
-                    1,
+                    },
                 )?;
                 if self.left[..take] != self.right[..take] {
                     return Ok(false);
@@ -1116,8 +1128,12 @@ where
         let mut emitted = 0_u32;
         let mut previous = None;
         loop {
-            self.poll_control_v1()?;
-            let entry = match self.metadata.next() {
+            let next = {
+                let mut shared_control = SharedOperationControlV1::new(self.control);
+                self.metadata
+                    .next_controlled_v1(&mut shared_control, &mut self.storage_counters)
+            };
+            let entry = match next {
                 Ok(Some(entry)) => entry,
                 Ok(None) => break,
                 Err(error) => return Err(self.promote_metadata_spool_error_v1(error)),
@@ -1158,7 +1174,7 @@ where
         }
         let digest_result = {
             let mut control = SharedOperationControlV1::new(self.control);
-            hash_port_range_controlled_v1(
+            hash_port_range_controlled_recorded_v1(
                 &mut counted_pack,
                 0,
                 checksum_len,
@@ -1166,6 +1182,8 @@ where
                 self.left,
                 counters,
                 &mut control,
+                Some(PACK_FINALIZATION_READ_RECORDERS_V1),
+                Some(PACK_FINALIZATION_HASH_RECORDERS_V1),
             )
         };
         let next_direct_read_bytes = self
@@ -1382,6 +1400,59 @@ fn accumulate_direct_read_observation_v1(
     Ok(())
 }
 
+fn poll_borrowed_operation_control_v1<C>(control: &RefCell<&mut C>) -> CoreResult<()>
+where
+    C: CdcControlV1 + FsCasControlV1 + ?Sized,
+{
+    let mut control = SharedOperationControlV1::new(control);
+    if crate::limits::OperationWorkControlV1::cancellation_requested_v1(&mut control) {
+        Err(CoreError::Cancelled)
+    } else if crate::limits::OperationWorkControlV1::deadline_exceeded_v1(&mut control) {
+        Err(CoreError::Deadline)
+    } else {
+        Ok(())
+    }
+}
+
+fn read_private_pack_comparison_controlled_v1<P, Poll, MapError>(
+    pack: &mut P,
+    offset: u64,
+    destination: &mut [u8],
+    direct_read_bytes: &mut u64,
+    direct_read_calls: &mut u64,
+    mut poll: Poll,
+    map_error: MapError,
+) -> CoreResult<()>
+where
+    P: PackReadPortV1 + ?Sized,
+    Poll: FnMut() -> CoreResult<()>,
+    MapError: FnOnce(&mut P, PackPortErrorV1) -> CoreError,
+{
+    poll()?;
+    accumulate_direct_read_observation_v1(direct_read_bytes, direct_read_calls, 0, 1)?;
+    let read = match pack.read_exact_at(offset, destination) {
+        Ok(()) => u64::try_from(destination.len())
+            .map_err(|_| CoreError::IntegerOverflow)
+            .and_then(|completed_bytes| {
+                accumulate_direct_read_observation_v1(
+                    direct_read_bytes,
+                    direct_read_calls,
+                    completed_bytes,
+                    0,
+                )
+            }),
+        Err(error) => Err(map_error(pack, error)),
+    };
+    let post_poll = poll();
+    match read {
+        Err(error) => {
+            let _ = post_poll;
+            Err(error)
+        }
+        Ok(()) => post_poll,
+    }
+}
+
 /// Ordered terminal result for an occupied-object comparison.  The read
 /// observation after the comparison is mandatory direct attribution, but it
 /// occurs after the comparison body and therefore cannot replace its first
@@ -1459,6 +1530,11 @@ mod tests {
         reads: u64,
     }
 
+    struct BoundaryReadPortV1 {
+        reads: u64,
+        fail_next: bool,
+    }
+
     impl PackReadPortV1 for FillingReadPortV1 {
         fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
             Ok(0)
@@ -1480,6 +1556,30 @@ mod tests {
             let source = self.bytes.get(start..end).ok_or(PackPortErrorV1::Failure)?;
             destination.copy_from_slice(source);
             self.reads += 1;
+            Ok(())
+        }
+    }
+
+    impl PackReadPortV1 for BoundaryReadPortV1 {
+        fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+            Ok(0)
+        }
+
+        fn len(&mut self) -> Result<u64, PackPortErrorV1> {
+            Ok(4)
+        }
+
+        fn read_exact_at(
+            &mut self,
+            _offset: u64,
+            destination: &mut [u8],
+        ) -> Result<(), PackPortErrorV1> {
+            self.reads += 1;
+            if self.fail_next {
+                self.fail_next = false;
+                return Err(PackPortErrorV1::Failure);
+            }
+            destination.fill(0x5a);
             Ok(())
         }
     }
@@ -1523,6 +1623,83 @@ mod tests {
             Err(CoreError::IntegerOverflow)
         );
         assert_eq!((bytes_read, read_calls), (71, u64::MAX));
+    }
+
+    #[test]
+    fn private_pack_read_boundary_preserves_attempts_bytes_and_first_error() {
+        let mut port = BoundaryReadPortV1 {
+            reads: 0,
+            fail_next: false,
+        };
+        let mut destination = [0_u8; 4];
+        let mut bytes_read = 0;
+        let mut read_calls = 0;
+        let mut polls = 0;
+
+        assert_eq!(
+            read_private_pack_comparison_controlled_v1(
+                &mut port,
+                0,
+                &mut destination,
+                &mut bytes_read,
+                &mut read_calls,
+                || {
+                    polls += 1;
+                    Ok(())
+                },
+                |_, _| CoreError::SourceFailure,
+            ),
+            Ok(())
+        );
+        assert_eq!((port.reads, bytes_read, read_calls, polls), (1, 4, 1, 2));
+        assert_eq!(destination, [0x5a; 4]);
+
+        port.fail_next = true;
+        let mut boundary_polls = 0;
+        assert_eq!(
+            read_private_pack_comparison_controlled_v1(
+                &mut port,
+                0,
+                &mut destination,
+                &mut bytes_read,
+                &mut read_calls,
+                || {
+                    boundary_polls += 1;
+                    if boundary_polls == 2 {
+                        Err(CoreError::Cancelled)
+                    } else {
+                        Ok(())
+                    }
+                },
+                |_, _| CoreError::IdMismatch,
+            ),
+            Err(CoreError::IdMismatch)
+        );
+        assert_eq!((port.reads, bytes_read, read_calls), (2, 4, 2));
+        assert_eq!(boundary_polls, 2);
+
+        boundary_polls = 0;
+        assert_eq!(
+            read_private_pack_comparison_controlled_v1(
+                &mut port,
+                0,
+                &mut destination,
+                &mut bytes_read,
+                &mut read_calls,
+                || {
+                    boundary_polls += 1;
+                    if boundary_polls == 2 {
+                        Err(CoreError::Deadline)
+                    } else {
+                        Ok(())
+                    }
+                },
+                |_, _| CoreError::SourceFailure,
+            ),
+            Err(CoreError::Deadline)
+        );
+        assert_eq!((port.reads, bytes_read, read_calls), (3, 8, 3));
+        assert_eq!(boundary_polls, 2);
     }
 
     #[test]

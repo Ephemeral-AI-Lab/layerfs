@@ -5,14 +5,17 @@
 //! metadata is replayed to authenticate the base logical identity and to
 //! structurally reuse untouched references; base payload is never scanned.
 
+use std::cell::RefCell;
+
 pub(crate) use crate::cdc::MAX_UPDATE_RESYNCHRONIZATION_BYTES;
 use crate::cdc::{
     BorrowedChunkV1, BoundaryConsumerV1, CdcBoundaryConsumerErrorV1, CdcControlV1, ChunkBoundaryV1,
     FastCdcV1, RejoinOperationBindingV1, VerifiedRejoinV1, MAXIMUM_CHUNK_BYTES,
 };
 use crate::content::{
-    write_chunk_object, write_file_object_and_logical, ChunkReferenceSpoolV1, ContentSourceErrorV1,
-    ContentSourceV1, ObjectDispositionV1, PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1,
+    write_chunk_object_controlled_v1, write_file_object_and_logical_controlled_v1,
+    ChunkReferenceSpoolV1, ContentSourceErrorV1, ContentSourceV1, ContentUpdateWorkV1,
+    ObjectDispositionV1, PreparedChunkRefV1, PreparedFileV1, PreparedObjectSinkV1,
     PreparedSinkErrorV1,
 };
 pub(crate) use crate::cow::file::{AuthenticatedBaseFileV1, UpdateRangeV1};
@@ -33,6 +36,26 @@ use crate::object::CanonicalFileObjectEncoderV1;
 use crate::{CoreError, CoreResult};
 
 const CHUNK_REFERENCE_METADATA_BYTES: u64 = 36;
+
+struct SharedContentUpdateControlV1<'cell, 'control, C: ?Sized> {
+    inner: &'cell RefCell<&'control mut C>,
+}
+
+impl<'cell, 'control, C: ?Sized> SharedContentUpdateControlV1<'cell, 'control, C> {
+    fn new(inner: &'cell RefCell<&'control mut C>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<C: CdcControlV1 + ?Sized> CdcControlV1 for SharedContentUpdateControlV1<'_, '_, C> {
+    fn cancellation_requested(&mut self) -> bool {
+        (**self.inner.borrow_mut()).cancellation_requested()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        (**self.inner.borrow_mut()).deadline_exceeded()
+    }
+}
 
 pub(crate) struct UpdateBuffersV1<'buffers> {
     source: &'buffers mut [u8; MAXIMUM_CHUNK_BYTES],
@@ -336,6 +359,8 @@ pub mod semantic {
         redispatches: u64,
         publication_authority_dispatches: u64,
         update_failures: u64,
+        content_update_control_polls: u64,
+        content_update_maximum_work_between_polls: u64,
     }
 
     impl UpdateObservationV1 {
@@ -425,6 +450,14 @@ pub mod semantic {
 
         pub const fn update_failures(self) -> u64 {
             self.update_failures
+        }
+
+        pub const fn content_update_control_polls(self) -> u64 {
+            self.content_update_control_polls
+        }
+
+        pub const fn content_update_maximum_work_between_polls(self) -> u64 {
+            self.content_update_maximum_work_between_polls
         }
     }
 
@@ -755,6 +788,8 @@ pub mod semantic {
             redispatches: 0,
             publication_authority_dispatches: 0,
             update_failures: 0,
+            content_update_control_polls: 0,
+            content_update_maximum_work_between_polls: 0,
         }
     }
 
@@ -876,6 +911,9 @@ pub mod semantic {
             redispatches: counters.redispatches,
             publication_authority_dispatches: counters.publication_authority_dispatches,
             update_failures: counters.update_failures,
+            content_update_control_polls: counters.content_update_control_polls,
+            content_update_maximum_work_between_polls: counters
+                .content_update_maximum_work_between_polls,
         }
     }
 
@@ -954,6 +992,68 @@ where
 enum UpdateMemoryAdmissionV1<'a> {
     Independent(&'a ResourceLedgerV1),
     Borrowed(&'a OperationReservationV1<'a>),
+}
+
+fn poll_content_update_shared_v1<C: CdcControlV1 + ?Sized>(
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    work.poll(&mut **control.borrow_mut(), counters)
+}
+
+fn complete_content_update_work_shared_v1<C: CdcControlV1 + ?Sized>(
+    work: &mut ContentUpdateWorkV1,
+    units: u64,
+    control: &RefCell<&mut C>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    work.complete(units, &mut **control.borrow_mut(), counters)
+}
+
+fn finish_content_update_port_shared_v1<T, C: CdcControlV1 + ?Sized>(
+    result: CoreResult<T>,
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<T> {
+    finish_content_update_observed_port_shared_v1(
+        result,
+        work,
+        control,
+        counters,
+        |_value, _counters| Ok(()),
+    )
+}
+
+fn finish_content_update_observed_port_shared_v1<T, C: CdcControlV1 + ?Sized, F>(
+    result: CoreResult<T>,
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
+    counters: &mut OperationCountersV1,
+    observe_success: F,
+) -> CoreResult<T>
+where
+    F: FnOnce(&T, &mut OperationCountersV1) -> CoreResult<()>,
+{
+    let direct = match result.as_ref() {
+        Ok(value) => observe_success(value, counters),
+        Err(_) => Ok(()),
+    };
+    let observed = complete_content_update_work_shared_v1(work, 1, control, counters)
+        .and_then(|()| poll_content_update_shared_v1(work, control, counters));
+    match result {
+        Ok(value) => {
+            direct?;
+            observed?;
+            Ok(value)
+        }
+        Err(error) => {
+            let _ = direct;
+            let _ = observed;
+            Err(error)
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1042,15 +1142,26 @@ where
             None
         }
     };
-    authenticate_base_file_evidence_v1(base, evidence, counters)?;
+    let control_cell = RefCell::new(control);
+    let mut work = ContentUpdateWorkV1::begin(&mut **control_cell.borrow_mut(), counters)?;
+    authenticate_base_file_evidence_controlled_v1(
+        base,
+        evidence,
+        &mut work,
+        &control_cell,
+        counters,
+    )?;
 
     let predecessor = if base_len == 0 {
         None
     } else {
-        let predecessor = evidence
+        poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+        let result = evidence
             .containing(range.start, range.start == base_len)
-            .map_err(map_evidence)?
-            .ok_or(CoreError::RangeResyncFailed)?;
+            .map_err(map_evidence);
+        let predecessor =
+            finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?
+                .ok_or(CoreError::RangeResyncFailed)?;
         counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         Some(predecessor)
     };
@@ -1063,15 +1174,30 @@ where
         return Err(CoreError::RangeResyncFailed);
     }
 
-    objects.begin_closure().map_err(map_sink)?;
-    if let Err(error) = output.begin(maximum_refs).map_err(map_sink) {
+    poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+    let result = objects.begin_closure().map_err(map_sink);
+    finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?;
+    poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+    let result = output.begin(maximum_refs).map_err(map_sink);
+    if let Err(error) =
+        finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)
+    {
+        let _ = poll_content_update_shared_v1(&mut work, &control_cell, counters);
         objects.abort_closure();
+        let _ = complete_content_update_work_shared_v1(&mut work, 1, &control_cell, counters)
+            .and_then(|()| poll_content_update_shared_v1(&mut work, &control_cell, counters));
         return Err(error);
     }
     let operation_binding = RejoinOperationBindingV1::frozen_fast();
     let result = (|| {
-        let prefix_chunk_count =
-            copy_untouched_prefix(evidence, output, predecessor_start, counters)?;
+        let prefix_chunk_count = copy_untouched_prefix(
+            evidence,
+            output,
+            predecessor_start,
+            &mut work,
+            &control_cell,
+            counters,
+        )?;
         let suffix_origin = prefix_len
             .checked_add(inserted_len)
             .ok_or(CoreError::RangeResyncFailed)?;
@@ -1088,8 +1214,11 @@ where
                 operation_binding: &operation_binding,
                 rejoin: None,
                 failure: None,
+                work: &mut work,
+                control: &control_cell,
             };
-            let mut stream = FastCdcV1::new().stream(buffers.cdc_ring, control)?;
+            let mut cdc_control = SharedContentUpdateControlV1::new(&control_cell);
+            let mut stream = FastCdcV1::new().stream(buffers.cdc_ring, &mut cdc_control)?;
 
             if prefix_len != 0 {
                 let prefix = usize::try_from(prefix_len).map_err(|_| CoreError::IntegerOverflow)?;
@@ -1097,13 +1226,15 @@ where
                     consumer.base_bytes,
                     predecessor_start,
                     &mut buffers.source[..prefix],
+                    consumer.work,
+                    consumer.control,
                     consumer.counters,
                     false,
                 )?;
                 push_update(
                     &mut stream,
                     &buffers.source[..prefix],
-                    control,
+                    &mut cdc_control,
                     &mut consumer,
                 )?;
             }
@@ -1112,33 +1243,60 @@ where
             while inserted_remaining != 0 {
                 let request = usize::try_from(inserted_remaining.min(MAXIMUM_CHUNK_BYTES as u64))
                     .map_err(|_| CoreError::IntegerOverflow)?;
+                poll_content_update_shared_v1(consumer.work, consumer.control, consumer.counters)?;
                 consumer.counters.add(CounterFieldV1::SourceReadCalls, 1)?;
-                let read = inserted
+                let result = inserted
                     .read(&mut buffers.source[..request])
-                    .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure)?;
-                if read > request {
-                    return Err(CoreError::SourceFailure);
-                }
+                    .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure);
+                let read = finish_content_update_observed_port_shared_v1(
+                    result,
+                    consumer.work,
+                    consumer.control,
+                    consumer.counters,
+                    |read, counters| {
+                        if *read > request {
+                            return Err(CoreError::SourceFailure);
+                        }
+                        counters.record_update_inserted_source_bytes(
+                            u64::try_from(*read).map_err(|_| CoreError::IntegerOverflow)?,
+                        )
+                    },
+                )?;
                 if read == 0 {
                     return Err(CoreError::Truncated);
                 }
                 let read_u64 = u64::try_from(read).map_err(|_| CoreError::IntegerOverflow)?;
-                consumer.counters.record_source_bytes_read(read_u64)?;
-                consumer
-                    .counters
-                    .add(CounterFieldV1::BytesCopied, read_u64)?;
-                consumer.counters.record_update_inserted(read_u64)?;
                 inserted_remaining = inserted_remaining
                     .checked_sub(read_u64)
                     .ok_or(CoreError::TrailingBytes)?;
-                push_update(&mut stream, &buffers.source[..read], control, &mut consumer)?;
+                push_update(
+                    &mut stream,
+                    &buffers.source[..read],
+                    &mut cdc_control,
+                    &mut consumer,
+                )?;
             }
+            poll_content_update_shared_v1(consumer.work, consumer.control, consumer.counters)?;
             consumer.counters.add(CounterFieldV1::SourceReadCalls, 1)?;
-            let probe = inserted
+            let result = inserted
                 .read(&mut buffers.source[..1])
-                .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure)?;
+                .map_err(|ContentSourceErrorV1::Failure| CoreError::SourceFailure);
+            let probe = finish_content_update_observed_port_shared_v1(
+                result,
+                consumer.work,
+                consumer.control,
+                consumer.counters,
+                |read, counters| {
+                    if *read > 1 {
+                        return Err(CoreError::SourceFailure);
+                    }
+                    if *read == 1 {
+                        counters.record_source_bytes_read(1)?;
+                    }
+                    Ok(())
+                },
+            )?;
             if probe != 0 {
-                consumer.counters.record_source_bytes_read(1)?;
                 return Err(CoreError::TrailingBytes);
             }
 
@@ -1147,11 +1305,22 @@ where
                 range.end,
                 &mut buffers.source[..],
                 |base_cursor, remaining_window, source| {
-                    let containing = consumer
+                    poll_content_update_shared_v1(
+                        consumer.work,
+                        consumer.control,
+                        consumer.counters,
+                    )?;
+                    let result = consumer
                         .evidence
                         .containing(base_cursor, false)
-                        .map_err(map_evidence)?
-                        .ok_or(CoreError::RangeResyncFailed)?;
+                        .map_err(map_evidence);
+                    let containing = finish_content_update_port_shared_v1(
+                        result,
+                        consumer.work,
+                        consumer.control,
+                        consumer.counters,
+                    )?
+                    .ok_or(CoreError::RangeResyncFailed)?;
                     consumer
                         .counters
                         .record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
@@ -1166,13 +1335,15 @@ where
                         consumer.base_bytes,
                         base_cursor,
                         &mut source[..segment],
+                        consumer.work,
+                        consumer.control,
                         consumer.counters,
                         true,
                     )?;
                     let consumed = push_update_until_pause(
                         &mut stream,
                         &source[..segment],
-                        control,
+                        &mut cdc_control,
                         &mut consumer,
                     )?;
                     if consumer.rejoin.is_none() && consumed != segment {
@@ -1183,10 +1354,10 @@ where
             )?;
 
             let rejoin = if let Some(rejoin) = consumer.rejoin.take() {
-                stream.finish_at_accepted_boundary(control)?;
+                stream.finish_at_accepted_boundary(&mut cdc_control)?;
                 Some(rejoin)
             } else if reached_base_end {
-                finish_update(&mut stream, control, &mut consumer)?;
+                finish_update(&mut stream, &mut cdc_control, &mut consumer)?;
                 None
             } else {
                 return Err(CoreError::RangeResyncFailed);
@@ -1196,38 +1367,89 @@ where
 
         let suffix_chunk_count = if let Some(rejoin) = rejoin {
             let rejoin = rejoin.consume(&operation_binding)?;
-            copy_untouched_suffix(evidence, output, rejoin.end()?, counters)?
+            copy_untouched_suffix(
+                evidence,
+                output,
+                rejoin.end()?,
+                &mut work,
+                &control_cell,
+                counters,
+            )?
         } else {
             0
         };
         let chunk_count = changed_chunk_count
             .checked_add(suffix_chunk_count)
             .ok_or(CoreError::IntegerOverflow)?;
-        let (logical_file, physical_file) =
-            write_file_object_and_logical(objects, output, mode, new_len, chunk_count, counters)?;
+        let mut shared_control = SharedContentUpdateControlV1::new(&control_cell);
+        let (logical_file, physical_file) = write_file_object_and_logical_controlled_v1(
+            objects,
+            output,
+            mode,
+            new_len,
+            chunk_count,
+            &mut work,
+            &mut shared_control,
+            counters,
+        )?;
         let prepared = PreparedFileV1::new(
             logical_file,
             physical_file,
             u32::try_from(chunk_count).map_err(|_| CoreError::IntegerOverflow)?,
         );
-        objects.finish_closure(prepared).map_err(map_sink)?;
+        poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+        let result = objects.finish_closure(prepared).map_err(map_sink);
+        finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?;
         Ok(prepared)
     })();
 
     if result.is_err() {
+        let _ = poll_content_update_shared_v1(&mut work, &control_cell, counters);
         output.abort();
+        let _ = complete_content_update_work_shared_v1(&mut work, 1, &control_cell, counters)
+            .and_then(|()| poll_content_update_shared_v1(&mut work, &control_cell, counters));
+        let _ = poll_content_update_shared_v1(&mut work, &control_cell, counters);
         objects.abort_closure();
+        let _ = complete_content_update_work_shared_v1(&mut work, 1, &control_cell, counters)
+            .and_then(|()| poll_content_update_shared_v1(&mut work, &control_cell, counters));
     }
     result
 }
 
-pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + ?Sized>(
+pub(crate) fn authenticate_base_file_evidence_v1<
+    E: BaseChunkEvidenceSourceV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
+>(
     base: AuthenticatedBaseFileV1,
     evidence: &mut E,
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    let control_cell = RefCell::new(control);
+    let mut work = ContentUpdateWorkV1::begin(&mut **control_cell.borrow_mut(), counters)?;
+    authenticate_base_file_evidence_controlled_v1(
+        base,
+        evidence,
+        &mut work,
+        &control_cell,
+        counters,
+    )
+}
+
+fn authenticate_base_file_evidence_controlled_v1<
+    E: BaseChunkEvidenceSourceV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
+>(
+    base: AuthenticatedBaseFileV1,
+    evidence: &mut E,
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
     validate_file_mode(base.mode).map_err(|_| CoreError::RangeResyncFailed)?;
-    evidence.rewind().map_err(map_evidence)?;
+    poll_content_update_shared_v1(work, control, counters)?;
+    let result = evidence.rewind().map_err(map_evidence);
+    finish_content_update_port_shared_v1(result, work, control, counters)?;
     let mut logical_hasher =
         LogicalFileHasherV1::new(base.identity.logical_len(), u64::from(base.chunk_count))
             .map_err(|_| CoreError::RangeResyncFailed)?;
@@ -1243,9 +1465,9 @@ pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + 
         .map_err(|_| CoreError::RangeResyncFailed)?;
     let mut expected_start = 0_u64;
     for _ in 0..base.chunk_count {
-        let chunk = evidence
-            .next()
-            .map_err(map_evidence)?
+        poll_content_update_shared_v1(work, control, counters)?;
+        let result = evidence.next().map_err(map_evidence);
+        let chunk = finish_content_update_port_shared_v1(result, work, control, counters)?
             .ok_or(CoreError::RangeResyncFailed)?;
         counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         validate_chunk_reference_len(u64::from(chunk.len))
@@ -1260,12 +1482,15 @@ pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + 
         encoder
             .emit_chunk_reference(chunk.len, &chunk.physical_id, &mut discard)
             .map_err(|_| CoreError::RangeResyncFailed)?;
+        complete_content_update_work_shared_v1(work, 1, control, counters)?;
     }
     let logical = logical_hasher
         .finish()
         .map_err(|_| CoreError::RangeResyncFailed)?;
     let physical = encoder.finish().map_err(|_| CoreError::RangeResyncFailed)?;
-    if evidence.next().map_err(map_evidence)?.is_some()
+    poll_content_update_shared_v1(work, control, counters)?;
+    let result = evidence.next().map_err(map_evidence);
+    if finish_content_update_port_shared_v1(result, work, control, counters)?.is_some()
         || expected_start != base.identity.logical_len()
         || logical != base.identity
         || physical != base.physical_file
@@ -1279,12 +1504,13 @@ pub(crate) fn authenticate_base_file_evidence_v1<E: BaseChunkEvidenceSourceV1 + 
 /// authenticated bounded chunk-reference stream. This borrows the outer root
 /// reservation; it cannot mint an independent operation or read base payload.
 #[cfg(feature = "operation-polymorphism")]
-pub(crate) fn reencode_file_metadata_borrowed_v1<O, R, E>(
+pub(crate) fn reencode_file_metadata_borrowed_v1<O, R, E, C>(
     new_mode: u16,
     base: AuthenticatedBaseFileV1,
     evidence: &mut E,
     objects: &mut O,
     output: &mut R,
+    control: &mut C,
     _reservation: &OperationReservationV1<'_>,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<PreparedFileV1>
@@ -1292,72 +1518,115 @@ where
     O: PreparedObjectSinkV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
     E: BaseChunkEvidenceSourceV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
 {
     validate_file_mode(new_mode)?;
-    objects.begin_closure().map_err(map_sink)?;
-    if let Err(error) = output.begin(u64::from(base.chunk_count)).map_err(map_sink) {
+    let control_cell = RefCell::new(control);
+    let mut work = ContentUpdateWorkV1::begin(&mut **control_cell.borrow_mut(), counters)?;
+    poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+    let result = objects.begin_closure().map_err(map_sink);
+    finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?;
+    poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+    let result = output.begin(u64::from(base.chunk_count)).map_err(map_sink);
+    if let Err(error) =
+        finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)
+    {
+        let _ = poll_content_update_shared_v1(&mut work, &control_cell, counters);
         objects.abort_closure();
+        let _ = complete_content_update_work_shared_v1(&mut work, 1, &control_cell, counters)
+            .and_then(|()| poll_content_update_shared_v1(&mut work, &control_cell, counters));
         return Err(error);
     }
 
     let result = (|| {
-        evidence.rewind().map_err(map_evidence)?;
+        poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+        let result = evidence.rewind().map_err(map_evidence);
+        finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?;
         let mut expected_start = 0_u64;
         for _ in 0..base.chunk_count {
-            let chunk = evidence
-                .next()
-                .map_err(map_evidence)?
-                .ok_or(CoreError::RangeResyncFailed)?;
+            poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+            let result = evidence.next().map_err(map_evidence);
+            let chunk =
+                finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?
+                    .ok_or(CoreError::RangeResyncFailed)?;
             counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
             validate_chunk_reference_len(u64::from(chunk.len))?;
             if chunk.start != expected_start {
                 return Err(CoreError::RangeResyncFailed);
             }
             expected_start = chunk.end()?;
-            output.push(chunk.prepared()).map_err(map_sink)?;
+            poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+            let result = output.push(chunk.prepared()).map_err(map_sink);
+            finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?;
+            complete_content_update_work_shared_v1(&mut work, 1, &control_cell, counters)?;
         }
-        if evidence.next().map_err(map_evidence)?.is_some()
+        poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+        let result = evidence.next().map_err(map_evidence);
+        if finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?
+            .is_some()
             || expected_start != base.identity.logical_len()
         {
             return Err(CoreError::RangeResyncFailed);
         }
 
-        let (logical_file, physical_file) = write_file_object_and_logical(
+        let mut shared_control = SharedContentUpdateControlV1::new(&control_cell);
+        let (logical_file, physical_file) = write_file_object_and_logical_controlled_v1(
             objects,
             output,
             new_mode,
             base.identity.logical_len(),
             u64::from(base.chunk_count),
+            &mut work,
+            &mut shared_control,
             counters,
         )?;
         if logical_file != base.identity {
             return Err(CoreError::IdMismatch);
         }
         let prepared = PreparedFileV1::new(logical_file, physical_file, base.chunk_count);
-        objects.finish_closure(prepared).map_err(map_sink)?;
+        poll_content_update_shared_v1(&mut work, &control_cell, counters)?;
+        let result = objects.finish_closure(prepared).map_err(map_sink);
+        finish_content_update_port_shared_v1(result, &mut work, &control_cell, counters)?;
         Ok(prepared)
     })();
 
     if result.is_err() {
+        let _ = poll_content_update_shared_v1(&mut work, &control_cell, counters);
         output.abort();
+        let _ = complete_content_update_work_shared_v1(&mut work, 1, &control_cell, counters)
+            .and_then(|()| poll_content_update_shared_v1(&mut work, &control_cell, counters));
+        let _ = poll_content_update_shared_v1(&mut work, &control_cell, counters);
         objects.abort_closure();
+        let _ = complete_content_update_work_shared_v1(&mut work, 1, &control_cell, counters)
+            .and_then(|()| poll_content_update_shared_v1(&mut work, &control_cell, counters));
     }
     result
 }
 
-fn copy_untouched_prefix<E, R>(
+fn copy_untouched_prefix<E, R, C>(
     evidence: &mut E,
     output: &mut R,
     predecessor_start: u64,
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<u64>
 where
     E: BaseChunkEvidenceSourceV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
 {
-    evidence.rewind().map_err(map_evidence)?;
+    poll_content_update_shared_v1(work, control, counters)?;
+    let result = evidence.rewind().map_err(map_evidence);
+    finish_content_update_port_shared_v1(result, work, control, counters)?;
     let mut copied = 0_u64;
-    while let Some(chunk) = evidence.next().map_err(map_evidence)? {
+    loop {
+        poll_content_update_shared_v1(work, control, counters)?;
+        let result = evidence.next().map_err(map_evidence);
+        let Some(chunk) = finish_content_update_port_shared_v1(result, work, control, counters)?
+        else {
+            break;
+        };
         counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         if chunk.start == predecessor_start {
             break;
@@ -1365,56 +1634,80 @@ where
         if chunk.end()? > predecessor_start {
             return Err(CoreError::RangeResyncFailed);
         }
-        reuse_ref(output, chunk, counters)?;
+        reuse_ref(output, chunk, work, control, counters)?;
         copied = copied.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
+        complete_content_update_work_shared_v1(work, 1, control, counters)?;
     }
     Ok(copied)
 }
 
-fn copy_untouched_suffix<E, R>(
+fn copy_untouched_suffix<E, R, C>(
     evidence: &mut E,
     output: &mut R,
     suffix_start: u64,
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<u64>
 where
     E: BaseChunkEvidenceSourceV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
 {
-    evidence.rewind().map_err(map_evidence)?;
+    poll_content_update_shared_v1(work, control, counters)?;
+    let result = evidence.rewind().map_err(map_evidence);
+    finish_content_update_port_shared_v1(result, work, control, counters)?;
     let mut found = false;
     let mut copied = 0_u64;
     let mut final_end = 0_u64;
-    while let Some(chunk) = evidence.next().map_err(map_evidence)? {
+    loop {
+        poll_content_update_shared_v1(work, control, counters)?;
+        let result = evidence.next().map_err(map_evidence);
+        let Some(chunk) = finish_content_update_port_shared_v1(result, work, control, counters)?
+        else {
+            break;
+        };
         counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
         final_end = chunk.end()?;
         if chunk.start >= suffix_start {
             if chunk.start != suffix_start {
                 return Err(CoreError::RangeResyncFailed);
             }
-            reuse_ref(output, chunk, counters)?;
+            reuse_ref(output, chunk, work, control, counters)?;
             copied = copied.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
             found = true;
             break;
         }
+        complete_content_update_work_shared_v1(work, 1, control, counters)?;
     }
     if !found && final_end != suffix_start {
         return Err(CoreError::RangeResyncFailed);
     }
-    while let Some(chunk) = evidence.next().map_err(map_evidence)? {
+    loop {
+        poll_content_update_shared_v1(work, control, counters)?;
+        let result = evidence.next().map_err(map_evidence);
+        let Some(chunk) = finish_content_update_port_shared_v1(result, work, control, counters)?
+        else {
+            break;
+        };
         counters.record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
-        reuse_ref(output, chunk, counters)?;
+        reuse_ref(output, chunk, work, control, counters)?;
         copied = copied.checked_add(1).ok_or(CoreError::IntegerOverflow)?;
+        complete_content_update_work_shared_v1(work, 1, control, counters)?;
     }
     Ok(copied)
 }
 
-fn reuse_ref<R: ChunkReferenceSpoolV1 + ?Sized>(
+fn reuse_ref<R: ChunkReferenceSpoolV1 + ?Sized, C: CdcControlV1 + ?Sized>(
     output: &mut R,
     chunk: BaseChunkEvidenceV1,
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
     counters: &mut OperationCountersV1,
 ) -> CoreResult<()> {
-    output.push(chunk.prepared()).map_err(map_sink)?;
+    poll_content_update_shared_v1(work, control, counters)?;
+    let result = output.push(chunk.prepared()).map_err(map_sink);
+    finish_content_update_port_shared_v1(result, work, control, counters)?;
     counters.add(
         CounterFieldV1::BytesStructurallyReused,
         u64::from(chunk.len),
@@ -1423,7 +1716,16 @@ fn reuse_ref<R: ChunkReferenceSpoolV1 + ?Sized>(
     counters.add(CounterFieldV1::PhysicalObjectsReused, 1)
 }
 
-struct UpdateConsumerV1<'a, 'operation, E: ?Sized, O: ?Sized, R: ?Sized, B: ?Sized> {
+struct UpdateConsumerV1<
+    'a,
+    'control,
+    'operation,
+    E: ?Sized,
+    O: ?Sized,
+    R: ?Sized,
+    B: ?Sized,
+    C: ?Sized,
+> {
     evidence: &'a mut E,
     objects: &'a mut O,
     output: &'a mut R,
@@ -1435,14 +1737,17 @@ struct UpdateConsumerV1<'a, 'operation, E: ?Sized, O: ?Sized, R: ?Sized, B: ?Siz
     operation_binding: &'operation RejoinOperationBindingV1,
     rejoin: Option<VerifiedRejoinV1<'operation, BaseChunkEvidenceV1>>,
     failure: Option<CoreError>,
+    work: &'a mut ContentUpdateWorkV1,
+    control: &'a RefCell<&'control mut C>,
 }
 
-impl<E, O, R, B> BoundaryConsumerV1 for UpdateConsumerV1<'_, '_, E, O, R, B>
+impl<E, O, R, B, C> BoundaryConsumerV1 for UpdateConsumerV1<'_, '_, '_, E, O, R, B, C>
 where
     E: BaseChunkEvidenceSourceV1 + ?Sized,
     O: PreparedObjectSinkV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
 {
     fn accept(
         &mut self,
@@ -1462,12 +1767,13 @@ where
     }
 }
 
-impl<E, O, R, B> UpdateConsumerV1<'_, '_, E, O, R, B>
+impl<E, O, R, B, C> UpdateConsumerV1<'_, '_, '_, E, O, R, B, C>
 where
     E: BaseChunkEvidenceSourceV1 + ?Sized,
     O: PreparedObjectSinkV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
+    C: CdcControlV1 + ?Sized,
 {
     fn accept_inner(
         &mut self,
@@ -1491,11 +1797,22 @@ where
                 .checked_add(boundary.start() - self.suffix_origin)
                 .ok_or(CoreError::RangeResyncFailed)?;
             self.counters.add(CounterFieldV1::AnchorAttempts, 1)?;
-            if let Some(base) = self.evidence.at_start(base_start).map_err(map_evidence)? {
+            poll_content_update_shared_v1(self.work, self.control, self.counters)?;
+            let result = self.evidence.at_start(base_start).map_err(map_evidence);
+            if let Some(base) = finish_content_update_port_shared_v1(
+                result,
+                self.work,
+                self.control,
+                self.counters,
+            )? {
                 self.counters
                     .record_update_reference_metadata(1, CHUNK_REFERENCE_METADATA_BYTES)?;
                 let rejoin =
                     if u64::from(base.len) == boundary.len() && base.logical_id == logical.id() {
+                        poll_content_update_shared_v1(self.work, self.control, self.counters)?;
+                        let base_bytes = &mut *self.base_bytes;
+                        let work = &mut *self.work;
+                        let control = self.control;
                         crate::cdc::verify_rejoin_bytes_v1(
                             self.operation_binding,
                             base,
@@ -1503,17 +1820,23 @@ where
                             base.len(),
                             chunk,
                             self.counters,
-                            |offset, first, second| {
-                                self.base_bytes
+                            |offset, first, second, _counters| {
+                                base_bytes
                                     .compare_exact_at(offset, first, second)
                                     .map_err(|_| CoreError::RangeResyncFailed)
+                            },
+                            |counters| {
+                                complete_content_update_work_shared_v1(work, 1, control, counters)
+                                    .and_then(|()| {
+                                        poll_content_update_shared_v1(work, control, counters)
+                                    })
                             },
                         )?
                     } else {
                         None
                     };
                 if let Some(rejoin) = rejoin {
-                    reuse_ref(self.output, base, self.counters)?;
+                    reuse_ref(self.output, base, self.work, self.control, self.counters)?;
                     self.chunk_count = self
                         .chunk_count
                         .checked_add(1)
@@ -1524,14 +1847,23 @@ where
             }
         }
 
-        let (physical_id, disposition) = write_chunk_object(self.objects, chunk, self.counters)?;
-        self.output
-            .push(PreparedChunkRefV1::from_parts(
-                logical.id(),
-                physical_id,
-                u32::try_from(chunk.len()).map_err(|_| CoreError::IntegerOverflow)?,
-            ))
-            .map_err(map_sink)?;
+        let mut shared_control = SharedContentUpdateControlV1::new(self.control);
+        let (physical_id, disposition) = write_chunk_object_controlled_v1(
+            self.objects,
+            chunk,
+            self.work,
+            &mut shared_control,
+            self.counters,
+        )?;
+        let reference = PreparedChunkRefV1::from_parts(
+            logical.id(),
+            physical_id,
+            u32::try_from(chunk.len()).map_err(|_| CoreError::IntegerOverflow)?,
+        );
+        poll_content_update_shared_v1(self.work, self.control, self.counters)?;
+        let result = self.output.push(reference).map_err(map_sink);
+        finish_content_update_port_shared_v1(result, self.work, self.control, self.counters)?;
+        complete_content_update_work_shared_v1(self.work, 1, self.control, self.counters)?;
         self.chunk_count = self
             .chunk_count
             .checked_add(1)
@@ -1548,11 +1880,11 @@ where
     }
 }
 
-fn push_update<C, E, O, R, B>(
+fn push_update<C, E, O, R, B, U>(
     stream: &mut crate::cdc::FastCdcV1Stream<'_>,
     bytes: &[u8],
     control: &mut C,
-    consumer: &mut UpdateConsumerV1<'_, '_, E, O, R, B>,
+    consumer: &mut UpdateConsumerV1<'_, '_, '_, E, O, R, B, U>,
 ) -> CoreResult<()>
 where
     C: CdcControlV1 + ?Sized,
@@ -1560,6 +1892,7 @@ where
     O: PreparedObjectSinkV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
+    U: CdcControlV1 + ?Sized,
 {
     let before = stream.counters();
     let result = match stream.push(Ok(bytes), control, consumer) {
@@ -1572,11 +1905,11 @@ where
     result
 }
 
-fn push_update_until_pause<C, E, O, R, B>(
+fn push_update_until_pause<C, E, O, R, B, U>(
     stream: &mut crate::cdc::FastCdcV1Stream<'_>,
     bytes: &[u8],
     control: &mut C,
-    consumer: &mut UpdateConsumerV1<'_, '_, E, O, R, B>,
+    consumer: &mut UpdateConsumerV1<'_, '_, '_, E, O, R, B, U>,
 ) -> CoreResult<usize>
 where
     C: CdcControlV1 + ?Sized,
@@ -1584,6 +1917,7 @@ where
     O: PreparedObjectSinkV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
+    U: CdcControlV1 + ?Sized,
 {
     let before = stream.counters();
     let result = match stream.push_until_consumer_pause(Ok(bytes), control, consumer) {
@@ -1596,10 +1930,10 @@ where
     result
 }
 
-fn finish_update<C, E, O, R, B>(
+fn finish_update<C, E, O, R, B, U>(
     stream: &mut crate::cdc::FastCdcV1Stream<'_>,
     control: &mut C,
-    consumer: &mut UpdateConsumerV1<'_, '_, E, O, R, B>,
+    consumer: &mut UpdateConsumerV1<'_, '_, '_, E, O, R, B, U>,
 ) -> CoreResult<()>
 where
     C: CdcControlV1 + ?Sized,
@@ -1607,6 +1941,7 @@ where
     O: PreparedObjectSinkV1 + ?Sized,
     R: ChunkReferenceSpoolV1 + ?Sized,
     B: AuthenticatedBaseByteReaderV1 + ?Sized,
+    U: CdcControlV1 + ?Sized,
 {
     let before = stream.counters();
     let result = match stream.finish(control, consumer) {
@@ -1619,23 +1954,27 @@ where
     result
 }
 
-fn read_base_exact<B: AuthenticatedBaseByteReaderV1 + ?Sized>(
+fn read_base_exact<B: AuthenticatedBaseByteReaderV1 + ?Sized, C: CdcControlV1 + ?Sized>(
     base: &mut B,
     offset: u64,
     destination: &mut [u8],
+    work: &mut ContentUpdateWorkV1,
+    control: &RefCell<&mut C>,
     counters: &mut OperationCountersV1,
     resynchronization: bool,
 ) -> CoreResult<()> {
-    base.read_exact_at(offset, destination)
-        .map_err(|_| CoreError::RangeResyncFailed)?;
+    poll_content_update_shared_v1(work, control, counters)?;
+    let result = base
+        .read_exact_at(offset, destination)
+        .map_err(|_| CoreError::RangeResyncFailed);
     let len = u64::try_from(destination.len()).map_err(|_| CoreError::IntegerOverflow)?;
-    counters.add(CounterFieldV1::BytesRead, len)?;
-    counters.add(CounterFieldV1::BytesCopied, len)?;
-    counters.record_update_base_payload(len)?;
-    if resynchronization {
-        counters.add(CounterFieldV1::UpdateResynchronizationBytes, len)?;
-    }
-    Ok(())
+    finish_content_update_observed_port_shared_v1(
+        result,
+        work,
+        control,
+        counters,
+        |(), counters| counters.record_update_base_bytes_read(len, resynchronization),
+    )
 }
 
 fn map_sink(PreparedSinkErrorV1::Refused: PreparedSinkErrorV1) -> CoreError {
@@ -1644,4 +1983,53 @@ fn map_sink(PreparedSinkErrorV1::Refused: PreparedSinkErrorV1) -> CoreError {
 
 fn map_evidence(PreparedSinkErrorV1::Refused: PreparedSinkErrorV1) -> CoreError {
     CoreError::RangeResyncFailed
+}
+
+#[cfg(test)]
+mod control_accounting_tests {
+    use super::*;
+
+    struct CancelOnSecondSample {
+        samples: u8,
+    }
+
+    impl CdcControlV1 for CancelOnSecondSample {
+        fn cancellation_requested(&mut self) -> bool {
+            self.samples += 1;
+            self.samples == 2
+        }
+
+        fn deadline_exceeded(&mut self) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn successful_port_bytes_are_recorded_before_later_cancellation() {
+        let mut control = CancelOnSecondSample { samples: 0 };
+        let control = RefCell::new(&mut control);
+        let mut counters = OperationCountersV1::default();
+        let mut work = ContentUpdateWorkV1::begin(&mut **control.borrow_mut(), &mut counters)
+            .expect("initial control sample");
+
+        let result = finish_content_update_observed_port_shared_v1(
+            Ok(7_usize),
+            &mut work,
+            &control,
+            &mut counters,
+            |read, counters| {
+                counters.record_update_inserted_source_bytes(
+                    u64::try_from(*read).map_err(|_| CoreError::IntegerOverflow)?,
+                )
+            },
+        );
+
+        assert_eq!(result, Err(CoreError::Cancelled));
+        assert_eq!(counters.source_bytes_read, 7);
+        assert_eq!(counters.bytes_read, 7);
+        assert_eq!(counters.bytes_copied, 7);
+        assert_eq!(counters.update_inserted_bytes, 7);
+        assert_eq!(counters.content_update_control_polls, 2);
+        assert_eq!(counters.content_update_maximum_work_between_polls, 1);
+    }
 }

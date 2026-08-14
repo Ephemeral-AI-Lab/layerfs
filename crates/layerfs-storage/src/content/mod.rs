@@ -66,6 +66,7 @@ pub mod semantic {
         spool_resident_bytes: Option<u64>,
         sink_refuse_after: Option<u64>,
         invalid_source_count: bool,
+        invalid_eof_count: bool,
     }
 
     impl<'a> ContentRequestV1<'a> {
@@ -81,6 +82,7 @@ pub mod semantic {
                 spool_resident_bytes: None,
                 sink_refuse_after: None,
                 invalid_source_count: false,
+                invalid_eof_count: false,
             }
         }
 
@@ -116,6 +118,11 @@ pub mod semantic {
 
         pub const fn with_invalid_source_count(mut self, invalid: bool) -> Self {
             self.invalid_source_count = invalid;
+            self
+        }
+
+        pub const fn with_invalid_eof_count(mut self, invalid: bool) -> Self {
+            self.invalid_eof_count = invalid;
             self
         }
     }
@@ -346,6 +353,7 @@ pub mod semantic {
         resident_bytes: u64,
         reads: u64,
         invalid_count: bool,
+        invalid_eof_count: bool,
         max_request: u64,
     }
 
@@ -357,6 +365,7 @@ pub mod semantic {
                 resident_bytes,
                 reads: 0,
                 invalid_count: false,
+                invalid_eof_count: false,
                 max_request: 0,
             }
         }
@@ -378,6 +387,9 @@ pub mod semantic {
             self.reads += 1;
             self.max_request = self.max_request.max(destination.len() as u64);
             if self.invalid_count {
+                return Ok(destination.len() + 1);
+            }
+            if self.invalid_eof_count && self.offset == self.bytes.len() {
                 return Ok(destination.len() + 1);
             }
             let amount = destination
@@ -665,6 +677,7 @@ pub mod semantic {
         } else {
             Source::new(request.data, request.source_resident_bytes)
         };
+        source.invalid_eof_count = request.invalid_eof_count;
         let mut sink = Sink {
             resident_bytes: request.sink_resident_bytes,
             refuse_after: request.sink_refuse_after,
@@ -699,6 +712,81 @@ pub mod semantic {
             admitted_slots: ledger.admitted_slots(),
             bytes_read: counters.bytes_read,
             bytes_copied: counters.bytes_copied,
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use core::cell::Cell;
+
+        use super::*;
+        use crate::cdc::CdcControlV1;
+
+        struct FailingSource<'a> {
+            returned: &'a Cell<bool>,
+        }
+
+        impl ContentSourceV1 for FailingSource<'_> {
+            fn resident_memory_bound_bytes(&self) -> CoreResult<u64> {
+                Ok(0)
+            }
+
+            fn read(&mut self, _destination: &mut [u8]) -> Result<usize, ContentSourceErrorV1> {
+                self.returned.set(true);
+                Err(ContentSourceErrorV1::Failure)
+            }
+        }
+
+        struct PanicAfterSource<'a> {
+            returned: &'a Cell<bool>,
+        }
+
+        impl CdcControlV1 for PanicAfterSource<'_> {
+            fn cancellation_requested(&mut self) -> bool {
+                assert!(!self.returned.get(), "polled after source failure");
+                false
+            }
+
+            fn deadline_exceeded(&mut self) -> bool {
+                assert!(!self.returned.get(), "polled after source failure");
+                false
+            }
+        }
+
+        #[test]
+        fn returned_source_failure_precedes_any_post_read_control_callback() {
+            let returned = Cell::new(false);
+            let mut source = FailingSource {
+                returned: &returned,
+            };
+            let mut control = PanicAfterSource {
+                returned: &returned,
+            };
+            let mut sink = Sink::default();
+            let mut spool = Spool::default();
+            let (mut source_buffer, mut ring) = buffers();
+            let mut counters = OperationCountersV1::default();
+            let ledger = ResourceLedgerV1::new(MEMORY_PROFILE_32_MIB);
+
+            assert_eq!(
+                create_file_v1(
+                    b"failure.bin",
+                    0o644,
+                    1,
+                    &mut source,
+                    &mut sink,
+                    &mut spool,
+                    ContentBuffersV1::new(&mut source_buffer, &mut ring),
+                    &mut control,
+                    &ledger,
+                    &mut counters,
+                ),
+                Err(CoreError::SourceFailure)
+            );
+            assert_eq!(counters.source_read_calls, 1);
+            assert_eq!(counters.source_bytes_read, 0);
+            assert_eq!(counters.bytes_read, 0);
+            assert_eq!(counters.bytes_copied, 0);
         }
     }
 }

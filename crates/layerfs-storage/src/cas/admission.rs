@@ -32,7 +32,7 @@ use crate::identity::{
 use crate::limits::ResourceLedgerV1;
 use crate::limits::{
     CounterFieldV1, MemoryComponentV1, OperationCountersV1, OperationMemoryPlanV1,
-    OperationReservationV1,
+    OperationReservationV1, OperationWorkControlV1,
 };
 use crate::object::require_canonical_traversal_depth_v1;
 use crate::object::{
@@ -138,6 +138,146 @@ enum AdmissionControlStageV1 {
     CandidateGraph,
 }
 
+fn record_closure_validation_port_poll_v1(
+    counters: &mut OperationCountersV1,
+    work_since_poll: u64,
+) -> CoreResult<()> {
+    counters.record_closure_validation_control_poll_v1(work_since_poll)
+}
+
+fn record_candidate_graph_port_poll_v1(
+    counters: &mut OperationCountersV1,
+    work_since_poll: u64,
+) -> CoreResult<()> {
+    counters.record_candidate_graph_control_poll_v1(work_since_poll)
+}
+
+fn record_closure_validation_port_bytes_v1(
+    counters: &mut OperationCountersV1,
+    bytes: u64,
+) -> CoreResult<()> {
+    let mut checked = *counters;
+    checked.add(CounterFieldV1::BytesRead, bytes)?;
+    checked.record_closure_validation_port_bytes_v1(bytes)?;
+    *counters = checked;
+    Ok(())
+}
+
+fn record_candidate_graph_port_bytes_v1(
+    counters: &mut OperationCountersV1,
+    bytes: u64,
+) -> CoreResult<()> {
+    let mut checked = *counters;
+    checked.add(CounterFieldV1::BytesRead, bytes)?;
+    checked.record_candidate_graph_port_bytes_v1(bytes)?;
+    *counters = checked;
+    Ok(())
+}
+
+impl AdmissionControlStageV1 {
+    const fn port_recorder(self) -> crate::cas::ImmutablePortControlPollV1 {
+        match self {
+            Self::ClosureValidation => record_closure_validation_port_poll_v1,
+            Self::CandidateGraph => record_candidate_graph_port_poll_v1,
+        }
+    }
+
+    const fn port_bytes_recorder(self) -> crate::cas::ImmutablePortReadBytesV1 {
+        match self {
+            Self::ClosureValidation => record_closure_validation_port_bytes_v1,
+            Self::CandidateGraph => record_candidate_graph_port_bytes_v1,
+        }
+    }
+
+    fn record_port_call(self, counters: &mut OperationCountersV1) -> CoreResult<()> {
+        match self {
+            Self::ClosureValidation => counters.record_closure_validation_port_call_v1(),
+            Self::CandidateGraph => counters.record_candidate_graph_port_call_v1(),
+        }
+    }
+
+    fn record_decode_hash_call(self, counters: &mut OperationCountersV1) -> CoreResult<()> {
+        let mut checked = *counters;
+        match self {
+            Self::ClosureValidation => {
+                checked.record_closure_validation_decode_call_v1()?;
+                checked.record_closure_validation_hash_call_v1()?;
+            }
+            Self::CandidateGraph => {
+                checked.record_candidate_graph_decode_call_v1()?;
+                checked.record_candidate_graph_hash_call_v1()?;
+            }
+        }
+        *counters = checked;
+        Ok(())
+    }
+
+    fn record_decode_hash_bytes(
+        self,
+        counters: &mut OperationCountersV1,
+        bytes: u64,
+    ) -> CoreResult<()> {
+        let mut checked = *counters;
+        match self {
+            Self::ClosureValidation => {
+                checked.record_closure_validation_decode_bytes_v1(bytes)?;
+                checked.record_closure_validation_hash_bytes_v1(bytes)?;
+            }
+            Self::CandidateGraph => {
+                checked.record_candidate_graph_decode_bytes_v1(bytes)?;
+                checked.record_candidate_graph_hash_bytes_v1(bytes)?;
+            }
+        }
+        *counters = checked;
+        Ok(())
+    }
+
+    fn record_decode_call(self, counters: &mut OperationCountersV1) -> CoreResult<()> {
+        match self {
+            Self::ClosureValidation => counters.record_closure_validation_decode_call_v1(),
+            Self::CandidateGraph => counters.record_candidate_graph_decode_call_v1(),
+        }
+    }
+
+    fn record_decode_bytes(self, counters: &mut OperationCountersV1, bytes: u64) -> CoreResult<()> {
+        match self {
+            Self::ClosureValidation => counters.record_closure_validation_decode_bytes_v1(bytes),
+            Self::CandidateGraph => counters.record_candidate_graph_decode_bytes_v1(bytes),
+        }
+    }
+
+    fn record_hash_call(self, counters: &mut OperationCountersV1) -> CoreResult<()> {
+        match self {
+            Self::ClosureValidation => counters.record_closure_validation_hash_call_v1(),
+            Self::CandidateGraph => counters.record_candidate_graph_hash_call_v1(),
+        }
+    }
+
+    fn record_hash_bytes(self, counters: &mut OperationCountersV1, bytes: u64) -> CoreResult<()> {
+        match self {
+            Self::ClosureValidation => counters.record_closure_validation_hash_bytes_v1(bytes),
+            Self::CandidateGraph => counters.record_candidate_graph_hash_bytes_v1(bytes),
+        }
+    }
+}
+
+struct AdmissionPortWorkControlV1<'a, S: ?Sized> {
+    sink: &'a mut S,
+}
+
+impl<S> OperationWorkControlV1 for AdmissionPortWorkControlV1<'_, S>
+where
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    fn cancellation_requested_v1(&mut self) -> bool {
+        self.sink.cancellation_requested_v1()
+    }
+
+    fn deadline_exceeded_v1(&mut self) -> bool {
+        self.sink.deadline_exceeded_v1()
+    }
+}
+
 /// One borrow of the caller-owned operation control plus the direct stage
 /// observation that makes each bounded interval independently auditable.
 struct AdmissionWorkControlV1<'a, S>
@@ -179,11 +319,131 @@ where
         }
     }
 
+    fn complete_boundary<T>(
+        &mut self,
+        result: CoreResult<T>,
+        completed_work: u64,
+    ) -> CoreResult<T> {
+        let post_poll = self.poll(completed_work);
+        match (result, post_poll) {
+            (Err(error), _) => Err(error),
+            (Ok(value), Ok(())) => Ok(value),
+            (Ok(_), Err(error)) => Err(error),
+        }
+    }
+
     fn begin_candidate_graph(&mut self) -> CoreResult<()> {
         self.poll(0)?;
         self.stage = AdmissionControlStageV1::CandidateGraph;
         self.poll(0)
     }
+}
+
+fn closure_object_id_at_controlled_v1<C, S>(
+    closure: &mut C,
+    ordinal: u64,
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<TypedPhysicalObjectIdV1>
+where
+    C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    control.stage.record_port_call(control.counters)?;
+    let recorder = control.stage.port_recorder();
+    let mut port_control = AdmissionPortWorkControlV1 {
+        sink: &mut *control.sink,
+    };
+    closure.object_id_at_controlled_v1(ordinal, &mut port_control, control.counters, recorder)
+}
+
+fn closure_object_len_at_controlled_v1<C, S>(
+    closure: &mut C,
+    ordinal: u64,
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<u64>
+where
+    C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    control.stage.record_port_call(control.counters)?;
+    let recorder = control.stage.port_recorder();
+    let mut port_control = AdmissionPortWorkControlV1 {
+        sink: &mut *control.sink,
+    };
+    closure.object_len_at_controlled_v1(ordinal, &mut port_control, control.counters, recorder)
+}
+
+fn closure_read_exact_at_controlled_v1<C, S>(
+    closure: &mut C,
+    ordinal: u64,
+    offset: u64,
+    destination: &mut [u8],
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<()>
+where
+    C: CompleteImmutableClosureReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    control.stage.record_port_call(control.counters)?;
+    let recorder = control.stage.port_recorder();
+    let bytes_recorder = control.stage.port_bytes_recorder();
+    let mut port_control = AdmissionPortWorkControlV1 {
+        sink: &mut *control.sink,
+    };
+    closure.read_object_exact_at_controlled_v1(
+        ordinal,
+        offset,
+        destination,
+        &mut port_control,
+        control.counters,
+        recorder,
+        bytes_recorder,
+    )
+}
+
+fn occupied_len_controlled_v1<O, S>(
+    occupied: &mut O,
+    id: TypedPhysicalObjectIdV1,
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<Option<u64>>
+where
+    O: OccupiedImmutableReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    control.stage.record_port_call(control.counters)?;
+    let recorder = control.stage.port_recorder();
+    let mut port_control = AdmissionPortWorkControlV1 {
+        sink: &mut *control.sink,
+    };
+    occupied.occupied_len_controlled_v1(id, &mut port_control, control.counters, recorder)
+}
+
+fn occupied_read_exact_at_controlled_v1<O, S>(
+    occupied: &mut O,
+    id: TypedPhysicalObjectIdV1,
+    offset: u64,
+    destination: &mut [u8],
+    control: &mut AdmissionWorkControlV1<'_, S>,
+) -> CoreResult<()>
+where
+    O: OccupiedImmutableReadPortV1 + ?Sized,
+    S: PreparedImmutableClosurePortV1 + ?Sized,
+{
+    control.stage.record_port_call(control.counters)?;
+    let recorder = control.stage.port_recorder();
+    let bytes_recorder = control.stage.port_bytes_recorder();
+    let mut port_control = AdmissionPortWorkControlV1 {
+        sink: &mut *control.sink,
+    };
+    occupied.read_occupied_exact_at_controlled_v1(
+        id,
+        offset,
+        destination,
+        &mut port_control,
+        control.counters,
+        recorder,
+        bytes_recorder,
+    )
 }
 
 #[cfg(any(test, feature = "operation-polymorphism"))]
@@ -328,9 +588,10 @@ where
 {
     let mut control = AdmissionWorkControlV1::new(sink, counters);
     control.poll(0)?;
-    control.poll(0)?;
-    let object_count = closure.object_count().map_err(map_source_port)?;
-    control.poll(1)?;
+    control.stage.record_port_call(control.counters)?;
+    let object_count_result = closure.object_count().map_err(map_source_port);
+    let object_count_work = u64::from(object_count_result.is_ok());
+    let object_count = control.complete_boundary(object_count_result, object_count_work)?;
     crate::format::validate_total_object_count(object_count)?;
     let object_count_usize =
         usize::try_from(object_count).map_err(|_| CoreError::IntegerOverflow)?;
@@ -346,11 +607,19 @@ where
     validate_canonical_typed_ids(closure, object_count, &mut control)?;
     buffers.traversal_state[..required_traversal_bytes].fill(0);
     control.poll(0)?;
-    control
+    let begin = control
         .sink
         .begin_private_closure(object_count)
-        .map_err(map_sink_port)?;
-    let validation = control.poll(1).and_then(|()| {
+        .map_err(map_sink_port);
+    let private_started = begin.is_ok();
+    let begin = control.complete_boundary(begin, u64::from(private_started));
+    if !private_started {
+        return match begin {
+            Err(error) => Err(error),
+            Ok(()) => Err(CoreError::SinkRefused),
+        };
+    }
+    let validation = begin.and_then(|()| {
         admit_inner(
             closure,
             object_count,
@@ -363,22 +632,27 @@ where
         )
     });
     let source_poll = control.poll(0);
-    let source_read_accounting = closure
+    let source_observation = closure
         .direct_storage_read_observation()
-        .map_err(map_source_port)
-        .and_then(|(bytes, calls)| {
-            control.counters.record_fscas_read(bytes, calls)?;
-            control.poll(calls)
-        });
+        .map_err(map_source_port);
+    let source_work = u64::from(source_observation.is_ok());
+    let source_read_accounting = source_observation.and_then(|(bytes, calls)| {
+        control.counters.record_fscas_read(bytes, calls)?;
+        Ok(())
+    });
+    let source_read_accounting = control.complete_boundary(source_read_accounting, source_work);
     let source_read_accounting = source_poll.and(source_read_accounting);
     let occupied_poll = control.poll(0);
-    let occupied_read_accounting = occupied
+    let occupied_observation = occupied
         .direct_storage_read_observation()
-        .map_err(map_source_port)
-        .and_then(|(bytes, calls)| {
-            control.counters.record_fscas_read(bytes, calls)?;
-            control.poll(calls)
-        });
+        .map_err(map_source_port);
+    let occupied_work = u64::from(occupied_observation.is_ok());
+    let occupied_read_accounting = occupied_observation.and_then(|(bytes, calls)| {
+        control.counters.record_fscas_read(bytes, calls)?;
+        Ok(())
+    });
+    let occupied_read_accounting =
+        control.complete_boundary(occupied_read_accounting, occupied_work);
     let occupied_read_accounting = occupied_poll.and(occupied_read_accounting);
     let result = match (validation, source_read_accounting, occupied_read_accounting) {
         (Err(error), _, _) => Err(error),
@@ -391,12 +665,27 @@ where
                 control.poll(0)?;
                 let mut visible_counters = *control.counters;
                 visible_counters.record_closure_fence()?;
-                control
+                visible_counters.record_candidate_graph_control_poll_v1(1)?;
+                let visibility_result = control
                     .sink
                     .make_closure_visible(expected_version_record)
-                    .map_err(map_sink_port)?;
-                *control.counters = visible_counters;
-                Ok(())
+                    .map_err(map_sink_port);
+                match visibility_result {
+                    Err(error) => {
+                        let _ = control.poll(0);
+                        Err(error)
+                    }
+                    Ok(()) => {
+                        *control.counters = visible_counters;
+                        // Visibility is already authoritative. The checked
+                        // post-boundary observation was staged above; sample
+                        // control now without turning success into failure.
+                        if !control.sink.cancellation_requested_v1() {
+                            let _ = control.sink.deadline_exceeded_v1();
+                        }
+                        Ok(())
+                    }
+                }
             })();
             visibility.map(|()| admitted)
         }
@@ -430,11 +719,14 @@ where
 
     for ordinal in 0..object_count {
         control.poll(0)?;
-        let expected_id = closure.object_id_at(ordinal).map_err(map_source_port)?;
-        control.poll(1)?;
+        let expected_id_result = closure_object_id_at_controlled_v1(closure, ordinal, control);
+        let expected_id_work = u64::from(expected_id_result.is_ok());
+        let expected_id = control.complete_boundary(expected_id_result, expected_id_work)?;
         control.poll(0)?;
-        let len = closure.object_len_at(ordinal).map_err(map_source_port)?;
-        control.poll(1)?;
+        let len_result = closure_object_len_at_controlled_v1(closure, ordinal, control);
+        let len_work = u64::from(len_result.is_ok());
+        let len = control.complete_boundary(len_result, len_work)?;
+        control.stage.record_decode_hash_call(control.counters)?;
         let decoded = {
             let mut source = ClosureObjectReadV1::new(closure, ordinal, len, control);
             decode_physical_object_from_port_v1(
@@ -459,10 +751,9 @@ where
         }
 
         control.poll(0)?;
-        let occupied_len = occupied
-            .occupied_len(expected_id)
-            .map_err(map_source_port)?;
-        control.poll(1)?;
+        let occupied_len_result = occupied_len_controlled_v1(occupied, expected_id, control);
+        let occupied_len_work = u64::from(occupied_len_result.is_ok());
+        let occupied_len = control.complete_boundary(occupied_len_result, occupied_len_work)?;
         match occupied_len {
             Some(occupied_len) => {
                 let validated = validate_and_compare_occupied(
@@ -477,11 +768,12 @@ where
                     buffers.occupied_comparison,
                 )?;
                 control.poll(0)?;
-                control
+                let note_reused = control
                     .sink
                     .note_reused_object(validated)
-                    .map_err(map_sink_port)?;
-                control.poll(1)?;
+                    .map_err(map_sink_port);
+                let note_reused_work = u64::from(note_reused.is_ok());
+                control.complete_boundary(note_reused, note_reused_work)?;
                 reused_count = reused_count
                     .checked_add(1)
                     .ok_or(CoreError::IntegerOverflow)?;
@@ -538,7 +830,10 @@ where
     if visited != object_count {
         return Err(CoreError::MissingClosureEdge);
     }
-    if derive_version_v1(logical_root) != version.version_id {
+    control.stage.record_hash_call(control.counters)?;
+    let logical_version = derive_version_v1(logical_root);
+    control.stage.record_hash_bytes(control.counters, 32)?;
+    if logical_version != version.version_id {
         return Err(CoreError::IdMismatch);
     }
     control.poll(0)?;
@@ -563,8 +858,9 @@ where
     let mut previous = None;
     for ordinal in 0..count {
         control.poll(0)?;
-        let current = closure.object_id_at(ordinal).map_err(map_source_port)?;
-        control.poll(1)?;
+        let current_result = closure_object_id_at_controlled_v1(closure, ordinal, control);
+        let current_work = u64::from(current_result.is_ok());
+        let current = control.complete_boundary(current_result, current_work)?;
         if previous.is_some_and(|left| {
             compare_closure_object_ids_v1(left, current) != core::cmp::Ordering::Less
         }) {
@@ -627,13 +923,18 @@ impl<
             return Err(CoreError::Truncated);
         }
         self.control.poll(0)?;
-        self.closure
-            .read_object_exact_at(self.ordinal, offset, destination)
-            .map_err(map_source_port)?;
+        let read = closure_read_exact_at_controlled_v1(
+            self.closure,
+            self.ordinal,
+            offset,
+            destination,
+            self.control,
+        );
+        let completed_work = if read.is_ok() { amount } else { 0 };
+        self.control.complete_boundary(read, completed_work)?;
         self.control
-            .counters
-            .add(CounterFieldV1::BytesRead, amount)?;
-        self.control.poll(amount)
+            .stage
+            .record_decode_hash_bytes(self.control.counters, amount)
     }
 }
 
@@ -665,13 +966,18 @@ impl<O: OccupiedImmutableReadPortV1 + ?Sized, S: PreparedImmutableClosurePortV1 
             return Err(CoreError::Truncated);
         }
         self.control.poll(0)?;
-        self.port
-            .read_occupied_exact_at(self.id, offset, destination)
-            .map_err(map_source_port)?;
+        let read = occupied_read_exact_at_controlled_v1(
+            self.port,
+            self.id,
+            offset,
+            destination,
+            self.control,
+        );
+        let completed_work = if read.is_ok() { amount } else { 0 };
+        self.control.complete_boundary(read, completed_work)?;
         self.control
-            .counters
-            .add(CounterFieldV1::BytesRead, amount)?;
-        self.control.poll(amount)
+            .stage
+            .record_decode_hash_bytes(self.control.counters, amount)
     }
 }
 
@@ -764,6 +1070,7 @@ where
     S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     {
+        control.stage.record_decode_hash_call(control.counters)?;
         let mut reader = OccupiedObjectReadV1 {
             port: occupied,
             id: expected_id,
@@ -793,28 +1100,40 @@ where
         let occupied_take = usize::try_from(occupied_len.saturating_sub(offset).min(amount))
             .map_err(|_| CoreError::IntegerOverflow)?;
         if incoming_take != 0 {
-            control.poll(0)?;
-            closure
-                .read_object_exact_at(ordinal, offset, &mut incoming_scratch[..incoming_take])
-                .map_err(map_source_port)?;
             let incoming_amount =
                 u64::try_from(incoming_take).map_err(|_| CoreError::IntegerOverflow)?;
-            control
-                .counters
-                .add(CounterFieldV1::BytesRead, incoming_amount)?;
-            control.poll(incoming_amount)?;
+            control.poll(0)?;
+            let incoming_read = closure_read_exact_at_controlled_v1(
+                closure,
+                ordinal,
+                offset,
+                &mut incoming_scratch[..incoming_take],
+                control,
+            );
+            let completed_work = if incoming_read.is_ok() {
+                incoming_amount
+            } else {
+                0
+            };
+            control.complete_boundary(incoming_read, completed_work)?;
         }
         if occupied_take != 0 {
-            control.poll(0)?;
-            occupied
-                .read_occupied_exact_at(expected_id, offset, &mut occupied_scratch[..occupied_take])
-                .map_err(map_source_port)?;
             let occupied_amount =
                 u64::try_from(occupied_take).map_err(|_| CoreError::IntegerOverflow)?;
-            control
-                .counters
-                .add(CounterFieldV1::BytesRead, occupied_amount)?;
-            control.poll(occupied_amount)?;
+            control.poll(0)?;
+            let occupied_read = occupied_read_exact_at_controlled_v1(
+                occupied,
+                expected_id,
+                offset,
+                &mut occupied_scratch[..occupied_take],
+                control,
+            );
+            let completed_work = if occupied_read.is_ok() {
+                occupied_amount
+            } else {
+                0
+            };
+            control.complete_boundary(occupied_read, completed_work)?;
         }
         if incoming_take != occupied_take
             || incoming_scratch[..incoming_take] != occupied_scratch[..occupied_take]
@@ -851,42 +1170,52 @@ where
     S: PreparedImmutableClosurePortV1 + ?Sized,
 {
     control.poll(0)?;
-    control
+    let begin = control
         .sink
         .begin_private_object(id, len)
-        .map_err(map_sink_port)?;
-    control.poll(1)?;
+        .map_err(map_sink_port);
+    let begin_work = u64::from(begin.is_ok());
+    control.complete_boundary(begin, begin_work)?;
     let mut offset = 0_u64;
     while offset < len {
         let take = usize::try_from((len - offset).min(COMPARISON_WINDOW_BYTES as u64))
             .map_err(|_| CoreError::IntegerOverflow)?;
-        control.poll(0)?;
-        closure
-            .read_object_exact_at(ordinal, offset, &mut scratch[..take])
-            .map_err(map_source_port)?;
         let amount = u64::try_from(take).map_err(|_| CoreError::IntegerOverflow)?;
-        control.counters.add(CounterFieldV1::BytesRead, amount)?;
-        control.poll(amount)?;
         control.poll(0)?;
-        control
+        let read = closure_read_exact_at_controlled_v1(
+            closure,
+            ordinal,
+            offset,
+            &mut scratch[..take],
+            control,
+        );
+        let read_work = if read.is_ok() { amount } else { 0 };
+        control.complete_boundary(read, read_work)?;
+        control.poll(0)?;
+        let write = control
             .sink
             .write_private_object(&scratch[..take])
-            .map_err(map_sink_port)?;
-        let mut checked = *control.counters;
-        checked.add(CounterFieldV1::BytesCopied, amount)?;
-        checked.add(CounterFieldV1::BytesWritten, amount)?;
-        *control.counters = checked;
-        control.poll(amount)?;
+            .map_err(map_sink_port);
+        let write_work = if write.is_ok() { amount } else { 0 };
+        let write = write.and_then(|()| {
+            let mut checked = *control.counters;
+            checked.add(CounterFieldV1::BytesCopied, amount)?;
+            checked.add(CounterFieldV1::BytesWritten, amount)?;
+            *control.counters = checked;
+            Ok(())
+        });
+        control.complete_boundary(write, write_work)?;
         offset = offset
             .checked_add(amount)
             .ok_or(CoreError::IntegerOverflow)?;
     }
     control.poll(0)?;
-    control
+    let finish = control
         .sink
         .finish_private_object(id)
-        .map_err(map_sink_port)?;
-    control.poll(1)
+        .map_err(map_sink_port);
+    let finish_work = u64::from(finish.is_ok());
+    control.complete_boundary(finish, finish_work)
 }
 
 fn map_source_port(ImmutablePortErrorV1::Failure: ImmutablePortErrorV1) -> CoreError {
@@ -901,6 +1230,7 @@ const fn map_occupant_validation(error: CoreError) -> CoreError {
     match error {
         CoreError::SourceFailure
         | CoreError::ResourceRefused
+        | CoreError::IntegerOverflow
         | CoreError::Cancelled
         | CoreError::Deadline
         | CoreError::Schema
@@ -909,6 +1239,15 @@ const fn map_occupant_validation(error: CoreError) -> CoreError {
         | CoreError::IdMismatch => error,
         _ => CoreError::MalformedOccupant,
     }
+}
+
+#[cfg(test)]
+#[test]
+fn occupant_validation_preserves_accounting_overflow() {
+    assert_eq!(
+        map_occupant_validation(CoreError::IntegerOverflow),
+        CoreError::IntegerOverflow
+    );
 }
 
 fn validate_object_edges<C, S>(
@@ -967,7 +1306,7 @@ where
                 };
                 require_edge(closure, object_count, id, control)?;
             }
-            cursor.finish()?;
+            cursor.finish(control)?;
         }
         PhysicalObjectPayloadV1::Tree(TreeRecordV1::Index(index)) => {
             let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
@@ -992,7 +1331,7 @@ where
                     control,
                 )?;
             }
-            cursor.finish()?;
+            cursor.finish(control)?;
         }
         PhysicalObjectPayloadV1::File(file) => {
             let mut cursor = ObjectCursorV1::payload(closure, ordinal, control)?;
@@ -1021,7 +1360,7 @@ where
                     }
                 }
             }
-            cursor.finish()?;
+            cursor.finish(control)?;
         }
         PhysicalObjectPayloadV1::Symlink(_) | PhysicalObjectPayloadV1::Chunk(_) => {}
     }
@@ -1043,8 +1382,9 @@ where
     while low < high {
         let middle = low + (high - low) / 2;
         control.poll(0)?;
-        let current = closure.object_id_at(middle).map_err(map_source_port)?;
-        control.poll(1)?;
+        let current_result = closure_object_id_at_controlled_v1(closure, middle, control);
+        let current_work = u64::from(current_result.is_ok());
+        let current = control.complete_boundary(current_result, current_work)?;
         match compare_closure_object_ids_v1(current, id) {
             core::cmp::Ordering::Less => low = middle + 1,
             core::cmp::Ordering::Greater => high = middle,
@@ -1173,9 +1513,11 @@ impl ObjectCursorV1 {
         C: CompleteImmutableClosureReadPortV1 + ?Sized,
         S: PreparedImmutableClosurePortV1 + ?Sized,
     {
+        control.stage.record_decode_call(control.counters)?;
         control.poll(0)?;
-        let len = closure.object_len_at(ordinal).map_err(map_source_port)?;
-        control.poll(1)?;
+        let len_result = closure_object_len_at_controlled_v1(closure, ordinal, control);
+        let len_work = u64::from(len_result.is_ok());
+        let len = control.complete_boundary(len_result, len_work)?;
         if len < OBJECT_HEADER_BYTES {
             return Err(CoreError::Truncated);
         }
@@ -1209,11 +1551,18 @@ impl ObjectCursorV1 {
             return Err(CoreError::Truncated);
         }
         control.poll(0)?;
-        closure
-            .read_object_exact_at(self.ordinal, self.offset, destination)
-            .map_err(map_source_port)?;
-        control.counters.add(CounterFieldV1::BytesRead, amount)?;
-        control.poll(amount)?;
+        let read = closure_read_exact_at_controlled_v1(
+            closure,
+            self.ordinal,
+            self.offset,
+            destination,
+            control,
+        );
+        let completed_work = if read.is_ok() { amount } else { 0 };
+        control.complete_boundary(read, completed_work)?;
+        control
+            .stage
+            .record_decode_bytes(control.counters, amount)?;
         self.offset = end;
         Ok(())
     }
@@ -1280,12 +1629,14 @@ impl ObjectCursorV1 {
         Ok(u64::from_be_bytes(self.read_array(closure, control)?))
     }
 
-    fn finish(self) -> CoreResult<()> {
-        if self.offset == self.end {
-            Ok(())
-        } else {
-            Err(CoreError::TrailingBytes)
+    fn finish<S>(self, _control: &mut AdmissionWorkControlV1<'_, S>) -> CoreResult<()>
+    where
+        S: PreparedImmutableClosurePortV1 + ?Sized,
+    {
+        if self.offset != self.end {
+            return Err(CoreError::TrailingBytes);
         }
+        Ok(())
     }
 }
 
@@ -1574,7 +1925,7 @@ impl PageTraversalV1 {
                 } => {
                     let frame = self.frames[index].take().ok_or(CoreError::Truncated)?;
                     self.len -= 1;
-                    frame.cursor.finish()?;
+                    frame.cursor.finish(control)?;
                     if frame.first_visit {
                         traversal_finish(states, frame.ordinal, visited)?;
                     }
@@ -1673,7 +2024,7 @@ impl AdmissionDirectoryFrameV1 {
             )),
             _ => return Err(CoreError::TypedEdge),
         };
-        cursor.finish()?;
+        cursor.finish(control)?;
         let pages = match root_page {
             Some(root_page) => Some(PageTraversalV1::new(
                 closure,
@@ -1913,9 +2264,14 @@ where
         return Err(CoreError::Target);
     }
     cursor.read_into(closure, control, &mut source_window[..target_len])?;
-    cursor.finish()?;
+    cursor.finish(control)?;
     let target = ValidatedSymlinkTarget::new(&source_window[..target_len])?;
+    control.stage.record_hash_call(control.counters)?;
     let result = derive_symlink_node_v1(target)?;
+    control.stage.record_hash_bytes(
+        control.counters,
+        u64::try_from(target_len).map_err(|_| CoreError::IntegerOverflow)?,
+    )?;
     if first_visit {
         traversal_finish(states, ordinal, visited)?;
     }
@@ -1965,7 +2321,10 @@ where
         if first_visit {
             traversal_finish(states, ordinal, visited)?;
         }
-        derive_file_node_v1(mode, logical_file)
+        control.stage.record_hash_call(control.counters)?;
+        let result = derive_file_node_v1(mode, logical_file)?;
+        control.stage.record_hash_bytes(control.counters, 42)?;
+        Ok(result)
     })();
     let observation = control.counters.accumulate(direct);
     match (result, observation) {
@@ -2057,7 +2416,7 @@ where
             }
         }
     }
-    cursor.finish()?;
+    cursor.finish(control.admission)?;
     if let Err(error) = stream.finish(&mut control, &mut consumer) {
         return Err(consumer
             .failure
@@ -2103,6 +2462,7 @@ where
     if take > source_window.len() {
         return Err(CoreError::ResourceRefused);
     }
+    control.admission.poll(0)?;
     control.poll_now()?;
     control.record_payload_call()?;
     let end = cursor
@@ -2112,17 +2472,28 @@ where
     if end > cursor.end {
         return Err(CoreError::Truncated);
     }
-    closure
-        .read_object_exact_at(cursor.ordinal, cursor.offset, &mut source_window[..take])
-        .map_err(map_source_port)?;
+    let read = closure_read_exact_at_controlled_v1(
+        closure,
+        cursor.ordinal,
+        cursor.offset,
+        &mut source_window[..take],
+        control.admission,
+    );
+    let completed_work = if read.is_ok() { actual_len } else { 0 };
+    let read = read.and_then(|()| control.record_payload_bytes(actual_len));
+    let read = control.admission.complete_boundary(read, completed_work);
+    let logical_post_poll = control.poll_now();
+    match (read, logical_post_poll) {
+        (Err(error), _) => return Err(error),
+        (Ok(()), Err(error)) => return Err(error),
+        (Ok(()), Ok(())) => {}
+    }
     control
         .admission
-        .counters
-        .add(CounterFieldV1::BytesRead, actual_len)?;
+        .stage
+        .record_decode_bytes(control.admission.counters, actual_len)?;
     cursor.offset = end;
-    control.record_payload_bytes(actual_len)?;
-    control.poll_now()?;
-    cursor.finish()?;
+    cursor.finish(control.admission)?;
     push_reconstructed_bytes(stream, control, consumer, &source_window[..take])?;
     if first_visit {
         traversal_finish(states, ordinal, visited)?;

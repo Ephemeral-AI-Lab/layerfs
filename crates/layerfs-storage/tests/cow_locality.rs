@@ -3,7 +3,8 @@ mod cow_owner {
     use layerfs_storage::format::ROOT_DIRECTORY_MODE_SENTINEL_V1;
     use layerfs_storage::qualification::cow::semantic::{
         build_v1, canonical_order_v1, file_replacement_v1, identity_v1, mutate_v1, preflight_v1,
-        TreeBuildRequestV1, TreeMutationFaultV1, TreeMutationObservationV1, TreeMutationRequestV1,
+        TreeBuildRequestV1, TreeMutationControlV1, TreeMutationFaultV1, TreeMutationObservationV1,
+        TreeMutationRequestV1,
     };
     use layerfs_storage::qualification::resources::operation_slot_bytes_v1;
     use layerfs_storage::CoreError;
@@ -126,6 +127,36 @@ mod cow_owner {
         assert_eq!(observation.ledger_admitted_slots(), 0);
         assert_eq!(observation.base_build_ledger_admitted_slots(), 0);
         assert_eq!(observation.result_build_ledger_admitted_slots(), 0);
+    }
+
+    #[test]
+    fn replacement_cancellation_is_polled_during_canonical_entry_validation() {
+        let observation = mutate_v1(
+            TreeMutationRequestV1::replace(192, 0)
+                .with_fault(TreeMutationFaultV1::NonCanonicalAffectedEntries)
+                .with_control(TreeMutationControlV1::CancelAtPoll(2)),
+        )
+        .unwrap();
+        assert_eq!(observation.error(), Some(CoreError::Cancelled));
+        assert_eq!(observation.cow_mutation_control_polls(), 2);
+        assert_eq!(observation.cow_mutation_maximum_work_between_polls(), 128);
+        assert_eq!(observation.sink_begins(), 0);
+        assert_eq!(observation.ledger_admitted_slots(), 0);
+    }
+
+    #[test]
+    fn replacement_deadline_is_polled_during_evidence_sizing() {
+        let observation = mutate_v1(
+            TreeMutationRequestV1::replace(18_433, 50 * 192 + 10)
+                .with_fault(TreeMutationFaultV1::WrongRoot)
+                .with_control(TreeMutationControlV1::DeadlineAtPoll(3)),
+        )
+        .unwrap();
+        assert_eq!(observation.error(), Some(CoreError::Deadline));
+        assert_eq!(observation.cow_mutation_control_polls(), 3);
+        assert_eq!(observation.cow_mutation_maximum_work_between_polls(), 128);
+        assert_eq!(observation.sink_begins(), 0);
+        assert_eq!(observation.ledger_admitted_slots(), 0);
     }
 
     #[test]

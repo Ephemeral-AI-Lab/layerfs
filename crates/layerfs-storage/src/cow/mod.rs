@@ -86,6 +86,34 @@ pub mod semantic {
         }
     }
 
+    struct RequestedCowControlV1 {
+        request: TreeMutationControlV1,
+        polls: u64,
+    }
+
+    impl RequestedCowControlV1 {
+        const fn new(request: TreeMutationControlV1) -> Self {
+            Self { request, polls: 0 }
+        }
+    }
+
+    impl OperationWorkControlV1 for RequestedCowControlV1 {
+        fn cancellation_requested_v1(&mut self) -> bool {
+            self.polls = self.polls.saturating_add(1);
+            matches!(
+                self.request,
+                TreeMutationControlV1::CancelAtPoll(poll) if self.polls >= poll
+            )
+        }
+
+        fn deadline_exceeded_v1(&mut self) -> bool {
+            matches!(
+                self.request,
+                TreeMutationControlV1::DeadlineAtPoll(poll) if self.polls >= poll
+            )
+        }
+    }
+
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum TreeModeV1 {
         ImplicitRoot,
@@ -560,6 +588,14 @@ pub mod semantic {
         CorruptTail,
         CorruptLeafSiblings,
         CorruptLevelOneSiblings,
+        NonCanonicalAffectedEntries,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum TreeMutationControlV1 {
+        Continue,
+        CancelAtPoll(u64),
+        DeadlineAtPoll(u64),
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -571,6 +607,7 @@ pub mod semantic {
         base_tag: u8,
         changed_tag: u8,
         fault: TreeMutationFaultV1,
+        control: TreeMutationControlV1,
         source_resident_bytes: u64,
         sink_resident_bytes: u64,
     }
@@ -585,6 +622,7 @@ pub mod semantic {
                 base_tag: 0,
                 changed_tag: 1,
                 fault: TreeMutationFaultV1::None,
+                control: TreeMutationControlV1::Continue,
                 source_resident_bytes: 0,
                 sink_resident_bytes: 0,
             }
@@ -630,6 +668,10 @@ pub mod semantic {
 
         pub const fn with_fault(self, fault: TreeMutationFaultV1) -> Self {
             Self { fault, ..self }
+        }
+
+        pub const fn with_control(self, control: TreeMutationControlV1) -> Self {
+            Self { control, ..self }
         }
 
         pub const fn with_residency(self, source: u64, sink: u64) -> Self {
@@ -1584,6 +1626,7 @@ pub mod semantic {
         );
         updated[index] = replacement;
         let rebuilt = build_tree(DirectoryBuildModeV1::ImplicitRoot, &updated)?;
+        let mut faulty_affected_entries = Vec::new();
         let mut evidence = replacement_evidence(
             DirectoryBuildModeV1::ImplicitRoot,
             &base_entries,
@@ -1601,6 +1644,18 @@ pub mod semantic {
             if let Some(first) = evidence.old_window.first_mut() {
                 *first ^= 1;
             }
+        } else if request.fault == TreeMutationFaultV1::NonCanonicalAffectedEntries {
+            faulty_affected_entries.extend_from_slice(evidence.affected_entries);
+            let last = faulty_affected_entries
+                .len()
+                .checked_sub(1)
+                .ok_or(CoreError::Path)?;
+            let previous = faulty_affected_entries
+                .get(last.checked_sub(1).ok_or(CoreError::Path)?)
+                .copied()
+                .ok_or(CoreError::Path)?;
+            faulty_affected_entries[last] = previous;
+            evidence.affected_entries = &faulty_affected_entries;
         }
         let proof_window_bytes = evidence.old_window.len() as u64;
         let proof_node_count = (evidence.prefix.len() + evidence.suffix.len()) as u32;
@@ -1610,7 +1665,7 @@ pub mod semantic {
         };
         let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
         let mut counters = OperationCountersV1::default();
-        let mut control = ContinueCowControlV1;
+        let mut control = RequestedCowControlV1::new(request.control);
         let outcome = replace_directory_entry_cow_v1(
             base.directory,
             replacement_evidence_value(&evidence, base.directory),
@@ -1831,7 +1886,7 @@ pub mod semantic {
         };
         let ledger = ResourceLedgerV1::new(32 * 1024 * 1024);
         let mut counters = OperationCountersV1::default();
-        let mut control = ContinueCowControlV1;
+        let mut control = RequestedCowControlV1::new(request.control);
         let outcome = match request.action {
             TreeMutationActionV1::Add => add_directory_entry_cow_v1(
                 base.directory,

@@ -329,6 +329,8 @@ mod mutation_owner {
         assert!(observation.algorithm_is_fastcdc);
         assert_storage_terminal(observation.operation_counters[0]);
         assert_storage_terminal(observation.operation_counters[1]);
+        assert!(observation.operation_counters[1].content_update_control_polls > 0);
+        assert!(observation.operation_counters[1].content_update_maximum_work_between_polls <= 128);
         assert_clean(observation);
     }
 
@@ -363,6 +365,20 @@ mod mutation_owner {
         assert_storage_terminal(observation.operation_counters[0]);
         assert_storage_terminal(observation.operation_counters[1]);
         assert_storage_terminal(observation.operation_counters[2]);
+        for counters in observation.operation_counters {
+            assert!(counters.cow_mutation_control_polls > 0);
+            assert!(counters.cow_mutation_maximum_work_between_polls <= 128);
+            assert!(counters.closure_validation_control_polls > 0);
+            assert!(
+                counters.closure_validation_maximum_work_between_polls
+                    <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64
+            );
+            assert!(counters.candidate_graph_control_polls > 0);
+            assert!(
+                counters.candidate_graph_maximum_work_between_polls
+                    <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64
+            );
+        }
         assert_clean(observation);
     }
 
@@ -388,6 +404,19 @@ mod mutation_owner {
         assert_eq!(observation.operation_counter_count, 1);
         assert!(observation.algorithm_is_fastcdc);
         assert_storage_terminal(observation.operation_counters[0]);
+        let counters = observation.operation_counters[0];
+        assert!(counters.cow_mutation_control_polls > 0);
+        assert!(counters.cow_mutation_maximum_work_between_polls <= 128);
+        assert!(counters.closure_validation_control_polls > 0);
+        assert!(
+            counters.closure_validation_maximum_work_between_polls
+                <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64
+        );
+        assert!(counters.candidate_graph_control_polls > 0);
+        assert!(
+            counters.candidate_graph_maximum_work_between_polls
+                <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64
+        );
         assert_clean(observation);
     }
 
@@ -427,6 +456,8 @@ mod mutation_owner {
                 + counters.storage_inodes_retained
         );
         assert_storage_terminal(observation.operation_counters[0]);
+        assert!(observation.operation_counters[0].content_update_control_polls > 0);
+        assert!(observation.operation_counters[0].content_update_maximum_work_between_polls <= 128);
         assert_clean(observation);
     }
 

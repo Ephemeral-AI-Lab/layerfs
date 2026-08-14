@@ -8,7 +8,7 @@
 use crate::identity::COMPARISON_WINDOW_BYTES;
 #[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::identity::IDENTITY_HASHER_BYTES_V1;
-use crate::limits::{CounterFieldV1, OperationCountersV1};
+use crate::limits::{CounterFieldV1, OperationCountersV1, OperationWorkControlV1};
 #[cfg(any(test, feature = "operation-polymorphism"))]
 use crate::limits::{MemoryComponentV1, OperationMemoryPlanV1, ResourceLedgerV1};
 #[cfg(any(test, feature = "operation-polymorphism"))]
@@ -47,6 +47,18 @@ pub enum ImmutablePortErrorV1 {
     Failure,
 }
 
+/// Direct stage recorder selected by the admission owner for one immutable
+/// port boundary. Filesystem adapters pass it through lower-layer bounded
+/// loops so their polls remain attributed to the caller's active stage.
+#[doc(hidden)]
+pub type ImmutablePortControlPollV1 = fn(&mut OperationCountersV1, u64) -> CoreResult<()>;
+
+/// Direct successful-read recorder selected by the admission owner for one
+/// immutable port boundary. Filesystem adapters invoke it after the bytes are
+/// present in the destination and before the post-I/O control poll.
+#[doc(hidden)]
+pub type ImmutablePortReadBytesV1 = fn(&mut OperationCountersV1, u64) -> CoreResult<()>;
+
 /// Exact occupied-key lookup through bounded random reads. Bytes must remain
 /// immutable between `occupied_len` and the final read for that key. LayerFS
 /// never repairs, replaces, quarantines, or requests the whole occupant.
@@ -66,12 +78,50 @@ pub trait OccupiedImmutableReadPortV1 {
         &mut self,
         id: TypedPhysicalObjectIdV1,
     ) -> Result<Option<u64>, ImmutablePortErrorV1>;
+    /// Controlled production variant. Pure and synthetic ports inherit the
+    /// control-free call because their bounded in-memory work is polled by the
+    /// admission owner immediately before and after this boundary.
+    #[doc(hidden)]
+    fn occupied_len_controlled_v1(
+        &mut self,
+        id: TypedPhysicalObjectIdV1,
+        _control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+        _record_control_poll: ImmutablePortControlPollV1,
+    ) -> CoreResult<Option<u64>> {
+        self.occupied_len(id).map_err(map_immutable_read_error_v1)
+    }
     fn read_occupied_exact_at(
         &mut self,
         id: TypedPhysicalObjectIdV1,
         offset: u64,
         destination: &mut [u8],
     ) -> Result<(), ImmutablePortErrorV1>;
+    /// Controlled production variant; see `occupied_len_controlled_v1`.
+    #[doc(hidden)]
+    fn read_occupied_exact_at_controlled_v1(
+        &mut self,
+        id: TypedPhysicalObjectIdV1,
+        offset: u64,
+        destination: &mut [u8],
+        _control: &mut dyn OperationWorkControlV1,
+        _counters: &mut OperationCountersV1,
+        _record_control_poll: ImmutablePortControlPollV1,
+        record_read_bytes: ImmutablePortReadBytesV1,
+    ) -> CoreResult<()> {
+        self.read_occupied_exact_at(id, offset, destination)
+            .map_err(map_immutable_read_error_v1)?;
+        record_read_bytes(
+            _counters,
+            u64::try_from(destination.len()).map_err(|_| CoreError::IntegerOverflow)?,
+        )
+    }
+}
+
+fn map_immutable_read_error_v1(error: ImmutablePortErrorV1) -> CoreError {
+    match error {
+        ImmutablePortErrorV1::Failure => CoreError::SourceFailure,
+    }
 }
 
 /// Private transaction sink. `make_closure_visible` is the sole visibility

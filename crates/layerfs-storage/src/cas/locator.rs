@@ -332,12 +332,28 @@ pub(super) fn decode_persistent_locator_for_install_v1(
     bytes: [u8; PERSISTENT_LOCATOR_BYTES_V1],
     expected: TypedPhysicalObjectIdV1,
 ) -> Result<PersistentObjectLocatorV1, PersistentLocatorInstallDecisionV1> {
-    decode_persistent_locator_v1(bytes, expected).map_err(|error| match error {
-        PersistentLocatorCodecErrorV1::Malformed => PersistentLocatorInstallDecisionV1::Malformed,
-        PersistentLocatorCodecErrorV1::BindingMismatch => {
-            PersistentLocatorInstallDecisionV1::BindingCollision
-        }
-    })
+    decode_persistent_locator_for_install_with_consumed_v1(bytes, expected).0
+}
+
+pub(super) fn decode_persistent_locator_for_install_with_consumed_v1(
+    bytes: [u8; PERSISTENT_LOCATOR_BYTES_V1],
+    expected: TypedPhysicalObjectIdV1,
+) -> (
+    Result<PersistentObjectLocatorV1, PersistentLocatorInstallDecisionV1>,
+    u64,
+) {
+    let (result, consumed) = decode_persistent_locator_with_consumed_v1(bytes, expected);
+    (
+        result.map_err(|error| match error {
+            PersistentLocatorCodecErrorV1::Malformed => {
+                PersistentLocatorInstallDecisionV1::Malformed
+            }
+            PersistentLocatorCodecErrorV1::BindingMismatch => {
+                PersistentLocatorInstallDecisionV1::BindingCollision
+            }
+        }),
+        consumed,
+    )
 }
 
 /// Decode a locator whose typed object binding is carried by the record
@@ -440,66 +456,93 @@ pub(super) fn decode_persistent_locator_v1(
     bytes: [u8; PERSISTENT_LOCATOR_BYTES_V1],
     expected: TypedPhysicalObjectIdV1,
 ) -> Result<PersistentObjectLocatorV1, PersistentLocatorCodecErrorV1> {
-    if &bytes[..8] != PERSISTENT_LOCATOR_MAGIC_V1
-        || !(1..=5).contains(&bytes[8])
-        || bytes[9..16] != [0_u8; 7]
-        || bytes[92..96] != [0_u8; 4]
-        || bytes[116..120] != [0_u8; 4]
-    {
-        return Err(PersistentLocatorCodecErrorV1::Malformed);
-    }
-    if bytes[8] != typed_kind_byte(expected) || bytes[16..48] != *expected.as_bytes() {
-        return Err(PersistentLocatorCodecErrorV1::BindingMismatch);
-    }
-    let pack_id = <[u8; 32]>::try_from(&bytes[48..80])
-        .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?;
-    let pack_len = u64::from_be_bytes(
-        bytes[80..88]
-            .try_into()
-            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
-    );
-    let record_count = u32::from_be_bytes(
-        bytes[88..92]
-            .try_into()
-            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
-    );
-    let index_offset = u64::from_be_bytes(
-        bytes[96..104]
-            .try_into()
-            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
-    );
-    let absolute_offset = u64::from_be_bytes(
-        bytes[104..112]
-            .try_into()
-            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
-    );
-    let object_len = u32::from_be_bytes(
-        bytes[112..116]
-            .try_into()
-            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
-    );
-    let checksum = <[u8; 32]>::try_from(&bytes[120..152])
-        .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?;
-    let transaction = u64::from_be_bytes(
-        bytes[152..160]
-            .try_into()
-            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
-    );
-    Ok(PersistentObjectLocatorV1::new(
-        SealedPackV1::from_validated_parts(
-            PackIdV1::from_digest(pack_id),
-            pack_len,
-            record_count,
-            index_offset,
-        ),
-        PackIndexEntryV1::from_validated_parts(
-            expected,
-            absolute_offset,
-            object_len,
-            ObjectChecksumV1::from_digest(checksum),
-        ),
-        transaction,
-    ))
+    decode_persistent_locator_with_consumed_v1(bytes, expected).0
+}
+
+fn decode_persistent_locator_with_consumed_v1(
+    bytes: [u8; PERSISTENT_LOCATOR_BYTES_V1],
+    expected: TypedPhysicalObjectIdV1,
+) -> (
+    Result<PersistentObjectLocatorV1, PersistentLocatorCodecErrorV1>,
+    u64,
+) {
+    let mut consumed = 8_u64;
+    let result = (|| {
+        if &bytes[..8] != PERSISTENT_LOCATOR_MAGIC_V1 {
+            return Err(PersistentLocatorCodecErrorV1::Malformed);
+        }
+        consumed = 9;
+        if !(1..=5).contains(&bytes[8]) {
+            return Err(PersistentLocatorCodecErrorV1::Malformed);
+        }
+        consumed = 16;
+        if bytes[9..16] != [0_u8; 7] {
+            return Err(PersistentLocatorCodecErrorV1::Malformed);
+        }
+        consumed = 96;
+        if bytes[92..96] != [0_u8; 4] {
+            return Err(PersistentLocatorCodecErrorV1::Malformed);
+        }
+        consumed = 120;
+        if bytes[116..120] != [0_u8; 4] {
+            return Err(PersistentLocatorCodecErrorV1::Malformed);
+        }
+        if bytes[8] != typed_kind_byte(expected) || bytes[16..48] != *expected.as_bytes() {
+            return Err(PersistentLocatorCodecErrorV1::BindingMismatch);
+        }
+        let pack_id = <[u8; 32]>::try_from(&bytes[48..80])
+            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?;
+        let pack_len = u64::from_be_bytes(
+            bytes[80..88]
+                .try_into()
+                .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
+        );
+        let record_count = u32::from_be_bytes(
+            bytes[88..92]
+                .try_into()
+                .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
+        );
+        let index_offset = u64::from_be_bytes(
+            bytes[96..104]
+                .try_into()
+                .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
+        );
+        let absolute_offset = u64::from_be_bytes(
+            bytes[104..112]
+                .try_into()
+                .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
+        );
+        let object_len = u32::from_be_bytes(
+            bytes[112..116]
+                .try_into()
+                .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
+        );
+        consumed = 152;
+        let checksum = <[u8; 32]>::try_from(&bytes[120..152])
+            .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?;
+        consumed = PERSISTENT_LOCATOR_BYTES_V1 as u64;
+        let transaction = u64::from_be_bytes(
+            bytes[152..160]
+                .try_into()
+                .map_err(|_| PersistentLocatorCodecErrorV1::Malformed)?,
+        );
+        Ok(PersistentObjectLocatorV1::new(
+            SealedPackV1::from_validated_parts(
+                PackIdV1::from_digest(pack_id),
+                pack_len,
+                record_count,
+                index_offset,
+            ),
+            PackIndexEntryV1::from_validated_parts(
+                expected,
+                absolute_offset,
+                object_len,
+                ObjectChecksumV1::from_digest(checksum),
+            ),
+            transaction,
+        ))
+    })();
+    (result, consumed)
 }
 
 const fn typed_kind_byte(id: TypedPhysicalObjectIdV1) -> u8 {
@@ -572,6 +615,54 @@ mod tests {
                 locator.transaction(),
             ),),
             PersistentLocatorPublicationDecisionV1::Authenticated
+        );
+    }
+
+    #[test]
+    fn persistent_locator_decoder_reports_exact_consumed_fault_boundary() {
+        let (locator, id) = fixture();
+        let encoded = encode_persistent_locator_v1(locator);
+        assert_eq!(
+            decode_persistent_locator_for_install_with_consumed_v1(encoded, id),
+            (Ok(locator), PERSISTENT_LOCATOR_BYTES_V1 as u64)
+        );
+
+        let mut bad_magic = encoded;
+        bad_magic[0] ^= 0xff;
+        assert_eq!(
+            decode_persistent_locator_for_install_with_consumed_v1(bad_magic, id),
+            (Err(PersistentLocatorInstallDecisionV1::Malformed), 8)
+        );
+
+        let mut bad_prefix_reserved = encoded;
+        bad_prefix_reserved[9] = 1;
+        assert_eq!(
+            decode_persistent_locator_for_install_with_consumed_v1(bad_prefix_reserved, id),
+            (Err(PersistentLocatorInstallDecisionV1::Malformed), 16)
+        );
+
+        let mut bad_pack_reserved = encoded;
+        bad_pack_reserved[92] = 1;
+        assert_eq!(
+            decode_persistent_locator_for_install_with_consumed_v1(bad_pack_reserved, id),
+            (Err(PersistentLocatorInstallDecisionV1::Malformed), 96)
+        );
+
+        let mut bad_object_reserved = encoded;
+        bad_object_reserved[116] = 1;
+        assert_eq!(
+            decode_persistent_locator_for_install_with_consumed_v1(bad_object_reserved, id),
+            (Err(PersistentLocatorInstallDecisionV1::Malformed), 120)
+        );
+
+        let mut wrong_binding = encoded;
+        wrong_binding[16] ^= 0xff;
+        assert_eq!(
+            decode_persistent_locator_for_install_with_consumed_v1(wrong_binding, id),
+            (
+                Err(PersistentLocatorInstallDecisionV1::BindingCollision),
+                120,
+            )
         );
     }
 

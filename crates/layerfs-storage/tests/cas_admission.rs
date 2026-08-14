@@ -973,6 +973,16 @@ mod cas_admission_owner {
         );
         assert_eq!(observation.bytes_copied(), total_canonical_bytes);
         assert_eq!(observation.bytes_written(), total_canonical_bytes);
+        assert!(observation.closure_validation_control_polls() > 0);
+        assert!(
+            observation.closure_validation_maximum_work_between_polls()
+                <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64
+        );
+        assert!(observation.candidate_graph_control_polls() > 0);
+        assert!(
+            observation.candidate_graph_maximum_work_between_polls()
+                <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64
+        );
     }
 
     #[test]
@@ -1064,14 +1074,53 @@ mod cas_admission_owner {
 
     #[test]
     fn logical_reconstruction_borrowed_control_stops_before_visibility() {
+        const LOGICAL_RECONSTRUCTION_FAULT_POLL_V1: u64 = 345;
+        const FIRST_PHYSICAL_FRAGMENT_BYTES_V1: u64 = 9;
+
         let objects = rechunked_file_closure();
         let object_refs = typed_refs(&objects);
         for failure in [CoreError::Cancelled, CoreError::Deadline] {
-            let observation =
+            let early =
                 admit_v1(AdmissionRequestV1::new(&object_refs).with_control_failure(failure));
+            assert_eq!(early.error(), Some(failure));
+            assert!(early.closure_validation_control_polls() > 0);
+            assert_eq!(early.candidate_graph_control_polls(), 0);
+            assert_eq!(early.logical_reconstruction_cdc_passes(), 0);
+            assert_eq!(early.logical_reconstruction_payload_read_calls(), 0);
+            assert_eq!(early.logical_reconstruction_payload_bytes(), 0);
+            assert!(!early.visible_expected());
+
+            // This frozen semantic fault boundary lands after closure
+            // validation and during logical payload reconstruction.
+            let observation = admit_v1(
+                AdmissionRequestV1::new(&object_refs).with_control_failure_after_polls(
+                    failure,
+                    LOGICAL_RECONSTRUCTION_FAULT_POLL_V1,
+                ),
+            );
             assert_eq!(observation.error(), Some(failure));
+            assert!(observation.candidate_graph_control_polls() > 0);
             assert_eq!(observation.logical_reconstruction_cdc_passes(), 1);
             assert!(observation.logical_reconstruction_control_polls() > 0);
+            // PB-08A expected-value patch point: if the frozen admission
+            // traversal changes intentionally, rebase the semantic fault
+            // poll and this exact first-fragment tuple together.
+            assert_eq!(
+                (
+                    observation.logical_reconstruction_payload_read_calls(),
+                    observation.logical_reconstruction_payload_bytes(),
+                ),
+                (1, FIRST_PHYSICAL_FRAGMENT_BYTES_V1),
+                "poll {LOGICAL_RECONSTRUCTION_FAULT_POLL_V1} must stop after the first exact payload read",
+            );
+            assert_eq!(
+                observation.logical_reconstruction_maximum_work_between_polls(),
+                FIRST_PHYSICAL_FRAGMENT_BYTES_V1
+            );
+            assert!(
+                observation.logical_reconstruction_maximum_work_between_polls()
+                    <= layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u64
+            );
             assert!(!observation.visible_expected());
             assert_eq!(observation.sink_aborts(), 1);
             assert_eq!(observation.admitted_slots(), 0);

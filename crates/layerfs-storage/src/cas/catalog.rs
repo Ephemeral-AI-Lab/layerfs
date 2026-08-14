@@ -20,29 +20,78 @@ pub(super) fn encode_catalog_marker(sealed: SealedPackV1) -> [u8; CATALOG_MARKER
 pub(super) fn decode_catalog_marker(
     bytes: [u8; CATALOG_MARKER_BYTES],
 ) -> Result<SealedPackV1, FsCasErrorV1> {
-    if &bytes[..8] != CATALOG_MAGIC || bytes[52..56] != [0_u8; 4] {
-        return Err(FsCasErrorV1::Integrity);
+    decode_catalog_marker_with_consumed_v1(bytes).0
+}
+
+/// Decode one fixed catalog record while reporting the exact highest input
+/// boundary inspected before success or failure. The caller records this
+/// value only after the codec has returned, so a malformed prefix is never
+/// reported as a successfully decoded complete marker.
+pub(super) fn decode_catalog_marker_with_consumed_v1(
+    bytes: [u8; CATALOG_MARKER_BYTES],
+) -> (Result<SealedPackV1, FsCasErrorV1>, u64) {
+    let mut consumed = 8_u64;
+    let result = (|| {
+        if &bytes[..8] != CATALOG_MAGIC {
+            return Err(FsCasErrorV1::Integrity);
+        }
+        consumed = 56;
+        if bytes[52..56] != [0_u8; 4] {
+            return Err(FsCasErrorV1::Integrity);
+        }
+        let id = <[u8; 32]>::try_from(&bytes[8..40]).map_err(|_| FsCasErrorV1::Integrity)?;
+        let pack_len = u64::from_be_bytes(
+            bytes[40..48]
+                .try_into()
+                .map_err(|_| FsCasErrorV1::Integrity)?,
+        );
+        let record_count = u32::from_be_bytes(
+            bytes[48..52]
+                .try_into()
+                .map_err(|_| FsCasErrorV1::Integrity)?,
+        );
+        consumed = CATALOG_MARKER_BYTES as u64;
+        let index_offset = u64::from_be_bytes(
+            bytes[56..64]
+                .try_into()
+                .map_err(|_| FsCasErrorV1::Integrity)?,
+        );
+        Ok(SealedPackV1::from_validated_parts(
+            PackIdV1::from_digest(id),
+            pack_len,
+            record_count,
+            index_offset,
+        ))
+    })();
+    (result, consumed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn catalog_decoder_reports_exact_consumed_fault_boundary() {
+        let sealed = SealedPackV1::from_validated_parts(
+            PackIdV1::from_digest([0x11; 32]),
+            0x0102_0304_0506_0708,
+            0x090a_0b0c,
+            0x1112_1314_1516_1718,
+        );
+        let encoded = encode_catalog_marker(sealed);
+        assert_eq!(
+            decode_catalog_marker_with_consumed_v1(encoded),
+            (Ok(sealed), CATALOG_MARKER_BYTES as u64)
+        );
+
+        let mut bad_magic = encoded;
+        bad_magic[0] ^= 0xff;
+        assert_eq!(decode_catalog_marker_with_consumed_v1(bad_magic).1, 8);
+
+        let mut bad_reserved = encoded;
+        bad_reserved[52] = 1;
+        let (result, consumed) = decode_catalog_marker_with_consumed_v1(bad_reserved);
+        assert_eq!(result, Err(FsCasErrorV1::Integrity));
+        assert_eq!(consumed, 56);
     }
-    let id = <[u8; 32]>::try_from(&bytes[8..40]).map_err(|_| FsCasErrorV1::Integrity)?;
-    let pack_len = u64::from_be_bytes(
-        bytes[40..48]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    let record_count = u32::from_be_bytes(
-        bytes[48..52]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    let index_offset = u64::from_be_bytes(
-        bytes[56..64]
-            .try_into()
-            .map_err(|_| FsCasErrorV1::Integrity)?,
-    );
-    Ok(SealedPackV1::from_validated_parts(
-        PackIdV1::from_digest(id),
-        pack_len,
-        record_count,
-        index_offset,
-    ))
 }

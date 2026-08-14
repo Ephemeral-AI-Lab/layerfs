@@ -15,13 +15,19 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, TryLockError, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use super::catalog::{decode_catalog_marker, encode_catalog_marker, CATALOG_MARKER_BYTES};
+#[cfg(test)]
+use super::catalog::decode_catalog_marker;
+use super::catalog::{
+    decode_catalog_marker_with_consumed_v1, encode_catalog_marker, CATALOG_MARKER_BYTES,
+};
 use super::locator::{
     decide_persistent_catalog_incumbent_v1, decide_persistent_locator_binding_v1,
     decide_persistent_locator_catalog_binding_v1, decide_persistent_locator_install_v1,
     decide_persistent_locator_publication_v1, decide_persistent_locator_rollback_v1,
-    decode_persistent_locator_for_install_v1, decode_persistent_locator_self_describing_v1,
-    encode_persistent_locator_v1, locator_transaction_tag_v1, PersistentCatalogIncumbentDecisionV1,
+    decode_persistent_locator_for_install_v1,
+    decode_persistent_locator_for_install_with_consumed_v1,
+    decode_persistent_locator_self_describing_v1, encode_persistent_locator_v1,
+    locator_transaction_tag_v1, PersistentCatalogIncumbentDecisionV1,
     PersistentLocatorBindingDecisionV1, PersistentLocatorBindingEvidenceV1,
     PersistentLocatorCatalogBindingDecisionV1, PersistentLocatorIncumbentEvidenceV1,
     PersistentLocatorInstallDecisionV1, PersistentLocatorInstallObservationV1,
@@ -33,23 +39,26 @@ use super::locator::{
 use crate::cas::admit_complete_immutable_v1;
 use crate::cas::{
     AdmissionBuffersV1, AdmittedClosureV1, CompleteImmutableClosureReadPortV1,
-    ImmutablePortErrorV1, OccupiedImmutableReadPortV1, PreparedImmutableClosurePortV1,
-    ValidatedOccupiedObjectV1,
+    ImmutablePortControlPollV1, ImmutablePortErrorV1, ImmutablePortReadBytesV1,
+    OccupiedImmutableReadPortV1, PreparedImmutableClosurePortV1, ValidatedOccupiedObjectV1,
 };
 use crate::identity::{PackIdV1, PhysicalVersionRecordIdV1, COMPARISON_WINDOW_BYTES};
 #[cfg(test)]
 use crate::limits::MemoryComponentV1;
 use crate::limits::{
     admitted_slots_for_budget, OperationCountersV1, OperationMemoryPlanV1, OperationReservationV1,
-    ResourceLedgerV1, BASE_LEDGER_BYTES, MEMORY_PROFILE_72_MIB, OPERATION_SLOT_BYTES,
+    OperationWorkControlV1, ResourceLedgerV1, BASE_LEDGER_BYTES, MEMORY_PROFILE_72_MIB,
+    OPERATION_SLOT_BYTES,
 };
 use crate::object::TypedPhysicalObjectIdV1;
 #[cfg(any(test, feature = "operation-polymorphism"))]
-use crate::pack::validate_pack_v1;
+use crate::pack::validate_pack_stage_v1;
 use crate::pack::{
+    locate_validated_pack_index_entry_controlled_recorded_v1,
     locate_validated_pack_index_entry_controlled_v1, read_sealed_pack_shape_v1,
-    read_validated_pack_index_entry_v1, validate_validated_pack_object_controlled_v1,
-    PackIndexEntryV1, PackIndexSpoolV1, PackObjectLocationV1, PackPortErrorV1, PackReadPortV1,
+    read_validated_pack_index_entry_v1, validate_validated_pack_object_controlled_recorded_v1,
+    validate_validated_pack_object_controlled_v1, PackIndexEntryV1, PackIndexSpoolV1,
+    PackObjectLocationV1, PackPortErrorV1, PackReadPortV1, PackValidationStageV1,
     PrivatePackPortV1, SealedPackV1, MAX_PACK_BYTES,
 };
 use crate::{CoreError, CoreResult};
@@ -82,9 +91,32 @@ enum CatalogRollbackDispositionV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ActivePackCatalogPolicyV1 {
-    RequireVacancy,
-    AllowForeign { expected: SealedPackV1 },
+enum ImmutableNamespaceEntryKindV1 {
+    Regular,
+    Directory,
+    Symlink,
+    Other,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CatalogRollbackNamespaceSnapshotV1 {
+    VacantName,
+    Regular(ImmutableFileSnapshotV1),
+    ForeignName {
+        snapshot: ImmutableFileSnapshotV1,
+        kind: ImmutableNamespaceEntryKindV1,
+    },
+    VacantParent,
+    ForeignParent {
+        snapshot: ImmutableFileSnapshotV1,
+        kind: ImmutableNamespaceEntryKindV1,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CatalogRollbackObservationV1 {
+    disposition: CatalogRollbackDispositionV1,
+    namespace: CatalogRollbackNamespaceSnapshotV1,
 }
 
 static NEXT_PRIVATE_NAME: AtomicU64 = AtomicU64::new(1);
@@ -2155,6 +2187,21 @@ impl<T: FsCasControlV1 + ?Sized> crate::limits::OperationWorkControlV1 for T {
 
     fn deadline_exceeded_v1(&mut self) -> bool {
         self.deadline_exceeded()
+    }
+}
+
+/// Narrow adapter used by immutable CAS read ports. It forwards only the
+/// caller's cancellation/deadline authority; filesystem fault and lifecycle
+/// hooks remain owned by the outer FsCas operation.
+struct FsCasImmutablePortControlBorrowV1<'control>(&'control mut dyn OperationWorkControlV1);
+
+impl FsCasControlV1 for FsCasImmutablePortControlBorrowV1<'_> {
+    fn cancellation_requested(&mut self) -> bool {
+        self.0.cancellation_requested_v1()
+    }
+
+    fn deadline_exceeded(&mut self) -> bool {
+        self.0.deadline_exceeded_v1()
     }
 }
 
@@ -6049,6 +6096,7 @@ impl FsCasV1 {
             None,
             None,
             None,
+            None,
             false,
             true,
             control,
@@ -6821,96 +6869,15 @@ impl FsCasV1 {
     where
         C: FsCasControlV1 + ?Sized,
     {
-        self.lock_active_pack_with_catalog_policy_controlled_v1(
-            id,
-            transaction,
-            carrier_path,
-            marker_path,
-            validated_file,
-            ActivePackCatalogPolicyV1::RequireVacancy,
-            true,
-            control,
-        )
-        .map(|(guard, _)| guard)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn lock_active_pack_for_catalog_rollback_controlled_v1<'owner, C>(
-        &'owner self,
-        id: PackIdV1,
-        transaction: u64,
-        carrier_path: &Path,
-        catalog_path: &Path,
-        expected: SealedPackV1,
-        validated_file: Option<&File>,
-        control: &mut C,
-    ) -> Result<
-        (
-            ControlledRootMutexGuardV1<'owner, PublicationStateV1>,
-            CatalogRollbackDispositionV1,
-        ),
-        FsCasErrorV1,
-    >
-    where
-        C: FsCasControlV1 + ?Sized,
-    {
-        self.lock_active_pack_with_catalog_policy_controlled_v1(
-            id,
-            transaction,
-            carrier_path,
-            catalog_path,
-            validated_file,
-            ActivePackCatalogPolicyV1::AllowForeign { expected },
-            false,
-            control,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn lock_active_pack_with_catalog_policy_controlled_v1<'owner, C>(
-        &'owner self,
-        id: PackIdV1,
-        transaction: u64,
-        carrier_path: &Path,
-        marker_path: &Path,
-        validated_file: Option<&File>,
-        catalog_policy: ActivePackCatalogPolicyV1,
-        require_valid_root: bool,
-        control: &mut C,
-    ) -> Result<
-        (
-            ControlledRootMutexGuardV1<'owner, PublicationStateV1>,
-            CatalogRollbackDispositionV1,
-        ),
-        FsCasErrorV1,
-    >
-    where
-        C: FsCasControlV1 + ?Sized,
-    {
-        let mut guard = if require_valid_root {
-            self.lock_publication_controlled_v1(control)?
-        } else {
-            self.lock_publication_for_cleanup_controlled_v1(control)?
-        };
-        let revalidated = (|| -> Result<CatalogRollbackDispositionV1, FsCasErrorV1> {
-            if require_valid_root {
-                self.ensure_valid()?;
-            }
+        let mut guard = self.lock_publication_controlled_v1(control)?;
+        let revalidated = (|| -> Result<(), FsCasErrorV1> {
+            self.ensure_valid()?;
             if !guard.owns_pack_v1(id, transaction) {
                 return Err(FsCasErrorV1::Integrity);
             }
-            let catalog_disposition = match catalog_policy {
-                ActivePackCatalogPolicyV1::RequireVacancy => {
-                    match open_regular_file_if_present(marker_path)? {
-                        None => {}
-                        Some(_) => return Err(FsCasErrorV1::Integrity),
-                    }
-                    CatalogRollbackDispositionV1::RollbackAllowed
-                }
-                ActivePackCatalogPolicyV1::AllowForeign { expected } => {
-                    classify_catalog_for_rollback_v1(marker_path, expected)?
-                }
-            };
+            if open_regular_file_if_present(marker_path)?.is_some() {
+                return Err(FsCasErrorV1::Integrity);
+            }
             let installed =
                 open_regular_file_if_present(carrier_path)?.ok_or(FsCasErrorV1::MissingOccupant)?;
             let installed_metadata = installed
@@ -6938,14 +6905,32 @@ impl FsCasV1 {
                     return Err(FsCasErrorV1::Integrity);
                 }
             }
-            Ok(catalog_disposition)
+            Ok(())
         })();
         match revalidated {
-            Ok(disposition) => Ok((guard, disposition)),
+            Ok(()) => Ok(guard),
             Err(error) => {
                 self.unlock_publication_controlled_v1(guard, control);
                 Err(error)
             }
+        }
+    }
+
+    fn lock_active_pack_for_catalog_rollback_controlled_v1<'owner, C>(
+        &'owner self,
+        id: PackIdV1,
+        transaction: u64,
+        control: &mut C,
+    ) -> Result<ControlledRootMutexGuardV1<'owner, PublicationStateV1>, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
+        let guard = self.lock_publication_for_cleanup_controlled_v1(control)?;
+        if guard.owns_pack_v1(id, transaction) {
+            Ok(guard)
+        } else {
+            self.unlock_publication_controlled_v1(guard, control);
+            Err(FsCasErrorV1::Integrity)
         }
     }
 
@@ -7787,6 +7772,7 @@ impl FsCasV1 {
                     metadata,
                     scratch,
                     declared.record_count(),
+                    PackValidationStageV1::PreInstall,
                     authority,
                     counters,
                     control,
@@ -8397,6 +8383,7 @@ impl FsCasV1 {
                                     metadata,
                                     scratch,
                                     validated.record_count(),
+                                    PackValidationStageV1::InstalledCarrier,
                                     authority,
                                     counters,
                                     control,
@@ -8899,6 +8886,7 @@ impl FsCasV1 {
                         // rejected as a stale locator prerequisite.
                         require_catalog_vacancy: false,
                     }),
+                    Some(&mut *counters),
                     true,
                     true,
                     control,
@@ -8922,14 +8910,11 @@ impl FsCasV1 {
                         incumbent,
                         cleanup,
                     )) => {
-                        let authenticated = decode_catalog_marker(incumbent.bytes)
-                            .map_err(|error| match error {
-                                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-                                other => other,
-                            })
-                            .and_then(|incumbent| {
-                                require_persistent_catalog_incumbent_v1(incumbent, validated)
-                            });
+                        let authenticated =
+                            decode_catalog_marker_recorded_v1(incumbent.bytes, counters, control)
+                                .and_then(|incumbent| {
+                                    require_persistent_catalog_incumbent_v1(incumbent, validated)
+                                });
                         let terminal = match authenticated.and_then(|()| {
                             self.revalidate_active_pack_marker_incumbent_controlled_v1(
                                 &marker_path,
@@ -8994,14 +8979,11 @@ impl FsCasV1 {
                     }
                     Ok(MarkerPublicationV1::VisibleClean(_)) => {}
                     Ok(MarkerPublicationV1::IncumbentClean(incumbent)) => {
-                        let authenticated = decode_catalog_marker(incumbent.bytes)
-                            .map_err(|error| match error {
-                                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-                                other => other,
-                            })
-                            .and_then(|incumbent| {
-                                require_persistent_catalog_incumbent_v1(incumbent, validated)
-                            });
+                        let authenticated =
+                            decode_catalog_marker_recorded_v1(incumbent.bytes, counters, control)
+                                .and_then(|incumbent| {
+                                    require_persistent_catalog_incumbent_v1(incumbent, validated)
+                                });
                         let authenticated = authenticated.and_then(|()| {
                             self.revalidate_active_pack_marker_incumbent_controlled_v1(
                                 &marker_path,
@@ -9736,36 +9718,49 @@ impl FsCasV1 {
                                 {
                                     return Err(FsCasErrorV1::Integrity);
                                 }
-                                let (publication_guard, catalog_disposition) = self
+                                let catalog_observation = {
+                                    let mut terminal_control =
+                                        TerminalRootLockControlV1::new(control);
+                                    observe_catalog_for_rollback_recorded_v1(
+                                        &catalog_path,
+                                        sealed,
+                                        counters,
+                                        &mut terminal_control,
+                                    )?
+                                };
+                                let publication_guard = self
                                     .lock_active_pack_for_catalog_rollback_controlled_v1(
                                         sealed.id(),
                                         transaction,
-                                        path,
-                                        &catalog_path,
-                                        sealed,
-                                        None,
                                         control,
                                     )?;
                                 let result = (|| -> Result<(), FsCasErrorV1> {
-                                    // A valid equal marker is irreversible
-                                    // adoption authority. Foreign or absent
-                                    // catalog state does not block this exact
-                                    // carrier rollback.
-                                    if catalog_disposition == CatalogRollbackDispositionV1::Adopted
-                                    {
-                                        return Err(FsCasErrorV1::Integrity);
-                                    }
-                                    // This is the final exact carrier
-                                    // authorization. No callback, wait, or
-                                    // externally observable hook may occur
-                                    // between this identity check and the
-                                    // unlink.
+                                    let carrier_snapshot = publication_guard
+                                        .carrier_snapshot_v1(sealed.id(), transaction)
+                                        .ok_or(FsCasErrorV1::Integrity)?;
+                                    revalidate_catalog_rollback_namespace_v1(
+                                        &catalog_path,
+                                        catalog_observation.namespace,
+                                    )?;
                                     #[cfg(any(test, feature = "operation-polymorphism"))]
                                     Self::observe_final_carrier_snapshot_check_for_test_v1();
                                     revalidate_immutable_file_snapshot_v1(
                                         path,
                                         receipt_value.snapshot,
                                     )?;
+                                    if carrier_snapshot != receipt_value.snapshot {
+                                        return Err(FsCasErrorV1::Integrity);
+                                    }
+                                    // All fallible observations are complete.
+                                    // A valid equal marker is irreversible
+                                    // adoption authority; otherwise the exact
+                                    // carrier receipt authorizes the immediate
+                                    // unlink below.
+                                    if catalog_observation.disposition
+                                        == CatalogRollbackDispositionV1::Adopted
+                                    {
+                                        return Err(FsCasErrorV1::Integrity);
+                                    }
                                     match fs::remove_file(path) {
                                         Ok(()) => Ok(()),
                                         Err(error) => {
@@ -10070,7 +10065,16 @@ impl FsCasV1 {
                     // here may be an incumbent installed by an earlier
                     // operation. Only the exact post-link receipts below can
                     // authorize an unlink.
-                    match read_object_locator_if_present(&path, entry.id()) {
+                    let observed = {
+                        let mut terminal_control = TerminalRootLockControlV1::new(control);
+                        read_object_locator_if_present_recorded_v1(
+                            &path,
+                            entry.id(),
+                            counters,
+                            &mut terminal_control,
+                        )
+                    };
+                    match observed {
                         Ok(_) => {}
                         Err(error) => {
                             first_error.get_or_insert(error);
@@ -10137,7 +10141,16 @@ impl FsCasV1 {
                 }
                 let id = receipt.locator.entry().id();
                 let path = objects.join(hex_typed_id(id));
-                match read_object_locator_if_present_with_snapshot_and_bytes_v1(&path, id) {
+                let preliminary = {
+                    let mut terminal_control = TerminalRootLockControlV1::new(control);
+                    read_object_locator_if_present_with_snapshot_and_bytes_recorded_v1(
+                        &path,
+                        id,
+                        counters,
+                        &mut terminal_control,
+                    )
+                };
+                match preliminary {
                     Ok(None) => {
                         // The exact alias was installed by this operation but
                         // is already absent. Reconcile its logical custody
@@ -10161,16 +10174,11 @@ impl FsCasV1 {
                         }
                     }
                     Ok(Some((_bytes, _locator, _snapshot))) => {
-                        // Every mutation-capable cleanup/fault hook must run
-                        // before the final deletion authorization. The first
-                        // snapshot above is only a preliminary observation;
-                        // a hook is allowed to replace the pathname while it
-                        // runs. Reacquire the active publication fence after
-                        // those hooks, then re-read and revalidate the exact
-                        // receipt immediately before the one unlink
-                        // transition. No callback, wait, or second fallible
-                        // observation is permitted between that check and
-                        // `remove_file`.
+                        // Every mutation-capable cleanup/fault hook runs before
+                        // the final catalog and locator observations. Those
+                        // blocking reads and decodes remain outside the short
+                        // publication fence; the locked pass only revalidates
+                        // their exact snapshots and authorizes one unlink.
                         let mut locator_removed = false;
                         let removal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
                             || {
@@ -10191,69 +10199,88 @@ impl FsCasV1 {
                                     .root
                                     .join("catalog")
                                     .join(hex_id(sealed.id().as_bytes()));
-                                let (publication_guard, catalog_disposition) = match self
+                                let catalog_observation = {
+                                    let mut terminal_control =
+                                        TerminalRootLockControlV1::new(control);
+                                    match observe_catalog_for_rollback_recorded_v1(
+                                        &catalog_path,
+                                        sealed,
+                                        counters,
+                                        &mut terminal_control,
+                                    ) {
+                                        Ok(observation) => observation,
+                                        Err(error) => return Err(Some(error)),
+                                    }
+                                };
+                                let final_locator = if catalog_observation.disposition
+                                    == CatalogRollbackDispositionV1::RollbackAllowed
+                                {
+                                    let mut terminal_control =
+                                        TerminalRootLockControlV1::new(control);
+                                    match read_object_locator_if_present_with_snapshot_and_bytes_recorded_v1(
+                                        &path, id, counters, &mut terminal_control,
+                                    ) {
+                                        Ok(Some(observed)) => Some(observed),
+                                        Ok(None) => return Err(Some(FsCasErrorV1::Integrity)),
+                                        Err(error) => return Err(Some(error)),
+                                    }
+                                } else {
+                                    None
+                                };
+                                let publication_guard = match self
                                     .lock_active_pack_for_catalog_rollback_controlled_v1(
                                         sealed.id(),
                                         transaction,
-                                        carrier,
-                                        &catalog_path,
-                                        sealed,
-                                        None,
                                         control,
                                     ) {
                                     Ok(result) => result,
                                     Err(error) => return Err(Some(error)),
                                 };
 
-                                let result = if catalog_disposition
-                                    == CatalogRollbackDispositionV1::Adopted
-                                {
-                                    // Once a valid equal catalog marker is
-                                    // authenticated under the publication
-                                    // fence, retain every remaining receipt
-                                    // instead of deleting below its authority.
-                                    catalog_adopted = true;
-                                    Err(None)
-                                } else {
-                                    match read_object_locator_if_present_with_snapshot_and_bytes_v1(
-                                        &path, id,
-                                    ) {
-                                        Ok(Some((final_bytes, final_locator, final_snapshot))) => {
-                                            let authenticated =
-                                                decide_persistent_locator_rollback_v1(
-                                                    PersistentLocatorRollbackEvidenceV1::new(
-                                                        receipt.locator,
-                                                        final_locator,
-                                                        final_bytes,
-                                                        final_snapshot == receipt.snapshot,
-                                                        transaction,
-                                                    ),
-                                                )
-                                                    == PersistentLocatorRollbackDecisionV1::Authorized;
-                                            let authenticated = if authenticated {
-                                                revalidate_immutable_file_snapshot_v1(
-                                                    &path,
-                                                    receipt.snapshot,
-                                                )
-                                            } else {
-                                                Err(FsCasErrorV1::Integrity)
-                                            };
-                                            match authenticated {
-                                                Ok(()) => match fs::remove_file(&path) {
-                                                    Ok(()) => Ok(()),
-                                                    Err(error) => Err(Some(
-                                                        map_required_filesystem_write_error_v1(
-                                                            &error,
-                                                        ),
-                                                    )),
-                                                },
-                                                Err(error) => Err(Some(error)),
-                                            }
-                                        }
-                                        Ok(None) => Err(Some(FsCasErrorV1::Integrity)),
-                                        Err(error) => Err(Some(error)),
+                                let result = (|| {
+                                    let carrier_snapshot = publication_guard
+                                        .carrier_snapshot_v1(sealed.id(), transaction)
+                                        .ok_or(Some(FsCasErrorV1::Integrity))?;
+                                    revalidate_catalog_rollback_namespace_v1(
+                                        &catalog_path,
+                                        catalog_observation.namespace,
+                                    )
+                                    .map_err(Some)?;
+                                    revalidate_immutable_file_snapshot_v1(
+                                        carrier,
+                                        carrier_snapshot,
+                                    )
+                                    .map_err(Some)?;
+                                    if catalog_observation.disposition
+                                        == CatalogRollbackDispositionV1::Adopted
+                                    {
+                                        // A valid equal marker is irreversible
+                                        // adoption authority. Retain every
+                                        // remaining receipt below it.
+                                        catalog_adopted = true;
+                                        return Err(None);
                                     }
-                                };
+                                    let (final_bytes, final_locator, final_snapshot) =
+                                        final_locator.ok_or(Some(FsCasErrorV1::Integrity))?;
+                                    revalidate_immutable_file_snapshot_v1(&path, final_snapshot)
+                                        .map_err(Some)?;
+                                    let authorized = decide_persistent_locator_rollback_v1(
+                                        PersistentLocatorRollbackEvidenceV1::new(
+                                            receipt.locator,
+                                            final_locator,
+                                            final_bytes,
+                                            final_snapshot == receipt.snapshot,
+                                            transaction,
+                                        ),
+                                    )
+                                        == PersistentLocatorRollbackDecisionV1::Authorized;
+                                    if !authorized {
+                                        return Err(Some(FsCasErrorV1::Integrity));
+                                    }
+                                    fs::remove_file(&path).map_err(|error| {
+                                        Some(map_required_filesystem_write_error_v1(&error))
+                                    })
+                                })();
                                 match result {
                                     Ok(()) => {
                                         locator_removed = true;
@@ -10826,7 +10853,11 @@ impl FsCasV1 {
 
         // Validate every incumbent before creating any locator for this pack.
         loop {
-            let entry = match metadata.next() {
+            let next = {
+                let mut work_control = FsCasWorkControlBorrowV1(control);
+                metadata.next_controlled_v1(&mut work_control, counters)
+            };
+            let entry = match next {
                 Ok(Some(entry)) => entry,
                 Ok(None) => break,
                 Err(error) => {
@@ -10839,11 +10870,17 @@ impl FsCasV1 {
             let path = objects.join(hex_typed_id(entry.id()));
             sample_control(control, FsCasBoundaryV1::BeforeObjectLocatorRead)?;
             sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
-            let locator = read_object_locator_if_present_with_snapshot_and_raw_v1(&path)?;
+            let locator = read_object_locator_if_present_with_snapshot_and_raw_recorded_v1(
+                &path, counters, control,
+            )?;
             sample_control(control, FsCasBoundaryV1::AfterObjectLocatorRead)?;
             if let Some((bytes, locator_snapshot)) = locator {
-                let locator = decode_persistent_locator_for_install_v1(bytes, entry.id())
-                    .map_err(map_persistent_locator_install_error_v1)?;
+                let locator = decode_persistent_locator_for_install_recorded_v1(
+                    bytes,
+                    entry.id(),
+                    counters,
+                    control,
+                )?;
                 let evidence = self.gather_object_locator_incumbent_evidence(
                     &mut candidate,
                     entry,
@@ -10879,7 +10916,11 @@ impl FsCasV1 {
             ));
         }
         loop {
-            let entry = match metadata.next() {
+            let next = {
+                let mut work_control = FsCasWorkControlBorrowV1(control);
+                metadata.next_controlled_v1(&mut work_control, counters)
+            };
+            let entry = match next {
                 Ok(Some(entry)) => entry,
                 Ok(None) => break,
                 Err(error) => {
@@ -10919,6 +10960,7 @@ impl FsCasV1 {
                     carrier: carrier_snapshot,
                     require_catalog_vacancy: true,
                 }),
+                Some(&mut *counters),
                 true,
                 true,
                 control,
@@ -10959,9 +11001,12 @@ impl FsCasV1 {
                     return Err(error);
                 }
                 MarkerPublicationV1::IncumbentWithPreparationResidue(incumbent, cleanup) => {
-                    let locator =
-                        decode_persistent_locator_for_install_v1(incumbent.bytes, entry.id())
-                            .map_err(map_persistent_locator_install_error_v1);
+                    let locator = decode_persistent_locator_for_install_recorded_v1(
+                        incumbent.bytes,
+                        entry.id(),
+                        counters,
+                        control,
+                    );
                     let locator = match locator {
                         Ok(locator) => locator,
                         Err(error) => return Err(error.dominated_by_v1(cleanup)),
@@ -11005,9 +11050,12 @@ impl FsCasV1 {
                     return Err(cleanup);
                 }
                 MarkerPublicationV1::IncumbentClean(incumbent) => {
-                    let locator =
-                        decode_persistent_locator_for_install_v1(incumbent.bytes, entry.id())
-                            .map_err(map_persistent_locator_install_error_v1)?;
+                    let locator = decode_persistent_locator_for_install_recorded_v1(
+                        incumbent.bytes,
+                        entry.id(),
+                        counters,
+                        control,
+                    )?;
                     let evidence = self.gather_object_locator_incumbent_evidence(
                         &mut candidate,
                         entry,
@@ -11079,7 +11127,10 @@ impl FsCasV1 {
             self.unlock_publication_controlled_v1(guard, control);
             let (file, active) = snapshot?;
             if let Some((mut file, snapshot)) = file {
-                break (read_catalog_marker_from_open_v1(&mut file)?, snapshot);
+                break (
+                    read_catalog_marker_from_open_recorded_v1(&mut file, counters, control)?,
+                    snapshot,
+                );
             }
             if !active {
                 return Err(FsCasErrorV1::MissingOccupant);
@@ -11202,7 +11253,11 @@ impl FsCasV1 {
             ));
         }
         loop {
-            let entry = match metadata.next() {
+            let next = {
+                let mut work_control = FsCasWorkControlBorrowV1(control);
+                metadata.next_controlled_v1(&mut work_control, counters)
+            };
+            let entry = match next {
                 Ok(Some(entry)) => entry,
                 Ok(None) => break,
                 Err(error) => {
@@ -11215,9 +11270,14 @@ impl FsCasV1 {
             let path = objects.join(hex_typed_id(entry.id()));
             sample_control(control, FsCasBoundaryV1::BeforeObjectLocatorRead)?;
             sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
-            let (locator, locator_snapshot) =
-                read_object_locator_if_present_with_snapshot_v1(&path, entry.id())?
-                    .ok_or(FsCasErrorV1::MissingOccupant)?;
+            let (_bytes, locator, locator_snapshot) =
+                read_object_locator_if_present_with_snapshot_and_bytes_recorded_v1(
+                    &path,
+                    entry.id(),
+                    counters,
+                    control,
+                )?
+                .ok_or(FsCasErrorV1::MissingOccupant)?;
             sample_control(control, FsCasBoundaryV1::AfterObjectLocatorRead)?;
             map_persistent_locator_install_decision_v1(decide_persistent_locator_install_v1(
                 PersistentLocatorInstallObservationV1::Incumbent(
@@ -11599,7 +11659,8 @@ impl FsCasV1 {
         // a native syscall counter, so qualification can prove directional
         // read failures without changing publication or retry behavior.
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
-        let (marker, marker_snapshot) = read_catalog_marker_with_snapshot_v1(marker_path)?;
+        let (marker, marker_snapshot) =
+            read_catalog_marker_with_snapshot_recorded_v1(marker_path, counters, control)?;
         sample_control(control, FsCasBoundaryV1::AfterIncumbentMarkerRead)?;
         require_persistent_catalog_incumbent_v1(marker, candidate)?;
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierMetadataRead)?;
@@ -11610,6 +11671,7 @@ impl FsCasV1 {
             metadata,
             scratch,
             marker.record_count(),
+            PackValidationStageV1::InstalledCarrier,
             authority,
             counters,
             control,
@@ -11710,6 +11772,7 @@ fn validate_pack_for_operation_v1<P, M, C>(
     metadata: &mut M,
     scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     maximum_entries: u32,
+    stage: PackValidationStageV1,
     authority: PackAdmissionAuthorityV1<'_, '_>,
     counters: &mut OperationCountersV1,
     control: &mut C,
@@ -11721,12 +11784,18 @@ where
 {
     let result = match authority {
         #[cfg(any(test, feature = "operation-polymorphism"))]
-        PackAdmissionAuthorityV1::Independent(ledger) => {
-            validate_pack_v1(pack, metadata, scratch, maximum_entries, ledger, counters)
-        }
+        PackAdmissionAuthorityV1::Independent(ledger) => validate_pack_stage_v1(
+            pack,
+            metadata,
+            scratch,
+            maximum_entries,
+            ledger,
+            counters,
+            stage,
+        ),
         PackAdmissionAuthorityV1::Borrowed { reservation, .. } => {
             let mut work_control = FsCasWorkControlBorrowV1(control);
-            crate::pack::validate_pack_borrowed_v1(
+            crate::pack::validate_pack_borrowed_stage_v1(
                 pack,
                 metadata,
                 scratch,
@@ -11734,6 +11803,7 @@ where
                 reservation,
                 counters,
                 &mut work_control,
+                stage,
             )
         }
     };
@@ -12741,17 +12811,31 @@ impl FsPrivatePackV1 {
                 .fail_closed_preserving_error_controlled_v1(FsCasErrorV1::Integrity, control);
             return Err(self.retain_error_v1(terminal));
         };
-        let write = file
+        if let Err(error) = poll_control_v1(control) {
+            return Err(self.retain_error_v1(error));
+        }
+        let seek = file
             .seek(SeekFrom::Start(written))
-            .map_err(|error| map_filesystem_write_error_v1(&error))
-            .and_then(|_| {
-                write_all_controlled_v1(
-                    file,
-                    bytes,
-                    FsCasFilesystemBoundaryV1::PrivatePackWrite,
-                    control,
-                )
-            });
+            .map(|_| ())
+            .map_err(|error| map_filesystem_write_error_v1(&error));
+        if let Err(error) = complete_control_boundary_v1(seek, control) {
+            return Err(self.retain_error_v1(error));
+        }
+        if let Err(error) = poll_control_v1(control) {
+            return Err(self.retain_error_v1(error));
+        }
+        let write = write_all_controlled_v1(
+            file,
+            bytes,
+            FsCasFilesystemBoundaryV1::PrivatePackWrite,
+            control,
+        );
+        if write.is_ok() {
+            // Commit the actual successful append before the post-I/O poll:
+            // cancellation after the write must not erase completed bytes.
+            *state_written = next;
+        }
+        let write = complete_control_boundary_v1(write, control);
         if let Err(error) = write {
             // `reconcile_preparation_length_v1(next)` already charged the
             // checked maximum this write could make live. Preserve that safe
@@ -12760,7 +12844,6 @@ impl FsPrivatePackV1 {
             // an unavailable metadata observation after a partial write.
             return Err(self.retain_error_v1(error));
         }
-        *state_written = next;
         self.ensure_owner_valid_v1()
     }
 
@@ -13187,6 +13270,20 @@ impl FsCasOccupiedV1 {
     where
         C: FsCasControlV1 + ?Sized,
     {
+        let mut counters = OperationCountersV1::default();
+        self.occupied_len_typed_controlled_recorded_v1(id, control, &mut counters, None)
+    }
+
+    fn occupied_len_typed_controlled_recorded_v1<C>(
+        &mut self,
+        id: TypedPhysicalObjectIdV1,
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+        record_control_poll: Option<ImmutablePortControlPollV1>,
+    ) -> Result<Option<u64>, FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
         self.cas.ensure_valid()?;
         // Cache selection is an in-memory visibility decision.  It requires
         // no filesystem work while the fence is held.
@@ -13231,17 +13328,51 @@ impl FsCasOccupiedV1 {
         // carrier identity, are revalidated under visibility only after all
         // file-backed pack/object validation is complete.
         let objects = self.cas.inner.root.join("objects");
-        validate_required_root_directory(&objects)?;
+        poll_immutable_port_control_v1(control, counters, record_control_poll, 0)?;
+        let objects_directory = validate_required_root_directory(&objects);
+        let objects_directory_work = u64::from(objects_directory.is_ok());
+        complete_immutable_port_boundary_v1(
+            objects_directory,
+            objects_directory_work,
+            control,
+            counters,
+            record_control_poll,
+        )?;
         let locator_path = objects.join(hex_typed_id(id));
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::ObjectLocatorRead)?;
         let (locator_bytes, locator_snapshot) = loop {
+            poll_immutable_port_control_v1(control, counters, record_control_poll, 0)?;
+            counters
+                .record_locator_index_read_call_v1()
+                .map_err(FsCasErrorV1::Core)?;
             let locator_read = read_exact_regular_file_if_present_with_snapshot_v1::<
                 PERSISTENT_LOCATOR_BYTES_V1,
-            >(&locator_path);
-            match locator_read.map_err(|error| match error {
+            >(&locator_path)
+            .map_err(|error| match error {
                 FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
                 other => other,
-            })? {
+            });
+            let locator_read = locator_read.and_then(|snapshot| {
+                if snapshot.is_some() {
+                    let mut checked = *counters;
+                    checked
+                        .record_locator_index_read_bytes_v1(PERSISTENT_LOCATOR_BYTES_U64_V1)
+                        .map_err(FsCasErrorV1::Core)?;
+                    *counters = checked;
+                }
+                Ok(snapshot)
+            });
+            let locator_read_work = match &locator_read {
+                Ok(Some(_)) => PERSISTENT_LOCATOR_BYTES_U64_V1,
+                Ok(None) | Err(_) => 0,
+            };
+            match complete_immutable_port_boundary_v1(
+                locator_read,
+                locator_read_work,
+                control,
+                counters,
+                record_control_poll,
+            )? {
                 Some(snapshot) => break snapshot,
                 None => {
                     // Absence is authoritative only while visibility is held.
@@ -13253,7 +13384,15 @@ impl FsCasOccupiedV1 {
                         Ok(open_regular_file_if_present(&locator_path)?.is_none())
                     })();
                     self.cas.unlock_visibility_controlled_v1(guard, control);
-                    if absent? {
+                    let absent_work = u64::from(absent.is_ok());
+                    let absent = complete_immutable_port_boundary_v1(
+                        absent,
+                        absent_work,
+                        control,
+                        counters,
+                        record_control_poll,
+                    )?;
+                    if absent {
                         self.current = None;
                         self.previous = None;
                         return Ok(None);
@@ -13262,21 +13401,46 @@ impl FsCasOccupiedV1 {
                 }
             }
         };
-        let locator = decode_persistent_locator_for_install_v1(locator_bytes, id)
-            .map_err(map_persistent_locator_install_error_v1)?;
+        let locator = decode_persistent_locator_for_install_recorded_v1(
+            locator_bytes,
+            id,
+            counters,
+            control,
+        )?;
         let pack_name = hex_id(locator.sealed().id().as_bytes());
         let catalog_path = self.cas.inner.root.join("catalog").join(&pack_name);
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CatalogMarkerRead)?;
-        let (catalog_bytes, catalog_snapshot) =
+        poll_immutable_port_control_v1(control, counters, record_control_poll, 0)?;
+        counters
+            .record_locator_index_read_call_v1()
+            .map_err(FsCasErrorV1::Core)?;
+        let catalog_read =
             read_exact_regular_file_with_snapshot_v1::<CATALOG_MARKER_BYTES>(&catalog_path)
                 .map_err(|error| match error {
                     FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
                     other => other,
-                })?;
-        let catalog = decode_catalog_marker(catalog_bytes).map_err(|error| match error {
-            FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-            other => other,
-        })?;
+                });
+        let catalog_read = catalog_read.and_then(|snapshot| {
+            let mut checked = *counters;
+            checked
+                .record_locator_index_read_bytes_v1(CATALOG_MARKER_BYTES as u64)
+                .map_err(FsCasErrorV1::Core)?;
+            *counters = checked;
+            Ok(snapshot)
+        });
+        let catalog_read_work = if catalog_read.is_ok() {
+            CATALOG_MARKER_BYTES as u64
+        } else {
+            0
+        };
+        let (catalog_bytes, catalog_snapshot) = complete_immutable_port_boundary_v1(
+            catalog_read,
+            catalog_read_work,
+            control,
+            counters,
+            record_control_poll,
+        )?;
+        let catalog = decode_catalog_marker_recorded_v1(catalog_bytes, counters, control)?;
         if decide_persistent_locator_catalog_binding_v1(locator, catalog)
             != PersistentLocatorCatalogBindingDecisionV1::Authenticated
         {
@@ -13284,21 +13448,35 @@ impl FsCasOccupiedV1 {
         }
         let carrier_path = self.cas.inner.root.join("carriers").join(&pack_name);
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierMetadataRead)?;
-        let mut pack = FilePackReadV1::open_occupant(&carrier_path)?;
+        poll_immutable_port_control_v1(control, counters, record_control_poll, 0)?;
+        let pack_open = FilePackReadV1::open_occupant(&carrier_path);
+        let pack_open_work = u64::from(pack_open.is_ok());
+        let mut pack = complete_immutable_port_boundary_v1(
+            pack_open,
+            pack_open_work,
+            control,
+            counters,
+            record_control_poll,
+        )?;
+        poll_immutable_port_control_v1(control, counters, record_control_poll, 0)?;
         let carrier_metadata = pack
             .file
             .metadata()
-            .map_err(|error| map_filesystem_read_error_v1(&error))?;
+            .map_err(|error| map_filesystem_read_error_v1(&error));
+        let carrier_metadata_work = u64::from(carrier_metadata.is_ok());
+        let carrier_metadata = complete_immutable_port_boundary_v1(
+            carrier_metadata,
+            carrier_metadata_work,
+            control,
+            counters,
+            record_control_poll,
+        )?;
         let carrier_snapshot = ImmutableFileSnapshotV1::from_metadata_v1(&carrier_metadata);
-        // The locator and catalog reads above are one completed metadata
-        // snapshot. Commit their direct observation as one transaction so a
-        // late checked failure cannot expose only half of the real work.
-        let locator_bytes = u64::try_from(PERSISTENT_LOCATOR_BYTES_V1)
-            .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
-        let catalog_bytes = u64::try_from(CATALOG_MARKER_BYTES)
-            .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
-        let metadata_bytes = locator_bytes
-            .checked_add(catalog_bytes)
+        // The locator and catalog reads form one resolved-metadata snapshot.
+        // Keep their legacy direct observation all-or-none while the named
+        // stage counters above remain attached to each actual read boundary.
+        let metadata_bytes = PERSISTENT_LOCATOR_BYTES_U64_V1
+            .checked_add(CATALOG_MARKER_BYTES as u64)
             .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
         let bytes_read = self
             .bytes_read
@@ -13310,14 +13488,14 @@ impl FsCasOccupiedV1 {
             .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
         self.bytes_read = bytes_read;
         self.read_calls = read_calls;
-        let mut local_counters = OperationCountersV1::default();
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierIndexRead)?;
-        let indexed = match locate_validated_pack_index_entry_controlled_v1(
+        let indexed = match locate_validated_pack_index_entry_controlled_recorded_v1(
             &mut pack,
             locator.sealed(),
             id,
-            &mut local_counters,
+            counters,
             control,
+            record_control_poll,
         ) {
             Ok(indexed) => indexed,
             Err(error) => return Err(restore_pack_occupant_failure_v1(&mut pack, error)),
@@ -13327,12 +13505,13 @@ impl FsCasOccupiedV1 {
             locator, catalog, indexed,
         ))?;
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierObjectRead)?;
-        let location = match validate_validated_pack_object_controlled_v1(
+        let location = match validate_validated_pack_object_controlled_recorded_v1(
             &mut pack,
             indexed,
             &mut self.validation_scratch,
-            &mut local_counters,
+            counters,
             control,
+            record_control_poll,
         ) {
             Ok(location) => location,
             Err(error) => return Err(restore_pack_occupant_failure_v1(&mut pack, error)),
@@ -13368,7 +13547,14 @@ impl FsCasOccupiedV1 {
             });
         }
         self.cas.unlock_visibility_controlled_v1(guard, control);
-        commit?;
+        let commit_work = if commit.is_ok() { 3 } else { 0 };
+        complete_immutable_port_boundary_v1(
+            commit,
+            commit_work,
+            control,
+            counters,
+            record_control_poll,
+        )?;
         Ok(Some(location.object_len))
     }
 
@@ -13392,8 +13578,33 @@ impl FsCasOccupiedV1 {
     where
         C: FsCasControlV1 + ?Sized,
     {
+        let mut counters = OperationCountersV1::default();
+        self.read_occupied_exact_at_typed_controlled_recorded_v1(
+            id,
+            offset,
+            destination,
+            control,
+            &mut counters,
+            None,
+            None,
+        )
+    }
+
+    fn read_occupied_exact_at_typed_controlled_recorded_v1<C>(
+        &mut self,
+        id: TypedPhysicalObjectIdV1,
+        offset: u64,
+        destination: &mut [u8],
+        control: &mut C,
+        counters: &mut OperationCountersV1,
+        record_control_poll: Option<ImmutablePortControlPollV1>,
+        record_read_bytes: Option<ImmutablePortReadBytesV1>,
+    ) -> Result<(), FsCasErrorV1>
+    where
+        C: FsCasControlV1 + ?Sized,
+    {
         self.cas.ensure_valid()?;
-        poll_control_v1(control)?;
+        poll_immutable_port_control_v1(control, counters, record_control_poll, 0)?;
         let amount = u64::try_from(destination.len())
             .map_err(|_| FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
         {
@@ -13445,8 +13656,9 @@ impl FsCasOccupiedV1 {
         // been established above. This semantic boundary attributes a real
         // payload read without pretending to expose native syscall counts.
         sample_filesystem_fault_v1(control, FsCasFilesystemBoundaryV1::CarrierPayloadRead)?;
-        checked_file_read(&mut resolved.file, resolved.pack_len, absolute, destination).map_err(
-            |error| {
+        poll_immutable_port_control_v1(control, counters, record_control_poll, 0)?;
+        let read = checked_file_read(&mut resolved.file, resolved.pack_len, absolute, destination)
+            .map_err(|error| {
                 if error == FsCasErrorV1::Integrity {
                     // Bounds were authenticated above. An integrity result at
                     // this point means the resolved incumbent carrier changed
@@ -13457,19 +13669,33 @@ impl FsCasOccupiedV1 {
                 } else {
                     error
                 }
-            },
+            });
+        let completed_work = if read.is_ok() { amount } else { 0 };
+        let read = read.and_then(|()| {
+            let bytes_read = self
+                .bytes_read
+                .checked_add(amount)
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+            let read_calls = self
+                .read_calls
+                .checked_add(1)
+                .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
+            let mut checked = *counters;
+            if let Some(recorder) = record_read_bytes {
+                recorder(&mut checked, amount).map_err(FsCasErrorV1::Core)?;
+            }
+            self.bytes_read = bytes_read;
+            self.read_calls = read_calls;
+            *counters = checked;
+            Ok(())
+        });
+        complete_immutable_port_boundary_v1(
+            read,
+            completed_work,
+            control,
+            counters,
+            record_control_poll,
         )?;
-        poll_control_v1(control)?;
-        let bytes_read = self
-            .bytes_read
-            .checked_add(amount)
-            .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
-        let read_calls = self
-            .read_calls
-            .checked_add(1)
-            .ok_or(FsCasErrorV1::Core(CoreError::IntegerOverflow))?;
-        self.bytes_read = bytes_read;
-        self.read_calls = read_calls;
 
         // Do not return bytes from a root invalidated during the unlocked
         // read. The destination may contain data, but the typed operation
@@ -13509,6 +13735,37 @@ impl OccupiedImmutableReadPortV1 for FsCasOccupiedV1 {
         }
     }
 
+    fn occupied_len_controlled_v1(
+        &mut self,
+        id: TypedPhysicalObjectIdV1,
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+        record_control_poll: ImmutablePortControlPollV1,
+    ) -> CoreResult<Option<u64>> {
+        let mut local_counters = OperationCountersV1::default();
+        let mut fs_control = FsCasImmutablePortControlBorrowV1(control);
+        let result = self.occupied_len_typed_controlled_recorded_v1(
+            id,
+            &mut fs_control,
+            &mut local_counters,
+            Some(record_control_poll),
+        );
+        let accounting = counters.accumulate(local_counters);
+        match result {
+            Err(error) => {
+                self.first_error.get_or_insert(error);
+                Err(match error {
+                    FsCasErrorV1::Core(core) => core,
+                    _ => CoreError::SourceFailure,
+                })
+            }
+            Ok(value) => {
+                accounting?;
+                Ok(value)
+            }
+        }
+    }
+
     fn read_occupied_exact_at(
         &mut self,
         id: TypedPhysicalObjectIdV1,
@@ -13521,6 +13778,40 @@ impl OccupiedImmutableReadPortV1 for FsCasOccupiedV1 {
                 self.first_error.get_or_insert(error);
                 Err(ImmutablePortErrorV1::Failure)
             }
+        }
+    }
+
+    fn read_occupied_exact_at_controlled_v1(
+        &mut self,
+        id: TypedPhysicalObjectIdV1,
+        offset: u64,
+        destination: &mut [u8],
+        control: &mut dyn OperationWorkControlV1,
+        counters: &mut OperationCountersV1,
+        record_control_poll: ImmutablePortControlPollV1,
+        record_read_bytes: ImmutablePortReadBytesV1,
+    ) -> CoreResult<()> {
+        let mut local_counters = OperationCountersV1::default();
+        let mut fs_control = FsCasImmutablePortControlBorrowV1(control);
+        let result = self.read_occupied_exact_at_typed_controlled_recorded_v1(
+            id,
+            offset,
+            destination,
+            &mut fs_control,
+            &mut local_counters,
+            Some(record_control_poll),
+            Some(record_read_bytes),
+        );
+        let accounting = counters.accumulate(local_counters);
+        match result {
+            Err(error) => {
+                self.first_error.get_or_insert(error);
+                Err(match error {
+                    FsCasErrorV1::Core(core) => core,
+                    _ => CoreError::SourceFailure,
+                })
+            }
+            Ok(()) => accounting,
         }
     }
 }
@@ -13736,6 +14027,7 @@ where
             None,
             None,
             Some(&mut *self.marker_custody),
+            None,
             None,
             true,
             true,
@@ -13995,6 +14287,55 @@ where
     }
 }
 
+fn complete_control_boundary_v1<T, C>(
+    result: Result<T, FsCasErrorV1>,
+    control: &mut C,
+) -> Result<T, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let post_poll = poll_control_v1(control);
+    match (result, post_poll) {
+        (Err(error), _) => Err(error),
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+    }
+}
+
+fn poll_immutable_port_control_v1<C>(
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+    record_control_poll: Option<ImmutablePortControlPollV1>,
+    completed_work: u64,
+) -> Result<(), FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    if let Some(record) = record_control_poll {
+        record(counters, completed_work).map_err(FsCasErrorV1::Core)?;
+    }
+    poll_control_v1(control)
+}
+
+fn complete_immutable_port_boundary_v1<T, C>(
+    result: Result<T, FsCasErrorV1>,
+    completed_work: u64,
+    control: &mut C,
+    counters: &mut OperationCountersV1,
+    record_control_poll: Option<ImmutablePortControlPollV1>,
+) -> Result<T, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let post_poll =
+        poll_immutable_port_control_v1(control, counters, record_control_poll, completed_work);
+    match (result, post_poll) {
+        (Err(error), _) => Err(error),
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+    }
+}
+
 #[derive(Clone, Copy)]
 enum PublicationOwnerWaitKindV1 {
     ActivePack,
@@ -14148,76 +14489,81 @@ where
         .map_err(|error| map_filesystem_write_error_v1(&error))
 }
 
-fn read_catalog_marker(path: &Path) -> Result<SealedPackV1, FsCasErrorV1> {
-    let bytes = read_exact_regular_file_if_present::<CATALOG_MARKER_BYTES>(path)
-        .map_err(|error| match error {
-            FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-            other => other,
-        })?
-        .ok_or(FsCasErrorV1::MissingOccupant)?;
-    decode_catalog_marker(bytes).map_err(|error| match error {
-        FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-        other => other,
-    })
+fn immutable_namespace_entry_kind_v1(metadata: &fs::Metadata) -> ImmutableNamespaceEntryKindV1 {
+    let kind = metadata.file_type();
+    if kind.is_symlink() {
+        ImmutableNamespaceEntryKindV1::Symlink
+    } else if kind.is_file() {
+        ImmutableNamespaceEntryKindV1::Regular
+    } else if kind.is_dir() {
+        ImmutableNamespaceEntryKindV1::Directory
+    } else {
+        ImmutableNamespaceEntryKindV1::Other
+    }
 }
 
-fn read_catalog_marker_with_snapshot_v1(
-    path: &Path,
-) -> Result<(SealedPackV1, ImmutableFileSnapshotV1), FsCasErrorV1> {
-    let (bytes, snapshot) =
-        read_exact_regular_file_if_present_with_snapshot_v1::<CATALOG_MARKER_BYTES>(path)
-            .map_err(|error| match error {
-                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-                other => other,
-            })?
-            .ok_or(FsCasErrorV1::MissingOccupant)?;
-    let marker = decode_catalog_marker(bytes).map_err(|error| match error {
-        FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
-        other => other,
-    })?;
-    Ok((marker, snapshot))
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CatalogRollbackRawObservationV1 {
+    VacantName,
+    RegularMalformed(ImmutableFileSnapshotV1),
+    RegularBytes([u8; CATALOG_MARKER_BYTES], ImmutableFileSnapshotV1),
+    ForeignName {
+        snapshot: ImmutableFileSnapshotV1,
+        kind: ImmutableNamespaceEntryKindV1,
+    },
+    VacantParent,
+    ForeignParent {
+        snapshot: ImmutableFileSnapshotV1,
+        kind: ImmutableNamespaceEntryKindV1,
+    },
 }
 
-/// Decide whether an incumbent catalog name still authorizes rollback of the
-/// unpublished candidate.  A malformed, unequal, or structurally foreign
-/// occupant is not adoption authority and must remain in place while the
-/// candidate's own exact receipts are unwound.  A valid equal marker is the
-/// irreversible dependency crossing and therefore retains the carrier chain.
-fn classify_catalog_for_rollback_v1(
+fn read_catalog_rollback_raw_v1(
     path: &Path,
-    expected: SealedPackV1,
-) -> Result<CatalogRollbackDispositionV1, FsCasErrorV1> {
-    match read_catalog_marker(path) {
-        Ok(incumbent) => match require_persistent_catalog_incumbent_v1(incumbent, expected) {
-            Ok(()) => Ok(CatalogRollbackDispositionV1::Adopted),
-            Err(
-                FsCasErrorV1::MalformedOccupant
-                | FsCasErrorV1::Integrity
-                | FsCasErrorV1::UnequalOccupant,
-            ) => Ok(CatalogRollbackDispositionV1::RollbackAllowed),
-            Err(error) => Err(error),
+) -> Result<CatalogRollbackRawObservationV1, FsCasErrorV1> {
+    match open_regular_file_if_present(path) {
+        Ok(None) => Ok(CatalogRollbackRawObservationV1::VacantName),
+        Ok(Some(mut file)) => {
+            let metadata = file
+                .metadata()
+                .map_err(|error| map_filesystem_read_error_v1(&error))?;
+            let snapshot = ImmutableFileSnapshotV1::from_metadata_v1(&metadata);
+            if metadata.len() != CATALOG_MARKER_BYTES as u64 {
+                return Ok(CatalogRollbackRawObservationV1::RegularMalformed(snapshot));
+            }
+            let bytes = read_exact_regular_file_after_metadata_v1(&mut file)?;
+            Ok(CatalogRollbackRawObservationV1::RegularBytes(
+                bytes, snapshot,
+            ))
+        }
+        Err(error @ FsCasErrorV1::Integrity) => match fs::symlink_metadata(path) {
+            Ok(metadata) => {
+                let kind = immutable_namespace_entry_kind_v1(&metadata);
+                if kind == ImmutableNamespaceEntryKindV1::Regular {
+                    return Err(error);
+                }
+                Ok(CatalogRollbackRawObservationV1::ForeignName {
+                    snapshot: ImmutableFileSnapshotV1::from_metadata_v1(&metadata),
+                    kind,
+                })
+            }
+            Err(lookup) => Err(map_filesystem_read_error_v1(&lookup)),
         },
-        Err(
-            FsCasErrorV1::MalformedOccupant
-            | FsCasErrorV1::Integrity
-            | FsCasErrorV1::UnequalOccupant
-            | FsCasErrorV1::MissingOccupant,
-        ) => Ok(CatalogRollbackDispositionV1::RollbackAllowed),
         Err(error @ FsCasErrorV1::Filesystem(_)) => {
-            // A publication fault can replace the catalog directory itself
-            // with a non-directory occupant.  That namespace shape cannot
-            // contain a matching catalog marker, so it is foreign cleanup
-            // residue rather than a reason to strand the candidate carrier.
             let parent = path.parent().ok_or(error)?;
             match fs::symlink_metadata(parent) {
-                Ok(metadata)
-                    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() =>
-                {
-                    Ok(CatalogRollbackDispositionV1::RollbackAllowed)
+                Ok(metadata) => {
+                    let kind = immutable_namespace_entry_kind_v1(&metadata);
+                    if kind == ImmutableNamespaceEntryKindV1::Directory {
+                        return Err(error);
+                    }
+                    Ok(CatalogRollbackRawObservationV1::ForeignParent {
+                        snapshot: ImmutableFileSnapshotV1::from_metadata_v1(&metadata),
+                        kind,
+                    })
                 }
-                Ok(_) => Err(error),
                 Err(lookup) if lookup.kind() == ErrorKind::NotFound => {
-                    Ok(CatalogRollbackDispositionV1::RollbackAllowed)
+                    Ok(CatalogRollbackRawObservationV1::VacantParent)
                 }
                 Err(lookup) => Err(map_filesystem_read_error_v1(&lookup)),
             }
@@ -14226,18 +14572,213 @@ fn classify_catalog_for_rollback_v1(
     }
 }
 
-fn read_catalog_marker_from_open_v1(file: &mut File) -> Result<SealedPackV1, FsCasErrorV1> {
-    let bytes =
+fn read_catalog_marker_with_snapshot_recorded_v1<C>(
+    path: &Path,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<(SealedPackV1, ImmutableFileSnapshotV1), FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    poll_control_v1(control)?;
+    counters
+        .record_locator_index_read_call_v1()
+        .map_err(FsCasErrorV1::Core)?;
+    let read = read_exact_regular_file_if_present_with_snapshot_v1::<CATALOG_MARKER_BYTES>(path)
+        .map_err(|error| match error {
+            FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+            other => other,
+        })
+        .and_then(|observed| observed.ok_or(FsCasErrorV1::MissingOccupant))
+        .and_then(|observed| {
+            counters
+                .record_locator_index_read_bytes_v1(CATALOG_MARKER_BYTES as u64)
+                .map_err(FsCasErrorV1::Core)?;
+            Ok(observed)
+        });
+    let (bytes, snapshot) = complete_control_boundary_v1(read, control)?;
+    let marker = decode_catalog_marker_recorded_v1(bytes, counters, control)?;
+    Ok((marker, snapshot))
+}
+
+/// Observe and classify catalog rollback authority outside the publication
+/// fence while retaining the exact immutable namespace snapshot required for
+/// final in-lock revalidation.
+fn observe_catalog_for_rollback_recorded_v1<C>(
+    path: &Path,
+    expected: SealedPackV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<CatalogRollbackObservationV1, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    poll_control_v1(control)?;
+    counters
+        .record_locator_index_read_call_v1()
+        .map_err(FsCasErrorV1::Core)?;
+    let read = read_catalog_rollback_raw_v1(path).and_then(|observed| {
+        if matches!(
+            observed,
+            CatalogRollbackRawObservationV1::RegularBytes(_, _)
+        ) {
+            counters
+                .record_locator_index_read_bytes_v1(CATALOG_MARKER_BYTES as u64)
+                .map_err(FsCasErrorV1::Core)?;
+        }
+        Ok(observed)
+    });
+    let observed = complete_control_boundary_v1(read, control)?;
+    let (disposition, namespace) = match observed {
+        CatalogRollbackRawObservationV1::VacantName => (
+            CatalogRollbackDispositionV1::RollbackAllowed,
+            CatalogRollbackNamespaceSnapshotV1::VacantName,
+        ),
+        CatalogRollbackRawObservationV1::RegularMalformed(snapshot) => (
+            CatalogRollbackDispositionV1::RollbackAllowed,
+            CatalogRollbackNamespaceSnapshotV1::Regular(snapshot),
+        ),
+        CatalogRollbackRawObservationV1::RegularBytes(bytes, snapshot) => {
+            let disposition = match decode_catalog_marker_recorded_v1(bytes, counters, control) {
+                Ok(incumbent) => match require_persistent_catalog_incumbent_v1(incumbent, expected)
+                {
+                    Ok(()) => CatalogRollbackDispositionV1::Adopted,
+                    Err(
+                        FsCasErrorV1::MalformedOccupant
+                        | FsCasErrorV1::Integrity
+                        | FsCasErrorV1::UnequalOccupant,
+                    ) => CatalogRollbackDispositionV1::RollbackAllowed,
+                    Err(error) => return Err(error),
+                },
+                Err(
+                    FsCasErrorV1::MalformedOccupant
+                    | FsCasErrorV1::Integrity
+                    | FsCasErrorV1::UnequalOccupant,
+                ) => CatalogRollbackDispositionV1::RollbackAllowed,
+                Err(error) => return Err(error),
+            };
+            (
+                disposition,
+                CatalogRollbackNamespaceSnapshotV1::Regular(snapshot),
+            )
+        }
+        CatalogRollbackRawObservationV1::ForeignName { snapshot, kind } => (
+            CatalogRollbackDispositionV1::RollbackAllowed,
+            CatalogRollbackNamespaceSnapshotV1::ForeignName { snapshot, kind },
+        ),
+        CatalogRollbackRawObservationV1::VacantParent => (
+            CatalogRollbackDispositionV1::RollbackAllowed,
+            CatalogRollbackNamespaceSnapshotV1::VacantParent,
+        ),
+        CatalogRollbackRawObservationV1::ForeignParent { snapshot, kind } => (
+            CatalogRollbackDispositionV1::RollbackAllowed,
+            CatalogRollbackNamespaceSnapshotV1::ForeignParent { snapshot, kind },
+        ),
+    };
+    Ok(CatalogRollbackObservationV1 {
+        disposition,
+        namespace,
+    })
+}
+
+fn revalidate_namespace_entry_snapshot_v1(
+    path: &Path,
+    snapshot: ImmutableFileSnapshotV1,
+    kind: ImmutableNamespaceEntryKindV1,
+) -> Result<(), FsCasErrorV1> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| map_required_filesystem_read_error_v1(&error))?;
+    (immutable_namespace_entry_kind_v1(&metadata) == kind && snapshot.matches_v1(&metadata))
+        .then_some(())
+        .ok_or(FsCasErrorV1::Integrity)
+}
+
+fn revalidate_catalog_rollback_namespace_v1(
+    path: &Path,
+    namespace: CatalogRollbackNamespaceSnapshotV1,
+) -> Result<(), FsCasErrorV1> {
+    match namespace {
+        CatalogRollbackNamespaceSnapshotV1::VacantName => match fs::symlink_metadata(path) {
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Ok(_) => Err(FsCasErrorV1::Integrity),
+            Err(error) => Err(map_filesystem_read_error_v1(&error)),
+        },
+        CatalogRollbackNamespaceSnapshotV1::Regular(snapshot) => {
+            revalidate_immutable_file_snapshot_v1(path, snapshot)
+        }
+        CatalogRollbackNamespaceSnapshotV1::ForeignName { snapshot, kind } => {
+            revalidate_namespace_entry_snapshot_v1(path, snapshot, kind)
+        }
+        CatalogRollbackNamespaceSnapshotV1::VacantParent => {
+            let parent = path.parent().ok_or(FsCasErrorV1::Integrity)?;
+            match fs::symlink_metadata(parent) {
+                Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+                Ok(_) => Err(FsCasErrorV1::Integrity),
+                Err(error) => Err(map_filesystem_read_error_v1(&error)),
+            }
+        }
+        CatalogRollbackNamespaceSnapshotV1::ForeignParent { snapshot, kind } => {
+            let parent = path.parent().ok_or(FsCasErrorV1::Integrity)?;
+            revalidate_namespace_entry_snapshot_v1(parent, snapshot, kind)
+        }
+    }
+}
+
+fn read_catalog_marker_from_open_recorded_v1<C>(
+    file: &mut File,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<SealedPackV1, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    poll_control_v1(control)?;
+    counters
+        .record_locator_index_read_call_v1()
+        .map_err(FsCasErrorV1::Core)?;
+    let read =
         read_exact_regular_file_from_open_v1::<CATALOG_MARKER_BYTES>(file).map_err(|error| {
             match error {
                 FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
                 other => other,
             }
-        })?;
-    decode_catalog_marker(bytes).map_err(|error| match error {
+        });
+    let read = read.and_then(|bytes| {
+        counters
+            .record_locator_index_read_bytes_v1(CATALOG_MARKER_BYTES as u64)
+            .map_err(FsCasErrorV1::Core)?;
+        Ok(bytes)
+    });
+    let bytes = complete_control_boundary_v1(read, control)?;
+    decode_catalog_marker_recorded_v1(bytes, counters, control)
+}
+
+fn decode_catalog_marker_recorded_v1<C>(
+    bytes: [u8; CATALOG_MARKER_BYTES],
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<SealedPackV1, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    poll_control_v1(control)?;
+    counters
+        .record_locator_index_decode_call_v1()
+        .map_err(FsCasErrorV1::Core)?;
+    let (marker, consumed) = decode_catalog_marker_with_consumed_v1(bytes);
+    let marker = marker.map_err(|error| match error {
         FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
         other => other,
-    })
+    });
+    let accounting = counters
+        .record_locator_index_decode_bytes_v1(consumed)
+        .map_err(FsCasErrorV1::Core);
+    let result = match (marker, accounting) {
+        (Err(error), _) => Err(error),
+        (Ok(marker), Ok(())) => Ok(marker),
+        (Ok(_), Err(error)) => Err(error),
+    };
+    complete_control_boundary_v1(result, control)
 }
 
 fn read_object_locator(
@@ -14264,14 +14805,6 @@ fn read_object_locator_if_present(
         .map_err(map_persistent_locator_install_error_v1)
 }
 
-fn read_object_locator_if_present_with_snapshot_v1(
-    path: &Path,
-    expected: TypedPhysicalObjectIdV1,
-) -> Result<Option<(PersistentObjectLocatorV1, ImmutableFileSnapshotV1)>, FsCasErrorV1> {
-    read_object_locator_if_present_with_snapshot_and_bytes_v1(path, expected)
-        .map(|result| result.map(|(_bytes, locator, snapshot)| (locator, snapshot)))
-}
-
 fn read_object_locator_if_present_with_snapshot_and_raw_v1(
     path: &Path,
 ) -> Result<Option<([u8; PERSISTENT_LOCATOR_BYTES_V1], ImmutableFileSnapshotV1)>, FsCasErrorV1> {
@@ -14282,9 +14815,61 @@ fn read_object_locator_if_present_with_snapshot_and_raw_v1(
         })
 }
 
-fn read_object_locator_if_present_with_snapshot_and_bytes_v1(
+fn read_object_locator_if_present_with_snapshot_and_raw_recorded_v1<C>(
+    path: &Path,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<Option<([u8; PERSISTENT_LOCATOR_BYTES_V1], ImmutableFileSnapshotV1)>, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    poll_control_v1(control)?;
+    counters
+        .record_locator_index_read_call_v1()
+        .map_err(FsCasErrorV1::Core)?;
+    let read = read_object_locator_if_present_with_snapshot_and_raw_v1(path).and_then(|observed| {
+        if observed.is_some() {
+            counters
+                .record_locator_index_read_bytes_v1(PERSISTENT_LOCATOR_BYTES_U64_V1)
+                .map_err(FsCasErrorV1::Core)?;
+        }
+        Ok(observed)
+    });
+    complete_control_boundary_v1(read, control)
+}
+
+fn decode_persistent_locator_for_install_recorded_v1<C>(
+    bytes: [u8; PERSISTENT_LOCATOR_BYTES_V1],
+    expected: TypedPhysicalObjectIdV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<PersistentObjectLocatorV1, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    poll_control_v1(control)?;
+    counters
+        .record_locator_index_decode_call_v1()
+        .map_err(FsCasErrorV1::Core)?;
+    let (locator, consumed) =
+        decode_persistent_locator_for_install_with_consumed_v1(bytes, expected);
+    let locator = locator.map_err(map_persistent_locator_install_error_v1);
+    let accounting = counters
+        .record_locator_index_decode_bytes_v1(consumed)
+        .map_err(FsCasErrorV1::Core);
+    let result = match (locator, accounting) {
+        (Err(error), _) => Err(error),
+        (Ok(locator), Ok(())) => Ok(locator),
+        (Ok(_), Err(error)) => Err(error),
+    };
+    complete_control_boundary_v1(result, control)
+}
+
+fn read_object_locator_if_present_with_snapshot_and_bytes_recorded_v1<C>(
     path: &Path,
     expected: TypedPhysicalObjectIdV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
 ) -> Result<
     Option<(
         [u8; PERSISTENT_LOCATOR_BYTES_V1],
@@ -14292,14 +14877,35 @@ fn read_object_locator_if_present_with_snapshot_and_bytes_v1(
         ImmutableFileSnapshotV1,
     )>,
     FsCasErrorV1,
-> {
-    let Some((bytes, snapshot)) = read_object_locator_if_present_with_snapshot_and_raw_v1(path)?
+>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let Some((bytes, snapshot)) =
+        read_object_locator_if_present_with_snapshot_and_raw_recorded_v1(path, counters, control)?
     else {
         return Ok(None);
     };
-    decode_persistent_locator_for_install_v1(bytes, expected)
-        .map(|locator| Some((bytes, locator, snapshot)))
-        .map_err(map_persistent_locator_install_error_v1)
+    let locator =
+        decode_persistent_locator_for_install_recorded_v1(bytes, expected, counters, control)?;
+    Ok(Some((bytes, locator, snapshot)))
+}
+
+fn read_object_locator_if_present_recorded_v1<C>(
+    path: &Path,
+    expected: TypedPhysicalObjectIdV1,
+    counters: &mut OperationCountersV1,
+    control: &mut C,
+) -> Result<Option<PersistentObjectLocatorV1>, FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    let Some((bytes, _snapshot)) =
+        read_object_locator_if_present_with_snapshot_and_raw_recorded_v1(path, counters, control)?
+    else {
+        return Ok(None);
+    };
+    decode_persistent_locator_for_install_recorded_v1(bytes, expected, counters, control).map(Some)
 }
 
 fn require_persistent_catalog_incumbent_v1(
@@ -14627,6 +15233,7 @@ fn publish_small_marker<const N: usize>(
         None,
         None,
         None,
+        None,
         false,
         false,
         &mut control,
@@ -14686,6 +15293,7 @@ fn publish_small_marker_controlled<const N: usize, C>(
     locator_receipt: Option<LocatorPublicationReceiptInputV1>,
     mut marker_custody: Option<&mut ImmutableMarkerCustodyV1>,
     prerequisite: Option<MarkerPublicationPrerequisiteV1<'_>>,
+    mut incumbent_counters: Option<&mut OperationCountersV1>,
     defer_incumbent_invalidation: bool,
     serialize_publication: bool,
     control: &mut C,
@@ -14897,21 +15505,26 @@ where
                     // fences are released, but its exact file identity must
                     // survive that unlocked work so the semantic caller can
                     // revalidate the pathname before relying on the bytes.
-                    let incumbent = open_regular_file_if_present(destination).and_then(|file| {
-                        let Some(file) = file else {
-                            return Ok(None);
-                        };
-                        let metadata = file
-                            .metadata()
-                            .map_err(|error| map_filesystem_read_error_v1(&error))?;
-                        if metadata.len() != N as u64 {
-                            return Err(FsCasErrorV1::Integrity);
-                        }
-                        Ok(Some((
-                            file,
-                            ImmutableFileSnapshotV1::from_metadata_v1(&metadata),
-                        )))
-                    });
+                    let mut incumbent = open_regular_file_if_present(destination)
+                        .and_then(|file| {
+                            let Some(file) = file else {
+                                return Ok(None);
+                            };
+                            let metadata = file
+                                .metadata()
+                                .map_err(|error| map_filesystem_read_error_v1(&error))?;
+                            if metadata.len() != N as u64 {
+                                return Err(FsCasErrorV1::Integrity);
+                            }
+                            Ok(Some((
+                                file,
+                                ImmutableFileSnapshotV1::from_metadata_v1(&metadata),
+                            )))
+                        })
+                        .map_err(|error| match error {
+                            FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+                            other => other,
+                        });
                     unlock_marker_guards_v1(
                         visibility_owner,
                         &mut visibility_guard,
@@ -14919,31 +15532,47 @@ where
                         control,
                     );
                     if locator_receipt_prepared {
-                        locator_custody
+                        if let Err(cleanup) = locator_custody
                             .as_mut()
                             .expect("locator custody was reserved before incumbent read")
-                            .discard_prepared_v1(control)?;
+                            .discard_prepared_v1(control)
+                        {
+                            incumbent = Err(match incumbent {
+                                Err(original) => original.dominated_by_v1(cleanup),
+                                Ok(_) => cleanup,
+                            });
+                        }
                     }
                     if let Some((owner, token, len)) = prepublication_charge.take() {
-                        if let Err(error) = owner.record_storage_immutable_remove_v1(token, len, 1)
-                        {
-                            return Err(
-                                owner.fail_closed_preserving_error_controlled_v1(error, control)
-                            );
-                        }
+                        incumbent = match incumbent {
+                            Err(original) => Err(owner
+                                .release_prepublication_marker_charge_preserving_error_v1(
+                                    token, len, control, original,
+                                )),
+                            Ok(value) => match owner
+                                .record_storage_immutable_remove_v1(token, len, 1)
+                            {
+                                Ok(()) => Ok(value),
+                                Err(error) => Err(owner
+                                    .fail_closed_preserving_error_controlled_v1(error, control)),
+                            },
+                        };
                     }
                     let incumbent = match incumbent {
                         Ok(Some((mut file, snapshot))) => {
-                            read_exact_regular_file_after_metadata_v1::<N>(&mut file)
-                                .map(|bytes| MarkerIncumbentV1 { bytes, snapshot })
+                            read_exact_regular_file_after_metadata_controlled_recorded_v1::<N, _>(
+                                &mut file,
+                                incumbent_counters.as_deref_mut(),
+                                control,
+                            )
+                            .map(|bytes| MarkerIncumbentV1 { bytes, snapshot })
+                            .map_err(|error| match error {
+                                FsCasErrorV1::Integrity => FsCasErrorV1::MalformedOccupant,
+                                other => other,
+                            })
                         }
                         Ok(None) => Err(FsCasErrorV1::MissingOccupant),
                         Err(error) => Err(error),
-                    };
-                    let incumbent = match incumbent {
-                        Ok(bytes) => Ok(bytes),
-                        Err(FsCasErrorV1::Integrity) => Err(FsCasErrorV1::MalformedOccupant),
-                        Err(other) => Err(other),
                     };
                     incumbent.map(|incumbent| Some(MarkerPublicationV1::IncumbentClean(incumbent)))
                 }
@@ -15484,6 +16113,64 @@ fn read_exact_regular_file_after_metadata_v1<const N: usize>(
         .map_err(|error| map_filesystem_read_error_v1(&error))?
         != 0
     {
+        return Err(FsCasErrorV1::Integrity);
+    }
+    Ok(bytes)
+}
+
+/// Perform an unlocked incumbent marker read with the operation's one
+/// borrowed control. Attempted calls are recorded immediately before each
+/// filesystem invocation; completed bytes are committed immediately after
+/// the successful boundary, before a later poll or semantic trailing-byte
+/// check can fail.
+fn read_exact_regular_file_after_metadata_controlled_recorded_v1<const N: usize, C>(
+    file: &mut File,
+    mut counters: Option<&mut OperationCountersV1>,
+    control: &mut C,
+) -> Result<[u8; N], FsCasErrorV1>
+where
+    C: FsCasControlV1 + ?Sized,
+{
+    poll_control_v1(control)?;
+    if let Some(counters) = counters.as_deref_mut() {
+        counters
+            .record_locator_index_read_call_v1()
+            .map_err(FsCasErrorV1::Core)?;
+    }
+    let mut bytes = [0_u8; N];
+    let read = file
+        .read_exact(&mut bytes)
+        .map_err(|error| map_filesystem_read_error_v1(&error));
+    let read = read.and_then(|()| {
+        if let Some(counters) = counters.as_deref_mut() {
+            counters
+                .record_locator_index_read_bytes_v1(N as u64)
+                .map_err(FsCasErrorV1::Core)?;
+        }
+        Ok(())
+    });
+    complete_control_boundary_v1(read, control)?;
+
+    poll_control_v1(control)?;
+    if let Some(counters) = counters.as_deref_mut() {
+        counters
+            .record_locator_index_read_call_v1()
+            .map_err(FsCasErrorV1::Core)?;
+    }
+    let mut trailing = [0_u8; 1];
+    let trailing_read = file
+        .read(&mut trailing)
+        .map_err(|error| map_filesystem_read_error_v1(&error));
+    let trailing_read = trailing_read.and_then(|amount| {
+        if let Some(counters) = counters.as_deref_mut() {
+            counters
+                .record_locator_index_read_bytes_v1(amount as u64)
+                .map_err(FsCasErrorV1::Core)?;
+        }
+        Ok(amount)
+    });
+    let trailing_read = complete_control_boundary_v1(trailing_read, control)?;
+    if trailing_read != 0 {
         return Err(FsCasErrorV1::Integrity);
     }
     Ok(bytes)

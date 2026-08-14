@@ -273,7 +273,7 @@ impl CdcStreamV1<'_> {
     }
 }
 
-fn sample_control<C: CdcControlV1 + ?Sized>(control: &mut C) -> CoreResult<()> {
+pub(crate) fn sample_control<C: CdcControlV1 + ?Sized>(control: &mut C) -> CoreResult<()> {
     if control.cancellation_requested() {
         Err(CoreError::Cancelled)
     } else if control.deadline_exceeded() {

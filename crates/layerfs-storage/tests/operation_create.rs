@@ -1632,18 +1632,180 @@ mod l1_content {
         assert!(!observation.sink_active());
         assert_eq!(observation.admitted_slots(), 0);
     }
+
+    #[test]
+    fn oversized_eof_probe_is_a_source_failure_without_fabricated_bytes() {
+        let observation = observe_failure_v1(
+            &ContentRequestV1::new(b"file.bin", 0o644, b"x").with_invalid_eof_count(true),
+        );
+        assert_eq!(observation.error(), CoreError::SourceFailure);
+        assert_eq!(observation.bytes_read(), 1);
+        assert_eq!(observation.bytes_copied(), 1);
+        assert_eq!(observation.sink_aborts(), 1);
+        assert!(observation.spool_aborted());
+        assert!(!observation.sink_active());
+        assert_eq!(observation.admitted_slots(), 0);
+    }
 }
 
 #[cfg(feature = "operation-polymorphism")]
 mod operation_create_owner {
     use crate::support::temp_fs_cas::TempFsCas;
     use layerfs_storage::cdc::CdcAlgorithmV1;
+    use layerfs_storage::format::PhysicalObjectKindV1;
     use layerfs_storage::qualification::cas::semantic::PublicationErrorV1;
     use layerfs_storage::qualification::lifecycle::semantic::{
         complete_create_case_v1, equivalent_create_lifecycle_v1, CompleteCreateCaseV1,
         CompleteCreateCountersV1, CompleteCreateObservationV1,
     };
     use layerfs_storage::CoreError;
+
+    const PB08A_FRAGMENTATION_CLOSURE_CAP: usize = 16;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct FrozenFragmentationFixtureV1 {
+        version_record: [u8; 32],
+        root_tree: [u8; 32],
+        pack_id: [u8; 32],
+        pack_len: u64,
+        pack_record_count: u32,
+        pack_index_offset: u64,
+        object_count: u64,
+        closure_transcript: [u8; 32],
+        ordered_objects: [(u8, [u8; 32], u64); PB08A_FRAGMENTATION_CLOSURE_CAP],
+    }
+
+    // PB-08A-FREEZE: independently authenticated canonical fixture for the
+    // frozen small repeated-content tree under all three source schedules.
+    const PB08A_EXPECTED_FRAGMENTATION_FIXTURE: FrozenFragmentationFixtureV1 =
+        FrozenFragmentationFixtureV1 {
+            version_record: [
+                212, 232, 61, 82, 161, 68, 208, 104, 85, 10, 218, 49, 4, 152, 93, 160, 105, 141,
+                97, 37, 31, 145, 224, 51, 190, 84, 67, 139, 201, 146, 39, 130,
+            ],
+            root_tree: [
+                3, 224, 211, 128, 29, 206, 29, 135, 139, 209, 85, 243, 117, 122, 21, 179, 25, 155,
+                242, 214, 236, 60, 40, 232, 133, 33, 217, 142, 152, 17, 104, 15,
+            ],
+            pack_id: [
+                82, 133, 141, 177, 1, 235, 141, 4, 41, 67, 93, 202, 198, 73, 197, 40, 14, 131, 180,
+                145, 190, 62, 131, 110, 144, 174, 45, 162, 166, 251, 116, 5,
+            ],
+            pack_len: 67_952,
+            pack_record_count: 11,
+            pack_index_offset: 66_992,
+            object_count: 11,
+            closure_transcript: [
+                143, 168, 43, 236, 105, 239, 163, 124, 222, 192, 134, 235, 250, 88, 142, 154, 129,
+                194, 209, 42, 20, 20, 43, 237, 166, 23, 8, 155, 23, 228, 159, 26,
+            ],
+            ordered_objects: [
+                (
+                    1,
+                    [
+                        212, 232, 61, 82, 161, 68, 208, 104, 85, 10, 218, 49, 4, 152, 93, 160, 105,
+                        141, 97, 37, 31, 145, 224, 51, 190, 84, 67, 139, 201, 146, 39, 130,
+                    ],
+                    236,
+                ),
+                (
+                    2,
+                    [
+                        3, 224, 211, 128, 29, 206, 29, 135, 139, 209, 85, 243, 117, 122, 21, 179,
+                        25, 155, 242, 214, 236, 60, 40, 232, 133, 33, 217, 142, 152, 17, 104, 15,
+                    ],
+                    93,
+                ),
+                (
+                    2,
+                    [
+                        55, 49, 234, 184, 13, 23, 206, 190, 4, 20, 180, 210, 227, 39, 107, 123, 27,
+                        140, 24, 144, 199, 67, 104, 194, 245, 115, 206, 37, 146, 44, 80, 213,
+                    ],
+                    101,
+                ),
+                (
+                    2,
+                    [
+                        107, 145, 107, 79, 166, 82, 78, 143, 9, 133, 205, 55, 20, 163, 251, 146,
+                        156, 176, 244, 80, 50, 165, 177, 213, 76, 31, 52, 16, 127, 117, 118, 201,
+                    ],
+                    189,
+                ),
+                (
+                    2,
+                    [
+                        118, 168, 50, 106, 161, 135, 104, 89, 162, 157, 245, 174, 111, 83, 11, 158,
+                        152, 4, 211, 236, 123, 244, 34, 159, 176, 161, 97, 90, 7, 70, 96, 194,
+                    ],
+                    93,
+                ),
+                (
+                    3,
+                    [
+                        34, 129, 231, 80, 255, 126, 108, 186, 86, 219, 78, 109, 46, 8, 44, 13, 165,
+                        57, 120, 9, 49, 239, 120, 242, 233, 193, 166, 197, 213, 88, 138, 91,
+                    ],
+                    187,
+                ),
+                (
+                    3,
+                    [
+                        249, 53, 89, 248, 195, 194, 43, 16, 102, 98, 16, 144, 108, 186, 214, 238,
+                        26, 105, 135, 14, 74, 56, 43, 124, 250, 152, 125, 202, 99, 44, 77, 88,
+                    ],
+                    151,
+                ),
+                (
+                    5,
+                    [
+                        7, 154, 40, 139, 151, 245, 47, 33, 4, 42, 233, 201, 184, 214, 140, 163, 71,
+                        28, 87, 151, 60, 45, 38, 24, 66, 132, 193, 215, 234, 96, 83, 227,
+                    ],
+                    81,
+                ),
+                (
+                    5,
+                    [
+                        56, 36, 230, 213, 247, 41, 144, 222, 151, 109, 231, 104, 50, 63, 233, 93,
+                        208, 236, 254, 247, 233, 174, 192, 130, 92, 217, 194, 46, 1, 223, 101, 171,
+                    ],
+                    32_820,
+                ),
+                (
+                    5,
+                    [
+                        153, 133, 79, 224, 201, 185, 75, 113, 73, 228, 142, 128, 141, 26, 33, 37,
+                        78, 190, 21, 57, 105, 29, 203, 236, 144, 180, 141, 52, 41, 166, 130, 70,
+                    ],
+                    32_820,
+                ),
+                (
+                    5,
+                    [
+                        160, 54, 149, 79, 39, 138, 165, 5, 75, 106, 248, 188, 104, 217, 41, 57,
+                        245, 212, 173, 43, 165, 205, 200, 53, 118, 171, 186, 12, 126, 121, 148,
+                        190,
+                    ],
+                    69,
+                ),
+                (0, [0; 32], 0),
+                (0, [0; 32], 0),
+                (0, [0; 32], 0),
+                (0, [0; 32], 0),
+                (0, [0; 32], 0),
+            ],
+        };
+
+    const fn physical_kind_byte(kind: PhysicalObjectKindV1) -> u8 {
+        match kind {
+            PhysicalObjectKindV1::VersionRecord => 1,
+            PhysicalObjectKindV1::Tree => 2,
+            PhysicalObjectKindV1::File => 3,
+            PhysicalObjectKindV1::Symlink => 4,
+            PhysicalObjectKindV1::Chunk => 5,
+        }
+    }
 
     fn run(label: &str, case: CompleteCreateCaseV1) -> CompleteCreateObservationV1 {
         let fixture = TempFsCas::new(label);
@@ -2335,6 +2497,18 @@ mod operation_create_owner {
                 counters.logical_reconstruction_maximum_work_between_polls
                     <= layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u64
             );
+            assert!(counters.closure_validation_control_polls > 0);
+            assert!(
+                counters.closure_validation_maximum_work_between_polls
+                    <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64,
+                "{algorithm:?}: closure maximum {}",
+                counters.closure_validation_maximum_work_between_polls
+            );
+            assert!(counters.candidate_graph_control_polls > 0);
+            assert!(
+                counters.candidate_graph_maximum_work_between_polls
+                    <= layerfs_storage::identity::COMPARISON_WINDOW_BYTES as u64
+            );
             assert_eq!(counters.unreachable_installed_residue_bytes, 0);
             assert!(counters.storage_bytes_committed > 0);
             assert!(counters.storage_inodes_committed > 0);
@@ -2360,50 +2534,49 @@ mod operation_create_owner {
     #[test]
     fn complete_create_reconstruction_is_equivalent_across_frozen_fragmentation_schedules() {
         const LOGICAL_BYTES: u64 = 2 * (2 * 32 * 1024 + 17) + (32 * 1024 + 29);
+        const LOGICAL_FILE_COUNT: u64 = 3;
+        let fixtures = [
+            TempFsCas::new("fragmentation-one-byte"),
+            TempFsCas::new("fragmentation-997-bytes"),
+            TempFsCas::new("fragmentation-maximum-chunk"),
+        ];
         let observations = [
-            ("fragmentation-one-byte", 1_u32),
-            ("fragmentation-997-bytes", 997_u32),
-            (
-                "fragmentation-maximum-chunk",
-                layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u32,
+            complete_create_case_v1(
+                fixtures[0].path(),
+                CompleteCreateCaseV1::FragmentationSchedule(1),
             ),
-        ]
-        .map(|(label, maximum_read)| {
-            run(
-                label,
-                CompleteCreateCaseV1::FragmentationSchedule(maximum_read),
-            )
-        });
-        let expected = observations[0];
+            complete_create_case_v1(
+                fixtures[1].path(),
+                CompleteCreateCaseV1::FragmentationSchedule(997),
+            ),
+            complete_create_case_v1(
+                fixtures[2].path(),
+                CompleteCreateCaseV1::FragmentationSchedule(
+                    layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES as u32,
+                ),
+            ),
+        ];
 
         for observation in observations {
             let counters = observation.counters;
+            assert_storage_equations(counters);
+            assert_eq!(observation.operation_admitted_slots, 0);
+            assert_eq!(observation.operation_admission_active, 0);
+            assert_eq!(observation.operation_admission_queue, (0, 0, 0));
+            assert_eq!(observation.storage_admission_active, (0, 0, 0));
+            assert_eq!(observation.preparation_entries, 0);
             assert_eq!(observation.error, None);
             assert_eq!(observation.algorithm, Some(CdcAlgorithmV1::FastCdc));
-            assert_eq!(observation.version_record, expected.version_record);
-            assert_eq!(observation.root_tree, expected.root_tree);
-            assert_eq!(observation.pack, expected.pack);
-            assert_eq!(observation.object_count, expected.object_count);
             assert_eq!(
                 observation.closure_object_count,
                 Some(observation.object_count)
             );
-            assert_eq!(observation.closure_transcript, expected.closure_transcript);
-            assert_eq!(
-                (
-                    counters.pack_entries,
-                    counters.pack_bytes,
-                    counters.carrier_bytes_total,
-                ),
-                (
-                    expected.counters.pack_entries,
-                    expected.counters.pack_bytes,
-                    expected.counters.carrier_bytes_total,
-                )
-            );
             assert!(counters.source_read_calls > 0);
             assert_eq!(counters.source_bytes_read, LOGICAL_BYTES);
-            assert_eq!(counters.logical_reconstruction_cdc_passes, 1);
+            assert_eq!(
+                counters.logical_reconstruction_cdc_passes,
+                LOGICAL_FILE_COUNT
+            );
             assert_eq!(counters.logical_reconstruction_logical_bytes, LOGICAL_BYTES);
             assert!(counters.logical_reconstruction_payload_read_calls > 0);
             assert_eq!(counters.logical_reconstruction_payload_bytes, LOGICAL_BYTES);
@@ -2414,11 +2587,172 @@ mod operation_create_owner {
             );
             assert!(counters.file_objects_reused > 0);
             assert!(counters.chunk_objects_reused > 0);
+            assert!([
+                counters.pack_finalization_read_calls,
+                counters.pack_finalization_read_bytes,
+                counters.pack_finalization_hash_calls,
+                counters.pack_finalization_hash_bytes,
+                counters.pre_install_validation_read_calls,
+                counters.pre_install_validation_read_bytes,
+                counters.pre_install_validation_hash_calls,
+                counters.pre_install_validation_hash_bytes,
+                counters.pre_install_validation_decode_calls,
+                counters.pre_install_validation_decode_bytes,
+                counters.installed_carrier_validation_read_calls,
+                counters.installed_carrier_validation_read_bytes,
+                counters.installed_carrier_validation_hash_calls,
+                counters.installed_carrier_validation_hash_bytes,
+                counters.installed_carrier_validation_decode_calls,
+                counters.installed_carrier_validation_decode_bytes,
+                counters.closure_validation_port_calls,
+                counters.closure_validation_port_bytes,
+                counters.closure_validation_hash_calls,
+                counters.closure_validation_hash_bytes,
+                counters.closure_validation_decode_calls,
+                counters.closure_validation_decode_bytes,
+                counters.candidate_graph_port_calls,
+                counters.candidate_graph_port_bytes,
+                counters.candidate_graph_hash_calls,
+                counters.candidate_graph_hash_bytes,
+                counters.candidate_graph_decode_calls,
+                counters.candidate_graph_decode_bytes,
+                counters.locator_index_probes,
+                counters.locator_index_read_calls,
+                counters.locator_index_read_bytes,
+                counters.locator_index_decode_calls,
+                counters.locator_index_decode_bytes,
+            ]
+            .into_iter()
+            .all(|value| value > 0));
             assert_eq!(counters.closure_fences, 1);
             assert_eq!(counters.unreachable_installed_residue_bytes, 0);
             assert!(observation.operation_authority_clean);
             assert!(counters.zero_forbidden_work);
         }
+
+        let first = observations[0];
+        let pack = first.pack.expect("successful fragmentation fixture pack");
+        let closure_object_count = usize::try_from(first.object_count)
+            .expect("bounded fragmentation fixture closure object count");
+        assert!(closure_object_count <= PB08A_FRAGMENTATION_CLOSURE_CAP);
+        let mut ordered_objects = [(0, [0; 32], 0); PB08A_FRAGMENTATION_CLOSURE_CAP];
+        for (ordinal, target) in ordered_objects[..closure_object_count]
+            .iter_mut()
+            .enumerate()
+        {
+            let mut scratch = [0_u8; layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES];
+            let (id, kind, canonical_len, read_len) = first
+                .read_authenticated_closure_ordinal_v1(
+                    fixtures[0].path(),
+                    ordinal as u64,
+                    0,
+                    &mut scratch,
+                )
+                .expect("authenticate frozen fragmentation closure ordinal");
+            assert!(read_len > 0);
+            assert_eq!(id.kind(), kind);
+            *target = (physical_kind_byte(kind), *id.as_bytes(), canonical_len);
+        }
+        let actual_fixture = FrozenFragmentationFixtureV1 {
+            version_record: *first
+                .version_record
+                .expect("successful fragmentation version record")
+                .as_bytes(),
+            root_tree: *first
+                .root_tree
+                .expect("successful fragmentation root tree")
+                .as_bytes(),
+            pack_id: *pack.id().as_bytes(),
+            pack_len: pack.pack_len(),
+            pack_record_count: pack.record_count(),
+            pack_index_offset: pack.index_offset(),
+            object_count: first.object_count,
+            closure_transcript: first
+                .closure_transcript
+                .expect("successful fragmentation closure transcript"),
+            ordered_objects,
+        };
+        assert_eq!(
+            actual_fixture, PB08A_EXPECTED_FRAGMENTATION_FIXTURE,
+            "PB-08A independently frozen canonical fixture changed"
+        );
+
+        let expected_closure_object_count =
+            usize::try_from(PB08A_EXPECTED_FRAGMENTATION_FIXTURE.object_count)
+                .expect("frozen fragmentation fixture closure object count");
+        assert!(expected_closure_object_count <= PB08A_FRAGMENTATION_CLOSURE_CAP);
+        for ordinal in 0..expected_closure_object_count {
+            let expected = PB08A_EXPECTED_FRAGMENTATION_FIXTURE.ordered_objects[ordinal];
+            let mut offset = 0_u64;
+            loop {
+                let mut one = [0_u8; layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES];
+                let mut nine_ninety_seven = [0_u8; layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES];
+                let mut maximum = [0_u8; layerfs_storage::cdc::MAXIMUM_CHUNK_BYTES];
+                let one_metadata = observations[0]
+                    .read_authenticated_closure_ordinal_v1(
+                        fixtures[0].path(),
+                        ordinal as u64,
+                        offset,
+                        &mut one,
+                    )
+                    .expect("read one-byte-schedule canonical object window");
+                let nine_ninety_seven_metadata = observations[1]
+                    .read_authenticated_closure_ordinal_v1(
+                        fixtures[1].path(),
+                        ordinal as u64,
+                        offset,
+                        &mut nine_ninety_seven,
+                    )
+                    .expect("read 997-byte-schedule canonical object window");
+                let maximum_metadata = observations[2]
+                    .read_authenticated_closure_ordinal_v1(
+                        fixtures[2].path(),
+                        ordinal as u64,
+                        offset,
+                        &mut maximum,
+                    )
+                    .expect("read maximum-schedule canonical object window");
+                assert_eq!(one_metadata, nine_ninety_seven_metadata);
+                assert_eq!(one_metadata, maximum_metadata);
+                let (id, kind, canonical_len, read_len) = one_metadata;
+                assert_eq!(
+                    (physical_kind_byte(kind), *id.as_bytes(), canonical_len),
+                    expected
+                );
+                assert_eq!(
+                    &one[..read_len],
+                    &nine_ninety_seven[..read_len],
+                    "canonical bytes differ at ordinal {ordinal}, offset {offset}"
+                );
+                assert_eq!(
+                    &one[..read_len],
+                    &maximum[..read_len],
+                    "canonical bytes differ at ordinal {ordinal}, offset {offset}"
+                );
+                offset = offset
+                    .checked_add(read_len as u64)
+                    .expect("bounded canonical object window offset");
+                if offset == canonical_len {
+                    break;
+                }
+                assert!(offset < canonical_len);
+            }
+        }
+
+        assert!(
+            observations[0].counters.source_read_calls > observations[1].counters.source_read_calls
+        );
+        assert!(
+            observations[1].counters.source_read_calls > observations[2].counters.source_read_calls
+        );
+        let normalized = observations.map(|mut observation| {
+            // Only calls made at the external source port vary with its
+            // fragmentation schedule. CDC receives stable bounded windows.
+            observation.counters.source_read_calls = 0;
+            observation
+        });
+        assert_eq!(normalized[0], normalized[1]);
+        assert_eq!(normalized[0], normalized[2]);
     }
 
     #[test]

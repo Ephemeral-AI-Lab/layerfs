@@ -706,6 +706,7 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
             selected_start,
             selected_end,
             hasher,
+            true,
         )?;
         self.files = 1;
         self.sink.finish_file().map_err(map_sink)
@@ -978,6 +979,7 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
             0,
             file.logical_len,
             hasher,
+            false,
         );
         result?;
         self.sink.finish_file().map_err(map_sink)
@@ -993,10 +995,15 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
         selected_start: u64,
         selected_end: u64,
         hasher: &mut blake3::Hasher,
+        observe_exact_range: bool,
     ) -> CoreResult<()> {
         let mut stream = self.object_stream(object_len);
         let typed_id = TypedPhysicalObjectIdV1::File(id);
-        {
+        if observe_exact_range {
+            self.counters.record_exact_range_control_poll_v1(0)?;
+            check_control(self.control)?;
+        }
+        let begin_file = (|| {
             let mut source = OccupiedObjectReaderV1::resolved_new(
                 self.occupied,
                 self.counters,
@@ -1004,7 +1011,18 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
                 typed_id,
                 object_len,
             )?;
-            stream.begin_file(&mut source, logical_len, extent_count)?;
+            stream.begin_file(&mut source, logical_len, extent_count)
+        })();
+        if let Err(error) = begin_file {
+            if observe_exact_range {
+                let _ = self.counters.record_exact_range_control_poll_v1(0);
+                let _ = check_control(self.control);
+            }
+            return Err(error);
+        }
+        if observe_exact_range {
+            self.counters.record_exact_range_control_poll_v1(1)?;
+            check_control(self.control)?;
         }
         let expected = selected_end
             .checked_sub(selected_start)
@@ -1024,6 +1042,7 @@ impl<S: ReadSinkV1 + ?Sized, C: FsCasControlV1 + ?Sized> ReaderV1<'_, S, C> {
             active_data_chunks: 0,
             active_data_end: 0,
             validated_chunks: 0,
+            observe_exact_range,
         };
         let mut consumer = RangeFileConsumerV1 {
             sink: self.sink,
@@ -1166,6 +1185,7 @@ struct FsCasVerifiedFileRangeV1<'a, C: FsCasControlV1 + ?Sized> {
     active_data_chunks: u32,
     active_data_end: u64,
     validated_chunks: u64,
+    observe_exact_range: bool,
 }
 
 impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
@@ -1176,11 +1196,38 @@ impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
         scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     ) -> CoreResult<u64> {
         let typed = TypedPhysicalObjectIdV1::Chunk(id);
-        let len = required_occupied_len_v1(self.occupied, self.control, typed)?;
-        let mut source =
-            OccupiedObjectReaderV1::new(self.occupied, self.counters, self.control, typed, len);
-        let decoded =
-            decode_physical_object_from_port_v1(&mut source, &mut DiscardStrongEdgesV1, scratch)?;
+        self.check_control(0)?;
+        let len = match required_occupied_len_v1(self.occupied, self.control, typed) {
+            Ok(len) => {
+                self.check_control(0)?;
+                len
+            }
+            Err(error) => {
+                let _ = self.check_control(0);
+                return Err(error);
+            }
+        };
+        self.check_control(0)?;
+        self.counters.record_exact_range_payload_call_v1()?;
+        let decoded = match {
+            let mut source = OccupiedObjectReaderV1::exact_range_chunk(
+                self.occupied,
+                self.counters,
+                self.control,
+                typed,
+                len,
+            );
+            decode_physical_object_from_port_v1(&mut source, &mut DiscardStrongEdgesV1, scratch)
+        } {
+            Ok(decoded) => {
+                self.check_control(len)?;
+                decoded
+            }
+            Err(error) => {
+                let _ = self.check_control(0);
+                return Err(error);
+            }
+        };
         let PhysicalObjectPayloadV1::Chunk(chunk) = decoded.payload() else {
             return Err(CoreError::TypedEdge);
         };
@@ -1190,7 +1237,6 @@ impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
         {
             return Err(CoreError::IdMismatch);
         }
-        check_control(self.control)?;
         self.validated_chunks = self
             .validated_chunks
             .checked_add(1)
@@ -1211,7 +1257,11 @@ impl<C: FsCasControlV1 + ?Sized> FsCasVerifiedFileRangeV1<'_, C> {
 }
 
 impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRangeV1<'_, C> {
-    fn check_control(&mut self) -> CoreResult<()> {
+    fn check_control(&mut self, completed_work: u64) -> CoreResult<()> {
+        if self.observe_exact_range {
+            self.counters
+                .record_exact_range_control_poll_v1(completed_work)?;
+        }
         check_control(self.control)
     }
 
@@ -1220,9 +1270,9 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
         verification_scratch: &mut [u8; COMPARISON_WINDOW_BYTES],
     ) -> CoreResult<Option<VerifiedFileSegmentV1>> {
         loop {
-            self.check_control()?;
+            self.check_control(0)?;
             if self.active_data_chunks != 0 {
-                let (chunk_len, chunk) = {
+                let reference = (|| {
                     let mut source = OccupiedObjectReaderV1::resolved_new(
                         self.occupied,
                         self.counters,
@@ -1230,7 +1280,17 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
                         self.object_id,
                         self.object_len,
                     )?;
-                    self.stream.next_chunk_reference(&mut source)?
+                    self.stream.next_chunk_reference(&mut source)
+                })();
+                let (chunk_len, chunk) = match reference {
+                    Ok(reference) => {
+                        self.check_control(1)?;
+                        reference
+                    }
+                    Err(error) => {
+                        let _ = self.check_control(0);
+                        return Err(error);
+                    }
                 };
                 self.active_data_chunks -= 1;
                 let chunk_start = self.logical_offset;
@@ -1267,7 +1327,7 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
             if self.extents_remaining == 0 {
                 return self.finish_if_complete();
             }
-            let extent = {
+            let next_extent = (|| {
                 let mut source = OccupiedObjectReaderV1::resolved_new(
                     self.occupied,
                     self.counters,
@@ -1275,7 +1335,17 @@ impl<C: FsCasControlV1 + ?Sized> VerifiedFileRangePortV1 for FsCasVerifiedFileRa
                     self.object_id,
                     self.object_len,
                 )?;
-                self.stream.next_file_extent(&mut source)?
+                self.stream.next_file_extent(&mut source)
+            })();
+            let extent = match next_extent {
+                Ok(extent) => {
+                    self.check_control(1)?;
+                    extent
+                }
+                Err(error) => {
+                    let _ = self.check_control(0);
+                    return Err(error);
+                }
             };
             let (extent_len, is_hole, chunk_count) = match extent {
                 VerifiedFileExtentV1::Hole { length } => (length, true, 0),
@@ -1781,6 +1851,7 @@ mod tests {
         panic_on_abort: bool,
         remove_objects_on_begin: Option<PathBuf>,
         stop_after_begin: Option<Rc<Cell<bool>>>,
+        fault_after_write: Option<Rc<Cell<bool>>>,
         poison_storage_on_finish: Option<FsCasV1>,
         poison_storage_on_abort: Option<FsCasV1>,
         began: u64,
@@ -1800,6 +1871,7 @@ mod tests {
                 panic_on_abort: false,
                 remove_objects_on_begin: None,
                 stop_after_begin: None,
+                fault_after_write: None,
                 poison_storage_on_finish: None,
                 poison_storage_on_abort: None,
                 began: 0,
@@ -1864,6 +1936,9 @@ mod tests {
                 .ok_or(ReadSinkErrorV1::Refused)?
                 .bytes
                 .extend_from_slice(bytes);
+            if let Some(activated) = self.fault_after_write.take() {
+                activated.set(true);
+            }
             Ok(())
         }
 
@@ -2689,6 +2764,14 @@ mod tests {
                 "{label}"
             );
             assert_eq!(
+                counters.exact_range_payload_read_calls, expected_payload_calls,
+                "{label}"
+            );
+            assert_eq!(
+                counters.exact_range_payload_bytes, expected_payload_bytes,
+                "{label}"
+            );
+            assert_eq!(
                 result.direct_fscas_calls(),
                 counters.fscas_read_calls,
                 "{label}"
@@ -2696,6 +2779,11 @@ mod tests {
             assert_eq!(
                 result.direct_fscas_bytes(),
                 counters.fscas_bytes_read,
+                "{label}"
+            );
+            assert!(counters.exact_range_control_polls > 0, "{label}");
+            assert!(
+                counters.exact_range_maximum_work_between_polls <= COMPARISON_WINDOW_BYTES as u64,
                 "{label}"
             );
             assert_eq!(sink.began, 1, "{label}");
@@ -2848,8 +2936,15 @@ mod tests {
         assert_eq!(result.payload_bytes(), SELECTED_LEN);
         assert_eq!(result.payload_direct_calls(), expected_payload_calls);
         assert_eq!(result.payload_direct_bytes(), expected_payload_bytes);
+        assert_eq!(
+            counters.exact_range_payload_read_calls,
+            expected_payload_calls
+        );
+        assert_eq!(counters.exact_range_payload_bytes, expected_payload_bytes);
         assert_eq!(result.direct_fscas_calls(), counters.fscas_read_calls);
         assert_eq!(result.direct_fscas_bytes(), counters.fscas_bytes_read);
+        assert!(counters.exact_range_control_polls > 0);
+        assert!(counters.exact_range_maximum_work_between_polls <= COMPARISON_WINDOW_BYTES as u64);
         assert_eq!(sink.files.len(), 1);
         assert_eq!(sink.files[0].path, b"payload.bin");
         assert_eq!(sink.files[0].selected_offset, SELECTED_OFFSET);
@@ -2916,6 +3011,8 @@ mod tests {
         assert_eq!(result.payload_bytes(), fixture.expected.len() as u64);
         assert_eq!(result.direct_fscas_bytes(), counters.fscas_bytes_read);
         assert_eq!(result.direct_fscas_calls(), counters.fscas_read_calls);
+        assert_eq!(counters.exact_range_control_polls, 0);
+        assert_eq!(counters.exact_range_maximum_work_between_polls, 0);
         assert_eq!(sink.began, 1);
         assert_eq!(sink.finished, 1);
         assert_eq!(sink.aborted, 0);
@@ -2970,6 +3067,11 @@ mod tests {
             );
             assert_eq!(result.payload_direct_bytes(), payload_bytes, "{label}");
             assert_eq!(result.payload_direct_calls(), payload_calls, "{label}");
+            assert!(counters.exact_range_control_polls > 0, "{label}");
+            assert!(
+                counters.exact_range_maximum_work_between_polls <= COMPARISON_WINDOW_BYTES as u64,
+                "{label}"
+            );
             assert_eq!(sink.began, 1, "{label}");
             assert_eq!(sink.finished, 1, "{label}");
             assert_eq!(sink.aborted, 0, "{label}");
@@ -4154,7 +4256,11 @@ mod tests {
                     let (mut comparison, mut path) = read_buffers();
                     let mut counters = OperationCountersV1::default();
                     let mut sink = CaptureSink::new(256 * 1024);
-                    sink.stop_after_begin = Some(Rc::clone(&activated));
+                    if range {
+                        sink.fault_after_write = Some(Rc::clone(&activated));
+                    } else {
+                        sink.stop_after_begin = Some(Rc::clone(&activated));
+                    }
                     let mut control = FilesystemFaultAfterBeginControl {
                         activated,
                         boundary,
@@ -4170,7 +4276,7 @@ mod tests {
                             fixture.root_tree,
                             b"d/b.bin",
                             817,
-                            17_777,
+                            32_900,
                             &mut sink,
                             &mut counters,
                             ReadBuffersV1 {
@@ -4200,6 +4306,25 @@ mod tests {
 
                     assert_eq!(error, ReadOperationErrorV1::FsCas(fault));
                     assert!(control.injected, "{fault_name}/{operation_name}");
+                    if range {
+                        let payload = &fixture.expected[1].2;
+                        let mut chunk_start = 0_usize;
+                        let first_payload_bytes = loop {
+                            let chunk_len = FastCdcV1::new()
+                                .cut(&payload[chunk_start..])
+                                .expect("canonical fault-row chunk boundary");
+                            let chunk_end = chunk_start + chunk_len;
+                            if chunk_start <= 817 && 817 < chunk_end {
+                                break chunk_len as u64;
+                            }
+                            chunk_start = chunk_end;
+                        };
+                        assert_eq!(counters.exact_range_payload_read_calls, 1);
+                        assert_eq!(counters.exact_range_payload_bytes, first_payload_bytes);
+                    } else {
+                        assert_eq!(counters.exact_range_payload_read_calls, 0);
+                        assert_eq!(counters.exact_range_payload_bytes, 0);
+                    }
                     assert_eq!(sink.began, 1, "{fault_name}/{operation_name}");
                     assert_eq!(sink.finished, 0, "{fault_name}/{operation_name}");
                     assert_eq!(sink.aborted, 1, "{fault_name}/{operation_name}");
@@ -4983,6 +5108,8 @@ mod tests {
         assert_eq!(sink.aborted, 1);
         assert!(sink.current.is_none());
         assert!(sink.files.is_empty());
+        assert_eq!(counters.exact_range_payload_read_calls, 0);
+        assert_eq!(counters.exact_range_payload_bytes, 0);
         assert!(counters.has_zero_forbidden_work());
     }
 

@@ -5,19 +5,20 @@
 //! exact reuse accounting.
 
 use super::tree::{
-    encode_directory, encode_index_boundaries, encode_leaf, finish_tree_object, map_sink,
-    validate_entries, CanonicalDirectoryTreeV1, CanonicalTreeChildV1, CanonicalTreeEntryV1,
-    CowTreeMutationV1, CowTreeReplacementV1, DirectoryLogicalIdentityV1, PreparedTreeSinkV1,
-    TreeObjectDispositionV1, TreePageBoundaryV1, TreePageSummaryV1, TreePayloadWriterV1,
-    TreePlanV1, MAX_TREE_OBJECT_BYTES, TREE_INDEX_FANOUT, TREE_LEAF_FANOUT,
+    encode_directory, encode_index_boundaries_controlled_v1, encode_leaf_controlled_v1,
+    finish_tree_object, map_sink, validate_entries_with_v1, CanonicalDirectoryTreeV1,
+    CanonicalTreeChildV1, CanonicalTreeEntryV1, CowMutationWorkV1, CowTreeMutationV1,
+    CowTreeReplacementV1, DirectoryLogicalIdentityV1, PreparedTreeSinkV1, TreeObjectDispositionV1,
+    TreePageBoundaryV1, TreePageSummaryV1, TreePayloadWriterV1, TreePlanV1, MAX_TREE_OBJECT_BYTES,
+    TREE_INDEX_FANOUT, TREE_LEAF_FANOUT,
 };
 use super::view::{
-    authenticate_and_derive_mutation_logical, mutation_evidence_resident_bytes_v1,
+    authenticate_and_derive_mutation_logical, mutation_evidence_resident_bytes_controlled_v1,
     mutation_hash_state_bytes_v1, read_base_snapshot, read_result_snapshot,
-    replacement_evidence_resident_bytes_v1, validate_mutation_physical_evidence,
+    replacement_evidence_resident_bytes_controlled_v1, validate_mutation_physical_evidence,
     validate_mutation_relation, validate_replacement_evidence, AuthenticatedTreeMutationEvidenceV1,
-    AuthenticatedTreeReplacementEvidenceV1, CanonicalTreeMutationSourceV1, CowMutationWorkV1,
-    TreeEntrySnapshotV1, TreeProofMutationV1,
+    AuthenticatedTreeReplacementEvidenceV1, CanonicalTreeMutationSourceV1, TreeEntrySnapshotV1,
+    TreeProofMutationV1,
 };
 use crate::format::compare_unsigned;
 use crate::identity::{COMPARISON_WINDOW_BYTES, IDENTITY_HASHER_BYTES_V1};
@@ -42,6 +43,32 @@ fn complete_cow_blocking_call_v1<T>(
             Ok(value)
         }
     }
+}
+
+fn abort_private_tree_set_after_error_v1<S: PreparedTreeSinkV1 + ?Sized>(
+    sink: &mut S,
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
+) {
+    // Cleanup remains mandatory, while the already-observed mutation error
+    // remains earlier than either control observation around abort.
+    let _before_abort = work.poll(control, counters);
+    sink.abort_private_tree_set();
+    let _after_abort = work.complete_blocking_call(control, counters);
+}
+
+fn reset_page_scratch_v1(
+    scratch: &mut [Option<TreePageSummaryV1>],
+    work: &mut CowMutationWorkV1,
+    control: &mut dyn OperationWorkControlV1,
+    counters: &mut OperationCountersV1,
+) -> CoreResult<()> {
+    for slot in scratch {
+        *slot = None;
+        work.complete(1, control, counters)?;
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -140,7 +167,9 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
     {
         return Err(CoreError::IdMismatch);
     }
-    validate_entries(evidence.affected_entries)?;
+    validate_entries_with_v1(evidence.affected_entries, || {
+        work.complete(1, control, counters)
+    })?;
     let relative = replacement_index
         .checked_sub(leaf_first)
         .ok_or(CoreError::IntegerOverflow)?;
@@ -151,7 +180,8 @@ fn replace_directory_entry_cow_with_admission_v1<S: PreparedTreeSinkV1 + ?Sized>
     if old.name.as_bytes() != replacement.name.as_bytes() {
         return Err(CoreError::Path);
     }
-    let evidence_bytes = replacement_evidence_resident_bytes_v1(evidence)?;
+    let evidence_bytes =
+        replacement_evidence_resident_bytes_controlled_v1(evidence, &mut work, control, counters)?;
     let memory = OperationMemoryPlanV1::empty()
         .charge(
             MemoryComponentV1::ObjectScratch,
@@ -260,7 +290,7 @@ fn replace_directory_entry_after_admission_v1<S: PreparedTreeSinkV1 + ?Sized>(
         object_scratch,
     );
     if result.is_err() {
-        sink.abort_private_tree_set();
+        abort_private_tree_set_after_error_v1(sink, work, control, counters);
     }
     result
 }
@@ -291,28 +321,25 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
         .checked_sub(leaf_first)
         .ok_or(CoreError::IntegerOverflow)?;
     work.poll(control, counters)?;
-    let changed_leaf = complete_cow_blocking_call_v1(
-        encode_leaf(
-            evidence
-                .affected_entries
-                .iter()
-                .enumerate()
-                .map(|(relative, entry)| {
-                    if relative == relative_replacement {
-                        replacement
-                    } else {
-                        *entry
-                    }
-                }),
-            leaf_first,
-            leaf_end,
-            sink,
-            counters,
-            object_scratch,
-        ),
+    let changed_leaf = encode_leaf_controlled_v1(
+        evidence
+            .affected_entries
+            .iter()
+            .enumerate()
+            .map(|(relative, entry)| {
+                if relative == relative_replacement {
+                    replacement
+                } else {
+                    *entry
+                }
+            }),
+        leaf_first,
+        leaf_end,
+        sink,
+        counters,
         work,
         control,
-        counters,
+        object_scratch,
     )?;
 
     let mut changed_level_one = None;
@@ -324,30 +351,27 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
                 .checked_mul(TREE_INDEX_FANOUT)
                 .ok_or(CoreError::IntegerOverflow)?;
             work.poll(control, counters)?;
-            let level_one = complete_cow_blocking_call_v1(
-                encode_index_boundaries(
-                    1,
-                    evidence
-                        .leaf_group
-                        .iter()
-                        .enumerate()
-                        .map(|(relative, boundary)| {
-                            Ok(if first_leaf + relative == leaf_index {
-                                TreePageBoundaryV1 {
-                                    summary: changed_leaf,
-                                    ..*boundary
-                                }
-                            } else {
-                                *boundary
-                            })
-                        }),
-                    sink,
-                    counters,
-                    object_scratch,
-                ),
+            let level_one = encode_index_boundaries_controlled_v1(
+                1,
+                evidence
+                    .leaf_group
+                    .iter()
+                    .enumerate()
+                    .map(|(relative, boundary)| {
+                        Ok(if first_leaf + relative == leaf_index {
+                            TreePageBoundaryV1 {
+                                summary: changed_leaf,
+                                ..*boundary
+                            }
+                        } else {
+                            *boundary
+                        })
+                    }),
+                sink,
+                counters,
                 work,
                 control,
-                counters,
+                object_scratch,
             )?;
             changed_level_one = Some((
                 u32::try_from(level_one_index).map_err(|_| CoreError::IntegerOverflow)?,
@@ -357,30 +381,27 @@ fn replace_inner<S: PreparedTreeSinkV1 + ?Sized>(
                 level_one
             } else {
                 work.poll(control, counters)?;
-                complete_cow_blocking_call_v1(
-                    encode_index_boundaries(
-                        2,
-                        evidence
-                            .level_one_group
-                            .iter()
-                            .enumerate()
-                            .map(|(index, boundary)| {
-                                Ok(if index == level_one_index {
-                                    TreePageBoundaryV1 {
-                                        summary: level_one,
-                                        ..*boundary
-                                    }
-                                } else {
-                                    *boundary
-                                })
-                            }),
-                        sink,
-                        counters,
-                        object_scratch,
-                    ),
+                encode_index_boundaries_controlled_v1(
+                    2,
+                    evidence
+                        .level_one_group
+                        .iter()
+                        .enumerate()
+                        .map(|(index, boundary)| {
+                            Ok(if index == level_one_index {
+                                TreePageBoundaryV1 {
+                                    summary: level_one,
+                                    ..*boundary
+                                }
+                            } else {
+                                *boundary
+                            })
+                        }),
+                    sink,
+                    counters,
                     work,
                     control,
-                    counters,
+                    object_scratch,
                 )?
             }
         }
@@ -962,7 +983,8 @@ where
     if page_scratch.len() < required_page_summaries {
         return Err(CoreError::ResourceRefused);
     }
-    let evidence_bytes = mutation_evidence_resident_bytes_v1(evidence)?;
+    let evidence_bytes =
+        mutation_evidence_resident_bytes_controlled_v1(evidence, &mut work, control, counters)?;
     let page_bytes = core::mem::size_of_val(page_scratch);
     let port_bytes = source
         .resident_memory_bound_bytes()?
@@ -1165,7 +1187,7 @@ where
         verified_base_root,
     );
     if result.is_err() {
-        sink.abort_private_tree_set();
+        abort_private_tree_set_after_error_v1(sink, work, control, counters);
     }
     result
 }
@@ -1200,7 +1222,7 @@ where
     let required = TREE_INDEX_FANOUT
         .checked_add(plan.level_one_count)
         .ok_or(CoreError::IntegerOverflow)?;
-    page_scratch[..required].fill(None);
+    reset_page_scratch_v1(&mut page_scratch[..required], work, control, counters)?;
     let level_one_start = TREE_INDEX_FANOUT;
 
     for group in 0..plan.level_one_count {
@@ -1219,7 +1241,12 @@ where
             .checked_add(TREE_INDEX_FANOUT)
             .ok_or(CoreError::IntegerOverflow)?
             .min(plan.leaf_count);
-        page_scratch[..end_leaf - first_leaf].fill(None);
+        reset_page_scratch_v1(
+            &mut page_scratch[..end_leaf - first_leaf],
+            work,
+            control,
+            counters,
+        )?;
         for leaf in first_leaf..end_leaf {
             work.complete(1, control, counters)?;
             let target = leaf - first_leaf;
@@ -1492,6 +1519,7 @@ where
         writer.write(&[entry.child.physical_kind()])?;
         writer.write(entry.child.physical_id_ref())?;
         previous = Some(entry);
+        work.complete(1, control, counters)?;
     }
     work.poll(control, counters)?;
     let encoded = finish_tree_object(writer, sink, counters);
@@ -1533,7 +1561,6 @@ where
     let mut first_entry = None;
     let mut last_entry = None;
     for child in children {
-        work.complete(1, control, counters)?;
         let child = child?;
         if child.depth.checked_add(1) != Some(depth) {
             return Err(CoreError::TypedEdge);
@@ -1557,6 +1584,7 @@ where
         writer.write(child.id.as_bytes())?;
         first_entry.get_or_insert(child.first_entry);
         last_entry = Some(child.last_entry);
+        work.complete(1, control, counters)?;
     }
     if count == 0 {
         return Err(CoreError::CountCap);

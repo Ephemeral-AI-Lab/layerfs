@@ -91,8 +91,8 @@ pub mod qualification {
         pub mod semantic {
             pub use crate::cow::semantic::{
                 build_v1, canonical_order_v1, file_replacement_v1, identity_v1, mutate_v1,
-                preflight_v1, TreeBuildRequestV1, TreeMutationFaultV1, TreeMutationObservationV1,
-                TreeMutationRequestV1,
+                preflight_v1, TreeBuildRequestV1, TreeMutationControlV1, TreeMutationFaultV1,
+                TreeMutationObservationV1, TreeMutationRequestV1,
             };
         }
     }
