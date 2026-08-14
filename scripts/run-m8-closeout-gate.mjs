@@ -1,10 +1,11 @@
-import { execFile } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
 const execute = promisify(execFile);
+const executeShell = promisify(exec);
 const root = path.resolve(import.meta.dirname, "..");
 const computerRoot = path.resolve(root, "..", "ephemeral-ai-computer");
 const protectedRoot = path.resolve(root, "..", "ephemeral-ai-fs");
@@ -70,18 +71,22 @@ async function runCommand(spec, candidate, computerCandidate) {
   let stderr = "";
   let exitCode = 0;
   try {
-    const result = await execute(
+    const executable =
       process.platform === "win32" && spec.command === "pnpm"
         ? "pnpm.cmd"
-        : spec.command,
-      spec.args,
-      {
-        cwd: spec.cwd,
-        windowsHide: true,
-        maxBuffer: 256 * 1024 * 1024,
-        shell: process.platform === "win32" && spec.command.endsWith(".cmd"),
-      },
-    );
+        : spec.command;
+    const result =
+      process.platform === "win32" && executable.endsWith(".cmd")
+        ? await executeShell([executable, ...spec.args].join(" "), {
+            cwd: spec.cwd,
+            windowsHide: true,
+            maxBuffer: 256 * 1024 * 1024,
+          })
+        : await execute(executable, spec.args, {
+            cwd: spec.cwd,
+            windowsHide: true,
+            maxBuffer: 256 * 1024 * 1024,
+          });
     stdout = result.stdout;
     stderr = result.stderr;
   } catch (error) {
@@ -220,16 +225,14 @@ const artifact = {
     hostPlatform: process.platform,
     hostArch: process.arch,
     pnpm: (
-      await execute(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--version"], {
-        windowsHide: true,
-        shell: process.platform === "win32",
-      })
+      await (process.platform === "win32"
+        ? executeShell("pnpm.cmd --version", { windowsHide: true })
+        : execute("pnpm", ["--version"], { windowsHide: true }))
     ).stdout.trim(),
     npm: (
-      await execute(process.platform === "win32" ? "npm.cmd" : "npm", ["--version"], {
-        windowsHide: true,
-        shell: process.platform === "win32",
-      })
+      await (process.platform === "win32"
+        ? executeShell("npm.cmd --version", { windowsHide: true })
+        : execute("npm", ["--version"], { windowsHide: true }))
     ).stdout.trim(),
   },
   testTotals: {
