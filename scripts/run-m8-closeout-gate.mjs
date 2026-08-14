@@ -113,7 +113,7 @@ async function runCommand(spec, candidate, computerCandidate) {
 
 function testTotals(source, name) {
   const fsMatch = source.match(
-    /ℹ tests (\d+)\s*\r?\nℹ pass (\d+)\s*\r?\nℹ fail (\d+)/u,
+    /tests (\d+)\s*\r?\n[^\r\n]*pass (\d+)\s*\r?\n[^\r\n]*fail (\d+)/u,
   );
   if (fsMatch)
     return {
