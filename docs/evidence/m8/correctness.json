@@ -1,0 +1,406 @@
+{
+  "schema": "efs-m8-evidence-v1",
+  "status": "passed",
+  "candidate": "47b41bea2c955ef24a1968286509778938714f93",
+  "candidateParent": "107c5e7a6a4661c36041d0d355b4c7ef2ae98d6f",
+  "computerCandidate": "9a82e2699ec8ac50e4a1652eca08f56babe82196",
+  "protectedOriginal": {
+    "head": "42954593e59395654718ef675d62a1f68a93f47b",
+    "statusSha256": "da649980f0d668d2450075e44d28434dd36ce1c01b77945285e92b190d828534"
+  },
+  "commands": [
+    "pnpm check:api",
+    "pnpm test:m8",
+    "pnpm test:quick",
+    "npm.cmd test --workspace @cloudflare/computer-rpc",
+    "npm.cmd test --workspace @cloudflare/computerd",
+    "wsl.exe -- bash -lc set -e; printf 'uname=%s\\n' \"$(uname -srmo)\"; test -c /dev/fuse; stat -c 'fuse=%F mode=%a device=%t:%T' /dev/fuse; fusermount3 --version | head -1; node --version"
+  ],
+  "versions": {
+    "hostNode": "v24.11.1",
+    "hostPlatform": "win32",
+    "hostArch": "x64",
+    "pnpm": "10.32.1",
+    "npm": "11.6.2"
+  },
+  "testTotals": {
+    "fsM8": {
+      "tests": 40,
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    },
+    "fsQuick": {
+      "tests": 231,
+      "passed": 231,
+      "failed": 0,
+      "skipped": 0
+    },
+    "computerRpc": {
+      "tests": 70,
+      "passed": 70,
+      "failed": 0,
+      "skipped": 0
+    },
+    "computerd": {
+      "tests": 145,
+      "passed": 144,
+      "failed": 0,
+      "skipped": 1
+    }
+  },
+  "gates": [
+    {
+      "name": "wsl2-real-fuse-identity",
+      "status": "passed"
+    },
+    {
+      "name": "authenticated-capnweb-carrier",
+      "status": "passed"
+    },
+    {
+      "name": "carrier-resource-limits",
+      "status": "passed"
+    },
+    {
+      "name": "persistent-provisioning",
+      "status": "passed"
+    },
+    {
+      "name": "provisioning-restart",
+      "status": "passed"
+    },
+    {
+      "name": "main-transfer",
+      "status": "passed"
+    },
+    {
+      "name": "active-branch-transfer",
+      "status": "passed"
+    },
+    {
+      "name": "branch-isolation-and-readonly-main",
+      "status": "passed"
+    },
+    {
+      "name": "shell-git-fuse-surface",
+      "status": "passed"
+    },
+    {
+      "name": "durable-replay-and-restart",
+      "status": "passed"
+    },
+    {
+      "name": "activation-and-publication-guards",
+      "status": "passed"
+    },
+    {
+      "name": "terminal-return-and-stale-reconnect",
+      "status": "passed"
+    },
+    {
+      "name": "database-replacement-and-reprovisioning",
+      "status": "passed"
+    },
+    {
+      "name": "pinned-reader-and-dirty-writer",
+      "status": "passed"
+    },
+    {
+      "name": "lease-reservation-staging-and-gc",
+      "status": "passed"
+    },
+    {
+      "name": "aggregate-memory-and-stream-limits",
+      "status": "passed"
+    },
+    {
+      "name": "evidence-integrity-and-cleanup",
+      "status": "passed"
+    }
+  ],
+  "carrier": {
+    "path": "/efs",
+    "protocol": "computer-efs-carrier-v1",
+    "perMessageDeflate": false,
+    "rawFrameBytes": 4259840,
+    "decodedEnvelopeBytes": 3145728,
+    "acknowledgementBytes": 65536,
+    "scratchBytes": 2097152,
+    "maxReservationBytes": 18087936
+  },
+  "fuse": {
+    "topology": "PowerShell -> wsl.exe -> Linux Node/computerd -> /dev/fuse",
+    "requiredIdentity": "character-device /dev/fuse",
+    "log": "docs/evidence/m8/logs/wsl_fuse_identity.log",
+    "backend": {
+      "kind": "fuse"
+    }
+  },
+  "identities": {
+    "filesystemId": "87ddee37-ef4d-4f84-90b2-fd066ac9fb0c",
+    "authorityId": "m8-authority",
+    "branchId": "m8-branch",
+    "branchGeneration": 1,
+    "branchGenerationDigest": "520231994617b86d3fda570cd9b204ad1cef9faec1ca74732dd52993b4d08041"
+  },
+  "transfers": [
+    {
+      "phase": "provisioning",
+      "sessionId": "60d12fe12b815e074e095b2ab07b747a",
+      "operationId": "m8-real-carrier-provision",
+      "plan": {
+        "flow": "authority-main-to-replica"
+      },
+      "activation": {
+        "kind": "main",
+        "revision": "0"
+      },
+      "finalCursor": "885e3257b5720f5da9ff9a9b22ed90e66a8c3ed99a26a0b5261c5de6346a46c3",
+      "transferredBytes": 0,
+      "reusedBytes": 0
+    },
+    {
+      "phase": "main",
+      "sessionId": "2dc4eccb119d247799f27bd8fef783c5",
+      "operationId": "m8-real-carrier-main",
+      "plan": {
+        "flow": "authority-main-to-replica"
+      },
+      "activation": {
+        "kind": "main",
+        "revision": "1"
+      },
+      "finalCursor": "cc728ffa2e3e88e63f835a4bf51b7b08ba9ced313151c0810b22ef65fc3e114d",
+      "transferredBytes": 159,
+      "reusedBytes": 0
+    },
+    {
+      "phase": "active-branch",
+      "sessionId": "c7a9c763f7d46afa2293bb30a09ae882",
+      "operationId": "m8-real-carrier-branch",
+      "plan": {
+        "flow": "authority-branch-to-replica",
+        "branchId": "m8-branch"
+      },
+      "activation": {
+        "kind": "branch",
+        "branchId": "m8-branch",
+        "baseRevision": "1",
+        "generation": 1,
+        "generationDigest": "520231994617b86d3fda570cd9b204ad1cef9faec1ca74732dd52993b4d08041",
+        "state": "active",
+        "authorityResult": null
+      },
+      "finalCursor": "dfc61105d22c240903bd77160387533a738a3fb07de023647d3ceb11fe5e5ace",
+      "transferredBytes": 155,
+      "reusedBytes": 0
+    }
+  ],
+  "restarts": 2,
+  "memory": {
+    "daemonRssBytes": 85221376,
+    "daemonHeapUsedBytes": 13240752,
+    "daemonCarrierReservedBytes": 0
+  },
+  "databases": {
+    "authorityBytes": 4096,
+    "replicaBytes": 471040,
+    "replicaWalBytes": 0
+  },
+  "cleanup": {
+    "daemonCarrierReservedBytes": 0,
+    "replicaWalBytesAfterCheckpoint": 0,
+    "temporaryDatabasesRemoved": true,
+    "activeSessionsAfterGate": 0,
+    "activeLeasesAfterGate": 0,
+    "stagingReservationsAfterGate": 0,
+    "stubsAfterGate": 0
+  },
+  "faultAndRestartObservations": [
+    "✔ revision retention checkpoints preserve the retained history window (124.4727ms)",
+    "✔ publication rejects a write set before opening an over-budget final transaction (73.9721ms)",
+    "✔ publication preflight includes terminal COW cleanup rows (69.0317ms)",
+    "✔ active branch generation digests are stable and mutation-sensitive (45.5782ms)",
+    "✔ guarded publication binds generation, digest, and operation request (46.8904ms)",
+    "✔ guarded publication replays the exact request after physical restart (129.2737ms)",
+    "✔ public filesystem covers canonical paths, ranges, metadata, and UTF-8 ordering (131.2081ms)",
+    "✔ hard links, symbolic links, rename, unlink, and recursive removal persist (141.1159ms)",
+    "✔ leased streams retain the selected snapshot across overwrite and release on completion (47.614ms)",
+    "✔ memory and transaction ceilings reject without a visible partial mutation (24.8042ms)",
+    "✔ close is idempotent and rejects later operations (24.5836ms)",
+    "✔ computer carrier profile freezes the 17.25 MiB reservation (1.2042ms)",
+    "✔ process-global admission is strict FIFO and occurs before endpoint construction (0.7988ms)",
+    "✔ queued admission aborts without constructing an endpoint (0.3267ms)",
+    "✔ admitted target exposes only exchange, bounds bytes, and close waits active (0.4103ms)",
+    "✔ carrier maps endpoint failures and enforces decoded response bounds (0.4141ms)",
+    "✔ endpoint-open and close faults release process admission exactly once (0.3143ms)",
+    "✔ durable sessions bind operation, identity, policy, plan, profile, and limits (90.8031ms)",
+    "✔ active session admission is aggregate, serialized, and released by terminal state (69.4066ms)",
+    "✔ retry-aborted sessions release their durable row and retained receipts (68.4751ms)",
+    "✔ terminal sessions remain charged to the retained session-row aggregate (63.3085ms)",
+    "✔ aggregate replication metadata admission rejects session and receipt growth atomically (59.2814ms)",
+    "✔ batch receipt, cursor, counters, and exact acknowledgement commit atomically (77.4196ms)",
+    "✔ receipt compaction and maintenance are bounded and durable (74.0715ms)",
+    "✔ retry budget and terminal result survive restart without clock rollback extension (93.5731ms)",
+    "✔ one public runtime owns bound filesystem, branch VFS, and durable replication (78.944ms)",
+    "✔ durable replica identity makes main read-only while private branches remain writable (175.1177ms)",
+    "✔ unbound runtime exposes only resumable provisioning replication (56.9852ms)",
+    "✔ lost outbound responses replay from a durable receipt and bind the request digest (68.4755ms)",
+    "✔ replication SHA-256 is incremental-compatible with standard vectors (0.7024ms)",
+    "✔ canonical version 1 envelopes and digests match all golden categories (6.6144ms)",
+    "✔ session identifiers are package-generated 128-bit lowercase hex (0.372ms)",
+    "✔ batch acknowledgement binds the complete request and committed cursor (1.147ms)",
+    "✔ authorization encoding canonicalizes plan order and binds identity, policy, and limits (0.5711ms)",
+    "✔ the endpoint returns its own authenticated policy record (0.6268ms)",
+    "✔ capability digest binds both the advertised row and effective limits (0.3821ms)",
+    "✔ limit negotiation uses minima for ceilings, maximum retry floor, and rejects cross-field hazards (0.4738ms)",
+    "✔ the normative global role-flow matrix accepts only its four rows (0.8404ms)",
+    "✔ fresh replica negotiation permits only authenticated authority-main provisioning (1.2412ms)",
+    "✔ semantic errors survive canonical response records without thrown-object preservation (0.2436ms)",
+    "✔ decoded carrier boundary is exact at 3 MiB and rejects one byte over (2.1389ms)",
+    "✔ decoder rejects corrupt, noncanonical, truncated, trailing, and oversized envelopes (1.0348ms)",
+    "✔ authority main transfers to an authenticated replica through the wire (691.0956ms)",
+    "✔ main transfer resumes after a dropped response and restart without a second revision (499.699ms)",
+    "✔ provisioning adopts the authority genesis into an unbound replica (511.7688ms)",
+    "✔ authority branch transfer preserves the selected generation and private content (839.7184ms)",
+    "✔ replica branch returns, publishes with a generation guard, and returns the terminal result (1575.4498ms)",
+    "✔ unbound replica initialization persists only schema identity and its marker (65.5678ms)",
+    "✔ unbound replica initialization rejects unrelated nonempty and bound databases (87.5863ms)",
+    "✔ unbound replica uses the runtime-owned durable identity representation (68.1232ms)",
+    "✔ every unbound initialization statement fault rolls back to a physically empty database (10170.0367ms)",
+    "✔ durable path-copy is authenticated and bounded on a 65,537-entry, three-level manifest (1849.4229ms)",
+    "✔ repeated reused hashes retain the stronger non-final authenticated source path (695.1046ms)",
+    "✔ nondegenerate multi-height CDC replacement copies one authenticated path (753.4959ms)",
+    "✔ path-copy caps hostile nondegenerate rechunk output before retaining entry 257 (59.9019ms)",
+    "✔ a 100 MiB fallback reports bounded windows and its full source-transaction cost (3842.595ms)",
+    "✔ durable edits authenticate a three-level manifest before the retained-entry fallback (222.4602ms)",
+    "✔ durable edits route empty, singleton, and two-level shapes to the local rebuild (46.9037ms)",
+    "✔ a singleton leaf expands through fallback into a canonical multi-leaf tree (1850.4516ms)",
+    "✔ durable edit reserves its concurrent read windows before source or insertion work (24.9526ms)",
+    "✔ direct durable edits account retained insertion ownership before storage or source work (0.5019ms)",
+    "✔ filesystem range mutations and streamed preparation own hostile byte views (72.2295ms)",
+    "✔ batched local rebuilds release exact ingest, staging, and metadata reservations (43.4281ms)",
+    "✔ string write preflight failures leave admission at its baseline (29.3107ms)",
+    "✔ public range edits admit intrinsic exact-bound bytes before ownership copy or source work (31.2418ms)",
+    "✔ Node storage prerequisite bounds 64 MiB materialization while public snapshot pinning remains M3 (1852.376ms)",
+    "✔ durable local rebuild reconnects a size-changing edit and persists byte-identical content (1902.723ms)",
+    "✔ durable local rebuild handles append, prepend, and truncate byte-identically (244.3952ms)",
+    "✔ every durable local rebuild persistence statement fault leaves the old state intact (2286.8672ms)",
+    "✔ manifest cursor intrinsically rejects oversized digest subclasses before source work (0.8586ms)",
+    "✔ SQLite manifest cursor returns bounded ranges through authenticated M1 paths (208.5924ms)",
+    "✔ cursor rejects unsupported parameters and root totals before exposing bytes (27.5464ms)",
+    "✔ cursor validates child totals, canonical grouping, and configured depth (28.8301ms)",
+    "✔ CAS corruption is rejected before destination bytes are changed (25.0727ms)",
+    "✔ cold and warm one-byte ranges stay inside the admitted max-object envelope (843.2192ms)",
+    "✔ a 100 MiB materialization rejects before a second full-window BLOB allocation (688.3309ms)",
+    "✔ local fresh appends reject duplicates while generic appends retain probes (38.4304ms)",
+    "✔ immutable COW heads retain one current page and atomically cross boundaries at every page size (685.9188ms)",
+    "✔ structural patches are segmented, ordered, bounded, and exact (25.1675ms)",
+    "✔ structural patch segment envelopes persist exactly and reject plus one before writes (78.0854ms)",
+    "✔ tight row profiles persist only patch sets their bounded reader can materialize (141.2199ms)",
+    "✔ patch payload plus row and binding overhead is exact across reopen (67.8027ms)",
+    "✔ bounded usage recount derives patch bytes from physical segments after reopen (74.3491ms)",
+    "✔ byte-weighted cache verifies once, remains bounded, and eviction preserves integrity checks (29.4469ms)",
+    "✔ content cache owns Buffer and subclass inputs and detaches every outward hit (24.9307ms)",
+    "✔ partial write-admission failure removes its staging lease and releases every reservation (23.8462ms)",
+    "✔ an oversized hostile stream chunk is intrinsically preflighted and cancelled before copy or processing (24.8545ms)",
+    "✔ declared streamed-ingest quota is reserved before the first producer pull (21.9729ms)",
+    "✔ declared entry-stream quota is reserved before iterable work or durable batches (21.9536ms)",
+    "✔ borrowed entry streams reject intrinsic oversized views before detached copies (22.9314ms)",
+    "✔ a 100 MiB streamed write stays chunk-bounded and a buffered peer rejects before copy (21440.7244ms)",
+    "✔ staging payload quota is exact across rollback, release, and reopen (77.5298ms)",
+    "✔ staging row metadata is exact at limit, rolls back at plus one, recounts, and releases (86.0275ms)",
+    "✔ maintenance expiry atomically releases partial and sealed staging charges after reopen (123.2378ms)",
+    "✔ every expired-lease tombstone statement fault rolls back lease state and usage (325.3564ms)",
+    "✔ every keyset cleanup statement fault rolls back its child deletion and cursor (161.8252ms)",
+    "✔ tombstoned leases clean up through resumable keyset-sized child batches (34.4148ms)",
+    "✔ lease maintenance observes aborts between bounded committed batches (30.4965ms)",
+    "✔ sealed recovery rows reject raw mutation until tombstoned cleanup (151.0883ms)",
+    "✔ count-only closure members seal across shared leaves, survive GC, and release exactly (105.0682ms)",
+    "✔ a genuine 100001-entry manifest closure reconciles durably and final-validates with constant-row work (3326.9005ms)",
+    "✔ one OperationsStorage transaction rejects mixed quota profiles (34.3031ms)",
+    "✔ writer filesystem, storage, and branch limits persist across connections (70.1427ms)",
+    "✔ invalid writer profiles reject before creating schema state (1.3768ms)",
+    "✔ schema initialization is deterministic, persisted, and read-only reopen-safe (57.2078ms)",
+    "✔ durable-table schema identity is atomic, exact, and header-independent (75.0297ms)",
+    "✔ current schema recovery authority is revalidated after physical reopen (493.8419ms)",
+    "✔ schema v1 migrates data to the current schema and every migration-statement fault rolls back (16635.3808ms)",
+    "✔ released schema v2 migrates through v3 to v4 and file-backed faults reopen as intact v2 (13017.3935ms)",
+    "✔ schema v3 migrates forward to v4 and every v4 statement fault preserves usable v3 (9524.8839ms)",
+    "✔ populated multi-height v3 manifests certify and remain readable after physical reopen (89.3436ms)",
+    "✔ a released v3 database containing one exact-bound object migrates and reopens (1037.7497ms)",
+    "✔ legacy certification rolls back corrupt, unbalanced, and unwritable manifests (157.0645ms)",
+    "✔ v4 migration refuses an unbounded atomic recount before changing v3 (106.0081ms)",
+    "✔ v1 transformed BLOB bytes admit the exact envelope and reject plus one row (464.6559ms)",
+    "✔ one usage authority enforces aggregate and category quotas transactionally (22.4309ms)",
+    "✔ staging identities and nonces are intrinsically bounded before durable admission (21.3258ms)",
+    "✔ namespace root journals reserve maintenance quota before changing the head (21.0233ms)",
+    "✔ transaction row profiles keep every derived statement budget safe (0.2448ms)",
+    "✔ storage profiles reject an adapter that cannot persist default FastCDC chunks (0.2048ms)",
+    "✔ namespace variable metadata deltas match a bounded direct recount across reopen (69.0957ms)",
+    "✔ direct usage recount refuses before scanning beyond its configured row envelope (22.9637ms)",
+    "✔ two connections serialize quota admission against the authoritative usage row (64.2266ms)",
+    "✔ two connections serialize staging metadata admission without an orphan row (65.584ms)",
+    "✔ CAS and segmented manifests persist with verified deduplication and exact usage (159.6055ms)",
+    "✔ the exact supported content-object bound persists and bound plus one rolls back (988.3862ms)",
+    "✔ bulk content envelopes reject before hashing or manifest decoding (22.1407ms)",
+    "✔ failure at every content write statement leaves the complete old state (128.7821ms)"
+  ],
+  "logs": [
+    {
+      "name": "fs-api",
+      "slug": "fs_api",
+      "command": "pnpm check:api",
+      "path": "docs/evidence/m8/logs/fs_api.log",
+      "exitCode": 0,
+      "elapsedMs": 1359,
+      "sha256": "6032de9c885753f39223d88a6bc994305db520117461ccecc3ef05a0c7fffe9b"
+    },
+    {
+      "name": "fs-m8",
+      "slug": "fs_m8",
+      "command": "pnpm test:m8",
+      "path": "docs/evidence/m8/logs/fs_m8.log",
+      "exitCode": 0,
+      "elapsedMs": 12694,
+      "sha256": "924e42e05a1aece3f9412755024fe2d6717c8ac098d36b53e098cf23fd2d6423"
+    },
+    {
+      "name": "fs-quick",
+      "slug": "fs_quick",
+      "command": "pnpm test:quick",
+      "path": "docs/evidence/m8/logs/fs_quick.log",
+      "exitCode": 0,
+      "elapsedMs": 57931,
+      "sha256": "a9ca4404d57b5aaca7f584fd3295dcfbdf138fb57e057933ecb3bc185c8102c9"
+    },
+    {
+      "name": "computer-rpc",
+      "slug": "computer_rpc",
+      "command": "npm.cmd test --workspace @cloudflare/computer-rpc",
+      "path": "docs/evidence/m8/logs/computer_rpc.log",
+      "exitCode": 0,
+      "elapsedMs": 22991,
+      "sha256": "5c7ce8a65f5f72390e3de36e16af02caf9dbfb06f5d1b596c060bc1863a12a17"
+    },
+    {
+      "name": "computerd-m8",
+      "slug": "computerd_m8",
+      "command": "npm.cmd test --workspace @cloudflare/computerd",
+      "path": "docs/evidence/m8/logs/computerd_m8.log",
+      "exitCode": 0,
+      "elapsedMs": 72181,
+      "sha256": "dfe5f50080cb88b73842dc0253fc125fd56a4019f9e7917abb37e48ef2374838"
+    },
+    {
+      "name": "wsl-fuse-identity",
+      "slug": "wsl_fuse_identity",
+      "command": "wsl.exe -- bash -lc set -e; printf 'uname=%s\\n' \"$(uname -srmo)\"; test -c /dev/fuse; stat -c 'fuse=%F mode=%a device=%t:%T' /dev/fuse; fusermount3 --version | head -1; node --version",
+      "path": "docs/evidence/m8/logs/wsl_fuse_identity.log",
+      "exitCode": 0,
+      "elapsedMs": 114,
+      "sha256": "bd94ee2ef42387e38145d60742efa627126a182a7e6abab364df208b5957dbb1"
+    }
+  ]
+}

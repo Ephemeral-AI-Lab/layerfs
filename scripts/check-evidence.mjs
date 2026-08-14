@@ -17,6 +17,10 @@ const acceptedMatch = /^pnpm validate:(m\d+)$/u.exec(acceptedValidation ?? "");
 if (!acceptedMatch)
   throw new Error("validate:accepted must select one milestone validation command");
 const activeAcceptedMilestone = acceptedMatch[1];
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
 if (
   !new Set(["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8"]).has(
     activeAcceptedMilestone,
@@ -2076,7 +2080,7 @@ async function validateOptionalM8Evidence() {
       cwd: "C:\\Users\\yifan\\code\\Ephemeral-AI-Lab\\ephemeral-ai-fs",
       windowsHide: true,
     })
-  ).stdout;
+  ).stdout.trim();
   if (sha256(protectedStatus) !== artifact.protectedOriginal.statusSha256)
     throw new Error("m8 protected original repository status changed");
   const recordCommit = await evidenceCommit(path.relative(root, jsonFilename));
