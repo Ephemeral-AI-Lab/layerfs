@@ -1,1 +1,11 @@
-export const REPLICATION_PROTOCOL_VERSION = "efs-replication-v1";
+export * from "./authorization.js";
+export * from "./computer-carrier.js";
+export * from "./errors.js";
+export * from "./identifiers.js";
+export * from "./limits.js";
+export * from "./sha256.js";
+export * from "./types.js";
+export * from "./wire.js";
+export * from "./endpoint.js";
+export { replicate } from "./driver.js";
+export type { ReplicationFilesystemBridge } from "@ephemeralai/fs/integrations/replication";

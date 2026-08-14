@@ -124,6 +124,78 @@
       ]
     },
     {
+      "name": "NodeVfsConformanceCaseId",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/node-vfs.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsConformanceFactory",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsConformanceHandle",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsConformanceMetrics",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsConformanceProvider",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NodeVfsConformanceSession",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/node-vfs.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
       "name": "PORTABLE_APPLICATION_ID",
       "kinds": [
         "value"
@@ -1166,6 +1238,18 @@
       "declarations": [
         {
           "file": "packages/testkit/dist/maintenance.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "runNodeVfsConformance",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/testkit/dist/node-vfs.d.ts",
           "kind": "FunctionDeclaration"
         }
       ]

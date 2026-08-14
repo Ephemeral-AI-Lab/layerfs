@@ -23,6 +23,7 @@
 [![M4 accepted](https://img.shields.io/badge/M4-accepted-2ea44f)](./docs/evidence/m4/exit.md)
 [![M5 accepted](https://img.shields.io/badge/M5-accepted-2ea44f)](./docs/evidence/m5/exit.md)
 [![M6 accepted](https://img.shields.io/badge/M6-accepted-2ea44f)](./docs/evidence/m6/exit.md)
+[![M7 accepted](https://img.shields.io/badge/M7-accepted-2ea44f)](./docs/evidence/m7/exit.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 LayerFS gives Ephemeral AI Computer a durable workspace layer where agents can
@@ -86,20 +87,22 @@ M2 SQLite storage   ✅
 M3 filesystem I/O   ✅
 M4 branches         ✅
 M5 maintenance      ✅
-M6 Cloudflare parity ✅  latest accepted milestone
-M7–M10 integration  ⏳
+M6 Cloudflare parity ✅
+M7 Node VFS         ✅  latest accepted milestone
+M8–M10 integration  ⏳
 ```
 
-| Milestone | Scope                                                         | Status                 |
-| --------- | ------------------------------------------------------------- | ---------------------- |
-| M0        | Repository and test foundation                                | ✅ Accepted            |
-| M1        | CAS, CDC, COW, patches, and manifests                         | ✅ Accepted            |
-| M2        | Transactional SQLite storage and Node driver                  | ✅ Accepted            |
-| M3        | Filesystem namespace, revisions, and I/O                      | ✅ Accepted            |
-| M4        | Branches and publication                                      | ✅ Accepted            |
-| M5        | Maintenance, recovery, and bounded scale                      | ✅ Accepted            |
-| M6        | Cloudflare Durable Object SQLite parity                       | ✅ **Latest accepted** |
-| M7–M10    | Node VFS/FUSE, replication, release, and Computer integration | ⏳ In progress         |
+| Milestone | Scope                                          | Status                 |
+| --------- | ---------------------------------------------- | ---------------------- |
+| M0        | Repository and test foundation                 | ✅ Accepted            |
+| M1        | CAS, CDC, COW, patches, and manifests          | ✅ Accepted            |
+| M2        | Transactional SQLite storage and Node driver   | ✅ Accepted            |
+| M3        | Filesystem namespace, revisions, and I/O       | ✅ Accepted            |
+| M4        | Branches and publication                       | ✅ Accepted            |
+| M5        | Maintenance, recovery, and bounded scale       | ✅ Accepted            |
+| M6        | Cloudflare Durable Object SQLite parity        | ✅ Accepted            |
+| M7        | Node VFS and real mounted FUSE                 | ✅ **Latest accepted** |
+| M8–M10    | Replication, release, and Computer integration | ⏳ In progress         |
 
 M6 adds the faithful local Cloudflare Durable Object adapter and runtime suite using
 `ctx.storage.sql` and `transactionSync`, including real runtime eviction,
@@ -111,6 +114,33 @@ Cloudflare credentials, deployment, network access, or external state.
 See the [implementation plan](./docs/implementation/implementation-plan.md),
 [M6 exit record](./docs/evidence/m6/exit.md), and
 [M6 handoff](./docs/implementation/m6-handoff.md).
+
+M7 adds the synchronous Node VFS provider, opaque core bridge, coordinated namespace and
+inode semantics, bounded multi-edit COW, fault/resource coverage, and the exact
+real-kernel FUSE profile. Candidate-bound evidence records 23 local tests and the full
+9,056-operation mounted profile in 24.8 seconds. See the
+[M7 evidence](./docs/evidence/m7/exit.md) and
+[M7 handoff](./docs/implementation/m7-handoff.md).
+
+### Accepted real-FUSE timings
+
+The accepted Linux x64 real-FUSE run used a 16 MiB deterministic payload with SQLite on
+`tmpfs`. Operating-system cache dropping was unavailable, so the restart read below is
+not presented as a guaranteed cold-cache result.
+
+| Mounted operation                   | Workload                        |             Accepted time |
+| ----------------------------------- | ------------------------------- | ------------------------: |
+| Initial write and `fsync`           | 16 MiB                          | 1,134.418 ms (14.1 MiB/s) |
+| Full read and SHA-256 after restart | 16 MiB                          |  101.370 ms (157.8 MiB/s) |
+| Full-file materialization           | Same mounted read after restart |                101.370 ms |
+| COW edits and final `fsync`         | 5,000 one-byte write callbacks  |    Not timed as one phase |
+| Complete mounted profile            | 9,056 operations and 3 restarts |                 24,767 ms |
+
+The evidence records every one-byte edit callback and one successful flush. Individual
+edit calls were below 27.266 ms, the cutoff of the retained ten slowest operations, but
+the run did not retain an aggregate edit-phase time or edit p50/p95. See the raw
+[real-FUSE log](./docs/evidence/m7/logs/m7-real-fuse.log) for the exact environment,
+resource peaks, digests, and operation counts.
 
 ## 📊 Benchmark progress
 
@@ -208,6 +238,14 @@ Run the accepted local Durable Object suite directly:
 pnpm test:m6
 ```
 
+Run the M7 local selection, or the mandatory real-FUSE target on a qualifying Linux
+host:
+
+```bash
+pnpm test:m7:local
+pnpm test:m7:fuse
+```
+
 Run the storage engine benchmark:
 
 ```bash
@@ -247,10 +285,16 @@ docs/benchmarks/              Benchmark plans, results, and improvement targets
 - [M5 acceptance evidence](./docs/evidence/m5/exit.md)
 - [M6 acceptance evidence](./docs/evidence/m6/exit.md)
 - [M6 implementation handoff](./docs/implementation/m6-handoff.md)
+- [M7 acceptance evidence](./docs/evidence/m7/exit.md)
+- [M7 implementation handoff](./docs/implementation/m7-handoff.md)
 - [Full implementation plan](./docs/implementation/implementation-plan.md)
 
-The next milestone is M7 Node VFS readiness and real mounted-FUSE validation on
-privileged Linux.
+The next milestone is M8 replication. Its Computer compatibility profile now includes
+authenticated fresh-replica provisioning, one shared filesystem runtime, exact active
+branch mounts with read-only replica main, durable resume, bounded Cap'n Web framing,
+generation-guarded publication, live-mount activation semantics, and an end-to-end gate
+through the pinned Ephemeral AI Computer fork and real FUSE. M10 remains the production
+cutover milestone.
 
 ## 📄 License
 

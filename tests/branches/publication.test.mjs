@@ -479,6 +479,43 @@ test("terminal lifecycle is durable, discard is idempotent, and identifiers are 
   database.close();
 });
 
+test("discarded generation digest survives physical restart after overlay cleanup", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-discard-digest-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    let { database, filesystem } = await setup(filename);
+    let branch = await filesystem.branches.create("discard-digest-restart");
+    await branch.writeFile("/durable", "terminal generation");
+    const active = await branch.info();
+    const discarded = await branch.discard();
+    assert.equal(discarded.generationDigest, active.generationDigest);
+    await branch.close();
+    await filesystem.close();
+    database.close();
+
+    ({ database, filesystem } = await setup(filename));
+    branch = await filesystem.branches.open("discard-digest-restart");
+    assert.deepEqual(await branch.info(), discarded);
+    assert.equal(
+      database.transaction(
+        "read",
+        (tx) =>
+          tx.all(
+            "SELECT count(*) count FROM efs_replication_sessions WHERE state=-2",
+            [],
+            { maxRows: 1, maxBytes: 128 },
+          )[0].count,
+      ),
+      1,
+    );
+    await branch.close();
+    await filesystem.close();
+    database.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("hard-link aliases retain identity and conflict as one inode", async () => {
   const { database, filesystem } = await setup();
   await filesystem.writeFile("/source", "base");
@@ -1707,6 +1744,18 @@ test("terminal branch metadata follows configured retention while identifiers re
     filesystem.branches.create("retained-discard"),
     (error) => error instanceof Error && /UNIQUE|constraint/i.test(error.message),
   );
+  assert.equal(
+    database.transaction(
+      "read",
+      (tx) =>
+        tx.all(
+          "SELECT count(*) count FROM efs_replication_sessions WHERE state=-2",
+          [],
+          { maxRows: 1, maxBytes: 128 },
+        )[0].count,
+    ),
+    0,
+  );
 
   now = 7 * day;
   const merged = await filesystem.branches.create("retained-merged");
@@ -1807,4 +1856,120 @@ test("publication preflight includes terminal COW cleanup rows", async () => {
   await branch.close();
   await filesystem.close();
   database.close();
+});
+
+test("active branch generation digests are stable and mutation-sensitive", async () => {
+  const { database, filesystem } = await setup();
+  try {
+    await filesystem.writeFile("/base", "base");
+    let branch = await filesystem.branches.create("generation-digest");
+    const empty = await branch.info();
+    assert.match(empty.generationDigest, /^[0-9a-f]{64}$/u);
+    await branch.writeRange("/base", 1, new TextEncoder().encode("X"));
+    const edited = await branch.info();
+    assert.equal(edited.generation, empty.generation + 1);
+    assert.notEqual(edited.generationDigest, empty.generationDigest);
+    await branch.close();
+    branch = await filesystem.branches.open("generation-digest");
+    assert.equal((await branch.info()).generationDigest, edited.generationDigest);
+    await branch.discard();
+    await branch.close();
+  } finally {
+    await filesystem.close();
+    await database.close();
+  }
+});
+
+test("guarded publication binds generation, digest, and operation request", async () => {
+  const { database, filesystem } = await setup();
+  try {
+    const branch = await filesystem.branches.create("guarded-publication");
+    await branch.writeFile("/guarded", "value");
+    const expected = await branch.info();
+    await assert.rejects(
+      branch.publish({ expectedGeneration: expected.generation }),
+      (error) =>
+        error instanceof BranchError && error.code === "InvalidPublicationExpectation",
+    );
+    await assert.rejects(
+      branch.publish({
+        operationId: "guarded-wrong",
+        expectedGeneration: expected.generation + 1,
+        expectedGenerationDigest: expected.generationDigest,
+      }),
+      (error) => error instanceof BranchError && error.code === "BranchChanged",
+    );
+    assert.equal(
+      database.transaction(
+        "read",
+        (tx) =>
+          tx.all("SELECT count(*) count FROM efs_operation_ids", [], {
+            maxRows: 1,
+            maxBytes: 128,
+          })[0].count,
+      ),
+      0,
+    );
+    const request = {
+      operationId: "guarded-exact",
+      expectedGeneration: expected.generation,
+      expectedGenerationDigest: expected.generationDigest,
+    };
+    const result = await branch.publish(request);
+    assert.equal(result.branchGeneration, expected.generation);
+    assert.equal(result.branchGenerationDigest, expected.generationDigest);
+    assert.deepEqual(await branch.publish(request), result);
+    await assert.rejects(
+      branch.publish({ operationId: request.operationId }),
+      (error) =>
+        error instanceof BranchError && error.code === "OperationRequestMismatch",
+    );
+    await assert.rejects(
+      branch.publish({
+        ...request,
+        expectedGenerationDigest: "0".repeat(64),
+      }),
+      (error) =>
+        error instanceof BranchError && error.code === "OperationRequestMismatch",
+    );
+    await branch.close();
+  } finally {
+    await filesystem.close();
+    await database.close();
+  }
+});
+
+test("guarded publication replays the exact request after physical restart", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "efs-guarded-replay-"));
+  const filename = path.join(directory, "filesystem.db");
+  try {
+    let { database, filesystem } = await setup(filename);
+    let branch = await filesystem.branches.create("guarded-restart");
+    await branch.writeFile("/value", "durable");
+    const expected = await branch.info();
+    const request = {
+      operationId: "guarded-restart-operation",
+      expectedGeneration: expected.generation,
+      expectedGenerationDigest: expected.generationDigest,
+    };
+    const result = await branch.publish(request);
+    await branch.close();
+    await filesystem.close();
+    database.close();
+
+    ({ database, filesystem } = await setup(filename));
+    branch = await filesystem.branches.open("guarded-restart");
+    assert.equal((await branch.info()).generationDigest, result.branchGenerationDigest);
+    assert.deepEqual(await branch.publish(request), result);
+    await assert.rejects(
+      branch.publish({ operationId: request.operationId }),
+      (error) =>
+        error instanceof BranchError && error.code === "OperationRequestMismatch",
+    );
+    await branch.close();
+    await filesystem.close();
+    database.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

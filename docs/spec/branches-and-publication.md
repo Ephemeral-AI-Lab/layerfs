@@ -349,15 +349,74 @@ branch terminal.
 
 Publication MAY prepare hashes, chunks, manifests, and an immutable candidate change set
 before opening the final write transaction. Preparation MUST capture the branch
-generation. Prepared data MUST either remain in memory until the transaction or be
-protected by a durable staging lease from concurrent garbage collection.
+generation and its generation digest. The digest is the lowercase hex encoding of:
+
+```text
+SHA-256(
+  ASCII("efs-branch-generation-digest-v1\0") ||
+  length32be(UTF8(filesystemId)) ||
+  length32be(UTF8(branchId)) ||
+  length32be(UTF8(baseRevision)) ||
+  uint64be(generation) ||
+  namespaceOverlayRoot32 ||
+  fileOverlayRoot32 ||
+  expectationRoot32 ||
+  immutableReferenceRoot32
+)
+```
+
+`length32be` is an unsigned four-byte big-endian byte length followed by exactly those
+bytes. `text(value)` is `length32be` around the UTF-8 bytes of the already validated
+string, byte for byte. Identifiers are not Unicode-normalized for this digest.
+`optional` is one byte `0x00`, or `0x01` followed by its value. Integers are unsigned
+big-endian: four bytes for mode and page length, eight bytes otherwise.
+
+Each of the four roots is exactly
+`SHA-256(domain || uint64be(rowCount) || encodedRow1 || ... || encodedRowN)`, using the
+domain, `length32be(...)` row encoding, and order below:
+
+- `namespaceOverlayRoot32` uses `ASCII("efs-branch-namespace-root-v1\0")`, then the
+  unsigned 64-bit row count, then
+  `length32be(text(path) || disposition8 || optional(text(inodeId)))` for each row
+  ordered by raw path bytes. `disposition8` is `0x01` for a present entry and `0x02` for
+  a tombstone.
+- `fileOverlayRoot32` uses `ASCII("efs-branch-node-root-v1\0")`, row count, then
+  `length32be(text(inodeId) || kind8 || mode32 || birthMs64 || mtimeMs64 || ctimeMs64 || logicalSize64 || contentStateDigest32)`
+  ordered by raw inode-identifier bytes. `kind8` is `0x01` regular file, `0x02`
+  directory, or `0x03` symbolic link.
+- `expectationRoot32` uses `ASCII("efs-branch-expectation-root-v1\0")`, row count, then
+  `length32be(reason8 || text(path) || optional(text(expectedRevision)) || optional(text(expectedToken)))`
+  ordered lexicographically by those complete encoded row bytes. The optional tag
+  therefore places absent before present without an implicit null rule. Reason codes
+  `0x01` through `0x06` map in declaration order to `entry-changed`, `node-changed`,
+  `source-changed`, `destination-changed`, `subtree-changed`, and `ancestor-changed`.
+- `immutableReferenceRoot32` uses `ASCII("efs-branch-reference-root-v1\0")`, row count,
+  then `length32be(kind8 || digest32)` ordered by `kind8` and digest bytes. `kind8` is
+  `0x01` for a content object and `0x02` for a manifest.
+
+For a regular file, `contentStateDigest32` is SHA-256 over
+`ASCII("efs-branch-file-state-v1\0")`, logical size, an optional 32-byte replacement or
+base manifest hash, the page count followed by page-index order records
+`pageIndex64 || pageLength32 || pageDataDigest32`, and the structural-patch count
+followed by admission-order records
+`order64 || offset64 || deleteLength64 || optional(insertManifestDigest32)`. A directory
+uses SHA-256 of `ASCII("efs-branch-directory-state-v1\0")`. A symbolic link uses SHA-256
+of `ASCII("efs-branch-symlink-state-v1\0") || text(target)`. Physical compaction MUST
+produce the same semantic records and digest.
+
+No JSON, locale, physical database row order, or host integer encoding is part of any
+digest. The version 1 golden fixtures MUST include empty and nonempty roots, every enum
+code and optional form, a non-NFC branch identifier encoded byte for byte, overlapping
+page and patch state, and the final digest. Hosts treat the digest as opaque and MUST
+NOT reconstruct it. Prepared data MUST either remain in memory until the transaction or
+be protected by a durable staging lease from concurrent garbage collection.
 
 The final publication transaction MUST perform the following logical steps:
 
 1. Look up the operation identifier and replay a prior result when required.
-2. Verify that the branch exists, is active, and still has the prepared generation. If
-   the generation changed, restart preparation or reject with `BranchChanged`; it MUST
-   NOT publish an incomplete generation.
+2. Verify that the branch exists, is active, and still has the prepared generation and
+   generation digest. If either changed, restart preparation or reject with
+   `BranchChanged`; it MUST NOT publish an incomplete or later generation.
 3. Re-read the current main head and every required conflict token.
 4. If any token differs, construct the complete deterministic conflict result, durably
    record it when an operation identifier was supplied, and commit only that result
@@ -393,14 +452,25 @@ contain between 1 and 200 UTF-8 bytes and is opaque and case-sensitive. An empty
 over-limit, or otherwise invalid operation identifier MUST reject with
 `InvalidOperationId` before publication preparation.
 
+`expectedGeneration` and `expectedGenerationDigest` are an atomic publication guard.
+They MUST be supplied together or omitted together. A partial or malformed expectation
+MUST reject with `InvalidPublicationExpectation` before preparation. When present, the
+final publication transaction MUST compare both values with the active branch. A
+mismatch rejects with `BranchChanged` and leaves main, branch state, and the operation
+identifier unmodified. A host publishing a generation returned by replication MUST
+supply both expectations.
+
 When a publish call durably records a result for an operation identifier, the
-implementation MUST bind the identifier to the branch identifier and branch generation
-published by that attempt. A later call with the same identifier:
+implementation MUST bind the identifier to the complete guarded request: branch
+identifier, whether expectations were supplied, expected generation, and expected
+generation digest. A later call with the same identifier:
 
 - MUST return the exact recorded merged or conflict result without creating a revision
   or repeating conflict detection;
 - MUST work after database close, process restart, or lost response;
 - MUST return `OperationBranchMismatch` if the supplied branch differs; and
+- MUST return `OperationRequestMismatch` if any expectation presence or value differs;
+  and
 - MUST NOT be interpreted as a request to publish later edits on that branch.
 
 Callers MUST use a new operation identifier after changing a conflicted branch. Reusing
@@ -578,6 +648,7 @@ interface BranchInfo {
   baseRevision: RevisionId;
   state: BranchState;
   generation: number;
+  generationDigest: string;
   createdAt: number;
   terminalAt: number | null;
 }
@@ -589,6 +660,8 @@ interface CreateBranchOptions {
 
 interface PublishOptions {
   operationId?: string;
+  expectedGeneration?: number;
+  expectedGenerationDigest?: string;
 }
 
 type ConflictReason =
@@ -610,6 +683,8 @@ interface MergedPublishResult {
   outcome: "merged";
   branchId: string;
   operationId: string | null;
+  branchGeneration: number;
+  branchGenerationDigest: string;
   baseRevision: RevisionId;
   parentRevision: RevisionId;
   revision: RevisionId;
@@ -621,6 +696,8 @@ interface ConflictPublishResult {
   outcome: "conflict";
   branchId: string;
   operationId: string | null;
+  branchGeneration: number;
+  branchGenerationDigest: string;
   baseRevision: RevisionId;
   headRevision: RevisionId;
   revision: null;
@@ -655,11 +732,13 @@ interface BranchCapableFilesystem
 type BranchErrorCode =
   | "InvalidBranchId"
   | "InvalidOperationId"
+  | "InvalidPublicationExpectation"
   | "BranchNotFound"
   | "BranchNotActive"
   | "RevisionNotFound"
   | "BranchChanged"
   | "OperationBranchMismatch"
+  | "OperationRequestMismatch"
   | "OperationNotFound"
   | "OperationResultExpired"
   | "LimitExceeded";

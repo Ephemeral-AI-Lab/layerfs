@@ -336,14 +336,23 @@ shim cannot satisfy the release gate alone.
 
 ## 13. Replication
 
-Test handshake compatibility, segmented manifest negotiation, bounded graph frontiers,
-missing-object negotiation, deduplication, cursor replay, dropped responses in every
-phase, staging certificates, branch push and pull, main catch-up, authorization policy,
-retry exhaustion, and abandoned-session cleanup.
+Test authenticated empty-replica provisioning, exact genesis adoption, handshake
+compatibility, segmented manifest negotiation, bounded graph frontiers, missing-object
+negotiation, deduplication, operation and cursor replay, dropped responses in every
+phase, staging certificates, one global-flow role matrix, active-branch transfer,
+authority-to-replica main catch-up, generation-guarded publication, retry exhaustion,
+and abandoned-session cleanup.
 
 Envelope decoding MUST be incremental and must not copy a complete envelope. All
 sessions share the filesystem admission controller. The replication bridge must expose
 no SQL, schema, repository, raw CAS insertion, or raw COW mutation.
+
+The suite MUST resume the exact recognized durable unbound bootstrap state after every
+accepted batch and reject unrelated nonempty state, a wrong engine, wrong workspace,
+unauthorized scope, unsupported logical filesystem schema, unsupported storage user
+version, and unsupported protocol before any further mutation. It MUST resume by stable
+operation ID and opaque resume key after physical process restart, without resetting the
+durable attempt or elapsed-time budget.
 
 ## 14. Computer integration
 
@@ -366,6 +375,27 @@ Run host reads and writes, push, pull, shell, Git, mounts, read-only enforcement
 restart, container restart, and reconnect to the same branch. Omitted engine
 configuration selects Ephemeral AI FS. DOFS runs only when selected explicitly and uses
 an isolated database.
+
+This path MUST use the pinned Computer fork's actual Cap'n Web text carrier and a real
+kernel FUSE mount. Authenticate and bind the workspace, filesystem, peer, global flow,
+host profile, and branch before the first exchange. Bound raw and decompressed frames
+before JSON/base64 decoding, then independently bound the decoded protocol envelope.
+Stable replication errors MUST survive the carrier without relying on JavaScript
+thrown-error properties.
+
+Provision a truly empty persistent Node SQLite replica, transfer main, transfer one
+active private branch, and mount exactly that branch. The mount MUST see base-main
+content; branch-private mutations MUST remain invisible to main and siblings, and
+sibling-private mutations MUST remain invisible to it. Replica main writes, missing
+branches, and terminal branches MUST never become writable main fallback. Return the
+exact branch generation and digest, publish with both expectations and an operation
+identifier, lose the response, and prove replay creates neither a second activation nor
+a second revision. Return the authority's terminal state and result to the replica, then
+prove reconnect rejects the branch without main fallback. Run incoming activation with
+pinned readers and dirty writers and prove cache invalidation, snapshot behavior, and no
+lost update. Delete the local database, provision a replacement from empty, retransmit
+main and the active branch, and verify exact identity and digest without another
+authority activation.
 
 ## 15. Release exit criteria
 

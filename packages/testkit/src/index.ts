@@ -28,6 +28,7 @@ export * from "./filesystem-fault-attempt.js";
 export * from "./cow.js";
 export * from "./storage.js";
 export * from "./fixture-context.js";
+export * from "./node-vfs.js";
 
 export type ConformanceCapability =
   | "read-only-reopen"

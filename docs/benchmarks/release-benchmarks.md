@@ -231,6 +231,8 @@ Measure:
 - sequential 100 MiB transfer;
 - transfer of an already-present 100 MiB file;
 - catch-up across 1,000 revisions;
+- authenticated empty-replica provisioning and restart;
+- active-branch transfer plus generation-guarded publication;
 - dropped response and resume in every phase; and
 - abandoned staging followed by bounded collection.
 
@@ -241,6 +243,12 @@ unchanged objects or subtrees.
 Peak replication buffers must remain at or below the negotiated limit. Envelope decoding
 must not retain a second complete copy. Report first durable progress, transferred and
 reused bytes, batches, receipts, retries, staging, memory, and physical growth.
+
+For the Computer carrier profile, additionally report raw and decompressed frame bytes,
+decoded envelope bytes, JSON/base64 expansion, transport high-water memory, live RPC
+stubs after disconnect, and combined process RSS. Run maximum-sized and one-byte-over
+maximum frames through the actual pinned Cap'n Web carrier; a custom binary loopback is
+not a substitute.
 
 ## 13. B08: Concurrency and bounded resources
 
@@ -267,11 +275,12 @@ Run the same engine-neutral fixtures through:
 
 ```text
 workspace.fs
-  -> replication
+  -> authenticated bounded Cap'n Web carrier
+  -> shared-runtime replication
   -> computerd
-  -> real FUSE
+  -> exact branch through real FUSE
   -> shell or Git
-  -> pull
+  -> generation-guarded pull and publication
   -> restart and reconnect
 ```
 
@@ -287,6 +296,13 @@ On the reference Computer runner:
 
 Correctness, durability, no-materialization, and memory gates remain mandatory even if
 the DOFS control does not satisfy them.
+
+The Ephemeral AI FS trial MUST start with a genuinely empty persistent Node SQLite
+replica, adopt the authority's exact genesis, and derive replication plus branch Node
+VFS from one runtime budget. It MUST include replica-main read-only enforcement, branch
+isolation, same-branch remount, dropped-message resume, pinned-reader activation, a
+dirty writer conflict, guarded publication replay, and zero live sessions, leases,
+reservations, or RPC stubs after cleanup.
 
 ## 15. Regression policy
 

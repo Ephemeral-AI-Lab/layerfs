@@ -3752,3 +3752,178 @@ export async function prepareDurableEditedContent(
     releaseRetained?.();
   }
 }
+
+/**
+ * Attempt the bounded, synchronous local/path-copy edit routes used by the
+ * Node VFS bridge. `undefined` means the edit shape requires the asynchronous
+ * streamed fallback; no lease or admission reservation is retained then.
+ */
+export function tryPrepareDurableEditedContentSync(
+  port: OperationsStorage,
+  source: DurableEditSource,
+  edit: DurableContentEdit,
+  storage: StorageLimits,
+  runtime: RuntimeLimits,
+  admission: AdmissionController,
+  cache?: ContentCache,
+  clock: () => number = Date.now,
+  retainedBytesAlreadyAdmitted = false,
+  readSnapshot?: DurableEditReadSnapshot,
+): DurableEditPreparedManifest | undefined {
+  const ownsCache = cache === undefined;
+  const operationCache =
+    cache ??
+    new ContentCache(Math.min(runtime.maxCacheBytes, 4 * 1024 ** 2), admission);
+  cache = operationCache;
+  const newSize = validateInputs(source, edit);
+  if (newSize > storage.maxFileBytes)
+    throw new RangeError("edited file exceeds maxFileBytes");
+  let releaseRetained: (() => void) | undefined;
+  if ((edit.retainedBytes ?? 0) > 0 && !retainedBytesAlreadyAdmitted) {
+    cache.makeRoom(edit.retainedBytes!);
+    releaseRetained = admission.reserve(edit.retainedBytes!);
+  }
+  try {
+    const localAttempt = tryLocallyRebuiltContent(
+      port,
+      source,
+      edit,
+      newSize,
+      storage,
+      runtime,
+      admission,
+      cache,
+      clock,
+      undefined,
+      readSnapshot,
+    );
+    if (localAttempt.outcome === "prepared") return localAttempt.prepared;
+    try {
+      const pathCapacity = checkedMultiply(
+        storage.maxManifestDepth + 1,
+        checkedMultiply(
+          storage.maxManifestNodeBytes,
+          4,
+          "authenticated path node ownership",
+        ),
+        "authenticated manifest path ownership",
+      );
+      let releasePath: () => void;
+      try {
+        cache.makeRoom(pathCapacity);
+        releasePath = admission.reserve(pathCapacity);
+      } catch (error) {
+        if (error instanceof RangeError) return undefined;
+        throw error;
+      }
+      try {
+        const path = port.transaction(
+          "read",
+          {
+            maxRows: checkedAdd(
+              8,
+              checkedMultiply(
+                storage.maxManifestDepth,
+                2,
+                "authenticated path result rows",
+              ),
+              "authenticated path result rows",
+            ),
+            maxBytes: Math.max(
+              runtime.maxQueryBatchBytes,
+              checkedAdd(
+                1_024,
+                checkedMultiply(
+                  storage.maxManifestDepth,
+                  checkedAdd(
+                    storage.maxManifestNodeBytes,
+                    512,
+                    "authenticated path row bytes",
+                  ),
+                  "authenticated path result bytes",
+                ),
+                "authenticated path result bytes",
+              ),
+            ),
+            maxStatements: storage.maxManifestDepth * 4 + 8,
+            maxElapsedMs: 5_000,
+          },
+          (tx) =>
+            tx
+              .manifestTree(storage, cache)
+              .pathAtOffset(source.manifestHash, edit.offset),
+        );
+        if (
+          path.fileSize !== source.size ||
+          path.parameters.minimum !== source.parameters.minimum ||
+          path.parameters.average !== source.parameters.average ||
+          path.parameters.maximum !== source.parameters.maximum
+        )
+          throw new Error("ECORRUPT: durable edit source disagrees with manifest root");
+        const candidate = buildCandidate(
+          path,
+          source,
+          edit,
+          newSize,
+          storage,
+          runtime,
+          admission,
+          cache,
+          port.hashBytes,
+        );
+        try {
+          const projectedTransactions = checkedAdd(
+            1,
+            checkedAdd(
+              candidate.sourceReadTransactions,
+              projectedPersistenceTransactions(candidate, storage),
+            ),
+            "durable path-copy aggregate transactions",
+          );
+          if (projectedTransactions > MAX_PATH_COPY_TRANSACTIONS) return undefined;
+          const prepared = persistCandidate(
+            port,
+            source,
+            candidate,
+            storage,
+            cache,
+            clock,
+            MAX_PATH_COPY_TRANSACTIONS - 1 - candidate.sourceReadTransactions,
+          );
+          return Object.freeze({
+            hash: prepared.hash,
+            size: newSize,
+            certificate: prepared.certificate,
+            mode: "durable-path-copy",
+            pathCopyMetrics: Object.freeze({
+              authenticatedNodesRead: candidate.authenticatedNodesRead,
+              manifestRecordsRead: candidate.manifestRecordsRead,
+              emittedNodes: candidate.nodes.length,
+              emittedEntries: candidate.entries.length,
+              emittedObjectBytes: candidate.entries.reduce(
+                (sum, entry) => checkedAdd(sum, intrinsicByteLength(entry.bytes)),
+                0,
+              ),
+              reusedSubtrees: candidate.reused.length,
+              storageTransactions:
+                prepared.storageTransactions + 1 + candidate.sourceReadTransactions,
+              sourceReadCalls: candidate.sourceReadCalls,
+              sourceReadTransactions: candidate.sourceReadTransactions,
+              sourceBytesRead: candidate.sourceBytesRead,
+            }),
+          });
+        } finally {
+          candidate.release();
+        }
+      } finally {
+        releasePath();
+      }
+    } catch (error) {
+      if (error instanceof DurablePathCopyFallbackError) return undefined;
+      throw error;
+    }
+  } finally {
+    if (ownsCache) operationCache.clear();
+    releaseRetained?.();
+  }
+}

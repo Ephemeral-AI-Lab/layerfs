@@ -88,6 +88,10 @@ export interface ClosureCertificate {
 export interface ReconcileBatchOptions {
   /** The caller already authenticated durable count-only boundary objects. */
   readonly skipObjectBackingCheck?: boolean;
+  /** Validate a manifest root without comparing its per-root closure to the
+   * aggregate staging certificate. Used when one import carries several
+   * independently rooted file manifests. */
+  readonly validationOnly?: boolean;
 }
 interface VerifiedFreshBacking {
   readonly objectSizes?: ReadonlyMap<string, number>;
@@ -857,6 +861,7 @@ export class StagingRepository {
     ownerNonce: Uint8Array,
     requireSealed: boolean,
     validated?: ValidatedSealedLease,
+    bumpRootJournal = true,
   ): boolean {
     const charge =
       validated?.leaseId === leaseId && equalBytes(validated.ownerNonce, ownerNonce)
@@ -886,7 +891,7 @@ export class StagingRepository {
         charge.ingest_reservation_bytes,
         charge.metadata_reservation_bytes,
       );
-      this.bumpRoot(6, leaseId);
+      if (bumpRootJournal) this.bumpRoot(6, leaseId);
     } else if (charge.state === 2) {
       this.#scheduleCleanup(leaseId, ownerNonce, 0, 0);
     }
@@ -949,6 +954,46 @@ export class StagingRepository {
       [leaseId, manifestHash],
     );
     this.bumpRoot(2, leaseId, false);
+  }
+
+  /**
+   * Create a bounded export lease before the transfer runtime starts walking
+   * immutable roots.  Export leases deliberately do not use a staging
+   * certificate: their only children are efs_lease_manifests, which are
+   * removed by the same bounded cleanup state machine as read leases.
+   */
+  acquireExportLease(
+    leaseId: string,
+    ownerId: string,
+    ownerNonce: Uint8Array,
+    expiresAt: number,
+  ): void {
+    stagingId(leaseId, "export lease id");
+    stagingId(ownerId, "export lease owner id");
+    if (intrinsicByteLength(ownerNonce) !== 16)
+      throw new RangeError("export lease owner nonce must contain exactly 16 bytes");
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= 0)
+      throw new RangeError("export lease expiry is invalid");
+    this.#tx.run(
+      "INSERT INTO efs_leases(id,kind,owner_id,owner_nonce,branch_id,generation,created_at_ms,last_renewal_at_ms,expires_at_ms,state) VALUES(?,0,?,?,NULL,NULL,?,?,?,1)",
+      [leaseId, ownerId, ownerNonce, expiresAt, expiresAt, expiresAt],
+    );
+  }
+
+  renewExportLease(
+    leaseId: string,
+    ownerId: string,
+    ownerNonce: Uint8Array,
+    now: number,
+    expiresAt: number,
+  ): boolean {
+    if (intrinsicByteLength(ownerNonce) !== 16)
+      throw new RangeError("export lease owner nonce must contain exactly 16 bytes");
+    const result = this.#tx.run(
+      "UPDATE efs_leases SET last_renewal_at_ms=?,expires_at_ms=? WHERE id=? AND kind=0 AND owner_id=? AND owner_nonce=? AND state=1 AND expires_at_ms>?",
+      [now, expiresAt, leaseId, ownerId, ownerNonce, now],
+    );
+    return result.changes === 1;
   }
   renewReadLease(
     leaseId: string,
@@ -1140,8 +1185,19 @@ export class StagingRepository {
     leaseId: string,
     ownerNonce: Uint8Array,
     members: readonly StagingMember[],
+    bumpRootJournal = true,
   ): ClosureCertificate {
-    return this.#appendBatch(leaseId, ownerNonce, members, true);
+    return this.#appendBatch(
+      leaseId,
+      ownerNonce,
+      members,
+      true,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      bumpRootJournal,
+    );
   }
 
   /**
@@ -1455,6 +1511,7 @@ export class StagingRepository {
     skipExistingMembershipCheck = false,
     verifiedObjectSizes?: ReadonlyMap<string, number>,
     verifiedRootSizes?: ReadonlyMap<string, number>,
+    bumpRootJournal = true,
   ): ClosureCertificate {
     if (members.length === 0) return this.snapshot(leaseId, ownerNonce);
     if (members.length > this.#limits.maxQueryBatchSize)
@@ -1645,7 +1702,7 @@ export class StagingRepository {
       membership_count: sequence,
       next_sequence: sequence,
     });
-    if (insertedRows) this.bumpRoot(6, leaseId, false);
+    if (insertedRows && bumpRootJournal) this.bumpRoot(6, leaseId, false);
     return Object.freeze({
       leaseId,
       ownerNonce: copyBytes(ownerNonce),
@@ -2603,13 +2660,18 @@ export class StagingRepository {
       const reconciled = this.#reconciliation(leaseId)!;
       const certificate = this.#row(leaseId);
       if (
-        reconciled.object_count !== certificate.object_count ||
-        reconciled.object_bytes !== certificate.object_bytes ||
-        reconciled.node_count !== certificate.node_count ||
-        reconciled.node_bytes !== certificate.node_bytes ||
-        reconciled.membership_count !== certificate.membership_count ||
-        reconciled.next_sequence !== certificate.membership_count ||
-        !equalBytes(reconciled.closure_fold, certificate.chain_fold)
+        (!options.validationOnly &&
+          reconciled.object_count !== certificate.object_count) ||
+        (!options.validationOnly &&
+          reconciled.object_bytes !== certificate.object_bytes) ||
+        (!options.validationOnly && reconciled.node_count !== certificate.node_count) ||
+        (!options.validationOnly && reconciled.node_bytes !== certificate.node_bytes) ||
+        (!options.validationOnly &&
+          reconciled.membership_count !== certificate.membership_count) ||
+        (!options.validationOnly &&
+          reconciled.next_sequence !== certificate.membership_count) ||
+        (!options.validationOnly &&
+          !equalBytes(reconciled.closure_fold, certificate.chain_fold))
       ) {
         throw new Error(
           `ECORRUPT: complete manifest closure differs from staged membership (reconciled=${reconciled.object_count}/${reconciled.object_bytes}/${reconciled.node_count}/${reconciled.node_bytes}/${reconciled.membership_count}, certificate=${certificate.object_count}/${certificate.object_bytes}/${certificate.node_count}/${certificate.node_bytes}/${certificate.membership_count})`,
@@ -2644,6 +2706,36 @@ export class StagingRepository {
       for (const pendingLeaseId of this.#batchedReconciliationLeases)
         this.#flushBatchedReconciliation(pendingLeaseId);
     return Object.freeze({ processed, complete: !pending });
+  }
+
+  clearReconciliation(leaseId: string, ownerNonce: Uint8Array): void {
+    const certificate = this.#row(leaseId);
+    if (!equalBytes(certificate.owner_nonce, ownerNonce) || certificate.sealed !== 0)
+      throw new Error("ECORRUPT: staging owner mismatch or certificate already sealed");
+    const counts =
+      this.#tx.all<{ count: number } & SqliteRow>(
+        "SELECT (SELECT count(*) FROM efs_staging_reconciliation_queue WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_manifest_validation_queue WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_reused_subtrees WHERE lease_id=?) + (SELECT count(*) FROM efs_staging_reconciliations WHERE lease_id=?) count",
+        [leaseId, leaseId, leaseId, leaseId],
+        { maxRows: 1, maxBytes: 256 },
+      )[0]?.count ?? 0;
+    this.#tx.run("DELETE FROM efs_staging_reconciliation_queue WHERE lease_id=?", [
+      leaseId,
+    ]);
+    this.#tx.run("DELETE FROM efs_staging_manifest_validation_queue WHERE lease_id=?", [
+      leaseId,
+    ]);
+    this.#tx.run("DELETE FROM efs_staging_reused_subtrees WHERE lease_id=?", [leaseId]);
+    this.#tx.run("DELETE FROM efs_staging_reconciliations WHERE lease_id=?", [leaseId]);
+    this.#reconciliationCache.delete(leaseId);
+    for (const key of this.#reconciliationQueueCache.keys())
+      if (key.startsWith(`${leaseId}:`)) this.#reconciliationQueueCache.delete(key);
+    for (const key of this.#reusedSubtreeCache.keys())
+      if (key.startsWith(`${leaseId}:`)) this.#reusedSubtreeCache.delete(key);
+    for (const key of this.#manifestBackingCache.keys())
+      if (key.startsWith(`${leaseId}:`)) this.#manifestBackingCache.delete(key);
+    for (const key of this.#reusedSummaryCache.keys())
+      if (key.startsWith(`${leaseId}:`)) this.#reusedSummaryCache.delete(key);
+    this.#changeMetadataRows(-counts, "replication manifest validation cleanup");
   }
 
   seal(certificate: ClosureCertificate): void {

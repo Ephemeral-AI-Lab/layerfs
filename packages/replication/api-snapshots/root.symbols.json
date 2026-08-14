@@ -4,14 +4,1384 @@
   "entry": "packages/replication/dist/index.d.ts",
   "symbols": [
     {
+      "name": "ACK_MAX_BYTES",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "admitComputerEfsCarrierV1",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "AdmittedComputerEfsCarrierV1",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "assertNotError",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "authorizationDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "authorizationDigestHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "AuthorizedReplicationPeer",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "authorizeExchange",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "authorizeReplicationFlow",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/authorization.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "batchEnvelopeDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "batchEnvelopeDigestHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "batchPayloadByteCount",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "batchPayloadDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "batchPayloadDigestHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "bytesToLowerHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/sha256.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "CanonicalAuthorizationRecord",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "canonicalRecord",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "CanonicalReplicationEnvelope",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "capabilitiesFromBridge",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "capabilityDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "capabilityDigestHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "COMPUTER_EFS_CARRIER_V1_LIMITS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "COMPUTER_EFS_CARRIER_V1_RESOURCES",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ComputerEfsCarrierV1Endpoint",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ComputerEfsCarrierV1Limits",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ComputerEfsCarrierV1RpcTarget",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "computerEfsCarrierV1Stats",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "createCanonicalBatch",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "createCanonicalBatchAcknowledgement",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "createReplicationEndpoint",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "cursorBindingDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "cursorBindingDigestHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "decodeCanonicalBatchAcknowledgement",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "decodeCanonicalEnvelope",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "DecodeCanonicalEnvelopeOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "destinationOperationId",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "effectiveLimitsDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "effectiveLimitsDigestHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "EFS_REPLICATION_V1_WIRE",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeAuthorizationPayload",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeBatchRecordsPayload",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeCanonicalBatchAcknowledgement",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeCanonicalEnvelope",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeCapabilitiesPayload",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "encodeCursorBindingPayload",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "equalBytes",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "FastCdcConfiguration",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "generateReplicationSessionId",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/identifiers.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "IncrementalReplicationSha256",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/sha256.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "initialSessionCursor",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "isReplicationErrorRetryable",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/errors.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "limitPolicyFromLimits",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NegotiatedReplicationSession",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/authorization.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "negotiateReplicationLimits",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "NegotiateReplicationLimitsOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "negotiateReplicationSession",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/authorization.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "nextPhaseFor",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "nextSessionCursor",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "planEquals",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "PRE_NEGOTIATION_BYTES",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "randomSessionId",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "receiptChainDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "receiptChainDigestHex",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "replicate",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/driver.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicatedAuthorityResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicateOptions",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_APPLICATION_ID",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_CEILING_FIELDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_CHUNKER_FORMAT",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_FILESYSTEM_SCHEMA_VERSION",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_HOST_PROFILE",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_LIMIT_FIELDS",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_MANIFEST_FORMAT",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
       "name": "REPLICATION_PROTOCOL_VERSION",
       "kinds": [
         "value"
       ],
       "declarations": [
         {
-          "file": "packages/replication/dist/index.d.ts",
+          "file": "packages/replication/dist/types.d.ts",
           "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "REPLICATION_STORAGE_USER_VERSION",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "VariableDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationActivation",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBatch",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBatchAcknowledgement",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBatchRecord",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationBranchGenerationFragment",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationCapabilities",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationCeilingLimits",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationCheckpointFragment",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationCursorBinding",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationEndpoint",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationError",
+      "kinds": [
+        "value",
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/errors.d.ts",
+          "kind": "ClassDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationErrorCode",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/errors.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "replicationErrorFromRecord",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/errors.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "replicationErrorRecord",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/errors.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationFeatures",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationFilesystemBridge",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/fs/dist/filesystem/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationLimitPolicy",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationLimits",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "replicationOwnerNonceDigest",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationPhase",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationPlan",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationRandomFill",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/identifiers.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationRevisionFragment",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationRole",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationRunResult",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "TypeAliasDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationSemanticErrorRecord",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "replicationSha256",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/sha256.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationStorageCapabilities",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationTerminalResultRecord",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/types.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ReplicationTransport",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/endpoint.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "requiredRoles",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/authorization.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "validateAuthorizedPeer",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/authorization.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "validateBatchAcknowledgement",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/wire.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "validateComputerEfsCarrierV1",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "ValidatedComputerEfsCarrierV1",
+      "kinds": [
+        "type"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/computer-carrier.d.ts",
+          "kind": "InterfaceDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "validateLimitsAgainstStorage",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "validateReplicationLimits",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "validateReplicationSessionId",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/identifiers.d.ts",
+          "kind": "FunctionDeclaration"
+        }
+      ]
+    },
+    {
+      "name": "validateReplicationStorageCapabilities",
+      "kinds": [
+        "value"
+      ],
+      "declarations": [
+        {
+          "file": "packages/replication/dist/limits.d.ts",
+          "kind": "FunctionDeclaration"
         }
       ]
     }

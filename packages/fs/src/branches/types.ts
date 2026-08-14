@@ -10,6 +10,8 @@ export interface BranchInfo {
   readonly baseRevision: RevisionId;
   readonly state: BranchState;
   readonly generation: number;
+  /** Canonical digest of the complete semantic branch generation. */
+  readonly generationDigest: string;
   readonly createdAt: number;
   readonly terminalAt: number | null;
   readonly mergedRevision: RevisionId | null;
@@ -20,6 +22,8 @@ export interface CreateBranchOptions {
 }
 export interface PublishOptions {
   readonly operationId?: string;
+  readonly expectedGeneration?: number;
+  readonly expectedGenerationDigest?: string;
 }
 export type ConflictReason =
   | "entry-changed"
@@ -38,6 +42,8 @@ export interface MergedPublishResult {
   readonly outcome: "merged";
   readonly branchId: string;
   readonly operationId: string | null;
+  readonly branchGeneration: number;
+  readonly branchGenerationDigest: string;
   readonly baseRevision: RevisionId;
   readonly parentRevision: RevisionId;
   readonly revision: RevisionId;
@@ -48,6 +54,8 @@ export interface ConflictPublishResult {
   readonly outcome: "conflict";
   readonly branchId: string;
   readonly operationId: string | null;
+  readonly branchGeneration: number;
+  readonly branchGenerationDigest: string;
   readonly baseRevision: RevisionId;
   readonly headRevision: RevisionId;
   readonly revision: null;
@@ -76,11 +84,13 @@ export interface BranchCapableFilesystem
 export type BranchErrorCode =
   | "InvalidBranchId"
   | "InvalidOperationId"
+  | "InvalidPublicationExpectation"
   | "BranchNotFound"
   | "BranchNotActive"
   | "RevisionNotFound"
   | "BranchChanged"
   | "OperationBranchMismatch"
+  | "OperationRequestMismatch"
   | "OperationNotFound"
   | "OperationResultExpired"
   | "LimitExceeded";

@@ -5,6 +5,16 @@
 /* source: packages/node-vfs/dist/index.d.ts */
 export type CowPageBytes = 4096 | 8192 | 16384;
 
+/* export: createNodeVfsProvider; kinds: value */
+/* source: packages/node-vfs/dist/index.d.ts */
+/** Create a provider from a bridge owned by an already-open shared core runtime. */
+export declare function createNodeVfsProvider(bridge: NodeVfsFilesystemBridge, observer?: NodeVfsObserver): NodeVfsProvider;
+
+/* export: createNodeVfsSynchronousFileSystem; kinds: value */
+/* source: packages/node-vfs/dist/synchronous-adapter.d.ts */
+/** Adapt a branch-scoped Node VFS provider to a host's sync filesystem shape. */
+export declare function createNodeVfsSynchronousFileSystem(provider: NodeVfsProvider): NodeVfsSynchronousFileSystem;
+
 /* export: FlushOptions; kinds: type */
 /* source: packages/node-vfs/dist/index.d.ts */
 export interface FlushOptions {
@@ -43,7 +53,9 @@ export interface NodeVfsCapabilities {
 /* export: NodeVfsHandle; kinds: type */
 /* source: packages/node-vfs/dist/index.d.ts */
 export interface NodeVfsHandle {
-    readonly filesystem: EphemeralFS;
+    readonly filesystem: EphemeralFilesystem;
+    /** Owning core runtime; differs from `filesystem` for a branch-scoped handle. */
+    readonly runtime: EphemeralFS;
     readonly provider: NodeVfsProvider;
     close(): Promise<void>;
 }
@@ -58,6 +70,7 @@ export interface NodeVfsMetrics {
 /* source: packages/node-vfs/dist/index.d.ts */
 export interface NodeVfsMetricsSnapshot {
     readonly openSessions: number;
+    readonly peakOpenSessions: number;
     readonly dirtySessions: number;
     readonly residentWriteBytes: number;
     readonly peakResidentWriteBytes: number;
@@ -72,6 +85,22 @@ export interface NodeVfsMetricsSnapshot {
     readonly rejectedWriteCount: number;
     readonly directReadBytes: number;
     readonly coreBatchCount: number;
+    readonly cowEditCount: number;
+    readonly cowEditSourceBytes: number;
+    readonly callbackSizeDistribution: Readonly<{
+        upTo4KiB: number;
+        upTo64KiB: number;
+        upTo1MiB: number;
+        over1MiB: number;
+    }>;
+    readonly contiguousRunBytes: number;
+    readonly peakContiguousRunBytes: number;
+    readonly flushReasonCounts: Readonly<{
+        explicitCommit: number;
+        flush: number;
+        close: number;
+        providerSync: number;
+    }>;
 }
 
 /* export: NodeVfsObservation; kinds: type */
@@ -121,6 +150,45 @@ export interface NodeVfsProvider {
     rmdirSync(path: string): void;
     syncSync(): void;
     closeSync(): void;
+}
+
+/* export: NodeVfsSynchronousFileSystem; kinds: type */
+/* source: packages/node-vfs/dist/synchronous-adapter.d.ts */
+/**
+ * Structural synchronous filesystem surface for host adapters such as FUSE.
+ *
+ * This deliberately has no dependency on a host filesystem library.  The
+ * durable namespace, branch view, COW admission, and session semantics stay
+ * in NodeVfsProvider; a host only supplies the object shape it already
+ * consumes.
+ */
+export interface NodeVfsSynchronousFileSystem {
+    existsSync(path: string): boolean;
+    statSync(path: string): FileStat;
+    lstatSync(path: string): FileStat;
+    readdirSync(path: string): string[];
+    readlinkSync(path: string): string;
+    accessSync(path: string): void;
+    readRangeSync(path: string, position: number, length: number): Uint8Array;
+    readFileSync(path: string): Uint8Array;
+    writeFileSync(path: string, bytes: Uint8Array, options?: {
+        mode?: number;
+    }): void;
+    createFileSync(path: string, options?: {
+        mode?: number;
+    }): void;
+    writeRangeSync(path: string, bytes: Uint8Array, position: number): number;
+    truncateFileSync(path: string, size: number): void;
+    mkdirSync(path: string, options?: {
+        recursive?: boolean;
+        mode?: number;
+    }): void;
+    chmodSync(path: string, mode: number): void;
+    linkSync(existingPath: string, newPath: string): void;
+    symlinkSync(target: string, path: string): void;
+    renameSync(oldPath: string, newPath: string): void;
+    unlinkSync(path: string): void;
+    rmdirSync(path: string): void;
 }
 
 /* export: OpenFileOptions; kinds: type */

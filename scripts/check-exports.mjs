@@ -22,6 +22,7 @@ const expectedCoreExports = [
   ".",
   "./integrations/node-vfs",
   "./integrations/replication",
+  "./integrations/runtime",
   "./sqlite-driver",
 ].sort();
 const executable = (name) => (process.platform === "win32" ? `${name}.cmd` : name);
@@ -499,9 +500,11 @@ for (const packageName of packageNames) {
   if (Object.keys(loaded).length === 0) throw new Error(\`packed package has no runtime exports: \${packageName}\`);
 }
 const root = await import("@ephemeralai/fs");
-if (typeof root.EphemeralFS !== "function" || typeof root.FilesystemError !== "function") throw new Error("root exports are incomplete");
+if (typeof root.EphemeralFS !== "function" || typeof root.EphemeralRuntime !== "function" || typeof root.FilesystemError !== "function") throw new Error("root exports are incomplete");
 await import("@ephemeralai/fs/sqlite-driver");
 await import("@ephemeralai/fs/integrations/replication");
+const runtime = await import("@ephemeralai/fs/integrations/runtime");
+if (typeof runtime.EphemeralRuntime !== "function") throw new Error("runtime export is incomplete");
 const nodeVfs = await import("@ephemeralai/fs/integrations/node-vfs");
 if (typeof nodeVfs.createNodeVfsBridge !== "function") throw new Error("Node VFS bridge export is incomplete");
 const forbidden = [
@@ -526,9 +529,10 @@ for (const suffix of forbidden) {
   await writeFile(
     path.join(consumer, "consumer.ts"),
     `
-import { EphemeralFS, FilesystemError, type EphemeralFilesystem } from "@ephemeralai/fs";
+import { EphemeralFS, EphemeralRuntime, FilesystemError, type EphemeralFilesystem } from "@ephemeralai/fs";
 import type { FilesystemSQLiteDriver } from "@ephemeralai/fs/sqlite-driver";
-import type { ReplicationPlan } from "@ephemeralai/fs/integrations/replication";
+import type { ReplicationFlow } from "@ephemeralai/fs/integrations/replication";
+import { EphemeralRuntime as IntegrationRuntime } from "@ephemeralai/fs/integrations/runtime";
 import { createNodeVfsBridge, type NodeVfsFilesystemBridge } from "@ephemeralai/fs/integrations/node-vfs";
 import { openNodeSqlite, type NodeSQLiteDriver } from "@ephemeralai/fs-sqlite-node";
 import { CloudflareSQLiteDriver } from "@ephemeralai/fs-sqlite-cloudflare";
@@ -537,7 +541,8 @@ import { REPLICATION_PROTOCOL_VERSION } from "@ephemeralai/fs-replication";
 import { createRecordingFactory, type ConformanceAdapterFactory } from "@ephemeralai/fs-testkit";
 declare const driver: FilesystemSQLiteDriver;
 const open: (options: Parameters<typeof EphemeralFS.open>[0]) => Promise<EphemeralFilesystem> = EphemeralFS.open;
-const plan: ReplicationPlan = { pullMain: true };
+const flow: ReplicationFlow = "authority-main-to-replica";
+const runtimeRoot: typeof EphemeralRuntime = IntegrationRuntime;
 const bridge: NodeVfsFilesystemBridge = createNodeVfsBridge({ database: driver });
 const nodeDriverFactory: typeof openNodeSqlite = openNodeSqlite;
 const nodeDriver: NodeSQLiteDriver | undefined = undefined;
@@ -547,7 +552,7 @@ const nodeVfsHandle: NodeVfsHandle | undefined = undefined;
 const protocol: string = REPLICATION_PROTOCOL_VERSION;
 const recorder: typeof createRecordingFactory = createRecordingFactory;
 const adapterFactory: ConformanceAdapterFactory | undefined = undefined;
-void FilesystemError; void open; void plan; void bridge; void nodeDriverFactory; void nodeDriver; void cloudflareDriver;
+void FilesystemError; void open; void flow; void runtimeRoot; void bridge; void nodeDriverFactory; void nodeDriver; void cloudflareDriver;
 void nodeVfsFactory; void nodeVfsHandle; void protocol; void recorder; void adapterFactory;
 `,
   );
