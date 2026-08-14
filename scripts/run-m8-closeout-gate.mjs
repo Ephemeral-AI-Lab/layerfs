@@ -112,9 +112,10 @@ async function runCommand(spec, candidate, computerCandidate) {
 }
 
 function testTotals(source, name) {
-  const fsTests = source.match(/tests (\d+)/u);
-  const fsPass = source.match(/pass (\d+)/u);
-  const fsFail = source.match(/fail (\d+)/u);
+  const normalized = source.replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "");
+  const fsTests = normalized.match(/tests (\d+)/u);
+  const fsPass = normalized.match(/pass (\d+)/u);
+  const fsFail = normalized.match(/fail (\d+)/u);
   if (fsTests && fsPass && fsFail)
     return {
       tests: Number(fsTests[1]),
@@ -122,7 +123,7 @@ function testTotals(source, name) {
       failed: Number(fsFail[1]),
       skipped: 0,
     };
-  const computerMatch = source.match(
+  const computerMatch = normalized.match(
     /Tests\s+(\d+)\s+passed\s*\|\s*(\d+)\s+skipped\s*\|\s*(\d+)\s+total/u,
   );
   if (computerMatch)
@@ -132,7 +133,7 @@ function testTotals(source, name) {
       failed: 0,
       skipped: Number(computerMatch[2]),
     };
-  const rpcMatch = source.match(/Tests\s+(\d+)\s+passed/u);
+  const rpcMatch = normalized.match(/Tests\s+(\d+)\s+passed/u);
   if (rpcMatch)
     return {
       tests: Number(rpcMatch[1]),
