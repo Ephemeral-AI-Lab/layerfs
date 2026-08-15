@@ -1530,3 +1530,142 @@ the observed size scaling.
 The release binary now emits both the per-edit `timing` object and the summed
 `operation_timing` object. The existing phase2 summarizer also reports medians
 for these fields rather than treating `elapsed_ms` as the only edit metric.
+
+## Phase 2 experiment specification — M7-bounded local edit is mandatory
+
+This specification governs all future R-SQLite versus R-HYBRID edit runs. The
+primary comparison must inherit the latest M7 bounded local-edit behavior. A
+run that uses the older flat R-SQLite edit path, rescans the complete source,
+or rebuilds the complete manifest is not an M7 comparison and must not be
+reported as one.
+
+### Required algorithm
+
+For a one-byte or other M7-supported local edit, both Rust lanes must execute
+the same portable algorithm:
+
+1. Load the authenticated manifest path for the edit offset.
+2. Read only the bounded source window required to determine the affected
+   FastCDC boundary and local leaf grouping.
+3. Rechunk and rehash the affected local region using the M7 parameters:
+   FastCDC `(32 KiB, 128 KiB, 512 KiB)`, leaf grouping `(64, 128, 256)`,
+   internal grouping `(32, 64, 128)`, and SHA-256 identity.
+4. Rebuild only the affected local groups and path-copy the changed manifest
+   spine.
+5. Reuse unchanged object identities and unchanged upper manifest subtrees.
+6. Publish the new root through the same logical transaction boundary in both
+   lanes.
+
+The implementation must remain semantically equivalent to the M7 reference
+functions `boundedPathAtOffset`, `regroupLevelBounded`,
+`buildBoundedManifestState`, `rebuildBoundedSpine`, and
+`rebuildManifestBoundedOwned` from LayerFS source commit
+`ce9035e49037f60a8c52d2775fd2d88d34e57cd4`.
+
+### Locality invariants
+
+Each retained edit sample must emit and record these counters:
+
+| Counter | M7 requirement |
+|---|---|
+| `source_bytes` | Bounded local-window bytes, not the logical file size |
+| `scan_window_bytes` | Bounded by the M7 local rebuild window for the edit shape |
+| `loaded_entries` | Only entries on the affected local frontier and required ancestors |
+| `loaded_nodes` | Only the affected manifest path/frontier |
+| `new_manifest_node_count` | Only rebuilt local nodes and their copied ancestors |
+| `reused_manifest_node_count` | Unchanged subtrees remain reused |
+| `changed_object_set` | Equal between R-SQLite and R-HYBRID |
+
+For the current one-byte workload, the 100 MiB gate is expected to remain in
+the same locality class as the accepted run: approximately a 2 MiB source
+window, a sub-megabyte scan window, 16 loaded entries, 2 loaded nodes, 2 new
+manifest nodes, and 5 reused manifest nodes. These are guardrails for the
+algorithm, not promises of identical numbers for every edit shape.
+
+The bounded-edit phase may increase modestly with file size because boundary
+context, hashing, allocation, and runtime costs are real. It must not become
+proportional to the complete file size. The report must not call the result
+“constant time”; it must report locality counters and the measured scaling.
+
+### Forbidden substitutions
+
+The following invalidate an M7 bounded-edit result:
+
+- full source scan before the local edit;
+- complete FastCDC rechunking of the logical file;
+- complete leaf/member rebuild;
+- complete manifest/root rebuild when the M7 path is applicable;
+- materializing the full file solely to apply a local edit;
+- using the Phase 1 flat R-SQLite algorithm as the primary control;
+- silently falling back to a full rebuild while retaining the label
+  `M7-bounded`;
+- charging a full canonical-oracle rebuild to the bounded-edit timer.
+
+If the edit shape is outside the supported M7 bounded case, the run must be
+classified explicitly as `M7 fallback`, recorded separately, and excluded
+from the one-byte bounded-edit comparison. The fallback may still be useful as
+a separate workload, but it cannot be used to claim M7 locality.
+
+### Storage-lane contract
+
+R-SQLite and R-HYBRID must share the complete M7 edit preparation through the
+new root candidate. They must use identical fixtures, edit offsets, chunking,
+hashes, object identity, manifest construction, transaction boundaries,
+SQLite PRAGMAs, close/reopen policy, and verification rules.
+
+Only payload persistence changes:
+
+- R-SQLite stores the new payload bytes in the SQLite payload representation.
+- R-HYBRID appends the same logical payload bytes to a self-validating carrier
+  and stores the carrier ID, offset, length, payload hash, logical size, and
+  verification information in SQLite.
+
+The carrier write, carrier flush/fsync, SQLite commit, and verification costs
+must remain visible in their own timing fields. Durability must not be weakened
+to preserve the M7 locality result.
+
+### Timing and reporting contract
+
+Every bounded-edit sample must report these phases separately:
+
+```text
+m7_bounded_local_edit_ms
+payload_persistence_ms
+sqlite_commit_ms
+close_reopen_ms
+full_verification_ms
+total_end_to_end_ms
+```
+
+`m7_bounded_local_edit_ms` ends after the local root candidate is built and
+must exclude the optional full canonical-oracle rebuild. `payload_persistence_ms`
+ends immediately before SQLite commit. `sqlite_commit_ms` contains the durable
+SQLite commit with `synchronous=FULL`. `close_reopen_ms` covers only closing and
+reopening the database. `full_verification_ms` includes the required complete
+correctness pass, including carrier validation for R-HYBRID. The total covers
+the complete lifecycle from local edit through full verification.
+
+The report must show both the bounded phase and the full lifecycle for 1 MiB,
+10 MiB, and 100 MiB files. It must also show individual samples, medians,
+source-window bytes, scan-window bytes, changed-object sets, and any fallback
+classification. A size-dependent full verification phase is expected and must
+not be misattributed to the M7 local-edit algorithm.
+
+### Acceptance gates before performance interpretation
+
+No performance result is valid unless both lanes pass:
+
+- M7 canonical root equivalence for the supported edit;
+- read-after-write and close/reopen verification;
+- equal logical byte count, object count, manifest, and root digest;
+- equal changed-object set and unchanged-object identities outside the edit;
+- equal materialized output and random-read bytes;
+- SQLite integrity and WAL/checkpoint checks;
+- carrier bounds, truncation, offset/length, hash, and orphan checks;
+- crash-before-commit and crash-after-commit recovery;
+- the recorded locality invariants above.
+
+The canonical M7 oracle may perform a fresh full rebuild, but it must be a
+separate correctness measurement. It must never be included in
+`m7_bounded_local_edit_ms` or used to turn a local edit into an apparent
+full-file edit.
