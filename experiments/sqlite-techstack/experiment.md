@@ -1669,3 +1669,207 @@ The canonical M7 oracle may perform a fresh full rebuild, but it must be a
 separate correctness measurement. It must never be included in
 `m7_bounded_local_edit_ms` or used to turn a local edit into an apparent
 full-file edit.
+
+## Phase 2 optimization specification — faster without memory or storage regression
+
+This is the follow-up implementation spec for improving R-HYBRID. It inherits
+the M7-bounded local-edit contract above; it does not authorize replacing the
+M7 algorithm with a faster full-scan path. The objective is to reduce storage
+protocol and verification overhead while preserving bounded working memory,
+durability, logical storage semantics, and the existing R-SQLite control.
+
+### Baseline and optimization target
+
+The current 100 MiB one-byte-edit medians identify the target clearly:
+
+| Phase | R-SQLite | R-HYBRID | Optimization target |
+|---|---:|---:|---|
+| M7 bounded local edit | 12.814 ms | 9.458 ms | Preserve M7 locality; do not trade it away |
+| Payload persistence | 3.219 ms | 13.546 ms | Remove avoidable carrier copies/syscalls |
+| SQLite commit | 4.205 ms | 1.600 ms | Preserve the current advantage |
+| Close/reopen | 6.788 ms | 3.541 ms | Preserve the current advantage |
+| Full verification | 1,239.488 ms | 1,659.769 ms | One bounded-memory streaming pass |
+| Total lifecycle | 1,585.432 ms | 2,005.970 ms | Close the 420.538 ms gap without hiding work |
+
+The first candidate is successful only if it improves the R-HYBRID baseline
+without increasing its peak RSS, temporary bytes, steady-state bytes, or
+obsolete carrier bytes. The existing R-SQLite lane remains the latest-M7
+control; it must not be weakened or made artificially slower.
+
+### Required optimization shape
+
+Implement the smallest candidate that covers these two measured costs.
+
+1. **Streaming carrier publication.** Build carrier records into one
+   deterministic segment stream per logical operation. Update the carrier
+   digest while records are appended; do not reread the completed carrier just
+   to calculate its identity. If a new carrier file is required, write one
+   temporary segment, sync it, atomically rename it, and sync the directory
+   once. If an existing append-only segment is used, append the operation's
+   records and sync that file once before opening the SQLite transaction.
+2. **One-pass carrier verification.** Verify carrier framing, bounds,
+   truncation, record hash, referenced object hash, and orphan status in one
+   sequential streaming pass. Use a fixed-size buffer and an ordered merge of
+   carrier records with SQLite references ordered by `(carrier_id, offset)`;
+   do not load the entire carrier or the entire reference table into memory.
+3. **No duplicate payload materialization.** The edited payload may exist in a
+   bounded edit buffer while it is hashed and written, but the implementation
+   must not retain a second full-file byte array, carrier byte array, or full
+   verification copy. A carrier record is written once and read once per
+   verification pass.
+4. **Shared-path preservation.** Keep source-window reading, FastCDC, hashing,
+   object admission, M7 regrouping, path-copying, root construction, and
+   SQLite metadata semantics identical in both lanes. Only the payload storage
+   operation may differ.
+
+`sync_data` may replace `sync_all` only where the resulting crash semantics are
+identical for the exact file-creation or append case and the existing
+crash-before-commit, crash-after-commit, truncation, and orphan tests pass. A
+weaker sync primitive must not be introduced solely because it is faster.
+
+### Memory contract
+
+The optimization must have bounded working memory with respect to logical file
+size. It may use the M7 source window, a fixed carrier I/O buffer, SQLite's
+configured page/cache memory, and the currently processed payload record. It
+must not use full-file `read_to_end`, a full-carrier `Vec`, an unbounded
+reference map, or a cache keyed by every object in the file.
+
+The benchmark runner must retain the existing safety guards:
+
+- reject requested fixture sizes above 100 MiB;
+- run one benchmark child at a time;
+- use explicit size checks before allocation;
+- record peak RSS for every retained sample;
+- terminate and mark the sample invalid if a process exceeds the configured
+  memory ceiling rather than allowing the host to swap or become unstable.
+
+The candidate fails the memory gate if median or maximum peak RSS is higher
+than the current R-HYBRID baseline for the same workload, or if peak RSS grows
+proportionally with file size after accounting for the existing SQLite cache
+and M7 window. The exact baseline values must be captured from the same machine
+and build before the candidate run; this avoids choosing an arbitrary absolute
+limit.
+
+### Storage and durability contract
+
+The optimization must not increase persistent or transient storage merely to
+gain speed.
+
+For every operation, record separately:
+
+```text
+database_bytes
+wal_bytes
+shm_bytes
+carrier_bytes
+temporary_bytes
+live_payload_bytes
+obsolete_carrier_bytes
+peak_total_bytes
+steady_state_total_bytes
+post_compaction_total_bytes
+```
+
+The candidate fails the storage gate if any of the following occurs against
+the current R-HYBRID baseline for the same fixture and operation:
+
+- higher steady-state total bytes;
+- higher post-compaction total bytes;
+- additional live payload copies;
+- unbounded obsolete carrier growth;
+- higher sampled peak total bytes without an explicitly reported reason;
+- a temporary full-carrier or full-file duplicate.
+
+Carrier publication must continue to follow this ordering:
+
+```text
+append carrier record(s)
+flush and sync carrier
+begin SQLite transaction
+insert/update carrier references
+commit SQLite with synchronous=FULL
+close/reopen and verify
+```
+
+Bytes present in the carrier but absent from committed SQLite metadata remain
+orphans. Recovery must detect and quarantine or reclaim them without deleting
+any referenced payload. A SQLite reference to a missing, truncated, or
+hash-mismatched carrier record remains a hard correctness failure.
+
+### Timing instrumentation
+
+The candidate must preserve the existing phase boundaries and add only the
+minimum counters needed to explain the optimization:
+
+```text
+m7_bounded_local_edit_ms
+carrier_record_encode_ms
+carrier_append_ms
+carrier_digest_ms
+carrier_sync_ms
+sqlite_metadata_ms
+sqlite_commit_ms
+close_reopen_ms
+full_verification_ms
+total_end_to_end_ms
+peak_rss_bytes
+peak_total_storage_bytes
+```
+
+`carrier_digest_ms` must be zero or near-zero incremental work during the
+append, not a hidden second full-carrier scan. `full_verification_ms` remains
+inside `total_end_to_end_ms`; it may not be moved outside the benchmark to
+manufacture a speedup. Any skipped, cached, or incremental verification must
+be labeled and measured separately from the required full-verification result.
+
+### Benchmark matrix
+
+Run the candidate and the unchanged baseline with the same serialized runner,
+fixtures, filesystem, build mode, cache policy, repetitions, lane order, and
+close/reopen policy:
+
+- Create/write: 1, 10, and 100 MiB.
+- One-byte edit: 1, 10, and 100 MiB.
+- Three one-byte M7-bounded edits: 100 MiB.
+- Cold and warm 100 MiB read.
+- 1,000 random 4 KiB reads.
+- One 100 MiB materialization.
+- 100 × 1 MiB materialization.
+- Crash before commit, crash after commit, truncation, and orphan cleanup.
+
+Use one warm-up and the existing retained repetitions. Report every sample,
+the median, and the phase/counter breakdown. Do not retain a speed result from
+a cell whose correctness, memory, or storage gate failed.
+
+### Acceptance criteria
+
+The optimized candidate is eligible for a decision only if all correctness and
+crash gates from the M7 specification pass and all of these additional gates
+pass:
+
+1. The M7 bounded-edit counters remain in the same locality class at 1, 10,
+   and 100 MiB.
+2. Peak RSS is no higher than the current R-HYBRID baseline for each workload.
+3. Peak, steady-state, and post-compaction storage are no higher than the
+   current R-HYBRID baseline, except for measurement noise documented from
+   individual samples.
+4. R-HYBRID's full lifecycle improves by at least 20% over the current
+   R-HYBRID baseline in the targeted write/edit workloads, or it reaches parity
+   with R-SQLite without regressing the read/materialization wins.
+5. No regression exceeds 10% for random reads, small edits, or materialization
+   workloads that already favor R-HYBRID.
+6. The result remains valid under `synchronous=FULL`, carrier durability
+   ordering, close/reopen verification, and the same SQLite WAL policy.
+
+If the candidate is faster only because it omits full verification, uses weaker
+durability, retains more memory, creates duplicate payload storage, or leaves
+unbounded carrier garbage, reject it even if the headline elapsed time falls.
+
+### Stop conditions
+
+Do not tune FastCDC, tree fanout, object identity, manifest semantics, or the
+M7 bounded window in this optimization pass. Those changes would create a new
+algorithm comparison rather than isolate the storage-layout improvement. Stop
+after the streaming carrier and one-pass verifier are measured; only then
+consider a separate M7 algorithm experiment.
