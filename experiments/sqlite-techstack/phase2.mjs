@@ -19,7 +19,7 @@ const jobs = [
 ];
 
 function run(args) {
-  const result = spawnSync(BINARY, args, {
+  const result = spawnSync("/usr/bin/time", ["-l", BINARY, ...args], {
     cwd: ROOT,
     encoding: "utf8",
     timeout: 15 * 60 * 1000,
@@ -29,7 +29,15 @@ function run(args) {
   }
   const output = result.stdout.trim();
   if (!output) throw new Error(`empty result for ${args.join(" ")}`);
-  return JSON.parse(output);
+  const rss = result.stderr.match(/^\s*(\d+)\s+maximum resident set size\s*$/m);
+  if (!rss) throw new Error(`missing RSS measurement for ${args.join(" ")}: ${result.stderr}`);
+  const parsed = JSON.parse(output);
+  parsed.peak_rss_bytes = Number(rss[1]);
+  parsed.peak_total_storage_bytes = parsed.peak_total_storage_bytes
+    ?? parsed.counters?.peak_total_storage_bytes
+    ?? parsed.peak_total_bytes
+    ?? parsed.counters?.peak_total_bytes;
+  return parsed;
 }
 
 function median(values) {
@@ -55,6 +63,22 @@ function summarize(rows) {
     }
     const timing = {};
     for (const field of [
+      "carrier_record_encode_ms",
+      "carrier_append_ms",
+      "carrier_digest_ms",
+      "carrier_write_ms",
+      "carrier_sync_ms",
+      "carrier_verify_ms",
+      "sqlite_metadata_ms",
+      "carrier_fsync_ms",
+    ]) {
+      const values = group
+        .map((row) => row.timing?.[field])
+        .filter((value) => typeof value === "number");
+      if (values.length) timing[field] = median(values);
+    }
+    const operation_timing = {};
+    for (const field of [
       "m7_bounded_local_edit_ms",
       "payload_persistence_ms",
       "sqlite_commit_ms",
@@ -65,10 +89,69 @@ function summarize(rows) {
       const values = group
         .map((row) => row.operation_timing?.[field])
         .filter((value) => typeof value === "number");
-      if (values.length) timing[field] = median(values);
+      if (values.length) operation_timing[field] = median(values);
     }
-    return { workload, size_mib: Number(size_mib), candidate, retained_samples: group.length, metrics, timing };
+    return {
+      workload,
+      size_mib: Number(size_mib),
+      candidate,
+      retained_samples: group.length,
+      metrics,
+      timing,
+      operation_timing,
+      peak_rss_bytes: median(group.map((row) => row.peak_rss_bytes)),
+      peak_total_storage_bytes: median(group.map((row) => row.peak_total_storage_bytes)),
+    };
   });
+}
+
+function validatePairedResults(rows) {
+  const paired = new Map();
+  for (const row of rows.filter((item) => item.retained)) {
+    const key = `${row.workload}|${row.size_mib}|${row.sample}`;
+    const modes = paired.get(key) ?? new Map();
+    modes.set(row.candidate, row);
+    paired.set(key, modes);
+  }
+  const identityFields = ["base_root", "root", "logical_digest", "object_count", "manifest_node_count"];
+  const m7Fields = [
+    "offset",
+    "digest",
+    "changed_object_set",
+    "unchanged_identity_set",
+    "metrics.loadedEntries",
+    "metrics.loadedNodes",
+    "metrics.affectedEntries",
+    "metrics.newObjectCount",
+    "metrics.newManifestNodeCount",
+    "metrics.reusedManifestNodeCount",
+    "metrics.scanWindowBytes",
+  ];
+  for (const [key, modes] of paired) {
+    const sqlite = modes.get("R-SQLite");
+    const hybrid = modes.get("R-HYBRID");
+    if (!sqlite || !hybrid) throw new Error(`unpaired retained sample: ${key}`);
+    for (const field of identityFields) {
+      if (sqlite[field] !== hybrid[field]) {
+        throw new Error(`lane identity mismatch ${key} ${field}: ${sqlite[field]} != ${hybrid[field]}`);
+      }
+    }
+    if (sqlite.edits || hybrid.edits) {
+      if (!sqlite.edits || !hybrid.edits || sqlite.edits.length !== hybrid.edits.length) {
+        throw new Error(`lane edit-count mismatch ${key}`);
+      }
+      for (let index = 0; index < sqlite.edits.length; index += 1) {
+        const left = sqlite.edits[index];
+        const right = hybrid.edits[index];
+        for (const field of m7Fields) {
+          const read = (value) => field.split(".").reduce((current, part) => current?.[part], value);
+          if (read(left) !== read(right)) {
+            throw new Error(`lane M7 mismatch ${key} edit ${index} ${field}: ${read(left)} != ${read(right)}`);
+          }
+        }
+      }
+    }
+  }
 }
 
 const correctness = {
@@ -104,6 +187,8 @@ for (const [workload, sizes] of jobs) {
     }
   }
 }
+
+validatePairedResults(rows);
 
 mkdirSync(RESULTS, { recursive: true });
 writeFileSync(join(RESULTS, "phase2.jsonl"), `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);

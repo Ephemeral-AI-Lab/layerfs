@@ -1873,3 +1873,552 @@ M7 bounded window in this optimization pass. Those changes would create a new
 algorithm comparison rather than isolate the storage-layout improvement. Stop
 after the streaming carrier and one-pass verifier are measured; only then
 consider a separate M7 algorithm experiment.
+
+## Phase 2 optimization result — streaming carrier and bounded verifier
+
+**Run date:** 2026-08-15
+
+This section supersedes the earlier Phase 2 defer decision for the specific
+streaming-carrier candidate. The production LayerFS checkout remained
+untouched at `8c1c55785ab25d0435d47e32e35a1a7bdf1fbf6d`; all changes are
+confined to this experiment branch and its report/runner.
+
+### Candidate implemented
+
+The candidate keeps the shared M7 edit path and changes only the R-HYBRID
+publication and validation work:
+
+- `CarrierWriter` emits deterministic LFCR records through a 128 KiB
+  `BufWriter`, updates SHA-256 while appending, and does not build a full
+  carrier `Vec` or reread a completed carrier to calculate its ID.
+- Carrier durability remains temporary-file write, flush, `sync_all`, atomic
+  rename, carrier-directory sync, SQLite reference transaction, and
+  `synchronous=FULL` commit. Existing deterministic carrier files are checked
+  with the streaming validator before a temporary duplicate is removed.
+- The validator uses a fixed buffer, checks framing, lengths, bounds,
+  truncation, record hashes, carrier digest, and ordered SQLite references by
+  `(carrier_id, carrier_offset)`. Carrier creation stages only missing object
+  hashes, avoiding duplicate publication of already-admitted payloads.
+- `carrier_record_encode_ms`, `carrier_append_ms`, `carrier_digest_ms`,
+  `carrier_sync_ms`, `carrier_verify_ms`, `peak_rss_bytes`, and
+  `peak_total_storage_bytes` are emitted by the runner. Each child is wrapped
+  with macOS `/usr/bin/time -l` for per-sample RSS.
+
+The optional canonical M7 check was also corrected so sequential three-edit
+checks rebuild from the already-edited logical bytes rather than resetting to
+the original fixture. That is test-only plumbing and is excluded from
+`m7_bounded_local_edit_ms` and the default performance campaign.
+
+### Campaign custody and correctness
+
+The release binary was run through the serialized Phase 2 runner with one
+warm-up and five retained samples per cell, six samples per cell, alternating
+lane order, and one child at a time. The campaign completed 120 children; all
+retained children reported `phase2=pass`. Raw samples and the derived medians
+are retained in:
+
+```text
+experiments/sqlite-techstack/results/phase2.jsonl
+experiments/sqlite-techstack/results/phase2-summary.json
+```
+
+Additional current-binary gates passed for both lanes:
+
+| Gate | Result |
+|---|---|
+| Carrier format, bounds, payload hash, truncation rejection | Pass |
+| Canonical M7 root equivalence, one-byte edits at 1/10/100 MiB | Pass |
+| Canonical M7 root equivalence, three edits at 100 MiB | Pass |
+| Changed-object and unchanged-identity checks | Pass |
+| Read-after-write, close/reopen, digest, SQLite integrity | Pass |
+| Crash before commit and crash after commit | Pass |
+| Hybrid orphan detection and quarantine | Pass |
+| WAL checkpoint and carrier durability ordering | Pass |
+
+The crash checks are process-exit simulations at the existing transaction
+boundaries, not a power-loss or filesystem fault injector. The benchmark's
+"cold" read is also the existing APFS reopened-namespace condition, not a
+page-cache eviction.
+
+### End-to-end medians
+
+Times are milliseconds unless the unit is shown. The delta is
+`(R-HYBRID / R-SQLite - 1) * 100`; negative means Hybrid is faster. These are
+medians of the five retained samples after the one discarded warm-up.
+
+| Workload | R-SQLite | R-HYBRID | Hybrid delta |
+|---|---:|---:|---:|
+| Create 1 MiB | 48.250 | 68.233 | +41.41% |
+| Create 10 MiB | 399.018 | 500.897 | +25.53% |
+| Create 100 MiB | 2,889.523 | 3,405.885 | +17.87% |
+| One-byte edit 1 MiB | 19.346 | 32.342 | +67.18% |
+| One-byte edit 10 MiB | 120.250 | 161.998 | +34.72% |
+| One-byte edit 100 MiB | 1,127.584 | 1,427.862 | +26.63% |
+| Three M7-bounded edits, 100 MiB | 3,365.383 | 4,276.873 | +27.08% |
+| Cold 100 MiB read | 856.791 | 716.745 | -16.35% |
+| Warm 100 MiB read | 852.193 | 716.692 | -15.90% |
+| 1,000 random 4 KiB reads, µs/read | 663.887 | 468.637 | -29.41% |
+| One 100 MiB materialization | 645.561 | 512.109 | -20.67% |
+| 100 × 1 MiB materialization, per-file median | 9.967 | 9.205 | -7.64% |
+
+The retained end-to-end samples, in execution order, were:
+
+| Workload | R-SQLite samples | R-HYBRID samples |
+|---|---|---|
+| Create 1 MiB | 47.535, 48.458, 48.250, 48.881, 47.769 | 68.233, 68.000, 67.699, 71.617, 70.824 |
+| Create 10 MiB | 415.929, 400.740, 397.597, 398.800, 399.018 | 501.363, 496.745, 498.207, 500.897, 501.943 |
+| Create 100 MiB | 2,889.523, 2,913.527, 2,858.769, 2,863.857, 2,917.494 | 4,805.742, 3,405.885, 3,404.484, 3,400.407, 3,435.678 |
+| Edit 1 MiB | 19.430, 19.346, 18.317, 19.449, 17.945 | 31.837, 32.394, 32.342, 32.458, 31.269 |
+| Edit 10 MiB | 123.592, 120.250, 120.290, 119.208, 119.852 | 163.508, 161.998, 163.620, 160.445, 161.017 |
+| Edit 100 MiB | 1,124.282, 1,131.139, 1,115.844, 1,160.302, 1,127.584 | 1,450.295, 1,427.862, 1,425.960, 1,433.439, 1,421.335 |
+| Three edits, 100 MiB | 3,370.965, 3,327.956, 3,331.929, 3,365.383, 3,365.714 | 4,295.553, 4,285.976, 4,253.175, 4,276.873, 4,255.460 |
+| Cold read, 100 MiB | 856.791, 873.929, 842.573, 875.232, 845.499 | 729.459, 724.701, 706.035, 709.753, 716.745 |
+| Warm read, 100 MiB | 866.925, 862.615, 843.159, 852.193, 846.954 | 727.982, 718.074, 709.771, 716.692, 714.140 |
+| Random read, µs/read | 663.949, 686.364, 654.337, 653.080, 663.887 | 469.963, 478.275, 463.382, 468.637, 465.227 |
+| Materialize, 100 MiB | 639.903, 643.909, 663.464, 645.561, 649.717 | 509.275, 510.692, 513.627, 512.109, 515.329 |
+| 100 × 1 MiB, ms/file | 10.016, 9.975, 9.916, 9.951, 9.967 | 9.124, 9.965, 9.205, 9.781, 9.100 |
+
+### M7 phase boundaries and carrier timing
+
+The shared bounded-edit phase remains local. For the one-byte workload, the
+median M7 phase is `3.340 → 7.852 → 9.066 ms` for R-SQLite and
+`3.157 → 6.385 → 6.625 ms` for R-HYBRID at 1/10/100 MiB. The required full
+verification remains inside the total and is reported separately:
+
+| One-byte edit | M7 local edit | Payload persistence | SQLite commit | Close/reopen | Full verification | Total |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 MiB / R-SQLite | 3.340 | 1.298 | 1.621 | 2.601 | 7.930 | 19.346 |
+| 1 MiB / R-HYBRID | 3.157 | 10.474 | 0.999 | 2.170 | 13.145 | 32.342 |
+| 10 MiB / R-SQLite | 7.852 | 1.408 | 2.315 | 3.037 | 82.801 | 120.250 |
+| 10 MiB / R-HYBRID | 6.385 | 11.583 | 1.118 | 2.246 | 118.776 | 161.998 |
+| 100 MiB / R-SQLite | 9.066 | 2.097 | 3.316 | 5.580 | 879.784 | 1,127.584 |
+| 100 MiB / R-HYBRID | 6.625 | 12.120 | 1.239 | 2.761 | 1,179.876 | 1,427.862 |
+
+At 100 MiB, the carrier-specific Hybrid medians were:
+
+| Workload | Encode | Append/write | Incremental digest | Carrier sync | Carrier verify | SQLite metadata |
+|---|---:|---:|---:|---:|---:|---:|
+| Create | 0.011 | 242.127 | 0.000 | 13.160 | 1,374.443 | 4.448 |
+| One-byte edit | 0.013 | 245.108 | 0.001 | 23.092 | 926.026 | 5.613 |
+| Three edits | 0.012 | 246.057 | 0.001 | 40.842 | 1,867.281 | 6.572 |
+
+The near-zero incremental digest field is the important instrumentation
+result: the candidate hashes headers and payloads during the append stream;
+there is no hidden full-carrier digest scan. The remaining carrier write and
+verification costs are visible rather than moved outside the lifecycle.
+
+### RSS and storage
+
+Peak RSS is the median of the five retained `/usr/bin/time -l` measurements;
+peak storage is the median sampled directory total emitted by the child.
+
+| Workload / size | R-SQLite RSS | R-HYBRID RSS | R-SQLite peak storage | R-HYBRID peak storage |
+|---|---:|---:|---:|---:|
+| Create 100 MiB | 311,345,152 | 221,478,912 | 107,254,624 | 105,323,808 |
+| One-byte edit 100 MiB | 311,050,240 | 222,347,264 | 107,254,624 | 105,480,428 |
+| Three edits 100 MiB | 311,361,536 | 222,461,952 | 107,254,624 | 105,929,546 |
+| Read 100 MiB | 310,984,704 | 221,282,304 | 107,254,624 | 105,323,808 |
+| Materialize 100 MiB | 311,083,008 | 220,921,856 | 107,254,624 | 105,323,808 |
+| 100 × 1 MiB | 8,159,232 | 6,127,616 | 1,264,656 | 1,263,080 |
+
+The candidate is below the available same-machine historical Hybrid RSS
+measurement of 543,817,728 bytes and below the current R-SQLite control in
+every listed cell. The historical pre-optimization RSS was manually sampled,
+not collected by the new per-child field, so this is a strong regression check
+but not a perfectly paired pre/post RSS capture. Peak storage is also sampled
+at lifecycle boundaries; temporary carrier bytes can be present between those
+snapshots.
+
+### Acceptance decision
+
+**Accept the streaming-carrier candidate as the Phase 2 experiment result;
+do not promote it directly to production LayerFS.**
+
+Against the prior corrected 100 MiB R-HYBRID baseline, the optimized medians
+improve by 30.15% for create, 28.88% for one-byte edit, and 28.82% for three
+M7-bounded edits. This meets the required 20% targeted-write improvement.
+The candidate also preserves the read/materialization advantage, lowers the
+measured RSS and sampled peak storage, keeps `synchronous=FULL`, and passes
+the carrier, canonical, reopen, integrity, WAL, orphan, and crash gates.
+
+It is still slower than the R-SQLite control by 17.87% on 100 MiB create,
+26.63% on one-byte edit, and 27.08% on three edits. That is allowed by the
+optimization rule because the candidate clears the 20% improvement threshold
+against the prior Hybrid baseline, but it is not parity.
+
+Two limitations remain explicit. First, the streaming carrier validator is a
+single fixed-buffer carrier pass, but the full verification lifecycle still
+performs the separate materialized logical-digest walk before that validator;
+the candidate removes full-carrier allocation and the duplicate digest scan,
+not every logical payload read. Second, the minimal Rust harness still builds
+fixture/object/manifest structures in memory and samples disk usage at
+boundaries, so this result establishes the storage-path improvement rather
+than production-grade bounded-memory proof. A production adoption would need
+the exact production M7 implementation, paired automated pre/post RSS and
+continuous temporary-space observation, and fault-injection coverage beyond
+process-exit crash simulation.
+
+## Phase 2 closure audit — latest authoritative paired rerun
+
+**Run date:** 2026-08-15
+
+This section supersedes the numeric tables in the preceding optimization-result
+section. The earlier section recorded an intermediate rerun; the tables below
+come from the final source state after the paired logical-equivalence checks and
+per-workload storage snapshots were added.
+
+### Custody, subagent findings, and synthesis
+
+- LayerFS production reference: commit
+  `8c1c55785ab25d0435d47e32e35a1a7bdf1fbf6d`; M7 source reference
+  `ce9035e49037f60a8c52d2775fd2d88d34e57cd4`. The production checkout was not
+  modified.
+- Experiment branch: `experiment/sqlite-techstack`; report-only base commit:
+  `52ebd7771bbdde6a5422cd7637aefd731d67ff29`. The final experiment commit is
+  supplied in the handoff after this report is committed.
+- The three mandatory read-only explorers found the same smallest safe scope:
+  retain the shared M7 path and durability ordering; stream the carrier with a
+  fixed buffer and incremental digest; validate it in one bounded sequential
+  pass; and add timing, memory, storage, and paired-equivalence evidence.
+  Explorer 1 confirmed the temporary-file, sync, rename, directory-sync, and
+  SQLite-reference ordering. Explorer 2 found that a full carrier allocation or
+  unbounded reference map would be the principal memory risks. Explorer 3
+  confirmed that both lanes use the latest M7 bounded source window, local
+  regrouping, changed-spine path-copy, and unchanged-subtree reuse.
+- The synthesized plan was therefore limited to
+  `experiments/m8-rust-port/src/main.rs`, the minimum result validation in
+  `experiments/sqlite-techstack/phase2.mjs`, and this preserved report. No
+  FastCDC, tree fanout, object identity, manifest semantics, M7 window, SQLite
+  durability mode, or production file was changed.
+
+The final command was:
+
+```text
+PHASE2_REPS=6 node phase2.mjs
+```
+
+It ran serialized child processes, discarded one warm-up per cell, retained
+five samples per cell, alternated lane order, and serialized
+`results/phase2.jsonl` plus `results/phase2-summary.json`. There were 120 child
+samples, and every retained child passed `phase2=pass`. The runner's
+`validatePairedResults` compared roots, logical digests, object counts, manifest
+counts, edit offsets, changed-object sets, unchanged-identity sets, and M7
+locality counters for every retained pair; those comparisons are computed from
+the Rust results rather than hardcoded pass values.
+
+### Carrier functions inspected and implementation
+
+The exact carrier and lifecycle functions inspected were:
+
+`CarrierWriter::new`, `CarrierWriter::append`, `CarrierWriter::finish`,
+`stage_carrier`, `validate_carrier_file`, `read_carrier_record`,
+`phase2_prepare_objects`, `phase2_persist_manifest`, `phase2_store`,
+`phase2_read_payload`, `phase2_materialized_digest`, `phase2_verify`,
+`stage_compaction_carrier`, `phase2_compact`, `phase2_edit_entries`,
+`phase2_local_rebuild`, `phase2_space`, `phase2_orphan_files`,
+`phase2_quarantine_orphans`, `phase2_carrier_check`,
+`phase2_recovery_record`, and `phase2_crash_child`. In the runner, the paired
+validation path is `validatePairedResults`; execution and summarization remain
+in `run` and `summarize`.
+
+The implementation is deliberately small:
+
+- R-HYBRID writes LFCR records through a fixed 128 KiB `BufWriter`, updates the
+  carrier SHA-256 as records are appended, and avoids a full-carrier `Vec` and
+  duplicate post-write digest scan.
+- Durability remains append, flush, `sync_all`, atomic rename,
+  carrier-directory sync, SQLite reference insertion/update, and
+  `synchronous=FULL` commit, followed by close/reopen verification.
+- Carrier validation uses a fixed buffer, checks framing, lengths, bounds,
+  truncation, record hashes, carrier identity, and ordered SQLite references.
+- M7 edit results now compute changed-object and unchanged-identity digests,
+  assert that the unaffected prefix/suffix identities remain unchanged, and
+  expose those fields to the paired runner.
+- Edit, read, and materialization records now include a steady-state storage
+  snapshot from the existing `phase2_space` helper. Create already reports
+  steady-state and post-compaction storage. These snapshots are outside the
+  timed operation boundaries.
+
+Tracked source/report files changed for this experiment are:
+
+- `experiments/m8-rust-port/src/main.rs`
+- `experiments/sqlite-techstack/phase2.mjs`
+- `experiments/sqlite-techstack/experiment.md`
+
+The unrelated dirty `experiments/sqlite-techstack/rust/src/main.rs`, the
+untracked `experiments/sqlite-techstack/rust/src/workspace.rs`, and the
+untracked `experiments/npm-cas-cdc/` directory were preserved.
+
+### End-to-end retained samples and medians
+
+Times are milliseconds except the random-read row. Samples are the five
+retained values after the discarded warm-up. Delta is
+`(R-HYBRID / R-SQLite - 1) * 100`; negative means Hybrid is faster.
+
+| Workload | R-SQLite retained samples / median | R-HYBRID retained samples / median | Hybrid delta |
+|---|---|---|---:|
+| Create 1 MiB | 27.224500, 26.633917, 27.496333, 27.720125, 27.799542 / **27.496333** | 37.582417, 38.069875, 38.999916, 39.346625, 42.110375 / **38.999916** | +41.84% |
+| Create 10 MiB | 200.772959, 200.544625, 200.010041, 200.445042, 210.263625 / **200.544625** | 219.095083, 217.952792, 223.388792, 219.813208, 217.590208 / **219.095083** | +9.25% |
+| Create 100 MiB | 1,967.245959, 2,016.581375, 2,884.168709, 2,005.253375, 1,994.773292 / **2,005.253375** | 2,032.805750, 2,016.951541, 2,685.428750, 2,049.379875, 1,997.017291 / **2,032.805750** | +1.37% |
+| One-byte edit 1 MiB | 17.243084, 18.438666, 18.811542, 18.923042, 18.278958 / **18.438666** | 30.030875, 27.401084, 29.431375, 29.118208, 29.116666 / **29.118208** | +57.92% |
+| One-byte edit 10 MiB | 121.679875, 117.824209, 119.459000, 119.426084, 118.952292 / **119.426084** | 136.771750, 136.586750, 137.586833, 138.894458, 137.723875 / **137.586833** | +15.21% |
+| One-byte edit 100 MiB | 1,128.319958, 1,122.743208, 1,112.038000, 1,116.480250, 1,095.617042 / **1,116.480250** | 1,199.475541, 1,171.236375, 1,179.556500, 1,173.559041, 1,172.958542 / **1,173.559041** | +5.11% |
+| Three M7-bounded edits, 100 MiB | 3,280.687750, 3,283.543792, 3,285.454084, 3,290.586625, 3,283.520958 / **3,283.543792** | 3,513.518750, 3,549.592875, 3,551.435333, 3,522.090084, 3,521.817000 / **3,522.090084** | +7.26% |
+| One 100 MiB materialization | 618.258500, 621.673667, 617.862125, 618.505625, 618.675209 / **618.505625** | 510.918708, 500.911417, 497.134500, 494.467417, 498.548667 / **498.548667** | -19.39% |
+| 100 × 1 MiB materialization, per-file median | 9.989875, 9.978917, 9.985625, 9.993417, 9.996166 / **9.989875** | 9.096125, 9.005083, 9.045541, 9.164375, 9.009291 / **9.045541** | -9.45% |
+
+Read workloads have three measurements per retained sample:
+
+| Read measurement | R-SQLite retained samples / median | R-HYBRID retained samples / median | Hybrid delta |
+|---|---|---|---:|
+| Cold 100 MiB read, ms | 821.774500, 819.977666, 898.437708, 825.454709, 822.198958 / **822.198958** | 696.290083, 698.176250, 694.375000, 708.523166, 698.438875 / **698.176250** | -15.08% |
+| Warm 100 MiB read, ms | 815.723834, 818.361500, 828.059666, 823.849958, 821.207250 / **821.207250** | 696.675458, 696.377541, 694.872958, 708.490875, 696.351708 / **696.377541** | -15.20% |
+| 1,000 random 4 KiB reads, µs/read | 632.122625, 632.225834, 648.521250, 645.134958, 641.136834 / **641.136834** | 452.343417, 451.251917, 449.802459, 460.268917, 453.956083 / **452.343417** | -29.45% |
+
+Relative to the current R-HYBRID baseline recorded in the objective, the
+candidate improves the 100 MiB targeted workloads by 58.31% for create, 41.55%
+for one-byte edit, and 41.38% for three edits. It clears the required 20%
+within-Hybrid improvement threshold, but remains slower than R-SQLite in those
+workloads by the deltas shown above.
+
+### Timing breakdown
+
+The required boundaries are preserved: M7 bounded local edit, payload
+persistence, SQLite commit, close/reopen, full verification, and total. Full
+verification remains inside total.
+
+| Workload / lane, 100 MiB | M7 local edit | Payload persistence | SQLite commit | Close/reopen | Full verification | Total |
+|---|---:|---:|---:|---:|---:|---:|
+| One-byte / R-SQLite | 8.923209 | 2.124750 | 3.732000 | 6.073583 | 873.248459 | 1,116.480250 |
+| One-byte / R-HYBRID | 6.716958 | 11.866084 | 1.165250 | 3.080709 | 928.253541 | 1,173.559041 |
+| Three edits / R-SQLite | 19.148084 | 5.025792 | 8.954458 | 15.422708 | 2,566.307958 | 3,283.543792 |
+| Three edits / R-HYBRID | 13.778750 | 34.824875 | 3.735542 | 8.393334 | 2,794.094709 | 3,522.090084 |
+
+Carrier-specific medians at 100 MiB were:
+
+| Workload / R-HYBRID | Record encode | Append | Incremental digest | Carrier sync | Carrier verify | SQLite metadata |
+|---|---:|---:|---:|---:|---:|---:|
+| Create | 0.012125 | 251.090168 | 0.000167 | 11.491958 | 467.623000 | 4.459792 |
+| One-byte edit | 0.011959 | 241.551375 | 0.000584 | 21.887083 | 464.664292 | 5.344292 |
+| Three edits | 0.011245 | 241.629583 | 0.001124 | 42.320583 | 933.523334 | 6.545707 |
+
+The corresponding R-SQLite SQLite-metadata medians were 96.873042 ms for
+create, 95.920209 ms for one-byte edit, and 98.122542 ms for three edits. The
+near-zero digest field is evidence that carrier identity is computed during the
+append stream; it is not a hidden full-carrier reread.
+
+### Peak RSS and disk-space tables
+
+Peak values are medians of the five retained `/usr/bin/time -l` measurements or
+the sampled directory totals. All byte fields are bytes.
+
+| Workload / size | R-SQLite peak RSS | R-HYBRID peak RSS | R-SQLite peak total | R-HYBRID peak total |
+|---|---:|---:|---:|---:|
+| Create 100 MiB | 311,099,392 | 221,298,688 | 107,254,624 | 105,323,808 |
+| One-byte edit 100 MiB | 311,033,856 | 222,035,968 | 107,254,624 | 105,480,428 |
+| Three edits 100 MiB | 311,066,624 | 222,593,024 | 107,254,624 | 105,929,546 |
+| Read 100 MiB | 311,001,088 | 221,085,696 | 107,254,624 | 105,323,808 |
+| Materialize 100 MiB | 311,066,624 | 221,134,848 | 107,254,624 | 105,323,808 |
+| 100 × 1 MiB | 7,634,944 | 6,029,312 | 1,264,656 | 1,263,080 |
+
+The detailed 100 MiB storage snapshots were:
+
+| Workload / lane | SQLite DB | WAL | SHM | Carrier | Temporary | Live payload | Obsolete carrier | Peak total | Steady total | Post-compaction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Create / R-SQLite | 106,307,584 | 0 | 32,768 | 0 | 0 | 104,857,600 | 0 | 107,254,624 | 106,340,352 | 106,340,352 |
+| Create / R-HYBRID | 286,720 | 0 | 32,768 | 104,895,512 | 0 | 104,857,600 | 0 | 105,323,808 | 105,215,000 | 105,215,000 |
+| One-byte / R-SQLite | 106,516,480 | 0 | 32,768 | 0 | 0 | 105,015,820 | 0 | 107,254,624 | 106,549,248 | not measured |
+| One-byte / R-HYBRID | 335,872 | 0 | 32,768 | 105,053,788 | 0 | 105,015,820 | 0 | 105,480,428 | 105,422,428 | not measured |
+| Three edits / R-SQLite | 106,979,328 | 0 | 32,768 | 0 | 0 | 105,370,642 | 0 | 107,254,624 | 107,012,096 | not measured |
+| Three edits / R-HYBRID | 430,080 | 0 | 32,768 | 105,408,722 | 0 | 105,370,642 | 0 | 105,929,546 | 105,871,570 | not measured |
+| Read / R-SQLite | 106,307,584 | 0 | 32,768 | 0 | 0 | 104,857,600 | 0 | 107,254,624 | 106,340,352 | not measured |
+| Read / R-HYBRID | 286,720 | 0 | 32,768 | 104,895,512 | 0 | 104,857,600 | 0 | 105,323,808 | 105,215,000 | not measured |
+| Materialize / R-SQLite | 106,307,584 | 0 | 32,768 | 0 | 0 | 104,857,600 | 0 | 107,254,624 | 211,197,952 | not measured |
+| Materialize / R-HYBRID | 286,720 | 0 | 32,768 | 104,895,512 | 0 | 104,857,600 | 0 | 105,323,808 | 210,072,600 | not measured |
+
+Materialization steady totals include the required 100 MiB output file in the
+workload directory; the two lanes produce equal output bytes, so the comparison
+remains fair. The carrier temporary-file field was zero in the post-operation
+snapshots. Create is the only workload that invokes the existing compaction
+path, so post-compaction is measured there; a full post-compaction table for
+edit/read/materialization was not manufactured.
+
+For the 100 × 1 MiB workload, steady totals were 2,211,840 bytes for
+R-SQLite and 2,204,096 bytes for R-HYBRID; post-compaction was not run for that
+repeated materialization workload.
+
+### SQL, transaction, and statement-count comparison
+
+The operation columns exclude the close/reopen verification pass; the full
+columns include the full result counters. R-HYBRID create full counters include
+the required post-compaction verification, while its primary operation counters
+match the R-SQLite logical operation except for one carrier metadata row.
+
+| Workload / counters | R-SQLite operation: statements / rows read / rows inserted / tx / commits | R-HYBRID operation: statements / rows read / rows inserted / tx / commits | R-SQLite full | R-HYBRID full |
+|---|---|---|---|---|
+| Create 100 MiB | 2,048 / 683 / 688 / 1 / 1 | 2,048 / 683 / 689 / 1 / 1 | 2,048 / 683 / 688 / 1 / 1 | 2,731 / 1,366 / 689 / 2 / 2 |
+| One-byte edit 100 MiB | 713 / 706 / 6 / 1 / 1 | 713 / 706 / 7 / 1 / 1 | 2,761 / 1,389 / 694 / 2 / 2 | 2,761 / 1,389 / 696 / 2 / 2 |
+| Three edits 100 MiB | 2,134 / 2,113 / 18 / 3 / 3 | 2,134 / 2,113 / 21 / 3 / 3 | 4,182 / 2,796 / 706 / 4 / 4 | 4,182 / 2,796 / 710 / 4 / 4 |
+| Read 100 MiB | 2,392 / 2,392 / 0 / 0 / 0 | 2,392 / 2,392 / 0 / 0 / 0 | 4,440 / 3,075 / 688 / 1 / 1 | 4,440 / 3,075 / 689 / 1 / 1 |
+| One 100 MiB materialization | 6 / 6 / 0 / 0 / 0 | 6 / 6 / 0 / 0 / 0 | 2,054 / 689 / 688 / 1 / 1 | 2,054 / 689 / 689 / 1 / 1 |
+| 100 × 1 MiB materialization | 200 / 200 / 0 / 0 / 0 | 200 / 200 / 0 / 0 / 0 | 229 / 210 / 11 / 1 / 1 | 229 / 210 / 12 / 1 / 1 |
+
+The M7 edit source-window counters also matched: one edit read 2,097,152
+source bytes in one source transaction; three edits read 4,371,981 source bytes
+in three source transactions. Read workloads performed 1,000 source reads and
+transactions and 92,832,100 source bytes in each lane. Materialization read 677
+objects; repeated 1 MiB materialization read 800 objects in each lane. The
+small row-count differences are the carrier metadata rows, not skipped logical
+payload work.
+
+### Correctness, durability, and crash recovery
+
+All retained pairs passed the runner's computed equality checks for base root,
+final root, logical digest, object count, manifest-node count, and materialized
+logical bytes. Every edit pair also matched offset, M7 locality counters,
+changed-object set, and unchanged-identity set. Focused canonical M7 checks
+passed for one-byte edits at 1/10/100 MiB and for three sequential edits at 100
+MiB in both lanes.
+
+The independent carrier self-check reported `bounds=verified`,
+`carrier_format_check=pass`, `payload_hash=verified`, and
+`truncated_record=rejected`. SQLite integrity, WAL/checkpoint, read-after-write,
+close/reopen, carrier bounds, truncation, payload hash, and carrier digest gates
+all passed. The configured path remained WAL with `synchronous=FULL`,
+`foreign_keys=ON`, `mmap_size=0`, and the existing cache/source-window policy.
+
+Crash/recovery results for both lanes were baseline counts `[8,1,1]`,
+crash-before-commit status `91`, and after-commit status `92`, with recovered
+counts `[9,2,2]`. Both lanes passed old-or-new visibility, referenced-payload,
+SQLite-integrity, crash-before-commit, and crash-after-commit checks. SQLite
+quarantined zero orphan carrier files; R-HYBRID quarantined one deliberately
+uncommitted carrier file. No unquarantined orphan remained.
+
+### Limitations and final decision
+
+- Crash tests are process-exit simulations at the existing pre-commit and
+  post-commit boundaries, not power-loss or filesystem-fault injection.
+- The cold-read condition is the existing APFS reopened-namespace condition,
+  not an explicit page-cache eviction test.
+- RSS is measured by `/usr/bin/time -l`; disk usage is sampled at lifecycle
+  boundaries, not continuously during the temporary-file interval. The current
+  Rust harness still builds fixture/object/manifest structures in memory, so
+  this is a storage-path experiment rather than production-grade bounded-memory
+  proof.
+- Materialization storage totals include the output file; post-compaction is
+  measured only on create. The non-create rows therefore report steady-state
+  and peak snapshots, but not an invented post-compaction result.
+- R-HYBRID remains slower than R-SQLite on create and durable edit workloads,
+  although the candidate improves the prior R-HYBRID baseline by more than 20%
+  on each targeted 100 MiB write/edit workload.
+
+**Decision: Defer R-HYBRID for the overall workload.** Keep the streaming
+carrier and bounded verifier as a valid experiment result because it clears the
+within-Hybrid optimization gate and preserves the read, random-read, and large
+materialization advantages. Do not promote it to production or select it as the
+default storage layout while the write/edit lane is still slower than
+R-SQLite; a future adoption would need paired production-scale benchmarks,
+continuous temporary-space/RSS capture, full post-compaction coverage for the
+remaining workloads, and stronger fault injection.
+
+## Phase 3 follow-up — npm/native SQLite CAS+CDC boundary using Phase 1 R-SQL
+
+**Date:** 2026-08-15
+**Run root:** `/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-npm-cas-cdc-73feQx`
+
+This follow-up deliberately inherits the Phase 1 R-SQL persistence assets. It
+uses the same flat SQLite schema, SQL text, BLAKE3 domains, FastCDC profile,
+`BEGIN IMMEDIATE`/`COMMIT` transaction, `synchronous=FULL`, WAL settings,
+head update, close/reopen verification, and explicit `wal_checkpoint(TRUNCATE)`.
+The npm project is only the workload and uses the pinned native
+`sqlite3@6.0.1` addon built from source. This is therefore a CAS-policy
+experiment on the R-SQL lane, not a Node-SQLite-versus-Rust-SQLite database
+implementation A/B.
+
+### Workload and policies
+
+The run covered the requested scenarios: A, empty install; B, two independent
+installs; C, two branches from an installed dependency tree followed by
+install/rebuild; D, repeated install, SQLite script, log append, source edit,
+and rebuild boundaries; and E, a volatile-path burst. Each policy published a
+complete root at every boundary:
+
+- `full_cdc`: recan and rechunk every file;
+- `incremental_cdc`: reuse prior manifest references when the path metadata key
+  is unchanged;
+- `volatile_whole_file`: use whole-file objects for npm cache, logs, build
+  output, and the local SQLite database. Native CoW was unavailable, so this is
+  the closest supported fallback and intentionally reads the whole volatile
+  file into memory.
+
+The experiment-only metadata key uses type, size, mode, and a 100 ms-quantized
+mtime. That removes sub-millisecond timestamp rounding introduced by the
+macOS branch-copy operation; an implementation should use filesystem change
+events or content hashes when same-size edits inside that window matter.
+
+### Measured findings
+
+- **A, first install:** all policies read 29,408,998 source bytes and admitted
+  1,985 new objects for 26,190,388 unique payload bytes. Checkpoint time was
+  251.27–352.67 ms; the first install is expected to be a full scan for every
+  policy.
+- **B, independent workspaces:** the second independent install admitted zero
+  new objects and reused all 1,265 object references already present in its
+  policy database; unique payload stayed at 11,130,778 bytes. This is content
+  deduplication across independent installs, not a shared workspace shortcut.
+- **C, existing dependency tree:** each branch rebuild admitted 936 new then 8
+  new objects, while incremental CDC classified 87 paths as changed and read
+  20,001,582 bytes versus full CDC's 904 paths and 29,409,361 bytes. The
+  resulting unique payload was identical between full and incremental policy
+  for each branch, showing that the speedup came from avoiding unchanged-file
+  reads while retaining the same CAS object identities.
+- **D, repeated boundaries:**
+
+  | boundary | full CDC source bytes | incremental source bytes | whole-file source bytes | full ms | incremental ms | whole-file ms |
+  |---|---:|---:|---:|---:|---:|---:|
+  | SQLite script | 34,612,855 | 8,206 | 8,206 | 277.68 | 160.15 | 149.83 |
+  | log append | 34,612,876 | 21 | 21 | 262.43 | 157.19 | 151.80 |
+  | source edit | 34,612,886 | 20 | 20 | 265.11 | 160.65 | 152.02 |
+  | rebuild | 34,615,242 | 7,253,529 | 7,253,529 | 293.75 | 173.34 | 167.95 |
+
+  The one-file edits are therefore not constant-time in the absolute sense—the
+  fixed root/metadata/verification work remains—but incremental CDC makes the
+  source-read component local to the changed paths.
+- **E, volatile burst:** full CDC read 34,615,277 bytes; incremental and
+  whole-file policies read 112,279 bytes across 15 changed paths. Whole-file
+  mode used 2,357 refs instead of incremental CDC's 2,601 but retained 21,289
+  more unique payload bytes in this run, so it is a hot-path reference fallback,
+  not automatically the smallest retained representation.
+- **Dropping intermediate checkpoints:** pruning D to its final root reduced
+  live payload from 31,399,914 to 31,374,574 bytes for incremental CDC and from
+  31,421,203 to 31,395,863 bytes for whole-file mode. The SQLite main file did
+  not shrink because this maintenance path does not run `VACUUM`; it remained
+  37,629,952 and 37,154,816 bytes respectively. WAL was 0 bytes after the
+  explicit checkpoint and SHM was 32,768 bytes.
+
+### Correctness and decision
+
+All 36 R-SQL checkpoints passed manifest/logical digest verification, object
+length checks, root-member checks, foreign-key integrity, close/reopen
+visibility, and the post-run database integrity check. All three rollback
+checks passed: full restore after the first install, source-only restore, and
+restore before later volatile changes. The local SQLite application database
+was closed before checkpointing, so this validates byte-level file rollback,
+not rollback of an arbitrary live SQLite process.
+
+Decision: publish a complete logical checkpoint after every mutating hook when
+rollback/replay semantics require it; use incremental changed-path CDC as the
+default; classify npm cache, logs, build output, and local SQLite files as
+volatile; use native CoW or a whole-file reference on the hot path when
+available; and promote volatile paths to ordinary CAS/CDC at a final durable
+checkpoint or before long retention. Keep full-workspace CDC as a correctness
+and repair baseline.
+
+The npm install/rebuild wall times, native compilation, and package-cache
+effects are recorded separately in the raw JSON and are not mixed into the
+R-SQL checkpoint timings. This is one bounded run, so the numbers are measured
+evidence for the policy decision rather than a statistical performance claim.
+
+Reproducible artifacts: [`npm-cas-cdc.md`](../npm-cas-cdc/results/npm-cas-cdc.md),
+[`npm-cas-cdc.json`](../npm-cas-cdc/results/npm-cas-cdc.json), and
+[`npm-cas-cdc.csv`](../npm-cas-cdc/results/npm-cas-cdc.csv).
