@@ -2053,10 +2053,68 @@ the candidate removes full-carrier allocation and the duplicate digest scan,
 not every logical payload read. Second, the minimal Rust harness still builds
 fixture/object/manifest structures in memory and samples disk usage at
 boundaries, so this result establishes the storage-path improvement rather
-than production-grade bounded-memory proof. A production adoption would need
-the exact production M7 implementation, paired automated pre/post RSS and
-continuous temporary-space observation, and fault-injection coverage beyond
-process-exit crash simulation.
+than production-grade bounded-memory proof. The follow-up below removes the
+full fixture payload map from the Phase 2 base path and changes edit
+verification to an explicitly labeled incremental contract. A production
+adoption would still need the exact production M7 implementation, paired
+automated pre/post RSS and continuous temporary-space observation, and
+fault-injection coverage beyond process-exit crash simulation.
+
+## Phase 2 follow-up — incremental verification and streamed fixture setup
+
+**Run date:** 2026-08-15
+
+This follow-up implements the only remaining optimization with a credible
+path to materially faster edits: after a newly published state has passed the
+full verifier, each edit verifies SQLite integrity, the new root and journal
+reference, new manifest nodes, changed payloads, and the new hybrid carrier
+only. The full logical digest and full carrier scrub remain available through
+the existing verifier. Set `PHASE2_FULL_SCRUB_EVERY=N` to run that full scrub
+after every N edits; the output labels this as
+`incremental+periodic-full-scrub` and reports `full_scrub_ms` separately.
+
+The persisted `efs_verification_state` record makes incremental verification
+fail closed unless the preceding root, logical digest, and journal generation
+come from a matching full verification boundary. Unchanged manifest nodes and
+payloads are therefore trusted only from that recorded boundary, rather than
+silently treated as newly verified. Create, recovery, and compaction retain
+the full verifier by default.
+
+The Phase 2 fixture now streams deterministic bytes through a fixed buffer,
+FastCDC, and hashing, retaining chunk metadata and a deterministic source
+cursor instead of a full payload map. Edit digest oracles are also streamed;
+random-read oracles regenerate only the requested chunk window. The optional
+`PHASE2_M7_CANONICAL_CHECK=1` path intentionally retains a full canonical
+oracle because it is a correctness cross-check, not the production benchmark
+path.
+
+The official paired runner was executed with one warm-up and two retained
+samples per cell (`PHASE2_REPS=3`):
+
+| 100 MiB workload | R-HYBRID | R-SQLite | Hybrid delta |
+|---|---:|---:|---:|
+| Create | 1,973.0 ms | 1,862.7 ms | 5.9% slower |
+| One-byte edit | 307.8 ms | 341.3 ms | 9.8% faster |
+| Three edits | 909.5 ms | 1,014.9 ms | 10.4% faster |
+
+The same retained samples measured peak RSS of 6.6 MiB versus 93.1 MiB on
+create, 11.0 MiB versus 93.0 MiB on one-byte edit, and 13.0 MiB versus
+91.7 MiB on three edits for R-HYBRID versus R-SQLite. Hybrid remains slower
+on create because deterministic source/CDC/hash and carrier publication still
+dominate that path, but the edit path now beats SQLite in this run without
+weakening durability or carrier publication ordering. A full scrub every
+edit was separately exercised at 1 MiB in both lanes and passed; it reports
+three full scrubs for the three-edit workload.
+
+This changes the edit guarantee from full verification on every lifecycle to
+incremental verification plus periodic full verification. If a caller requires
+a full logical scrub after every edit, the incremental speed result does not
+apply and a 50% improvement is not supported by this experiment. Changing
+the database alone is unlikely to produce that improvement now: the 100 MiB
+create cost is dominated by shared source/CDC/hash work, while the edit cost
+is dominated by hybrid carrier publication and durability work.
+SQLite-specific incremental verification is only about 4 ms for Hybrid and
+43 ms for SQLite in the retained one-byte sample.
 
 ## Phase 2 closure audit — latest authoritative paired rerun
 
@@ -2320,6 +2378,174 @@ default storage layout while the write/edit lane is still slower than
 R-SQLite; a future adoption would need paired production-scale benchmarks,
 continuous temporary-space/RSS capture, full post-compaction coverage for the
 remaining workloads, and stronger fault injection.
+
+## Phase 2 alternate architecture — stable append-only payload log (R-LOG)
+
+**Run date:** 2026-08-15
+**Command:** `PHASE2_REPS=4 node phase2.mjs`
+**Samples:** one warm-up discarded, three retained per cell, 120 retained
+child samples across three lanes
+
+The user-requested alternative to R-HYBRID was implemented as R-LOG. It keeps a
+single stable, page-independent `carriers/payload.log` and appends authenticated
+LFCR records. SQLite stores each object's log offset, length, checksum, and the
+committed log high-water mark. The writer flushes and `sync_all`s the log and
+its directory before the SQLite transaction commits. Recovery truncates an
+uncommitted tail back to the SQLite high-water mark; a shorter-than-committed
+log fails closed. The log also carries a chained digest, so a full verifier can
+detect reordering, truncation, or replacement rather than trusting offsets
+alone.
+
+This is materially different from one carrier per generation, but it exposes a
+hard cost: every mandatory full scrub walks the entire historical log. The
+append path is cheap; the required verification path is not.
+
+### Subagent findings and smallest safe plan
+
+- Ohm found that the existing CAS table is already a BLOB primary-key
+  `WITHOUT ROWID` table. The redundant SQLite object-admission preflight was
+  removed and the remaining hot lookups use prepared-statement caching.
+- Jason found that the edit digest oracle had been charged to the operation
+  timer even though it is only a correctness oracle. It is now reported
+  separately; the full scrub remains inside the operation lifecycle. The
+  materialized digest also no longer hashes the same payload a second time.
+- Maxwell proposed the stable append-only log tested here: SQLite offsets plus
+  checksum, log sync before commit, committed high-water mark, and crash-tail
+  truncation. That design was implemented and passed the crash gates.
+
+The shared M7 path, FastCDC profile, manifest fanout, object identities,
+SQLite WAL mode, `synchronous=FULL`, source-window bound, and durability order
+were not weakened. The official runner forces
+`PHASE2_FULL_SCRUB_EVERY=1`, so the full scrub is included in every edit total.
+
+### Retained samples and medians
+
+Times are milliseconds unless noted. Each cell shows the three retained samples
+followed by the median. The raw JSONL contains the complete per-process record,
+including roots, digests, counters, timing fields, RSS, storage, and correctness
+fields.
+
+| Workload | R-SQLite | R-HYBRID | R-LOG |
+|---|---:|---:|---:|
+| Create 1 MiB | 36.713, 33.717, 33.098 / **33.717** | 46.907, 44.703, 47.332 / **46.907** | 44.951, 50.524, 47.377 / **47.377** |
+| Create 10 MiB | 230.271, 224.925, 229.454 / **229.454** | 256.470, 270.630, 255.499 / **256.470** | 286.806, 286.783, 284.521 / **286.783** |
+| Create 100 MiB | 2,239.421, 2,262.619, 2,364.638 / **2,262.619** | 2,344.225, 2,417.892, 2,464.540 / **2,417.892** | 2,662.951, 2,721.008, 2,686.406 / **2,686.406** |
+| One-byte edit 1 MiB | 21.680, 22.500, 22.964 / **22.500** | 36.574, 37.574, 35.809 / **36.574** | 46.281, 45.990, 44.892 / **45.990** |
+| One-byte edit 10 MiB | 110.022, 109.554, 108.976 / **109.554** | 130.324, 126.654, 128.968 / **128.968** | 254.929, 268.767, 254.140 / **254.929** |
+| One-byte edit 100 MiB | 1,051.251, 1,003.092, 1,039.817 / **1,039.817** | 1,056.224, 1,035.294, 1,061.115 / **1,056.224** | 2,339.400, 2,363.506, 2,361.828 / **2,361.828** |
+| Three M7-bounded edits, 100 MiB | 3,073.239, 3,094.379, 3,102.581 / **3,094.379** | 3,180.176, 3,146.365, 3,170.106 / **3,170.106** | 7,121.735, 7,128.655, 7,027.881 / **7,121.735** |
+
+R-LOG's 100 MiB read samples were:
+
+| Read measurement | R-SQLite | R-HYBRID | R-LOG |
+|---|---:|---:|---:|
+| Cold read, ms | 887.248, 885.609, 860.153 / **885.609** | 696.068, 673.998, 679.982 / **679.982** | 696.150, 681.012, 675.325 / **681.012** |
+| Warm read, ms | 878.812, 875.236, 864.721 / **875.236** | 1,222.282, 671.731, 688.173 / **688.173** | 680.908, 679.353, 681.230 / **680.908** |
+| 1,000 random 4 KiB reads, µs/read | 1,130.059, 1,105.545, 1,083.124 / **1,105.545** | 837.148, 819.707, 819.792 / **819.792** | 824.620, 809.539, 825.212 / **824.620** |
+
+Materialization samples were:
+
+| Workload | R-SQLite | R-HYBRID | R-LOG |
+|---|---:|---:|---:|
+| One 100 MiB output, ms | 927.326, 902.221, 912.258 / **912.258** | 717.867, 708.465, 705.452 / **708.465** | 720.007, 713.108, 707.059 / **713.108** |
+| 100 × 1 MiB, median per file, ms | 12.105, 12.184, 12.063 / **12.105** | 11.825, 11.212, 11.934 / **11.825** | 11.828, 11.854, 11.845 / **11.845** |
+
+The R-LOG materialization medians above are the per-process `materialize_ms`
+and per-file median fields, respectively; the lifecycle's full verification is
+reported separately in the timing table below. R-LOG is slightly slower than
+R-HYBRID for both materialization workloads and faster than R-SQLite only for
+the repeated 1 MiB case.
+
+### Timing, memory, storage, and SQL
+
+The full scrub is inside each edit's total. At 100 MiB the relevant medians were:
+
+| Workload | Lane | Incremental verify | Full scrub | Total |
+|---|---|---:|---:|---:|
+| Create | R-SQLite | — | 926.990 | 2,262.619 |
+| Create | R-HYBRID | — | 1,035.590 | 2,417.892 |
+| Create | R-LOG | — | 1,334.577 | 2,686.406 |
+| One-byte edit | R-SQLite | 65.492 | 946.723 | 1,039.817 |
+| One-byte edit | R-HYBRID | 4.411 | 1,026.272 | 1,056.224 |
+| One-byte edit | R-LOG | 982.034 | 1,349.275 | 2,361.828 |
+| Three edits | R-SQLite | 187.634 | 2,840.827 | 3,094.379 |
+| Three edits | R-HYBRID | 11.806 | 3,075.597 | 3,170.106 |
+| Three edits | R-LOG | 2,958.812 | 4,069.295 | 7,121.735 |
+
+The R-LOG verifier's incremental field is already almost a full-log scan for a
+one-byte edit and grows to 2,959 ms for three edits. The stable log removes
+carrier-file churn and keeps RSS low, but the chained digest and referenced
+record validation make it a poor fit for the mandatory full-verification edit
+contract.
+
+| Workload / size | R-SQLite RSS | R-HYBRID RSS | R-LOG RSS | R-SQLite storage | R-HYBRID storage | R-LOG storage |
+|---|---:|---:|---:|---:|---:|---:|
+| Create 100 MiB | 16.0 MiB | 4.3 MiB | 4.2 MiB | 10.4 MiB | 10.2 MiB | 10.2 MiB |
+| One-byte edit 100 MiB | 21.2 MiB | 9.6 MiB | 9.6 MiB | 10.5 MiB | 10.4 MiB | 10.4 MiB |
+| Three edits 100 MiB | 93.5 MiB | 12.6 MiB | 12.5 MiB | 102.3 MiB | 101.0 MiB | 101.0 MiB |
+| Read 100 MiB | 93.5 MiB | 8.3 MiB | 8.1 MiB | 102.3 MiB | 100.5 MiB | 100.5 MiB |
+| Materialize 100 MiB | 92.7 MiB | 6.0 MiB | 6.1 MiB | 102.3 MiB | 100.5 MiB | 100.5 MiB |
+| 100 × 1 MiB | 6.1 MiB | 4.0 MiB | 4.3 MiB | 1.2 MiB | 1.2 MiB | 1.2 MiB |
+
+At 100 MiB the operation statement/row/transaction counts were:
+
+| Workload / lane | Operation statements / rows read / rows inserted / transactions / commits | Full statements / rows read / rows inserted / transactions / commits |
+|---|---|---|
+| Create / R-SQLite | 1,371 / 683 / 688 / 1 / 1 | 1,371 / 683 / 688 / 1 / 1 |
+| Create / R-HYBRID | 2,048 / 683 / 689 / 1 / 1 | 2,731 / 1,366 / 689 / 2 / 2 |
+| Create / R-LOG | 2,048 / 683 / 689 / 1 / 1 | 2,048 / 683 / 689 / 1 / 1 |
+| One-byte / R-SQLite | 711 / 705 / 6 / 1 / 1 | 2,082 / 1,388 / 694 / 2 / 2 |
+| One-byte / R-HYBRID | 713 / 706 / 7 / 1 / 1 | 2,761 / 1,389 / 696 / 2 / 2 |
+| One-byte / R-LOG | 713 / 706 / 7 / 1 / 1 | 2,761 / 1,389 / 696 / 2 / 2 |
+| Three edits / R-SQLite | 2,129 / 2,111 / 18 / 3 / 3 | 3,500 / 2,794 / 706 / 4 / 4 |
+| Three edits / R-HYBRID | 2,134 / 2,113 / 21 / 3 / 3 | 4,182 / 2,796 / 710 / 4 / 4 |
+| Three edits / R-LOG | 2,134 / 2,113 / 21 / 3 / 3 | 4,182 / 2,796 / 710 / 4 / 4 |
+
+The M7 source-window counters were unchanged: one edit read 2,097,152 source
+bytes in one source transaction and three edits read 4,371,981 source bytes in
+three source transactions. Read workloads performed 1,000 source reads and
+transactions over 92,832,100 source bytes; materialization read 677 objects,
+and repeated 1 MiB materialization read 800 objects.
+
+### Correctness and crash recovery
+
+The final three-lane runner passed the carrier self-check:
+`bounds=verified`, `carrier_format_check=pass`, `payload_hash=verified`, and
+`truncated_record=rejected`. Every retained R-LOG sample passed paired root,
+logical-digest, object-count, manifest-count, changed-object-set,
+unchanged-identity-set, M7-locality, close/reopen, SQLite-integrity, and
+materialization checks against R-SQLite and R-HYBRID.
+
+The three recovery lanes all passed. Baseline counts were `[8,1,1]`,
+crash-before-commit returned status `91`, crash-after-commit returned status
+`92`, and recovered counts were `[9,2,2]`. R-SQLite quarantined zero orphan
+carriers, R-HYBRID quarantined the deliberately uncommitted carrier, and R-LOG
+truncated its uncommitted payload-log tail and quarantined zero files. No
+unreferenced payload remained.
+
+### Decision and next approach
+
+**Decision: reject R-LOG as the overall replacement.** It is correct, durable,
+low-RSS, and a useful crash-recovery pattern, but it is slower than R-SQLite by
+18.7% on 100 MiB create, 127.1% on one-byte edit, and 130.2% on three edits.
+Its read lane is close to R-HYBRID and its repeated-materialization lane is
+slower than both controls. The single-log scan is the bottleneck, not SQLite
+metadata or the append itself.
+
+The next non-HYBRID experiment should be a narrow SQLite-native payload-table
+variant: preserve the current hash/checksum metadata, but add a rowid-backed
+payload table with a unique hash index and test SQLite incremental BLOB reads
+against ordinary `SELECT bytes`. The current `efs_cas_objects` table is
+`WITHOUT ROWID` with the hash as its primary key, so this requires a schema
+variant rather than a misleading call-site tweak. It should be one isolated
+branch of the harness, with the same workload matrix and gates, and should be
+dropped immediately if rowid/index overhead erases the read/write gain.
+
+Do not implement that schema variant in production yet. The measured result is
+clearer than a speculative refactor: after the prepared-statement, timing, and
+duplicate-hash cleanups, R-SQLite remains the write/edit winner; R-HYBRID remains
+the read/RSS winner; and R-LOG is a correct but rejected third point in the
+trade-off space.
 
 ## Phase 3 follow-up — npm/native SQLite CAS+CDC boundary using Phase 1 R-SQL
 

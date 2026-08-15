@@ -21,11 +21,13 @@ const CARRIER_IO_BUFFER_BYTES: usize = 128 * 1024;
 const CARRIER_VERSION: u16 = 1;
 const RANDOM_READS: usize = 1_000;
 const MAX_PHASE2_MIB: usize = 100;
+const LOG_FILE_NAME: &str = "payload.log";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StorageMode {
     Sqlite,
     Hybrid,
+    Log,
 }
 
 impl StorageMode {
@@ -33,6 +35,7 @@ impl StorageMode {
         match self {
             Self::Sqlite => "R-SQLite",
             Self::Hybrid => "R-HYBRID",
+            Self::Log => "R-LOG",
         }
     }
 }
@@ -47,6 +50,7 @@ struct CarrierRecord {
 #[derive(Clone, Debug)]
 struct CarrierBatch {
     carrier_id: [u8; 32],
+    carrier_digest: [u8; 32],
     relative_path: String,
     byte_length: usize,
     record_count: usize,
@@ -298,7 +302,8 @@ impl CarrierWriter {
         let mut sync_ns = sync_started.elapsed().as_nanos();
         if final_path.exists() {
             if std::fs::metadata(&final_path)?.len() != self.byte_length as u64
-                || validate_carrier_file(&final_path, carrier_id, None, true)? != self.record_count
+                || validate_carrier_file(&final_path, carrier_id, carrier_id, None, true, None)?
+                    != self.record_count
             {
                 let _ = std::fs::remove_file(&self.temp_path);
                 return Err("deterministic carrier name collision".into());
@@ -312,6 +317,7 @@ impl CarrierWriter {
         }
         Ok(CarrierBatch {
             carrier_id,
+            carrier_digest: carrier_id,
             relative_path: final_name,
             byte_length: self.byte_length,
             record_count: self.record_count,
@@ -345,6 +351,147 @@ fn stage_carrier(
     let mut batch = writer.finish()?;
     batch.offsets = offsets;
     Ok(Some(batch))
+}
+
+fn payload_log_id() -> [u8; 32] {
+    sha256(b"phase2-payload-log-v1")
+}
+
+fn payload_log_seed() -> [u8; 32] {
+    sha256(b"phase2-payload-log-chain-v1")
+}
+
+struct PayloadLogWriter {
+    path: PathBuf,
+    file: BufWriter<File>,
+    chain: [u8; 32],
+    byte_length: usize,
+    record_count: usize,
+    offsets: HashMap<[u8; 32], (usize, usize)>,
+    record_encode_ns: u128,
+    write_started: Instant,
+}
+
+impl PayloadLogWriter {
+    fn new(
+        path: &Path,
+        chain: [u8; 32],
+        byte_length: usize,
+        record_count: usize,
+    ) -> AppResult<Self> {
+        if let Some(parent) = path.parent() {
+            create_dir_all(parent)?;
+        }
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            file: BufWriter::with_capacity(CARRIER_IO_BUFFER_BYTES, file),
+            chain,
+            byte_length,
+            record_count,
+            offsets: HashMap::new(),
+            record_encode_ns: 0,
+            write_started: Instant::now(),
+        })
+    }
+
+    fn append(&mut self, hash: [u8; 32], bytes: &[u8]) -> AppResult<()> {
+        let offset = self.byte_length;
+        let encode_started = Instant::now();
+        let mut header = [0u8; CARRIER_HEADER_BYTES];
+        header[..4].copy_from_slice(b"LFCR");
+        header[4..6].copy_from_slice(&CARRIER_VERSION.to_le_bytes());
+        header[6..8].copy_from_slice(&(CARRIER_HEADER_BYTES as u16).to_le_bytes());
+        header[8..16].copy_from_slice(&(bytes.len() as u64).to_le_bytes());
+        header[16..48].copy_from_slice(&hash);
+        header[48..52].copy_from_slice(&1u32.to_le_bytes());
+        header[52..56].copy_from_slice(&0u32.to_le_bytes());
+        self.record_encode_ns += encode_started.elapsed().as_nanos();
+        let mut record_digest = Sha256::new();
+        record_digest.update(&header);
+        record_digest.update(bytes);
+        let record_digest: [u8; 32] = record_digest.finalize().into();
+        let mut next_chain = Sha256::new();
+        next_chain.update(self.chain);
+        next_chain.update(record_digest);
+        self.chain = next_chain.finalize().into();
+        self.file.write_all(&header)?;
+        self.file.write_all(bytes)?;
+        self.byte_length = offset
+            .checked_add(CARRIER_HEADER_BYTES)
+            .and_then(|value| value.checked_add(bytes.len()))
+            .ok_or("payload log length overflow")?;
+        self.record_count += 1;
+        self.offsets.insert(hash, (offset, bytes.len()));
+        Ok(())
+    }
+
+    fn finish(mut self) -> AppResult<CarrierBatch> {
+        self.file.flush()?;
+        let write_ns = self.write_started.elapsed().as_nanos();
+        let file = self.file.into_inner().map_err(|error| error.into_error())?;
+        let sync_started = Instant::now();
+        file.sync_all()?;
+        let sync_ns = sync_started.elapsed().as_nanos();
+        sync_directory(self.path.parent().ok_or("payload log has no parent")?)?;
+        Ok(CarrierBatch {
+            carrier_id: payload_log_id(),
+            carrier_digest: self.chain,
+            relative_path: LOG_FILE_NAME.to_string(),
+            byte_length: self.byte_length,
+            record_count: self.record_count,
+            offsets: self.offsets,
+            record_encode_ns: self.record_encode_ns,
+            digest_ns: 0,
+            write_ns,
+            sync_ns,
+        })
+    }
+}
+
+fn stage_payload_log(
+    conn: &Connection,
+    carrier_dir: &Path,
+    objects: &Phase2ObjectSource<'_>,
+    missing: &HashSet<[u8; 32]>,
+) -> AppResult<Option<CarrierBatch>> {
+    if missing.is_empty() {
+        return Ok(None);
+    }
+    let log_path = carrier_dir.join(LOG_FILE_NAME);
+    let log_id = payload_log_id();
+    let (chain, byte_length, record_count) = conn
+        .query_row(
+            "SELECT carrier_digest,carrier_bytes,record_count FROM efs_carriers WHERE carrier_id=?",
+            params![log_id.as_slice()],
+            |row| {
+                let digest: [u8; 32] = row
+                    .get::<_, Vec<u8>>(0)?
+                    .try_into()
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let bytes: i64 = row.get(1)?;
+                let records: i64 = row.get(2)?;
+                if bytes < 0 || records < 0 {
+                    return Err(rusqlite::Error::InvalidQuery);
+                }
+                Ok((digest, bytes as usize, records as usize))
+            },
+        )
+        .optional()?
+        .unwrap_or((payload_log_seed(), 0, 0));
+    let actual_length = std::fs::metadata(&log_path)
+        .map(|metadata| metadata.len() as usize)
+        .unwrap_or(0);
+    if actual_length != byte_length {
+        return Err("payload log length differs from committed high-water mark".into());
+    }
+    let mut writer = PayloadLogWriter::new(&log_path, chain, byte_length, record_count)?;
+    for hash in objects.hashes() {
+        if missing.contains(&hash) {
+            writer.append(hash, &objects.payload(hash)?)?;
+        }
+    }
+    Ok(Some(writer.finish()?))
 }
 
 fn read_carrier_record(
@@ -384,8 +531,10 @@ fn read_carrier_record(
 fn validate_carrier_file(
     path: &Path,
     carrier_id: [u8; 32],
+    expected_digest: [u8; 32],
     references: Option<(&Connection, i64)>,
     verify_payload_hash: bool,
+    mut chain_seed: Option<[u8; 32]>,
 ) -> AppResult<usize> {
     let file_length = std::fs::metadata(path)?.len();
     let file = File::open(path)?;
@@ -415,6 +564,10 @@ fn validate_carrier_file(
         }
         reader.read_exact(&mut header[1..])?;
         carrier_hash.update(&header);
+        let mut record_digest = chain_seed.map(|_| Sha256::new());
+        if let Some(digest) = record_digest.as_mut() {
+            digest.update(&header);
+        }
         if &header[..4] != b"LFCR"
             || u16::from_le_bytes(header[4..6].try_into()?) != CARRIER_VERSION
             || u16::from_le_bytes(header[6..8].try_into()?) as usize != CARRIER_HEADER_BYTES
@@ -481,6 +634,9 @@ fn validate_carrier_file(
             if verify_payload_hash {
                 payload_hash.update(&payload_buffer[..read_length]);
             }
+            if let Some(digest) = record_digest.as_mut() {
+                digest.update(&payload_buffer[..read_length]);
+            }
             carrier_hash.update(&payload_buffer[..read_length]);
             remaining -= read_length as u64;
         }
@@ -489,6 +645,12 @@ fn validate_carrier_file(
             if payload_digest != expected_hash {
                 return Err("carrier record bounds or hash invalid".into());
             }
+        }
+        if let Some(record_digest) = record_digest {
+            let mut next_chain = Sha256::new();
+            next_chain.update(chain_seed.ok_or("missing payload log chain seed")?);
+            next_chain.update(record_digest.finalize());
+            chain_seed = Some(next_chain.finalize().into());
         }
         offset = end;
         count += 1;
@@ -504,8 +666,11 @@ fn validate_carrier_file(
     if expected_record_count != Some(count as i64) && expected_record_count.is_some() {
         return Err("carrier record count mismatch".into());
     }
-    let actual_carrier_id: [u8; 32] = carrier_hash.finalize().into();
-    if actual_carrier_id != carrier_id {
+    let actual_digest: [u8; 32] = match chain_seed {
+        Some(chain) => chain,
+        None => carrier_hash.finalize().into(),
+    };
+    if actual_digest != expected_digest {
         return Err("carrier file digest mismatch".into());
     }
     Ok(count)
@@ -580,6 +745,26 @@ impl DeterministicSource {
     fn fill(&mut self, output: &mut [u8]) {
         for byte in output {
             *byte = self.next_byte();
+        }
+    }
+
+    fn advance(&mut self, mut count: usize) {
+        if self.next < 4 {
+            let consumed = usize::min(count, 4 - self.next);
+            self.next += consumed;
+            count -= consumed;
+        }
+        if count >= 4 {
+            let words = count / 4;
+            self.state = self
+                .state
+                .wrapping_add(0x6d2b_79f5u32.wrapping_mul(words as u32));
+            self.next = 4;
+            count %= 4;
+        }
+        while count > 0 {
+            self.next_byte();
+            count -= 1;
         }
     }
 }
@@ -678,10 +863,7 @@ fn stream_fixture(seed: u32, length: usize) -> AppResult<(FixturePlan, u128, u12
             });
         }
         buffer.drain(..end);
-        buffer_source = buffer_source.clone();
-        for _ in 0..end {
-            let _ = buffer_source.next_byte();
-        }
+        buffer_source.advance(end);
         remaining -= end;
     }
     let plan = FixturePlan {
@@ -694,6 +876,26 @@ fn stream_fixture(seed: u32, length: usize) -> AppResult<(FixturePlan, u128, u12
         source_ns,
         started.elapsed().as_nanos().saturating_sub(source_ns),
     ))
+}
+
+fn deterministic_digest_with_edits(seed: u32, length: usize, offsets: &[usize]) -> [u8; 32] {
+    let (_, _, maximum) = PARAMETERS;
+    let mut source = DeterministicSource::new(seed);
+    let mut buffer = vec![0u8; usize::min(maximum, length)];
+    let mut digest = Sha256::new();
+    let mut position = 0;
+    while position < length {
+        let count = usize::min(buffer.len(), length - position);
+        source.fill(&mut buffer[..count]);
+        for offset in offsets {
+            if *offset >= position && *offset < position + count {
+                buffer[*offset - position] = INSERT_BYTE;
+            }
+        }
+        digest.update(&buffer[..count]);
+        position += count;
+    }
+    digest.finalize().into()
 }
 
 fn advance_group_state(
@@ -1269,22 +1471,36 @@ fn phase2_read_payload(
 ) -> AppResult<Vec<u8>> {
     match mode {
         StorageMode::Sqlite => {
-            let (size, bytes): (i64, Vec<u8>) = conn.query_row(
-                "SELECT size,bytes FROM efs_cas_objects WHERE hash=?",
-                params![hash.as_slice()],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )?;
+            let mut statement =
+                conn.prepare_cached("SELECT size,bytes FROM efs_cas_objects WHERE hash=?")?;
+            let (size, bytes): (i64, Vec<u8>) = statement
+                .query_row(params![hash.as_slice()], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })?;
             if size < 0 || size as usize != bytes.len() || sha256(&bytes) != hash {
                 return Err("SQLite payload digest or length mismatch".into());
             }
             Ok(bytes)
         }
-        StorageMode::Hybrid => {
-            let (size, carrier_id, offset, length, checksum, relative_path): (i64, Vec<u8>, i64, i64, Vec<u8>, String) = conn.query_row(
-                "SELECT o.size,o.carrier_id,o.carrier_offset,o.carrier_length,o.carrier_checksum,c.relative_path FROM efs_cas_objects o JOIN efs_carriers c ON c.carrier_id=o.carrier_id WHERE o.hash=?",
-                params![hash.as_slice()],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
-            )?;
+        StorageMode::Hybrid | StorageMode::Log => {
+            let mut statement = conn.prepare_cached("SELECT o.size,o.carrier_id,o.carrier_offset,o.carrier_length,o.carrier_checksum,c.relative_path FROM efs_cas_objects o JOIN efs_carriers c ON c.carrier_id=o.carrier_id WHERE o.hash=?")?;
+            let (size, carrier_id, offset, length, checksum, relative_path): (
+                i64,
+                Vec<u8>,
+                i64,
+                i64,
+                Vec<u8>,
+                String,
+            ) = statement.query_row(params![hash.as_slice()], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            })?;
             let carrier_id: [u8; 32] = carrier_id
                 .try_into()
                 .map_err(|_| "invalid carrier identifier")?;
@@ -1316,27 +1532,15 @@ fn phase2_read_payload(
 fn phase2_prepare_objects(
     conn: &Connection,
     objects: &Phase2ObjectSource<'_>,
-    mode: StorageMode,
+    _mode: StorageMode,
     counters: &mut Counters,
 ) -> AppResult<HashSet<[u8; 32]>> {
     let mut missing = HashSet::new();
+    let mut statement = conn.prepare_cached("SELECT size FROM efs_cas_objects WHERE hash=?")?;
     for hash in objects.hashes() {
-        let found: Option<i64> = match mode {
-            StorageMode::Sqlite => conn
-                .query_row(
-                    "SELECT size FROM efs_cas_objects WHERE hash=?",
-                    params![hash.as_slice()],
-                    |row| row.get(0),
-                )
-                .optional()?,
-            StorageMode::Hybrid => conn
-                .query_row(
-                    "SELECT size FROM efs_cas_objects WHERE hash=?",
-                    params![hash.as_slice()],
-                    |row| row.get(0),
-                )
-                .optional()?,
-        };
+        let found: Option<i64> = statement
+            .query_row(params![hash.as_slice()], |row| row.get(0))
+            .optional()?;
         counters.statements += 1;
         counters.rows_read += usize::from(found.is_some());
         if found.is_none() {
@@ -1363,7 +1567,11 @@ fn phase2_persist_manifest(
         // ponytail: the staged bytes were hashed while building the deterministic carrier and
         // fsynced before this transaction; full carrier validation belongs to the shared
         // close/reopen verification boundary, not a duplicate pre-commit 100 MiB scan.
-        tx.execute("INSERT OR IGNORE INTO efs_carriers(carrier_id,relative_path,carrier_bytes,carrier_digest,record_count,format_version) VALUES(?,?,?,?,?,?)", params![batch.carrier_id.as_slice(), batch.relative_path, batch.byte_length as i64, batch.carrier_id.as_slice(), batch.record_count as i64, CARRIER_VERSION as i64])?;
+        if mode == StorageMode::Log {
+            tx.execute("INSERT INTO efs_carriers(carrier_id,relative_path,carrier_bytes,carrier_digest,record_count,format_version) VALUES(?,?,?,?,?,?) ON CONFLICT(carrier_id) DO UPDATE SET relative_path=excluded.relative_path,carrier_bytes=excluded.carrier_bytes,carrier_digest=excluded.carrier_digest,record_count=excluded.record_count,format_version=excluded.format_version", params![batch.carrier_id.as_slice(), batch.relative_path, batch.byte_length as i64, batch.carrier_digest.as_slice(), batch.record_count as i64, CARRIER_VERSION as i64])?;
+        } else {
+            tx.execute("INSERT OR IGNORE INTO efs_carriers(carrier_id,relative_path,carrier_bytes,carrier_digest,record_count,format_version) VALUES(?,?,?,?,?,?)", params![batch.carrier_id.as_slice(), batch.relative_path, batch.byte_length as i64, batch.carrier_digest.as_slice(), batch.record_count as i64, CARRIER_VERSION as i64])?;
+        }
         counters.rows_inserted += 1;
     }
     let mut new_objects = 0;
@@ -1373,13 +1581,15 @@ fn phase2_persist_manifest(
         let is_new = missing.contains(&hash);
         match mode {
             StorageMode::Sqlite => {
-                let existing: Option<(i64, Vec<u8>)> = tx
-                    .query_row(
-                        "SELECT size,bytes FROM efs_cas_objects WHERE hash=?",
-                        params![hash.as_slice()],
-                        |row| Ok((row.get(0)?, row.get(1)?)),
-                    )
-                    .optional()?;
+                let existing: Option<(i64, Vec<u8>)> = {
+                    let mut statement =
+                        tx.prepare_cached("SELECT size,bytes FROM efs_cas_objects WHERE hash=?")?;
+                    statement
+                        .query_row(params![hash.as_slice()], |row| {
+                            Ok((row.get(0)?, row.get(1)?))
+                        })
+                        .optional()?
+                };
                 counters.rows_read += usize::from(existing.is_some());
                 if let Some((size, prior)) = existing {
                     if size < 0
@@ -1390,13 +1600,19 @@ fn phase2_persist_manifest(
                         return Err("CAS same-ID/different-bytes collision".into());
                     }
                 } else {
-                    tx.execute("INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,?)", params![hash.as_slice(), bytes.len() as i64, bytes, sequence])?;
+                    let mut statement = tx.prepare_cached("INSERT INTO efs_cas_objects(hash,size,bytes,allocation_sequence) VALUES(?,?,?,?)")?;
+                    statement.execute(params![
+                        hash.as_slice(),
+                        bytes.len() as i64,
+                        bytes,
+                        sequence
+                    ])?;
                     counters.rows_inserted += 1;
                     new_objects += 1;
                     sequence += 1;
                 }
             }
-            StorageMode::Hybrid => {
+            StorageMode::Hybrid | StorageMode::Log => {
                 let existing: Option<(i64, Vec<u8>, i64, i64, Vec<u8>)> = tx.query_row("SELECT size,carrier_id,carrier_offset,carrier_length,carrier_checksum FROM efs_cas_objects WHERE hash=?", params![hash.as_slice()], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))).optional()?;
                 counters.rows_read += usize::from(existing.is_some());
                 if let Some((size, carrier_id, offset, length, checksum)) = existing {
@@ -1427,15 +1643,15 @@ fn phase2_persist_manifest(
                         return Err("carrier same-ID/different-bytes collision".into());
                     }
                 } else {
-                    let batch = carrier.ok_or("new hybrid object has no durable carrier")?;
+                    let batch = carrier.ok_or("new external object has no durable carrier")?;
                     if !is_new {
-                        return Err("new hybrid object missing from carrier admission".into());
+                        return Err("new external object missing from carrier admission".into());
                     }
                     let (carrier_offset, carrier_length) = batch
                         .offsets
                         .get(&hash)
                         .copied()
-                        .ok_or("new hybrid object missing carrier offset")?;
+                        .ok_or("new external object missing carrier offset")?;
                     tx.execute("INSERT INTO efs_cas_objects(hash,size,carrier_id,carrier_offset,carrier_length,carrier_checksum,allocation_sequence) VALUES(?,?,?,?,?,?,?)", params![hash.as_slice(), bytes.len() as i64, batch.carrier_id.as_slice(), carrier_offset as i64, carrier_length as i64, hash.as_slice(), sequence])?;
                     counters.rows_inserted += 1;
                     new_objects += 1;
@@ -1450,20 +1666,28 @@ fn phase2_persist_manifest(
             continue;
         }
         counters.statements += 1;
-        let prior: Option<Vec<u8>> = tx
-            .query_row(
-                "SELECT encoded FROM efs_manifest_nodes WHERE hash=?",
-                params![node.hash.as_slice()],
-                |row| row.get(0),
-            )
-            .optional()?;
+        let prior: Option<Vec<u8>> = {
+            let mut statement =
+                tx.prepare_cached("SELECT encoded FROM efs_manifest_nodes WHERE hash=?")?;
+            statement
+                .query_row(params![node.hash.as_slice()], |row| row.get(0))
+                .optional()?
+        };
         counters.rows_read += usize::from(prior.is_some());
         if let Some(prior) = prior {
             if prior != node.encoded {
                 return Err("manifest node collision".into());
             }
         } else {
-            tx.execute("INSERT INTO efs_manifest_nodes(hash,kind,logical_bytes,entry_count,encoded,allocation_sequence) VALUES(?,?,?,?,?,?)", params![node.hash.as_slice(), node.kind(), node.span() as i64, node.entry_count() as i64, &node.encoded, sequence])?;
+            let mut statement = tx.prepare_cached("INSERT INTO efs_manifest_nodes(hash,kind,logical_bytes,entry_count,encoded,allocation_sequence) VALUES(?,?,?,?,?,?)")?;
+            statement.execute(params![
+                node.hash.as_slice(),
+                node.kind(),
+                node.span() as i64,
+                node.entry_count() as i64,
+                &node.encoded,
+                sequence
+            ])?;
             counters.rows_inserted += 1;
             new_nodes += 1;
             sequence += 1;
@@ -1937,6 +2161,34 @@ fn phase2_read_source_window(
     Ok(output)
 }
 
+fn fixture_read_source_window(
+    fixture: &FixturePlan,
+    entries: &[Entry],
+    start_index: usize,
+    start_offset: usize,
+    file_size: usize,
+    requested_length: usize,
+) -> AppResult<Vec<u8>> {
+    let length = usize::min(requested_length, file_size - start_offset);
+    let mut output = vec![0u8; length];
+    let mut copied = 0;
+    let mut index = start_index;
+    let mut object_offset = start_offset;
+    while copied < length {
+        let bytes = Phase2ObjectSource::Fixture(fixture).payload(entries[index].hash)?;
+        if bytes.len() != entries[index].length {
+            return Err("fixture object length mismatch".into());
+        }
+        let offset = start_offset.saturating_sub(object_offset);
+        let take = usize::min(bytes.len() - offset, length - copied);
+        output[copied..copied + take].copy_from_slice(&bytes[offset..offset + take]);
+        copied += take;
+        object_offset += bytes.len();
+        index += 1;
+    }
+    Ok(output)
+}
+
 #[derive(Clone)]
 struct Phase2LeafContext {
     leaf: EncodedNode,
@@ -2395,7 +2647,11 @@ fn phase2_edit_entries(
     timings.tree_ns += tree_started.elapsed().as_nanos();
     if std::env::var_os("PHASE2_M7_CANONICAL_CHECK").is_some() {
         let canonical_started = Instant::now();
-        let mut canonical_bytes = canonical_source.to_vec();
+        let mut canonical_bytes = if canonical_source.is_empty() {
+            deterministic_bytes(SEED, built.file_size)
+        } else {
+            canonical_source.to_vec()
+        };
         canonical_bytes[offset] = INSERT_BYTE;
         let (canonical_entries, _) = chunk_fixture(&canonical_bytes);
         let canonical = build_manifest(&canonical_entries);
@@ -2547,11 +2803,11 @@ fn phase2_materialized_digest(
         out: &mut Sha256,
         counters: &mut Counters,
     ) -> AppResult<()> {
-        let encoded: Vec<u8> = conn.query_row(
-            "SELECT encoded FROM efs_manifest_nodes WHERE hash=?",
-            params![node_hash.as_slice()],
-            |row| row.get(0),
-        )?;
+        let encoded: Vec<u8> = {
+            let mut statement =
+                conn.prepare_cached("SELECT encoded FROM efs_manifest_nodes WHERE hash=?")?;
+            statement.query_row(params![node_hash.as_slice()], |row| row.get(0))?
+        };
         counters.statements += 1;
         counters.rows_read += 1;
         let node = decode_node(&encoded, node_hash)?;
@@ -2561,7 +2817,7 @@ fn phase2_materialized_digest(
                     let bytes = phase2_read_payload(conn, mode, carrier_dir, entry.hash)?;
                     counters.statements += 1;
                     counters.rows_read += 1;
-                    if bytes.len() != entry.length || sha256(&bytes) != entry.hash {
+                    if bytes.len() != entry.length {
                         return Err("payload digest mismatch after reopen".into());
                     }
                     out.update(bytes);
@@ -2625,7 +2881,7 @@ fn phase2_space(
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().to_string();
             let size = entry.metadata()?.len();
-            if name.ends_with(".lfc") {
+            if name.ends_with(".lfc") || (mode == StorageMode::Log && name == LOG_FILE_NAME) {
                 carrier_bytes += size;
                 carrier_names.insert(name);
             } else {
@@ -2643,7 +2899,7 @@ fn phase2_space(
                 live_payload += row.get::<_, i64>(0)?.max(0) as u64;
             }
         }
-        StorageMode::Hybrid => {
+        StorageMode::Hybrid | StorageMode::Log => {
             let mut stmt = conn.prepare("SELECT size,carrier_id FROM efs_cas_objects")?;
             let mut rows = stmt.query([])?;
             while let Some(row) = rows.next()? {
@@ -2653,7 +2909,7 @@ fn phase2_space(
         }
     }
     let mut orphan_carrier_bytes = 0u64;
-    if mode == StorageMode::Hybrid {
+    if matches!(mode, StorageMode::Hybrid | StorageMode::Log) {
         let mut carriers = conn.prepare("SELECT carrier_id,relative_path FROM efs_carriers")?;
         let rows = carriers.query_map([], |row| {
             Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, String>(1)?))
@@ -2703,7 +2959,7 @@ fn phase2_orphan_files(conn: &Connection, carrier_dir: &Path) -> AppResult<Vec<P
     for entry in std::fs::read_dir(carrier_dir)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().to_string();
-        if !name.ends_with(".lfc") {
+        if !name.ends_with(".lfc") && name != LOG_FILE_NAME {
             continue;
         }
         let known: bool = conn.query_row(
@@ -2716,6 +2972,37 @@ fn phase2_orphan_files(conn: &Connection, carrier_dir: &Path) -> AppResult<Vec<P
         }
     }
     Ok(orphans)
+}
+
+fn phase2_recover_payload_log(conn: &Connection, carrier_dir: &Path) -> AppResult<bool> {
+    let committed: Option<i64> = conn
+        .query_row(
+            "SELECT carrier_bytes FROM efs_carriers WHERE carrier_id=?",
+            params![payload_log_id().as_slice()],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(committed) = committed else {
+        return Ok(false);
+    };
+    if committed < 0 {
+        return Err("negative payload log high-water mark".into());
+    }
+    let path = carrier_dir.join(LOG_FILE_NAME);
+    let actual = std::fs::metadata(&path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    if actual < committed as u64 {
+        return Err("payload log is shorter than committed high-water mark".into());
+    }
+    if actual == committed as u64 {
+        return Ok(false);
+    }
+    let file = OpenOptions::new().write(true).open(&path)?;
+    file.set_len(committed as u64)?;
+    file.sync_all()?;
+    sync_directory(carrier_dir)?;
+    Ok(true)
 }
 
 fn phase2_quarantine_orphans(conn: &Connection, carrier_dir: &Path) -> AppResult<usize> {
@@ -2739,6 +3026,7 @@ struct Phase2Timings {
     cdc_hash_ns: u128,
     tree_ns: u128,
     canonical_check_ns: u128,
+    expected_digest_oracle_ns: u128,
     admission_ns: u128,
     storage_before_commit_ns: u128,
     carrier_record_encode_ns: u128,
@@ -2752,6 +3040,7 @@ struct Phase2Timings {
     close_reopen_ns: u128,
     verification_ns: u128,
     incremental_verification_ns: u128,
+    integrity_check_ns: u128,
     checkpoint_ns: u128,
 }
 
@@ -2773,7 +3062,7 @@ fn phase2_open(path: &Path, mode: StorageMode, fresh: bool) -> AppResult<Connect
     if fresh {
         match mode {
             StorageMode::Sqlite => schema(&conn)?,
-            StorageMode::Hybrid => schema_hybrid(&conn)?,
+            StorageMode::Hybrid | StorageMode::Log => schema_hybrid(&conn)?,
         }
     }
     Ok(conn)
@@ -2792,12 +3081,18 @@ fn phase2_store(
     let storage_started = Instant::now();
     let carrier_dir = directory.join("carriers");
     let admission_started = Instant::now();
-    let missing = phase2_prepare_objects(conn, &objects, mode, counters)?;
+    let missing = match mode {
+        StorageMode::Sqlite => HashSet::new(),
+        StorageMode::Hybrid | StorageMode::Log => {
+            phase2_prepare_objects(conn, &objects, mode, counters)?
+        }
+    };
     timings.admission_ns += admission_started.elapsed().as_nanos();
     let carrier_started = Instant::now();
     let carrier = match mode {
         StorageMode::Sqlite => None,
         StorageMode::Hybrid => stage_carrier(&carrier_dir, &objects, &missing)?,
+        StorageMode::Log => stage_payload_log(conn, &carrier_dir, &objects, &missing)?,
     };
     timings.carrier_append_ns += carrier_started.elapsed().as_nanos();
     if let Some(batch) = &carrier {
@@ -2847,7 +3142,12 @@ fn phase2_verify(
     counters: &mut Counters,
     timings: &mut Phase2Timings,
 ) -> AppResult<()> {
-    let integrity: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let integrity_started = Instant::now();
+    let integrity: String = {
+        let mut statement = conn.prepare_cached("PRAGMA integrity_check")?;
+        statement.query_row([], |row| row.get(0))?
+    };
+    timings.integrity_check_ns += integrity_started.elapsed().as_nanos();
     if integrity != "ok" {
         return Err(format!("SQLite integrity_check failed: {integrity}").into());
     }
@@ -2861,23 +3161,30 @@ fn phase2_verify(
     if digest != expected_digest {
         return Err("logical digest mismatch after reopen".into());
     }
-    if mode == StorageMode::Hybrid {
+    if matches!(mode, StorageMode::Hybrid | StorageMode::Log) {
         let carrier_verify_started = Instant::now();
-        let mut statement =
-            conn.prepare("SELECT carrier_id,relative_path,record_count FROM efs_carriers")?;
+        let mut statement = conn.prepare(
+            "SELECT carrier_id,relative_path,carrier_digest,record_count FROM efs_carriers",
+        )?;
         let mut rows = statement.query([])?;
         while let Some(row) = rows.next()? {
             let carrier_id = row.get::<_, Vec<u8>>(0)?;
             let path = row.get::<_, String>(1)?;
-            let record_count = row.get::<_, i64>(2)?;
+            let carrier_digest = row.get::<_, Vec<u8>>(2)?;
+            let record_count = row.get::<_, i64>(3)?;
             let id: [u8; 32] = carrier_id.try_into().map_err(|_| "invalid carrier ID")?;
+            let digest: [u8; 32] = carrier_digest
+                .try_into()
+                .map_err(|_| "invalid carrier digest")?;
             validate_carrier_file(
                 &directory.join("carriers").join(path),
                 id,
+                digest,
                 Some((conn, record_count)),
                 // phase2_materialized_digest already hashes every referenced payload;
                 // this pass validates framing, references, and the carrier digest.
                 false,
+                (mode == StorageMode::Log).then_some(payload_log_seed()),
             )?;
         }
         if !phase2_orphan_files(conn, &directory.join("carriers"))?.is_empty() {
@@ -2929,7 +3236,12 @@ fn phase2_verify_incremental(
     {
         return Err("incremental verification requires a matching full verification state".into());
     }
-    let integrity: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+    let integrity_started = Instant::now();
+    let integrity: String = {
+        let mut statement = conn.prepare_cached("PRAGMA integrity_check")?;
+        statement.query_row([], |row| row.get(0))?
+    };
+    timings.integrity_check_ns += integrity_started.elapsed().as_nanos();
     if integrity != "ok" {
         return Err(format!("SQLite integrity_check failed: {integrity}").into());
     }
@@ -2965,20 +3277,21 @@ fn phase2_verify_incremental(
         decode_node(&stored, node.hash)?;
     }
     for hash in changed_objects.keys().copied() {
-        let bytes = phase2_read_payload(conn, mode, &directory.join("carriers"), hash)?;
-        if sha256(&bytes) != hash {
-            return Err("incremental payload digest mismatch".into());
-        }
+        phase2_read_payload(conn, mode, &directory.join("carriers"), hash)?;
     }
-    if let (StorageMode::Hybrid, Some(batch)) = (mode, carrier) {
-        let carrier_verify_started = Instant::now();
-        validate_carrier_file(
-            &directory.join("carriers").join(&batch.relative_path),
-            batch.carrier_id,
-            Some((conn, batch.record_count as i64)),
-            true,
-        )?;
-        timings.carrier_verify_ns += carrier_verify_started.elapsed().as_nanos();
+    if matches!(mode, StorageMode::Hybrid | StorageMode::Log) {
+        if let Some(batch) = carrier {
+            let carrier_verify_started = Instant::now();
+            validate_carrier_file(
+                &directory.join("carriers").join(&batch.relative_path),
+                batch.carrier_id,
+                batch.carrier_digest,
+                Some((conn, batch.record_count as i64)),
+                true,
+                (mode == StorageMode::Log).then_some(payload_log_seed()),
+            )?;
+            timings.carrier_verify_ns += carrier_verify_started.elapsed().as_nanos();
+        }
     }
     phase2_record_verification(conn, built.root_hash, expected_digest)?;
     let elapsed = verification_started.elapsed().as_nanos();
@@ -3007,10 +3320,7 @@ fn phase2_base(
     Counters,
 )> {
     create_dir_all(directory)?;
-    let source_started = Instant::now();
-    let fixture = stream_fixture(SEED, size)?;
-    let source_read_ns = source_started.elapsed().as_nanos();
-    let cdc_hash_ns = 0;
+    let (fixture, source_read_ns, cdc_hash_ns) = stream_fixture(SEED, size)?;
     let tree_started = Instant::now();
     let built = build_manifest(&fixture.entries);
     let tree_ns = tree_started.elapsed().as_nanos();
@@ -3128,11 +3438,11 @@ fn phase2_materialize_to(
         digest: &mut Sha256,
         counters: &mut Counters,
     ) -> AppResult<()> {
-        let encoded: Vec<u8> = conn.query_row(
-            "SELECT encoded FROM efs_manifest_nodes WHERE hash=?",
-            params![node_hash.as_slice()],
-            |row| row.get(0),
-        )?;
+        let encoded: Vec<u8> = {
+            let mut statement =
+                conn.prepare_cached("SELECT encoded FROM efs_manifest_nodes WHERE hash=?")?;
+            statement.query_row(params![node_hash.as_slice()], |row| row.get(0))?
+        };
         counters.statements += 1;
         counters.rows_read += 1;
         match decode_node(&encoded, node_hash)? {
@@ -3178,7 +3488,7 @@ fn phase2_random_reads(
     mode: StorageMode,
     directory: &Path,
     built: &BuiltManifest,
-    expected_source: &[u8],
+    fixture: &FixturePlan,
     reads: usize,
     counters: &mut Counters,
 ) -> AppResult<(u128, [u8; 32])> {
@@ -3202,9 +3512,18 @@ fn phase2_random_reads(
             offset - leaf.target_offset + 4096,
             counters,
         )?;
+        let expected = fixture_read_source_window(
+            fixture,
+            &built.entries,
+            leaf.target_entry,
+            leaf.target_offset,
+            built.file_size,
+            offset - leaf.target_offset + 4096,
+        )?;
         let relative = offset - leaf.target_offset;
         if bytes.len() < relative + 4096
-            || bytes[relative..relative + 4096] != expected_source[offset..offset + 4096]
+            || expected.len() < relative + 4096
+            || bytes[relative..relative + 4096] != expected[relative..relative + 4096]
         {
             return Err("random-read bytes mismatch".into());
         }
@@ -3293,6 +3612,7 @@ fn phase2_json_timing(t: &Phase2Timings) -> serde_json::Value {
         "fastcdc_hash_ms": t.cdc_hash_ns as f64 / 1e6,
         "tree_member_ms": t.tree_ns as f64 / 1e6,
         "m7_canonical_check_ms": t.canonical_check_ns as f64 / 1e6,
+        "expected_digest_oracle_ms": t.expected_digest_oracle_ns as f64 / 1e6,
         "object_admission_ms": t.admission_ns as f64 / 1e6,
         "payload_persistence_ms": t.storage_before_commit_ns as f64 / 1e6,
         "carrier_record_encode_ms": t.carrier_record_encode_ns as f64 / 1e6,
@@ -3307,6 +3627,7 @@ fn phase2_json_timing(t: &Phase2Timings) -> serde_json::Value {
         "close_reopen_ms": t.close_reopen_ns as f64 / 1e6,
         "full_verification_ms": t.verification_ns as f64 / 1e6,
         "incremental_verification_ms": t.incremental_verification_ns as f64 / 1e6,
+        "integrity_check_ms": t.integrity_check_ns as f64 / 1e6,
         "checkpoint_ms": t.checkpoint_ns as f64 / 1e6,
     })
 }
@@ -3433,10 +3754,10 @@ fn phase2_edit_record(
     } else {
         vec![0, size / 2, size - 1]
     };
-    let mut expected_bytes = deterministic_bytes(SEED, size);
     let base_root = base.root_hash;
     let mut current_expected = expected_base;
     let mut current = base;
+    let mut edited_offsets = Vec::new();
     let mut edits = Vec::new();
     let operation_start_counters = counters.clone();
     let mut operation_bounded_local_edit_ns = 0u128;
@@ -3445,8 +3766,25 @@ fn phase2_edit_record(
     let mut operation_sqlite_commit_ns = 0u128;
     let mut operation_close_reopen_ns = 0u128;
     let mut operation_full_verification_ns = 0u128;
+    let full_scrub_every = std::env::var("PHASE2_FULL_SCRUB_EVERY")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0);
+    let mut operation_full_scrub_ns = 0u128;
+    let mut full_scrub_count = 0usize;
+    let expected_oracle_started = Instant::now();
+    let mut expected_offsets = Vec::with_capacity(offsets.len());
+    let expected_digests: Vec<[u8; 32]> = offsets
+        .iter()
+        .map(|offset| {
+            expected_offsets.push(*offset);
+            deterministic_digest_with_edits(SEED, size, &expected_offsets)
+        })
+        .collect();
+    let expected_oracle_ns = expected_oracle_started.elapsed().as_nanos();
+    timings.expected_digest_oracle_ns += expected_oracle_ns;
     let operation_started = Instant::now();
-    for offset in offsets {
+    for (edit_index, offset) in offsets.into_iter().enumerate() {
         let edit_started = Instant::now();
         let canonical_check_before = timings.canonical_check_ns;
         let bounded_edit_started = Instant::now();
@@ -3455,7 +3793,7 @@ fn phase2_edit_record(
             mode,
             &directory.join("carriers"),
             &current,
-            &expected_bytes,
+            &[],
             offset,
             &mut timings,
             &mut counters,
@@ -3488,8 +3826,8 @@ fn phase2_edit_record(
         timings.carrier_fsync_ns += edit_timings.carrier_fsync_ns;
         timings.sqlite_metadata_ns += edit_timings.sqlite_metadata_ns;
         timings.sqlite_commit_ns += edit_timings.sqlite_commit_ns;
-        expected_bytes[offset] = INSERT_BYTE;
-        let expected = sha256(&expected_bytes);
+        edited_offsets.push(offset);
+        let expected = expected_digests[edit_index];
         let (reopened, close_reopen_ns, incremental_verification_ns) = phase2_reopen_incremental(
             conn,
             &db_path,
@@ -3506,6 +3844,24 @@ fn phase2_edit_record(
         )?;
         timings.close_reopen_ns += close_reopen_ns;
         conn = reopened;
+        let full_scrub_ns = if full_scrub_every.is_some_and(|every| (edit_index + 1) % every == 0) {
+            let scrub_started = Instant::now();
+            phase2_verify(
+                &conn,
+                mode,
+                &directory,
+                &rebuilt,
+                expected,
+                &mut counters,
+                &mut timings,
+            )?;
+            let elapsed = scrub_started.elapsed().as_nanos();
+            operation_full_scrub_ns += elapsed;
+            full_scrub_count += 1;
+            elapsed
+        } else {
+            0
+        };
         let total_end_to_end_ns = edit_started.elapsed().as_nanos();
         operation_bounded_local_edit_ns += bounded_local_edit_ns;
         operation_canonical_check_ns += canonical_check_ns;
@@ -3528,8 +3884,9 @@ fn phase2_edit_record(
                 "payload_persistence_ms": edit_timings.storage_before_commit_ns as f64/1e6,
                 "sqlite_commit_ms": edit_timings.sqlite_commit_ns as f64/1e6,
                 "close_reopen_ms": close_reopen_ns as f64/1e6,
-                "verification_mode": "incremental",
+                "verification_mode": if full_scrub_ns > 0 { "incremental+full-scrub" } else { "incremental" },
                 "incremental_verification_ms": incremental_verification_ns as f64/1e6,
+                "full_scrub_ms": full_scrub_ns as f64/1e6,
                 "total_end_to_end_ms": total_end_to_end_ns as f64/1e6
             }
         }));
@@ -3537,13 +3894,17 @@ fn phase2_edit_record(
         current = rebuilt;
     }
     let total_ms = operation_started.elapsed().as_secs_f64() * 1000.0;
+    let logical_digest = expected_digests
+        .last()
+        .copied()
+        .ok_or("edit operation produced no expected digest")?;
     let space = phase2_space(&conn, mode, &directory, &directory.join("carriers"))?;
     let result = json!({
         "phase2":"pass","candidate":mode.name(),"workload":workload,"size_bytes":size,"size_mib":size/MIB,
         "elapsed_ms":total_ms,"total_end_to_end_ms":total_ms,"throughput_mib_s":(size as f64 / MIB as f64)/(total_ms/1000.0),"edits":edits,
         "base_root":hex(&base_root),
         "root":hex(&current.root_hash),
-        "logical_digest":hex(&sha256(&expected_bytes)),
+        "logical_digest":hex(&logical_digest),
         "object_count":current.entries.len(),
         "manifest_node_count":current.nodes.len(),
         "operation_timing": {
@@ -3552,8 +3913,11 @@ fn phase2_edit_record(
             "payload_persistence_ms": operation_payload_persistence_ns as f64/1e6,
             "sqlite_commit_ms": operation_sqlite_commit_ns as f64/1e6,
             "close_reopen_ms": operation_close_reopen_ns as f64/1e6,
-            "verification_mode": "incremental",
+            "verification_mode": if full_scrub_count > 0 { "incremental+periodic-full-scrub" } else { "incremental" },
             "incremental_verification_ms": operation_full_verification_ns as f64/1e6,
+            "full_scrub_ms": operation_full_scrub_ns as f64/1e6,
+            "full_scrub_count": full_scrub_count,
+            "expected_digest_oracle_ms": expected_oracle_ns as f64/1e6,
             "total_end_to_end_ms": total_ms
         },
         "timing":phase2_json_timing(&timings),
@@ -3573,7 +3937,6 @@ fn phase2_read_record(mode: StorageMode, size: usize) -> AppResult<serde_json::V
     create_dir_all(&directory)?;
     let (conn, built, fixture, mut timings, mut counters) = phase2_base(&directory, mode, size)?;
     let expected = fixture.digest;
-    let original = deterministic_bytes(SEED, size);
     let db_path = directory.join("fs.db");
     let (conn, reopen_ns, _) = phase2_reopen(
         conn,
@@ -3610,7 +3973,7 @@ fn phase2_read_record(mode: StorageMode, size: usize) -> AppResult<serde_json::V
         mode,
         &directory,
         &built,
-        &original,
+        &fixture,
         RANDOM_READS,
         &mut counters,
     )?;
@@ -3739,10 +4102,16 @@ fn phase2_crash_child(
     let old_nodes: HashSet<_> = built.nodes.iter().map(|node| node.hash).collect();
     let carrier_dir = directory.join("carriers");
     let object_source = Phase2ObjectSource::Map(&objects);
-    let missing = phase2_prepare_objects(&conn, &object_source, mode, &mut counters)?;
+    let missing = match mode {
+        StorageMode::Sqlite => HashSet::new(),
+        StorageMode::Hybrid | StorageMode::Log => {
+            phase2_prepare_objects(&conn, &object_source, mode, &mut counters)?
+        }
+    };
     let carrier = match mode {
         StorageMode::Sqlite => None,
         StorageMode::Hybrid => stage_carrier(&carrier_dir, &object_source, &missing)?,
+        StorageMode::Log => stage_payload_log(&conn, &carrier_dir, &object_source, &missing)?,
     };
     let generation: i64 = conn.query_row(
         "SELECT coalesce(max(generation),0)+1 FROM efs_root_journal",
@@ -3791,6 +4160,7 @@ fn phase2_recovery_record(mode: StorageMode, size: usize) -> AppResult<serde_jso
                 match mode {
                     StorageMode::Sqlite => "sqlite",
                     StorageMode::Hybrid => "hybrid",
+                    StorageMode::Log => "log",
                 },
                 db_path.to_str().ok_or("non-UTF8 database path")?,
                 &size_mib,
@@ -3802,7 +4172,12 @@ fn phase2_recovery_record(mode: StorageMode, size: usize) -> AppResult<serde_jso
     };
     let before_status = run_child("before-commit")?;
     let recovered_before = phase2_open(&db_path, mode, false)?;
-    let orphan_count = if mode == StorageMode::Hybrid {
+    let payload_log_tail_truncated = if mode == StorageMode::Log {
+        phase2_recover_payload_log(&recovered_before, &directory.join("carriers"))?
+    } else {
+        false
+    };
+    let orphan_count = if matches!(mode, StorageMode::Hybrid | StorageMode::Log) {
         phase2_quarantine_orphans(&recovered_before, &directory.join("carriers"))?
     } else {
         0
@@ -3836,7 +4211,7 @@ fn phase2_recovery_record(mode: StorageMode, size: usize) -> AppResult<serde_jso
     )?;
     let after_counts: (i64, i64, i64) = after.query_row("SELECT (SELECT count(*) FROM efs_cas_objects),(SELECT count(*) FROM efs_manifest_roots),(SELECT count(*) FROM efs_root_journal)", [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
     after.close().map_err(|(_, error)| error)?;
-    let result = json!({"phase2":"pass","candidate":mode.name(),"workload":workload,"size_mib":size/MIB,"crash_before_commit_status":before_status,"crash_after_commit_status":after_status,"old_or_new_before":before_status==91,"old_or_new_after":after_status==92,"orphan_files_quarantined":orphan_count,"baseline_counts":baseline_counts,"after_counts":after_counts,"correctness":{"crash_before_commit":"pass","crash_after_commit":"pass","orphan_detection":"pass","orphan_quarantine":"pass","referenced_payloads":"pass","sqlite_integrity":"pass"}});
+    let result = json!({"phase2":"pass","candidate":mode.name(),"workload":workload,"size_mib":size/MIB,"crash_before_commit_status":before_status,"crash_after_commit_status":after_status,"old_or_new_before":before_status==91,"old_or_new_after":after_status==92,"payload_log_tail_truncated":payload_log_tail_truncated,"orphan_files_quarantined":orphan_count,"baseline_counts":baseline_counts,"after_counts":after_counts,"correctness":{"crash_before_commit":"pass","crash_after_commit":"pass","orphan_detection":"pass","orphan_quarantine":"pass","referenced_payloads":"pass","sqlite_integrity":"pass"}});
     remove_dir_all(&directory)?;
     Ok(result)
 }
@@ -3860,8 +4235,10 @@ fn phase2_carrier_check() -> AppResult<serde_json::Value> {
     if validate_carrier_file(
         &carrier_dir.join(&batch.relative_path),
         batch.carrier_id,
+        batch.carrier_digest,
         None,
         true,
+        None,
     )? != 1
     {
         return Err("carrier self-check record count failed".into());
@@ -3889,7 +4266,16 @@ fn phase2_carrier_check() -> AppResult<serde_json::Value> {
     let corrupt = carrier_dir.join("corrupt.lfc");
     std::fs::copy(carrier_dir.join(&batch.relative_path), &corrupt)?;
     OpenOptions::new().write(true).open(&corrupt)?.set_len(3)?;
-    if validate_carrier_file(&corrupt, batch.carrier_id, None, true).is_ok() {
+    if validate_carrier_file(
+        &corrupt,
+        batch.carrier_id,
+        batch.carrier_digest,
+        None,
+        true,
+        None,
+    )
+    .is_ok()
+    {
         return Err("truncated carrier accepted".into());
     }
     remove_dir_all(&directory)?;
@@ -3999,6 +4385,7 @@ fn parse_storage_mode(value: &str) -> AppResult<StorageMode> {
     match value {
         "sqlite" | "r-sqlite" => Ok(StorageMode::Sqlite),
         "hybrid" | "r-hybrid" => Ok(StorageMode::Hybrid),
+        "log" | "payload-log" | "r-log" => Ok(StorageMode::Log),
         _ => Err(format!("unknown storage mode: {value}").into()),
     }
 }

@@ -21,6 +21,7 @@ const jobs = [
 function run(args) {
   const result = spawnSync("/usr/bin/time", ["-l", BINARY, ...args], {
     cwd: ROOT,
+    env: { ...process.env, PHASE2_FULL_SCRUB_EVERY: "1" },
     encoding: "utf8",
     timeout: 15 * 60 * 1000,
   });
@@ -71,6 +72,12 @@ function summarize(rows) {
       "carrier_verify_ms",
       "sqlite_metadata_ms",
       "carrier_fsync_ms",
+      "source_read_ms",
+      "fastcdc_hash_ms",
+      "tree_member_ms",
+      "integrity_check_ms",
+      "incremental_verification_ms",
+      "full_verification_ms",
     ]) {
       const values = group
         .map((row) => row.timing?.[field])
@@ -84,6 +91,9 @@ function summarize(rows) {
       "sqlite_commit_ms",
       "close_reopen_ms",
       "full_verification_ms",
+      "incremental_verification_ms",
+      "expected_digest_oracle_ms",
+      "full_scrub_ms",
       "total_end_to_end_ms",
     ]) {
       const values = group
@@ -128,25 +138,29 @@ function validatePairedResults(rows) {
     "metrics.scanWindowBytes",
   ];
   for (const [key, modes] of paired) {
-    const sqlite = modes.get("R-SQLite");
-    const hybrid = modes.get("R-HYBRID");
-    if (!sqlite || !hybrid) throw new Error(`unpaired retained sample: ${key}`);
-    for (const field of identityFields) {
-      if (sqlite[field] !== hybrid[field]) {
-        throw new Error(`lane identity mismatch ${key} ${field}: ${sqlite[field]} != ${hybrid[field]}`);
+    const lanes = ["R-SQLite", "R-HYBRID", "R-LOG"].map((candidate) => modes.get(candidate));
+    if (lanes.some((lane) => !lane)) throw new Error(`unpaired retained sample: ${key}`);
+    const [sqlite, ...otherLanes] = lanes;
+    for (const lane of otherLanes) {
+      for (const field of identityFields) {
+        if (sqlite[field] !== lane[field]) {
+          throw new Error(`lane identity mismatch ${key} ${field}: ${sqlite[field]} != ${lane[field]}`);
+        }
       }
     }
-    if (sqlite.edits || hybrid.edits) {
-      if (!sqlite.edits || !hybrid.edits || sqlite.edits.length !== hybrid.edits.length) {
-        throw new Error(`lane edit-count mismatch ${key}`);
-      }
-      for (let index = 0; index < sqlite.edits.length; index += 1) {
-        const left = sqlite.edits[index];
-        const right = hybrid.edits[index];
-        for (const field of m7Fields) {
-          const read = (value) => field.split(".").reduce((current, part) => current?.[part], value);
-          if (read(left) !== read(right)) {
-            throw new Error(`lane M7 mismatch ${key} edit ${index} ${field}: ${read(left)} != ${read(right)}`);
+    for (const lane of otherLanes) {
+      if (sqlite.edits || lane.edits) {
+        if (!sqlite.edits || !lane.edits || sqlite.edits.length !== lane.edits.length) {
+          throw new Error(`lane edit-count mismatch ${key}`);
+        }
+        for (let index = 0; index < sqlite.edits.length; index += 1) {
+          const left = sqlite.edits[index];
+          const right = lane.edits[index];
+          for (const field of m7Fields) {
+            const read = (value) => field.split(".").reduce((current, part) => current?.[part], value);
+            if (read(left) !== read(right)) {
+              throw new Error(`lane M7 mismatch ${key} edit ${index} ${field}: ${read(left)} != ${read(right)}`);
+            }
           }
         }
       }
@@ -158,6 +172,7 @@ const correctness = {
   carrier: run(["phase2-carrier-check"]),
   recovery_sqlite: run(["phase2-recovery", "sqlite", "1"]),
   recovery_hybrid: run(["phase2-recovery", "hybrid", "1"]),
+  recovery_log: run(["phase2-recovery", "log", "1"]),
 };
 for (const [name, result] of Object.entries(correctness)) {
   if (result.phase2 === "pass" || result.carrier_format_check === "pass") continue;
@@ -169,7 +184,11 @@ let sequence = 0;
 for (const [workload, sizes] of jobs) {
   for (const size of sizes) {
     for (let sample = 0; sample < repetitions; sample += 1) {
-      const modes = sample % 2 === 0 ? ["sqlite", "hybrid"] : ["hybrid", "sqlite"];
+      const modes = [
+        ["sqlite", "hybrid", "log"],
+        ["hybrid", "log", "sqlite"],
+        ["log", "sqlite", "hybrid"],
+      ][sample % 3];
       for (const mode of modes) {
         process.stderr.write(`phase2 ${workload} ${size}MiB ${mode} sample ${sample + 1}/${repetitions}\n`);
         const result = run(["phase2", mode, workload, String(size)]);
