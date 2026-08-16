@@ -34,6 +34,14 @@ impl InMemoryCas {
             return Err(CoreError::IdentityMismatch);
         }
 
+        self.put_verified(id, bytes)
+    }
+
+    fn put_verified(&mut self, id: ChunkId, bytes: &[u8]) -> CoreResult<PutOutcome> {
+        if bytes.len() > MAXIMUM_CHUNK_BYTES {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
+
         if let Some(existing) = self.objects.get(&id) {
             if chunk_id(existing) != id || existing != bytes {
                 return Err(CoreError::IdentityMismatch);
@@ -52,8 +60,11 @@ impl InMemoryCas {
     }
 
     pub fn put_chunk(&mut self, bytes: &[u8]) -> CoreResult<(ChunkId, PutOutcome)> {
+        if bytes.len() > MAXIMUM_CHUNK_BYTES {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
         let id = chunk_id(bytes);
-        let outcome = self.put(id, bytes)?;
+        let outcome = self.put_verified(id, bytes)?;
         Ok((id, outcome))
     }
 

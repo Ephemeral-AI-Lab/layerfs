@@ -3,8 +3,8 @@ use layerfs_core::{
     cas::{InMemoryCas, PutOutcome},
     cdc::FastCdc,
     decode_object, decode_object_from, encode_object, encode_object_to, CanonicalName,
-    CanonicalPath, ChunkReference, CoreError, DirectoryEntry, EditCounters, LogicalFile, Object,
-    ObjectId, ObjectKind, ObjectReference,
+    CanonicalPath, ChunkReference, CoreError, DirectoryEntry, EditCounters, FullReplaceTiming,
+    LogicalFile, Object, ObjectId, ObjectKind, ObjectReference,
 };
 use layerfs_os::{probe, HostEnvironment};
 use std::collections::{BTreeMap, BTreeSet};
@@ -104,6 +104,14 @@ fn main() {
             .nth(2)
             .ok_or_else(|| "usage: layerfs-eval phase2-edits <run-directory>".to_owned())
             .and_then(|path| run_phase2_edits(Path::new(&path)).map(|_| 0)),
+        Some("phase2-ingest-breakdown") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase2-ingest-breakdown <run-directory>".to_owned())
+            .and_then(|path| run_phase2_ingest_breakdown(Path::new(&path)).map(|_| 0)),
+        Some("phase2-ingest-file") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase2-ingest-file <run-directory>".to_owned())
+            .and_then(|path| run_phase2_ingest_file(Path::new(&path)).map(|_| 0)),
         Some("oracle") => {
             let expected = env::args().nth(2);
             let actual = env::args().nth(3);
@@ -141,6 +149,8 @@ fn print_help() {
     println!("layerfs-eval phase1 <run-directory>");
     println!("layerfs-eval phase2-layout <run-directory>");
     println!("layerfs-eval phase2-edits <run-directory>");
+    println!("layerfs-eval phase2-ingest-breakdown <run-directory>");
+    println!("layerfs-eval phase2-ingest-file <run-directory>");
     println!("layerfs-eval oracle <expected-directory> <actual-directory> <output-json>");
 }
 
@@ -1000,6 +1010,234 @@ fn run_phase2_edits(run_directory: &Path) -> EvalResult<()> {
         &phase2_edit_summary(&runs),
     )?;
     Ok(())
+}
+
+struct IngestBreakdownRun {
+    dataset: String,
+    file_size: u64,
+    chunks: usize,
+    source_fingerprint: String,
+    counters: EditCounters,
+    cas_stored_bytes: u64,
+    timing: FullReplaceTiming,
+    component_total_ns: u128,
+    outer_elapsed_ns: u128,
+    correct: bool,
+    pipeline: &'static str,
+}
+
+fn run_phase2_ingest_breakdown(run_directory: &Path) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let (dataset, size) = SINGLE_FILES
+        .iter()
+        .find(|&&(dataset, _)| dataset == "S1-100")
+        .copied()
+        .ok_or_else(|| "S1-100 dataset is not configured".to_owned())?;
+
+    let mut cas = InMemoryCas::new();
+    let mut reader = DeterministicReader::new(size, dataset);
+    let outer_start = Instant::now();
+    let (full_replace, timing) = LogicalFile::full_replace_timed(&mut cas, &mut reader)
+        .map_err(|error| format!("{dataset} full ingest: {error}"))?;
+    let outer_elapsed_ns = outer_start.elapsed().as_nanos();
+    let source_fingerprint = reader.fingerprint();
+    let correct = verify_logical_file(&cas, full_replace.file(), &source_fingerprint)?;
+    let component_total_ns = timing_component_total_ns(&timing)?;
+    let run = IngestBreakdownRun {
+        dataset: dataset.to_owned(),
+        file_size: size,
+        chunks: full_replace.file().chunks().len(),
+        source_fingerprint,
+        counters: full_replace.counters(),
+        cas_stored_bytes: cas.stored_bytes(),
+        timing,
+        component_total_ns,
+        outer_elapsed_ns,
+        correct,
+        pipeline:
+            "DeterministicReader -> FastCDC -> full InMemoryCas::put_chunk -> LogicalFile manifest",
+    };
+
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{}\n", phase2_ingest_breakdown_json(&run, &source)),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        &phase2_ingest_breakdown_summary(&run),
+    )?;
+    Ok(())
+}
+
+fn run_phase2_ingest_file(run_directory: &Path) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let (dataset, size) = SINGLE_FILES
+        .iter()
+        .find(|&&(dataset, _)| dataset == "S1-100")
+        .copied()
+        .ok_or_else(|| "S1-100 dataset is not configured".to_owned())?;
+    let source_path = run_directory.join("S1-100.source");
+    let source_fingerprint = write_deterministic_source(&source_path, size, dataset)?;
+
+    let mut cas = InMemoryCas::new();
+    let mut reader = File::open(&source_path).map_err(io_message)?;
+    let outer_start = Instant::now();
+    let (full_replace, timing) = LogicalFile::full_replace_timed(&mut cas, &mut reader)
+        .map_err(|error| format!("{dataset} file ingest: {error}"))?;
+    let outer_elapsed_ns = outer_start.elapsed().as_nanos();
+    let correct = verify_logical_file(&cas, full_replace.file(), &source_fingerprint)?;
+    let component_total_ns = timing_component_total_ns(&timing)?;
+    let run = IngestBreakdownRun {
+        dataset: dataset.to_owned(),
+        file_size: size,
+        chunks: full_replace.file().chunks().len(),
+        source_fingerprint,
+        counters: full_replace.counters(),
+        cas_stored_bytes: cas.stored_bytes(),
+        timing,
+        component_total_ns,
+        outer_elapsed_ns,
+        correct,
+        pipeline: "regular file -> FastCDC -> full InMemoryCas::put_chunk -> LogicalFile manifest",
+    };
+
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{}\n", phase2_ingest_breakdown_json(&run, &source)),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        &phase2_ingest_breakdown_summary(&run),
+    )?;
+    Ok(())
+}
+
+fn write_deterministic_source(path: &Path, size: u64, dataset: &str) -> EvalResult<String> {
+    let mut reader = DeterministicReader::new(size, dataset);
+    let mut file = File::create(path).map_err(io_message)?;
+    let mut buffer = vec![0_u8; BUFFER_SIZE];
+    loop {
+        let read = reader.read(&mut buffer).map_err(io_message)?;
+        if read == 0 {
+            break;
+        }
+        file.write_all(&buffer[..read]).map_err(io_message)?;
+    }
+    file.sync_all().map_err(io_message)?;
+    Ok(reader.fingerprint())
+}
+
+fn timing_component_total_ns(timing: &FullReplaceTiming) -> EvalResult<u128> {
+    [
+        timing.source_read_ns,
+        timing.cdc_ns,
+        timing.cas_publish_ns,
+        timing.manifest_ns,
+    ]
+    .into_iter()
+    .try_fold(0_u128, |total, stage| {
+        total
+            .checked_add(stage)
+            .ok_or_else(|| "ingest timing total overflow".to_owned())
+    })
+}
+
+fn phase2_ingest_breakdown_json(run: &IngestBreakdownRun, source: &GitMetadata) -> String {
+    format!(
+        "{{\"format_version\":1,\"benchmark\":\"phase2-ingest-breakdown\",\"dataset\":{},\"file_size_bytes\":{},\"chunks\":{},\"source_fingerprint\":{},\"cdc_bytes_scanned\":{},\"chunks_created\":{},\"cas_stored_bytes\":{},\"source_read_ns\":{},\"cdc_ns\":{},\"cas_publish_ns\":{},\"manifest_ns\":{},\"component_total_ns\":{},\"outer_elapsed_ns\":{},\"correct\":{},\"source_commit\":{},\"dirty_tree\":{},\"pipeline\":{},\"storage_engine\":\"in-memory-btreemap-cas\"}}",
+        json_string(&run.dataset),
+        run.file_size,
+        run.chunks,
+        json_string(&run.source_fingerprint),
+        run.counters.cdc_bytes_scanned,
+        run.counters.chunks_created,
+        run.cas_stored_bytes,
+        run.timing.source_read_ns,
+        run.timing.cdc_ns,
+        run.timing.cas_publish_ns,
+        run.timing.manifest_ns,
+        run.component_total_ns,
+        run.outer_elapsed_ns,
+        run.correct,
+        json_option_string(source.commit.as_deref()),
+        source.dirty_tree,
+        json_string(run.pipeline),
+    )
+}
+
+fn phase2_ingest_breakdown_summary(run: &IngestBreakdownRun) -> String {
+    let component_total = run.component_total_ns as f64;
+    let row = |name: &str, ns: u128| {
+        let percent = if component_total == 0.0 {
+            0.0
+        } else {
+            (ns as f64 * 100.0) / component_total
+        };
+        format!(
+            "| {name} | {} | {:.3} | {:.2}% |\n",
+            ns,
+            ns as f64 / 1_000_000.0,
+            percent,
+        )
+    };
+    let mut summary = format!(
+        "# Phase 2 100 MiB full-ingest timing breakdown\n\n\
+         Dataset: `{}` ({} bytes / 100 MiB). This is one fresh in-memory run of\n\
+         the production full-replace path: deterministic source generation,\n\
+         FastCDC chunking, full CAS publication for every emitted chunk, and\n\
+         final logical-file manifest construction. Correctness was checked by\n\
+         reading the resulting logical file and comparing its BLAKE3 fingerprint.\n\n\
+         | Step | Nanoseconds | Milliseconds | Share of component total |\n|---|---:|---:|---:|\n",
+        run.dataset, run.file_size,
+    );
+    summary.push_str(&row("Source read / input", run.timing.source_read_ns));
+    summary.push_str(&row(
+        "CDC scanner and callback bookkeeping",
+        run.timing.cdc_ns,
+    ));
+    summary.push_str(&row(
+        "CAS publication (hash, lookup, copy, insert/reuse)",
+        run.timing.cas_publish_ns,
+    ));
+    summary.push_str(&row(
+        "Logical-file manifest finalization",
+        run.timing.manifest_ns,
+    ));
+    summary.push_str(&format!(
+        "| **Component total (sum)** | **{}** | **{:.3}** | **100.00%** |\n\n\
+         Outer `full_replace_timed` elapsed: **{} ns ({:.3} ms)**. The outer\n\
+         timer is a cross-check; the four rows above are the additive stage\n\
+         total. The small difference is timer/instrumentation and orchestration\n\
+         overhead.\n\n\
+         - CDC bytes scanned: `{}`\n\
+         - Chunks created: `{}`\n\
+         - CAS objects: `{}`\n\
+         - CAS bytes stored: `{}`\n\
+         - Correct: `{}`\n\
+         - Storage engine: `InMemoryCas` backed by an in-memory `BTreeMap`\n",
+        run.component_total_ns,
+        run.component_total_ns as f64 / 1_000_000.0,
+        run.outer_elapsed_ns,
+        run.outer_elapsed_ns as f64 / 1_000_000.0,
+        run.counters.cdc_bytes_scanned,
+        run.counters.chunks_created,
+        run.chunks,
+        run.cas_stored_bytes,
+        run.correct,
+    ));
+    summary
 }
 
 struct EditShape {

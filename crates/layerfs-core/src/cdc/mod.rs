@@ -39,7 +39,7 @@ impl FastCdc {
         mut on_chunk: F,
     ) -> CoreResult<CdcCounters> {
         let mut scanner = Scanner::new();
-        let mut input = [0; MINIMUM_CHUNK_BYTES];
+        let mut input = [0; MAXIMUM_CHUNK_BYTES];
         let mut counters = CdcCounters::default();
 
         loop {
@@ -52,17 +52,14 @@ impl FastCdc {
                 .bytes_scanned
                 .checked_add(u64::try_from(read).map_err(|_| CoreError::LengthOverflow)?)
                 .ok_or(CoreError::LengthOverflow)?;
-            for &byte in &input[..read] {
-                scanner.push(byte, &mut on_chunk, &mut counters)?;
-            }
+            scanner.consume(&input[..read], &mut on_chunk, &mut counters)?;
         }
     }
 }
 
 struct Scanner {
     chunk: Vec<u8>,
-    lookahead: [u8; 2],
-    lookahead_len: usize,
+    pending: Option<u8>,
     hash: u64,
     next_even: usize,
 }
@@ -71,39 +68,54 @@ impl Scanner {
     fn new() -> Self {
         Self {
             chunk: Vec::with_capacity(MAXIMUM_CHUNK_BYTES),
-            lookahead: [0; 2],
-            lookahead_len: 0,
+            pending: None,
             hash: PROFILE_SEED,
             next_even: MINIMUM_CHUNK_BYTES,
         }
     }
 
-    fn push<F: FnMut(&[u8]) -> CoreResult<()>>(
+    fn consume<F: FnMut(&[u8]) -> CoreResult<()>>(
         &mut self,
-        byte: u8,
+        mut bytes: &[u8],
         on_chunk: &mut F,
         counters: &mut CdcCounters,
     ) -> CoreResult<()> {
-        if self.chunk.len() < MINIMUM_CHUNK_BYTES {
-            self.chunk.push(byte);
-            return Ok(());
-        }
+        while !bytes.is_empty() {
+            if self.chunk.len() < MINIMUM_CHUNK_BYTES {
+                let needed = MINIMUM_CHUNK_BYTES - self.chunk.len();
+                let take = needed.min(bytes.len());
+                self.chunk.extend_from_slice(&bytes[..take]);
+                bytes = &bytes[take..];
+                if bytes.is_empty() {
+                    return Ok(());
+                }
+            }
 
-        self.lookahead[self.lookahead_len] = byte;
-        self.lookahead_len += 1;
-        if self.lookahead_len == 2 {
-            self.process_pair(on_chunk, counters)?;
+            let (first, from_pending) = match self.pending.take() {
+                Some(byte) => (byte, true),
+                None if bytes.len() >= 2 => (bytes[0], false),
+                None => {
+                    self.pending = Some(bytes[0]);
+                    return Ok(());
+                }
+            };
+            if !from_pending {
+                bytes = &bytes[1..];
+            }
+            let second = bytes[0];
+            bytes = &bytes[1..];
+            self.process_pair(first, second, on_chunk, counters)?;
         }
         Ok(())
     }
 
     fn process_pair<F: FnMut(&[u8]) -> CoreResult<()>>(
         &mut self,
+        first: u8,
+        second: u8,
         on_chunk: &mut F,
         counters: &mut CdcCounters,
     ) -> CoreResult<()> {
-        let first = self.lookahead[0];
-        let second = self.lookahead[1];
         let small = self.next_even < TARGET_CHUNK_BYTES;
 
         self.hash = self
@@ -119,14 +131,13 @@ impl Scanner {
             == 0
         {
             self.emit(on_chunk, counters)?;
-            self.push(first, on_chunk, counters)?;
-            self.push(second, on_chunk, counters)?;
+            self.chunk.extend_from_slice(&[first, second]);
         } else {
             self.hash = self.hash.wrapping_add(GEAR[usize::from(second)]);
             if self.hash & if small { SMALL_MASK } else { LARGE_MASK } == 0 {
                 self.chunk.push(first);
                 self.emit(on_chunk, counters)?;
-                self.push(second, on_chunk, counters)?;
+                self.chunk.push(second);
             } else {
                 self.chunk.extend_from_slice(&[first, second]);
                 self.next_even += 2;
@@ -135,7 +146,6 @@ impl Scanner {
                 }
             }
         }
-        self.lookahead_len = 0;
         Ok(())
     }
 
@@ -163,9 +173,9 @@ impl Scanner {
         on_chunk: &mut F,
         counters: &mut CdcCounters,
     ) -> CoreResult<()> {
-        self.chunk
-            .extend_from_slice(&self.lookahead[..self.lookahead_len]);
-        self.lookahead_len = 0;
+        if let Some(byte) = self.pending.take() {
+            self.chunk.push(byte);
+        }
         self.emit(on_chunk, counters)
     }
 }

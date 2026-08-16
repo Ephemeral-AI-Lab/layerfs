@@ -2,6 +2,7 @@
 
 use std::io::{Cursor, Read};
 use std::ops::Range;
+use std::time::Instant;
 
 use crate::cas::{InMemoryCas, PutOutcome};
 use crate::cdc::FastCdc;
@@ -10,6 +11,14 @@ use crate::{ChunkId, CoreError, CoreResult};
 
 pub const MAX_REJOIN_WINDOW_BYTES: u64 = 1024 * 1024;
 const REJOIN_CONFIRM_CHUNKS: usize = 2;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FullReplaceTiming {
+    pub source_read_ns: u128,
+    pub cdc_ns: u128,
+    pub cas_publish_ns: u128,
+    pub manifest_ns: u128,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChunkReference {
@@ -270,6 +279,67 @@ impl LogicalFile {
         Ok(EditResult { file, counters })
     }
 
+    pub fn full_replace_timed<R: Read>(
+        cas: &mut InMemoryCas,
+        reader: R,
+    ) -> CoreResult<(EditResult, FullReplaceTiming)> {
+        let mut reader = TimedReader {
+            inner: reader,
+            read_ns: 0,
+        };
+        let mut scanned = Vec::new();
+        let mut counters = EditCounters::default();
+        let mut cas_publish_ns = 0_u128;
+        let scan_start = Instant::now();
+        let cdc_counters = FastCdc::new().scan(&mut reader, |bytes| {
+            let length = u64::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
+            let start = counters.bytes_hashed;
+            let cas_start = Instant::now();
+            let result = cas.put_chunk(bytes);
+            cas_publish_ns = cas_publish_ns.saturating_add(cas_start.elapsed().as_nanos());
+            let (id, outcome) = result?;
+            counters.bytes_hashed = counters
+                .bytes_hashed
+                .checked_add(length)
+                .ok_or(CoreError::LengthOverflow)?;
+            match outcome {
+                PutOutcome::Inserted => add_counter(&mut counters.chunks_created, 1)?,
+                PutOutcome::Reused => add_counter(&mut counters.chunks_reused, 1)?,
+            }
+            scanned.push(ScannedChunk {
+                reference: ChunkReference::new(id, length),
+                outcome,
+                start,
+            });
+            Ok(())
+        })?;
+        let scan_ns = scan_start.elapsed().as_nanos();
+        counters.cdc_bytes_scanned = cdc_counters.bytes_scanned;
+        counters.bytes_delivered = counters.cdc_bytes_scanned;
+
+        let manifest_start = Instant::now();
+        let length = scanned.iter().try_fold(0_u64, |length, chunk| {
+            length
+                .checked_add(chunk.reference.length)
+                .ok_or(CoreError::LengthOverflow)
+        })?;
+        let chunks = scanned.iter().map(|chunk| chunk.reference).collect();
+        let file = Self::from_authenticated_chunks(chunks, length)?;
+        let manifest_ns = manifest_start.elapsed().as_nanos();
+
+        Ok((
+            EditResult { file, counters },
+            FullReplaceTiming {
+                source_read_ns: reader.read_ns,
+                cdc_ns: scan_ns
+                    .saturating_sub(reader.read_ns)
+                    .saturating_sub(cas_publish_ns),
+                cas_publish_ns,
+                manifest_ns,
+            },
+        ))
+    }
+
     fn chunk_start_offsets(&self) -> CoreResult<Vec<u64>> {
         let capacity = self
             .chunks
@@ -445,6 +515,20 @@ fn append_old_range(
 struct Rejoin {
     scanned_index: usize,
     old_index: usize,
+}
+
+struct TimedReader<R> {
+    inner: R,
+    read_ns: u128,
+}
+
+impl<R: Read> Read for TimedReader<R> {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        let start = Instant::now();
+        let result = self.inner.read(output);
+        self.read_ns = self.read_ns.saturating_add(start.elapsed().as_nanos());
+        result
+    }
 }
 
 fn find_rejoin(

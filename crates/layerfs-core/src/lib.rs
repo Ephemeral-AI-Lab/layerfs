@@ -14,7 +14,8 @@ pub mod limits;
 pub mod object;
 
 pub use content::{
-    ChunkReference, EditCounters, EditResult, LogicalFile, RangeRead, MAX_REJOIN_WINDOW_BYTES,
+    ChunkReference, EditCounters, EditResult, FullReplaceTiming, LogicalFile, RangeRead,
+    MAX_REJOIN_WINDOW_BYTES,
 };
 pub use error::{CoreError, CoreResult};
 pub use format::{CanonicalName, CanonicalPath};

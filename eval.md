@@ -268,6 +268,7 @@ conventions. Build it in release mode and retain the generated
 cargo build --release -p layerfs-eval --offline
 target/release/layerfs-eval phase2-layout eval/runs/<layout-run>
 target/release/layerfs-eval phase2-edits eval/runs/<edit-run>
+target/release/layerfs-eval phase2-ingest-breakdown eval/runs/<breakdown-run>
 ```
 
 `phase2-layout` constructs one authenticated CDC/CAS fixture for each of
@@ -289,6 +290,15 @@ CAS bytes stored, range and final size, source metadata, and correctness. A
 bounded B7 or B8 result must be judged from these counters; correct bytes alone
 do not qualify an unbounded full-file fallback. These are cold in-memory
 baselines, not durable-storage, concurrency, or final performance claims.
+
+`phase2-ingest-breakdown` runs only S1-100 and partitions the same B6
+`full_replace` operation into source read/generation, CDC scanner work, full
+in-memory CAS publication, and logical-file manifest finalization. Its
+`component_total_ns` is the additive sum of those four stages; the separate
+`outer_elapsed_ns` is retained as a timer cross-check. The CAS row includes
+BLAKE3 identity hashing, authenticated lookup, byte copy, and insertion/reuse
+in the current `InMemoryCas` implementation. It is a diagnostic decomposition
+of the in-memory baseline, not a durable SQLite or filesystem benchmark.
 
 ## 7. Cold and warm protocol
 
