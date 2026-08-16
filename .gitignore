@@ -1,0 +1,4 @@
+/target/
+/eval/runs/
+/eval/datasets/
+.DS_Store

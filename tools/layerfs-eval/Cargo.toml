@@ -1,0 +1,14 @@
+[package]
+name = "layerfs-eval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3.workspace = true
+layerfs-os = { path = "../../crates/layerfs-os" }
+
+[[bin]]
+name = "layerfs-eval"
+path = "src/main.rs"

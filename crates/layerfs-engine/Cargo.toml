@@ -1,0 +1,12 @@
+[package]
+name = "layerfs-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-core = { path = "../layerfs-core" }
+
+[lib]
+path = "src/lib.rs"

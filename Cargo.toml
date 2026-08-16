@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/layerfs-core",
+    "crates/layerfs-engine",
+    "crates/layerfs-os",
+    "crates/layerfs-vfs",
+    "crates/layerfs-sdk",
+    "tools/layerfs-eval",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+rust-version = "1.85"
+license = "MIT"
+
+[workspace.dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
