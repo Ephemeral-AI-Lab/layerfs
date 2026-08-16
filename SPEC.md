@@ -29,7 +29,8 @@ The system has two different concepts that must not be mixed.
 - CDC chunk-boundary algorithms;
 - content-addressed identity and canonical hashing;
 - canonical object encoding and decoding;
-- immutable chunks, files, directories, trees, roots, and deltas;
+- immutable chunks, files, directories, trees, and deltas;
+- typed root handles for published directory objects;
 - copy-on-write tree updates;
 - authenticated reuse of unchanged chunks and subtrees;
 - bounded range update and rejoin logic; and
@@ -45,7 +46,7 @@ pack, or a particular filesystem.
 `layerfs-engine` owns durable persistence:
 
 - storing and reading canonical object bytes;
-- storing roots, deltas, and indexes;
+- storing root/checkpoint metadata, deltas, and indexes;
 - range reads without reconstructing an entire file;
 - transactions and durability;
 - concurrent access and locking;
@@ -58,6 +59,51 @@ identity, or delta meaning. It persists values already validated by the core.
 The engine API must be semantic and backend-neutral. It must not expose SQL,
 SQL transactions, ORM objects, table names, or database-specific error types to
 the core, projection, or SDK.
+
+### 2.3 Canonical object contract
+
+Phase 1 freezes the smallest useful canonical object contract:
+
+```text
+magic[4] = "LFSO"
+kind[1]
+payload_len[4] = big-endian u32
+payload[payload_len]
+```
+
+The header is exactly 9 bytes. It has no flags, reserved fields, compatibility
+fields, or format-version field. The payload length excludes the header and is
+checked before decoding or allocation. Every object has exactly one canonical
+encoding and exact end-of-input is required.
+
+Phase 1 has only two object kinds: bounded bytes and directories. Directory
+entries contain immediate canonical names, child kind tags, and typed object
+references. Names are sorted by unsigned byte order and duplicate names are
+invalid. Descendant paths are never stored in a directory object.
+
+`ObjectId` is one typed 32-byte BLAKE3 identity over the supplied canonical
+object bytes using the fixed object hash domain. Identity verification hashes
+the supplied bytes directly, then validates their grammar; it does not decode,
+re-encode, and hash a reconstructed value.
+
+There is no canonical `Root` object and no second root identity. A root is a
+typed handle to a directory `ObjectId`. The engine may store a root/checkpoint
+record containing that handle, its parent, and publication metadata, but that
+record is storage metadata rather than canonical object bytes.
+
+Phase 1 deliberately does not freeze the large-file content layout. Phase 2
+benchmarks a flat manifest, a segmented layout, and a fixed-fanout content tree.
+The production candidate is:
+
+```text
+File → ContentLeaf/ContentBranch tree → Chunk IDs → CAS
+```
+
+Leaves hold bounded ordered chunk references and lengths. Branches hold bounded
+child references and subtree byte lengths so range reads and small edits can
+avoid scanning an entire file. The benchmark selects the final shape before
+the `File`, `ContentLeaf`, and `ContentBranch` encodings become part of the
+stable format.
 
 ## 3. Repository and crate layout
 
@@ -154,7 +200,7 @@ cow/          immutable views and copy-on-write tree mutation
 delta/        changed paths, tombstones, parent roots, and new roots
 ```
 
-`cow/` means copy-on-write. A mutation creates a new root and only the changed
+`cow/` means copy-on-write. A mutation creates a new root handle and only the changed
 nodes plus their affected ancestor spine. Unchanged chunks, files, directories,
 and subtrees remain shared by identity.
 
@@ -202,6 +248,9 @@ Their exact names may change, but the following properties are mandatory:
 - a root is not visible until its complete closure is durable;
 - root publication is one atomic engine transition; and
 - backend failures are mapped into LayerFS typed errors.
+
+`RootRecord` is engine metadata around a typed root handle. It is not a
+canonical `Root` object and does not introduce another object identifier.
 
 The initial SQLite implementation may store chunks and metadata in SQLite
 tables. It may later use a file-backed object area behind the same engine port
@@ -346,7 +395,6 @@ Capture returns an opaque checkpoint containing:
 
 - the new root identity;
 - the parent root identity;
-- the capture revision;
 - changed-path count and bounded change summary; and
 - typed status.
 
@@ -443,16 +491,19 @@ rescans a complete large file.
 
 ## 12. Initial implementation order
 
-1. Create `layerfs-core` with canonical types, identity, CDC, object, CAS, COW,
-   and delta tests that do not require a database.
-2. Create `layerfs-engine` with SQLite schema, object reads/writes, root/delta
-   transactions, and direct backend tests.
-3. Implement `layerfs-vfs::materialize` using `layerfs-os`.
-4. Implement `layerfs-vfs::capture` with exact changed-path/range
+1. Establish the Phase 1 core contract: canonical paths, the fixed envelope,
+   the two initial object kinds, direct identity authentication, and tests that
+   do not require a database.
+2. Add CDC, CAS, and the benchmark-selected logical content layout in the next
+   core phase; then add COW and delta semantics.
+3. Create `layerfs-engine` with SQLite schema, object reads/writes,
+   root/checkpoint metadata, delta transactions, and direct backend tests.
+4. Implement `layerfs-vfs::materialize` using `layerfs-os`.
+5. Implement `layerfs-vfs::capture` with exact changed-path/range
    evidence.
-5. Expose the four-operation SDK.
-6. Add cold/warm/read/edit/write benchmarks and verify small-edit scaling.
-7. Consider a PostgreSQL backend only after the SQLite implementation has a
+6. Expose the four-operation SDK.
+7. Add cold/warm/read/edit/write benchmarks and verify small-edit scaling.
+8. Consider a PostgreSQL backend only after the SQLite implementation has a
    measured need for it.
 
 The first implementation must not carry forward the old custom engine merely

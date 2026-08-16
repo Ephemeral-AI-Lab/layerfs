@@ -65,11 +65,18 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 ### 1. What to implement
 
 - Implement `layerfs-core` without a database dependency.
-- Implement bounded canonical paths and path ordering.
-- Implement typed logical and physical identity values.
-- Implement domain-separated hashing and canonical object encoding.
+- Implement bounded canonical paths, immediate directory names, and unsigned
+  byte ordering.
+- Implement the fixed 9-byte object envelope:
+  `LFSO` + kind byte + big-endian `u32` payload length + payload.
+- Implement only the Phase 1 bytes and directory object kinds. Do not add a
+  stored canonical `Root` object or a second root identity; a root is a typed
+  handle to a directory object ID.
+- Implement one typed `ObjectId` digest over the supplied canonical bytes.
 - Implement object decoding with checked lengths, bounds, strong-edge validation,
   and exact EOF handling.
+- Do not add flags, reserved fields, compatibility fields, generic registries,
+  storage traits, or a final large-file manifest in this phase.
 - Define typed errors for malformed bytes, invalid paths, type mismatches,
   identity mismatches, overflow, and unsupported operations.
 - Keep backend values out of identity inputs. SQLite row IDs, APFS inode numbers,
@@ -80,6 +87,11 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 
 - Canonical encoding round trips to the same typed object.
 - Same logical input produces byte-identical objects and IDs across runs.
+- The envelope is exactly 9 bytes before the payload, has no version-like
+  extension fields, and rejects unsupported marker/kind bytes.
+- Directory objects contain immediate names only, sorted by unsigned bytes;
+  duplicate or descendant-path entries fail.
+- Root handles resolve to directory object IDs without a stored root object.
 - Fragmentation, read-buffer size, and storage backend do not change identity.
 - Malformed headers, lengths, paths, edges, trailing bytes, and wrong object
   kinds fail with the correct typed error.
@@ -88,6 +100,65 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 - Canonical output is identical on APFS case-sensitive and case-insensitive
   volumes when the same canonical input is supplied.
 - Core tests run without SQLite, APFS APIs, or filesystem-specific imports.
+- Run the Phase 1 microbenchmark in [`eval.md`](eval.md) for representative
+  byte objects, directory fan-outs, and short/maximal canonical paths.
+- Record the benchmark source fingerprint, per-case timings, correctness, and
+  an external peak-memory observation or an explicit unavailable status.
+
+### 3. Phase 1 evidence and closure gate
+
+The implementation evidence for Phase 1 is present on the current worktree:
+
+- canonical paths and immediate names are bounded and deterministic;
+- the fixed 9-byte `LFSO` envelope has only `Bytes` and `Directory` kinds;
+- one typed `ObjectId` authenticates the supplied canonical bytes directly;
+- streaming decode checks payload bounds before allocation and requires exact
+  end-of-input; and
+- root-path iteration, boundary limits, fragmented reads, malformed lengths,
+  oversized names, and manually malformed directory ordering have direct
+  regressions.
+
+Phase 1 is not closed until the canonical-object baseline is also produced.
+The baseline is intentionally smaller than the Phase 2 large-file evaluation:
+it measures the bounded core primitive, not CDC, CAS, SQLite, materialization,
+or small-edit scaling.
+
+Verification evidence:
+
+```text
+cargo fmt --all -- --check                                  PASS
+cargo test -p layerfs-core --offline                         PASS: 17 tests
+cargo test --workspace --offline                             PASS: 22 unit tests
+cargo clippy -p layerfs-core --offline --all-targets -- -D warnings
+                                                             PASS
+git diff --check                                            PASS
+```
+
+Required closure run:
+
+```text
+cargo build --release -p layerfs-eval
+/usr/bin/time -l -o eval/phase1-<commit>/time.txt \
+  target/release/layerfs-eval phase1 eval/phase1-<commit>
+```
+
+The closure artifact must contain `environment.json`, `results.jsonl`,
+`summary.md`, and `time.txt`. Every result must be correct. `time.txt` is the
+external RSS/maximum-resident-size observation; if the host cannot provide it,
+the summary must say `unavailable` rather than report zero.
+
+The Phase 1 performance contract is therefore:
+
+- canonical work is linear in the supplied bounded input;
+- the benchmark exercises the actual `Read`/`Write` and identity entry points;
+- no benchmark case fails correctness;
+- memory observations are explicit; and
+- no Phase 1 claim is extended to large-file locality or high-concurrency
+  process-wide memory bounds.
+
+Large-file layout, tree-search locality, CDC/CAS small-edit scaling, SQLite
+throughput, and cold/warm materialization benchmarks begin in Phase 2 after the
+content-tree shape is selected; no Phase 1 format decision depends on them.
 
 ## Phase 2 — CDC, CAS semantics, and logical content
 
@@ -96,6 +167,14 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 - Implement the frozen CDC profile as a streaming scanner with bounded memory.
 - Implement chunk identity and immutable CAS semantics in `layerfs-core`.
 - Implement logical files as ordered chunk identities and lengths.
+- Target production content as `File -> bounded immutable content tree ->
+  Chunk IDs -> CAS`.
+- Benchmark a flat manifest, a segmented layout, and a fixed-fanout content
+  tree before selecting the large-file layout. A tree candidate uses bounded
+  `ContentLeaf` nodes for chunk references and `ContentBranch` nodes for child
+  references plus subtree byte lengths.
+- Freeze the `File`, `ContentLeaf`, and `ContentBranch` encodings only after
+  the benchmark selects the shape; Phase 1 does not carry this format risk.
 - Implement streaming create and explicit full replace.
 - Implement bounded range update and CDC rejoin verification.
 - Reuse authenticated unchanged prefix and suffix chunks.
@@ -129,7 +208,7 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 - Implement parent-root plus delta representation.
 - Represent additions, removals, replacements, and metadata changes as bounded
   canonical delta entries.
-- Keep workspace revision and immutable root identity separate.
+- Keep mutable workspace state separate from immutable root identity.
 
 ### 2. What to test
 
@@ -150,8 +229,9 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 ### 1. What to implement
 
 - Implement `layerfs-engine` with SQLite as the first backend.
-- Define tables for immutable objects, roots, deltas, path/index metadata, and
-  store metadata.
+- Define tables for immutable objects, root/checkpoint metadata, deltas,
+  path/index metadata, and store metadata. Root rows are engine metadata around
+  typed directory handles, not canonical `Root` objects.
 - Use parameterized prepared statements for hot operations.
 - Implement no-replace object insertion and authenticated incumbent reuse.
 - Implement exact object range reads.

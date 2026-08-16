@@ -28,6 +28,52 @@ The first evaluation must answer these questions:
 7. Does memory remain bounded as file size and edit count grow?
 8. Are Rust and TypeScript being compared under equivalent conditions?
 
+## 1.1 Phase 1 closure baseline
+
+Phase 1 has a separate microbenchmark gate before it is marked complete. This
+gate measures only the canonical core and prevents us from confusing bounded
+object performance with the later large-file system benchmark.
+
+Run it after the Phase 1 source and tests are stable:
+
+```text
+cargo build --release -p layerfs-eval
+/usr/bin/time -l -o eval/phase1-<commit>/time.txt \
+  target/release/layerfs-eval phase1 eval/phase1-<commit>
+```
+
+The command produces `environment.json`, `results.jsonl`, and `summary.md`.
+The `time.txt` file is the external macOS maximum-resident-size observation.
+If the host cannot provide a reliable RSS observation, retain the artifact and
+record the value as `unavailable`; never substitute zero.
+
+The Phase 1 baseline cases are:
+
+| Case family | Inputs | Operations | Required evidence |
+|---|---|---|---|
+| Bytes | 1 KiB, 1 MiB, 8 MiB | encode to `Vec`, encode to `Write`, decode from slice, decode from `Read`, hash from slice, hash from `Read`, `Object::id` | Median timing, input/output bytes, correct result |
+| Directory | 16, 256, and 4,096 children | encode, streaming decode, streaming hash | Median timing, encoded size, correct result |
+| Paths | Short nested path and 256-component near-maximum path | canonical validation | Median timing, path length, correct result |
+
+Each case has one warm-up and five measured iterations. The benchmark must
+exercise the actual public Phase 1 entry points; it must not benchmark only
+fixture construction or a private mock codec.
+
+Phase 1 may close only when:
+
+- every case returns the expected object or identity;
+- the benchmark artifacts record the source commit and dirty-tree state;
+- per-case timings and input/output sizes are retained;
+- peak memory is recorded by the external macOS measurement or explicitly
+  marked unavailable; and
+- the report states that this is a bounded canonical-object baseline, not a
+  large-file, CDC, CAS, SQLite, or concurrency qualification.
+
+This gate does not set a throughput target. It establishes the source- and
+environment-specific baseline used to detect regressions in Phase 1. Phase 2
+then adds the first architectural performance gate for CDC, CAS, content-tree
+locality, range reads, and one-byte edit scaling.
+
 ## 2. Fixed datasets
 
 All datasets must be deterministic. The generator seed, content pattern,

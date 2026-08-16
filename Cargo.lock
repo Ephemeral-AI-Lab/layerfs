@@ -68,6 +68,9 @@ checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
 [[package]]
 name = "layerfs-core"
 version = "0.1.0"
+dependencies = [
+ "blake3",
+]
 
 [[package]]
 name = "layerfs-engine"
@@ -81,6 +84,7 @@ name = "layerfs-eval"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "layerfs-core",
  "layerfs-os",
 ]
 

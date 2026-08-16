@@ -1,13 +1,17 @@
 use blake3::Hasher;
+use layerfs_core::{
+    decode_object, decode_object_from, encode_object, encode_object_to, CanonicalName,
+    CanonicalPath, DirectoryEntry, Object, ObjectId, ObjectKind, ObjectReference,
+};
 use layerfs_os::{probe, HostEnvironment};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{self, Cursor, Read, Write};
 use std::path::Path;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 const FORMAT_VERSION: u32 = 1;
 const SEED: u64 = 0x4c41594552534653;
@@ -78,6 +82,10 @@ fn main() {
                 _ => Err("usage: layerfs-eval probe <directory> <output-json>".to_owned()),
             }
         }
+        Some("phase1") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase1 <run-directory>".to_owned())
+            .and_then(|path| run_phase1(Path::new(&path)).map(|_| 0)),
         Some("oracle") => {
             let expected = env::args().nth(2);
             let actual = env::args().nth(3);
@@ -112,7 +120,272 @@ fn print_help() {
     println!("layerfs-eval b0 <run-directory>");
     println!("layerfs-eval dataset <dataset-directory>");
     println!("layerfs-eval probe <directory> <output-json>");
+    println!("layerfs-eval phase1 <run-directory>");
     println!("layerfs-eval oracle <expected-directory> <actual-directory> <output-json>");
+}
+
+const PHASE1_WARMUPS: usize = 1;
+const PHASE1_ITERATIONS: usize = 5;
+const PHASE1_BYTE_SIZES: &[usize] = &[1024, 1024 * 1024, 8 * 1024 * 1024];
+const PHASE1_DIRECTORY_FANOUTS: &[usize] = &[16, 256, 4096];
+
+#[derive(Debug)]
+struct Phase1Run {
+    case: String,
+    input_bytes: usize,
+    output_bytes: usize,
+    iterations: usize,
+    elapsed_ns: Vec<u128>,
+    correct: bool,
+}
+
+fn run_phase1(run_directory: &Path) -> EvalResult<()> {
+    prepare_phase1_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+
+    let mut runs = Vec::new();
+    for &size in PHASE1_BYTE_SIZES {
+        let object = phase1_bytes_object(size)?;
+        let encoded =
+            encode_object(&object).map_err(|error| format!("encode fixture: {error:?}"))?;
+        let expected_id = ObjectId::for_bytes(&encoded);
+        let label = format!("bytes-{size}");
+
+        runs.push(measure_phase1(
+            format!("{label}/encode_vec"),
+            encoded.len(),
+            encoded.len(),
+            || {
+                encode_object(&object)
+                    .is_ok_and(|value| std::hint::black_box(value.len()) == encoded.len())
+            },
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/encode_writer"),
+            encoded.len(),
+            encoded.len(),
+            || {
+                let mut output = Vec::with_capacity(encoded.len());
+                encode_object_to(&object, &mut output)
+                    .is_ok_and(|_| std::hint::black_box(output.as_slice()) == encoded.as_slice())
+            },
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/decode_slice"),
+            encoded.len(),
+            size,
+            || decode_object(&encoded).is_ok_and(|value| value == object),
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/decode_reader"),
+            encoded.len(),
+            size,
+            || {
+                decode_object_from(Cursor::new(encoded.as_slice()))
+                    .is_ok_and(|value| value == object)
+            },
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/hash_slice"),
+            encoded.len(),
+            32,
+            || std::hint::black_box(ObjectId::for_bytes(&encoded)) == expected_id,
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/hash_reader"),
+            encoded.len(),
+            32,
+            || {
+                ObjectId::from_reader(Cursor::new(encoded.as_slice()))
+                    .is_ok_and(|value| value == expected_id)
+            },
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/object_id"),
+            size,
+            32,
+            || object.id().is_ok_and(|value| value == expected_id),
+        )?);
+    }
+
+    for &fanout in PHASE1_DIRECTORY_FANOUTS {
+        let object = phase1_directory_object(fanout)?;
+        let encoded =
+            encode_object(&object).map_err(|error| format!("encode fixture: {error:?}"))?;
+        let expected_id = ObjectId::for_bytes(&encoded);
+        let label = format!("directory-{fanout}");
+        runs.push(measure_phase1(
+            format!("{label}/encode_vec"),
+            encoded.len(),
+            encoded.len(),
+            || {
+                encode_object(&object)
+                    .is_ok_and(|value| std::hint::black_box(value.len()) == encoded.len())
+            },
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/decode_reader"),
+            encoded.len(),
+            encoded.len(),
+            || {
+                decode_object_from(Cursor::new(encoded.as_slice()))
+                    .is_ok_and(|value| value == object)
+            },
+        )?);
+        runs.push(measure_phase1(
+            format!("{label}/hash_reader"),
+            encoded.len(),
+            32,
+            || {
+                ObjectId::from_reader(Cursor::new(encoded.as_slice()))
+                    .is_ok_and(|value| value == expected_id)
+            },
+        )?);
+    }
+
+    for (label, path) in [
+        ("path-short", "a/b/c".to_owned()),
+        ("path-max", phase1_max_path()),
+    ] {
+        let path_bytes = path.len();
+        runs.push(measure_phase1(
+            format!("{label}/validate"),
+            path_bytes,
+            path_bytes,
+            || CanonicalPath::new(&path).is_ok(),
+        )?);
+    }
+
+    let results = runs
+        .iter()
+        .map(phase1_run_json)
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{results}\n"),
+    )?;
+    write_text(&run_directory.join("summary.md"), &phase1_summary(&runs))?;
+    Ok(())
+}
+
+fn phase1_bytes_object(size: usize) -> EvalResult<Object> {
+    let mut bytes = vec![0_u8; size];
+    fill_buffer(&mut bytes, 0, "phase1-bytes");
+    Object::bytes(bytes).map_err(|error| format!("bytes fixture: {error:?}"))
+}
+
+fn phase1_directory_object(fanout: usize) -> EvalResult<Object> {
+    let id = ObjectId::for_bytes(b"phase1-directory-child");
+    let mut entries = Vec::with_capacity(fanout);
+    for index in 0..fanout {
+        let name = CanonicalName::new(&format!("entry-{index:05}"))
+            .map_err(|error| format!("directory name fixture: {error:?}"))?;
+        entries.push(DirectoryEntry::new(
+            name,
+            ObjectReference::new(ObjectKind::Bytes, id),
+        ));
+    }
+    Object::directory(entries).map_err(|error| format!("directory fixture: {error:?}"))
+}
+
+fn phase1_max_path() -> String {
+    (0..256)
+        .map(|_| "abcdefghijklmno")
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn measure_phase1<F>(
+    case: String,
+    input_bytes: usize,
+    output_bytes: usize,
+    mut operation: F,
+) -> EvalResult<Phase1Run>
+where
+    F: FnMut() -> bool,
+{
+    for _ in 0..PHASE1_WARMUPS {
+        if !operation() {
+            return Err(format!(
+                "Phase 1 benchmark correctness failed during warm-up: {case}"
+            ));
+        }
+    }
+    let mut elapsed_ns = Vec::with_capacity(PHASE1_ITERATIONS);
+    for _ in 0..PHASE1_ITERATIONS {
+        let start = Instant::now();
+        let correct = operation();
+        elapsed_ns.push(start.elapsed().as_nanos());
+        if !correct {
+            return Err(format!("Phase 1 benchmark correctness failed: {case}"));
+        }
+    }
+    Ok(Phase1Run {
+        case,
+        input_bytes,
+        output_bytes,
+        iterations: PHASE1_ITERATIONS,
+        elapsed_ns,
+        correct: true,
+    })
+}
+
+fn phase1_run_json(run: &Phase1Run) -> String {
+    let elapsed = run
+        .elapsed_ns
+        .iter()
+        .map(u128::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"format_version\":1,\"case\":{},\"input_bytes\":{},\"output_bytes\":{},\"iterations\":{},\"elapsed_ns\":[{}],\"peak_memory_bytes\":null,\"peak_memory_status\":\"external_observation_required\",\"correct\":{}}}",
+        json_string(&run.case),
+        run.input_bytes,
+        run.output_bytes,
+        run.iterations,
+        elapsed,
+        run.correct,
+    )
+}
+
+fn phase1_summary(runs: &[Phase1Run]) -> String {
+    let mut summary = String::from(
+        "# Phase 1 canonical-object baseline\n\n\
+         This is a correctness-preserving microbenchmark for the Phase 1 core.\n\n\
+         It measures bounded path validation, canonical encode/decode, and\n\
+         BLAKE3 identity work for representative byte and directory objects.\n\n\
+         It does not measure CDC, CAS, SQLite, materialization, or large-file\n\
+         small-edit behavior; those remain Phase 2 and later gates.\n\n\
+         Each case has one warm-up and five measured iterations. `peak_memory_bytes`\n\
+         remains explicitly unavailable because this process does not sample RSS.\n\
+         Capture peak memory externally with `/usr/bin/time -l` or Instruments.\n\n\
+         | Case | Median ns | Input bytes | Output bytes | Correct |\n|---|---:|---:|---:|:---:|\n",
+    );
+    for run in runs {
+        let median = median(&run.elapsed_ns);
+        let _ = writeln!(
+            summary,
+            "| `{}` | {} | {} | {} | {} |",
+            run.case, median, run.input_bytes, run.output_bytes, run.correct
+        );
+    }
+    summary.push_str(
+        "\nPhase 1 is eligible to close only when all cases are correct, the\n\
+         results and environment artifacts are retained, and the external peak\n\
+         memory observation is recorded as a value or explicitly unavailable.\n",
+    );
+    summary
+}
+
+fn median(values: &[u128]) -> u128 {
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    sorted[sorted.len() / 2]
 }
 
 fn run_b0(run_directory: &Path) -> EvalResult<()> {
@@ -154,8 +427,7 @@ fn run_b0(run_directory: &Path) -> EvalResult<()> {
     }
     write_text(&run_directory.join("results.jsonl"), &results)?;
 
-    let summary = format!(
-        "# Phase 0 B0\n\n\
+    let summary = ("# Phase 0 B0\n\n\
          B0 records deterministic dataset and manifest generation before the \
          production LayerFS roots exist.\n\n\
          The root_input field is the manifest digest for each dataset, not a \
@@ -165,8 +437,8 @@ fn run_b0(run_directory: &Path) -> EvalResult<()> {
          - Dataset manifest: dataset.json\n\
          - Root inputs: root_inputs.json\n\
          - Environment: environment.json\n\
-         - Results: results.jsonl\n"
-    );
+         - Results: results.jsonl\n")
+        .to_owned();
     write_text(&run_directory.join("summary.md"), &summary)?;
     Ok(())
 }
@@ -611,6 +883,21 @@ fn prepare_empty_directory(path: &Path) -> EvalResult<()> {
     if path.exists() {
         let mut entries = fs::read_dir(path).map_err(io_message)?;
         if entries.next().transpose().map_err(io_message)?.is_some() {
+            return Err(format!("output directory is not empty: {}", path.display()));
+        }
+    } else {
+        fs::create_dir_all(path).map_err(io_message)?;
+    }
+    Ok(())
+}
+
+fn prepare_phase1_directory(path: &Path) -> EvalResult<()> {
+    if path.exists() {
+        let entries = fs::read_dir(path)
+            .map_err(io_message)?
+            .collect::<Result<Vec<_>, io::Error>>()
+            .map_err(io_message)?;
+        if entries.iter().any(|entry| entry.file_name() != "time.txt") {
             return Err(format!("output directory is not empty: {}", path.display()));
         }
     } else {
