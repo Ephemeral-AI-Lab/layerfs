@@ -1,6 +1,6 @@
 use blake3::Hasher;
 use layerfs_core::{
-    cas::{InMemoryCas, PutOutcome},
+    cas::{InMemoryCas, PackedInMemoryCas, PutOutcome},
     cdc::FastCdc,
     decode_object, decode_object_from, encode_object, encode_object_to, CanonicalName,
     CanonicalPath, ChunkReference, CoreError, DirectoryEntry, EditCounters, FullReplaceTiming,
@@ -29,6 +29,8 @@ const TREE_FILE_COUNT: usize = 10_000;
 const PHASE2_LAYOUT_WARMUPS: usize = 1;
 const PHASE2_LAYOUT_ITERATIONS: usize = 3;
 const PHASE2_RANGE_BYTES: u64 = 64 * 1024;
+const PHASE2_OPT2_WARMUPS: usize = 1;
+const PHASE2_OPT2_ITERATIONS: usize = 5;
 const SEGMENT_CHUNKS: usize = 64;
 const TREE_LEAF_CHUNKS: usize = 64;
 const TREE_FANOUT: usize = 16;
@@ -112,6 +114,18 @@ fn main() {
             .nth(2)
             .ok_or_else(|| "usage: layerfs-eval phase2-ingest-file <run-directory>".to_owned())
             .and_then(|path| run_phase2_ingest_file(Path::new(&path)).map(|_| 0)),
+        Some("phase2-opt2") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase2-opt2 <run-directory>".to_owned())
+            .and_then(|path| run_phase2_opt2(Path::new(&path), false).map(|_| 0)),
+        Some("phase2-opt2-presized") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase2-opt2-presized <run-directory>".to_owned())
+            .and_then(|path| run_phase2_opt2(Path::new(&path), true).map(|_| 0)),
+        Some("phase2-opt2-clean") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase2-opt2-clean <run-directory>".to_owned())
+            .and_then(|path| run_phase2_opt2_clean(Path::new(&path)).map(|_| 0)),
         Some("oracle") => {
             let expected = env::args().nth(2);
             let actual = env::args().nth(3);
@@ -151,6 +165,9 @@ fn print_help() {
     println!("layerfs-eval phase2-edits <run-directory>");
     println!("layerfs-eval phase2-ingest-breakdown <run-directory>");
     println!("layerfs-eval phase2-ingest-file <run-directory>");
+    println!("layerfs-eval phase2-opt2 <run-directory>");
+    println!("layerfs-eval phase2-opt2-presized <run-directory>");
+    println!("layerfs-eval phase2-opt2-clean <run-directory>");
     println!("layerfs-eval oracle <expected-directory> <actual-directory> <output-json>");
 }
 
@@ -1124,6 +1141,644 @@ fn run_phase2_ingest_file(run_directory: &Path) -> EvalResult<()> {
     Ok(())
 }
 
+struct Opt2Ingest {
+    references: Vec<ChunkReference>,
+    counters: EditCounters,
+    cas_stored_bytes: u64,
+    timing: FullReplaceTiming,
+    outer_elapsed_ns: u128,
+    correct: bool,
+    payload_len: Option<u64>,
+    payload_capacity: Option<u64>,
+    payload_reallocations: Option<u64>,
+    payload_growth_copy_estimate: Option<u64>,
+}
+
+struct Opt2Run {
+    engine: &'static str,
+    iteration: usize,
+    file_size: u64,
+    chunks: usize,
+    source_fingerprint: String,
+    counters: EditCounters,
+    cas_stored_bytes: u64,
+    timing: FullReplaceTiming,
+    component_total_ns: u128,
+    outer_elapsed_ns: u128,
+    correct: bool,
+    differential_correct: bool,
+    payload_len: Option<u64>,
+    payload_capacity: Option<u64>,
+    payload_reallocations: Option<u64>,
+    payload_growth_copy_estimate: Option<u64>,
+}
+
+fn run_phase2_opt2(run_directory: &Path, presize_packed: bool) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let (dataset, size) = SINGLE_FILES
+        .iter()
+        .find(|&&(dataset, _)| dataset == "S1-100")
+        .copied()
+        .ok_or_else(|| "S1-100 dataset is not configured".to_owned())?;
+    let source_path = run_directory.join("S1-100.source");
+    let source_fingerprint = write_deterministic_source(&source_path, size, dataset)?;
+
+    for _ in 0..PHASE2_OPT2_WARMUPS {
+        let (_, _) = run_opt2_pair(&source_path, size, &source_fingerprint, 0, presize_packed)?;
+    }
+
+    let mut runs = Vec::with_capacity(PHASE2_OPT2_ITERATIONS * 2);
+    for iteration in 1..=PHASE2_OPT2_ITERATIONS {
+        let (baseline, packed) = run_opt2_pair(
+            &source_path,
+            size,
+            &source_fingerprint,
+            iteration,
+            presize_packed,
+        )?;
+        runs.push(baseline);
+        runs.push(packed);
+    }
+
+    let results = runs
+        .iter()
+        .map(|run| phase2_opt2_json(run, &source))
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{results}\n"),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        &phase2_opt2_summary(dataset, size, &source_fingerprint, &runs, presize_packed),
+    )?;
+    Ok(())
+}
+
+fn run_opt2_pair(
+    source_path: &Path,
+    size: u64,
+    source_fingerprint: &str,
+    iteration: usize,
+    presize_packed: bool,
+) -> EvalResult<(Opt2Run, Opt2Run)> {
+    let baseline = run_opt2_baseline(source_path, size, source_fingerprint, iteration)?;
+    let packed = run_opt2_packed(
+        source_path,
+        size,
+        source_fingerprint,
+        iteration,
+        presize_packed,
+    )?;
+
+    let differential_correct = baseline.references == packed.references
+        && baseline.counters == packed.counters
+        && baseline.cas_stored_bytes == packed.cas_stored_bytes
+        && baseline.correct
+        && packed.correct;
+    if !differential_correct {
+        return Err(format!(
+            "phase2-opt2 differential mismatch at iteration {iteration}"
+        ));
+    }
+
+    let baseline_run = Opt2Run {
+        engine: "in-memory-btreemap-cas",
+        iteration,
+        file_size: size,
+        chunks: baseline.references.len(),
+        source_fingerprint: source_fingerprint.to_owned(),
+        counters: baseline.counters,
+        cas_stored_bytes: baseline.cas_stored_bytes,
+        timing: baseline.timing,
+        component_total_ns: timing_component_total_ns(&baseline.timing)?,
+        outer_elapsed_ns: baseline.outer_elapsed_ns,
+        correct: baseline.correct,
+        differential_correct,
+        payload_len: baseline.payload_len,
+        payload_capacity: baseline.payload_capacity,
+        payload_reallocations: baseline.payload_reallocations,
+        payload_growth_copy_estimate: baseline.payload_growth_copy_estimate,
+    };
+    let packed_run = Opt2Run {
+        engine: "packed-in-memory-cas",
+        iteration,
+        file_size: size,
+        chunks: packed.references.len(),
+        source_fingerprint: source_fingerprint.to_owned(),
+        counters: packed.counters,
+        cas_stored_bytes: packed.cas_stored_bytes,
+        timing: packed.timing,
+        component_total_ns: timing_component_total_ns(&packed.timing)?,
+        outer_elapsed_ns: packed.outer_elapsed_ns,
+        correct: packed.correct,
+        differential_correct,
+        payload_len: packed.payload_len,
+        payload_capacity: packed.payload_capacity,
+        payload_reallocations: packed.payload_reallocations,
+        payload_growth_copy_estimate: packed.payload_growth_copy_estimate,
+    };
+    Ok((baseline_run, packed_run))
+}
+
+fn run_opt2_baseline(
+    source_path: &Path,
+    size: u64,
+    source_fingerprint: &str,
+    _iteration: usize,
+) -> EvalResult<Opt2Ingest> {
+    let mut cas = InMemoryCas::new();
+    let mut reader = File::open(source_path).map_err(io_message)?;
+    let outer_start = Instant::now();
+    let (full_replace, timing) = LogicalFile::full_replace_timed(&mut cas, &mut reader)
+        .map_err(|error| format!("baseline full ingest: {error}"))?;
+    let outer_elapsed_ns = outer_start.elapsed().as_nanos();
+    let correct = verify_logical_file(&cas, full_replace.file(), source_fingerprint)?;
+    if full_replace.file().length() != size {
+        return Err(format!(
+            "baseline length mismatch: expected {size}, got {}",
+            full_replace.file().length()
+        ));
+    }
+    Ok(Opt2Ingest {
+        references: full_replace.file().chunks().to_vec(),
+        counters: full_replace.counters(),
+        cas_stored_bytes: cas.stored_bytes(),
+        timing,
+        outer_elapsed_ns,
+        correct,
+        payload_len: None,
+        payload_capacity: None,
+        payload_reallocations: None,
+        payload_growth_copy_estimate: None,
+    })
+}
+
+fn run_opt2_packed(
+    source_path: &Path,
+    size: u64,
+    source_fingerprint: &str,
+    _iteration: usize,
+    presize_packed: bool,
+) -> EvalResult<Opt2Ingest> {
+    let capacity = if presize_packed {
+        usize::try_from(size).map_err(|_| "packed payload capacity overflow".to_owned())?
+    } else {
+        0
+    };
+    let mut cas = PackedInMemoryCas::with_capacity(capacity);
+    let mut reader = File::open(source_path).map_err(io_message)?;
+    let outer_start = Instant::now();
+    let (full_replace, timing) = LogicalFile::full_replace_timed_packed_cas(&mut cas, &mut reader)
+        .map_err(|error| format!("packed full ingest: {error}"))?;
+    let outer_elapsed_ns = outer_start.elapsed().as_nanos();
+    let correct = verify_packed_logical_file(&cas, full_replace.file(), source_fingerprint)?;
+    if full_replace.file().length() != size {
+        return Err(format!(
+            "packed length mismatch: expected {size}, got {}",
+            full_replace.file().length()
+        ));
+    }
+    Ok(Opt2Ingest {
+        references: full_replace.file().chunks().to_vec(),
+        counters: full_replace.counters(),
+        cas_stored_bytes: cas.stored_bytes(),
+        timing,
+        outer_elapsed_ns,
+        correct,
+        payload_len: Some(
+            u64::try_from(cas.payload_len())
+                .map_err(|_| "packed payload length overflow".to_owned())?,
+        ),
+        payload_capacity: Some(
+            u64::try_from(cas.payload_capacity())
+                .map_err(|_| "packed payload capacity overflow".to_owned())?,
+        ),
+        payload_reallocations: Some(cas.payload_reallocations()),
+        payload_growth_copy_estimate: Some(cas.payload_growth_copy_estimate()),
+    })
+}
+
+fn phase2_opt2_json(run: &Opt2Run, source: &GitMetadata) -> String {
+    format!(
+        "{{\"format_version\":2,\"benchmark\":\"phase2-opt2-packed-cas\",\"engine\":{},\"iteration\":{},\"file_size_bytes\":{},\"chunks\":{},\"source_fingerprint\":{},\"cdc_bytes_scanned\":{},\"chunks_created\":{},\"chunks_reused\":{},\"bytes_hashed\":{},\"bytes_delivered\":{},\"cas_stored_bytes\":{},\"source_read_ns\":{},\"cdc_ns\":{},\"cas_publish_ns\":{},\"manifest_ns\":{},\"component_total_ns\":{},\"outer_elapsed_ns\":{},\"correct\":{},\"differential_correct\":{},\"payload_len\":{},\"payload_capacity\":{},\"payload_reallocations\":{},\"payload_growth_copy_estimate\":{},\"source_commit\":{},\"dirty_tree\":{},\"pipeline\":{}}}",
+        json_string(run.engine),
+        run.iteration,
+        run.file_size,
+        run.chunks,
+        json_string(&run.source_fingerprint),
+        run.counters.cdc_bytes_scanned,
+        run.counters.chunks_created,
+        run.counters.chunks_reused,
+        run.counters.bytes_hashed,
+        run.counters.bytes_delivered,
+        run.cas_stored_bytes,
+        run.timing.source_read_ns,
+        run.timing.cdc_ns,
+        run.timing.cas_publish_ns,
+        run.timing.manifest_ns,
+        run.component_total_ns,
+        run.outer_elapsed_ns,
+        run.correct,
+        run.differential_correct,
+        json_option_u64(run.payload_len),
+        json_option_u64(run.payload_capacity),
+        json_option_u64(run.payload_reallocations),
+        json_option_u64(run.payload_growth_copy_estimate),
+        json_option_string(source.commit.as_deref()),
+        source.dirty_tree,
+        json_string("APFS file -> FastCDC -> CAS -> logical chunk references"),
+    )
+}
+
+fn phase2_opt2_summary(
+    dataset: &str,
+    size: u64,
+    source_fingerprint: &str,
+    runs: &[Opt2Run],
+    presize_packed: bool,
+) -> String {
+    let baseline = runs
+        .iter()
+        .filter(|run| run.engine == "in-memory-btreemap-cas")
+        .collect::<Vec<_>>();
+    let packed = runs
+        .iter()
+        .filter(|run| run.engine == "packed-in-memory-cas")
+        .collect::<Vec<_>>();
+    let baseline_times = baseline
+        .iter()
+        .map(|run| run.outer_elapsed_ns)
+        .collect::<Vec<_>>();
+    let packed_times = packed
+        .iter()
+        .map(|run| run.outer_elapsed_ns)
+        .collect::<Vec<_>>();
+    let baseline_median = median(&baseline_times);
+    let packed_median = median(&packed_times);
+    let baseline_throughput = throughput_mib_s(size, baseline_median);
+    let packed_throughput = throughput_mib_s(size, packed_median);
+    let improvement = if baseline_median == 0 {
+        0.0
+    } else {
+        (baseline_median as f64 - packed_median as f64) * 100.0 / baseline_median as f64
+    };
+    let mut summary = format!(
+        "# Phase 2 Opt2 packed-CAS A/B benchmark\n\n\
+         Dataset: `{dataset}` ({size} bytes / 100 MiB). The source is one\n\
+         deterministic regular file created and synced in this run directory;\n\
+         `environment.json` records the filesystem probe, including APFS when\n\
+         applicable. Each engine has {PHASE2_OPT2_WARMUPS} warmup and\n\
+         {PHASE2_OPT2_ITERATIONS} measured runs. The source file is reused, but\n\
+         each run uses a fresh CAS. Packed payload pre-sizing: `{presize_packed}`.\n\n\
+         Differential correctness requires identical CDC chunk IDs and lengths,\n\
+         identical counters and stored-byte totals, and identical reconstructed\n\
+         BLAKE3 output. All measured rows passed that check.\n\n\
+         Source fingerprint: `{source_fingerprint}`\n\n\
+         | Engine | Median outer ms | Min outer ms | Max outer ms | Median MiB/s |\n|---|---:|---:|---:|---:|\n"
+    );
+    summary.push_str(&phase2_opt2_engine_row("InMemoryCas", &baseline, size));
+    summary.push_str(&phase2_opt2_engine_row("PackedInMemoryCas", &packed, size));
+    let _ = writeln!(
+        summary,
+        "\nPacked median change: **{improvement:.2}%** (positive means faster).\n\n\
+         Baseline median outer time: `{baseline_median} ns`; packed median outer\n\
+         time: `{packed_median} ns`. Stage timing and every measured row are in\n\
+         `results.jsonl`; the source file is `S1-100.source`.\n"
+    );
+    summary.push_str(&format!(
+        "\n| Engine | Median source ms | Median CDC ms | Median CAS ms | Median manifest ms |\n|---|---:|---:|---:|---:|\n{}{}",
+        phase2_opt2_stage_row("InMemoryCas", &baseline),
+        phase2_opt2_stage_row("PackedInMemoryCas", &packed),
+    ));
+    let _ = writeln!(
+        summary,
+        "\nThroughput cross-check: InMemoryCas `{baseline_throughput:.1} MiB/s`;\n\
+         PackedInMemoryCas `{packed_throughput:.1} MiB/s`."
+    );
+    let packed_capacity = packed
+        .iter()
+        .filter_map(|run| run.payload_capacity)
+        .map(u128::from)
+        .collect::<Vec<_>>();
+    let packed_reallocations = packed
+        .iter()
+        .filter_map(|run| run.payload_reallocations)
+        .map(u128::from)
+        .collect::<Vec<_>>();
+    let packed_growth_copied = packed
+        .iter()
+        .filter_map(|run| run.payload_growth_copy_estimate)
+        .map(u128::from)
+        .collect::<Vec<_>>();
+    let _ = writeln!(
+        summary,
+        "\nPacked payload observations (median): capacity `{}` bytes; reallocations `{}`; estimated growth-copy bytes `{}`.",
+        median(&packed_capacity),
+        median(&packed_reallocations),
+        median(&packed_growth_copied),
+    );
+    summary
+}
+
+fn phase2_opt2_engine_row(name: &str, runs: &[&Opt2Run], size: u64) -> String {
+    let times = runs
+        .iter()
+        .map(|run| run.outer_elapsed_ns)
+        .collect::<Vec<_>>();
+    let median_ns = median(&times);
+    let min_ns = times.iter().copied().min().unwrap_or(0);
+    let max_ns = times.iter().copied().max().unwrap_or(0);
+    format!(
+        "| {name} | {:.3} | {:.3} | {:.3} | {:.1} |\n",
+        median_ns as f64 / 1_000_000.0,
+        min_ns as f64 / 1_000_000.0,
+        max_ns as f64 / 1_000_000.0,
+        throughput_mib_s(size, median_ns),
+    )
+}
+
+fn phase2_opt2_stage_row(name: &str, runs: &[&Opt2Run]) -> String {
+    let median_stage = |stage: fn(&FullReplaceTiming) -> u128| {
+        let values = runs
+            .iter()
+            .map(|run| stage(&run.timing))
+            .collect::<Vec<_>>();
+        median(&values) as f64 / 1_000_000.0
+    };
+    format!(
+        "| {name} | {:.3} | {:.3} | {:.3} | {:.3} |\n",
+        median_stage(|timing| timing.source_read_ns),
+        median_stage(|timing| timing.cdc_ns),
+        median_stage(|timing| timing.cas_publish_ns),
+        median_stage(|timing| timing.manifest_ns),
+    )
+}
+
+struct CleanOpt2Ingest {
+    references: Vec<ChunkReference>,
+    counters: EditCounters,
+    cas_stored_bytes: u64,
+    elapsed_ns: u128,
+    correct: bool,
+}
+
+struct CleanOpt2Run {
+    engine: &'static str,
+    iteration: usize,
+    file_size: u64,
+    chunks: usize,
+    source_fingerprint: String,
+    counters: EditCounters,
+    cas_stored_bytes: u64,
+    elapsed_ns: u128,
+    correct: bool,
+    differential_correct: bool,
+}
+
+fn run_phase2_opt2_clean(run_directory: &Path) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let (dataset, size) = SINGLE_FILES
+        .iter()
+        .find(|&&(dataset, _)| dataset == "S1-100")
+        .copied()
+        .ok_or_else(|| "S1-100 dataset is not configured".to_owned())?;
+    let source_path = run_directory.join("S1-100.source");
+    let source_fingerprint = write_deterministic_source(&source_path, size, dataset)?;
+
+    for _ in 0..PHASE2_OPT2_WARMUPS {
+        let _ = run_clean_pair(&source_path, size, &source_fingerprint, 0)?;
+    }
+
+    let mut runs = Vec::with_capacity(PHASE2_OPT2_ITERATIONS * 2);
+    for iteration in 1..=PHASE2_OPT2_ITERATIONS {
+        let (baseline, packed) =
+            run_clean_pair(&source_path, size, &source_fingerprint, iteration)?;
+        runs.push(baseline);
+        runs.push(packed);
+    }
+
+    let results = runs
+        .iter()
+        .map(|run| phase2_opt2_clean_json(run, &source))
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{results}\n"),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        &phase2_opt2_clean_summary(dataset, size, &source_fingerprint, &runs),
+    )?;
+    Ok(())
+}
+
+fn run_clean_pair(
+    source_path: &Path,
+    size: u64,
+    source_fingerprint: &str,
+    iteration: usize,
+) -> EvalResult<(CleanOpt2Run, CleanOpt2Run)> {
+    let baseline = run_clean_baseline(source_path, size, source_fingerprint)?;
+    let packed = run_clean_packed(source_path, size, source_fingerprint)?;
+    let differential_correct = baseline.references == packed.references
+        && baseline.counters == packed.counters
+        && baseline.cas_stored_bytes == packed.cas_stored_bytes
+        && baseline.correct
+        && packed.correct;
+    if !differential_correct {
+        return Err(format!(
+            "phase2-opt2-clean differential mismatch at iteration {iteration}"
+        ));
+    }
+    Ok((
+        CleanOpt2Run {
+            engine: "in-memory-btreemap-cas",
+            iteration,
+            file_size: size,
+            chunks: baseline.references.len(),
+            source_fingerprint: source_fingerprint.to_owned(),
+            counters: baseline.counters,
+            cas_stored_bytes: baseline.cas_stored_bytes,
+            elapsed_ns: baseline.elapsed_ns,
+            correct: baseline.correct,
+            differential_correct,
+        },
+        CleanOpt2Run {
+            engine: "packed-in-memory-cas-presized",
+            iteration,
+            file_size: size,
+            chunks: packed.references.len(),
+            source_fingerprint: source_fingerprint.to_owned(),
+            counters: packed.counters,
+            cas_stored_bytes: packed.cas_stored_bytes,
+            elapsed_ns: packed.elapsed_ns,
+            correct: packed.correct,
+            differential_correct,
+        },
+    ))
+}
+
+fn run_clean_baseline(
+    source_path: &Path,
+    size: u64,
+    source_fingerprint: &str,
+) -> EvalResult<CleanOpt2Ingest> {
+    let mut cas = InMemoryCas::new();
+    let mut reader = File::open(source_path).map_err(io_message)?;
+    let start = Instant::now();
+    let full_replace = LogicalFile::full_replace(&mut cas, &mut reader)
+        .map_err(|error| format!("clean baseline full ingest: {error}"))?;
+    let elapsed_ns = start.elapsed().as_nanos();
+    let correct = verify_logical_file(&cas, full_replace.file(), source_fingerprint)?;
+    if full_replace.file().length() != size {
+        return Err(format!(
+            "clean baseline length mismatch: expected {size}, got {}",
+            full_replace.file().length()
+        ));
+    }
+    Ok(CleanOpt2Ingest {
+        references: full_replace.file().chunks().to_vec(),
+        counters: full_replace.counters(),
+        cas_stored_bytes: cas.stored_bytes(),
+        elapsed_ns,
+        correct,
+    })
+}
+
+fn run_clean_packed(
+    source_path: &Path,
+    size: u64,
+    source_fingerprint: &str,
+) -> EvalResult<CleanOpt2Ingest> {
+    let capacity =
+        usize::try_from(size).map_err(|_| "clean packed payload capacity overflow".to_owned())?;
+    let mut cas = PackedInMemoryCas::with_capacity(capacity);
+    let mut reader = File::open(source_path).map_err(io_message)?;
+    let start = Instant::now();
+    let full_replace = LogicalFile::full_replace_packed_cas(&mut cas, &mut reader)
+        .map_err(|error| format!("clean packed full ingest: {error}"))?;
+    let elapsed_ns = start.elapsed().as_nanos();
+    let correct = verify_packed_logical_file(&cas, full_replace.file(), source_fingerprint)?;
+    if full_replace.file().length() != size {
+        return Err(format!(
+            "clean packed length mismatch: expected {size}, got {}",
+            full_replace.file().length()
+        ));
+    }
+    Ok(CleanOpt2Ingest {
+        references: full_replace.file().chunks().to_vec(),
+        counters: full_replace.counters(),
+        cas_stored_bytes: cas.stored_bytes(),
+        elapsed_ns,
+        correct,
+    })
+}
+
+fn phase2_opt2_clean_json(run: &CleanOpt2Run, source: &GitMetadata) -> String {
+    format!(
+        "{{\"format_version\":1,\"benchmark\":\"phase2-opt2-clean\",\"engine\":{},\"iteration\":{},\"file_size_bytes\":{},\"chunks\":{},\"source_fingerprint\":{},\"cdc_bytes_scanned\":{},\"chunks_created\":{},\"chunks_reused\":{},\"bytes_hashed\":{},\"bytes_delivered\":{},\"cas_stored_bytes\":{},\"elapsed_ns\":{},\"correct\":{},\"differential_correct\":{},\"source_commit\":{},\"dirty_tree\":{},\"pipeline\":{}}}",
+        json_string(run.engine),
+        run.iteration,
+        run.file_size,
+        run.chunks,
+        json_string(&run.source_fingerprint),
+        run.counters.cdc_bytes_scanned,
+        run.counters.chunks_created,
+        run.counters.chunks_reused,
+        run.counters.bytes_hashed,
+        run.counters.bytes_delivered,
+        run.cas_stored_bytes,
+        run.elapsed_ns,
+        run.correct,
+        run.differential_correct,
+        json_option_string(source.commit.as_deref()),
+        source.dirty_tree,
+        json_string("APFS file -> FastCDC -> CAS -> logical chunk references"),
+    )
+}
+
+fn phase2_opt2_clean_summary(
+    dataset: &str,
+    size: u64,
+    source_fingerprint: &str,
+    runs: &[CleanOpt2Run],
+) -> String {
+    let baseline = runs
+        .iter()
+        .filter(|run| run.engine == "in-memory-btreemap-cas")
+        .collect::<Vec<_>>();
+    let packed = runs
+        .iter()
+        .filter(|run| run.engine == "packed-in-memory-cas-presized")
+        .collect::<Vec<_>>();
+    let baseline_times = baseline
+        .iter()
+        .map(|run| run.elapsed_ns)
+        .collect::<Vec<_>>();
+    let packed_times = packed.iter().map(|run| run.elapsed_ns).collect::<Vec<_>>();
+    let baseline_median = median(&baseline_times);
+    let packed_median = median(&packed_times);
+    let improvement = if baseline_median == 0 {
+        0.0
+    } else {
+        (baseline_median as f64 - packed_median as f64) * 100.0 / baseline_median as f64
+    };
+    format!(
+        "# Phase 2 clean full-ingest A/B\n\n\
+         Dataset: `{dataset}` ({size} bytes / 100 MiB), deterministic source on
+         APFS when applicable. Each engine has {PHASE2_OPT2_WARMUPS} warmup and
+         {PHASE2_OPT2_ITERATIONS} measured runs. The packed payload is pre-sized
+         to the source size. This lane measures one outer timer only; it does
+         not add per-read or per-chunk `Instant` calls.\n\n\
+         Differential correctness requires identical CDC references, counters,
+         CAS stored bytes, and reconstructed BLAKE3 output.\n\n\
+         Source fingerprint: `{source_fingerprint}`\n\n\
+         | Engine | Median outer ms | Min outer ms | Max outer ms | Median MiB/s |\n|---|---:|---:|---:|---:|\n{}{}\n\
+         Packed median change: **{improvement:.2}%** (positive means faster).\n\n\
+         This is the throughput lane. Use `phase2-opt2` for stage attribution;
+         its per-stage timers are diagnostic and not directly comparable to this
+         clean lane.\n",
+        clean_engine_row("InMemoryCas", &baseline, size),
+        clean_engine_row("PackedInMemoryCas (pre-sized)", &packed, size),
+    )
+}
+
+fn clean_engine_row(name: &str, runs: &[&CleanOpt2Run], size: u64) -> String {
+    let times = runs.iter().map(|run| run.elapsed_ns).collect::<Vec<_>>();
+    let median_ns = median(&times);
+    let min_ns = times.iter().copied().min().unwrap_or(0);
+    let max_ns = times.iter().copied().max().unwrap_or(0);
+    format!(
+        "| {name} | {:.3} | {:.3} | {:.3} | {:.1} |\n",
+        median_ns as f64 / 1_000_000.0,
+        min_ns as f64 / 1_000_000.0,
+        max_ns as f64 / 1_000_000.0,
+        throughput_mib_s(size, median_ns),
+    )
+}
+
+fn throughput_mib_s(size: u64, elapsed_ns: u128) -> f64 {
+    if elapsed_ns == 0 {
+        return 0.0;
+    }
+    size as f64 / (1024.0 * 1024.0) / (elapsed_ns as f64 / 1_000_000_000.0)
+}
+
 fn write_deterministic_source(path: &Path, size: u64, dataset: &str) -> EvalResult<String> {
     let mut reader = DeterministicReader::new(size, dataset);
     let mut file = File::create(path).map_err(io_message)?;
@@ -1303,6 +1958,29 @@ fn verify_logical_file(
             .map_err(|error| format!("logical-file verification read: {error}"))?;
         hasher.update(read.bytes());
         offset = end;
+    }
+    Ok(hasher.finalize().to_hex().to_string() == expected_fingerprint)
+}
+
+fn verify_packed_logical_file(
+    cas: &PackedInMemoryCas,
+    file: &LogicalFile,
+    expected_fingerprint: &str,
+) -> EvalResult<bool> {
+    let mut hasher = Hasher::new();
+    for reference in file.chunks() {
+        let bytes = cas
+            .get(reference.id())
+            .map_err(|error| format!("packed logical-file verification read: {error}"))?;
+        let actual = u64::try_from(bytes.len())
+            .map_err(|_| "packed logical-file verification length overflow".to_owned())?;
+        if actual != reference.length() {
+            return Err(format!(
+                "packed logical-file verification length mismatch: expected {}, got {actual}",
+                reference.length()
+            ));
+        }
+        hasher.update(bytes);
     }
     Ok(hasher.finalize().to_hex().to_string() == expected_fingerprint)
 }
