@@ -7,6 +7,8 @@ pub const COMPONENT: &str = "layerfs-core";
 pub mod cas;
 pub mod cdc;
 pub mod content;
+pub mod cow;
+pub mod delta;
 mod error;
 pub mod format;
 pub mod identity;

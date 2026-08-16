@@ -2,6 +2,7 @@ use blake3::Hasher;
 use layerfs_core::{
     cas::{InMemoryCas, PackedInMemoryCas, PutOutcome},
     cdc::FastCdc,
+    cow::{RootHandle, TreeNode as CoreTreeNode},
     decode_object, decode_object_from, encode_object, encode_object_to, CanonicalName,
     CanonicalPath, ChunkReference, CoreError, DirectoryEntry, EditCounters, FullReplaceTiming,
     LogicalFile, Object, ObjectId, ObjectKind, ObjectReference,
@@ -126,6 +127,10 @@ fn main() {
             .nth(2)
             .ok_or_else(|| "usage: layerfs-eval phase2-opt2-clean <run-directory>".to_owned())
             .and_then(|path| run_phase2_opt2_clean(Path::new(&path)).map(|_| 0)),
+        Some("phase3-cow") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase3-cow <run-directory>".to_owned())
+            .and_then(|path| run_phase3_cow(Path::new(&path)).map(|_| 0)),
         Some("oracle") => {
             let expected = env::args().nth(2);
             let actual = env::args().nth(3);
@@ -168,6 +173,7 @@ fn print_help() {
     println!("layerfs-eval phase2-opt2 <run-directory>");
     println!("layerfs-eval phase2-opt2-presized <run-directory>");
     println!("layerfs-eval phase2-opt2-clean <run-directory>");
+    println!("layerfs-eval phase3-cow <run-directory>");
     println!("layerfs-eval oracle <expected-directory> <actual-directory> <output-json>");
 }
 
@@ -1027,6 +1033,277 @@ fn run_phase2_edits(run_directory: &Path) -> EvalResult<()> {
         &phase2_edit_summary(&runs),
     )?;
     Ok(())
+}
+
+struct CowRun {
+    case: &'static str,
+    dataset: String,
+    operation: &'static str,
+    file_size: u64,
+    range: Range<u64>,
+    replacement_bytes: u64,
+    final_size: u64,
+    source_fingerprint: String,
+    base_ingest_ns: u128,
+    content_edit_ns: u128,
+    cow_delta_ns: u128,
+    delta_apply_ns: u128,
+    total_ns: u128,
+    counters: EditCounters,
+    delta_entries: usize,
+    parent_unchanged: bool,
+    sibling_shared: bool,
+    correct: bool,
+}
+
+fn run_phase3_cow(run_directory: &Path) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let mut runs = Vec::new();
+
+    for &(dataset, size) in SINGLE_FILES {
+        let mut cas = InMemoryCas::new();
+        let mut reader = DeterministicReader::new(size, dataset);
+        let ingest_start = Instant::now();
+        let base = LogicalFile::full_replace(&mut cas, &mut reader)
+            .map_err(|error| format!("{dataset} Phase 3 base ingest: {error}"))?;
+        let base_ingest_ns = ingest_start.elapsed().as_nanos();
+        let source_fingerprint = reader.fingerprint();
+        if !verify_logical_file(&cas, base.file(), &source_fingerprint)? {
+            return Err(format!("{dataset} base ingest correctness failed"));
+        }
+
+        let file_name =
+            CanonicalName::new("file").map_err(|error| format!("{dataset} file name: {error}"))?;
+        let sibling_name = CanonicalName::new("sibling")
+            .map_err(|error| format!("{dataset} sibling name: {error}"))?;
+        let sibling = CoreTreeNode::empty_directory();
+        let parent = RootHandle::from_entries([
+            (file_name, CoreTreeNode::file(base.file().clone())),
+            (sibling_name, sibling),
+        ])
+        .map_err(|error| format!("{dataset} parent root: {error}"))?;
+
+        let middle = size
+            .checked_div(2)
+            .ok_or_else(|| format!("{dataset} B7 offset arithmetic failed"))?;
+        let edit_start = middle
+            .checked_sub(1)
+            .ok_or_else(|| format!("{dataset} B7 middle offset underflow"))?;
+        runs.push(measure_phase3_cow_case(
+            &mut cas,
+            base.file(),
+            &parent,
+            dataset,
+            size,
+            &source_fingerprint,
+            base_ingest_ns,
+            "B7",
+            "one-byte-middle-replacement",
+            edit_start..middle,
+            vec![0xa5],
+        )?);
+
+        if dataset == "S1-100" {
+            for edit in phase2_edit_shapes(size)? {
+                runs.push(measure_phase3_cow_case(
+                    &mut cas,
+                    base.file(),
+                    &parent,
+                    dataset,
+                    size,
+                    &source_fingerprint,
+                    base_ingest_ns,
+                    "B8",
+                    edit.operation,
+                    edit.range,
+                    edit.replacement,
+                )?);
+            }
+        }
+    }
+
+    let results = runs
+        .iter()
+        .map(|run| phase3_cow_run_json(run, &source))
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{results}\n"),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        &phase3_cow_summary(&runs),
+    )?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn measure_phase3_cow_case(
+    cas: &mut InMemoryCas,
+    base: &LogicalFile,
+    parent: &RootHandle,
+    dataset: &str,
+    file_size: u64,
+    source_fingerprint: &str,
+    base_ingest_ns: u128,
+    case: &'static str,
+    operation: &'static str,
+    range: Range<u64>,
+    replacement: Vec<u8>,
+) -> EvalResult<CowRun> {
+    let expected_fingerprint = edited_fingerprint(dataset, file_size, range.clone(), &replacement)?;
+    let parent_id = parent.id();
+    let file_path = CanonicalPath::new("file").map_err(|error| error.to_string())?;
+    let sibling_path = CanonicalPath::new("sibling").map_err(|error| error.to_string())?;
+    let parent_file_id = parent
+        .lookup_required(&file_path)
+        .map_err(|error| error.to_string())?
+        .identity();
+    let operation_start = Instant::now();
+
+    let content_start = Instant::now();
+    let edited = base
+        .replace_range(cas, range.clone(), &replacement)
+        .map_err(|error| format!("{dataset} {case} {operation} content edit: {error}"))?;
+    let content_edit_ns = content_start.elapsed().as_nanos();
+
+    let cow_start = Instant::now();
+    let mutation = parent
+        .replace(file_path.clone(), CoreTreeNode::file(edited.file().clone()))
+        .map_err(|error| format!("{dataset} {case} {operation} COW mutation: {error}"))?;
+    let cow_delta_ns = cow_start.elapsed().as_nanos();
+
+    let apply_start = Instant::now();
+    let applied = mutation
+        .delta()
+        .apply(parent)
+        .map_err(|error| format!("{dataset} {case} {operation} delta apply: {error}"))?;
+    let delta_apply_ns = apply_start.elapsed().as_nanos();
+    let total_ns = operation_start.elapsed().as_nanos();
+
+    let actual_file = mutation
+        .root()
+        .lookup_required(&file_path)
+        .map_err(|error| error.to_string())?
+        .file_content()
+        .ok_or_else(|| format!("{dataset} {case} {operation} result is not a file"))?;
+    let correct_bytes = verify_logical_file(cas, actual_file, &expected_fingerprint)?;
+    let parent_unchanged = parent.id() == parent_id
+        && parent
+            .lookup_required(&file_path)
+            .map_err(|error| error.to_string())?
+            .identity()
+            == parent_file_id;
+    let sibling_shared = CoreTreeNode::ptr_eq(
+        parent
+            .lookup_required(&sibling_path)
+            .map_err(|error| error.to_string())?,
+        mutation
+            .root()
+            .lookup_required(&sibling_path)
+            .map_err(|error| error.to_string())?,
+    );
+    let correct = correct_bytes
+        && applied == *mutation.root()
+        && mutation.delta().entries().len() <= layerfs_core::limits::MAX_CHILD_REFERENCES
+        && parent_unchanged
+        && sibling_shared;
+
+    Ok(CowRun {
+        case,
+        dataset: dataset.to_owned(),
+        operation,
+        file_size,
+        range,
+        replacement_bytes: u64::try_from(replacement.len())
+            .map_err(|_| format!("{dataset} {case} {operation} replacement overflow"))?,
+        final_size: actual_file.length(),
+        source_fingerprint: source_fingerprint.to_owned(),
+        base_ingest_ns,
+        content_edit_ns,
+        cow_delta_ns,
+        delta_apply_ns,
+        total_ns,
+        counters: edited.counters(),
+        delta_entries: mutation.delta().entries().len(),
+        parent_unchanged,
+        sibling_shared,
+        correct,
+    })
+}
+
+fn phase3_cow_run_json(run: &CowRun, source: &GitMetadata) -> String {
+    format!(
+        "{{\"format_version\":1,\"benchmark\":\"phase3-cow-delta\",\"case\":{},\"dataset\":{},\"operation\":{},\"file_size_bytes\":{},\"range_start\":{},\"range_end\":{},\"replacement_bytes\":{},\"final_size_bytes\":{},\"source_fingerprint\":{},\"base_ingest_ns\":{},\"content_edit_ns\":{},\"cow_delta_ns\":{},\"delta_apply_ns\":{},\"total_ns\":{},\"cdc_bytes_scanned\":{},\"chunks_reused\":{},\"chunks_created\":{},\"delta_entries\":{},\"parent_unchanged\":{},\"sibling_shared\":{},\"correct\":{},\"source_commit\":{},\"dirty_tree\":{},\"performance_claim\":\"in-memory-cow-delta-stage-measurement\"}}",
+        json_string(run.case),
+        json_string(&run.dataset),
+        json_string(run.operation),
+        run.file_size,
+        run.range.start,
+        run.range.end,
+        run.replacement_bytes,
+        run.final_size,
+        json_string(&run.source_fingerprint),
+        run.base_ingest_ns,
+        run.content_edit_ns,
+        run.cow_delta_ns,
+        run.delta_apply_ns,
+        run.total_ns,
+        run.counters.cdc_bytes_scanned,
+        run.counters.chunks_reused,
+        run.counters.chunks_created,
+        run.delta_entries,
+        run.parent_unchanged,
+        run.sibling_shared,
+        run.correct,
+        json_option_string(source.commit.as_deref()),
+        source.dirty_tree,
+    )
+}
+
+fn phase3_cow_summary(runs: &[CowRun]) -> String {
+    let mut summary = String::from(
+        "# Phase 3 COW/delta in-memory measurement\n\n\
+         This artifact exercises deterministic CDC/CAS logical-file edits,\n\
+         immutable COW root mutation, deterministic delta construction, and\n\
+         authenticated delta application. Timings exclude final correctness\n\
+         verification and include no SQLite, durable storage, or VFS work.\n\n\
+         | Case | Dataset | Operation | File bytes | Base ingest ms | Edit ms | COW + delta ms | Delta apply ms | Total ms | CDC scanned | Reused | Created | Delta entries | Correct |\n|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---:|\n",
+    );
+    for run in runs {
+        let _ = writeln!(
+            summary,
+            "| {} | {} | `{}` | {} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {} | {} | {} | {} | {} |",
+            run.case,
+            run.dataset,
+            run.operation,
+            run.file_size,
+            run.base_ingest_ns as f64 / 1_000_000.0,
+            run.content_edit_ns as f64 / 1_000_000.0,
+            run.cow_delta_ns as f64 / 1_000_000.0,
+            run.delta_apply_ns as f64 / 1_000_000.0,
+            run.total_ns as f64 / 1_000_000.0,
+            run.counters.cdc_bytes_scanned,
+            run.counters.chunks_reused,
+            run.counters.chunks_created,
+            run.delta_entries,
+            run.correct,
+        );
+    }
+    summary.push_str(
+        "\n`parent_unchanged` and `sibling_shared` are emitted per row and are\n\
+         required structural-sharing checks. Peak RSS is intentionally an\n\
+         external observation; run the binary under `/usr/bin/time -l` or\n\
+         Instruments when recording memory.\n",
+    );
+    summary
 }
 
 struct IngestBreakdownRun {

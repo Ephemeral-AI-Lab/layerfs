@@ -1,25 +1,56 @@
 use std::fmt;
 
+use crate::identity::ObjectId;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CoreError {
     InvalidPath,
     PathLimitExceeded,
-    InvalidObjectKind { tag: u8 },
+    InvalidObjectKind {
+        tag: u8,
+    },
     LengthOverflow,
     ObjectLimitExceeded,
     MissingObject,
     IdentityMismatch,
-    LengthMismatch { expected: u64, actual: u64 },
-    InvalidRange { start: u64, end: u64, length: u64 },
-    BoundedResynchronization { scanned: u64, limit: u64 },
+    LengthMismatch {
+        expected: u64,
+        actual: u64,
+    },
+    InvalidRange {
+        start: u64,
+        end: u64,
+        length: u64,
+    },
+    BoundedResynchronization {
+        scanned: u64,
+        limit: u64,
+    },
     UnexpectedEof,
     TrailingBytes,
     NonCanonicalOrdering,
     Unsupported,
     Io,
-    InvalidIdentityLength { expected: usize, actual: usize },
+    InvalidIdentityLength {
+        expected: usize,
+        actual: usize,
+    },
     InvalidIdentityText,
     InvalidUtf8,
+    NameCollision,
+    PathNotFound,
+    NotDirectory,
+    RootMutation,
+    InvalidRename,
+    DeltaParentMismatch {
+        expected: ObjectId,
+        actual: ObjectId,
+    },
+    DeltaChildMismatch {
+        expected: ObjectId,
+        actual: ObjectId,
+    },
+    DeltaConflict,
 }
 
 pub type CoreResult<T> = Result<T, CoreError>;
@@ -63,6 +94,20 @@ impl fmt::Display for CoreError {
             }
             Self::InvalidIdentityText => formatter.write_str("invalid identity text"),
             Self::InvalidUtf8 => formatter.write_str("invalid UTF-8"),
+            Self::NameCollision => formatter.write_str("directory name already exists"),
+            Self::PathNotFound => formatter.write_str("path does not exist"),
+            Self::NotDirectory => formatter.write_str("path component is not a directory"),
+            Self::RootMutation => formatter.write_str("root cannot be added, removed, or replaced"),
+            Self::InvalidRename => formatter.write_str("invalid rename"),
+            Self::DeltaParentMismatch { expected, actual } => write!(
+                formatter,
+                "delta parent mismatch: expected {expected}, got {actual}"
+            ),
+            Self::DeltaChildMismatch { expected, actual } => write!(
+                formatter,
+                "delta child mismatch: expected {expected}, got {actual}"
+            ),
+            Self::DeltaConflict => formatter.write_str("delta entry conflicts with current tree"),
         }
     }
 }
