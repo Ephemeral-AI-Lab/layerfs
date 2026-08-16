@@ -1,7 +1,10 @@
 use blake3::Hasher;
 use layerfs_core::{
+    cas::{InMemoryCas, PutOutcome},
+    cdc::FastCdc,
     decode_object, decode_object_from, encode_object, encode_object_to, CanonicalName,
-    CanonicalPath, DirectoryEntry, Object, ObjectId, ObjectKind, ObjectReference,
+    CanonicalPath, ChunkReference, CoreError, DirectoryEntry, EditCounters, LogicalFile, Object,
+    ObjectId, ObjectKind, ObjectReference,
 };
 use layerfs_os::{probe, HostEnvironment};
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,6 +12,7 @@ use std::env;
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Cursor, Read, Write};
+use std::ops::Range;
 use std::path::Path;
 use std::process::Command;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -22,6 +26,12 @@ const SINGLE_FILES: &[(&str, u64)] = &[
     ("S1-512", 512 * 1024 * 1024),
 ];
 const TREE_FILE_COUNT: usize = 10_000;
+const PHASE2_LAYOUT_WARMUPS: usize = 1;
+const PHASE2_LAYOUT_ITERATIONS: usize = 3;
+const PHASE2_RANGE_BYTES: u64 = 64 * 1024;
+const SEGMENT_CHUNKS: usize = 64;
+const TREE_LEAF_CHUNKS: usize = 64;
+const TREE_FANOUT: usize = 16;
 
 type EvalResult<T> = Result<T, String>;
 
@@ -86,6 +96,14 @@ fn main() {
             .nth(2)
             .ok_or_else(|| "usage: layerfs-eval phase1 <run-directory>".to_owned())
             .and_then(|path| run_phase1(Path::new(&path)).map(|_| 0)),
+        Some("phase2-layout") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase2-layout <run-directory>".to_owned())
+            .and_then(|path| run_phase2_layout(Path::new(&path)).map(|_| 0)),
+        Some("phase2-edits") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase2-edits <run-directory>".to_owned())
+            .and_then(|path| run_phase2_edits(Path::new(&path)).map(|_| 0)),
         Some("oracle") => {
             let expected = env::args().nth(2);
             let actual = env::args().nth(3);
@@ -121,6 +139,8 @@ fn print_help() {
     println!("layerfs-eval dataset <dataset-directory>");
     println!("layerfs-eval probe <directory> <output-json>");
     println!("layerfs-eval phase1 <run-directory>");
+    println!("layerfs-eval phase2-layout <run-directory>");
+    println!("layerfs-eval phase2-edits <run-directory>");
     println!("layerfs-eval oracle <expected-directory> <actual-directory> <output-json>");
 }
 
@@ -128,6 +148,1015 @@ const PHASE1_WARMUPS: usize = 1;
 const PHASE1_ITERATIONS: usize = 5;
 const PHASE1_BYTE_SIZES: &[usize] = &[1024, 1024 * 1024, 8 * 1024 * 1024];
 const PHASE1_DIRECTORY_FANOUTS: &[usize] = &[16, 256, 4096];
+
+struct LayoutFixture {
+    cas: InMemoryCas,
+    references: Vec<ChunkReference>,
+    length: u64,
+    source_fingerprint: String,
+    cdc_bytes_scanned: u64,
+    chunks_created: u64,
+    cas_stored_bytes: u64,
+}
+
+struct DeterministicReader {
+    total: u64,
+    offset: u64,
+    salt: String,
+    hasher: Hasher,
+    block: Vec<u8>,
+    block_offset: u64,
+    block_length: usize,
+    block_position: usize,
+}
+
+impl DeterministicReader {
+    fn new(total: u64, salt: &str) -> Self {
+        Self {
+            total,
+            offset: 0,
+            salt: salt.to_owned(),
+            hasher: Hasher::new(),
+            block: vec![0_u8; BUFFER_SIZE],
+            block_offset: 0,
+            block_length: 0,
+            block_position: 0,
+        }
+    }
+
+    fn fingerprint(&self) -> String {
+        self.hasher.clone().finalize().to_hex().to_string()
+    }
+}
+
+impl Read for DeterministicReader {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        if self.offset == self.total || output.is_empty() {
+            return Ok(0);
+        }
+        if self.block_position == self.block_length {
+            let block_size = u64::try_from(BUFFER_SIZE)
+                .map_err(|_| io::Error::other("deterministic reader buffer overflow"))?;
+            self.block_offset = (self.offset / block_size)
+                .checked_mul(block_size)
+                .ok_or_else(|| io::Error::other("deterministic reader block overflow"))?;
+            let remaining = self
+                .total
+                .checked_sub(self.block_offset)
+                .ok_or_else(|| io::Error::other("deterministic reader block underflow"))?;
+            self.block_length = usize::try_from(remaining.min(block_size))
+                .map_err(|_| io::Error::other("deterministic reader length overflow"))?;
+            fill_buffer(
+                &mut self.block[..self.block_length],
+                self.block_offset,
+                &self.salt,
+            );
+            self.block_position = 0;
+        }
+        let length = output
+            .len()
+            .min(self.block_length.saturating_sub(self.block_position));
+        output[..length]
+            .copy_from_slice(&self.block[self.block_position..self.block_position + length]);
+        self.hasher.update(&output[..length]);
+        self.block_position += length;
+        self.offset =
+            self.offset
+                .checked_add(u64::try_from(length).map_err(|_| {
+                    io::Error::other("deterministic reader length conversion overflow")
+                })?)
+                .ok_or_else(|| io::Error::other("deterministic reader offset overflow"))?;
+        Ok(length)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct LayoutReadStats {
+    metadata_nodes_visited: u64,
+    chunk_refs_inspected: u64,
+    chunks_read: u64,
+    bytes_delivered: u64,
+}
+
+struct LayoutRead {
+    bytes: Vec<u8>,
+    stats: LayoutReadStats,
+}
+
+struct FlatManifest {
+    references: Vec<ChunkReference>,
+    length: u64,
+}
+
+impl FlatManifest {
+    fn from_references(references: Vec<ChunkReference>, length: u64) -> Self {
+        Self { references, length }
+    }
+
+    fn read_range(&self, cas: &InMemoryCas, range: Range<u64>) -> EvalResult<LayoutRead> {
+        validate_layout_range(range.clone(), self.length)?;
+        let mut stats = LayoutReadStats {
+            metadata_nodes_visited: 1,
+            ..LayoutReadStats::default()
+        };
+        let bytes = read_chunk_references(cas, &self.references, 0, range, &mut stats)?;
+        finish_layout_read(bytes, stats)
+    }
+}
+
+struct Segment {
+    start: u64,
+    end: u64,
+    references: Vec<ChunkReference>,
+}
+
+struct SegmentedManifest {
+    segments: Vec<Segment>,
+    length: u64,
+}
+
+impl SegmentedManifest {
+    fn from_references(references: &[ChunkReference]) -> EvalResult<Self> {
+        let mut segments = Vec::new();
+        let mut offset = 0_u64;
+        for slice in references.chunks(SEGMENT_CHUNKS) {
+            let start = offset;
+            for reference in slice {
+                offset = offset
+                    .checked_add(reference.length())
+                    .ok_or_else(|| "segmented layout length overflow".to_owned())?;
+            }
+            segments.push(Segment {
+                start,
+                end: offset,
+                references: slice.to_vec(),
+            });
+        }
+        Ok(Self {
+            segments,
+            length: offset,
+        })
+    }
+
+    fn first_segment(&self, offset: u64, stats: &mut LayoutReadStats) -> usize {
+        let mut low = 0;
+        let mut high = self.segments.len();
+        while low < high {
+            let middle = low + (high - low) / 2;
+            stats.metadata_nodes_visited += 1;
+            if self.segments[middle].end <= offset {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        low
+    }
+
+    fn read_range(&self, cas: &InMemoryCas, range: Range<u64>) -> EvalResult<LayoutRead> {
+        validate_layout_range(range.clone(), self.length)?;
+        let mut stats = LayoutReadStats {
+            metadata_nodes_visited: 1,
+            ..LayoutReadStats::default()
+        };
+        let mut bytes = Vec::new();
+        if range.start != range.end {
+            let mut index = self.first_segment(range.start, &mut stats);
+            while let Some(segment) = self.segments.get(index) {
+                stats.metadata_nodes_visited = stats
+                    .metadata_nodes_visited
+                    .checked_add(1)
+                    .ok_or_else(|| "segmented metadata counter overflow".to_owned())?;
+                if segment.start >= range.end {
+                    break;
+                }
+                let segment_range = range.start.max(segment.start)..range.end.min(segment.end);
+                if segment_range.start < segment_range.end {
+                    let segment_bytes = read_chunk_references(
+                        cas,
+                        &segment.references,
+                        segment.start,
+                        segment_range,
+                        &mut stats,
+                    )?;
+                    bytes.extend_from_slice(&segment_bytes);
+                }
+                index += 1;
+            }
+        }
+        finish_layout_read(bytes, stats)
+    }
+}
+
+enum ContentCandidate {
+    Flat(FlatManifest),
+    Segmented(SegmentedManifest),
+    Tree(FanoutTree),
+}
+
+impl ContentCandidate {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Flat(_) => "flat-manifest",
+            Self::Segmented(_) => "segmented-64-chunks",
+            Self::Tree(_) => "fixed-fanout-16-tree",
+        }
+    }
+
+    fn read_range(&self, cas: &InMemoryCas, range: Range<u64>) -> EvalResult<LayoutRead> {
+        match self {
+            Self::Flat(layout) => layout.read_range(cas, range),
+            Self::Segmented(layout) => layout.read_range(cas, range),
+            Self::Tree(layout) => layout.read_range(cas, range),
+        }
+    }
+}
+
+enum TreeNode {
+    Leaf {
+        start: u64,
+        end: u64,
+        references: Vec<ChunkReference>,
+    },
+    Branch {
+        start: u64,
+        end: u64,
+        children: Vec<TreeNode>,
+    },
+}
+
+impl TreeNode {
+    fn start(&self) -> u64 {
+        match self {
+            Self::Leaf { start, .. } | Self::Branch { start, .. } => *start,
+        }
+    }
+
+    fn end(&self) -> u64 {
+        match self {
+            Self::Leaf { end, .. } | Self::Branch { end, .. } => *end,
+        }
+    }
+
+    fn read_into(
+        &self,
+        cas: &InMemoryCas,
+        range: Range<u64>,
+        stats: &mut LayoutReadStats,
+        output: &mut Vec<u8>,
+    ) -> EvalResult<()> {
+        stats.metadata_nodes_visited = stats
+            .metadata_nodes_visited
+            .checked_add(1)
+            .ok_or_else(|| "tree metadata counter overflow".to_owned())?;
+        match self {
+            Self::Leaf {
+                start, references, ..
+            } => {
+                let bytes = read_chunk_references(cas, references, *start, range, stats)?;
+                output.extend_from_slice(&bytes);
+            }
+            Self::Branch { children, .. } => {
+                for child in children {
+                    if child.end() <= range.start || child.start() >= range.end {
+                        stats.metadata_nodes_visited = stats
+                            .metadata_nodes_visited
+                            .checked_add(1)
+                            .ok_or_else(|| "tree metadata counter overflow".to_owned())?;
+                        continue;
+                    }
+                    child.read_into(cas, range.clone(), stats, output)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+struct FanoutTree {
+    root: TreeNode,
+    length: u64,
+}
+
+impl FanoutTree {
+    fn from_references(references: &[ChunkReference]) -> EvalResult<Self> {
+        let mut level = Vec::new();
+        let mut offset = 0_u64;
+        for slice in references.chunks(TREE_LEAF_CHUNKS) {
+            let start = offset;
+            for reference in slice {
+                offset = offset
+                    .checked_add(reference.length())
+                    .ok_or_else(|| "tree length overflow".to_owned())?;
+            }
+            level.push(TreeNode::Leaf {
+                start,
+                end: offset,
+                references: slice.to_vec(),
+            });
+        }
+        if level.is_empty() {
+            level.push(TreeNode::Leaf {
+                start: 0,
+                end: 0,
+                references: Vec::new(),
+            });
+        }
+        while level.len() > 1 {
+            let mut next = Vec::new();
+            while !level.is_empty() {
+                let take = TREE_FANOUT.min(level.len());
+                let children = level.drain(..take).collect::<Vec<_>>();
+                let start = children
+                    .first()
+                    .map(|child| child.start())
+                    .ok_or_else(|| "tree branch without children".to_owned())?;
+                let end = children
+                    .last()
+                    .map(|child| child.end())
+                    .ok_or_else(|| "tree branch without children".to_owned())?;
+                next.push(TreeNode::Branch {
+                    start,
+                    end,
+                    children,
+                });
+            }
+            level = next;
+        }
+        let root = level.pop().ok_or_else(|| "tree without root".to_owned())?;
+        Ok(Self {
+            root,
+            length: offset,
+        })
+    }
+
+    fn read_range(&self, cas: &InMemoryCas, range: Range<u64>) -> EvalResult<LayoutRead> {
+        validate_layout_range(range.clone(), self.length)?;
+        let capacity = usize::try_from(
+            range
+                .end
+                .checked_sub(range.start)
+                .ok_or_else(|| "tree range length underflow".to_owned())?,
+        )
+        .map_err(|_| "tree range length does not fit usize".to_owned())?;
+        let mut bytes = Vec::with_capacity(capacity);
+        let mut stats = LayoutReadStats::default();
+        if range.start != range.end {
+            self.root.read_into(cas, range, &mut stats, &mut bytes)?;
+        }
+        finish_layout_read(bytes, stats)
+    }
+}
+
+fn build_layout_fixture(id: &str, size: u64) -> EvalResult<LayoutFixture> {
+    let mut source = DeterministicReader::new(size, id);
+    let mut cas = InMemoryCas::new();
+    let mut references = Vec::new();
+    let mut chunks_created = 0_u64;
+    let cdc_counters = FastCdc::new()
+        .scan(&mut source, |chunk| {
+            let (id, outcome) = cas.put_chunk(chunk)?;
+            if outcome == PutOutcome::Inserted {
+                chunks_created = chunks_created
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+            }
+            let length = u64::try_from(chunk.len()).map_err(|_| CoreError::LengthOverflow)?;
+            references.push(ChunkReference::new(id, length));
+            Ok(())
+        })
+        .map_err(|error| format!("build layout fixture: {error}"))?;
+    Ok(LayoutFixture {
+        cas_stored_bytes: cas.stored_bytes(),
+        cas,
+        references,
+        length: size,
+        source_fingerprint: source.fingerprint(),
+        cdc_bytes_scanned: cdc_counters.bytes_scanned,
+        chunks_created,
+    })
+}
+
+fn validate_layout_range(range: Range<u64>, length: u64) -> EvalResult<()> {
+    if range.start > range.end || range.end > length {
+        return Err(format!(
+            "invalid layout range {}..{} for length {length}",
+            range.start, range.end
+        ));
+    }
+    Ok(())
+}
+
+fn read_chunk_references(
+    cas: &InMemoryCas,
+    references: &[ChunkReference],
+    start_offset: u64,
+    range: Range<u64>,
+    stats: &mut LayoutReadStats,
+) -> EvalResult<Vec<u8>> {
+    let requested = range
+        .end
+        .checked_sub(range.start)
+        .ok_or_else(|| "layout range arithmetic underflow".to_owned())?;
+    let capacity = usize::try_from(requested)
+        .map_err(|_| "layout range length does not fit usize".to_owned())?;
+    let mut output = Vec::with_capacity(capacity);
+    let mut offset = start_offset;
+    for reference in references {
+        stats.chunk_refs_inspected = stats
+            .chunk_refs_inspected
+            .checked_add(1)
+            .ok_or_else(|| "layout reference counter overflow".to_owned())?;
+        let chunk_end = offset
+            .checked_add(reference.length())
+            .ok_or_else(|| "layout chunk offset overflow".to_owned())?;
+        if offset >= range.end {
+            break;
+        }
+        if chunk_end <= range.start {
+            offset = chunk_end;
+            continue;
+        }
+        let chunk = cas
+            .get(reference.id())
+            .map_err(|error| format!("layout CAS read: {error}"))?;
+        let actual = u64::try_from(chunk.len())
+            .map_err(|_| "layout chunk length does not fit u64".to_owned())?;
+        if actual != reference.length() {
+            return Err(format!(
+                "layout chunk length mismatch: expected {}, got {actual}",
+                reference.length()
+            ));
+        }
+        let local_start = range.start.saturating_sub(offset);
+        let local_end = range
+            .end
+            .min(chunk_end)
+            .checked_sub(offset)
+            .ok_or_else(|| "layout chunk range underflow".to_owned())?;
+        let local_start = usize::try_from(local_start)
+            .map_err(|_| "layout chunk start does not fit usize".to_owned())?;
+        let local_end = usize::try_from(local_end)
+            .map_err(|_| "layout chunk end does not fit usize".to_owned())?;
+        output.extend_from_slice(&chunk[local_start..local_end]);
+        stats.chunks_read = stats
+            .chunks_read
+            .checked_add(1)
+            .ok_or_else(|| "layout chunk counter overflow".to_owned())?;
+        offset = chunk_end;
+    }
+    Ok(output)
+}
+
+fn finish_layout_read(bytes: Vec<u8>, mut stats: LayoutReadStats) -> EvalResult<LayoutRead> {
+    stats.bytes_delivered = u64::try_from(bytes.len())
+        .map_err(|_| "layout delivered-byte counter overflow".to_owned())?;
+    Ok(LayoutRead { bytes, stats })
+}
+
+fn layout_ranges(size: u64) -> EvalResult<Vec<(&'static str, Range<u64>)>> {
+    let length = PHASE2_RANGE_BYTES.min(size);
+    let middle_start = size
+        .checked_div(2)
+        .and_then(|offset| offset.checked_sub(length / 2))
+        .ok_or_else(|| "layout middle range underflow".to_owned())?;
+    let eof_start = size
+        .checked_sub(length)
+        .ok_or_else(|| "layout EOF range underflow".to_owned())?;
+    let middle_end = middle_start
+        .checked_add(length)
+        .ok_or_else(|| "layout middle range overflow".to_owned())?;
+    Ok(vec![
+        ("prefix", 0..length),
+        ("middle", middle_start..middle_end),
+        ("eof", eof_start..size),
+    ])
+}
+
+fn expected_layout_range(id: &str, range: Range<u64>) -> EvalResult<Vec<u8>> {
+    let length = range
+        .end
+        .checked_sub(range.start)
+        .ok_or_else(|| "layout expected range underflow".to_owned())?;
+    let mut bytes = vec![
+        0_u8;
+        usize::try_from(length)
+            .map_err(|_| "layout expected range does not fit usize".to_owned())?
+    ];
+    let block_size = u64::try_from(BUFFER_SIZE)
+        .map_err(|_| "layout expected buffer size overflow".to_owned())?;
+    let mut offset = range.start;
+    let mut block = vec![0_u8; BUFFER_SIZE];
+    while offset < range.end {
+        let block_start = (offset / block_size)
+            .checked_mul(block_size)
+            .ok_or_else(|| "layout expected block overflow".to_owned())?;
+        let block_end = range.end.min(
+            block_start
+                .checked_add(block_size)
+                .ok_or_else(|| "layout expected block end overflow".to_owned())?,
+        );
+        let block_length = usize::try_from(
+            block_end
+                .checked_sub(block_start)
+                .ok_or_else(|| "layout expected block underflow".to_owned())?,
+        )
+        .map_err(|_| "layout expected block length overflow".to_owned())?;
+        fill_buffer(&mut block[..block_length], block_start, id);
+        let source_start = usize::try_from(offset - block_start)
+            .map_err(|_| "layout expected source offset overflow".to_owned())?;
+        let output_start = usize::try_from(offset - range.start)
+            .map_err(|_| "layout expected output offset overflow".to_owned())?;
+        bytes[output_start..output_start + block_length - source_start]
+            .copy_from_slice(&block[source_start..block_length]);
+        offset = block_end;
+    }
+    Ok(bytes)
+}
+
+struct LayoutBenchmarkRun {
+    dataset: String,
+    layout: &'static str,
+    range_name: &'static str,
+    file_size: u64,
+    range: Range<u64>,
+    source_fingerprint: String,
+    cdc_bytes_scanned: u64,
+    chunks_created: u64,
+    cas_stored_bytes: u64,
+    stats: LayoutReadStats,
+    elapsed_ns: Vec<u128>,
+    correct: bool,
+}
+
+fn measure_layout(
+    candidate: &ContentCandidate,
+    fixture: &LayoutFixture,
+    dataset: &str,
+    range_name: &'static str,
+    range: Range<u64>,
+    expected: &[u8],
+) -> EvalResult<LayoutBenchmarkRun> {
+    let mut measured_stats = None;
+    for _ in 0..PHASE2_LAYOUT_WARMUPS {
+        let read = candidate.read_range(&fixture.cas, range.clone())?;
+        if read.bytes != expected {
+            return Err(format!(
+                "layout correctness failed during warm-up: {} {range_name}: {}",
+                candidate.name(),
+                layout_mismatch(&read.bytes, expected)
+            ));
+        }
+        measured_stats = Some(read.stats);
+    }
+    let mut elapsed_ns = Vec::with_capacity(PHASE2_LAYOUT_ITERATIONS);
+    for _ in 0..PHASE2_LAYOUT_ITERATIONS {
+        let start = Instant::now();
+        let read = candidate.read_range(&fixture.cas, range.clone())?;
+        elapsed_ns.push(start.elapsed().as_nanos());
+        if read.bytes != expected {
+            return Err(format!(
+                "layout correctness failed: {} {range_name}: {}",
+                candidate.name(),
+                layout_mismatch(&read.bytes, expected)
+            ));
+        }
+        if let Some(stats) = measured_stats {
+            if stats != read.stats {
+                return Err(format!(
+                    "layout counters were nondeterministic: {} {range_name}",
+                    candidate.name()
+                ));
+            }
+        }
+        measured_stats = Some(read.stats);
+        std::hint::black_box(read.bytes.len());
+    }
+    Ok(LayoutBenchmarkRun {
+        dataset: dataset.to_owned(),
+        layout: candidate.name(),
+        range,
+        range_name,
+        file_size: fixture.length,
+        source_fingerprint: fixture.source_fingerprint.clone(),
+        cdc_bytes_scanned: fixture.cdc_bytes_scanned,
+        chunks_created: fixture.chunks_created,
+        cas_stored_bytes: fixture.cas_stored_bytes,
+        stats: measured_stats.ok_or_else(|| "layout benchmark produced no counters".to_owned())?,
+        elapsed_ns,
+        correct: true,
+    })
+}
+
+fn layout_mismatch(actual: &[u8], expected: &[u8]) -> String {
+    let first_difference = actual
+        .iter()
+        .zip(expected)
+        .position(|(actual, expected)| actual != expected);
+    format!(
+        "actual_len={}, expected_len={}, first_difference={first_difference:?}",
+        actual.len(),
+        expected.len(),
+    )
+}
+
+fn run_phase2_layout(run_directory: &Path) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let mut runs = Vec::new();
+    for &(dataset, size) in SINGLE_FILES {
+        let fixture = build_layout_fixture(dataset, size)?;
+        let flat = ContentCandidate::Flat(FlatManifest::from_references(
+            fixture.references.clone(),
+            fixture.length,
+        ));
+        let segmented =
+            ContentCandidate::Segmented(SegmentedManifest::from_references(&fixture.references)?);
+        let tree = ContentCandidate::Tree(FanoutTree::from_references(&fixture.references)?);
+        let candidates = [flat, segmented, tree];
+        for (range_name, range) in layout_ranges(size)? {
+            let expected = expected_layout_range(dataset, range.clone())?;
+            for candidate in &candidates {
+                runs.push(measure_layout(
+                    candidate,
+                    &fixture,
+                    dataset,
+                    range_name,
+                    range.clone(),
+                    &expected,
+                )?);
+            }
+        }
+    }
+    let results = runs
+        .iter()
+        .map(|run| phase2_layout_run_json(run, &source))
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{results}\n"),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        &phase2_layout_summary(&runs),
+    )?;
+    Ok(())
+}
+
+fn phase2_layout_run_json(run: &LayoutBenchmarkRun, source: &GitMetadata) -> String {
+    let elapsed = run
+        .elapsed_ns
+        .iter()
+        .map(u128::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"format_version\":1,\"benchmark\":\"phase2-layout-selection-baseline\",\"case\":\"layout-range-read\",\"dataset\":{},\"layout\":{},\"range_name\":{},\"file_size_bytes\":{},\"range_start\":{},\"range_bytes\":{},\"source_fingerprint\":{},\"cdc_bytes_scanned\":{},\"chunks_created\":{},\"cas_stored_bytes\":{},\"metadata_nodes_visited\":{},\"chunk_refs_inspected\":{},\"chunks_read\":{},\"bytes_delivered\":{},\"iterations\":{},\"elapsed_ns\":[{}],\"peak_memory_bytes\":null,\"correct\":{},\"source_commit\":{},\"dirty_tree\":{},\"performance_claim\":\"layout-selection-baseline-only\"}}",
+        json_string(&run.dataset),
+        json_string(run.layout),
+        json_string(run.range_name),
+        run.file_size,
+        run.range.start,
+        run.range.end - run.range.start,
+        json_string(&run.source_fingerprint),
+        run.cdc_bytes_scanned,
+        run.chunks_created,
+        run.cas_stored_bytes,
+        run.stats.metadata_nodes_visited,
+        run.stats.chunk_refs_inspected,
+        run.stats.chunks_read,
+        run.stats.bytes_delivered,
+        run.elapsed_ns.len(),
+        elapsed,
+        run.correct,
+        json_option_string(source.commit.as_deref()),
+        source.dirty_tree,
+    )
+}
+
+fn phase2_layout_summary(runs: &[LayoutBenchmarkRun]) -> String {
+    let mut summary = String::from(
+        "# Phase 2 layout-selection baseline\n\n\
+         This artifact compares three simple in-memory logical layouts over the\n\
+         same authenticated CDC chunk references: a flat manifest, fixed-size\n\
+         64-chunk segments, and a fixed-fanout-16 tree with 64-chunk leaves.\n\n\
+         It measures deterministic 64 KiB prefix, middle, and EOF range reads\n\
+         for S1-16, S1-100, and S1-512. `metadata_nodes_visited`,\n\
+         `chunk_refs_inspected`, and `chunks_read` are layout-operation counters;\n\
+         `cdc_bytes_scanned` and `chunks_created` describe fixture construction.\n\n\
+         This is a layout-selection baseline, not a final performance claim. It\n\
+         does not freeze canonical content encodings and does not qualify B6/B7/B8,\n\
+         SQLite, concurrency, or process-wide memory. Peak memory remains an\n\
+         external observation.\n\n\
+         | Dataset | Layout | Range | Median ns | Metadata nodes | Chunk refs | Chunks read | Correct |\n|---|---|---|---:|---:|---:|---:|:---:|\n",
+    );
+    for run in runs {
+        let _ = writeln!(
+            summary,
+            "| {} | `{}` | `{}` | {} | {} | {} | {} | {} |",
+            run.dataset,
+            run.layout,
+            run.range_name,
+            median(&run.elapsed_ns),
+            run.stats.metadata_nodes_visited,
+            run.stats.chunk_refs_inspected,
+            run.stats.chunks_read,
+            run.correct,
+        );
+    }
+    summary.push_str(
+        "\nEvery result includes the source fingerprint, source metadata, exact range\n\
+         correctness, and the deterministic layout counters in `results.jsonl`.\n",
+    );
+    summary
+}
+
+struct EditRun {
+    case: &'static str,
+    dataset: String,
+    operation: &'static str,
+    file_size: u64,
+    range: Range<u64>,
+    replacement_bytes: u64,
+    final_size: u64,
+    source_fingerprint: String,
+    counters: EditCounters,
+    cas_stored_bytes: u64,
+    elapsed_ns: u128,
+    correct: bool,
+}
+
+fn run_phase2_edits(run_directory: &Path) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let mut runs = Vec::new();
+
+    for &(dataset, size) in SINGLE_FILES {
+        let mut cas = InMemoryCas::new();
+        let mut reader = DeterministicReader::new(size, dataset);
+        let start = Instant::now();
+        let full_replace = LogicalFile::full_replace(&mut cas, &mut reader)
+            .map_err(|error| format!("{dataset} B6 full replace: {error}"))?;
+        let elapsed_ns = start.elapsed().as_nanos();
+        let source_fingerprint = reader.fingerprint();
+        let correct = verify_logical_file(&cas, full_replace.file(), &source_fingerprint)?;
+        runs.push(EditRun {
+            case: "B6",
+            dataset: dataset.to_owned(),
+            operation: "full-replace",
+            file_size: size,
+            range: 0..0,
+            replacement_bytes: size,
+            final_size: full_replace.file().length(),
+            source_fingerprint: source_fingerprint.clone(),
+            counters: full_replace.counters(),
+            cas_stored_bytes: cas.stored_bytes(),
+            elapsed_ns,
+            correct,
+        });
+
+        let middle = size
+            .checked_div(2)
+            .ok_or_else(|| format!("{dataset} B7 offset arithmetic failed"))?;
+        let replacement = [0xa5_u8];
+        let edit_start = middle
+            .checked_sub(1)
+            .ok_or_else(|| format!("{dataset} B7 middle offset underflow"))?;
+        let start = Instant::now();
+        let edited = full_replace
+            .file()
+            .replace_range(&mut cas, edit_start..middle, &replacement)
+            .map_err(|error| format!("{dataset} B7 middle edit: {error}"))?;
+        let elapsed_ns = start.elapsed().as_nanos();
+        let expected = edited_fingerprint(dataset, size, edit_start..middle, &replacement)?;
+        let correct = verify_logical_file(&cas, edited.file(), &expected)?;
+        runs.push(EditRun {
+            case: "B7",
+            dataset: dataset.to_owned(),
+            operation: "one-byte-middle-replacement",
+            file_size: size,
+            range: edit_start..middle,
+            replacement_bytes: 1,
+            final_size: edited.file().length(),
+            source_fingerprint: source_fingerprint.clone(),
+            counters: edited.counters(),
+            cas_stored_bytes: cas.stored_bytes(),
+            elapsed_ns,
+            correct,
+        });
+
+        if dataset == "S1-100" {
+            for edit in phase2_edit_shapes(size)? {
+                let start = Instant::now();
+                let edited = full_replace
+                    .file()
+                    .replace_range(&mut cas, edit.range.clone(), &edit.replacement)
+                    .map_err(|error| format!("{dataset} B8 {}: {error}", edit.operation))?;
+                let elapsed_ns = start.elapsed().as_nanos();
+                let expected =
+                    edited_fingerprint(dataset, size, edit.range.clone(), &edit.replacement)?;
+                let correct = verify_logical_file(&cas, edited.file(), &expected)?;
+                runs.push(EditRun {
+                    case: "B8",
+                    dataset: dataset.to_owned(),
+                    operation: edit.operation,
+                    file_size: size,
+                    range: edit.range,
+                    replacement_bytes: u64::try_from(edit.replacement.len())
+                        .map_err(|_| "B8 replacement length overflow".to_owned())?,
+                    final_size: edited.file().length(),
+                    source_fingerprint: source_fingerprint.clone(),
+                    counters: edited.counters(),
+                    cas_stored_bytes: cas.stored_bytes(),
+                    elapsed_ns,
+                    correct,
+                });
+            }
+        }
+    }
+
+    let results = runs
+        .iter()
+        .map(|run| phase2_edit_run_json(run, &source))
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{results}\n"),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        &phase2_edit_summary(&runs),
+    )?;
+    Ok(())
+}
+
+struct EditShape {
+    operation: &'static str,
+    range: Range<u64>,
+    replacement: Vec<u8>,
+}
+
+fn phase2_edit_shapes(size: u64) -> EvalResult<Vec<EditShape>> {
+    let middle = size
+        .checked_div(2)
+        .ok_or_else(|| "B8 middle offset arithmetic failed".to_owned())?;
+    let middle_start = middle
+        .checked_sub(1)
+        .ok_or_else(|| "B8 middle offset underflow".to_owned())?;
+    let truncate_start = size
+        .checked_sub(64 * 1024)
+        .ok_or_else(|| "B8 truncate range underflow".to_owned())?;
+    Ok(vec![
+        EditShape {
+            operation: "equal-length-middle-replacement",
+            range: middle_start..middle,
+            replacement: vec![0xa5],
+        },
+        EditShape {
+            operation: "prepend",
+            range: 0..0,
+            replacement: b"prepend".to_vec(),
+        },
+        EditShape {
+            operation: "append",
+            range: size..size,
+            replacement: b"append".to_vec(),
+        },
+        EditShape {
+            operation: "truncate",
+            range: truncate_start..size,
+            replacement: Vec::new(),
+        },
+        EditShape {
+            operation: "eof-no-op",
+            range: size..size,
+            replacement: Vec::new(),
+        },
+    ])
+}
+
+fn verify_logical_file(
+    cas: &InMemoryCas,
+    file: &LogicalFile,
+    expected_fingerprint: &str,
+) -> EvalResult<bool> {
+    let mut hasher = Hasher::new();
+    let mut offset = 0_u64;
+    while offset < file.length() {
+        let end = file.length().min(
+            offset
+                .checked_add(BUFFER_SIZE as u64)
+                .ok_or_else(|| "logical-file verification overflow".to_owned())?,
+        );
+        let read = file
+            .read_range(cas, offset..end)
+            .map_err(|error| format!("logical-file verification read: {error}"))?;
+        hasher.update(read.bytes());
+        offset = end;
+    }
+    Ok(hasher.finalize().to_hex().to_string() == expected_fingerprint)
+}
+
+fn edited_fingerprint(
+    dataset: &str,
+    size: u64,
+    range: Range<u64>,
+    replacement: &[u8],
+) -> EvalResult<String> {
+    let mut hasher = Hasher::new();
+    update_expected_range(&mut hasher, dataset, 0..range.start)?;
+    hasher.update(replacement);
+    update_expected_range(&mut hasher, dataset, range.end..size)?;
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+fn update_expected_range(hasher: &mut Hasher, dataset: &str, range: Range<u64>) -> EvalResult<()> {
+    let mut offset = range.start;
+    while offset < range.end {
+        let end = range.end.min(
+            offset
+                .checked_add(BUFFER_SIZE as u64)
+                .ok_or_else(|| "expected edit fingerprint overflow".to_owned())?,
+        );
+        let bytes = expected_layout_range(dataset, offset..end)?;
+        hasher.update(&bytes);
+        offset = end;
+    }
+    Ok(())
+}
+
+fn phase2_edit_run_json(run: &EditRun, source: &GitMetadata) -> String {
+    format!(
+        "{{\"format_version\":1,\"benchmark\":\"phase2-edit-baseline\",\"case\":{},\"dataset\":{},\"operation\":{},\"file_size_bytes\":{},\"range_start\":{},\"range_end\":{},\"replacement_bytes\":{},\"final_size_bytes\":{},\"source_fingerprint\":{},\"cdc_bytes_scanned\":{},\"chunks_reused\":{},\"chunks_created\":{},\"bytes_hashed\":{},\"bytes_delivered\":{},\"cas_stored_bytes\":{},\"elapsed_ns\":{},\"correct\":{},\"source_commit\":{},\"dirty_tree\":{},\"performance_claim\":\"in-memory-phase2-baseline-only\"}}",
+        json_string(run.case),
+        json_string(&run.dataset),
+        json_string(run.operation),
+        run.file_size,
+        run.range.start,
+        run.range.end,
+        run.replacement_bytes,
+        run.final_size,
+        json_string(&run.source_fingerprint),
+        run.counters.cdc_bytes_scanned,
+        run.counters.chunks_reused,
+        run.counters.chunks_created,
+        run.counters.bytes_hashed,
+        run.counters.bytes_delivered,
+        run.cas_stored_bytes,
+        run.elapsed_ns,
+        run.correct,
+        json_option_string(source.commit.as_deref()),
+        source.dirty_tree,
+    )
+}
+
+fn phase2_edit_summary(runs: &[EditRun]) -> String {
+    let mut summary = String::from(
+        "# Phase 2 in-memory edit baseline\n\n\
+         This artifact exercises the real streaming CDC/CAS full-replace path\n\
+         (B6), one-byte middle replacement scaling (B7), and the five S1-100\n\
+         edit shapes (B8). Each case is a single cold in-memory operation; final\n\
+         bytes are verified by deterministic BLAKE3 fingerprints.\n\n\
+         The counters are the acceptance evidence: B7 must scan bounded bytes\n\
+         relative to file size, and B8 must remain exact without an unbounded\n\
+         fallback. This is not a durable-storage, concurrency, or final\n\
+         performance claim.\n\n\
+         | Case | Dataset | Operation | File bytes | CDC scanned | Reused | Created | Elapsed ns | Correct |\n|---|---|---|---:|---:|---:|---:|---:|:---:|\n",
+    );
+    for run in runs {
+        let _ = writeln!(
+            summary,
+            "| {} | {} | `{}` | {} | {} | {} | {} | {} | {} |",
+            run.case,
+            run.dataset,
+            run.operation,
+            run.file_size,
+            run.counters.cdc_bytes_scanned,
+            run.counters.chunks_reused,
+            run.counters.chunks_created,
+            run.elapsed_ns,
+            run.correct,
+        );
+    }
+    summary.push_str(
+        "\n`environment.json` records host/source metadata. `results.jsonl` retains\n\
+         the exact range, final size, authenticated source fingerprint, all\n\
+         required B6/B7/B8 counters, and correctness result for each operation.\n",
+    );
+    summary
+}
 
 #[derive(Debug)]
 struct Phase1Run {

@@ -7,7 +7,11 @@ pub enum CoreError {
     InvalidObjectKind { tag: u8 },
     LengthOverflow,
     ObjectLimitExceeded,
+    MissingObject,
     IdentityMismatch,
+    LengthMismatch { expected: u64, actual: u64 },
+    InvalidRange { start: u64, end: u64, length: u64 },
+    BoundedResynchronization { scanned: u64, limit: u64 },
     UnexpectedEof,
     TrailingBytes,
     NonCanonicalOrdering,
@@ -28,9 +32,24 @@ impl fmt::Display for CoreError {
             Self::InvalidObjectKind { tag } => write!(formatter, "invalid object kind {tag:#x}"),
             Self::LengthOverflow => formatter.write_str("length arithmetic overflow"),
             Self::ObjectLimitExceeded => formatter.write_str("object limit exceeded"),
+            Self::MissingObject => formatter.write_str("object is missing"),
             Self::IdentityMismatch => {
                 formatter.write_str("identity does not match canonical bytes")
             }
+            Self::LengthMismatch { expected, actual } => {
+                write!(
+                    formatter,
+                    "length mismatch: expected {expected}, got {actual}"
+                )
+            }
+            Self::InvalidRange { start, end, length } => write!(
+                formatter,
+                "invalid range {start}..{end} for logical length {length}"
+            ),
+            Self::BoundedResynchronization { scanned, limit } => write!(
+                formatter,
+                "bounded resynchronization failed after scanning {scanned} bytes (limit {limit})"
+            ),
             Self::UnexpectedEof => formatter.write_str("unexpected end of input"),
             Self::TrailingBytes => formatter.write_str("trailing bytes"),
             Self::NonCanonicalOrdering => formatter.write_str("non-canonical ordering"),

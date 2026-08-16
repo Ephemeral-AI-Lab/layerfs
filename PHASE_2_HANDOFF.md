@@ -146,3 +146,113 @@ file size grows
 
 The next useful artifact is a Phase 2 in-memory CDC/CAS benchmark report, not a
 SQLite schema.
+
+## 7. Phase 2 closure and Phase 3 handoff
+
+The requested Phase 2 data-plane slice is closed on the current worktree. The
+implementation is limited to the frozen streaming CDC scanner, the existing
+Phase 1 BLAKE3 identity domain, immutable authenticated `InMemoryCas`, the
+unencoded logical-file representation, bounded range reads, and bounded edit
+rejoin. No production storage trait, SQLite code, or canonical large-file
+object encoding was added.
+
+### Evidence artifacts
+
+The final release artifacts are retained at these repository-relative paths:
+
+```text
+eval/runs/phase2-layout-selection-baseline-final/environment.json
+eval/runs/phase2-layout-selection-baseline-final/results.jsonl
+eval/runs/phase2-layout-selection-baseline-final/summary.md
+
+eval/runs/phase2-edits-baseline-final/environment.json
+eval/runs/phase2-edits-baseline-final/results.jsonl
+eval/runs/phase2-edits-baseline-final/summary.md
+```
+
+The layout artifact contains 27/27 correct rows: S1-16, S1-100, and S1-512;
+flat manifest, fixed 64-chunk segments, and fixed-fanout-16 tree; and 64 KiB
+prefix, middle, and EOF ranges. The edit artifact contains 11/11 correct
+rows: B6 on all three single-file sizes, B7 one-byte middle replacement on
+all three sizes, and the five B8 edit shapes on S1-100. Both artifacts retain
+source fingerprints, host/source metadata, exact correctness, and the
+operation counters.
+
+### Counter findings
+
+| Gate | Dataset | CDC bytes scanned | Chunks reused | Chunks created | Finding |
+|---|---|---:|---:|---:|---|
+| B6 full replace | S1-16 | 16,777,216 | 0 | 851 | Full source scan by design |
+| B6 full replace | S1-100 | 104,857,600 | 0 | 5,284 | Full source scan by design |
+| B6 full replace | S1-512 | 536,870,912 | 0 | 27,162 | Full source scan by design |
+| B7 middle byte | S1-16 | 1,052,829 | 850 | 1 | Bounded edit work; unchanged chunks reused |
+| B7 middle byte | S1-100 | 1,060,505 | 5,283 | 1 | Bounded edit work; unchanged chunks reused |
+| B7 middle byte | S1-512 | 1,070,912 | 27,161 | 1 | Bounded edit work; unchanged chunks reused |
+
+B8 on S1-100 produced the following exact counter results:
+
+```text
+equal-length middle replacement: 1,060,505 scanned; 5,284 reused; 0 created
+prepend:                         1,045,499 scanned; 5,283 reused; 1 created
+append:                             14,196 scanned; 5,283 reused; 1 created
+truncate:                            4,785 scanned; 5,280 reused; 1 created
+EOF no-op:                                0 scanned;     0 reused; 0 created
+```
+
+B6 is intentionally linear because it captures a new complete source. B7 and
+B8 remain bounded by the rejoin probe plus the affected chunk and changed
+bytes; they do not silently fall back to a full-file scan. The layout and edit
+artifacts are in-memory baselines, not durable-storage, concurrency, peak-RSS,
+or final throughput qualifications.
+
+### Layout decision
+
+The benchmark recommends fixed-size 64-chunk segmentation as the working
+candidate for the next internal tree/COW experiments: on the tested middle and
+EOF ranges it reduced reference inspection to the local segment, while the
+flat manifest remained linear in the number of preceding references. The
+fixed-fanout tree also provided local reference inspection, but its simple
+candidate traversal visited more metadata nodes than segmentation in these
+measurements.
+
+This is only a layout-selection recommendation. The candidates are unencoded
+in-memory structures; the benchmark did not freeze `File`, `ContentLeaf`, or
+`ContentBranch` canonical bytes, add public format/version fields, or select a
+final persistent representation. Revisit the choice after the canonical
+encoding constraints, COW ancestor updates, and durable range-read costs are
+measured.
+
+### Exact verification commands
+
+The closure evidence was produced and checked with:
+
+```text
+cargo test -p layerfs-core content --offline
+cargo build --release -p layerfs-eval --offline
+target/release/layerfs-eval phase2-layout eval/runs/phase2-layout-selection-baseline-final
+target/release/layerfs-eval phase2-edits eval/runs/phase2-edits-baseline-final
+cargo test --workspace --offline
+cargo fmt --all -- --check
+cargo clippy --workspace --offline --all-targets -- -D warnings
+git diff --check
+```
+
+The focused content tests passed 8/8; the workspace passed 32 core tests and 5
+evaluator tests; formatting, warnings-denied clippy, and diff checks passed.
+
+### Later work and first Phase 3 task
+
+The following remain later work and are deliberately not Phase 2 closure
+claims: final canonical `File`, `ContentLeaf`, and `ContentBranch` encoding;
+durable engine/SQLite integration; COW and delta persistence; VFS/SDK layers;
+and host/platform projection. B9 scattered capture and B10 repeated
+checkpoint orchestration also require those later root and transaction paths.
+
+The exact first Phase 3 task is: implement and test the unencoded immutable
+directory/file tree and one in-memory copy-on-write root transition over the
+selected segmented working candidate. The first test must mutate one file,
+prove the parent root remains readable and unchanged, prove unchanged sibling
+subtrees retain their identities, and expose the bounded changed-ancestor
+spine needed by the later delta and SQLite phases. This task must preserve the
+current Phase 1 identity domains and must not freeze canonical large-file
+encodings until that COW/layout evidence is complete.

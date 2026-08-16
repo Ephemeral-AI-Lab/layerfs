@@ -258,6 +258,38 @@ full-file fallback. If a one-byte edit scans or rewrites the complete file,
 the result must be marked as bounded-edit failure even if the final bytes are
 correct.
 
+### 6.5 Phase 2 in-memory baseline artifacts
+
+The Phase 2 data-plane baseline uses the existing `layerfs-eval` artifact
+conventions. Build it in release mode and retain the generated
+`environment.json`, `results.jsonl`, and `summary.md` together:
+
+```text
+cargo build --release -p layerfs-eval --offline
+target/release/layerfs-eval phase2-layout eval/runs/<layout-run>
+target/release/layerfs-eval phase2-edits eval/runs/<edit-run>
+```
+
+`phase2-layout` constructs one authenticated CDC/CAS fixture for each of
+S1-16, S1-100, and S1-512, then compares three unencoded in-memory reference
+layouts: a flat manifest, fixed 64-chunk segments, and a fixed-fanout-16 tree
+with 64-chunk leaves. It runs deterministic 64 KiB prefix, middle, and EOF
+ranges with one warm-up and three measured iterations. Each row records exact
+correctness, source fingerprint and metadata, elapsed samples, and metadata
+nodes, chunk references, chunks read, and delivered bytes. This is a
+layout-selection baseline only; it does not freeze `File`, `ContentLeaf`, or
+`ContentBranch` encodings and is not a final performance claim.
+
+`phase2-edits` records B6 full replacement on all three single-file sizes, B7
+one-byte middle replacement on all three sizes, and B8 equal-length middle
+replacement, prepend, append, truncate, and EOF on S1-100. Each operation is
+verified against a deterministic BLAKE3 fingerprint. The result rows retain
+CDC bytes scanned, reused and created chunks, bytes hashed, bytes delivered,
+CAS bytes stored, range and final size, source metadata, and correctness. A
+bounded B7 or B8 result must be judged from these counters; correct bytes alone
+do not qualify an unbounded full-file fallback. These are cold in-memory
+baselines, not durable-storage, concurrency, or final performance claims.
+
 ## 7. Cold and warm protocol
 
 The benchmark must use these labels precisely:
