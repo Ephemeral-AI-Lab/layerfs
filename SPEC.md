@@ -2,6 +2,9 @@
 
 Status: proposed implementation specification for a new Rust repository.
 
+The detailed Phase 4 gate is maintained in
+[PHASE_4_SPEC.md](PHASE_4_SPEC.md).
+
 This specification defines the restart architecture for LayerFS built around
 Rust-owned content algorithms and a replaceable durable storage engine. The
 first storage engine is SQLite. PostgreSQL and a recovered custom engine are

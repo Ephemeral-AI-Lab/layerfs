@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 blake3.workspace = true
 layerfs-core = { path = "../../crates/layerfs-core" }
+layerfs-engine = { path = "../../crates/layerfs-engine" }
 layerfs-os = { path = "../../crates/layerfs-os" }
 
 [[bin]]

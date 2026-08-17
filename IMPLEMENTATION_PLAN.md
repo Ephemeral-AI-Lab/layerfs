@@ -8,6 +8,9 @@ The evaluation harness starts before the storage engine. We do not wait for
 the SDK or the final integration phase to discover that capture is still
 `O(file size)`.
 
+The executable Phase 4 plan is maintained in
+[PHASE_4_IMPLEMENTATION_PLAN.md](PHASE_4_IMPLEMENTATION_PLAN.md).
+
 The first qualified host composition is:
 
 ```text

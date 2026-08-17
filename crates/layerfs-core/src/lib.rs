@@ -23,6 +23,6 @@ pub use error::{CoreError, CoreResult};
 pub use format::{CanonicalName, CanonicalPath};
 pub use identity::{chunk_id, ChunkId, ObjectId};
 pub use object::{
-    decode_object, decode_object_from, encode_object, encode_object_to, DirectoryEntry, Object,
-    ObjectKind, ObjectReference,
+    decode_object, decode_object_from, encode_object, encode_object_to, validate_identity,
+    validate_object_from, DirectoryEntry, Object, ObjectKind, ObjectReference, ObjectSummary,
 };

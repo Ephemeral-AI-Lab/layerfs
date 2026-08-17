@@ -7,6 +7,7 @@ use layerfs_core::{
     CanonicalPath, ChunkReference, CoreError, DirectoryEntry, EditCounters, FullReplaceTiming,
     LogicalFile, Object, ObjectId, ObjectKind, ObjectReference,
 };
+use layerfs_engine::{DeltaRecord, Engine, EngineCounters, RootRecord, StorageObservation};
 use layerfs_os::{probe, HostEnvironment};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -131,6 +132,10 @@ fn main() {
             .nth(2)
             .ok_or_else(|| "usage: layerfs-eval phase3-cow <run-directory>".to_owned())
             .and_then(|path| run_phase3_cow(Path::new(&path)).map(|_| 0)),
+        Some("phase4a") => env::args()
+            .nth(2)
+            .ok_or_else(|| "usage: layerfs-eval phase4a <run-directory>".to_owned())
+            .and_then(|path| run_phase4a(Path::new(&path)).map(|_| 0)),
         Some("oracle") => {
             let expected = env::args().nth(2);
             let actual = env::args().nth(3);
@@ -174,6 +179,7 @@ fn print_help() {
     println!("layerfs-eval phase2-opt2-presized <run-directory>");
     println!("layerfs-eval phase2-opt2-clean <run-directory>");
     println!("layerfs-eval phase3-cow <run-directory>");
+    println!("layerfs-eval phase4a <run-directory>");
     println!("layerfs-eval oracle <expected-directory> <actual-directory> <output-json>");
 }
 
@@ -1266,6 +1272,290 @@ fn phase3_cow_run_json(run: &CowRun, source: &GitMetadata) -> String {
         json_option_string(source.commit.as_deref()),
         source.dirty_tree,
     )
+}
+
+struct Phase4Ingest {
+    root: RootRecord,
+    objects: Vec<(ObjectId, u64)>,
+    source_fingerprint: String,
+    cdc_bytes_scanned: u64,
+    cdc_chunks: u64,
+    wall_ns: u128,
+    publication_ns: u128,
+    commit_ns: u128,
+    counters: EngineCounters,
+    observations: StorageObservation,
+}
+
+fn run_phase4a(run_directory: &Path) -> EvalResult<()> {
+    prepare_empty_directory(run_directory)?;
+    let environment = host_environment(run_directory)?;
+    write_text(
+        &run_directory.join("environment.json"),
+        &environment_json(&environment),
+    )?;
+    let source = git_metadata();
+    let size = 100 * 1024 * 1024;
+    let mut results = Vec::new();
+    let mut retained_ingest = None;
+
+    for repetition in 0..3 {
+        let path = run_directory.join(format!("phase4a-i1-{repetition}.sqlite"));
+        let engine = Engine::open(&path).map_err(engine_message)?;
+        let (directory_id, base_root) = create_phase4a_base(&engine)?;
+        engine.reset_counters().map_err(engine_message)?;
+        let ingest = phase4a_ingest(&engine, base_root.id, directory_id, size, "S1-100")?;
+        results.push(phase4a_row_json("P4-I1", repetition, &ingest, &source));
+        drop(engine);
+        if repetition < 2 {
+            let _ = fs::remove_file(path);
+        } else {
+            retained_ingest = Some(ingest);
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    let repeat_path = run_directory.join("phase4a.sqlite");
+    for repetition in 0..3 {
+        let path = run_directory.join(format!("phase4a-i2-{repetition}.sqlite"));
+        let engine = Engine::open(&path).map_err(engine_message)?;
+        let (directory_id, base_root) = create_phase4a_base(&engine)?;
+        let first = phase4a_ingest(&engine, base_root.id, directory_id, size, "S1-100")?;
+        engine.reset_counters().map_err(engine_message)?;
+        let second = phase4a_ingest(&engine, first.root.id, directory_id, size, "S1-100")?;
+        if first.objects != second.objects || first.source_fingerprint != second.source_fingerprint
+        {
+            return Err("P4-I2 repeat changed the authenticated dataset".to_owned());
+        }
+        results.push(phase4a_row_json("P4-I2", repetition, &second, &source));
+        drop(engine);
+        if repetition == 2 {
+            fs::rename(&path, &repeat_path).map_err(io_message)?;
+        } else {
+            let _ = fs::remove_file(path);
+        }
+    }
+    let ingest = retained_ingest
+        .ok_or_else(|| "P4 benchmark did not retain an ingest manifest".to_owned())?;
+
+    for repetition in 0..3 {
+        let engine = Engine::open(&repeat_path).map_err(engine_message)?;
+        let start = Instant::now();
+        let mut hasher = Hasher::new();
+        for &(id, length) in &ingest.objects {
+            let bytes = engine
+                .read_object_range(id, 0..length)
+                .map_err(engine_message)?;
+            match decode_object(&bytes).map_err(|error| error.to_string())? {
+                Object::Bytes(bytes) => {
+                    hasher.update(&bytes);
+                }
+                Object::Directory(_) => return Err("P4-R1 read a directory as a chunk".to_owned()),
+            }
+        }
+        let wall_ns = start.elapsed().as_nanos();
+        let correct = hasher.finalize().to_hex().to_string() == ingest.source_fingerprint;
+        if !correct {
+            return Err("P4-R1 source fingerprint mismatch".to_owned());
+        }
+        let read = Phase4Read {
+            bytes: size,
+            wall_ns,
+            counters: engine.counters().map_err(engine_message)?,
+            observations: engine.observations(),
+            correct,
+        };
+        results.push(phase4a_read_row_json(
+            "P4-R1",
+            repetition,
+            &read,
+            &source,
+            &ingest.source_fingerprint,
+        ));
+        drop(engine);
+    }
+
+    for repetition in 0..3 {
+        let engine = Engine::open(&repeat_path).map_err(engine_message)?;
+        let start = Instant::now();
+        let sample_count = ingest.objects.len().min(64);
+        let mut range_bytes = 0_u64;
+        for sample in 0..sample_count {
+            let index = (sample * 37 + repetition * 11) % ingest.objects.len();
+            let (id, length) = ingest.objects[index];
+            let start_offset =
+                (u64::try_from(sample).map_err(|_| "P4-R2 sample overflow".to_owned())? * 29)
+                    % length;
+            let end = length.min(start_offset.saturating_add(257));
+            let bytes = engine
+                .read_object_range(id, start_offset..end)
+                .map_err(engine_message)?;
+            let expected = end
+                .checked_sub(start_offset)
+                .ok_or_else(|| "P4-R2 range underflow".to_owned())?;
+            if u64::try_from(bytes.len()).map_err(|_| "P4-R2 result overflow".to_owned())?
+                != expected
+            {
+                return Err("P4-R2 returned a short bounded range".to_owned());
+            }
+            range_bytes = range_bytes
+                .checked_add(expected)
+                .ok_or_else(|| "P4-R2 byte counter overflow".to_owned())?;
+        }
+        let read = Phase4Read {
+            bytes: range_bytes,
+            wall_ns: start.elapsed().as_nanos(),
+            counters: engine.counters().map_err(engine_message)?,
+            observations: engine.observations(),
+            correct: true,
+        };
+        results.push(phase4a_read_row_json(
+            "P4-R2",
+            repetition,
+            &read,
+            &source,
+            &ingest.source_fingerprint,
+        ));
+        drop(engine);
+    }
+
+    write_text(
+        &run_directory.join("results.jsonl"),
+        &format!("{}\n", results.join("\n")),
+    )?;
+    write_text(
+        &run_directory.join("summary.md"),
+        "# Phase 4A SQLite BLOB engine\n\nP4-I1/P4-I2/P4-R1/P4-R2 are three-repetition engine-only measurements on the deterministic 100 MiB S1-100 stream. The engine uses DELETE/FULL/FILE/mmap=0 and records CDC, object, SQLite statement/transaction, commit, journal, and durable-byte counters. CPU/RSS/PSS are unavailable in this harness. Pack, WAL, projection, and SDK work remain Phase 4B or later.\n",
+    )?;
+    Ok(())
+}
+
+fn create_phase4a_base(engine: &Engine) -> EvalResult<(ObjectId, RootRecord)> {
+    let directory =
+        encode_object(&Object::directory(Vec::new()).map_err(|error| error.to_string())?)
+            .map_err(|error| error.to_string())?;
+    let directory_id = ObjectId::for_bytes(&directory);
+    let root = RootRecord {
+        id: ObjectId::for_bytes(b"layerfs-phase4a-base-root"),
+        directory_object: directory_id,
+        parent: None,
+    };
+    let delta = DeltaRecord::new(None, root.id, b"base".to_vec());
+    let mut capture = engine.begin_capture(None).map_err(engine_message)?;
+    capture
+        .put_object_if_absent(directory_id, &directory)
+        .map_err(engine_message)?;
+    capture.write_delta(&delta).map_err(engine_message)?;
+    capture.commit_root(root.clone()).map_err(engine_message)?;
+    Ok((directory_id, root))
+}
+
+fn phase4a_ingest(
+    engine: &Engine,
+    parent: ObjectId,
+    directory_id: ObjectId,
+    size: u64,
+    dataset: &str,
+) -> EvalResult<Phase4Ingest> {
+    let mut root_identity = Vec::with_capacity(32 + 24);
+    root_identity.extend_from_slice(b"layerfs-phase4a-file-root");
+    root_identity.extend_from_slice(parent.as_bytes());
+    let root = RootRecord {
+        id: ObjectId::for_bytes(&root_identity),
+        directory_object: directory_id,
+        parent: Some(parent),
+    };
+    let mut capture = engine.begin_capture(Some(parent)).map_err(engine_message)?;
+    let start = Instant::now();
+    let publication_start = Instant::now();
+    let mut source_hasher = Hasher::new();
+    let mut objects = Vec::new();
+    let mut delta_payload = Vec::new();
+    let cdc = FastCdc::new()
+        .scan(DeterministicReader::new(size, dataset), |chunk| {
+            source_hasher.update(chunk);
+            let object = Object::bytes(chunk.to_vec())?;
+            let canonical = encode_object(&object)?;
+            let id = ObjectId::for_bytes(&canonical);
+            let length = u64::try_from(canonical.len()).map_err(|_| CoreError::LengthOverflow)?;
+            capture
+                .put_object_if_absent(id, &canonical)
+                .map_err(|_| CoreError::Io)?;
+            delta_payload.extend_from_slice(id.as_bytes());
+            objects.push((id, length));
+            Ok(())
+        })
+        .map_err(|error| format!("{dataset} CDC/object ingest: {error}"))?;
+    let publication_ns = publication_start.elapsed().as_nanos();
+    let delta = DeltaRecord::new(Some(parent), root.id, delta_payload);
+    capture.write_delta(&delta).map_err(engine_message)?;
+    let commit_start = Instant::now();
+    capture.commit_root(root.clone()).map_err(engine_message)?;
+    let commit_ns = commit_start.elapsed().as_nanos();
+    let source_fingerprint = source_hasher.finalize().to_hex().to_string();
+    Ok(Phase4Ingest {
+        root,
+        objects,
+        source_fingerprint,
+        cdc_bytes_scanned: cdc.bytes_scanned,
+        cdc_chunks: cdc.chunks_emitted,
+        wall_ns: start.elapsed().as_nanos(),
+        publication_ns,
+        commit_ns,
+        counters: engine.counters().map_err(engine_message)?,
+        observations: engine.observations(),
+    })
+}
+
+struct Phase4Read {
+    bytes: u64,
+    wall_ns: u128,
+    counters: EngineCounters,
+    observations: StorageObservation,
+    correct: bool,
+}
+
+fn phase4a_row_json(
+    case: &str,
+    repetition: usize,
+    run: &Phase4Ingest,
+    source: &GitMetadata,
+) -> String {
+    format!(
+        "{{\"format_version\":1,\"benchmark\":\"phase4a-sqlite-blob\",\"row\":{},\"repetition\":{},\"input_bytes\":{},\"wall_ns\":{},\"publication_ns\":{},\"commit_ns\":{},\"cdc_bytes_scanned\":{},\"cdc_chunks\":{},\"object_count\":{},\"objects_created\":{},\"objects_reused\":{},\"objects_validated\":{},\"object_bytes_read\":{},\"object_bytes_written\":{},\"sqlite_statements\":{},\"transactions_started\":{},\"transactions_committed\":{},\"transactions_rolled_back\":{},\"database_bytes\":{},\"rollback_journal_bytes\":{},\"temporary_file_bytes\":{},\"logical_engine_bytes\":{},\"source_fingerprint\":{},\"correct\":true,\"cpu_time_ns\":null,\"rss_bytes\":null,\"pss_bytes\":null,\"source_commit\":{},\"dirty_tree\":{},\"profile\":\"DELETE/FULL/FILE/mmap=0\",\"performance_claim\":\"engine-only-durable-baseline\"}}",
+        json_string(case), repetition, run.cdc_bytes_scanned, run.wall_ns, run.publication_ns,
+        run.commit_ns, run.cdc_bytes_scanned, run.cdc_chunks, run.objects.len(), run.counters.objects_created,
+        run.counters.objects_reused, run.counters.objects_validated, run.counters.object_bytes_read,
+        run.counters.object_bytes_written, run.counters.statements, run.counters.transactions_started,
+        run.counters.transactions_committed, run.counters.transactions_rolled_back,
+        json_option_u64(run.observations.database_bytes), json_option_u64(run.observations.rollback_journal_bytes),
+        json_option_u64(run.observations.temporary_file_bytes), json_option_u64(run.observations.logical_engine_bytes),
+        json_string(&run.source_fingerprint), json_option_string(source.commit.as_deref()), source.dirty_tree,
+    )
+}
+
+fn phase4a_read_row_json(
+    case: &str,
+    repetition: usize,
+    run: &Phase4Read,
+    source: &GitMetadata,
+    source_fingerprint: &str,
+) -> String {
+    format!(
+        "{{\"format_version\":1,\"benchmark\":\"phase4a-sqlite-blob\",\"row\":{},\"repetition\":{},\"input_bytes\":{},\"wall_ns\":{},\"sqlite_statements\":{},\"transactions_started\":{},\"transactions_committed\":{},\"transactions_rolled_back\":{},\"objects_validated\":{},\"object_bytes_read\":{},\"range_bytes_requested\":{},\"range_bytes_returned\":{},\"database_bytes\":{},\"rollback_journal_bytes\":{},\"temporary_file_bytes\":{},\"logical_engine_bytes\":{},\"source_fingerprint\":{},\"correct\":{},\"cpu_time_ns\":null,\"rss_bytes\":null,\"pss_bytes\":null,\"source_commit\":{},\"dirty_tree\":{},\"profile\":\"DELETE/FULL/FILE/mmap=0\",\"performance_claim\":\"engine-only-durable-baseline\"}}",
+        json_string(case), repetition, run.bytes, run.wall_ns, run.counters.statements,
+        run.counters.transactions_started, run.counters.transactions_committed,
+        run.counters.transactions_rolled_back, run.counters.objects_validated,
+        run.counters.object_bytes_read, run.counters.range_bytes_requested,
+        run.counters.range_bytes_returned, json_option_u64(run.observations.database_bytes),
+        json_option_u64(run.observations.rollback_journal_bytes), json_option_u64(run.observations.temporary_file_bytes),
+        json_option_u64(run.observations.logical_engine_bytes), json_string(source_fingerprint), run.correct,
+        json_option_string(source.commit.as_deref()), source.dirty_tree,
+    )
+}
+
+fn engine_message(error: layerfs_engine::EngineError) -> String {
+    error.to_string()
 }
 
 fn phase3_cow_summary(runs: &[CowRun]) -> String {
