@@ -4,7 +4,7 @@ use std::io::{Cursor, Read};
 use std::ops::Range;
 use std::time::Instant;
 
-use crate::cas::{InMemoryCas, PackedInMemoryCas, PutOutcome};
+use crate::cas::{InMemoryCas, PutOutcome};
 use crate::cdc::FastCdc;
 use crate::limits::MAX_CHILD_REFERENCES;
 use crate::{ChunkId, CoreError, CoreResult};
@@ -271,13 +271,6 @@ impl LogicalFile {
         Self::full_replace_with(reader, |bytes| cas.put_chunk(bytes))
     }
 
-    pub fn full_replace_packed_cas<R: Read>(
-        cas: &mut PackedInMemoryCas,
-        reader: R,
-    ) -> CoreResult<EditResult> {
-        Self::full_replace_with(reader, |bytes| cas.put_chunk(bytes))
-    }
-
     fn full_replace_with<R: Read, F: FnMut(&[u8]) -> CoreResult<(ChunkId, PutOutcome)>>(
         reader: R,
         mut put_chunk: F,
@@ -295,13 +288,6 @@ impl LogicalFile {
 
     pub fn full_replace_timed<R: Read>(
         cas: &mut InMemoryCas,
-        reader: R,
-    ) -> CoreResult<(EditResult, FullReplaceTiming)> {
-        Self::full_replace_timed_with(reader, |bytes| cas.put_chunk(bytes))
-    }
-
-    pub fn full_replace_timed_packed_cas<R: Read>(
-        cas: &mut PackedInMemoryCas,
         reader: R,
     ) -> CoreResult<(EditResult, FullReplaceTiming)> {
         Self::full_replace_timed_with(reader, |bytes| cas.put_chunk(bytes))
@@ -657,7 +643,7 @@ mod tests {
     use std::io::Cursor;
 
     use super::*;
-    use crate::cas::{InMemoryCas, PackedInMemoryCas};
+    use crate::cas::InMemoryCas;
     use crate::cdc::FastCdc;
     use crate::chunk_id;
 
@@ -783,13 +769,6 @@ mod tests {
         file.read_range(cas, 0..file.length()).unwrap().into_bytes()
     }
 
-    fn packed_all_bytes(cas: &PackedInMemoryCas, file: &LogicalFile) -> Vec<u8> {
-        file.chunks()
-            .iter()
-            .flat_map(|reference| cas.get(reference.id()).unwrap().iter().copied())
-            .collect()
-    }
-
     #[test]
     fn bounded_edits_reconstruct_and_reuse_authenticated_chunks() {
         let data = generated_input(2 * 1024 * 1024);
@@ -871,33 +850,6 @@ mod tests {
             result.counters().bytes_delivered
         );
         assert!(result.counters().chunks_created > 0);
-    }
-
-    #[test]
-    fn packed_full_replace_matches_content_and_reuses_chunks() {
-        let data = generated_input(2 * 1024 * 1024);
-        let mut plain = InMemoryCas::new();
-        let mut packed = PackedInMemoryCas::with_capacity(data.len());
-
-        let plain_result =
-            LogicalFile::full_replace(&mut plain, Cursor::new(data.clone())).unwrap();
-        let packed_result =
-            LogicalFile::full_replace_packed_cas(&mut packed, Cursor::new(data.clone())).unwrap();
-
-        assert_eq!(packed_result.file(), plain_result.file());
-        assert_eq!(packed_result.counters(), plain_result.counters());
-        assert_eq!(packed.stored_bytes(), plain.stored_bytes());
-        assert_eq!(packed_all_bytes(&packed, packed_result.file()), data);
-
-        let payload_len = packed.payload_len();
-        let second = LogicalFile::full_replace_packed_cas(&mut packed, Cursor::new(data)).unwrap();
-        assert_eq!(second.file(), packed_result.file());
-        assert_eq!(second.counters().chunks_created, 0);
-        assert_eq!(
-            second.counters().chunks_reused as usize,
-            second.file().chunks().len()
-        );
-        assert_eq!(packed.payload_len(), payload_len);
     }
 
     #[test]

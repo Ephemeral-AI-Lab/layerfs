@@ -1,6 +1,9 @@
 # Phase 4B exploratory acceptance ledger
 
 Status: exploratory candidate; **not qualified and not promoted**.
+Rollback status: **rejected and superseded for active implementation** by
+[`PHASE_4_ROLLING_BACK_TO_PREVIOUS_OPTIMIZATION_SPEC.md`](PHASE_4_ROLLING_BACK_TO_PREVIOUS_OPTIMIZATION_SPEC.md).
+This ledger remains only as historical qualification evidence.
 
 | Requirement | Evidence | Status |
 |---|---|---|

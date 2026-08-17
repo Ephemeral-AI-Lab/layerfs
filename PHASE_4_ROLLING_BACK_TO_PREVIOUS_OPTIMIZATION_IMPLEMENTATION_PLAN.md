@@ -184,8 +184,9 @@ The test run must discover and execute a nonzero number of SQLite tests.
 ### Search gate
 
 ```sh
-rg -n "PackedInMemoryCas|ChunkLocation|full_replace_packed|packed_cas" \
-  crates --glob '*.rs'
+rg -n -S "PackedInMemoryCas|ChunkLocation|full_replace_packed|packed_cas|phase2-opt2|packed" \
+  tools crates Cargo.toml Cargo.lock \
+  --glob '*.rs' --glob 'Cargo.toml' --glob 'Cargo.lock'
 ```
 
 There must be no active Rust hit after deletion.
@@ -811,10 +812,10 @@ condition and exact verification evidence are recorded.
 
 | Work package | Status | Source fingerprint | Evidence |
 | --- | --- | --- | --- |
-| WP0 authority/evidence snapshot | pending | — | — |
-| WP1 delete append-only carrier | pending | — | — |
-| WP2 delete `PackedInMemoryCas` | pending | — | — |
-| WP3 post-deletion baseline | pending | — | — |
+| WP0 authority/evidence snapshot | complete | starting HEAD `e760a122d128dc242e9364483a7259b360dacf87`; deleted-source SHA-256 set in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Finding reconciled with five-row proxy evidence; rejected/superseded notices added; deletion record created. |
+| WP1 delete append-only carrier | complete | final active source hashes recorded in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Carrier module and two binaries deleted; exports/errors/dependencies/lockfile entries removed; active searches and SQLite checks pass. |
+| WP2 delete `PackedInMemoryCas` | complete | final core CAS/content/eval source hashes recorded in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Packed implementation, entry points, helpers, tests, and workspace eval benchmark modes deleted; ordinary `InMemoryCas`/COW paths pass core checks. |
+| WP3 post-deletion baseline | complete | HEAD unchanged; final active source hashes recorded in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Metadata, workspace tests, all-target/all-feature checks, format, and diff gates pass; WP4 remains pending. |
 | WP4 freeze durable mapping | pending | — | — |
 | WP5 implement shared mapping | pending | — | — |
 | WP6 Memory semantic engine | pending | — | — |

@@ -5,6 +5,28 @@ Date: 2026-08-17
 Repository: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty`
 Branch: `codex/empty-worktree`
 
+## Final same-source proxy evidence retained for rollback
+
+The later same-source campaign ran five measured rows per lane on the exact
+100 MiB proxy source. The append-only median was 3,164,894,458 ns or
+31.596630 MiB/s. The deliberately conservative SQLite-control median was
+2,833,641,750 ns or 35.290276 MiB/s, making append-only 331,252,708 ns or
+11.69% slower in wall time.
+
+The source was exactly 104,857,600 bytes with raw BLAKE3
+`0855eedd9498bf31a1eafb5a2f00bf84f646db5153cc86632fcb0cc0e180fb36`,
+logical-v1 BLAKE3
+`52ce153eab81e33a0243a25a47a8805a86ba9bec125a27bee3c50de647cdafbc`, and
+historical expected SHA-256
+`27f82e57f589b7ed79f28a8cef02acd2db82682fbccb35cdd6b48a136d98a7d6`.
+The proxy workload had 4,801 chunk occurrences, 263 unique chunks, 4,803
+object submissions, 265 creations, and 4,538 reuses.
+
+Both lanes explicitly had `full_logical_workload=false`,
+`phase3_semantic_persistence=false`, `promotion_authorized=false`, and
+`target_attainment_authorized=false`. These are exploratory non-promotion
+diagnostics, not valid 200 or 300 MiB/s full-logical-workload rows.
+
 ## Executive finding
 
 The first append-only implementation is not yet a faster engine than Phase

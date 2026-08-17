@@ -4,6 +4,9 @@ Status: implemented and benchmarked; not promoted as a performance optimization.
 The packed layout is retained as a qualification candidate only. Pre-sizing
 removes its allocation-growth penalty, but the clean throughput lane shows
 parity rather than a material win.
+Rollback status: **rejected by the active rollback direction for implementation**.
+The specification and measured result below remain historical evidence; the
+packed CAS is not retained behind a compatibility or dormant code path.
 
 Checkpoint: Phase 2 Optimization 1 (`c581bf9`).
 

@@ -1,6 +1,10 @@
 # Phase 4B Specification — Append-only Carrier, Disk-backed Index, and One Commit Marker
 
 Status: measured implementation candidate; not a Phase 4A replacement
+Rollback status: **rejected and superseded for active implementation** by
+[`PHASE_4_ROLLING_BACK_TO_PREVIOUS_OPTIMIZATION_SPEC.md`](PHASE_4_ROLLING_BACK_TO_PREVIOUS_OPTIMIZATION_SPEC.md).
+The requirements and measurements below are retained as historical evidence;
+they do not authorize a carrier implementation or promotion.
 Controlling baseline: [Phase 4A SQLite BLOB](PHASE_4_SPEC.md)
 Qualification platform: macOS on APFS
 
