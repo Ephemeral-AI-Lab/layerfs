@@ -2,6 +2,15 @@
 
 #![forbid(unsafe_code)]
 
+mod append_only;
+
+/// Measured Phase 4B candidate API. This remains exploratory until the Phase 4A
+/// decision record authorizes promotion; it is not the selected production
+/// carrier.
+pub use append_only::{
+    AppendOnlyCapture, AppendOnlyCounters, AppendOnlyEngine, AppendOnlyObservation,
+};
+
 use layerfs_core::{
     validate_identity, validate_object_from, CoreError, ObjectId, ObjectKind, ObjectSummary,
 };
@@ -72,6 +81,15 @@ pub enum EngineError {
     InvalidTransaction,
     CounterOverflow,
     InjectedFailure(&'static str),
+    CarrierBusy,
+    CarrierPermissionDenied(String),
+    CarrierNoSpace(String),
+    CarrierRecoveryTornTail,
+    CarrierRecoveryMalformed(&'static str),
+    CarrierIntegrity(&'static str),
+    CarrierIo(String),
+    DurabilityAmbiguous,
+    EnginePoisoned,
 }
 
 impl fmt::Display for EngineError {
@@ -115,6 +133,23 @@ impl fmt::Display for EngineError {
             Self::InvalidTransaction => formatter.write_str("capture transaction is not active"),
             Self::CounterOverflow => formatter.write_str("counter arithmetic overflow"),
             Self::InjectedFailure(point) => write!(formatter, "injected failure at {point}"),
+            Self::CarrierBusy => formatter.write_str("carrier writer is busy"),
+            Self::CarrierPermissionDenied(message) => {
+                write!(formatter, "carrier permission denied: {message}")
+            }
+            Self::CarrierNoSpace(message) => {
+                write!(formatter, "carrier is out of space: {message}")
+            }
+            Self::CarrierRecoveryTornTail => formatter.write_str("carrier has a torn tail"),
+            Self::CarrierRecoveryMalformed(name) => {
+                write!(formatter, "malformed uncommitted carrier {name} residue")
+            }
+            Self::CarrierIntegrity(name) => write!(formatter, "carrier integrity failure: {name}"),
+            Self::CarrierIo(message) => write!(formatter, "carrier I/O error: {message}"),
+            Self::DurabilityAmbiguous => {
+                formatter.write_str("carrier durability is ambiguous; reopen before retrying")
+            }
+            Self::EnginePoisoned => formatter.write_str("carrier handle is poisoned; reopen it"),
         }
     }
 }
@@ -175,7 +210,7 @@ impl DeltaRecord {
         }
     }
 
-    fn validate(&self) -> EngineResult<()> {
+    pub(crate) fn validate(&self) -> EngineResult<()> {
         let actual = delta_identity(self.parent, self.child, &self.payload);
         if actual != self.id {
             return Err(EngineError::IdentityMismatch {
@@ -647,17 +682,6 @@ impl<'a> Capture<'a> {
             checked_add(&mut counters.logical_root_bytes, root_record_len(&root)?)
         })?;
         Ok(())
-    }
-
-    pub fn rollback(mut self) -> EngineResult<()> {
-        self.ensure_active()?;
-        self.engine.mark_statement()?;
-        self.connection
-            .execute_batch("ROLLBACK")
-            .map_err(map_sqlite_error)?;
-        self.active = false;
-        self.engine
-            .bump(|counters| checked_add(&mut counters.transactions_rolled_back, 1))
     }
 
     fn ensure_active(&self) -> EngineResult<()> {
@@ -1279,8 +1303,10 @@ mod tests {
                 engine.read_object_range(id, 2..7).expect("range"),
                 bytes[2..7]
             );
+            let reversed_start = 7;
+            let reversed_end = 2;
             assert!(matches!(
-                engine.read_object_range(id, 7..2),
+                engine.read_object_range(id, reversed_start..reversed_end),
                 Err(EngineError::InvalidRange { .. })
             ));
             assert!(matches!(

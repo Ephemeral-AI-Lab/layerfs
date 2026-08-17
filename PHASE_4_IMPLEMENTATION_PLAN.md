@@ -3,7 +3,8 @@
 Status: planned
 Controlling specification: [PHASE_4_SPEC.md](PHASE_4_SPEC.md)
 Required target: Phase 4A SQLite BLOB baseline
-Conditional target: Phase 4B pack-backed catalog only after measurement
+Conditional target: Phase 4B append-only carrier/index only after measurement;
+see [PHASE_4B_APPEND_ONLY_SPEC.md](PHASE_4B_APPEND_ONLY_SPEC.md)
 
 The plan is deliberately staged so that persistence and performance risks are
 visible before VFS or SDK work begins. Each stage has two sections:
@@ -294,20 +295,22 @@ canonical encoding/hash, SQLite BLOB writes, rollback journal, or APFS I/O.
 
 ### What to implement
 
-Before writing pack code, produce a short decision record:
+Before writing append-only carrier/index code, produce a short decision
+record:
 
 ~~~text
 Phase 4A baseline
   -> dominant measured cost
   -> target workload affected
-  -> expected pack benefit
+  -> expected carrier/index benefit
   -> correctness/recovery/memory risks
-  -> decision: defer pack or open Phase 4B
+  -> decision: defer the candidate or open Phase 4B
 ~~~
 
-If SQLite BLOB/journal overhead is not the dominant cost, defer pack and keep
-the BLOB implementation as the reference. If it is dominant, define the
-smallest pack A/B experiment inside layerfs-engine.
+If SQLite BLOB/journal overhead is not the dominant cost, defer the candidate
+and keep the BLOB implementation as the reference. If it is dominant, open the
+smallest append-only carrier/index A/B experiment defined by
+[PHASE_4B_APPEND_ONLY_SPEC.md](PHASE_4B_APPEND_ONLY_SPEC.md).
 
 ### What to test
 
@@ -317,22 +320,25 @@ smallest pack A/B experiment inside layerfs-engine.
   statements/transactions, journal bytes, and commit;
 - compare repeated ingest and one-byte edit behavior;
 - verify that any proposed optimization targets the measured bottleneck;
-- record a no-pack decision when evidence does not justify another carrier.
+- record a no-candidate decision when evidence does not justify another
+  carrier/index.
 
 Exit condition: Phase 4A is either accepted as the baseline or Phase 4B is
 explicitly authorized by evidence. Do not carry two unmeasured designs.
 
-## 8. Optional Phase 4B pack candidate
+## 8. Optional Phase 4B append-only carrier candidate
 
 ### What to implement
 
-Only if Stage 7 triggers it:
+Only if Stage 7 triggers it, and only according to
+[PHASE_4B_APPEND_ONLY_SPEC.md](PHASE_4B_APPEND_ONLY_SPEC.md):
 
-- keep SQLite as catalog and root/delta authority;
-- append canonical object bytes to APFS pack files;
-- store pack ID, offset, length, and authenticated checksum metadata;
-- publish pack data before catalog visibility;
-- revalidate exact pack authority before cleanup or replacement;
+- append canonical object frames, immutable disk-index pages, roots, deltas,
+  and one commit marker to one aligned APFS store log;
+- keep the complete object index out of memory and use only bounded page/cache
+  state;
+- publish the marker only after all referenced frames are authenticated;
+- perform one measured durability sync per capture;
 - preserve the exact Phase 4A engine operation surface;
 - add crash/reopen and bounded range-read behavior.
 
@@ -349,8 +355,8 @@ candidate wins the A/B gate.
 - reopen after committed and uncommitted operations;
 - APFS engine bytes, RSS/PSS, ingest, repeat ingest, range read, and edit
   benchmarks;
-- pack candidate must win on the declared target workload without regressing
-  correctness or violating memory/resource bounds.
+- the append-only candidate must win on the declared target workload without
+  regressing correctness or violating memory/resource bounds.
 
 Exit condition: choose one carrier for the next milestone and delete or keep
 the candidate explicitly. Do not leave both as indistinguishable production

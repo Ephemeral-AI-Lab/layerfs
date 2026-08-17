@@ -2,14 +2,17 @@
 
 Status: proposed
 Required path: Phase 4A, SQLite BLOB baseline
-Conditional path: Phase 4B, pack-backed SQLite catalog
+Conditional path: Phase 4B, append-only carrier + disk-backed index + one
+commit marker; see [PHASE_4B_APPEND_ONLY_SPEC.md](PHASE_4B_APPEND_ONLY_SPEC.md)
 Platform for qualification: macOS on APFS
 
 This specification turns the Phase 3 in-memory content, COW, and delta
 semantics into a durable engine. Phase 4A is the required implementation and
 the reference performance baseline. Phase 4B is not a second equal production
 design: it is a measured follow-up that is allowed only if Phase 4A proves
-that SQLite BLOB or journal behavior is the bottleneck.
+that SQLite BLOB or journal behavior is the bottleneck. The append-only
+candidate and its recovery/performance contract are specified separately so
+that Phase 4A remains unchanged while the candidate is studied.
 
 ## 1. Goal
 
@@ -271,26 +274,28 @@ Phase 4 uses synchronous caller-thread operations. It must define and test:
 The initial engine may serialize writers with the smallest correct mechanism.
 That is an explicit baseline, not evidence of final multi-writer throughput.
 
-## 8. Phase 4B — conditional pack candidate
+## 8. Phase 4B — conditional append-only carrier candidate
 
 Phase 4B is allowed only after Phase 4A measurements show that small SQLite
 BLOB writes, BLOB page churn, or rollback-journal amplification dominates the
 target workload.
 
-If triggered, the candidate keeps SQLite as the catalog:
+If triggered, the candidate follows
+[PHASE_4B_APPEND_ONLY_SPEC.md](PHASE_4B_APPEND_ONLY_SPEC.md) and uses one
+aligned append-only store log:
 
 ~~~text
-SQLite: object_id, kind, length, pack_id, offset, stored_length, roots, deltas
-Pack:   authenticated canonical bytes in append-only APFS files
+store.log: object frames, immutable disk-index pages, roots, deltas,
+           one commit marker per capture
 ~~~
 
-Pack is an engine carrier, not a core algorithm. It must preserve the same
-engine operations, object IDs, canonical bytes, error semantics, and
-correctness tests. A pack implementation is rejected if it improves ingest
-while worsening small-edit reuse, bounded reads, crash recovery, or measured
-RSS beyond the Phase 4 budget.
+The append-only log is an engine carrier and index, not a core algorithm. It
+must preserve the same engine operations, object IDs, canonical bytes, error
+semantics, and correctness tests. The candidate is rejected if it improves
+ingest while worsening small-edit reuse, bounded reads, crash recovery, or
+measured RSS beyond the Phase 4 budget.
 
-No pack code is part of the Phase 4A acceptance gate.
+No append-only carrier/index code is part of the Phase 4A acceptance gate.
 
 ## 9. Correctness invariants
 
@@ -374,8 +379,8 @@ because pack files may be useful in a future durable engine.
 
 - PostgreSQL or another storage provider;
 - WAL and journal-mode tuning as a production change;
-- pack files unless the Phase 4A evidence triggers them;
-- pack compaction, free-space recycling, and GC;
+- append-only carrier/index unless the Phase 4A evidence triggers Phase 4B;
+- carrier compaction, free-space recycling, repacking, and GC;
 - FUSE, overlayfs, APFS clone/reflink, and native materialization;
 - public SDK endpoint expansion;
 - internal async workers or a general scheduler;
