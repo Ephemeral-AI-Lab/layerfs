@@ -269,8 +269,13 @@ impl PageCache {
         evicted
     }
 
-    fn is_full(&self) -> bool {
-        self.capacity != 0 && self.pages.len() == self.capacity
+    fn would_evict_unpersisted(&self, persisted_end: u64) -> bool {
+        self.capacity != 0
+            && self.pages.len() == self.capacity
+            && self
+                .pages
+                .front()
+                .is_some_and(|(_, page)| page.end > persisted_end)
     }
 }
 
@@ -649,7 +654,11 @@ impl AppendOnlyCapture<'_> {
         #[cfg(test)]
         self.fail_if(AppendFaultPoint::AfterObjectAppend)?;
 
-        if self.state.cache.is_full() {
+        if self
+            .state
+            .cache
+            .would_evict_unpersisted(self.state.persisted_end)
+        {
             flush_state(&mut self.state)?;
         }
 
@@ -983,6 +992,9 @@ fn scan_log(file: &File) -> EngineResult<ScanResult> {
                 &mut counters.recovery_torn_bytes,
                 physical_end.saturating_sub(offset),
             )?;
+            if visible.is_none() {
+                return Err(EngineError::CarrierRecoveryTornTail);
+            }
             recovery_blocked = true;
             break;
         }
@@ -1015,6 +1027,9 @@ fn scan_log(file: &File) -> EngineResult<ScanResult> {
                 &mut counters.recovery_torn_bytes,
                 physical_end.saturating_sub(offset),
             )?;
+            if visible.is_none() {
+                return Err(EngineError::CarrierRecoveryTornTail);
+            }
             recovery_blocked = true;
             break;
         }
@@ -1192,6 +1207,7 @@ fn validate_marker(
     previous: Option<VisibleMarker>,
     counters: &mut AppendOnlyCounters,
 ) -> EngineResult<bool> {
+    let previous_end = previous.map_or(0, |marker| marker.end);
     if marker.generation == 0 {
         if marker.previous_marker != 0 || marker.parent.is_some() {
             return Ok(false);
@@ -1207,7 +1223,8 @@ fn validate_marker(
             return Ok(false);
         }
     }
-    if marker.capture_start > marker.offset
+    if marker.capture_start < previous_end
+        || marker.capture_start > marker.offset
         || marker.capture_bytes != marker.offset.saturating_sub(marker.capture_start)
         || marker.capture_start.checked_add(marker.capture_bytes) != Some(marker.offset)
         || marker.delta_offset >= marker.offset
@@ -1716,6 +1733,7 @@ fn lookup_index(
         heads,
         id,
         max_end,
+        state.persisted_end,
         &mut state.counters,
     );
     add_elapsed(&mut state.counters.index_lookup_ns, lookup_start)?;
@@ -1729,7 +1747,15 @@ fn lookup_index_file(
     max_end: u64,
     counters: &mut AppendOnlyCounters,
 ) -> EngineResult<Option<ObjectLocator>> {
-    lookup_index_file_cached(file, &mut PageCache::new(0), heads, id, max_end, counters)
+    lookup_index_file_cached(
+        file,
+        &mut PageCache::new(0),
+        heads,
+        id,
+        max_end,
+        max_end,
+        counters,
+    )
 }
 
 fn lookup_index_file_cached(
@@ -1738,6 +1764,7 @@ fn lookup_index_file_cached(
     heads: &[u64; BUCKETS],
     id: ObjectId,
     max_end: u64,
+    persisted_end: u64,
     counters: &mut AppendOnlyCounters,
 ) -> EngineResult<Option<ObjectLocator>> {
     let mut offset = heads[usize::from(id.as_bytes()[0])];
@@ -1758,7 +1785,7 @@ fn lookup_index_file_cached(
         } else {
             bump(&mut counters.index_cache_misses, 1)?;
             let page = read_index_page(file, offset, max_end, counters)?;
-            if cache.insert(offset, page) {
+            if !cache.would_evict_unpersisted(persisted_end) && cache.insert(offset, page) {
                 bump(&mut counters.index_cache_evictions, 1)?;
             }
             page
@@ -2916,6 +2943,83 @@ mod tests {
     }
 
     #[test]
+    fn append_only_public_reuse_reauthenticates_persisted_bytes() {
+        let child = Object::bytes(b"persisted child".to_vec()).expect("child");
+        let child_bytes = encode_object(&child).expect("child encoding");
+        let child_id = ObjectId::for_bytes(&child_bytes);
+        let directory = Object::Directory(vec![DirectoryEntry::new(
+            CanonicalName::new("child").expect("name"),
+            ObjectReference::new(ObjectKind::Bytes, child_id),
+        )]);
+        let directory_bytes = encode_object(&directory).expect("directory encoding");
+        let directory_id = ObjectId::for_bytes(&directory_bytes);
+        let path = temp_path("public-reuse-tamper");
+        let engine = AppendOnlyEngine::open(&path).expect("open");
+        let mut capture = engine.begin_capture(None).expect("capture");
+        capture
+            .put_object_if_absent(child_id, &child_bytes)
+            .expect("child");
+        capture
+            .put_object_if_absent(directory_id, &directory_bytes)
+            .expect("directory");
+        let root = RootRecord {
+            id: ObjectId::for_bytes(b"public-reuse-root"),
+            directory_object: directory_id,
+            parent: None,
+        };
+        capture
+            .write_delta(&DeltaRecord::new(
+                None,
+                root.id,
+                b"public-reuse-delta".to_vec(),
+            ))
+            .expect("delta");
+        capture.commit_root(root.clone()).expect("commit");
+        drop(engine);
+
+        let file = OpenOptions::new().read(true).open(&path).expect("scan");
+        let marker = scan_log(&file).expect("scan").visible.expect("marker");
+        let heads = read_index_root(
+            &file,
+            marker.index_root_offset,
+            marker.offset,
+            &mut AppendOnlyCounters::default(),
+        )
+        .expect("index root");
+        let locator = lookup_index_file(
+            &file,
+            &heads,
+            child_id,
+            marker.offset,
+            &mut AppendOnlyCounters::default(),
+        )
+        .expect("lookup")
+        .expect("child locator");
+        drop(file);
+
+        let engine = AppendOnlyEngine::open(&path).expect("reopen before tamper");
+        let mut capture = engine.begin_capture(Some(root.id)).expect("reuse capture");
+        rewrite_frame_payload(&path, locator.offset, |payload| payload[41] ^= 1);
+        assert!(matches!(
+            capture.put_object_if_absent(child_id, &child_bytes),
+            Err(EngineError::IdentityMismatch { expected, actual })
+                if expected == child_id && actual != child_id
+        ));
+        assert_eq!(capture.counters().objects_reused, 0);
+        drop(capture);
+        assert!(matches!(
+            engine.begin_capture(Some(root.id)),
+            Err(EngineError::EnginePoisoned)
+        ));
+        drop(engine);
+        assert!(matches!(
+            AppendOnlyEngine::open(&path),
+            Err(EngineError::CarrierIntegrity("capture evidence"))
+        ));
+        std::fs::remove_file(path).expect("cleanup");
+    }
+
+    #[test]
     fn append_only_persists_phase2_cdc_and_phase3_parented_delta_reopen() {
         let mut source = Vec::with_capacity(100_000);
         let mut state = 0x9e37_79b9_7f4a_7c15_u64;
@@ -3051,6 +3155,37 @@ mod tests {
     }
 
     #[test]
+    fn append_only_lookup_cache_keeps_unflushed_index_pages() {
+        let path = temp_path("dirty-cache-page");
+        let engine = AppendOnlyEngine::open(&path).expect("open");
+        let mut capture = engine.begin_capture(None).expect("capture");
+        let mut objects = Vec::new();
+        for byte in 0_u8..64 {
+            let canonical =
+                encode_object(&Object::bytes(vec![byte]).expect("bytes")).expect("encode");
+            let id = ObjectId::for_bytes(&canonical);
+            assert_eq!(
+                capture.put_object_if_absent(id, &canonical),
+                Ok(PutOutcome::Created)
+            );
+            objects.push((id, canonical));
+        }
+        for (id, canonical) in objects.iter().take(40) {
+            assert_eq!(
+                capture.put_object_if_absent(*id, canonical),
+                Ok(PutOutcome::Reused)
+            );
+        }
+        let (id, canonical) = objects.last().expect("last object");
+        assert_eq!(
+            capture.put_object_if_absent(*id, canonical),
+            Ok(PutOutcome::Reused)
+        );
+        drop(capture);
+        std::fs::remove_file(path).expect("cleanup");
+    }
+
+    #[test]
     fn append_only_faults_leave_old_head_and_sync_poison() {
         let path = temp_path("faults");
         let (directory_id, directory_bytes, root, _) = commit_one(&path);
@@ -3124,5 +3259,33 @@ mod tests {
         assert_eq!(reopened.load_visible_root().expect("root"), Some(root.id));
         assert!(reopened.observations().expect("observation").residue_bytes > 0);
         std::fs::remove_file(path).expect("cleanup");
+    }
+
+    #[test]
+    fn append_only_first_capture_torn_tail_is_typed() {
+        let partial_header = MAGIC[..1].to_vec();
+        let partial_payload = FrameHeader {
+            kind: FrameKind::Object,
+            payload_len: 1,
+            generation: 1,
+            previous_offset: 0,
+            offset: 0,
+            checksum: [0_u8; CHECKSUM_LEN],
+        }
+        .encode()
+        .to_vec();
+
+        for (label, bytes) in [
+            ("first-partial-header", partial_header),
+            ("first-partial-payload", partial_payload),
+        ] {
+            let path = temp_path(label);
+            std::fs::write(&path, bytes).expect("write torn first frame");
+            assert!(matches!(
+                AppendOnlyEngine::open(&path),
+                Err(EngineError::CarrierRecoveryTornTail)
+            ));
+            std::fs::remove_file(path).expect("cleanup");
+        }
     }
 }
