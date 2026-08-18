@@ -1,6 +1,8 @@
 mod mutate;
 mod tree;
 
+pub mod persistence;
+
 pub use mutate::{Mutation, MutationResult};
 pub use tree::{Metadata, NodeId, NodeKind, RootHandle, RootId, TreeNode};
 

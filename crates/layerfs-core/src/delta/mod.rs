@@ -5,6 +5,8 @@ use crate::identity::ObjectId;
 use crate::limits::MAX_CHILD_REFERENCES;
 use crate::{CanonicalName, CanonicalPath, CoreError, CoreResult};
 
+pub mod codec;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DeltaEntry {
     Add {

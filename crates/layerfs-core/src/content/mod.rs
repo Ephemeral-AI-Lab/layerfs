@@ -9,6 +9,8 @@ use crate::cdc::FastCdc;
 use crate::limits::MAX_CHILD_REFERENCES;
 use crate::{ChunkId, CoreError, CoreResult};
 
+pub mod persistence;
+
 pub const MAX_REJOIN_WINDOW_BYTES: u64 = 1024 * 1024;
 const REJOIN_CONFIRM_CHUNKS: usize = 2;
 

@@ -242,11 +242,14 @@ new persistence format or performance work begins.
 
 ### Deliverable
 
-Create one subordinate specification:
+Create the canonical mapping specification:
 
 `PHASE_4_LOGICAL_PERSISTENCE_MAPPING.md`
 
 It must freeze exact bytes rather than describe only a conceptual graph.
+The separately approved
+`PHASE_4_SQLITE_VISIBLE_HEAD_MIGRATION_SPEC.md` is the only schema exception
+needed to persist that mapping; it does not expand WP4 into a migration system.
 
 ### Design inventory
 
@@ -300,12 +303,64 @@ At minimum freeze:
 For successful cases record exact encoded bytes, BLAKE3 object ID, root/delta
 identity, and reconstructed logical value.
 
+Pre-promotion vectors are measurement fixtures, not compatibility authority.
+Regenerate the independent authoritative set after one profile is promoted.
+
 ### Exit condition
 
-No production codec implementation begins until this exact mapping and its
-bounds have been reviewed against the Phase 1/2/3 contracts.
+Split WP4 into two explicit states:
+
+- **WP4-C — candidate specification:** complete when the candidate grammar,
+  bounds, semantics, failure rules, and measurement gate have passed review.
+  This authorizes only WP4-M below; it grants no compatibility authority.
+- **WP4-P — compatibility-profile promotion:** complete only after the A/B
+  selects one file K/F pair and one directory-page ceiling, every losing
+  alternative and selector is deleted, independent final goldens are
+  regenerated and fingerprinted, and the final read-only audit passes.
+
+No public or compatibility-bearing production codec begins before WP4-P.
+
+## 9A. WP4-M — Provisional profile measurement lane
+
+### Narrow authority
+
+Implement only the shared codec and SQLite measurement path needed to compare:
+
+- file K64/F64, K59/F101, and K256/F256; and
+- directory 64-KiB, 256-KiB, and 1-MiB page ceilings.
+
+The selector is private to tests and the benchmark. Do not add a public feature
+flag, provider abstraction, format-negotiation surface, or permanent
+multi-profile production API. Isolated benchmark databases may contain these
+candidate identities; no candidate has compatibility authority. Each candidate
+database and receipt uses a private domain-separated profile ID and the
+candidate-only schema authority in
+`PHASE_4_SQLITE_VISIBLE_HEAD_MIGRATION_SPEC.md`.
+
+### Dependency order
+
+1. WP4-C candidate specification.
+2. WP4-M provisional shared codec/SQLite measurement path.
+3. WP8/WP9 non-qualifying profile-selection A/B at 100 and 512 MiB.
+4. WP4-P winner promotion, loser/selector deletion, final independent goldens,
+   fingerprint, and read-only audit.
+5. WP5 frozen-format exit rerun and finalization of WP5 and later production
+   work against the single promoted profile.
+
+Every provisional row must say `qualification=false` and `purpose=profile_selection`.
+It cannot support a product, compatibility, or 200/300-MiB/s claim.
+
+### Exit condition
+
+Return the complete section 12.7 counter set and A/B rows to WP4-P. Immediately
+after selection, delete losing constants, branches, fixtures, and the private
+selector before generating final goldens or rerunning WP5's exit checks.
 
 ## 10. WP5 — Implement the shared mapping
+
+WP4-M may contribute the minimum shared codec code needed for measurement, but
+that provisional code is not a completed WP5 deliverable. WP5 finalizes only
+the surviving single profile after WP4-P.
 
 ### Production changes
 
@@ -345,7 +400,9 @@ git diff --check
 ### Exit condition
 
 The core can encode, authenticate, decode, and reconstruct a real Phase 3 file,
-tree, root, and delta using only the frozen mapping and bounded object reads.
+tree, root, and delta using only the promoted mapping and bounded object reads.
+Rerun this check after WP4-P and verify that no losing profile or selector
+remains.
 
 ## 11. WP6 — Add the Memory semantic engine lane
 
@@ -388,6 +445,10 @@ engine.
 
 ## 12. WP7 — Integrate the mapping with SQLite
 
+The private WP4-M SQLite path may exist earlier only for profile measurement.
+This production integration starts after WP4-P and exposes only the promoted
+format.
+
 ### Production changes
 
 1. Persist the frozen logical objects using existing immutable object storage.
@@ -396,8 +457,9 @@ engine.
 4. Validate full strong-edge closure before publication.
 5. Authenticate the visible root, delta, and required closure after genuine
    close/reopen.
-6. Preserve the SQLite schema if it can store the frozen canonical bytes and
-   records unchanged. Specify a migration before any schema change.
+6. Implement only the single version-2 schema and exact version-1 handling
+   authorized by `PHASE_4_SQLITE_VISIBLE_HEAD_MIGRATION_SPEC.md`; do not build a
+   migration framework or silently translate non-empty provisional stores.
 7. Preserve existing journal/durability settings and typed error mapping.
 
 ### Correctness tests
@@ -424,12 +486,14 @@ Add one release benchmark binary, provisionally:
 `crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs`
 
 It should be one binary with two explicit lanes, not a benchmark framework.
+Before WP4-P, it may also expose the private WP4-M profile-selection selector;
+that selector and its losing profiles are deleted at promotion.
 
 ### Fixture preparation
 
 Provide a separate deterministic preparation command that writes the 1, 10,
-and 100 MiB fixtures and a checked manifest. Preparation is outside every
-engine timer.
+and 100 MiB fixtures, validates the retained 512-MiB profile-selection fixture,
+and writes a checked manifest. Preparation is outside every engine timer.
 
 The manifest contains:
 
@@ -453,6 +517,10 @@ Implement the matrix from the controlling specification:
 - full replacement;
 - retained prepend/append/truncate/EOF/scattered regression rows.
 
+Before WP4-P, the private profile-selection campaign also runs the forced
++1-reference early/middle edit and the section 12.7 wide-directory
+create/replace/insert rows for every candidate ceiling.
+
 ### Output
 
 Emit one JSON object per run. Human-readable summaries are generated from the
@@ -469,6 +537,10 @@ Every row includes:
 - durability/reopen applicability;
 - qualification booleans; and
 - failure as an exact typed cause, not a partial success row.
+
+Pre-promotion profile-selection rows always set `qualification=false` and
+`purpose=profile_selection`. Only the post-promotion single-profile binary may
+emit normal qualifying rows.
 
 ### Required benchmark self-gates
 
@@ -496,6 +568,11 @@ missing closure, missing durability, failed reopen, or unequal logical output.
 Build once, then run one warmup and five measured iterations per required row
 without compiler contention. Keep source generation outside timing.
 
+The first campaign is the section 12.7 100/512-MiB profile-selection A/B and
+returns evidence to WP4-P; it emits no qualifying product claim. After WP4-P,
+delete the provisional selector, rerun WP5's exit check, and rebuild the
+single-profile binary before establishing the ordinary fair baseline below.
+
 Example shape; finalize flags with the binary:
 
 ```sh
@@ -505,17 +582,22 @@ cargo build -p layerfs-engine --offline --release \
 target/release/phase4_create_edit_benchmark \
   --engine memory \
   --manifest <fixture-manifest> \
-  --scenario all \
-  --iterations 5 \
-  --jsonl <memory-results>
+  --scenario <one-scenario> \
+  --iterations 1 \
+  --jsonl <one-memory-row>
 
 target/release/phase4_create_edit_benchmark \
   --engine sqlite \
   --manifest <fixture-manifest> \
-  --scenario all \
-  --iterations 5 \
-  --jsonl <sqlite-results>
+  --scenario <one-scenario> \
+  --iterations 1 \
+  --jsonl <one-sqlite-row>
 ```
+
+An outer campaign driver runs warmups separately, alternates row order, and
+collects five isolated measured processes per engine/scenario. A developer
+`--scenario all` mode may exist for diagnostics, but its campaign-wide RSS is
+not promotion evidence.
 
 Use `/usr/bin/time -l` for external RSS/host observations on macOS, while
 reporting that its boundary includes process setup. Do not claim cold APFS
@@ -572,9 +654,12 @@ Add inclusive counters for every authentication caller and closure boundary:
 4. Keep reopen authentication independent unless a persisted authenticated
    generation receipt proves the exact reopened identity.
 
-Receipt keys must include the immutable engine/store identity, generation,
-object ID, locator or row identity, and exact byte range. Bounds and eviction
-must be explicit. Do not cache every object in the source.
+An operation-local verified-work receipt must include the immutable store and
+validation authority, integrity epoch, mapping profile, generation,
+authenticated root and transition, object ID, locator or row identity, and
+exact byte range. Count/byte bounds and deterministic eviction must be
+explicit. It is distinct from the locator-free snapshot-closure receipt. Do
+not cache every object in the source.
 
 ### Rejection rules
 
@@ -815,9 +900,11 @@ condition and exact verification evidence are recorded.
 | WP0 authority/evidence snapshot | complete | starting HEAD `e760a122d128dc242e9364483a7259b360dacf87`; deleted-source SHA-256 set in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Finding reconciled with five-row proxy evidence; rejected/superseded notices added; deletion record created. |
 | WP1 delete append-only carrier | complete | final active source hashes recorded in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Carrier module and two binaries deleted; exports/errors/dependencies/lockfile entries removed; active searches and SQLite checks pass. |
 | WP2 delete `PackedInMemoryCas` | complete | final core CAS/content/eval source hashes recorded in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Packed implementation, entry points, helpers, tests, and workspace eval benchmark modes deleted; ordinary `InMemoryCas`/COW paths pass core checks. |
-| WP3 post-deletion baseline | complete | HEAD unchanged; final active source hashes recorded in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Metadata, workspace tests, all-target/all-feature checks, format, and diff gates pass; WP4 remains pending. |
-| WP4 freeze durable mapping | pending | — | — |
-| WP5 implement shared mapping | pending | — | — |
+| WP3 post-deletion baseline | complete | implementation commit `f595046e150e60dda6e3f06d915bbc283e20e952`; final active source hashes recorded in `PHASE_4_ROLLBACK_DELETION_RECORD.md` | Metadata, workspace tests, all-target/all-feature checks, format, and diff gates pass; WP4-C is complete and WP4-P remains pending. |
+| WP4-C candidate mapping specification | complete | candidate record SHA-256 `3e94b054e6bf0eb198f6b04287d8a6cb209fb2925450b6c6bc6a69c84ab63e06`; narrow schema-authority record SHA-256 `cfddcc291cfff40ffcfd19e8e93ba2a4e51b3b16c412d137ece5463acc7625df` | Scalable checked-u64 candidate, receipt trust boundary, 100-GiB analytical equations, rejection reconciliation, and executable selection dependency are recorded in `PHASE_4_LOGICAL_PERSISTENCE_MAPPING.md`; `PHASE_4_SQLITE_VISIBLE_HEAD_MIGRATION_SPEC.md` separately authorizes only the complete-head schema transition. Neither grants candidate compatibility authority. |
+| WP4-M provisional profile measurement lane | pending | — | Private benchmark/test-only comparison of file K64/F64, K59/F101, K256/F256 and directory 64-KiB/256-KiB/1-MiB; every row is non-qualifying. |
+| WP4-P compatibility-profile promotion | pending | — | Await 100/512-MiB A/B, loser/selector deletion, single-profile promotion, replacement independent goldens/fingerprint, and final audit. |
+| WP5 implement/finalize shared mapping | pending | — | Provisional shared code may be measured only under WP4-M; rerun the frozen-format exit after WP4-P with one surviving profile. |
 | WP6 Memory semantic engine | pending | — | — |
 | WP7 SQLite mapping integration | pending | — | — |
 | WP8 create/edit benchmark | pending | — | — |

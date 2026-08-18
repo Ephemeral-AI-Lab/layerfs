@@ -105,12 +105,14 @@ The SQLite schema, profile, SQL, and data files were not changed. Canonical
 bytes, object IDs, CDC outputs, and ordinary Phase 1/2/3 core paths were not
 changed; the core test suite continued to pass its canonical/CDC/COW assertions.
 
-The final worktree contains intentional WP0–WP3 edits only. `git diff --stat`
-shows 15 tracked files changed, 42 insertions, and 6,402 deletions; the
-untracked deletion record itself is visible in `git status --short` but is not
-included in that tracked diff statistic. The active source fingerprint is:
+The final WP0–WP3 implementation was committed as
+`f595046e150e60dda6e3f06d915bbc283e20e952`. Its commit statistic is 16 files
+changed, 171 insertions, and 6,402 deletions; this deletion record is one of
+those tracked files. The active source fingerprint is:
 
-- unchanged HEAD: `e760a122d128dc242e9364483a7259b360dacf87`;
+- starting checkpoint: `e760a122d128dc242e9364483a7259b360dacf87`;
+- final WP0–WP3 implementation commit:
+  `f595046e150e60dda6e3f06d915bbc283e20e952`;
 - `Cargo.toml`: `dbcb7eeb7672bdd5e8bb8ece8d238879e867b6f7f343ddfed50e20f807760621`;
 - `crates/layerfs-engine/Cargo.toml`:
   `d61019278eaeaeabf39d8393705a62484403a4c116105c41e75086b9cc3bff61`;
@@ -125,5 +127,7 @@ included in that tracked diff statistic. The active source fingerprint is:
 
 ## Final source fingerprint
 
-The final active source hashes above and unchanged HEAD are the source
-fingerprint. No commit was created.
+The final active source hashes above and implementation commit
+`f595046e150e60dda6e3f06d915bbc283e20e952` are the final WP0–WP3 source
+fingerprint. The starting checkpoint remains
+`e760a122d128dc242e9364483a7259b360dacf87`.

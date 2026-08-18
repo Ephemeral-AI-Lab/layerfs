@@ -51,6 +51,23 @@ pub enum CoreError {
         actual: ObjectId,
     },
     DeltaConflict,
+    WrongLogicalRole,
+    InvalidMappingTag {
+        tag: u8,
+    },
+    UnsupportedMappingVersion {
+        version: u16,
+    },
+    MappingDepthExceeded,
+    MappingCycle,
+    ChunkLengthMismatch,
+    ChunkIdentityMismatch,
+    AllocationBudgetExceeded,
+    InvalidValidationReceipt,
+    SchemaMigrationRequired,
+    ValidationAuthorityUnavailable,
+    PublicationConflict,
+    AmbiguousDurability,
 }
 
 pub type CoreResult<T> = Result<T, CoreError>;
@@ -108,6 +125,23 @@ impl fmt::Display for CoreError {
                 "delta child mismatch: expected {expected}, got {actual}"
             ),
             Self::DeltaConflict => formatter.write_str("delta entry conflicts with current tree"),
+            Self::WrongLogicalRole => formatter.write_str("wrong logical object role"),
+            Self::InvalidMappingTag { tag } => write!(formatter, "invalid mapping tag {tag:#x}"),
+            Self::UnsupportedMappingVersion { version } => {
+                write!(formatter, "unsupported mapping version {version}")
+            }
+            Self::MappingDepthExceeded => formatter.write_str("mapping depth exceeded"),
+            Self::MappingCycle => formatter.write_str("mapping cycle detected"),
+            Self::ChunkLengthMismatch => formatter.write_str("chunk length mismatch"),
+            Self::ChunkIdentityMismatch => formatter.write_str("chunk identity mismatch"),
+            Self::AllocationBudgetExceeded => formatter.write_str("allocation budget exceeded"),
+            Self::InvalidValidationReceipt => formatter.write_str("invalid validation receipt"),
+            Self::SchemaMigrationRequired => formatter.write_str("schema migration required"),
+            Self::ValidationAuthorityUnavailable => {
+                formatter.write_str("validation authority unavailable")
+            }
+            Self::PublicationConflict => formatter.write_str("publication conflict"),
+            Self::AmbiguousDurability => formatter.write_str("ambiguous durability"),
         }
     }
 }

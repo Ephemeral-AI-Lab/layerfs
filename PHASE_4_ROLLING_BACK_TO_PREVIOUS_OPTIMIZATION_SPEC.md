@@ -203,10 +203,15 @@ The following remain non-negotiable:
 - one durability-equivalent commit per SQLite capture; and
 - reopen verification against the published root and delta.
 
-An optimization may avoid duplicate work only when it retains a bounded receipt
-that proves the exact work already completed for the same immutable store,
-generation, object, locator, and byte range. A cached key alone is not proof of
-authenticated payload equality.
+Two receipt classes are distinct. A bounded authenticated snapshot receipt may
+prove complete closure validation for one exact store authority, integrity
+epoch, mapping profile, generation, root, and transition; it may cover an
+unchanged subtree, but never authenticates bytes fetched later or incumbent
+equality. A future operation-local duplicate-read shortcut must instead bind
+the exact store authority, epoch, profile, generation, root and transition,
+object, locator or row identity, and byte range, with explicit count/byte
+bounds and eviction. A cached key alone is not proof of authenticated payload
+equality.
 
 ## 9. Durable Phase 3 logical-object mapping
 
@@ -280,9 +285,11 @@ separate semantic verification row.
 
 ### 10.2 SQLite lane
 
-SQLite remains the durable production lane. Preserve its current database
-format and required durability profile unless a separate migration specification
-authorizes a change.
+SQLite remains the durable production lane. Preserve its required durability
+profile. `PHASE_4_SQLITE_VISIBLE_HEAD_MIGRATION_SPEC.md` is the only authorized
+schema exception: after WP4-P selects one mapping profile, WP7 may implement
+its single version-2 complete-visible-head schema and its exact version-1
+handling. No other migration or multi-profile production format is authorized.
 
 Each capture must use:
 
