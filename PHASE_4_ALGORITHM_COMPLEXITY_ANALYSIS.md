@@ -1018,7 +1018,7 @@ The repaired operation replaces the retained middle chunk's 18,854 bytes with
 the deterministic bytewise transform `old_byte XOR 0x5a`
 (`same_middle_replacement`, `phase4_create_edit_benchmark.rs`). The controlling
 spec was prospectively amended on 2026-08-19 before the accepted build/timing,
-and `require_amended_m45_expectations` (line 1012) rejects drift in the exact
+and `require_amended_m45_expectations` rejects drift in the exact
 operation, source, base, CDC sequence, before/after file, root, transition, and
 closure. An exact full edited-stream scan proves that it has 5,284 references.
 The prior uniform-`0x5a` operation is not the same
@@ -1027,7 +1027,7 @@ is ineligible for the same-count path. Its old 5,284-reference expectation was
 created by substituting bytes after the old chunk boundary had already been
 chosen and is superseded.
 
-The local algorithm is in `same_middle_rejoin_references` (line 3729):
+The local algorithm is in `same_middle_rejoin_references`:
 
 1. authenticate the old file root and exact reference count;
 2. choose ordinal `position - 1` as the safe predecessor and authenticate that
@@ -1047,7 +1047,7 @@ The local algorithm is in `same_middle_rejoin_references` (line 3729):
 The retained row inspected 143,709 CDC bytes, emitted five replacement chunk
 references, and stopped well below the 1-MiB failure ceiling. The full oracle
 independently scans the complete edited `Reader`, not the old callback stream.
-`same_middle_expectations_use_the_exact_edited_cdc_stream` (line 9583)
+`same_middle_expectations_use_the_exact_edited_cdc_stream`
 asserts both exact-oracle equality and inequality with the withdrawn callback-
 substitution sequence. Failure to establish this rejoin falls back by typed
 classification; the fixed-ordinal same-count verifier is never faked.
@@ -1066,7 +1066,7 @@ The 1-MiB bound is a failure ceiling, not work performed after early rejoin.
 
 ### 21.2 Ordinal-local rewrite and redistributed lengths
 
-`rewrite_same_root_by_ordinal` (line 4567) replaces
+`rewrite_same_root_by_ordinal` replaces
 the consecutive ordinal run and rewrites only its affected leaf/leaves,
 ancestor branch union, file root, singleton namespace root, and transition.
 It does not require individual changed references or intermediate subtree
@@ -1080,7 +1080,7 @@ final total raw length equal
 Each prior and replacement subtree independently recomputes and validates its
 actual cumulative lengths. The paired verifier accepts different prior versus
 replacement child totals when their separate declared/actual values agree.
-`changed_spine_accepts_same_count_length_redistribution` (line 10857) directly
+`changed_spine_accepts_same_count_length_redistribution` directly
 covers a two-reference length redistribution across the leaf boundary.
 
 The retained edit created eleven canonical objects: five changed chunks plus
@@ -1101,7 +1101,7 @@ and range verification. The sole changed variable is pre-COMMIT qualification:
   authenticates both nodes at each changed spine position, and treats an edge
   as covered only when the authenticated prior/replacement parent descriptors
   carry the byte-identical immutable child ObjectId
-  (`verify_same_count_changed_spine`, line 5826).
+  (`verify_same_count_changed_spine`).
 
 No merely equal count, length, ordinal, row key, or receipt byte string permits
 a skip. Every different edge is followed, and every new chunk is read in full,
@@ -1129,12 +1129,11 @@ remained invariant.
 
 The transaction-owned witness is established only by exact receipt/transition
 checks plus `scrub_file`, whose namespace entry uses the exact singleton
-resolver (`establish_same_open_file_witness`, line 6279). Reopen, mutation,
+resolver (`establish_same_open_file_witness`). Reopen, mutation,
 tuple mismatch, single-use consumption, failed rollback, publication, and
 unresolved durability invalidate authority. The direct complete-namespace and
 failed-rollback tests are `witness_requires_the_exact_complete_namespace_closure`
-(line 11169) and `failed_rollback_invalidates_an_unconsumed_witness`
-(line 11217). A persisted receipt alone
+and `failed_rollback_invalidates_an_unconsumed_witness`. A persisted receipt alone
 cannot mint cross-reopen authority.
 
 ### 21.4 Qualification time and memory
@@ -1149,8 +1148,7 @@ T_qualify = O(K + F*H + A_delta + V_delta + H^2)
 
 The `H^2` term is the bounded active-ancestry membership scan; no global
 visited map is present. Parent canonical/decoded child vectors are explicitly
-dropped before recursive changed-child descent in `verify_changed_file_pair`
-(line 5635), so the
+dropped before recursive changed-child descent in `verify_changed_file_pair`, so the
 active resident shape is:
 
 ```text
@@ -1183,12 +1181,12 @@ decoded nodes, file references, tree nodes, DFS frames, delta paths, generated
 SQL, eager ranges, range measurements, fixed receipts, prepared expectations,
 phase/range JSON, and the final report output use the same checked RAII charge.
 No already-allocated vector is adopted into Q. `read_prepared_expectations`
-(line 7177) preflights the 128-KiB file and result capacity before allocation;
-`row_json` (line 7770) counts the exact output before reserving it.
+preflights the 128-KiB file and result capacity before allocation; `row_json`
+counts the exact output before reserving it.
 
 The exact-boundary/error test admits exactly 1,073,741,824 bytes, rejects the
 next byte before allocation, leaves the prior charge unchanged, and returns to
-zero. `real_sqlite_read_precharges_canonical_and_decoded_overlap` (line 9375)
+zero. `real_sqlite_read_precharges_canonical_and_decoded_overlap`
 independently computes a real SQLite canonical+decoded overlap. The complete
 real-path equation is asserted by
 `measured_edit_starts_from_an_already_published_base`.
@@ -1200,19 +1198,19 @@ under their precise narrower names. No alternate W/D meaning is invented.
 
 ### 21.5 BEGIN, publication, and ambiguous durability
 
-`Store::begin` (line 1824) checks the next transaction identity, SQL execute
+`Store::begin` checks the next transaction identity, SQL execute
 count, and transaction count before dispatching `BEGIN IMMEDIATE`; after SQLite
 accepts BEGIN, installing counters and `active_transaction` is infallible.
-`begin_counter_overflow_precedes_sql_and_leaves_connection_usable`
-(line 11599) proves the typed `LengthOverflow`, unchanged head, absent writer,
+`begin_counter_overflow_precedes_sql_and_leaves_connection_usable` proves the
+typed `LengthOverflow`, unchanged head, absent writer,
 and immediate connection reuse.
 
-`transaction_attempt` (line 1867) is the single post-BEGIN/pre-COMMIT cleanup
+`transaction_attempt` is the single post-BEGIN/pre-COMMIT cleanup
 path and preserves the first exact `FailureCause`, including a concrete missing
 `ObjectId`, separately from cleanup and reconciliation. `Store::publish`
-(line 2387) returns `PublicationOutcome`: normal `Committed`, or
+returns `PublicationOutcome`: normal `Committed`, or
 `RequestedVisible` plus retained diagnostic provenance. The normal API test is
-`normal_publish_retains_requested_visible_diagnostic` (line 11499).
+`normal_publish_retains_requested_visible_diagnostic`.
 
 The dispatch matrix uses the production fresh-connection reconciliation path:
 
@@ -1223,8 +1221,8 @@ The dispatch matrix uses the production fresh-connection reconciliation path:
 - `Ambiguous`: real COMMIT succeeds, then the fresh authoritative database path
   is genuinely unavailable during reconciliation.
 
-`real_commit_dispatch_boundaries_cover_requested_different_and_ambiguous`
-(line 11530) and `actual_commit_error_uses_fresh_reconciliation` prove one
+`real_commit_dispatch_boundaries_cover_requested_different_and_ambiguous` and
+`actual_commit_error_uses_fresh_reconciliation` prove one
 counted COMMIT dispatch and exact first/cleanup/reconciliation/dominant slots.
 After successful dispatch or requested-visible reconciliation, later failures
 are wrapped as committed-publication failures and cannot relabel visibility.
@@ -1281,16 +1279,18 @@ M3 is historical continuity evidence only. The accepted v3 measured-spec
 SHA-256 remains
 `55980c049e5e3ce824664070c11c358428c69ad1fb4f3a4fc0af925ce941756b`.
 
-`ChargedVec::from_exact_builder` (line 558) now accepts a separately built
+`ChargedVec::from_exact_builder` now accepts a separately built
 vector only when both `len == declared` and `capacity == declared`. A larger
 returned capacity is rejected as typed `AllocationFailed`; the precharge and
 the rejected vector then drop together and Q returns to zero. The focused
-`exact_builder_rejects_excess_capacity_and_cleans_q` regression (line 9382)
+`exact_builder_rejects_excess_capacity_and_cleans_q` regression
 constructs `len=4, capacity=5` explicitly. This is the smallest shared fix for
 all file, delta, and directory canonical builders and does not change the
-authoritative 96/256/64 semantic charges.
+authoritative 96/256/64 semantic charges. This is a safe typed-failure
+portability limitation: if a platform cannot return the exact requested
+capacity, the operation fails rather than adopting uncharged allocator excess.
 
-The synthetic `build_deep_uniform_base` fixture (line 9797) constructs a
+The synthetic `build_deep_uniform_base` fixture constructs a
 canonical K64/F64 tree by reusing immutable leaf/branch objects; it allocates
 no source-sized buffer. Its exact topology is:
 
@@ -1302,8 +1302,8 @@ root level / H               = 2
 root children                = 2
 ```
 
-`deep_changed_spine_proves_height_union_and_bounded_qualification`
-(line 11108) changes ordinals 63-64 across a leaf boundary, ordinal 4,096 in
+`deep_changed_spine_proves_height_union_and_bounded_qualification` changes
+ordinals 63-64 across a leaf boundary, ordinal 4,096 in
 the first leaf of a second inner branch, and ordinal 262,144 in the final
 partial leaf. The final prior/replacement comparison therefore spans both root
 children and has the exact changed union:

@@ -1,5 +1,18 @@
 # WP4-M optimization progress
 
+F0 status (2026-08-19): **PASS; custody freeze complete**. The accepted M4.5
+state is clean commit `26f4f10122a16dd14474e93076c92f80876b798f`, tree
+`0c9042da733d9ca0045a93fb69eb709f8d77ef09`, with parent-to-commit binary
+patch SHA-256
+`8103959f462cb073293d42ae3944ad80171cb0e9509417fc08352288e960e7d3`.
+V4 remains the permanent active C0/C1 small-edit control at
+`446.457042 -> 8.540708 ms` (`-98.087003%`, 5/5), Q 2,222,803 bytes and
+terminal zero. V4 manifests verify 61/61 and 15/15; v3 reverifies 171/171;
+the independent v4 regeneration is byte-identical; all 12 arm-copy and row
+gates pass. F0 added documentation/custody only and no commit. F1 is eligible
+only as a separate task; profile selection, promotion, production integration,
+full-create gain, and Phase 4 completion remain false/not started.
+
 Final checkpoint status (2026-08-19): **PASS; ready for a separate F0
 freeze**. The accepted v3 terminal evidence remains preserved. The release-path
 exact-capacity guard required a fresh v4 campaign, which passes at C0/C1
@@ -97,6 +110,7 @@ M4 confirmed that authenticated prior-receipt coverage can remove nearly all red
 | M4.5 v3 terminal repair | **PASS** | prospective §13.3A XOR authority; pre-BEGIN admission/ownership; pre-admitted exact Q; real COMMIT dispatch-boundary reconciliation; diagnostic-carrying publication outcome; exact storage split; 96 tests | C0 440.023209 -> C1 9.134334 ms (-97.924124%), 5/5; Q 2,222,803; 20-pair RSS/peak adjudication passes | retain changed-spine mechanism; v2/preliminary-v3 remain superseded; F0 eligible only as separate work |
 | M4.5 final read-only audit | **PASS — prior active** | all five lanes agree; no P0/P1 acceptance blocker; complete 171-file terminal manifest verifies; release `f84e6b0f...ef1` | no audit-time timing; accepts terminal v3 only | M4.5 accepted; no qualification/promotion/profile/production claim |
 | M4.5 checkpoint-quality follow-up | **PASS — active** | §13.5A C0/C1 clarification; exact-capacity rejection; H=2 multi-ancestor/malformed proof; 98 tests; complete v4 manifest 61/61 | C0 446.457042 -> C1 8.540708 ms (-98.087003%), 5/5; Q 2,222,803; RSS/peak extension not triggered | checkpoint safe for separate F0 freeze; no F0 source work or later-phase claim |
+| F0 accepted-checkpoint freeze | **PASS — active** | clean commit/tree/parent and 8103959f parent patch frozen; v4 61/61 + 15/15, v3 171/171; independent JSON byte-equal; source/spec/executable/base/command/toolchain/report hashes frozen | no new timing; retains v4 `446.457042 -> 8.540708 ms`, 5/5, Q 2,222,803 | permanent C0/C1 regression baseline; F1 eligible separately; no profile/promotion/production claim |
 
 M4.5-0 corrected the historical interpretation without changing frozen data:
 the semantic cross-process authority defect independently rejects M4; the old

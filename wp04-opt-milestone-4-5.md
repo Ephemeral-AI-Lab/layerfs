@@ -1,5 +1,38 @@
 # WP4-M M4.5 terminal report — independent-audit checkpoint
 
+## F0 custody freeze — 2026-08-19
+
+- **F0 PASS.** The accepted M4.5 checkpoint is frozen at clean commit
+  `26f4f10122a16dd14474e93076c92f80876b798f`, parent
+  `f3df30a80172131b74b5949a6a55234c962dac67`, and tree
+  `0c9042da733d9ca0045a93fb69eb709f8d77ef09`.
+- Exact patch definition
+  `git diff --binary f3df30a80172131b74b5949a6a55234c962dac67 26f4f10122a16dd14474e93076c92f80876b798f`
+  hashes to
+  `8103959f462cb073293d42ae3944ad80171cb0e9509417fc08352288e960e7d3`.
+  The historical v4 tracked-dirty diff
+  `49d1734aae97d30cadc2d7224e6729e40c22eef91f625e8dbaf40ecd9061d281`
+  remains separately named and is not substituted for the committed patch.
+- V4 remains the active small-edit baseline: C0 `446.457042 ms` versus C1
+  `8.540708 ms` (`-98.087003%`, 5/5), exact Q 2,222,803 bytes, terminal zero,
+  release executable
+  `7c395935457f99acfd3b02e08cdba976b971c61a407aeb65c243f2f26ddaf1a2`.
+- V4 verifies 61/61 complete-manifest entries and 15/15 focused-manifest
+  entries; v3 independently reverifies 171/171. The committed benchmark and
+  controlling spec are byte-identical to the frozen v4 snapshots.
+- A fresh independent recomputation from retained v4 raw JSONL/preflight is
+  byte-identical to the retained independent JSON. All 12 rows are release,
+  non-debug, one transaction, one COMMIT, committed publication, exact
+  identity/Q/storage, and byte-identical database/authority/expectation arms.
+- C0 complete-closure and C1 changed-spine are permanent regression controls.
+- Dedicated report: `wp04-opt-milestone-f0.md`. Compact machine manifest:
+  `target/wp4m-f0-m45-freeze-20260819-v1/f0-manifest.json`.
+- No F0 implementation, build, benchmark, profile decision, promotion,
+  production integration, or Phase 4 completion occurred. F1 is eligible only
+  as a separate task. No F0 commit was created.
+
+The M4.5 sections below remain preserved as the evidence being frozen.
+
 ## Final checkpoint disposition — 2026-08-19 v4 follow-up
 
 - **PASS; ready for a separate F0 freeze.** The private exact-XOR same-count

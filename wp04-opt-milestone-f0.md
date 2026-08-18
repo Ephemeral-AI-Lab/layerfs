@@ -1,0 +1,279 @@
+# WP4-M F0 — accepted M4.5 checkpoint freeze
+
+## Disposition and scope
+
+- Date: 2026-08-19.
+- F0 disposition: **PASS**.
+- Purpose: freeze the accepted M4.5 checkpoint as the durable, reproducible
+  control for later work.
+- Active small-edit baseline: v4 C0 complete-closure versus C1 changed-spine.
+- Implementation/build/benchmark work in F0: **none**.
+- F0 commit: **none**; this report and its ledger updates remain uncommitted.
+- F1: eligible only as a separate task.
+- Qualification, promotion, profile selection/rejection, production
+  integration, full-create gain, count-changing optimization, F1 execution,
+  and Phase 4 completion: not started/not claimed.
+
+## Clean committed checkpoint
+
+F0 began from a clean worktree and froze these Git objects:
+
+| Object | Identity |
+|---|---|
+| Repository / branch | `/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty` / `codex/empty-worktree` |
+| Commit | `26f4f10122a16dd14474e93076c92f80876b798f` |
+| Commit subject | `phase4: complete M4.5 changed-spine checkpoint` |
+| Parent | `f3df30a80172131b74b5949a6a55234c962dac67` |
+| Tree | `0c9042da733d9ca0045a93fb69eb709f8d77ef09` |
+| Initial status | clean; no tracked or untracked paths |
+
+Selected committed Git blob identities:
+
+| File | Git blob |
+|---|---|
+| `crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs` | `07e7693484e7d03f8c892c63b78db7653d0223c5` |
+| `PHASE_4_WP4M_M4_5_OPTIMIZATION_SPEC.md` | `5f216c57b6aa199b09845df7dfebb4c8e5c4031b` |
+| `PHASE_4_ALGORITHM_COMPLEXITY_ANALYSIS.md` | `5e5ca616af949968af395b9a59660589b195c364` |
+| `wp04-opt-milestone-4-5-v3-terminal-benchmark.md` | `7e132939acad40fe376c7ce17a43fdd344b0aa04` |
+| `wp04-opt-milestone-4-5-v3-follow-up.md` | `e2855848c8bef0c42e98a0fab669626e09ff3fc7` |
+| `wp04-opt-milestone-4-5.md` | `5e308602ba2375348e252d3d2e29afecc2ef6a7d` |
+| `wp04-opt-milestone-4-5-independent-audit.md` | `f01df0565aaebf534c535e962ceaa0516caab059` |
+| `wp04-optimization-progress.md` | `0ab0a41b63872a709d372ea0adbc7903b48668c9` |
+
+## Complete committed-patch identity
+
+The authoritative F0 definition is the exact byte stream produced by:
+
+```text
+git diff --binary \
+  f3df30a80172131b74b5949a6a55234c962dac67 \
+  26f4f10122a16dd14474e93076c92f80876b798f
+```
+
+Its SHA-256 is:
+
+```text
+8103959f462cb073293d42ae3944ad80171cb0e9509417fc08352288e960e7d3
+```
+
+`git show --format= --binary --no-ext-diff 26f4f101...` and
+`git diff-tree --no-commit-id --binary -p -r 26f4f101...` independently
+produce the same SHA-256.
+
+The historical v4 terminal tracked-dirty diff
+`49d1734aae97d30cadc2d7224e6729e40c22eef91f625e8dbaf40ecd9061d281`
+is retained with its original definition. It is not the complete
+parent-to-commit patch and is never substituted for `8103959f...`.
+
+F0's documentation-only tracked diff from the clean commit is
+`450f0148bb3fcd1ad3986e86dfade35f8c1fd0f62a91357b5fa61b92beaa3ed7`.
+
+## Frozen source, specification, and executable
+
+| Item | SHA-256 |
+|---|---|
+| Committed benchmark source | `0a078b25216fdc4da83722807dd8e921b523f99f074c86e5480a38e2a9ea2061` |
+| Committed controlling M4.5 spec | `739620380446c8fc2fee5f7edc96c867bc32ed83bb6b54dcc98ecd76d5eab4c8` |
+| Complexity analysis at M4.5 commit | `3a6892a44755f4492765391e67cadfc99a9b7aff5b7cdc6a9aecc6e6f5237660` |
+| Complexity analysis after F0 line-annotation hygiene | `40c81eeeba9e766c9170c94020144173df4558f26e7f19424e078a7b30f19e86` |
+| V4 release executable | `7c395935457f99acfd3b02e08cdba976b971c61a407aeb65c243f2f26ddaf1a2` |
+
+The committed benchmark source is byte-identical to
+`target/wp4m-m45-checkpoint-k64-20260819-v4/source/phase4_create_edit_benchmark.rs`.
+The committed controlling spec is byte-identical to the corresponding frozen
+v4 source snapshot. F0 did not change or rebuild the executable.
+
+The complexity edit removes stale numeric source-line annotations while
+retaining stable symbol names and substance. It also records the exact
+allocator-capacity equality guard as a safe typed-failure portability
+limitation: if exact capacity cannot be returned, the operation fails as
+`AllocationFailed` instead of adopting uncharged allocator excess.
+
+## Retained artifact sets
+
+| Set | Root / manifest | Verification |
+|---|---|---:|
+| V4 active checkpoint | `target/wp4m-m45-checkpoint-k64-20260819-v4/wp4m-m45-checkpoint.complete-hashes.txt` | 61/61 PASS |
+| V4 focused hashes | `target/wp4m-m45-checkpoint-k64-20260819-v4/wp4m-m45-checkpoint.final-hashes.txt` | 15/15 PASS |
+| V3 prior accepted terminal | `target/wp4m-m45-repair-k64-20260819-v3-terminal/wp4m-m45-terminal-complete-hashes.txt` | 171/171 PASS |
+
+Manifest hashes:
+
+| Manifest | SHA-256 |
+|---|---|
+| V4 complete | `1b1621735ad949abe4755e94dcd2487699af5502479dd99b707cc4d4a20e99c1` |
+| V4 focused/final | `533be670b8c5863e8de4645de4507bfe2b7d20ca35c399434c3422733f460eaa` |
+| V3 complete | `60887e2a4245fd3358f2242eac06b88e11051beacd3fc0bd0a2d7a7115f28cfd` |
+
+No retained database, sidecar, expectation, raw row, executable, or prior
+manifest was copied, modified, or deleted by F0. The compact F0 artifact root
+contains only references/hashes and a regenerated 11,380-byte independent
+JSON:
+
+```text
+target/wp4m-f0-m45-freeze-20260819-v1/
+```
+
+## V4 evidence and independent regeneration
+
+| Artifact | SHA-256 |
+|---|---|
+| Raw JSONL | `411d1c4144c20b06cbadd17bd72f21b0c6c85e4d6fcdea0fae320a1b4a949a0c` |
+| Preflight TSV | `84a1ff0a18c44e6978aab3d91c908f1a760f22ba2c1a0d72544c8b91441888c7` |
+| Campaign summary | `1d189cd135cec493ad065fb808c18af0f5995160cea3f2e944479325f8d4d478` |
+| Retained independent JSON | `f5f520cb25c9fa520be300f9262c88a4f8e199f591d8dfcf6e72fa94ffbfacb3` |
+| F0 regenerated independent JSON | `f5f520cb25c9fa520be300f9262c88a4f8e199f591d8dfcf6e72fa94ffbfacb3` |
+| Commands | `3d434491232c816ea015079951f28162a6e7db201c834a6aae1db5f29e69b02c` |
+
+F0 reran `independent_recompute_v4.py` against only the retained raw JSONL and
+preflight into `v4-independent-recomputed.json`. `cmp` proves byte equality
+with the retained independent JSON; no benchmark row was rerun.
+
+## Prepared base custody
+
+All 12 arm-copy rows match the database, authority sidecar, and expectations
+of their independently prepared pair base.
+
+| Pair | Base database SHA-256 | Authority SHA-256 |
+|---:|---|---|
+| 0 warmup | `1c0d5f4ed39e57808253f031b07d36583a2617e9a550655397c5eb43f0f0eaec` | `2cba86af9312f0fba31153a1d54363ff48042a2661a2fd341135a8bb53cbdd01` |
+| 1 | `188083cc09589ca77bc7e335390766d69423c0a1bdde6ddca436d7262e62050c` | `1f31181f072481df35c7ba884268fd21648b8a037c63abe53080baf5ce7ab51f` |
+| 2 | `b5d69d8b77cf370a4bb50652070b8031f0a7fd8046b4fd9b8a1ed6271a3f6487` | `f2f7fe3beb71fa7b61e9925d871fbc9ce55fe6e02b442b40ef9b41d144e89d24` |
+| 3 | `17e0117f70377006ab8fa3e1f8d74b8b634ddd624975242c3331db4f2ff71bd4` | `22b2b7a6cbadc8db8efed270e9ce3a43105b8b569c32f6aa6aeedd15cfcbb0ea` |
+| 4 | `b840ba900665330af05dee25d96ea3713759122d1bacd040781c4bcdbc0bb8e4` | `201e9d410cf3bd397ec5b5455698acf6e8d0483ced7fd8c10ccb46681134e19b` |
+| 5 | `4491dc740e63267e6e507b729fbd22ea2517c4606d7cea1a2162246b8e35302a` | `a94d38e271a5441d07f41155fdee0dfa567dacd84301ebbc8b9a44fc1b2873d7` |
+
+Every pair expectation hashes to
+`70520375af87d5227e28775a59879067d3b942cd82eb3f2fd2e15bb942b169ff`.
+The 100-MiB fixture hashes to
+`63b3695b8c117b5bc39885e0df0dcd0af1d49e575482bab16577d84b4f40eff4`;
+its retained manifest hashes to
+`8c64b5f49a10651e71fd52df3959cae22d291af4d95f47e43f7456308baad4ca`.
+
+## Permanent C0/C1 controls
+
+The immutable control definitions are:
+
+```text
+C0 = exact common edit substrate + complete pre-COMMIT closure qualification
+C1 = byte-identical substrate + same-open changed-spine qualification
+```
+
+Both use the same release executable, edited stream, CDC, CAS/COW mutation,
+pair base, authority, expectations, COMMIT, reopen, scrub, reconstruction,
+ranges, counters, and reporting. Only pre-COMMIT qualification changes.
+
+Frozen v4 result, not newly measured by F0:
+
+| Metric | C0 | C1 | Frozen result |
+|---|---:|---:|---|
+| Durable edit median | 446.457042 ms | 8.540708 ms | -98.087003%, 5/5 wins |
+| Mapping/CDC/COW median | 6.660084 ms | 6.546500 ms | common path |
+| Pre-COMMIT qualification | 437.020042 ms | 0.284500 ms | changed variable |
+| SQLite COMMIT median | 2.468083 ms | 1.935000 ms | common path |
+| Same-open lifecycle | 1,153.324459 ms | 716.367834 ms | complete local lifecycle |
+| First-open lifecycle | 1,394.917293 ms | 953.201251 ms | includes authority |
+| Exact Q | 2,222,803 bytes | 2,222,803 bytes | terminal zero |
+
+RSS arm median is -0.175% for C1 and peak footprint is +0.129%; the memory
+extension was not triggered. These are same-middle edit-latency controls, never
+100-MiB/edit throughput.
+
+## Row and isolation audit
+
+All 12 retained v4 rows satisfy:
+
+- status `PASS`;
+- `build_profile=release`, `debug_assertions=false`;
+- `throughput_measurement_admissible=false`;
+- one transaction, one COMMIT, committed publication, no error;
+- exact durable and lifecycle phase equations;
+- executable SHA-256
+  `7c395935457f99acfd3b02e08cdba976b971c61a407aeb65c243f2f26ddaf1a2`;
+- exact 5,284-reference CDC sequence, root, transition, and closure;
+- 18,854 edit bytes and 143,709 exact CDC bytes;
+- eleven created objects, 110,745 canonical new-write bytes, and 7,382
+  canonical rewrite bytes;
+- 18 SQL executes, 12 changed rows, 26 BLOB writes;
+- Q equation `38,959 + 1,085,490 + 12,864 + 1,085,490 = 2,222,803` and
+  terminal zero; and
+- identical main/journal/authority apparent and allocated endpoints.
+
+Qualification-dependent evidence is exact: C0 performs 16,418 queries and
+16,334 statement-cache acquisitions; C1 performs 11,060 and 10,976, covers
+123 equal edges, follows eight new/different edges, and fully authenticates
+five new chunks / 103,363 bytes. Mutation, writes, transactions, COMMIT, Q,
+identities, and storage remain invariant.
+
+## Commands, environment, toolchain, and SQLite profile
+
+| Evidence | SHA-256 / value |
+|---|---|
+| Retained commands file | `3d434491232c816ea015079951f28162a6e7db201c834a6aae1db5f29e69b02c` |
+| Measured dirty status snapshot | `4680fafcca6a1773267f829abb3f889f90dc411d1906d4ea4dd8f40263c88b49` |
+| `rustc -Vv` snapshot | `aea7c77c2b0d24444d07240e4d785e4ba73b6c9e786748af2ddc22bbf4c104bf` |
+| Cargo version snapshot | `b6ef6807dd96d18b833474ad68e7a23a29e562a29c67afa71a59fb9a73df0068` |
+| `uname -a` snapshot | `5c6d4880aa20fe4fc6c5f4ae76e5186cf1669518a76e70c5c6c9f3550db03d59` |
+| Rust | `rustc 1.96.0 (ac68faa20 2026-05-25)` |
+| Cargo | `cargo 1.96.0 (30a34c682 2026-05-25)` |
+| Host | `aarch64-apple-darwin`; Darwin 25.4.0 |
+
+The measured Store configures `journal_mode=DELETE`, `synchronous=FULL`,
+`temp_store=FILE`, and `mmap_size=0` on each open. A fresh read-only base check
+reported `journal_mode=delete`, `synchronous=2` (FULL), `mmap_size=0`, and
+`integrity_check=ok`; `temp_store=0` is the expected new-connection default
+because that pragma is connection-local.
+
+## Reports and documentation hygiene
+
+Committed M4.5 report hashes remain frozen:
+
+| Report | SHA-256 |
+|---|---|
+| V3 terminal benchmark | `e11f42000edf4756f0f8aa4f4d6b5e3a5d91cc8aaf696dfc83588ffdd19cfcc1` |
+| V4 checkpoint follow-up | `266aae594486f5c1850862d86d109294023781d1c27c23432d5aca66e57867cb` |
+| M4.5 terminal report at commit | `06839d75530264ad7fddc6f51ef91953786a778157568c3d1f541dbfad6298bd` |
+| Independent audit | `2ea65fb6bd53d3100ead393da252deed04cf1aacf6519aff4344c0943a4384b5` |
+| Rolling ledger at commit | `6ba775edffe069bbd719d6936f11fadb6e66fea725d9481ecdb24afecd89e54e` |
+
+F0 documentation hashes before the new report/manifest are:
+
+| File | SHA-256 |
+|---|---|
+| Complexity analysis | `40c81eeeba9e766c9170c94020144173df4558f26e7f19424e078a7b30f19e86` |
+| M4.5 terminal report with F0 status | `ce39bee7110ab2d9372e4422ab7030d61abc1dac0bf5d9763f4abab2e7e48a73` |
+| Rolling ledger with F0 status | `31ab757988e043a0cfb549f4ae7e31d8aa161743d79d22f415c85a7a6d1f36da` |
+
+The compact `f0-manifest.json` freezes these files plus this F0 report. The
+companion `f0-terminal-hashes.txt` freezes the manifest itself without a
+circular self-hash.
+
+## Limitations and non-claims
+
+- `ChargedVec::from_exact_builder` intentionally requires exact returned
+  capacity. A platform allocator returning excess capacity causes typed
+  `AllocationFailed`; it never crosses Q after allocation.
+- W/D, native SQLite prepare count, sync/fsync calls, page-cache state, peak
+  journal/temp, and byte-level host physical I/O remain `Unavailable` where
+  the accepted v4 evidence could not observe them exactly.
+- The accepted optimization is private benchmark-Store, exact-XOR,
+  same-count changed-spine behavior. It is not production integration.
+- Count-changing edits and `+1` remain suffix-linear and unoptimized here.
+- Same-open authority and fresh scrub remain linear in complete authenticated
+  closure; reconstruction remains linear in output.
+- F0 freezes evidence. It does not improve full-create capture or establish
+  the 200/300-MiB/s targets.
+
+## Final read-only F0 audit
+
+| Lane | Result |
+|---|---|
+| Git identity and patch definition | PASS: clean starting commit/tree/parent; three binary-patch commands agree |
+| Source/spec/executable identity | PASS: committed bytes equal frozen v4 snapshots; release hash exact |
+| Artifact integrity | PASS: v4 61/61 and 15/15; v3 171/171 |
+| Independent recomputation | PASS: regenerated JSON byte-identical to retained independent JSON |
+| Base and row custody | PASS: 12/12 triple-copy equality; every release/publication/Q/identity/storage equation passes |
+| Report/claim hygiene | PASS: permanent controls and all non-claims explicit; no F1 or implementation work |
+
+No custody inconsistency or M4.5 blocker was discovered. **F0 PASS.** F1 may
+begin only as a separately authorized task.
