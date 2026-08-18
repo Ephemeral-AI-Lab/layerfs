@@ -172,7 +172,7 @@ pub fn decode_mapping_transition(bytes: &[u8]) -> CoreResult<DecodedTransition> 
         bytes,
         crate::content::persistence::DELTA_INDEX_TAG,
     )?;
-    decode_transition(&payload)
+    decode_transition(payload)
 }
 
 fn encode_genesis_body(child: ObjectId) -> CoreResult<Vec<u8>> {
@@ -196,7 +196,83 @@ pub fn encode_delta_page(entries: &[TransitionOperation]) -> CoreResult<Vec<u8>>
 
 pub fn decode_mapping_delta_page(bytes: &[u8]) -> CoreResult<Vec<TransitionOperation>> {
     let payload = decode_mapping(bytes, DELTA_PAGE_TAG)?;
-    decode_delta_page(&payload)
+    decode_delta_page(payload)
+}
+
+pub fn measure_mapping_transition_pages(bytes: &[u8]) -> CoreResult<usize> {
+    let payload = decode_mapping(bytes, DELTA_INDEX_TAG)?;
+    if payload.len() < 1 + 32 + 4 + 4 {
+        return Err(CoreError::UnexpectedEof);
+    }
+    let parent_bytes = match payload[0] {
+        0 => 0,
+        1 => 32,
+        tag => return Err(CoreError::InvalidMappingTag { tag }),
+    };
+    let offset = 1usize
+        .checked_add(parent_bytes)
+        .and_then(|value| value.checked_add(32 + 4))
+        .ok_or(CoreError::LengthOverflow)?;
+    let end = offset.checked_add(4).ok_or(CoreError::LengthOverflow)?;
+    let count = usize::try_from(u32::from_be_bytes(
+        payload
+            .get(offset..end)
+            .ok_or(CoreError::UnexpectedEof)?
+            .try_into()
+            .map_err(|_| CoreError::UnexpectedEof)?,
+    ))
+    .map_err(|_| CoreError::LengthOverflow)?;
+    Ok(count)
+}
+
+pub fn measure_mapping_delta_page(bytes: &[u8]) -> CoreResult<(usize, usize)> {
+    let payload = decode_mapping(bytes, DELTA_PAGE_TAG)?;
+    let count = usize::try_from(u32::from_be_bytes(
+        payload
+            .get(..4)
+            .ok_or(CoreError::UnexpectedEof)?
+            .try_into()
+            .map_err(|_| CoreError::UnexpectedEof)?,
+    ))
+    .map_err(|_| CoreError::LengthOverflow)?;
+    if count == 0 || count > MAX_CHILD_REFERENCES {
+        return Err(CoreError::NonCanonicalPagePartition);
+    }
+    let mut offset = 4_usize;
+    let mut path_bytes = 0_usize;
+    for _ in 0..count {
+        let kind = *payload.get(offset).ok_or(CoreError::UnexpectedEof)?;
+        offset = offset.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+        let path_len_end = offset.checked_add(4).ok_or(CoreError::LengthOverflow)?;
+        let path_len = usize::try_from(u32::from_be_bytes(
+            payload
+                .get(offset..path_len_end)
+                .ok_or(CoreError::UnexpectedEof)?
+                .try_into()
+                .map_err(|_| CoreError::UnexpectedEof)?,
+        ))
+        .map_err(|_| CoreError::LengthOverflow)?;
+        offset = path_len_end
+            .checked_add(path_len)
+            .ok_or(CoreError::LengthOverflow)?;
+        path_bytes = path_bytes
+            .checked_add(path_len)
+            .ok_or(CoreError::LengthOverflow)?;
+        let tail = match kind {
+            0x01 | 0x02 => 32,
+            0x03 => 64,
+            0x04 => 72,
+            _ => return Err(CoreError::InvalidMappingTag { tag: kind }),
+        };
+        offset = offset.checked_add(tail).ok_or(CoreError::LengthOverflow)?;
+        if offset > payload.len() {
+            return Err(CoreError::UnexpectedEof);
+        }
+    }
+    if offset != payload.len() {
+        return Err(CoreError::TrailingBytes);
+    }
+    Ok((count, path_bytes))
 }
 
 pub fn decode_delta_page(payload: &[u8]) -> CoreResult<Vec<TransitionOperation>> {

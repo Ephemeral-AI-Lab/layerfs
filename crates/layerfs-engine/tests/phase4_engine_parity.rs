@@ -45,7 +45,7 @@ fn file_mapping_round_trips_at_leaf_boundaries() {
         let payload =
             file_codec::decode_mapping(&canonical, file_codec::FILE_LEAF_TAG).expect("decode");
         assert_eq!(
-            file_codec::parse_file_leaf(&payload).expect("parse"),
+            file_codec::parse_file_leaf(payload).expect("parse"),
             references
         );
     }
@@ -87,8 +87,9 @@ fn file_root_and_delta_preserve_ordered_identity() {
     );
     let payload =
         file_codec::decode_mapping(&root, file_codec::FILE_ROOT_TAG).expect("root decode");
-    let (total, references, level, children) =
-        file_codec::parse_file_root(&payload).expect("root parse");
+    let (mode, total, references, level, children) =
+        file_codec::parse_file_root(payload).expect("root parse");
+    assert_eq!(mode, 0);
     assert_eq!((total, references, level), (9, 2, 0));
     assert_eq!(
         children,
@@ -163,7 +164,7 @@ fn directory_pages_and_wrappers_are_canonical() {
     let index_payload =
         file_codec::decode_mapping(&index, file_codec::DIR_INDEX_TAG).expect("index decode");
     assert_eq!(
-        dir_codec::parse_directory_index(&index_payload)
+        dir_codec::parse_directory_index(index_payload)
             .expect("index parse")
             .len(),
         1
@@ -241,8 +242,8 @@ fn file_partition_rules_and_height_are_checked() {
     let empty = canonical_mapping(empty);
     let empty = file_codec::decode_mapping(&empty, file_codec::FILE_ROOT_TAG).expect("decode");
     assert_eq!(
-        file_codec::parse_file_root(&empty).expect("parse empty root"),
-        (0, 0, 0, Vec::new())
+        file_codec::parse_file_root(empty).expect("parse empty root"),
+        (u32::MAX, 0, 0, 0, Vec::new())
     );
 
     let mut children_without_level = Vec::new();

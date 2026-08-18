@@ -8,7 +8,7 @@ license.workspace = true
 [dependencies]
 blake3 = { workspace = true }
 layerfs-core = { path = "../layerfs-core" }
-rusqlite = { version = "=0.40.2", default-features = false, features = ["cache", "blob"] }
+rusqlite = { version = "=0.40.2", default-features = false, features = ["cache", "blob", "hooks"] }
 
 [lib]
 path = "src/lib.rs"

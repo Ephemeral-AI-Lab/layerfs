@@ -64,6 +64,7 @@ pub enum CoreError {
     ChunkLengthMismatch,
     ChunkIdentityMismatch,
     AllocationBudgetExceeded,
+    AllocationFailed,
     InvalidValidationReceipt,
     SchemaMigrationRequired,
     ValidationAuthorityUnavailable,
@@ -137,6 +138,7 @@ impl fmt::Display for CoreError {
             Self::ChunkLengthMismatch => formatter.write_str("chunk length mismatch"),
             Self::ChunkIdentityMismatch => formatter.write_str("chunk identity mismatch"),
             Self::AllocationBudgetExceeded => formatter.write_str("allocation budget exceeded"),
+            Self::AllocationFailed => formatter.write_str("allocation failed"),
             Self::InvalidValidationReceipt => formatter.write_str("invalid validation receipt"),
             Self::SchemaMigrationRequired => formatter.write_str("schema migration required"),
             Self::ValidationAuthorityUnavailable => {

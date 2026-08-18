@@ -682,6 +682,68 @@ Use only the retained exact 100-MiB K64/F64 same-middle fixture:
 The fixture gate must reject any mismatch; it never rewrites expected values
 from newly observed data.
 
+### 13.3A Prospective corrective experiment amendment — 2026-08-19
+
+The §13.3 row above is retained verbatim as a withdrawn historical row. Exact
+frozen Phase-2 FastCDC over its uniform-`0x5a` edited byte stream produces
+5,283 references, not 5,284. It is therefore a count-changing operation and
+cannot be the controlling same-count M4.5 experiment. Its identities and all
+campaigns that treated it as same-count remain inadmissible for acceptance.
+
+Prospectively, before any new candidate build or timing, the only controlling
+M4.5 same-middle operation is:
+
+- retained source: the same 104,857,600-byte fixture and
+  `63b3695b8c117b5bc39885e0df0dcd0af1d49e575482bab16577d84b4f40eff4`
+  SHA-256 from §13.3;
+- edit offset: 52,480,416;
+- removed length: 18,854 bytes;
+- inserted length: 18,854 bytes; and
+- inserted byte at local ordinal `i`: `removed[i] XOR 0x5a`.
+
+An independent full edited-stream FastCDC oracle freezes these amended
+identities:
+
+- edited source BLAKE3:
+  `527b215f91735e023b23a2e970f86c9e25ea303d38a1e4006f3f3a2a98f9db49`;
+- result references: 5,284;
+- ordered CDC-sequence BLAKE3:
+  `e6d6d858ab6ff9804839630df90a2e621ae06291e55ab12aea9957c566ec83f7`;
+- prepared base root / transition / closure:
+  `2d41c27f96b0332475fb8ec3c46a336c9c8a8084408bc545e5cbb24d51cb25d0` /
+  `ba15fd20469414de99c135fc90a5c5ad028f99f115b8c0d138ace9ec98536412` /
+  `d6aac6e40cc851dd6295dbeec6488f1c5ebefa7520f86b0cd12bdcdce1f0d54a`;
+- before / after file objects:
+  `a94d42f6357b621ea51e306fe0a242854ed95d02d3e3dc7a88e3c2a20c194786` /
+  `ab1f98a2c44c60f1b88f8aaec368ab2bbd68de9580e6e79b4dbf859800f2e7c8`;
+- result root:
+  `d1a69475b0f8e25e44d7bd625a679b596ea2a8b3347ef8c15fafa13f654b299b`;
+- transition:
+  `f11cc9d84deae7f1871adca62cc562ab63dbb01e9c39771ed3522eab4007cee1`;
+- ordered closure digest:
+  `c0f6a39bf9939c89301bedb564516c5ec851321a1d89c69b2e95d4b1844a9587`;
+  and
+- prepared-expectation SHA-256:
+  `70520375af87d5227e28775a59879067d3b942cd82eb3f2fd2e15bb942b169ff`.
+
+The fixture gate must reject any mismatch in the source, operation tuple,
+reference count, ordered CDC sequence, root, transition, closure, or prepared
+expectation. It must never rewrite these values from the candidate arm.
+
+The decision rule remains §13.5: one warmup plus five adjacent balanced AB/BA
+pairs, byte-identical physical database/authority/expectation copies within
+each pair, at least 5% affected-metric median improvement, and at least 4/5
+paired wins, after every correctness and custody hard gate passes. Only a new
+versioned v3 campaign built and run after this amendment may carry acceptance.
+The retained v2 XOR campaign predates this amendment and is direction-only
+evidence even though its artifacts remain hash-valid.
+
+This amendment does not claim count-changing optimization, `+1` performance,
+complete-closure avoidance during same-open witness establishment or fresh
+scrub, reconstruction improvement, qualification, profile selection,
+promotion, production integration, full-create gain, F0 completion, or later
+Phase 4 completion.
+
 ### 13.4 Authority setup and timer boundaries
 
 Each edit row starts from an independently prepared, committed, byte-identical
@@ -746,6 +808,30 @@ The primary affected metric is pre-COMMIT closure-validation latency. M4.5
 passes the speed gate only with at least 5% median improvement and at least
 four of five paired wins. Same-middle is an edit-latency row. Do not divide the
 whole 100-MiB logical file by edit wall time and call it storage throughput.
+
+### 13.5A Terminal comparison clarification — 2026-08-19
+
+The opening retained-M3-versus-M4.5 wording in §13.5 is historical continuity
+context, not the final causal comparison used by the accepted terminal
+campaign. The official M4.5 comparison uses one release executable with two
+qualification modes:
+
+- C0 performs complete-closure pre-COMMIT qualification; and
+- C1 performs receipt-backed same-open changed-spine pre-COMMIT
+  qualification.
+
+CDC, CAS/COW mutation, pair base, authority sidecar, prepared expectations,
+COMMIT, reopen, fresh scrub, reconstruction, ranges, counters, and reporting
+are identical between C0 and C1. The only changed variable is the pre-COMMIT
+qualification algorithm. Retained M3 supplies historical continuity evidence
+only and is not the A arm of the terminal causal result.
+
+This paragraph is a post-measurement clarification, not a retroactive workload,
+identity, decision-rule, or timing change. It preserves §13.3 and §13.3A and
+the spec measured by the accepted v3 terminal campaign, whose SHA-256 was
+`55980c049e5e3ce824664070c11c358428c69ad1fb4f3a4fc0af925ce941756b`.
+The v3 raw rows, executable, source/diff, identities, and manifests remain
+unchanged and authoritative for that accepted checkpoint.
 
 ### 13.6 Protected resource adjudication
 

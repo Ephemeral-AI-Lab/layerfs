@@ -114,7 +114,7 @@ pub fn canonical_mapping(tag: u8, body: &[u8]) -> CoreResult<(ObjectId, Vec<u8>)
     Ok((id, bytes))
 }
 
-pub fn decode_mapping(bytes: &[u8], expected_tag: u8) -> CoreResult<Vec<u8>> {
+pub fn decode_mapping(bytes: &[u8], expected_tag: u8) -> CoreResult<&[u8]> {
     let payload = crate::object::decode_bytes_object(bytes)?;
     if payload.len() < MAPPING_MAGIC.len() + 3 {
         return Err(CoreError::UnexpectedEof);
@@ -129,7 +129,7 @@ pub fn decode_mapping(bytes: &[u8], expected_tag: u8) -> CoreResult<Vec<u8>> {
     if payload[10] != expected_tag {
         return Err(CoreError::InvalidMappingTag { tag: payload[10] });
     }
-    Ok(payload[11..].to_vec())
+    Ok(&payload[11..])
 }
 
 pub fn encode_file_leaf(references: &[FileReference]) -> CoreResult<Vec<u8>> {
@@ -349,10 +349,15 @@ pub fn expected_file_level(reference_count: u64, profile: FileMappingProfile) ->
     Ok(level)
 }
 
-pub fn parse_file_root(payload: &[u8]) -> CoreResult<(u64, u64, u8, Vec<FileChild>)> {
+pub fn parse_file_root(payload: &[u8]) -> CoreResult<(u32, u64, u64, u8, Vec<FileChild>)> {
     if payload.len() < 25 {
         return Err(CoreError::UnexpectedEof);
     }
+    let mode = u32::from_be_bytes(
+        payload[..4]
+            .try_into()
+            .map_err(|_| CoreError::UnexpectedEof)?,
+    );
     let total = u64::from_be_bytes(
         payload[4..12]
             .try_into()
@@ -372,7 +377,7 @@ pub fn parse_file_root(payload: &[u8]) -> CoreResult<(u64, u64, u8, Vec<FileChil
             actual: final_end,
         });
     }
-    Ok((total, count_refs, level, children))
+    Ok((mode, total, count_refs, level, children))
 }
 
 pub fn validate_file_root_summary(

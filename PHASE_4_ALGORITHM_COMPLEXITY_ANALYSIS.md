@@ -1004,3 +1004,333 @@ The fixed-radix candidate is promotable only if measured constants are good and
 the count-changing-edit gate passes. Otherwise WP4-P must reject it and measure
 the narrowly defined deterministic content-defined/prolly alternative rather
 than freezing a known `O(N)` small-edit failure mode.
+
+## 21. M4.5 repaired same-count changed-spine analysis
+
+Status: source-linked terminal analysis for the prospectively amended private
+K64/F64 XOR same-middle measurement path and the retained `v3-terminal` campaign.
+This section does not promote K64/F64, complete WP4-P, or describe production
+`Engine` integration.
+
+### 21.1 Exact edited-stream CDC and rejoin
+
+The repaired operation replaces the retained middle chunk's 18,854 bytes with
+the deterministic bytewise transform `old_byte XOR 0x5a`
+(`same_middle_replacement`, `phase4_create_edit_benchmark.rs`). The controlling
+spec was prospectively amended on 2026-08-19 before the accepted build/timing,
+and `require_amended_m45_expectations` (line 1012) rejects drift in the exact
+operation, source, base, CDC sequence, before/after file, root, transition, and
+closure. An exact full edited-stream scan proves that it has 5,284 references.
+The prior uniform-`0x5a` operation is not the same
+workload: exact FastCDC produces 5,283 references, so it is count-changing and
+is ineligible for the same-count path. Its old 5,284-reference expectation was
+created by substituting bytes after the old chunk boundary had already been
+chosen and is superseded.
+
+The local algorithm is in `same_middle_rejoin_references` (line 3729):
+
+1. authenticate the old file root and exact reference count;
+2. choose ordinal `position - 1` as the safe predecessor and authenticate that
+   reference/path;
+3. read at most predecessor + removed bytes + the frozen 1-MiB rejoin ceiling;
+4. run the frozen 8/16/32-KiB FastCDC scanner over
+   `predecessor || exact replacement || old suffix`;
+5. compare complete `(start, raw length, raw ChunkId)` observations and stop at
+   the first two exact old-suffix confirmations
+   (`tail_exact_rejoin`);
+6. store only chunks before that proven rejoin and reuse the authenticated old
+   suffix; and
+7. require `old_count == new_count`, which is exactly the final-reference-count
+   equality for a local replacement. Otherwise return the typed bounded-rejoin
+   or length mismatch and never enter same-count COW.
+
+The retained row inspected 143,709 CDC bytes, emitted five replacement chunk
+references, and stopped well below the 1-MiB failure ceiling. The full oracle
+independently scans the complete edited `Reader`, not the old callback stream.
+`same_middle_expectations_use_the_exact_edited_cdc_stream` (line 9583)
+asserts both exact-oracle equality and inequality with the withdrawn callback-
+substitution sequence. Failure to establish this rejoin falls back by typed
+classification; the fixed-ordinal same-count verifier is never faked.
+
+For changed CDC bytes `X_b` and changed/new reference occurrences `X_c`, the
+successful mutation is:
+
+```text
+T_mutation = O(X_b + X_c + K + F*H)
+```
+
+For the retained topology, `N=5,284`, `K=64`, `P=ceil(N/K)=83`, `F=64`, and
+there is one branch layer between root and leaf (`H=1`). The direct measured
+inputs were `X_b=143,709` scanned bytes and `X_c=5` replacement references.
+The 1-MiB bound is a failure ceiling, not work performed after early rejoin.
+
+### 21.2 Ordinal-local rewrite and redistributed lengths
+
+`rewrite_same_root_by_ordinal` (line 4567) replaces
+the consecutive ordinal run and rewrites only its affected leaf/leaves,
+ancestor branch union, file root, singleton namespace root, and transition.
+It does not require individual changed references or intermediate subtree
+cumulative ends to retain their old lengths. Same-count means:
+
+```text
+final reference count equal
+final total raw length equal
+```
+
+Each prior and replacement subtree independently recomputes and validates its
+actual cumulative lengths. The paired verifier accepts different prior versus
+replacement child totals when their separate declared/actual values agree.
+`changed_spine_accepts_same_count_length_redistribution` (line 10857) directly
+covers a two-reference length redistribution across the leaf boundary.
+
+The retained edit created eleven canonical objects: five changed chunks plus
+one leaf, one branch, file root, namespace root, delta page, and transition.
+It rewrote 7,382 canonical mapping bytes and wrote 110,745 new canonical bytes.
+Unchanged leaves, the other root branch, and unchanged chunk occurrences keep
+their exact ObjectIds.
+
+### 21.3 C0/C1 equivalence and witness-covered skips
+
+C0 and C1 share the same executable, prepared base, edit, CDC/rejoin, object
+creation, root/transition construction, COMMIT, reopen, scrub, reconstruction,
+and range verification. The sole changed variable is pre-COMMIT qualification:
+
+- C0 fully authenticates the requested transition and complete new file
+  closure (`qualify_same_middle_full_closure`).
+- C1 first consumes the exact private transaction-owned same-open permit,
+  authenticates both nodes at each changed spine position, and treats an edge
+  as covered only when the authenticated prior/replacement parent descriptors
+  carry the byte-identical immutable child ObjectId
+  (`verify_same_count_changed_spine`, line 5826).
+
+No merely equal count, length, ordinal, row key, or receipt byte string permits
+a skip. Every different edge is followed, and every new chunk is read in full,
+canonical-ObjectId authenticated, length checked, and raw-ChunkId checked.
+For the retained topology the exact edge equation is:
+
+```text
+covered equal edges = 1 unchanged root child
+                    + 63 unchanged branch children
+                    + 59 unchanged leaf references
+                    = 123
+
+new/different edges = namespace->file root
+                    + root->changed branch
+                    + branch->changed leaf
+                    + 5 changed chunk edges
+                    = 8
+```
+
+The five new chunks total 103,363 authenticated canonical bytes. C1 removed
+exactly 5,358 statement-cache acquisitions, queries, returned rows, and row-
+BLOB reads relative to C0 while writes, rewrites, executes, changed rows,
+transactions, COMMITs, Q, roots, transitions, closure, and endpoint storage
+remained invariant.
+
+The transaction-owned witness is established only by exact receipt/transition
+checks plus `scrub_file`, whose namespace entry uses the exact singleton
+resolver (`establish_same_open_file_witness`, line 6279). Reopen, mutation,
+tuple mismatch, single-use consumption, failed rollback, publication, and
+unresolved durability invalidate authority. The direct complete-namespace and
+failed-rollback tests are `witness_requires_the_exact_complete_namespace_closure`
+(line 11169) and `failed_rollback_invalidates_an_unconsumed_witness`
+(line 11217). A persisted receipt alone
+cannot mint cross-reopen authority.
+
+### 21.4 Qualification time and memory
+
+Let `A_delta` be complete canonical bytes authenticated on the two changed
+spines and `V_delta` be canonical bytes in fully traversed new/different
+subtrees. C1 qualification is:
+
+```text
+T_qualify = O(K + F*H + A_delta + V_delta + H^2)
+```
+
+The `H^2` term is the bounded active-ancestry membership scan; no global
+visited map is present. Parent canonical/decoded child vectors are explicitly
+dropped before recursive changed-child descent in `verify_changed_file_pair`
+(line 5635), so the
+active resident shape is:
+
+```text
+M_resident = O(H + K + F
+               + bounded CDC/chunk/canonical/page/SQL/range buffers)
+```
+
+For this contiguous edit, the pending changed-pair frontier is bounded by the
+changed reference run (`O(K)` under the admitted local row). The final retained
+campaign reports the same exact logical-Q high-water in every C0 and C1 row:
+
+```text
+base live state                       38,959
+old authenticated CDC window       1,085,490
+old-window RejoinChunk slots          12,864  (= 134 * 96)
+edited scan input                   1,085,490
+                                      -------
+Q high-water                        2,222,803 bytes
+```
+
+The implementation records every term and checks the sum at the allocation
+site; `q_cdc_overlap_current == q_high_water == 2,222,803` in all 12 rows and
+`q_current=0` after the charged report output is delivered. The base-live term
+is exactly `38,311` prepared-expectation bytes plus three simultaneous
+216-byte witness/permit/prior-head receipts (`38,311 + 648 = 38,959`). The old window and scan
+input are admitted before allocation, the exact 134 slots use the governing
+96-byte file-reference charge, and the old window is explicitly dropped after
+the edited input is built. Canonical builders, borrowed SQLite-to-owned copies,
+decoded nodes, file references, tree nodes, DFS frames, delta paths, generated
+SQL, eager ranges, range measurements, fixed receipts, prepared expectations,
+phase/range JSON, and the final report output use the same checked RAII charge.
+No already-allocated vector is adopted into Q. `read_prepared_expectations`
+(line 7177) preflights the 128-KiB file and result capacity before allocation;
+`row_json` (line 7770) counts the exact output before reserving it.
+
+The exact-boundary/error test admits exactly 1,073,741,824 bytes, rejects the
+next byte before allocation, leaves the prior charge unchanged, and returns to
+zero. `real_sqlite_read_precharges_canonical_and_decoded_overlap` (line 9375)
+independently computes a real SQLite canonical+decoded overlap. The complete
+real-path equation is asserted by
+`measured_edit_starts_from_an_already_published_base`.
+
+W and D remain `Unavailable` because the private benchmark does not implement
+the governing cumulative definitions exactly; canonical new-write,
+authenticated-nonnew, rewrite, CDC, SQL, BLOB, and output counters are reported
+under their precise narrower names. No alternate W/D meaning is invented.
+
+### 21.5 BEGIN, publication, and ambiguous durability
+
+`Store::begin` (line 1824) checks the next transaction identity, SQL execute
+count, and transaction count before dispatching `BEGIN IMMEDIATE`; after SQLite
+accepts BEGIN, installing counters and `active_transaction` is infallible.
+`begin_counter_overflow_precedes_sql_and_leaves_connection_usable`
+(line 11599) proves the typed `LengthOverflow`, unchanged head, absent writer,
+and immediate connection reuse.
+
+`transaction_attempt` (line 1867) is the single post-BEGIN/pre-COMMIT cleanup
+path and preserves the first exact `FailureCause`, including a concrete missing
+`ObjectId`, separately from cleanup and reconciliation. `Store::publish`
+(line 2387) returns `PublicationOutcome`: normal `Committed`, or
+`RequestedVisible` plus retained diagnostic provenance. The normal API test is
+`normal_publish_retains_requested_visible_diagnostic` (line 11499).
+
+The dispatch matrix uses the production fresh-connection reconciliation path:
+
+- `RequestedVisible`: real COMMIT succeeds, then acknowledgement is lost;
+- `PriorVisible`: SQLite commit hook rejects the real COMMIT;
+- `DifferentHead`: real COMMIT succeeds, then a separately committed complete
+  successor head is visible; and
+- `Ambiguous`: real COMMIT succeeds, then the fresh authoritative database path
+  is genuinely unavailable during reconciliation.
+
+`real_commit_dispatch_boundaries_cover_requested_different_and_ambiguous`
+(line 11530) and `actual_commit_error_uses_fresh_reconciliation` prove one
+counted COMMIT dispatch and exact first/cleanup/reconciliation/dominant slots.
+After successful dispatch or requested-visible reconciliation, later failures
+are wrapped as committed-publication failures and cannot relabel visibility.
+
+### 21.6 Complete phases remain linear
+
+The path-local result does not change the necessary complete phases:
+
+```text
+same-open witness establishment = Theta(complete reachable authenticated closure)
+fresh full scrub                = Theta(complete reachable authenticated closure)
+full reconstruction             = Theta(source bytes + references + mapping auth)
+complete first-open lifecycle    = same-open authority + durable edit
+                                 + reopen + scrub + reconstruction + ranges
+```
+
+Final `v3-terminal` C1 medians were 237.833 ms for same-open authority,
+9.134 ms for the durable edit, 694.629 ms for post-COMMIT verification,
+703.764 ms for the same-open complete lifecycle, and 940.827 ms for the
+derived first-open edit lifecycle. C0/C1 durable medians were
+440.023 ms / 9.134 ms (`-97.924%`, 5/5 wins). Only the durable edit and
+pre-COMMIT qualifier are path-local.
+
+### 21.7 Count-changing bound and explicit limitations
+
+Fixed ordinal grouping remains suffix-linear for `+1`, prepend, insert,
+delete, append-with-count-change, or any edit that cannot prove equal final
+reference count:
+
+```text
+T_count_change = O(changed CDC bytes + suffix references/objects/bytes)
+S_history      = O(rewritten suffix mapping bytes)
+```
+
+The honest retained S1-100 whole-suffix ceiling remains 5,285 references,
+86 mapping objects, and 365,211 canonical mapping bytes. M4.5 did not run or
+improve that row. The discovered uniform-`0x5a` 5,283-reference result is a
+concrete example that must take the count-changing/fallback classification.
+
+There is no source-sized or all-reference staging vector, unbounded
+expectations input (128-KiB hard limit), unbounded visited map, unbounded
+cache, or extra serialized metadata. The changed operation retains a bounded
+old-range/scan window only; the database schema, 216-byte receipt, candidate
+profile bytes, and authority sidecar format are unchanged.
+
+### 21.8 Final checkpoint-quality evidence
+
+The 2026-08-19 post-measurement §13.5A clarification records the actual
+terminal comparison without changing the experiment: one release executable,
+C0 complete-closure qualification, and C1 changed-spine qualification. CDC,
+CAS/COW mutation, copied pair base, authority, expectations, COMMIT, reopen,
+scrub, reconstruction, ranges, counters, and reporting are common. Retained
+M3 is historical continuity evidence only. The accepted v3 measured-spec
+SHA-256 remains
+`55980c049e5e3ce824664070c11c358428c69ad1fb4f3a4fc0af925ce941756b`.
+
+`ChargedVec::from_exact_builder` (line 558) now accepts a separately built
+vector only when both `len == declared` and `capacity == declared`. A larger
+returned capacity is rejected as typed `AllocationFailed`; the precharge and
+the rejected vector then drop together and Q returns to zero. The focused
+`exact_builder_rejects_excess_capacity_and_cleans_q` regression (line 9382)
+constructs `len=4, capacity=5` explicitly. This is the smallest shared fix for
+all file, delta, and directory canonical builders and does not change the
+authoritative 96/256/64 semantic charges.
+
+The synthetic `build_deep_uniform_base` fixture (line 9797) constructs a
+canonical K64/F64 tree by reusing immutable leaf/branch objects; it allocates
+no source-sized buffer. Its exact topology is:
+
+```text
+N = 64 * 64 * 64 + 1 = 262,145 references
+leaf occurrences             = 4,097
+level-1 branch occurrences   = 65
+root level / H               = 2
+root children                = 2
+```
+
+`deep_changed_spine_proves_height_union_and_bounded_qualification`
+(line 11108) changes ordinals 63-64 across a leaf boundary, ordinal 4,096 in
+the first leaf of a second inner branch, and ordinal 262,144 in the final
+partial leaf. The final prior/replacement comparison therefore spans both root
+children and has the exact changed union:
+
+```text
+changed leaves                 = 4
+changed branches               = 5  (three level-1 + two level-2)
+prior spine objects            = 11 (namespace + file root + union)
+replacement spine objects      = 11
+receipt-covered equal edges    = 376
+new/different edges            = 14
+fully authenticated new chunks = 4
+```
+
+The direct C0 path performs 266,309 complete file-closure occurrences and
+266,318 SQL queries. The C1 path performs zero complete-closure occurrences,
+34 SQL queries, and no leaf-batch query. Its derived two-sided active-ancestry
+charge is `(H + 3) * 64 * 2 = 640` bytes, its exact qualification Q high-water
+is 43,488 bytes, and terminal Q is zero. A malformed cumulative summary at the
+deep level-1 branch is rejected by both C0 and C1 as typed `LengthMismatch`.
+This turns the `F*H`, `H^2`, and active-ancestry terms from code inspection into
+direct H=2 evidence; it does not change their bounds.
+
+Because the capacity rejection is release-path code, a fresh versioned v4
+campaign was required. Its independently recomputed durable medians are
+446.457 ms for C0 and 8.541 ms for C1 (`-98.087%`, 5/5 wins). Exact campaign Q
+remains 2,222,803 bytes with terminal zero. C1 RSS arm median is 0.175% lower;
+peak-footprint arm median is 0.129% higher, so §13.6 does not trigger the
+15-pair extension. The accepted path-local complexity and limitations above
+are unchanged.
