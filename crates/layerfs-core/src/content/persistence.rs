@@ -4,6 +4,7 @@
 //! byte grammar shared by the candidate layouts.
 
 use crate::identity::{ChunkId, ObjectId, DIGEST_BYTES};
+use crate::limits::MAX_CHILD_REFERENCES;
 use crate::object::{encode_object, Object};
 use crate::{CoreError, CoreResult};
 
@@ -18,6 +19,21 @@ pub const DELTA_INDEX_TAG: u8 = 0x05;
 pub const DELTA_PAGE_TAG: u8 = 0x06;
 pub const FILE_REF_BYTES: usize = 68;
 pub const FILE_DESCRIPTOR_BYTES: usize = 40;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FileMappingProfile {
+    pub leaf_capacity: usize,
+    pub branch_capacity: usize,
+}
+
+impl FileMappingProfile {
+    pub const fn new(leaf_capacity: usize, branch_capacity: usize) -> Self {
+        Self {
+            leaf_capacity,
+            branch_capacity,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FileReference {
@@ -57,8 +73,8 @@ pub struct FileChild {
 
 impl FileChild {
     pub fn encode(self, output: &mut Vec<u8>) {
-        output.extend_from_slice(self.object_id.as_bytes());
         output.extend_from_slice(&self.cumulative_end.to_be_bytes());
+        output.extend_from_slice(self.object_id.as_bytes());
     }
 
     pub fn decode(bytes: &[u8]) -> CoreResult<Self> {
@@ -66,12 +82,12 @@ impl FileChild {
             return Err(CoreError::UnexpectedEof);
         }
         Ok(Self {
-            object_id: ObjectId::from_bytes(&bytes[..DIGEST_BYTES])?,
             cumulative_end: u64::from_be_bytes(
-                bytes[32..]
+                bytes[..8]
                     .try_into()
                     .map_err(|_| CoreError::UnexpectedEof)?,
             ),
+            object_id: ObjectId::from_bytes(&bytes[8..])?,
         })
     }
 }
@@ -192,6 +208,9 @@ pub fn parse_file_leaf(payload: &[u8]) -> CoreResult<Vec<FileReference>> {
             .map_err(|_| CoreError::UnexpectedEof)?,
     ))
     .map_err(|_| CoreError::LengthOverflow)?;
+    if count > MAX_CHILD_REFERENCES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
     let expected = 4usize
         .checked_add(
             count
@@ -225,6 +244,9 @@ pub fn parse_file_children(payload: &[u8], with_level: bool) -> CoreResult<(u8, 
             .map_err(|_| CoreError::UnexpectedEof)?,
     ))
     .map_err(|_| CoreError::LengthOverflow)?;
+    if count > MAX_CHILD_REFERENCES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
     let expected = prefix
         .checked_add(
             count
@@ -254,6 +276,79 @@ pub fn parse_file_children(payload: &[u8], with_level: bool) -> CoreResult<(u8, 
     Ok((level, children))
 }
 
+pub fn validate_file_leaf(
+    references: &[FileReference],
+    profile: FileMappingProfile,
+    final_leaf: bool,
+) -> CoreResult<(u64, u64)> {
+    if references.is_empty()
+        || references.len() > profile.leaf_capacity
+        || (!final_leaf && references.len() != profile.leaf_capacity)
+    {
+        return Err(CoreError::NonCanonicalPagePartition);
+    }
+    let total = references.iter().try_fold(0_u64, |total, reference| {
+        total
+            .checked_add(u64::from(reference.raw_length))
+            .ok_or(CoreError::LengthOverflow)
+    })?;
+    Ok((
+        u64::try_from(references.len()).map_err(|_| CoreError::LengthOverflow)?,
+        total,
+    ))
+}
+
+pub fn validate_file_children(
+    children: &[FileChild],
+    profile: FileMappingProfile,
+    final_node: bool,
+) -> CoreResult<(u64, u64)> {
+    if children.is_empty()
+        || children.len() > profile.branch_capacity
+        || (!final_node && children.len() != profile.branch_capacity)
+    {
+        return Err(CoreError::NonCanonicalPagePartition);
+    }
+    let mut previous = 0_u64;
+    for child in children {
+        if child.cumulative_end < previous {
+            return Err(CoreError::NonCanonicalOrdering);
+        }
+        previous = child.cumulative_end;
+    }
+    Ok((
+        u64::try_from(children.len()).map_err(|_| CoreError::LengthOverflow)?,
+        previous,
+    ))
+}
+
+pub fn expected_file_level(reference_count: u64, profile: FileMappingProfile) -> CoreResult<u8> {
+    if reference_count == 0 || profile.leaf_capacity == 0 || profile.branch_capacity == 0 {
+        return Ok(0);
+    }
+    let leaves = reference_count
+        .checked_add(
+            u64::try_from(profile.leaf_capacity)
+                .map_err(|_| CoreError::LengthOverflow)?
+                .checked_sub(1)
+                .ok_or(CoreError::LengthOverflow)?,
+        )
+        .ok_or(CoreError::LengthOverflow)?
+        / u64::try_from(profile.leaf_capacity).map_err(|_| CoreError::LengthOverflow)?;
+    let fanout = u64::try_from(profile.branch_capacity).map_err(|_| CoreError::LengthOverflow)?;
+    let mut capacity = fanout;
+    let mut level = 0_u8;
+    while leaves > capacity {
+        level = level
+            .checked_add(1)
+            .ok_or(CoreError::MappingDepthExceeded)?;
+        capacity = capacity
+            .checked_mul(fanout)
+            .ok_or(CoreError::LengthOverflow)?;
+    }
+    Ok(level)
+}
+
 pub fn parse_file_root(payload: &[u8]) -> CoreResult<(u64, u64, u8, Vec<FileChild>)> {
     if payload.len() < 25 {
         return Err(CoreError::UnexpectedEof);
@@ -278,4 +373,25 @@ pub fn parse_file_root(payload: &[u8]) -> CoreResult<(u64, u64, u8, Vec<FileChil
         });
     }
     Ok((total, count_refs, level, children))
+}
+
+pub fn validate_file_root_summary(
+    declared_total: u64,
+    declared_references: u64,
+    actual_total: u64,
+    actual_references: u64,
+) -> CoreResult<()> {
+    if declared_total != actual_total {
+        return Err(CoreError::LengthMismatch {
+            expected: declared_total,
+            actual: actual_total,
+        });
+    }
+    if declared_references != actual_references {
+        return Err(CoreError::LengthMismatch {
+            expected: declared_references,
+            actual: actual_references,
+        });
+    }
+    Ok(())
 }

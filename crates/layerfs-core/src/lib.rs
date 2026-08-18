@@ -14,6 +14,7 @@ pub mod format;
 pub mod identity;
 pub mod limits;
 pub mod object;
+pub mod validation;
 
 pub use content::{
     ChunkReference, EditCounters, EditResult, FullReplaceTiming, LogicalFile, RangeRead,

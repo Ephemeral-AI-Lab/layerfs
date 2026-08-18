@@ -29,6 +29,7 @@ pub enum CoreError {
     UnexpectedEof,
     TrailingBytes,
     NonCanonicalOrdering,
+    NonCanonicalPagePartition,
     Unsupported,
     Io,
     InvalidIdentityLength {
@@ -101,6 +102,7 @@ impl fmt::Display for CoreError {
             Self::UnexpectedEof => formatter.write_str("unexpected end of input"),
             Self::TrailingBytes => formatter.write_str("trailing bytes"),
             Self::NonCanonicalOrdering => formatter.write_str("non-canonical ordering"),
+            Self::NonCanonicalPagePartition => formatter.write_str("non-canonical page partition"),
             Self::Unsupported => formatter.write_str("unsupported canonical bytes"),
             Self::Io => formatter.write_str("I/O error"),
             Self::InvalidIdentityLength { expected, actual } => {
