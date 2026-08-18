@@ -493,54 +493,51 @@ impl Store {
     }
 
     fn put(&mut self, id: ObjectId, canonical: &[u8], metrics: &mut Metrics) -> AnyResult<()> {
-        layerfs_core::validate_identity(canonical, id)?;
+        let object = layerfs_core::validate_identity(canonical, id)?;
         add(&mut metrics.objects_authenticated, 1)?;
         add_len(&mut metrics.canonical_bytes_authenticated, canonical.len())?;
         add_len(&mut metrics.w_bytes, canonical.len())?;
         metrics.q_single_canonical_max = metrics
             .q_single_canonical_max
             .max(u64::try_from(canonical.len()).map_err(|_| CoreError::LengthOverflow)?);
-        let existing: Option<Vec<u8>> = self
+        let inserted = self
             .connection
-            .query_row(
-                "SELECT canonical_bytes FROM wp4m_objects WHERE object_id = ?1",
-                params![id.as_bytes().as_slice()],
-                |row| row.get(0),
-            )
-            .optional()?;
-        add(&mut metrics.sql_statements, 1)?;
-        if let Some(existing) = existing {
-            layerfs_core::validate_identity(&existing, id)?;
-            if existing != canonical {
-                return Err(CoreError::IdentityMismatch.into());
-            }
-            add(&mut metrics.objects_reused, 1)?;
-            return Ok(());
-        }
-        let object = decode_object(canonical)?;
-        self.connection.execute(
-            "INSERT INTO wp4m_objects (object_id, kind, canonical_length, canonical_bytes)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![
+            .prepare_cached(
+                "INSERT INTO wp4m_objects (object_id, kind, canonical_length, canonical_bytes)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(object_id) DO NOTHING",
+            )?
+            .execute(params![
                 id.as_bytes().as_slice(),
                 object.kind() as u8,
                 i64::try_from(canonical.len()).map_err(|_| CoreError::LengthOverflow)?,
                 canonical
-            ],
-        )?;
+            ])?;
         add(&mut metrics.sql_statements, 1)?;
-        add(&mut metrics.objects_created, 1)?;
-        add(&mut metrics.blob_writes, 1)?;
-        add_len(&mut metrics.canonical_bytes_written, canonical.len())?;
+        if inserted == 1 {
+            add(&mut metrics.objects_created, 1)?;
+            add(&mut metrics.blob_writes, 1)?;
+            add_len(&mut metrics.canonical_bytes_written, canonical.len())?;
+            return Ok(());
+        }
+        let existing: Vec<u8> = self
+            .connection
+            .prepare_cached("SELECT canonical_bytes FROM wp4m_objects WHERE object_id = ?1")?
+            .query_row(params![id.as_bytes().as_slice()], |row| row.get(0))?;
+        add(&mut metrics.sql_statements, 1)?;
+        layerfs_core::validate_identity(&existing, id)?;
+        if existing != canonical {
+            return Err(CoreError::IdentityMismatch.into());
+        }
+        add(&mut metrics.objects_reused, 1)?;
         Ok(())
     }
 
-    fn get(&self, id: ObjectId, metrics: &mut Metrics) -> AnyResult<(Object, Vec<u8>)> {
-        let bytes: Vec<u8> = self.connection.query_row(
-            "SELECT canonical_bytes FROM wp4m_objects WHERE object_id = ?1",
-            params![id.as_bytes().as_slice()],
-            |row| row.get(0),
-        )?;
+    fn read_canonical(&self, id: ObjectId, metrics: &mut Metrics) -> AnyResult<Vec<u8>> {
+        let bytes: Vec<u8> = self
+            .connection
+            .prepare_cached("SELECT canonical_bytes FROM wp4m_objects WHERE object_id = ?1")?
+            .query_row(params![id.as_bytes().as_slice()], |row| row.get(0))?;
         add(&mut metrics.sql_statements, 1)?;
         add(&mut metrics.sql_rows, 1)?;
         add(&mut metrics.blob_reads, 1)?;
@@ -550,8 +547,19 @@ impl Store {
         metrics.q_single_canonical_max = metrics
             .q_single_canonical_max
             .max(u64::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?);
+        Ok(bytes)
+    }
+
+    fn get(&self, id: ObjectId, metrics: &mut Metrics) -> AnyResult<(Object, Vec<u8>)> {
+        let bytes = self.read_canonical(id, metrics)?;
         let object = layerfs_core::validate_identity(&bytes, id)?;
         Ok((object, bytes))
+    }
+
+    fn get_bytes(&self, id: ObjectId, metrics: &mut Metrics) -> AnyResult<Vec<u8>> {
+        let bytes = self.read_canonical(id, metrics)?;
+        layerfs_core::validate_bytes_identity(&bytes, id)?;
+        Ok(bytes)
     }
 
     fn current_head(&self) -> AnyResult<Option<VisibleHead>> {
@@ -959,7 +967,7 @@ impl FileBuilder {
             std::mem::take(&mut self.levels[level])
         };
         while level > 0 && children.len() == 1 {
-            let (_, bytes) = store.get(children[0].object_id, metrics)?;
+            let bytes = store.get_bytes(children[0].object_id, metrics)?;
             let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_BRANCH_TAG)?;
             let (branch_level, branch_children) = file_codec::parse_file_children(&payload, true)?;
             if usize::from(branch_level) != level {
@@ -1058,7 +1066,7 @@ fn resolve_namespace_file_root(
         return Err(CoreError::WrongLogicalRole.into());
     }
     let file_root = entries[0].reference().id();
-    let (_, bytes) = store.get(file_root, metrics)?;
+    let bytes = store.get_bytes(file_root, metrics)?;
     file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
     Ok(file_root)
 }
@@ -1618,7 +1626,7 @@ fn verify_transition(
     metrics: &mut Metrics,
 ) -> AnyResult<[u8; 32]> {
     let mut closure_hasher = Hasher::new();
-    let (_, bytes) = store.get(transition, metrics)?;
+    let bytes = store.get_bytes(transition, metrics)?;
     observe_closure(&mut closure_hasher, b"transition", transition, &bytes)?;
     let decoded = delta_codec::decode_mapping_transition(&bytes)?;
     if decoded.parent != expected_parent || decoded.child != expected_child {
@@ -1626,7 +1634,7 @@ fn verify_transition(
     }
     let mut operations = Vec::new();
     for page in &decoded.pages {
-        let (_, bytes) = store.get(*page, metrics)?;
+        let bytes = store.get_bytes(*page, metrics)?;
         observe_closure(&mut closure_hasher, b"transition-page", *page, &bytes)?;
         let page_operations = delta_codec::decode_mapping_delta_page(&bytes)?;
         if page_operations.is_empty() {
@@ -1710,7 +1718,7 @@ fn replay_shadow_transition(
         b"t" => file_codec::DIR_INDEX_TAG,
         _ => return Err(CoreError::DeltaConflict.into()),
     };
-    let (_, after_bytes) = store.get(*after, metrics)?;
+    let after_bytes = store.get_bytes(*after, metrics)?;
     file_codec::decode_mapping(&after_bytes, expected_tag)?;
     let after_node = shadow_node(*after)?;
     let parent = shadow_root(store, parent_id, metrics)?;
@@ -1730,7 +1738,7 @@ fn replay_shadow_transition(
         &parent,
         parent_id,
         |id| {
-            let (_, bytes) = store.get(id, metrics).map_err(|error| {
+            let bytes = store.get_bytes(id, metrics).map_err(|error| {
                 match error.downcast_ref::<CoreError>() {
                     Some(error) => *error,
                     None => CoreError::Io,
@@ -1794,7 +1802,7 @@ fn rewrite_same_node_by_offset(
     if usize::from(level) > MAX_DEPTH {
         return Err(CoreError::MappingDepthExceeded.into());
     }
-    let (_, bytes) = store.get(id, metrics)?;
+    let bytes = store.get_bytes(id, metrics)?;
     if level == 0 {
         let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
         let mut refs = file_codec::parse_file_leaf(&payload)?;
@@ -1879,7 +1887,7 @@ fn rewrite_same_root_by_offset(
     replacement: file_codec::FileReference,
     metrics: &mut Metrics,
 ) -> AnyResult<(ObjectId, bool)> {
-    let (_, bytes) = store.get(root, metrics)?;
+    let bytes = store.get_bytes(root, metrics)?;
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
     let (total_raw, reference_count, level, mut children) = file_codec::parse_file_root(&payload)?;
     let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
@@ -1972,7 +1980,7 @@ fn rebuild_plus_one_suffix(
     }
     active.push(id);
     let result = (|| {
-        let (_, bytes) = store.get(id, metrics)?;
+        let bytes = store.get_bytes(id, metrics)?;
         if level == 0 {
             let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
             let references = file_codec::parse_file_leaf(&payload)?;
@@ -2104,7 +2112,7 @@ fn rebuild_plus_one_root(
     metrics: &mut Metrics,
 ) -> AnyResult<(u64, u64)> {
     let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
-    let (_, bytes) = store.get(root, metrics)?;
+    let bytes = store.get_bytes(root, metrics)?;
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
     let (declared_total, declared_references, level, children) =
         file_codec::parse_file_root(&payload)?;
@@ -2261,7 +2269,7 @@ fn edit_file(
             publish_transition_with_operations(store, Some(parent), root, &[operation], metrics)?;
         return Ok((root, transition));
     }
-    let (_, file_root_bytes) = store.get(file_parent, metrics)?;
+    let file_root_bytes = store.get_bytes(file_parent, metrics)?;
     let file_root_payload =
         file_codec::decode_mapping(&file_root_bytes, file_codec::FILE_ROOT_TAG)?;
     let (_, reference_count, _, _) = file_codec::parse_file_root(&file_root_payload)?;
@@ -2322,7 +2330,7 @@ where
     }
     active.push(id);
     let result = (|| {
-        let (_, bytes) = store.get(id, metrics)?;
+        let bytes = store.get_bytes(id, metrics)?;
         let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
         let (expected_length, expected_references, level, children) =
             file_codec::parse_file_root(&payload)?;
@@ -2400,7 +2408,7 @@ where
         return Err(CoreError::MappingCycle.into());
     }
     active.push(id);
-    let (_, bytes) = store.get(id, metrics)?;
+    let bytes = store.get_bytes(id, metrics)?;
     let result = if level == 0 {
         let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
         let references = file_codec::parse_file_leaf(&payload)?;
@@ -2485,14 +2493,13 @@ fn stream_file(
         return Err(CoreError::MappingCycle.into());
     }
     active.push(id);
-    let (object, bytes) = store.get(id, metrics)?;
+    let bytes = store.get_bytes(id, metrics)?;
     observe_closure(closure_hasher, b"file-mapping", id, &bytes)?;
     add(&mut metrics.closure_occurrences, 1)?;
     let payload = match level {
         0 => file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?,
         _ => file_codec::decode_mapping(&bytes, file_codec::FILE_BRANCH_TAG)?,
     };
-    let _ = object;
     if level == 0 {
         let references = file_codec::parse_file_leaf(&payload)?;
         file_codec::validate_file_leaf(&references, profile, final_node)?;
@@ -2502,7 +2509,7 @@ fn stream_file(
         for reference in references {
             sequence_hasher.update(&reference.raw_length.to_be_bytes());
             sequence_hasher.update(reference.raw_id.as_bytes());
-            let (chunk, canonical) = store.get(reference.object_id, metrics)?;
+            let canonical = store.get_bytes(reference.object_id, metrics)?;
             add(&mut metrics.closure_occurrences, 1)?;
             observe_closure(
                 closure_hasher,
@@ -2510,19 +2517,16 @@ fn stream_file(
                 reference.object_id,
                 &canonical,
             )?;
-            let Object::Bytes(raw) = chunk else {
-                return Err(CoreError::WrongLogicalRole.into());
-            };
+            let raw = layerfs_core::decode_bytes_object(&canonical)?;
             if u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?
                 != reference.raw_length
             {
                 return Err(CoreError::ChunkLengthMismatch.into());
             }
-            if chunk_id(&raw) != reference.raw_id {
+            if chunk_id(raw) != reference.raw_id {
                 return Err(CoreError::ChunkIdentityMismatch.into());
             }
-            let _ = canonical;
-            hasher.update(&raw);
+            hasher.update(raw);
             *length = length
                 .checked_add(u64::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?)
                 .ok_or(CoreError::LengthOverflow)?;
@@ -2600,7 +2604,7 @@ fn read_file_range(
         }
         .into());
     }
-    let (_, bytes) = store.get(root, metrics)?;
+    let bytes = store.get_bytes(root, metrics)?;
     add(&mut metrics.closure_occurrences, 1)?;
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
     let (total, references, level, children) = file_codec::parse_file_root(&payload)?;
@@ -2675,7 +2679,7 @@ fn route_file_range(
         return Err(CoreError::MappingCycle.into());
     }
     active.push(id);
-    let (_, bytes) = store.get(id, metrics)?;
+    let bytes = store.get_bytes(id, metrics)?;
     add(&mut metrics.closure_occurrences, 1)?;
     if level == 0 {
         let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
@@ -2687,12 +2691,10 @@ fn route_file_range(
                 .checked_add(u64::from(reference.raw_length))
                 .ok_or(CoreError::LengthOverflow)?;
             if end > range.start && offset < range.end && reference.raw_length != 0 {
-                let (object, _) = store.get(reference.object_id, metrics)?;
+                let canonical = store.get_bytes(reference.object_id, metrics)?;
                 add(&mut metrics.closure_occurrences, 1)?;
-                let Object::Bytes(raw) = object else {
-                    return Err(CoreError::WrongLogicalRole.into());
-                };
-                if chunk_id(&raw) != reference.raw_id
+                let raw = layerfs_core::decode_bytes_object(&canonical)?;
+                if chunk_id(raw) != reference.raw_id
                     || u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?
                         != reference.raw_length
                 {
@@ -2772,7 +2774,7 @@ fn verify_file(
         return Err(CoreError::WrongLogicalRole.into());
     }
     let file_root = entries[0].reference().id();
-    let (_, root_bytes) = store.get(file_root, metrics)?;
+    let root_bytes = store.get_bytes(file_root, metrics)?;
     observe_closure(&mut closure_hasher, b"file-root", file_root, &root_bytes)?;
     let payload = file_codec::decode_mapping(&root_bytes, file_codec::FILE_ROOT_TAG)?;
     let (expected_length, expected_references, level, root_children) =
@@ -2866,7 +2868,7 @@ fn scrub_file(
     metrics: &mut Metrics,
 ) -> AnyResult<(u64, u64)> {
     let file_root = namespace_entry_id(store, root, b"file", metrics)?;
-    let (_, root_bytes) = store.get(file_root, metrics)?;
+    let root_bytes = store.get_bytes(file_root, metrics)?;
     let payload = file_codec::decode_mapping(&root_bytes, file_codec::FILE_ROOT_TAG)?;
     let (expected_length, expected_references, level, _) = file_codec::parse_file_root(&payload)?;
     let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
@@ -2878,12 +2880,10 @@ fn scrub_file(
                         reference: file_codec::FileReference,
                         metrics: &mut Metrics|
      -> AnyResult<()> {
-        let (object, _) = store.get(reference.object_id, metrics)?;
-        let Object::Bytes(raw) = object else {
-            return Err(CoreError::WrongLogicalRole.into());
-        };
+        let canonical = store.get_bytes(reference.object_id, metrics)?;
+        let raw = layerfs_core::decode_bytes_object(&canonical)?;
         if u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)? != reference.raw_length
-            || chunk_id(&raw) != reference.raw_id
+            || chunk_id(raw) != reference.raw_id
         {
             return Err(CoreError::ChunkIdentityMismatch.into());
         }
@@ -4982,6 +4982,57 @@ mod tests {
         let (_, _, level, children) =
             file_codec::parse_file_root(&payload).expect("file root body");
         (level, children)
+    }
+
+    #[test]
+    fn candidate_store_rebinds_cached_object_statements_without_weakening_immutable_handoff() {
+        let database = test_path("cached-object-statements.sqlite");
+        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let canonical_a = encode_canonical_object(&Object::bytes(b"a".to_vec()).expect("object a"))
+            .expect("canonical a");
+        let canonical_b = encode_canonical_object(&Object::bytes(b"b".to_vec()).expect("object b"))
+            .expect("canonical b");
+        let id_a = ObjectId::for_bytes(&canonical_a);
+        let id_b = ObjectId::for_bytes(&canonical_b);
+        let mut metrics = Metrics::default();
+
+        store.put(id_a, &canonical_a, &mut metrics).expect("put a");
+        store.put(id_b, &canonical_b, &mut metrics).expect("put b");
+        store
+            .put(id_a, &canonical_a, &mut metrics)
+            .expect("reuse a");
+        assert_eq!(metrics.objects_created, 2);
+        assert_eq!(metrics.objects_reused, 1);
+        assert_eq!(store.get(id_a, &mut metrics).expect("get a").1, canonical_a);
+        assert_eq!(
+            store.get_bytes(id_b, &mut metrics).expect("get bytes b"),
+            canonical_b
+        );
+
+        store
+            .connection
+            .execute(
+                "UPDATE wp4m_objects SET canonical_bytes = ?1 WHERE object_id = ?2",
+                params![canonical_b.as_slice(), id_a.as_bytes().as_slice()],
+            )
+            .expect("corrupt incumbent");
+        let error = store
+            .get_bytes(id_a, &mut metrics)
+            .expect_err("corrupt bytes must fail");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::IdentityMismatch)
+        );
+        let error = store
+            .put(id_a, &canonical_a, &mut metrics)
+            .expect_err("corrupt incumbent must fail");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::IdentityMismatch)
+        );
+
+        drop(store);
+        remove_sqlite_image(&database).expect("database cleanup");
     }
 
     #[test]

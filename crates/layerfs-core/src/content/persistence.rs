@@ -115,10 +115,7 @@ pub fn canonical_mapping(tag: u8, body: &[u8]) -> CoreResult<(ObjectId, Vec<u8>)
 }
 
 pub fn decode_mapping(bytes: &[u8], expected_tag: u8) -> CoreResult<Vec<u8>> {
-    let object = crate::object::decode_object(bytes)?;
-    let Object::Bytes(payload) = object else {
-        return Err(CoreError::WrongLogicalRole);
-    };
+    let payload = crate::object::decode_bytes_object(bytes)?;
     if payload.len() < MAPPING_MAGIC.len() + 3 {
         return Err(CoreError::UnexpectedEof);
     }

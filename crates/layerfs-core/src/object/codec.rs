@@ -46,6 +46,59 @@ pub fn decode_object(bytes: &[u8]) -> CoreResult<Object> {
     decode_object_from(Cursor::new(bytes))
 }
 
+pub fn decode_bytes_object(bytes: &[u8]) -> CoreResult<&[u8]> {
+    if bytes.len() > MAX_OBJECT_BYTES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    if bytes.len() < HEADER_LEN {
+        return Err(CoreError::UnexpectedEof);
+    }
+    if bytes[..MAGIC.len()] != MAGIC {
+        return Err(CoreError::Unsupported);
+    }
+    if ObjectKind::try_from(bytes[4])? != ObjectKind::Bytes {
+        decode_object(bytes)?;
+        return Err(CoreError::WrongLogicalRole);
+    }
+    let payload_len = usize::try_from(u32::from_be_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]))
+        .map_err(|_| CoreError::LengthOverflow)?;
+    let max_payload = MAX_OBJECT_BYTES
+        .checked_sub(HEADER_LEN)
+        .ok_or(CoreError::LengthOverflow)?;
+    if payload_len > max_payload {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    if payload_len < 4 || bytes.len() < HEADER_LEN + 4 {
+        return Err(CoreError::UnexpectedEof);
+    }
+    let value_len = usize::try_from(u32::from_be_bytes([
+        bytes[HEADER_LEN],
+        bytes[HEADER_LEN + 1],
+        bytes[HEADER_LEN + 2],
+        bytes[HEADER_LEN + 3],
+    ]))
+    .map_err(|_| CoreError::LengthOverflow)?;
+    if value_len > MAX_OBJECT_FIELD_BYTES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    let encoded_value_len = 4usize
+        .checked_add(value_len)
+        .ok_or(CoreError::LengthOverflow)?;
+    if encoded_value_len > payload_len {
+        return Err(CoreError::UnexpectedEof);
+    }
+    let canonical_len = HEADER_LEN
+        .checked_add(payload_len)
+        .ok_or(CoreError::LengthOverflow)?;
+    if bytes.len() < canonical_len {
+        return Err(CoreError::UnexpectedEof);
+    }
+    if encoded_value_len != payload_len || bytes.len() != canonical_len {
+        return Err(CoreError::TrailingBytes);
+    }
+    Ok(&bytes[HEADER_LEN + 4..canonical_len])
+}
+
 pub fn decode_object_from<R: Read>(reader: R) -> CoreResult<Object> {
     let mut reader = reader;
     let mut header = [0_u8; HEADER_LEN];
@@ -87,6 +140,13 @@ pub fn validate_identity(bytes: &[u8], expected: ObjectId) -> CoreResult<Object>
         return Err(CoreError::IdentityMismatch);
     }
     decode_object(bytes)
+}
+
+pub fn validate_bytes_identity(bytes: &[u8], expected: ObjectId) -> CoreResult<&[u8]> {
+    if ObjectId::for_bytes(bytes) != expected {
+        return Err(CoreError::IdentityMismatch);
+    }
+    decode_bytes_object(bytes)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -538,6 +598,10 @@ mod tests {
         let bytes = encode_object(&object).unwrap();
         let expected = object.id().unwrap();
         assert_eq!(validate_identity(&bytes, expected).unwrap(), object);
+        assert_eq!(
+            validate_bytes_identity(&bytes, expected).unwrap(),
+            b"identity"
+        );
 
         let mut changed = bytes.clone();
         changed[HEADER_LEN + 4] = b'X';
@@ -548,6 +612,19 @@ mod tests {
         assert_eq!(
             validate_identity(&bytes, id(0)),
             Err(CoreError::IdentityMismatch)
+        );
+        assert_eq!(
+            validate_bytes_identity(&changed, expected),
+            Err(CoreError::IdentityMismatch)
+        );
+        assert_eq!(
+            decode_bytes_object(&bytes[..bytes.len() - 1]),
+            Err(CoreError::UnexpectedEof)
+        );
+        let directory = encode_object(&Object::directory(Vec::new()).unwrap()).unwrap();
+        assert_eq!(
+            decode_bytes_object(&directory),
+            Err(CoreError::WrongLogicalRole)
         );
     }
 
