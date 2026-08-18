@@ -65,7 +65,19 @@ impl ValidatedSnapshotReceiptV1 {
         expected_profile: ObjectId,
         expected_authority: [u8; 32],
     ) -> CoreResult<Self> {
-        if bytes.len() != VALIDATED_SNAPSHOT_RECEIPT_BYTES {
+        if bytes.len() != VALIDATED_SNAPSHOT_RECEIPT_BYTES
+            || bytes[..4] != *b"LFSO"
+            || bytes[4] != crate::object::ObjectKind::Bytes as u8
+            || bytes[5..9] != 207_u32.to_be_bytes()
+            || bytes[9..13] != (RECEIPT_INNER_BYTES as u32).to_be_bytes()
+        {
+            return Err(CoreError::InvalidValidationReceipt);
+        }
+        let authenticated_inner = &bytes[13..];
+        let mut authenticator = blake3::Hasher::new_keyed(validation_key);
+        authenticator.update(b"layerfs/validated-snapshot/v1\0");
+        authenticator.update(&authenticated_inner[..171]);
+        if authenticator.finalize().as_bytes() != &authenticated_inner[171..] {
             return Err(CoreError::InvalidValidationReceipt);
         }
         let Object::Bytes(inner) = crate::object::decode_object(bytes)? else {
@@ -104,12 +116,6 @@ impl ValidatedSnapshotReceiptV1 {
         let transition_id = ObjectId::from_bytes(&inner[107..139])?;
         let mapping_profile_id = ObjectId::from_bytes(&inner[139..171])?;
         if mapping_profile_id != expected_profile {
-            return Err(CoreError::InvalidValidationReceipt);
-        }
-        let mut authenticator = blake3::Hasher::new_keyed(validation_key);
-        authenticator.update(b"layerfs/validated-snapshot/v1\0");
-        authenticator.update(&inner[..171]);
-        if authenticator.finalize().as_bytes() != &inner[171..203] {
             return Err(CoreError::InvalidValidationReceipt);
         }
         Ok(Self {

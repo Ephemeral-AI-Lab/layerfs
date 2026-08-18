@@ -136,25 +136,63 @@ pub fn validate_directory_partition(
     pages: &[(&[DirectoryEntry], &DirectoryPageRef)],
     page_ceiling: usize,
 ) -> CoreResult<()> {
-    let mut total = 0_u64;
-    let mut previous_last: Option<&[u8]> = None;
+    let mut validator = DirectoryPartitionValidator::new(page_ceiling);
     for (entries, descriptor) in pages {
+        validator.push(entries, descriptor)?;
+    }
+    validator.finish(total_entries)
+}
+
+#[derive(Debug)]
+pub struct DirectoryPartitionValidator {
+    page_ceiling: usize,
+    total: u64,
+    previous_last: Option<Vec<u8>>,
+    previous_encoded_size: Option<usize>,
+}
+
+impl DirectoryPartitionValidator {
+    pub fn new(page_ceiling: usize) -> Self {
+        Self {
+            page_ceiling,
+            total: 0,
+            previous_last: None,
+            previous_encoded_size: None,
+        }
+    }
+
+    pub fn push(
+        &mut self,
+        entries: &[DirectoryEntry],
+        descriptor: &DirectoryPageRef,
+    ) -> CoreResult<()> {
         let encoded_size = entries.iter().try_fold(13_usize, |size, entry| {
-            size.checked_add(4)
-                .and_then(|size| size.checked_add(entry.name().as_bytes().len()))
-                .and_then(|size| size.checked_add(1 + 32))
+            size.checked_add(directory_entry_bytes(entry)?)
                 .ok_or(CoreError::LengthOverflow)
         })?;
         if entries.is_empty()
             || entries.len()
                 != usize::try_from(descriptor.count).map_err(|_| CoreError::LengthOverflow)?
-            || encoded_size > page_ceiling
+            || encoded_size > self.page_ceiling
             || entries[0].name().as_bytes() != descriptor.first_name.as_slice()
         {
             return Err(CoreError::NonCanonicalPagePartition);
         }
-        if let Some(previous_last) = previous_last {
-            if previous_last >= entries[0].name().as_bytes() {
+        if let Some(previous_last) = self.previous_last.as_deref() {
+            match previous_last.cmp(entries[0].name().as_bytes()) {
+                std::cmp::Ordering::Equal => return Err(CoreError::NameCollision),
+                std::cmp::Ordering::Greater => {
+                    return Err(CoreError::NonCanonicalPagePartition);
+                }
+                std::cmp::Ordering::Less => {}
+            }
+            if self
+                .previous_encoded_size
+                .ok_or(CoreError::NonCanonicalPagePartition)?
+                .checked_add(directory_entry_bytes(&entries[0])?)
+                .ok_or(CoreError::LengthOverflow)?
+                <= self.page_ceiling
+            {
                 return Err(CoreError::NonCanonicalPagePartition);
             }
         }
@@ -163,22 +201,83 @@ pub fn validate_directory_partition(
                 return Err(CoreError::NonCanonicalOrdering);
             }
         }
-        previous_last = Some(
+        self.previous_last = Some(
             entries
                 .last()
                 .ok_or(CoreError::UnexpectedEof)?
                 .name()
-                .as_bytes(),
+                .as_bytes()
+                .to_vec(),
         );
-        total = total
+        self.previous_encoded_size = Some(encoded_size);
+        self.total = self
+            .total
             .checked_add(u64::try_from(entries.len()).map_err(|_| CoreError::LengthOverflow)?)
             .ok_or(CoreError::LengthOverflow)?;
+        Ok(())
     }
-    if total != u64::from(total_entries) {
-        return Err(CoreError::LengthMismatch {
-            expected: u64::from(total_entries),
-            actual: total,
-        });
+
+    pub fn finish(self, total_entries: u32) -> CoreResult<()> {
+        if self.total != u64::from(total_entries) {
+            return Err(CoreError::LengthMismatch {
+                expected: u64::from(total_entries),
+                actual: self.total,
+            });
+        }
+        Ok(())
     }
-    Ok(())
+}
+
+fn directory_entry_bytes(entry: &DirectoryEntry) -> CoreResult<usize> {
+    4_usize
+        .checked_add(entry.name().as_bytes().len())
+        .and_then(|size| size.checked_add(1 + 32))
+        .ok_or(CoreError::LengthOverflow)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(name: &[u8]) -> DirectoryEntry {
+        DirectoryEntry::new(
+            CanonicalName::from_bytes(name).expect("name"),
+            ObjectReference::new(ObjectKind::Bytes, ObjectId::for_bytes(name)),
+        )
+    }
+
+    #[test]
+    fn streaming_partition_rejects_slack_and_cross_page_duplicate() {
+        let first = vec![entry(b"a")];
+        let second = vec![entry(b"b")];
+        let first_ref = DirectoryPageRef {
+            count: 1,
+            first_name: b"a".to_vec(),
+            object_id: ObjectId::for_bytes(b"first"),
+        };
+        let second_ref = DirectoryPageRef {
+            count: 1,
+            first_name: b"b".to_vec(),
+            object_id: ObjectId::for_bytes(b"second"),
+        };
+        let mut validator = DirectoryPartitionValidator::new(1_024);
+        validator.push(&first, &first_ref).expect("first page");
+        assert_eq!(
+            validator.push(&second, &second_ref),
+            Err(CoreError::NonCanonicalPagePartition)
+        );
+
+        let duplicate = vec![entry(b"a")];
+        let duplicate_ref = DirectoryPageRef {
+            count: 1,
+            first_name: b"a".to_vec(),
+            object_id: ObjectId::for_bytes(b"duplicate"),
+        };
+        let mut validator = DirectoryPartitionValidator::new(51);
+        validator.push(&first, &first_ref).expect("first page");
+        assert_eq!(
+            validator.push(&duplicate, &duplicate_ref),
+            Err(CoreError::NameCollision)
+        );
+    }
 }

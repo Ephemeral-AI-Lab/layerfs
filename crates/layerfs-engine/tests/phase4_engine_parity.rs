@@ -2,7 +2,7 @@ use layerfs_core::cas::InMemoryCas;
 use layerfs_core::content::persistence as file_codec;
 use layerfs_core::content::{ChunkReference, LogicalFile};
 use layerfs_core::cow::persistence as dir_codec;
-use layerfs_core::cow::{RootHandle, TreeNode};
+use layerfs_core::cow::{Metadata, RootHandle, TreeNode};
 use layerfs_core::delta::codec as delta_codec;
 use layerfs_core::object::{decode_object, encode_object, DirectoryEntry, Object};
 use layerfs_core::{
@@ -236,6 +236,36 @@ fn file_partition_rules_and_height_are_checked() {
             actual: 9,
         })
     );
+
+    let empty = file_codec::encode_file_root(u32::MAX, 0, 0, 0, &[]).expect("empty root");
+    let empty = canonical_mapping(empty);
+    let empty = file_codec::decode_mapping(&empty, file_codec::FILE_ROOT_TAG).expect("decode");
+    assert_eq!(
+        file_codec::parse_file_root(&empty).expect("parse empty root"),
+        (0, 0, 0, Vec::new())
+    );
+
+    let mut children_without_level = Vec::new();
+    children_without_level.extend_from_slice(&1_u32.to_be_bytes());
+    children[0].encode(&mut children_without_level);
+    assert_eq!(
+        file_codec::parse_file_children(&children_without_level, false).expect("children"),
+        (0, vec![children[0]])
+    );
+    assert_eq!(
+        file_codec::parse_file_children(&children_without_level[..3], false),
+        Err(CoreError::UnexpectedEof)
+    );
+    let mut trailing_children = children_without_level;
+    trailing_children.push(0);
+    assert_eq!(
+        file_codec::parse_file_children(&trailing_children, false),
+        Err(CoreError::TrailingBytes)
+    );
+    assert_eq!(
+        file_codec::expected_file_level(2, file_codec::FileMappingProfile::new(1, 1)),
+        Err(CoreError::NonCanonicalPagePartition)
+    );
 }
 
 #[test]
@@ -277,7 +307,7 @@ fn directory_partition_rejects_cross_page_duplicates() {
     assert!(dir_codec::validate_directory_partition(
         4,
         &[(&first, &first_ref), (&second, &second_ref)],
-        1024,
+        95,
     )
     .is_ok());
 
@@ -291,9 +321,9 @@ fn directory_partition_rejects_cross_page_duplicates() {
         dir_codec::validate_directory_partition(
             4,
             &[(&first, &first_ref), (&duplicate, &duplicate_ref)],
-            1024,
+            95,
         ),
-        Err(CoreError::NonCanonicalPagePartition)
+        Err(CoreError::NameCollision)
     );
 }
 
@@ -397,6 +427,137 @@ fn durable_delta_page_replays_through_phase3_apply() {
             durable_id,
         ),
         Err(CoreError::IdentityMismatch)
+    );
+}
+
+#[test]
+fn durable_delta_replays_add_remove_replace_and_metadata_in_sequence() {
+    let node = |mode| {
+        TreeNode::directory_with_metadata(std::iter::empty(), Metadata::new(mode))
+            .expect("directory")
+    };
+    let removed = node(1);
+    let replaced = node(2);
+    let metadata_before = node(3);
+    let added = node(4);
+    let replacement = node(5);
+    let parent = RootHandle::from_entries([
+        (
+            CanonicalName::new("metadata").expect("name"),
+            metadata_before.clone(),
+        ),
+        (CanonicalName::new("remove").expect("name"), removed.clone()),
+        (
+            CanonicalName::new("replace").expect("name"),
+            replaced.clone(),
+        ),
+    ])
+    .expect("parent");
+    let path = |value: &str| CanonicalPath::from_bytes(value.as_bytes()).expect("path");
+    let after_add = parent
+        .add(path("add"), added.clone())
+        .expect("add")
+        .into_root();
+    let after_remove = after_add
+        .remove(path("remove"))
+        .expect("remove")
+        .into_root();
+    let after_replace = after_remove
+        .replace(path("replace"), replacement.clone())
+        .expect("replace")
+        .into_root();
+    let child = after_replace
+        .set_metadata(path("metadata"), Metadata::new(6))
+        .expect("metadata")
+        .into_root();
+    let durable_id = |node: &TreeNode| Ok(ObjectId::for_bytes(node.identity().as_bytes()));
+    let metadata_after = metadata_before.with_metadata(Metadata::new(6));
+    let operations = vec![
+        delta_codec::TransitionOperation::Add {
+            path: b"add".to_vec(),
+            after: durable_id(&added).expect("added id"),
+        },
+        delta_codec::TransitionOperation::Remove {
+            path: b"remove".to_vec(),
+            before: durable_id(&removed).expect("removed id"),
+        },
+        delta_codec::TransitionOperation::Replace {
+            path: b"replace".to_vec(),
+            before: durable_id(&replaced).expect("replaced id"),
+            after: durable_id(&replacement).expect("replacement id"),
+        },
+        delta_codec::TransitionOperation::Metadata {
+            path: b"metadata".to_vec(),
+            before: durable_id(&metadata_before).expect("metadata before id"),
+            before_mode: 3,
+            after: durable_id(&metadata_after).expect("metadata after id"),
+            after_mode: 6,
+        },
+    ];
+    let page = canonical_mapping(delta_codec::encode_delta_page(&operations).expect("page"));
+    assert_eq!(
+        delta_codec::decode_mapping_delta_page(&page).expect("decode page"),
+        operations
+    );
+    let parent_id = durable_id(parent.node()).expect("parent id");
+    let transition = delta_codec::DecodedTransition {
+        parent: Some(parent_id),
+        child: durable_id(child.node()).expect("child id"),
+        entry_count: u32::try_from(operations.len()).expect("entry count"),
+        pages: vec![ObjectId::for_bytes(&page)],
+    };
+    let loaded = [added.clone(), replacement.clone()];
+    let replay = delta_codec::replay_durable_transition(
+        &transition,
+        &operations,
+        &parent,
+        parent_id,
+        |id| {
+            loaded
+                .iter()
+                .find(|node| durable_id(node) == Ok(id))
+                .cloned()
+                .ok_or(CoreError::MissingObject)
+        },
+        durable_id,
+    )
+    .expect("replay");
+    assert_eq!(replay.apply(&parent).expect("apply"), child);
+
+    let mut conflicting = operations.clone();
+    if let delta_codec::TransitionOperation::Remove { before, .. } = &mut conflicting[1] {
+        *before = ObjectId::for_bytes(b"wrong-before");
+    }
+    assert_eq!(
+        delta_codec::replay_durable_transition(
+            &transition,
+            &conflicting,
+            &parent,
+            parent_id,
+            |id| {
+                loaded
+                    .iter()
+                    .find(|node| durable_id(node) == Ok(id))
+                    .cloned()
+                    .ok_or(CoreError::MissingObject)
+            },
+            durable_id,
+        ),
+        Err(CoreError::DeltaConflict)
+    );
+    assert_eq!(
+        delta_codec::replay_durable_transition(
+            &transition,
+            &operations,
+            &parent,
+            ObjectId::for_bytes(b"wrong-parent"),
+            |_| Err(CoreError::MissingObject),
+            durable_id,
+        ),
+        Err(CoreError::DeltaParentMismatch {
+            expected: ObjectId::for_bytes(b"wrong-parent"),
+            actual: parent_id,
+        })
     );
 }
 

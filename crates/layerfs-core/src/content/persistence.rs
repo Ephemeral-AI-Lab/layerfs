@@ -232,8 +232,8 @@ pub fn parse_file_leaf(payload: &[u8]) -> CoreResult<Vec<FileReference>> {
 }
 
 pub fn parse_file_children(payload: &[u8], with_level: bool) -> CoreResult<(u8, Vec<FileChild>)> {
-    let prefix = if with_level { 5 } else { 0 };
-    if payload.len() < prefix + 4 {
+    let header = if with_level { 5 } else { 4 };
+    if payload.len() < header {
         return Err(CoreError::UnexpectedEof);
     }
     let level = if with_level { payload[0] } else { 0 };
@@ -247,7 +247,7 @@ pub fn parse_file_children(payload: &[u8], with_level: bool) -> CoreResult<(u8, 
     if count > MAX_CHILD_REFERENCES {
         return Err(CoreError::ObjectLimitExceeded);
     }
-    let expected = prefix
+    let expected = header
         .checked_add(
             count
                 .checked_mul(FILE_DESCRIPTOR_BYTES)
@@ -261,7 +261,7 @@ pub fn parse_file_children(payload: &[u8], with_level: bool) -> CoreResult<(u8, 
             CoreError::TrailingBytes
         });
     }
-    let start = prefix;
+    let start = header;
     let children = payload[start..]
         .chunks_exact(FILE_DESCRIPTOR_BYTES)
         .map(FileChild::decode)
@@ -336,6 +336,9 @@ pub fn expected_file_level(reference_count: u64, profile: FileMappingProfile) ->
         .ok_or(CoreError::LengthOverflow)?
         / u64::try_from(profile.leaf_capacity).map_err(|_| CoreError::LengthOverflow)?;
     let fanout = u64::try_from(profile.branch_capacity).map_err(|_| CoreError::LengthOverflow)?;
+    if fanout == 1 && leaves > 1 {
+        return Err(CoreError::NonCanonicalPagePartition);
+    }
     let mut capacity = fanout;
     let mut level = 0_u8;
     while leaves > capacity {

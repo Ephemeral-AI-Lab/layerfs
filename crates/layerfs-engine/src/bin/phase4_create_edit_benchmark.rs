@@ -67,6 +67,25 @@ struct FailureProvenance {
     dominant: Option<CoreError>,
 }
 
+fn failure_provenance(
+    first: Option<CoreError>,
+    cleanup_first: Option<CoreError>,
+    reconciliation: Reconciliation,
+) -> FailureProvenance {
+    let dominant = match reconciliation {
+        Reconciliation::NotAttempted | Reconciliation::PriorVisible => first,
+        Reconciliation::RequestedVisible => None,
+        Reconciliation::DifferentHead => Some(CoreError::PublicationConflict),
+        Reconciliation::Ambiguous => Some(CoreError::AmbiguousDurability),
+    };
+    FailureProvenance {
+        first,
+        cleanup_first,
+        reconciliation,
+        dominant,
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Candidate {
     name: &'static str,
@@ -122,6 +141,8 @@ struct Metrics {
     sql_statements: u64,
     sql_rows: u64,
     blob_opens: u64,
+    blob_reads: u64,
+    blob_writes: u64,
     transactions: u64,
     commits: u64,
     objects_created: u64,
@@ -161,12 +182,54 @@ struct PhaseTimes {
     complete_lifecycle_total_ns: u128,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct PhysicalSnapshot {
+    logical_database: Option<u64>,
+    apparent_database: Option<u64>,
+    apparent_journal: Option<u64>,
+    apparent_authority: Option<u64>,
+    allocated_database: Option<u64>,
+    allocated_journal: Option<u64>,
+    allocated_authority: Option<u64>,
+}
+
+impl PhysicalSnapshot {
+    fn allocated_store(self) -> Option<u64> {
+        self.allocated_database?
+            .checked_add(self.allocated_journal?)?
+            .checked_add(self.allocated_authority?)
+    }
+}
+
 #[derive(Clone, Debug)]
 struct RangeMeasurement {
     label: &'static str,
     range: std::ops::Range<u64>,
     wall_ns: u128,
     returned_bytes: usize,
+    canonical_bytes_authenticated: u64,
+    objects_authenticated: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct EditPoint {
+    reference_count: u64,
+    position: u64,
+    byte_offset: u64,
+    replacement_length: usize,
+}
+
+#[derive(Clone, Debug)]
+struct PreparedExpectations {
+    source_length: u64,
+    source_fingerprint: String,
+    edit_point: Option<EditPoint>,
+    expected_reference_count: Option<u64>,
+    expected_fingerprint: Option<String>,
+    expected_sequence: Option<String>,
+    expected_ranges: Vec<Vec<u8>>,
+    expected_probes: Vec<(&'static str, std::ops::Range<u64>)>,
+    base: Option<(ObjectId, ObjectId, [u8; 32])>,
 }
 
 fn add(value: &mut u64, amount: u64) -> CoreResult<()> {
@@ -264,7 +327,8 @@ fn new_validation_key(path: &Path, profile: [u8; 32]) -> CoreResult<[u8; 32]> {
 }
 
 fn read_authority(path: &Path) -> AnyResult<[u8; 32]> {
-    fs::read(path)?
+    fs::read(path)
+        .map_err(|_| CoreError::ValidationAuthorityUnavailable)?
         .try_into()
         .map_err(|_| CoreError::ValidationAuthorityUnavailable.into())
 }
@@ -466,6 +530,7 @@ impl Store {
         )?;
         add(&mut metrics.sql_statements, 1)?;
         add(&mut metrics.objects_created, 1)?;
+        add(&mut metrics.blob_writes, 1)?;
         add_len(&mut metrics.canonical_bytes_written, canonical.len())?;
         Ok(())
     }
@@ -478,7 +543,7 @@ impl Store {
         )?;
         add(&mut metrics.sql_statements, 1)?;
         add(&mut metrics.sql_rows, 1)?;
-        add(&mut metrics.blob_opens, 1)?;
+        add(&mut metrics.blob_reads, 1)?;
         add(&mut metrics.objects_authenticated, 1)?;
         add_len(&mut metrics.canonical_bytes_authenticated, bytes.len())?;
         add_len(&mut metrics.d_bytes, bytes.len())?;
@@ -642,12 +707,11 @@ impl Store {
                 .execute_batch("ROLLBACK")
                 .err()
                 .map(|_| CoreError::Io);
-            return Ok(FailureProvenance {
-                first: Some(CoreError::Io),
+            return Ok(failure_provenance(
+                Some(CoreError::Io),
                 cleanup_first,
-                reconciliation: Reconciliation::NotAttempted,
-                dominant: Some(CoreError::Io),
-            });
+                Reconciliation::NotAttempted,
+            ));
         }
         let next_commits = metrics
             .commits
@@ -658,46 +722,43 @@ impl Store {
         if fault == Some(PublishFault::AfterCommitBeforeAck) {
             let reconciliation =
                 self.reconcile_publication(current.as_ref(), &requested, request_key);
-            return Ok(FailureProvenance {
-                first: Some(CoreError::Io),
-                cleanup_first: None,
-                dominant: match reconciliation {
-                    Reconciliation::RequestedVisible => None,
-                    Reconciliation::PriorVisible => Some(CoreError::Io),
-                    Reconciliation::DifferentHead => Some(CoreError::PublicationConflict),
-                    Reconciliation::Ambiguous => Some(CoreError::AmbiguousDurability),
-                    Reconciliation::NotAttempted => Some(CoreError::AmbiguousDurability),
-                },
+            return Ok(failure_provenance(
+                Some(CoreError::Io),
+                None,
                 reconciliation,
-            });
+            ));
         }
-        Ok(FailureProvenance {
-            first: None,
-            cleanup_first: None,
-            reconciliation: Reconciliation::RequestedVisible,
-            dominant: None,
-        })
+        Ok(failure_provenance(
+            None,
+            None,
+            Reconciliation::RequestedVisible,
+        ))
     }
 
-    fn physical_bytes(&self) -> (Option<u64>, Option<u64>, Option<u64>) {
-        let db = fs::metadata(&self.path).ok().map(|metadata| metadata.len());
+    fn physical_snapshot(&self) -> PhysicalSnapshot {
         let mut journal = self.path.as_os_str().to_os_string();
         journal.push("-journal");
-        (
-            db,
-            fs::metadata(PathBuf::from(journal))
-                .ok()
-                .map(|metadata| metadata.len()),
-            fs::metadata(&self.authority_path)
-                .ok()
-                .map(|metadata| metadata.len()),
-        )
-    }
-}
-
-impl Drop for Store {
-    fn drop(&mut self) {
-        let _ = self.connection.execute_batch("ROLLBACK");
+        let journal = PathBuf::from(journal);
+        let logical_database = self
+            .connection
+            .query_row("PRAGMA page_count", [], |row| row.get::<_, i64>(0))
+            .ok()
+            .and_then(|pages| {
+                self.connection
+                    .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
+                    .ok()
+                    .and_then(|page_size| pages.checked_mul(page_size))
+                    .and_then(|bytes| u64::try_from(bytes).ok())
+            });
+        PhysicalSnapshot {
+            logical_database,
+            apparent_database: apparent_file_bytes(&self.path),
+            apparent_journal: apparent_file_bytes(&journal),
+            apparent_authority: apparent_file_bytes(&self.authority_path),
+            allocated_database: allocated_file_bytes(&self.path),
+            allocated_journal: allocated_file_bytes(&journal),
+            allocated_authority: allocated_file_bytes(&self.authority_path),
+        }
     }
 }
 
@@ -729,6 +790,7 @@ impl FileBuilder {
         metrics: &mut Metrics,
     ) -> AnyResult<()> {
         add_len(&mut metrics.source_bytes_read, bytes.len())?;
+        add_len(&mut metrics.source_cdc_bytes_read, bytes.len())?;
         add_len(&mut metrics.canonical_stage_source_bytes_read, bytes.len())?;
         add_len(&mut metrics.raw_bytes_hashed, bytes.len())?;
         let raw_length = u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
@@ -767,6 +829,54 @@ impl FileBuilder {
         if self.leaf.len() == self.candidate.k {
             self.flush_leaf_with_store(store, metrics)?;
         }
+        Ok(())
+    }
+
+    fn seed_reference(&mut self, reference: file_codec::FileReference) -> AnyResult<()> {
+        if self.leaf.len() >= self.candidate.k {
+            return Err(CoreError::NonCanonicalPagePartition.into());
+        }
+        self.total_raw = self
+            .total_raw
+            .checked_add(u64::from(reference.raw_length))
+            .ok_or(CoreError::LengthOverflow)?;
+        self.references = self
+            .references
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.leaf.push(reference);
+        Ok(())
+    }
+
+    fn seed_node(
+        &mut self,
+        level: usize,
+        object_id: ObjectId,
+        raw_length: u64,
+        references: u64,
+    ) -> AnyResult<()> {
+        while self.levels.len() <= level {
+            self.levels.push(Vec::with_capacity(self.candidate.f));
+            self.level_totals.push(0);
+        }
+        if self.levels[level].len() >= self.candidate.f {
+            return Err(CoreError::NonCanonicalPagePartition.into());
+        }
+        self.total_raw = self
+            .total_raw
+            .checked_add(raw_length)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.references = self
+            .references
+            .checked_add(references)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.level_totals[level] = self.level_totals[level]
+            .checked_add(raw_length)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.levels[level].push(file_codec::FileChild {
+            object_id,
+            cumulative_end: self.level_totals[level],
+        });
         Ok(())
     }
 
@@ -1021,16 +1131,19 @@ fn fill_retained_buffer(buffer: &mut [u8], offset: u64, salt: &str) {
 }
 
 fn prepare_sources(root: &Path) -> AnyResult<()> {
-    prepare_sources_for(root, &[SOURCE_100, SOURCE_512])
+    prepare_sources_for(root, &[SOURCE_100, SOURCE_512], false)
 }
 
-fn prepare_sources_for(root: &Path, sizes: &[u64]) -> AnyResult<()> {
+fn prepare_sources_for(root: &Path, sizes: &[u64], create_missing: bool) -> AnyResult<()> {
     fs::create_dir_all(root)?;
     let mut manifest = String::from(
         "{\"format\":1,\"fixture_origin\":\"phase2-deterministic-retained-generator\",\"fixtures\":[",
     );
     for &size in sizes {
         let path = source_path(root, size);
+        if !path.exists() && create_missing {
+            fill_source(&path, size, if size == SOURCE_100 { 0x51 } else { 0x52 })?;
+        }
         if fs::metadata(&path).ok().map(|metadata| metadata.len()) != Some(size) {
             return Err(format!(
                 "retained fixture {} is missing; generate/copy it outside the campaign first",
@@ -1092,6 +1205,14 @@ fn prepare_sources_for(root: &Path, sizes: &[u64]) -> AnyResult<()> {
     }
     manifest.push_str("]}\n");
     let manifest_path = root.join("wp4m-retained-fixture-manifest.json");
+    if !manifest_path.exists() && create_missing {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&manifest_path)?;
+        file.write_all(manifest.as_bytes())?;
+        file.sync_all()?;
+    }
     let retained_manifest = fs::read_to_string(&manifest_path).map_err(|error| {
         format!(
             "retained fixture manifest {} is missing; custody it outside the campaign: {error}",
@@ -1106,6 +1227,10 @@ fn prepare_sources_for(root: &Path, sizes: &[u64]) -> AnyResult<()> {
         .into());
     }
     Ok(())
+}
+
+fn prepare_retained_fixtures(root: &Path) -> AnyResult<()> {
+    prepare_sources_for(root, &[SOURCE_100, SOURCE_512], true)
 }
 
 fn source_hash(path: &Path) -> AnyResult<(u64, String)> {
@@ -1142,15 +1267,6 @@ fn source_cdc_sequence(path: &Path) -> AnyResult<(u64, String)> {
     Ok((count, sequence_hasher.finalize().to_hex().to_string()))
 }
 
-fn timed_source_cdc(path: &Path, metrics: &mut Metrics) -> AnyResult<()> {
-    FastCdc::new().scan(File::open(path)?, |chunk| {
-        add_len(&mut metrics.source_bytes_read, chunk.len())?;
-        add_len(&mut metrics.source_cdc_bytes_read, chunk.len())?;
-        Ok(())
-    })?;
-    Ok(())
-}
-
 fn source_edit_point(source: &Path, operation: &str) -> AnyResult<(u64, u64, usize)> {
     let mut references = 0_u64;
     FastCdc::new().scan(File::open(source)?, |_| {
@@ -1183,6 +1299,20 @@ fn source_edit_point(source: &Path, operation: &str) -> AnyResult<(u64, u64, usi
     })?;
     let (byte_offset, length) = point.ok_or(CoreError::MissingObject)?;
     Ok((references, byte_offset, length))
+}
+
+fn prepared_edit_point(source: &Path, operation: &str) -> AnyResult<EditPoint> {
+    let (reference_count, byte_offset, replacement_length) = source_edit_point(source, operation)?;
+    Ok(EditPoint {
+        reference_count,
+        position: if operation.contains("early") {
+            0
+        } else {
+            reference_count / 2
+        },
+        byte_offset,
+        replacement_length,
+    })
 }
 
 fn boundary_probe(
@@ -1429,6 +1559,8 @@ fn make_reference(
     bytes: &[u8],
     metrics: &mut Metrics,
 ) -> AnyResult<file_codec::FileReference> {
+    add_len(&mut metrics.source_bytes_read, bytes.len())?;
+    add_len(&mut metrics.canonical_stage_source_bytes_read, bytes.len())?;
     add_len(&mut metrics.raw_bytes_hashed, bytes.len())?;
     let raw_length = u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
     let raw_id = chunk_id(bytes);
@@ -1652,6 +1784,8 @@ fn rewrite_same_node_by_offset(
     store: &mut Store,
     id: ObjectId,
     level: u8,
+    final_node: bool,
+    profile: file_codec::FileMappingProfile,
     node_start: u64,
     target: u64,
     replacement: file_codec::FileReference,
@@ -1664,6 +1798,7 @@ fn rewrite_same_node_by_offset(
     if level == 0 {
         let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
         let mut refs = file_codec::parse_file_leaf(&payload)?;
+        file_codec::validate_file_leaf(&refs, profile, final_node)?;
         let mut offset = node_start;
         let mut changed = false;
         for reference in &mut refs {
@@ -1693,10 +1828,12 @@ fn rewrite_same_node_by_offset(
     if branch_level != level {
         return Err(CoreError::NonCanonicalOrdering.into());
     }
+    file_codec::validate_file_children(&children, profile, final_node)?;
     let total = children.last().map_or(0, |child| child.cumulative_end);
     let mut previous = 0_u64;
     let mut changed = false;
-    for child in &mut children {
+    let child_count = children.len();
+    for (index, child) in children.iter_mut().enumerate() {
         let child_start = node_start
             .checked_add(previous)
             .ok_or(CoreError::LengthOverflow)?;
@@ -1710,6 +1847,8 @@ fn rewrite_same_node_by_offset(
                 level
                     .checked_sub(1)
                     .ok_or(CoreError::MappingDepthExceeded)?,
+                final_node && index + 1 == child_count,
+                profile,
                 child_start,
                 target,
                 replacement,
@@ -1735,6 +1874,7 @@ fn rewrite_same_node_by_offset(
 fn rewrite_same_root_by_offset(
     store: &mut Store,
     root: ObjectId,
+    candidate: Candidate,
     target: u64,
     replacement: file_codec::FileReference,
     metrics: &mut Metrics,
@@ -1742,9 +1882,15 @@ fn rewrite_same_root_by_offset(
     let (_, bytes) = store.get(root, metrics)?;
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
     let (total_raw, reference_count, level, mut children) = file_codec::parse_file_root(&payload)?;
+    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
+    if level != file_codec::expected_file_level(reference_count, profile)? {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    file_codec::validate_file_children(&children, profile, true)?;
     let mut previous = 0_u64;
     let mut changed = false;
-    for child in &mut children {
+    let child_count = children.len();
+    for (index, child) in children.iter_mut().enumerate() {
         let child_start = previous;
         let child_end = child.cumulative_end;
         if !changed && target >= child_start && target < child_end {
@@ -1752,6 +1898,8 @@ fn rewrite_same_root_by_offset(
                 store,
                 child.object_id,
                 level,
+                index + 1 == child_count,
+                profile,
                 child_start,
                 target,
                 replacement,
@@ -1786,22 +1934,320 @@ fn rewrite_same_root_by_offset(
     Ok((new_id, true))
 }
 
+fn subtree_reference_capacity(
+    profile: file_codec::FileMappingProfile,
+    level: u8,
+) -> CoreResult<u64> {
+    let mut capacity =
+        u64::try_from(profile.leaf_capacity).map_err(|_| CoreError::LengthOverflow)?;
+    let fanout = u64::try_from(profile.branch_capacity).map_err(|_| CoreError::LengthOverflow)?;
+    for _ in 0..level {
+        capacity = capacity
+            .checked_mul(fanout)
+            .ok_or(CoreError::LengthOverflow)?;
+    }
+    Ok(capacity)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rebuild_plus_one_suffix(
+    store: &mut Store,
+    id: ObjectId,
+    level: u8,
+    final_node: bool,
+    local_position: u64,
+    profile: file_codec::FileMappingProfile,
+    inserted: file_codec::FileReference,
+    builder: &mut FileBuilder,
+    active: &mut Vec<ObjectId>,
+    suffix_references: &mut u64,
+    suffix_bytes: &mut u64,
+    metrics: &mut Metrics,
+) -> AnyResult<(u64, u64)> {
+    if usize::from(level) > MAX_DEPTH {
+        return Err(CoreError::MappingDepthExceeded.into());
+    }
+    if active.contains(&id) {
+        return Err(CoreError::MappingCycle.into());
+    }
+    active.push(id);
+    let result = (|| {
+        let (_, bytes) = store.get(id, metrics)?;
+        if level == 0 {
+            let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
+            let references = file_codec::parse_file_leaf(&payload)?;
+            let (count, total) = file_codec::validate_file_leaf(&references, profile, final_node)?;
+            let local = usize::try_from(local_position).map_err(|_| CoreError::LengthOverflow)?;
+            if local >= references.len() {
+                return Err(CoreError::NonCanonicalPagePartition.into());
+            }
+            for reference in references.iter().take(local).copied() {
+                builder.seed_reference(reference)?;
+            }
+            builder.push_reference(store, inserted, metrics)?;
+            for reference in references.iter().skip(local).copied() {
+                builder.push_reference(store, reference, metrics)?;
+                *suffix_references = suffix_references
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+                *suffix_bytes = suffix_bytes
+                    .checked_add(u64::from(reference.raw_length))
+                    .ok_or(CoreError::LengthOverflow)?;
+            }
+            return Ok((total, count));
+        }
+
+        let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_BRANCH_TAG)?;
+        let (branch_level, children) = file_codec::parse_file_children(&payload, true)?;
+        if branch_level != level {
+            return Err(CoreError::NonCanonicalOrdering.into());
+        }
+        file_codec::validate_file_children(&children, profile, final_node)?;
+        let child_level = level
+            .checked_sub(1)
+            .ok_or(CoreError::MappingDepthExceeded)?;
+        let child_capacity = subtree_reference_capacity(profile, child_level)?;
+        let selected = usize::try_from(local_position / child_capacity)
+            .map_err(|_| CoreError::LengthOverflow)?;
+        if selected >= children.len() {
+            return Err(CoreError::NonCanonicalPagePartition.into());
+        }
+        let mut previous_end = 0_u64;
+        let mut references = 0_u64;
+        for (index, child) in children.iter().enumerate() {
+            let child_length = child
+                .cumulative_end
+                .checked_sub(previous_end)
+                .ok_or(CoreError::LengthOverflow)?;
+            if index < selected {
+                builder.seed_node(
+                    usize::from(child_level),
+                    child.object_id,
+                    child_length,
+                    child_capacity,
+                )?;
+                references = references
+                    .checked_add(child_capacity)
+                    .ok_or(CoreError::LengthOverflow)?;
+            } else if index == selected {
+                let (actual_length, actual_references) = rebuild_plus_one_suffix(
+                    store,
+                    child.object_id,
+                    child_level,
+                    final_node && index + 1 == children.len(),
+                    local_position % child_capacity,
+                    profile,
+                    inserted,
+                    builder,
+                    active,
+                    suffix_references,
+                    suffix_bytes,
+                    metrics,
+                )?;
+                if actual_length != child_length {
+                    return Err(CoreError::LengthMismatch {
+                        expected: child_length,
+                        actual: actual_length,
+                    }
+                    .into());
+                }
+                references = references
+                    .checked_add(actual_references)
+                    .ok_or(CoreError::LengthOverflow)?;
+            } else {
+                let (actual_length, actual_references) = walk_file_references(
+                    store,
+                    child.object_id,
+                    child_level,
+                    final_node && index + 1 == children.len(),
+                    profile,
+                    active,
+                    &mut |store, reference, metrics| {
+                        builder.push_reference(store, reference, metrics)?;
+                        *suffix_references = suffix_references
+                            .checked_add(1)
+                            .ok_or(CoreError::LengthOverflow)?;
+                        *suffix_bytes = suffix_bytes
+                            .checked_add(u64::from(reference.raw_length))
+                            .ok_or(CoreError::LengthOverflow)?;
+                        Ok(())
+                    },
+                    metrics,
+                )?;
+                if actual_length != child_length {
+                    return Err(CoreError::LengthMismatch {
+                        expected: child_length,
+                        actual: actual_length,
+                    }
+                    .into());
+                }
+                references = references
+                    .checked_add(actual_references)
+                    .ok_or(CoreError::LengthOverflow)?;
+            }
+            previous_end = child.cumulative_end;
+        }
+        Ok((previous_end, references))
+    })();
+    active.pop();
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rebuild_plus_one_root(
+    store: &mut Store,
+    root: ObjectId,
+    candidate: Candidate,
+    position: u64,
+    inserted: file_codec::FileReference,
+    builder: &mut FileBuilder,
+    metrics: &mut Metrics,
+) -> AnyResult<(u64, u64)> {
+    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
+    let (_, bytes) = store.get(root, metrics)?;
+    let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
+    let (declared_total, declared_references, level, children) =
+        file_codec::parse_file_root(&payload)?;
+    if position >= declared_references
+        || level != file_codec::expected_file_level(declared_references, profile)?
+    {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    file_codec::validate_file_children(&children, profile, true)?;
+    let child_capacity = subtree_reference_capacity(profile, level)?;
+    let selected =
+        usize::try_from(position / child_capacity).map_err(|_| CoreError::LengthOverflow)?;
+    if selected >= children.len() {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    let mut previous_end = 0_u64;
+    let mut references = 0_u64;
+    let mut suffix_references = 0_u64;
+    let mut suffix_bytes = 0_u64;
+    let suffix_objects_before = metrics.objects_authenticated;
+    let mut active = vec![root];
+    for (index, child) in children.iter().enumerate() {
+        let child_length = child
+            .cumulative_end
+            .checked_sub(previous_end)
+            .ok_or(CoreError::LengthOverflow)?;
+        if index < selected {
+            builder.seed_node(
+                usize::from(level),
+                child.object_id,
+                child_length,
+                child_capacity,
+            )?;
+            references = references
+                .checked_add(child_capacity)
+                .ok_or(CoreError::LengthOverflow)?;
+        } else if index == selected {
+            let (actual_length, actual_references) = rebuild_plus_one_suffix(
+                store,
+                child.object_id,
+                level,
+                index + 1 == children.len(),
+                position % child_capacity,
+                profile,
+                inserted,
+                builder,
+                &mut active,
+                &mut suffix_references,
+                &mut suffix_bytes,
+                metrics,
+            )?;
+            if actual_length != child_length {
+                return Err(CoreError::LengthMismatch {
+                    expected: child_length,
+                    actual: actual_length,
+                }
+                .into());
+            }
+            references = references
+                .checked_add(actual_references)
+                .ok_or(CoreError::LengthOverflow)?;
+        } else {
+            let (actual_length, actual_references) = walk_file_references(
+                store,
+                child.object_id,
+                level,
+                index + 1 == children.len(),
+                profile,
+                &mut active,
+                &mut |store, reference, metrics| {
+                    builder.push_reference(store, reference, metrics)?;
+                    suffix_references = suffix_references
+                        .checked_add(1)
+                        .ok_or(CoreError::LengthOverflow)?;
+                    suffix_bytes = suffix_bytes
+                        .checked_add(u64::from(reference.raw_length))
+                        .ok_or(CoreError::LengthOverflow)?;
+                    Ok(())
+                },
+                metrics,
+            )?;
+            if actual_length != child_length {
+                return Err(CoreError::LengthMismatch {
+                    expected: child_length,
+                    actual: actual_length,
+                }
+                .into());
+            }
+            references = references
+                .checked_add(actual_references)
+                .ok_or(CoreError::LengthOverflow)?;
+        }
+        previous_end = child.cumulative_end;
+    }
+    file_codec::validate_file_root_summary(
+        declared_total,
+        declared_references,
+        previous_end,
+        references,
+    )?;
+    if suffix_references
+        != declared_references
+            .checked_sub(position)
+            .ok_or(CoreError::LengthOverflow)?
+    {
+        return Err(CoreError::LengthMismatch {
+            expected: declared_references
+                .checked_sub(position)
+                .ok_or(CoreError::LengthOverflow)?,
+            actual: suffix_references,
+        }
+        .into());
+    }
+    metrics.suffix_references = suffix_references;
+    metrics.suffix_bytes = suffix_bytes;
+    metrics.suffix_objects = metrics
+        .objects_authenticated
+        .checked_sub(suffix_objects_before)
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok((declared_total, declared_references))
+}
+
 fn edit_file(
     store: &mut Store,
-    source: &Path,
     candidate: Candidate,
     operation: &str,
+    edit_point: EditPoint,
     metrics: &mut Metrics,
 ) -> AnyResult<(ObjectId, ObjectId)> {
     let (_, parent, _, _) = store.current_head()?.ok_or(CoreError::MissingObject)?;
     let file_parent = resolve_namespace_file_root(store, parent, metrics)?;
     if operation == "same-middle" {
-        let (_, byte_offset, length) = source_edit_point(source, operation)?;
-        let replacement = vec![0x5a; length];
+        let replacement = vec![0x5a; edit_point.replacement_length];
         store.begin(metrics)?;
         let replacement = make_reference(store, &replacement, metrics)?;
-        let (file_root, changed) =
-            rewrite_same_root_by_offset(store, file_parent, byte_offset, replacement, metrics)?;
+        let (file_root, changed) = rewrite_same_root_by_offset(
+            store,
+            file_parent,
+            candidate,
+            edit_point.byte_offset,
+            replacement,
+            metrics,
+        )?;
         if !changed {
             return Err(CoreError::MissingObject.into());
         }
@@ -1819,67 +2265,34 @@ fn edit_file(
     let file_root_payload =
         file_codec::decode_mapping(&file_root_bytes, file_codec::FILE_ROOT_TAG)?;
     let (_, reference_count, _, _) = file_codec::parse_file_root(&file_root_payload)?;
-    let position = if operation.contains("early") {
-        0
-    } else {
-        reference_count / 2
-    };
+    if reference_count != edit_point.reference_count {
+        return Err(CoreError::LengthMismatch {
+            expected: edit_point.reference_count,
+            actual: reference_count,
+        }
+        .into());
+    }
+    let position = edit_point.position;
     let replacement = vec![0xa5];
     store.begin(metrics)?;
     let inserted = make_reference(store, &replacement, metrics)?;
     let mut builder = FileBuilder::new(candidate);
-    let mut ordinal = 0_u64;
-    let mut inserted_done = false;
-    let mut suffix_bytes = 0_u64;
-    let mut suffix_objects = 0_u64;
-    let mut active = Vec::new();
-    walk_file_root_references(
+    let (_, rebuilt_references) = rebuild_plus_one_root(
         store,
         file_parent,
-        file_codec::FileMappingProfile::new(candidate.k, candidate.f),
-        &mut active,
-        &mut |store, reference, metrics| {
-            if !inserted_done && ordinal == position {
-                builder.push_reference(store, inserted, metrics)?;
-                inserted_done = true;
-            }
-            let before_objects = metrics
-                .objects_created
-                .checked_add(metrics.objects_reused)
-                .ok_or(CoreError::LengthOverflow)?;
-            builder.push_reference(store, reference, metrics)?;
-            if ordinal >= position {
-                suffix_bytes = suffix_bytes
-                    .checked_add(u64::from(reference.raw_length))
-                    .ok_or(CoreError::LengthOverflow)?;
-                let after_objects = metrics
-                    .objects_created
-                    .checked_add(metrics.objects_reused)
-                    .ok_or(CoreError::LengthOverflow)?;
-                suffix_objects = suffix_objects
-                    .checked_add(after_objects.saturating_sub(before_objects))
-                    .ok_or(CoreError::LengthOverflow)?;
-            }
-            ordinal = ordinal.checked_add(1).ok_or(CoreError::LengthOverflow)?;
-            Ok(())
-        },
+        candidate,
+        position,
+        inserted,
+        &mut builder,
         metrics,
     )?;
-    if !inserted_done {
-        builder.push_reference(store, inserted, metrics)?;
-    }
-    if ordinal != reference_count {
+    if rebuilt_references != reference_count {
         return Err(CoreError::LengthMismatch {
             expected: reference_count,
-            actual: ordinal,
+            actual: rebuilt_references,
         }
         .into());
     }
-    metrics.suffix_references = reference_count
-        .checked_sub(position)
-        .ok_or(CoreError::LengthOverflow)?;
-    metrics.suffix_bytes = suffix_bytes;
-    metrics.suffix_objects = suffix_objects;
     let file_root = builder.finish(store, metrics)?;
     let root = namespace_file_root(store, file_root, metrics)?;
     let operation = delta_codec::TransitionOperation::Replace {
@@ -2175,6 +2588,7 @@ fn stream_file(
 fn read_file_range(
     store: &Store,
     root: ObjectId,
+    candidate: Candidate,
     range: std::ops::Range<u64>,
     metrics: &mut Metrics,
 ) -> AnyResult<Vec<u8>> {
@@ -2189,7 +2603,18 @@ fn read_file_range(
     let (_, bytes) = store.get(root, metrics)?;
     add(&mut metrics.closure_occurrences, 1)?;
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
-    let (total, _, level, children) = file_codec::parse_file_root(&payload)?;
+    let (total, references, level, children) = file_codec::parse_file_root(&payload)?;
+    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
+    if level != file_codec::expected_file_level(references, profile)? {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    if references == 0 {
+        if total != 0 || level != 0 || !children.is_empty() {
+            return Err(CoreError::NonCanonicalPagePartition.into());
+        }
+    } else {
+        file_codec::validate_file_children(&children, profile, true)?;
+    }
     if range.end > total {
         return Err(CoreError::InvalidRange {
             start: range.start,
@@ -2207,7 +2632,9 @@ fn read_file_range(
     .map_err(|_| CoreError::LengthOverflow)?;
     let mut output = Vec::with_capacity(requested);
     let mut previous = 0_u64;
-    for child in children {
+    let child_count = children.len();
+    let mut active = vec![root];
+    for (index, child) in children.into_iter().enumerate() {
         let child_start = previous;
         previous = child.cumulative_end;
         if child.cumulative_end <= range.start || child_start >= range.end {
@@ -2217,9 +2644,12 @@ fn read_file_range(
             store,
             child.object_id,
             level,
+            index + 1 == child_count,
+            profile,
             child_start,
             &range,
             &mut output,
+            &mut active,
             metrics,
         )?;
     }
@@ -2230,19 +2660,27 @@ fn route_file_range(
     store: &Store,
     id: ObjectId,
     level: u8,
+    final_node: bool,
+    profile: file_codec::FileMappingProfile,
     node_start: u64,
     range: &std::ops::Range<u64>,
     output: &mut Vec<u8>,
+    active: &mut Vec<ObjectId>,
     metrics: &mut Metrics,
 ) -> AnyResult<()> {
     if usize::from(level) > MAX_DEPTH {
         return Err(CoreError::MappingDepthExceeded.into());
     }
+    if active.contains(&id) {
+        return Err(CoreError::MappingCycle.into());
+    }
+    active.push(id);
     let (_, bytes) = store.get(id, metrics)?;
     add(&mut metrics.closure_occurrences, 1)?;
     if level == 0 {
         let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
         let refs = file_codec::parse_file_leaf(&payload)?;
+        file_codec::validate_file_leaf(&refs, profile, final_node)?;
         let mut offset = node_start;
         for reference in refs {
             let end = offset
@@ -2268,6 +2706,7 @@ fn route_file_range(
             }
             offset = end;
         }
+        active.pop();
         return Ok(());
     }
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_BRANCH_TAG)?;
@@ -2275,8 +2714,10 @@ fn route_file_range(
     if branch_level != level {
         return Err(CoreError::NonCanonicalOrdering.into());
     }
+    file_codec::validate_file_children(&children, profile, final_node)?;
     let mut previous = 0_u64;
-    for child in children {
+    let child_count = children.len();
+    for (index, child) in children.into_iter().enumerate() {
         let child_start = node_start
             .checked_add(previous)
             .ok_or(CoreError::LengthOverflow)?;
@@ -2291,13 +2732,17 @@ fn route_file_range(
                 level
                     .checked_sub(1)
                     .ok_or(CoreError::MappingDepthExceeded)?,
+                final_node && index + 1 == child_count,
+                profile,
                 child_start,
                 range,
                 output,
+                active,
                 metrics,
             )?;
         }
     }
+    active.pop();
     Ok(())
 }
 
@@ -2464,6 +2909,7 @@ fn scrub_file(
 fn verify_ranges(
     store: &Store,
     file_root: ObjectId,
+    candidate: Candidate,
     probes: &[(&'static str, std::ops::Range<u64>)],
     expected: &[Vec<u8>],
     metrics: &mut Metrics,
@@ -2477,8 +2923,10 @@ fn verify_ranges(
     }
     let mut measurements = Vec::with_capacity(probes.len());
     for ((label, range), expected) in probes.iter().zip(expected) {
+        let authenticated_before = metrics.canonical_bytes_authenticated;
+        let objects_before = metrics.objects_authenticated;
         let started = Instant::now();
-        let actual = read_file_range(store, file_root, range.clone(), metrics)?;
+        let actual = read_file_range(store, file_root, candidate, range.clone(), metrics)?;
         let wall_ns = started.elapsed().as_nanos();
         if &actual != expected {
             return Err(CoreError::PublicationConflict.into());
@@ -2488,6 +2936,14 @@ fn verify_ranges(
             range: range.clone(),
             wall_ns,
             returned_bytes: actual.len(),
+            canonical_bytes_authenticated: metrics
+                .canonical_bytes_authenticated
+                .checked_sub(authenticated_before)
+                .ok_or(CoreError::LengthOverflow)?,
+            objects_authenticated: metrics
+                .objects_authenticated
+                .checked_sub(objects_before)
+                .ok_or(CoreError::LengthOverflow)?,
         });
     }
     Ok(measurements)
@@ -2819,7 +3275,15 @@ fn verify_directory(
         &index_bytes,
         file_codec::DIR_INDEX_TAG,
     )?)?;
-    let mut loaded_pages = Vec::with_capacity(pages.len());
+    let mut partition = dir_codec::DirectoryPartitionValidator::new(candidate.directory_page);
+    let mut total = 0_u64;
+    let mut replacement_seen = false;
+    let mut expected_number = if expected_entries == DIRECTORY_ENTRIES as u64 + 1 {
+        0
+    } else {
+        1
+    };
+    let mut previous_last: Option<Vec<u8>> = None;
     for page in &pages {
         let (page_object, page_bytes) = store.get(page.object_id, metrics)?;
         observe_closure(
@@ -2831,26 +3295,7 @@ fn verify_directory(
         let Object::Directory(entries) = page_object else {
             return Err(CoreError::WrongLogicalRole.into());
         };
-        loaded_pages.push((page.clone(), entries));
-    }
-    let partition = loaded_pages
-        .iter()
-        .map(|(page, entries)| (entries.as_slice(), page))
-        .collect::<Vec<_>>();
-    dir_codec::validate_directory_partition(
-        u32::try_from(expected_entries).map_err(|_| CoreError::LengthOverflow)?,
-        &partition,
-        candidate.directory_page,
-    )?;
-    let mut total = 0_u64;
-    let mut replacement_seen = false;
-    let mut expected_number = if expected_entries == DIRECTORY_ENTRIES as u64 + 1 {
-        0
-    } else {
-        1
-    };
-    let mut previous_last: Option<Vec<u8>> = None;
-    for (page, entries) in loaded_pages {
+        partition.push(&entries, page)?;
         let page_start = expected_number;
         let page_child = entries
             .first()
@@ -2923,6 +3368,7 @@ fn verify_directory(
             total = total.checked_add(1).ok_or(CoreError::LengthOverflow)?;
         }
     }
+    partition.finish(u32::try_from(expected_entries).map_err(|_| CoreError::LengthOverflow)?)?;
     if total != expected_entries {
         return Err(CoreError::LengthMismatch {
             expected: expected_entries,
@@ -2936,8 +3382,380 @@ fn verify_directory(
     Ok(*closure_hasher.finalize().as_bytes())
 }
 
-fn apparent_store_bytes(store: &Store) -> (Option<u64>, Option<u64>, Option<u64>) {
-    store.physical_bytes()
+fn lookup_directory_entry(
+    store: &Store,
+    root: ObjectId,
+    candidate: Candidate,
+    name: &CanonicalName,
+    metrics: &mut Metrics,
+) -> AnyResult<ObjectId> {
+    let (root_object, _) = store.get(root, metrics)?;
+    let Object::Directory(wrapper) = root_object else {
+        return Err(CoreError::WrongLogicalRole.into());
+    };
+    if wrapper.len() != 2
+        || wrapper[0].name().as_bytes() != b"m"
+        || wrapper[1].name().as_bytes() != b"t"
+        || wrapper
+            .iter()
+            .any(|entry| entry.reference().kind() != ObjectKind::Bytes)
+    {
+        return Err(CoreError::WrongLogicalRole.into());
+    }
+    let (_, metadata_bytes) = store.get(wrapper[0].reference().id(), metrics)?;
+    if file_codec::decode_mapping(&metadata_bytes, file_codec::DIR_METADATA_TAG)?.len() != 4 {
+        return Err(CoreError::WrongLogicalRole.into());
+    }
+    let (_, index_bytes) = store.get(wrapper[1].reference().id(), metrics)?;
+    let pages = dir_codec::parse_directory_index(&file_codec::decode_mapping(
+        &index_bytes,
+        file_codec::DIR_INDEX_TAG,
+    )?)?;
+    let selected = pages
+        .partition_point(|page| page.first_name.as_slice() <= name.as_bytes())
+        .checked_sub(1)
+        .ok_or(CoreError::PathNotFound)?;
+    let descriptor = pages
+        .get(selected)
+        .ok_or(CoreError::NonCanonicalPagePartition)?;
+    let (page_object, page_bytes) = store.get(descriptor.object_id, metrics)?;
+    if page_bytes.len() > candidate.directory_page {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    let Object::Directory(entries) = page_object else {
+        return Err(CoreError::WrongLogicalRole.into());
+    };
+    if entries.len() != usize::try_from(descriptor.count).map_err(|_| CoreError::LengthOverflow)?
+        || entries.first().map(|entry| entry.name().as_bytes())
+            != Some(descriptor.first_name.as_slice())
+    {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    let entry = entries
+        .binary_search_by(|entry| entry.name().cmp(name))
+        .ok()
+        .and_then(|index| entries.get(index))
+        .ok_or(CoreError::PathNotFound)?;
+    if entry.reference().kind() != ObjectKind::Bytes {
+        return Err(CoreError::WrongLogicalRole.into());
+    }
+    let child = entry.reference().id();
+    let (_, child_bytes) = store.get(child, metrics)?;
+    file_codec::decode_mapping(&child_bytes, file_codec::FILE_ROOT_TAG)?;
+    Ok(child)
+}
+
+fn verify_directory_lookups(
+    store: &Store,
+    root: ObjectId,
+    candidate: Candidate,
+    leading: bool,
+    expected_replacement: Option<(u64, ObjectId)>,
+    metrics: &mut Metrics,
+) -> AnyResult<Vec<RangeMeasurement>> {
+    let first = usize::from(!leading);
+    let middle = if leading {
+        DIRECTORY_ENTRIES / 2
+    } else {
+        DIRECTORY_ENTRIES / 2 + 1
+    };
+    let unchanged = canonical_bytes(file_codec::encode_file_root(0, 0, 0, 0, &[])?)?.0;
+    let mut measurements = Vec::with_capacity(3);
+    for (label, number) in [
+        ("directory-lookup-first", first),
+        ("directory-lookup-middle", middle),
+        ("directory-lookup-last", DIRECTORY_ENTRIES),
+    ] {
+        let name = directory_name(number)?;
+        let authenticated_before = metrics.canonical_bytes_authenticated;
+        let objects_before = metrics.objects_authenticated;
+        let started = Instant::now();
+        let actual = lookup_directory_entry(store, root, candidate, &name, metrics)?;
+        let wall_ns = started.elapsed().as_nanos();
+        let number = u64::try_from(number).map_err(|_| CoreError::LengthOverflow)?;
+        let expected = expected_replacement
+            .filter(|(entry, _)| *entry == number)
+            .map_or(unchanged, |(_, id)| id);
+        if actual != expected {
+            return Err(CoreError::ChunkIdentityMismatch.into());
+        }
+        measurements.push(RangeMeasurement {
+            label,
+            range: number..number,
+            wall_ns,
+            returned_bytes: 32,
+            canonical_bytes_authenticated: metrics
+                .canonical_bytes_authenticated
+                .checked_sub(authenticated_before)
+                .ok_or(CoreError::LengthOverflow)?,
+            objects_authenticated: metrics
+                .objects_authenticated
+                .checked_sub(objects_before)
+                .ok_or(CoreError::LengthOverflow)?,
+        });
+    }
+    Ok(measurements)
+}
+
+fn apparent_file_bytes(path: &Path) -> Option<u64> {
+    match fs::metadata(path) {
+        Ok(metadata) => Some(metadata.len()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(0),
+        Err(_) => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn allocated_file_bytes(path: &Path) -> Option<u64> {
+    use std::os::macos::fs::MetadataExt;
+
+    match fs::metadata(path) {
+        Ok(metadata) => metadata.st_blocks().checked_mul(512),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(0),
+        Err(_) => None,
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn allocated_file_bytes(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+
+    match fs::metadata(path) {
+        Ok(metadata) => metadata.blocks().checked_mul(512),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(0),
+        Err(_) => None,
+    }
+}
+
+#[cfg(not(unix))]
+fn allocated_file_bytes(_path: &Path) -> Option<u64> {
+    None
+}
+
+fn expectations_path(path: &Path) -> PathBuf {
+    let mut value = path.as_os_str().to_os_string();
+    value.push(".expectations");
+    PathBuf::from(value)
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn decode_hex(value: &str) -> AnyResult<Vec<u8>> {
+    if value.len() % 2 != 0 {
+        return Err(CoreError::InvalidIdentityText.into());
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let digit = |value| match value {
+                b'0'..=b'9' => Ok(value - b'0'),
+                b'a'..=b'f' => Ok(value - b'a' + 10),
+                b'A'..=b'F' => Ok(value - b'A' + 10),
+                _ => Err(CoreError::InvalidIdentityText),
+            };
+            Ok((digit(pair[0])? << 4) | digit(pair[1])?)
+        })
+        .collect::<CoreResult<Vec<_>>>()
+        .map_err(Into::into)
+}
+
+fn probe_label(value: &str) -> AnyResult<&'static str> {
+    match value {
+        "zero" => Ok("zero"),
+        "first-byte" => Ok("first-byte"),
+        "cross-chunk" => Ok("cross-chunk"),
+        "leaf-boundary" => Ok("leaf-boundary"),
+        "branch-boundary" => Ok("branch-boundary"),
+        "last-byte" => Ok("last-byte"),
+        "eof" => Ok("eof"),
+        _ => Err(format!("unknown prepared range label {value}").into()),
+    }
+}
+
+fn expected_value<'a>(line: Option<&'a str>, prefix: &str) -> AnyResult<&'a str> {
+    line.and_then(|line| line.strip_prefix(prefix))
+        .ok_or_else(|| format!("malformed prepared expectation: missing {prefix}").into())
+}
+
+fn write_prepared_expectations(path: &Path, expected: &PreparedExpectations) -> AnyResult<()> {
+    let mut body = format!(
+        "LFS-WP4M-EXPECTATIONS-1\nsource_length={}\nsource_fingerprint={}\n",
+        expected.source_length, expected.source_fingerprint
+    );
+    if let Some(point) = expected.edit_point {
+        body.push_str(&format!(
+            "edit={},{},{},{}\n",
+            point.reference_count, point.position, point.byte_offset, point.replacement_length
+        ));
+    } else {
+        body.push_str("edit=-\n");
+    }
+    match (
+        expected.expected_reference_count,
+        expected.expected_fingerprint.as_deref(),
+        expected.expected_sequence.as_deref(),
+    ) {
+        (Some(references), Some(fingerprint), Some(sequence)) => {
+            body.push_str(&format!("file={references},{fingerprint},{sequence}\n"))
+        }
+        (None, None, None) => body.push_str("file=-\n"),
+        _ => return Err("incomplete prepared file observations".into()),
+    }
+    if let Some((root, transition, closure)) = expected.base {
+        body.push_str(&format!(
+            "base={root},{transition},{}\n",
+            hex_bytes(&closure)
+        ));
+    } else {
+        body.push_str("base=-\n");
+    }
+    if expected.expected_ranges.len() != expected.expected_probes.len() {
+        return Err(CoreError::LengthMismatch {
+            expected: u64::try_from(expected.expected_probes.len())
+                .map_err(|_| CoreError::LengthOverflow)?,
+            actual: u64::try_from(expected.expected_ranges.len())
+                .map_err(|_| CoreError::LengthOverflow)?,
+        }
+        .into());
+    }
+    for ((label, range), bytes) in expected
+        .expected_probes
+        .iter()
+        .zip(&expected.expected_ranges)
+    {
+        body.push_str(&format!(
+            "range={label},{},{},{}\n",
+            range.start,
+            range.end,
+            hex_bytes(bytes)
+        ));
+    }
+    let contents = format!(
+        "{body}manifest_blake3={}\n",
+        blake3::hash(body.as_bytes()).to_hex()
+    );
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    file.write_all(contents.as_bytes())?;
+    file.sync_all()?;
+    Ok(())
+}
+
+fn read_prepared_expectations(path: &Path) -> AnyResult<PreparedExpectations> {
+    let contents = fs::read_to_string(path)?;
+    let checksum_offset = contents
+        .rfind("manifest_blake3=")
+        .ok_or("prepared expectation checksum missing")?;
+    let body = &contents[..checksum_offset];
+    let checksum = contents[checksum_offset..]
+        .strip_prefix("manifest_blake3=")
+        .and_then(|value| value.strip_suffix('\n'))
+        .ok_or("malformed prepared expectation checksum")?;
+    if checksum != blake3::hash(body.as_bytes()).to_hex().as_str() {
+        return Err("prepared expectation checksum mismatch".into());
+    }
+    let mut lines = body.lines();
+    if lines.next() != Some("LFS-WP4M-EXPECTATIONS-1") {
+        return Err("prepared expectation version mismatch".into());
+    }
+    let source_length = expected_value(lines.next(), "source_length=")?.parse::<u64>()?;
+    let source_fingerprint = expected_value(lines.next(), "source_fingerprint=")?.to_string();
+    source_fingerprint.parse::<ObjectId>()?;
+    let edit = expected_value(lines.next(), "edit=")?;
+    let edit_point = if edit == "-" {
+        None
+    } else {
+        let mut values = edit.split(',');
+        let point = EditPoint {
+            reference_count: values
+                .next()
+                .ok_or("missing edit reference count")?
+                .parse()?,
+            position: values.next().ok_or("missing edit position")?.parse()?,
+            byte_offset: values.next().ok_or("missing edit byte offset")?.parse()?,
+            replacement_length: values
+                .next()
+                .ok_or("missing edit replacement length")?
+                .parse()?,
+        };
+        if values.next().is_some() || point.position >= point.reference_count {
+            return Err("malformed prepared edit point".into());
+        }
+        Some(point)
+    };
+    let file = expected_value(lines.next(), "file=")?;
+    let (expected_reference_count, expected_fingerprint, expected_sequence) = if file == "-" {
+        (None, None, None)
+    } else {
+        let mut values = file.split(',');
+        let references = values
+            .next()
+            .ok_or("missing expected references")?
+            .parse()?;
+        let fingerprint = values
+            .next()
+            .ok_or("missing expected fingerprint")?
+            .to_string();
+        let sequence = values
+            .next()
+            .ok_or("missing expected sequence")?
+            .to_string();
+        if values.next().is_some() {
+            return Err("malformed prepared file observations".into());
+        }
+        fingerprint.parse::<ObjectId>()?;
+        sequence.parse::<ObjectId>()?;
+        (Some(references), Some(fingerprint), Some(sequence))
+    };
+    let base = expected_value(lines.next(), "base=")?;
+    let base = if base == "-" {
+        None
+    } else {
+        let mut values = base.split(',');
+        let root = values.next().ok_or("missing prepared root")?.parse()?;
+        let transition = values
+            .next()
+            .ok_or("missing prepared transition")?
+            .parse()?;
+        let closure = values
+            .next()
+            .ok_or("missing prepared closure")?
+            .parse::<ObjectId>()?
+            .to_bytes();
+        if values.next().is_some() {
+            return Err("malformed prepared base".into());
+        }
+        Some((root, transition, closure))
+    };
+    let mut expected_ranges = Vec::new();
+    let mut expected_probes = Vec::new();
+    for line in lines {
+        let value = line
+            .strip_prefix("range=")
+            .ok_or("malformed prepared range")?;
+        let mut values = value.splitn(4, ',');
+        let label = probe_label(values.next().ok_or("missing range label")?)?;
+        let start = values.next().ok_or("missing range start")?.parse::<u64>()?;
+        let end = values.next().ok_or("missing range end")?.parse::<u64>()?;
+        if start > end {
+            return Err("malformed prepared range bounds".into());
+        }
+        expected_probes.push((label, start..end));
+        expected_ranges.push(decode_hex(values.next().ok_or("missing range bytes")?)?);
+    }
+    Ok(PreparedExpectations {
+        source_length,
+        source_fingerprint,
+        edit_point,
+        expected_reference_count,
+        expected_fingerprint,
+        expected_sequence,
+        expected_ranges,
+        expected_probes,
+        base,
+    })
 }
 
 fn remove_sqlite_image(path: &Path) -> AnyResult<()> {
@@ -2954,21 +3772,154 @@ fn remove_sqlite_image(path: &Path) -> AnyResult<()> {
     if authority.exists() {
         fs::remove_file(authority)?;
     }
+    let expectations = expectations_path(path);
+    if expectations.exists() {
+        fs::remove_file(expectations)?;
+    }
     Ok(())
 }
 
-fn clone_sqlite_image(source: &Path, destination: &Path) -> AnyResult<()> {
-    remove_sqlite_image(destination)?;
-    fs::copy(source, destination)?;
-    let mut source_journal = source.as_os_str().to_os_string();
-    source_journal.push("-journal");
-    let source_journal = PathBuf::from(source_journal);
-    if source_journal.exists() {
-        let mut destination_journal = destination.as_os_str().to_os_string();
-        destination_journal.push("-journal");
-        fs::copy(source_journal, PathBuf::from(destination_journal))?;
+fn row_database_path(
+    root: &Path,
+    candidate: Candidate,
+    size: u64,
+    operation: &str,
+    iteration: usize,
+) -> PathBuf {
+    root.join(format!(
+        "db-{}-{size}-{operation}-{iteration}.sqlite",
+        candidate.name
+    ))
+}
+
+fn prepare_row_database(
+    root: &Path,
+    candidate: Candidate,
+    size: u64,
+    operation: &str,
+    iteration: usize,
+) -> AnyResult<()> {
+    let db_path = row_database_path(root, candidate, size, operation, iteration);
+    remove_sqlite_image(&db_path)?;
+    let source = source_path(root, size);
+    let (source_length, source_fingerprint) = source_hash(&source)?;
+    if source_length != size {
+        return Err(CoreError::LengthMismatch {
+            expected: size,
+            actual: source_length,
+        }
+        .into());
     }
-    fs::copy(authority_path(source), authority_path(destination))?;
+    let edit_point = matches!(operation, "same-middle" | "plus1-early" | "plus1-middle")
+        .then(|| prepared_edit_point(&source, operation))
+        .transpose()?;
+    let observations = (!operation.starts_with("dir-"))
+        .then(|| expected_file_observations(&source, operation, source_length, candidate))
+        .transpose()?;
+    let mut expected = match observations {
+        Some((references, fingerprint, sequence, ranges, probes)) => PreparedExpectations {
+            source_length,
+            source_fingerprint,
+            edit_point,
+            expected_reference_count: Some(references),
+            expected_fingerprint: Some(fingerprint),
+            expected_sequence: Some(sequence),
+            expected_ranges: ranges,
+            expected_probes: probes,
+            base: None,
+        },
+        None => PreparedExpectations {
+            source_length,
+            source_fingerprint,
+            edit_point,
+            expected_reference_count: None,
+            expected_fingerprint: None,
+            expected_sequence: None,
+            expected_ranges: Vec::new(),
+            expected_probes: Vec::new(),
+            base: None,
+        },
+    };
+    let mut store = Store::open(&db_path, candidate)?;
+    let needs_file_base = matches!(operation, "same-middle" | "plus1-early" | "plus1-middle");
+    let needs_directory_base = matches!(operation, "dir-lookup" | "dir-replace" | "dir-leading");
+    if !needs_file_base && !needs_directory_base {
+        drop(store);
+        write_prepared_expectations(&expectations_path(&db_path), &expected)?;
+        return Ok(());
+    }
+
+    let mut metrics = Metrics::default();
+    let (root_id, transition_id) = if needs_file_base {
+        build_file(
+            &mut store,
+            &source_path(root, size),
+            candidate,
+            &mut metrics,
+        )?
+    } else {
+        build_directory(&mut store, candidate, false, false, &mut metrics)?
+    };
+    let transition_digest =
+        verify_transition(&store, transition_id, None, root_id, None, &mut metrics)?;
+    let content_digest = if needs_file_base {
+        verify_file(&store, root_id, candidate, None, None, &mut metrics)?.0
+    } else {
+        verify_directory(
+            &store,
+            root_id,
+            candidate,
+            u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+            None,
+            &mut metrics,
+        )?
+    };
+    let expected_digest = combined_closure_digest(transition_digest, content_digest);
+    store.publish(None, root_id, transition_id, &mut metrics)?;
+    drop(store);
+
+    let store = Store::open(&db_path, candidate)?;
+    let head = store
+        .current_head()?
+        .ok_or(CoreError::InvalidValidationReceipt)?;
+    if head.1 != root_id || head.2 != transition_id {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    let mut reopened_metrics = Metrics::default();
+    let transition_digest = verify_transition(
+        &store,
+        transition_id,
+        None,
+        root_id,
+        None,
+        &mut reopened_metrics,
+    )?;
+    let content_digest = if needs_file_base {
+        verify_file(
+            &store,
+            root_id,
+            candidate,
+            None,
+            None,
+            &mut reopened_metrics,
+        )?
+        .0
+    } else {
+        verify_directory(
+            &store,
+            root_id,
+            candidate,
+            u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+            None,
+            &mut reopened_metrics,
+        )?
+    };
+    if combined_closure_digest(transition_digest, content_digest) != expected_digest {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    drop(store);
+    expected.base = Some((root_id, transition_id, expected_digest));
+    write_prepared_expectations(&expectations_path(&db_path), &expected)?;
     Ok(())
 }
 
@@ -2993,6 +3944,84 @@ fn mib_per_second(bytes: u64, wall_ns: u128) -> String {
     )
 }
 
+fn command_text(program: &str, arguments: &[&str]) -> AnyResult<String> {
+    let output = std::process::Command::new(program)
+        .args(arguments)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!("{program} {:?} failed", arguments).into());
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
+}
+
+fn executable_sha256(path: &Path) -> AnyResult<String> {
+    let output = std::process::Command::new("shasum")
+        .args(["-a", "256"])
+        .arg(path)
+        .output()?;
+    if !output.status.success() {
+        return Err("shasum -a 256 failed".into());
+    }
+    let digest = String::from_utf8(output.stdout)?
+        .split_whitespace()
+        .next()
+        .ok_or("missing executable SHA-256")?
+        .to_string();
+    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("invalid executable SHA-256".into());
+    }
+    Ok(digest)
+}
+
+fn json_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
+fn write_environment_record(root: &Path, executable: &Path) -> AnyResult<String> {
+    let executable_sha256 = executable_sha256(executable)?;
+    let rustc = command_text("rustc", &["-Vv"])?;
+    let target = rustc
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .ok_or("rustc host triple unavailable")?;
+    let cargo = command_text("cargo", &["-V"])?;
+    let commit = command_text("git", &["rev-parse", "HEAD"])?;
+    let status = command_text("git", &["status", "--short"])?;
+    let uname = command_text("uname", &["-a"])?;
+    let cpu = command_text("sysctl", &["-n", "machdep.cpu.brand_string"])
+        .unwrap_or_else(|_| "Unavailable".to_string());
+    let memory =
+        command_text("sysctl", &["-n", "hw.memsize"]).unwrap_or_else(|_| "Unavailable".to_string());
+    let cores =
+        command_text("sysctl", &["-n", "hw.ncpu"]).unwrap_or_else(|_| "Unavailable".to_string());
+    let sqlite = Connection::open_in_memory()?
+        .query_row("SELECT sqlite_version()", [], |row| row.get::<_, String>(0))?;
+    let rustflags = env::var("RUSTFLAGS").unwrap_or_default();
+    let encoded_rustflags = env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
+    let mut record = File::create(root.join("wp4m-profile-selection-environment.json"))?;
+    writeln!(
+        record,
+        "{{\"format\":1,\"build_command\":\"cargo build --release -p layerfs-engine --bin phase4_create_edit_benchmark\",\"build_profile\":\"release\",\"debug_assertions\":false,\"executable\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"git_commit\":\"{commit}\",\"git_status\":\"{}\",\"rustc_vv\":\"{}\",\"cargo_version\":\"{}\",\"target_triple\":\"{target}\",\"sqlite_version\":\"{sqlite}\",\"rustflags\":\"{}\",\"cargo_encoded_rustflags\":\"{}\",\"os_uname\":\"{}\",\"cpu\":\"{}\",\"memory_bytes\":\"{}\",\"logical_cpu_count\":\"{}\"}}",
+        json_escape(&executable.display().to_string()),
+        json_escape(&status),
+        json_escape(&rustc),
+        json_escape(&cargo),
+        json_escape(&rustflags),
+        json_escape(&encoded_rustflags),
+        json_escape(&uname),
+        json_escape(&cpu),
+        json_escape(&memory),
+        json_escape(&cores),
+    )?;
+    record.sync_all()?;
+    Ok(executable_sha256)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn row_json(
     candidate: Candidate,
@@ -3001,7 +4030,6 @@ fn row_json(
     iteration: usize,
     warmup: bool,
     source_fingerprint: &str,
-    started: Instant,
     capture_ns: u128,
     verification_ns: u128,
     root: ObjectId,
@@ -3011,9 +4039,11 @@ fn row_json(
     actual_references: u64,
     closure_digest: [u8; 32],
     metrics: Metrics,
-    physical_bytes: (Option<u64>, Option<u64>, Option<u64>),
+    physical_before: PhysicalSnapshot,
+    physical_after: PhysicalSnapshot,
     phases: &PhaseTimes,
     range_measurements: &[RangeMeasurement],
+    executable_sha256: &str,
     error: Option<&str>,
 ) -> AnyResult<String> {
     let profile = profile_hex(candidate)?;
@@ -3025,7 +4055,13 @@ fn row_json(
     let optional_u64_json = |value: Option<u64>| {
         value.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string())
     };
-    let (database_bytes, journal_bytes, authority_bytes) = physical_bytes;
+    let allocated_store_delta = physical_before
+        .allocated_store()
+        .zip(physical_after.allocated_store())
+        .map(|(before, after)| i128::from(after) - i128::from(before));
+    let optional_i128_json = |value: Option<i128>| {
+        value.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string())
+    };
     let expected_references_json = expected_references
         .map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string());
     let expected_sequence_json = expected_sequence.map_or_else(
@@ -3050,12 +4086,14 @@ fn row_json(
         .iter()
         .map(|measurement| {
             format!(
-                "{{\"label\":\"{}\",\"start\":{},\"end\":{},\"wall_ns\":{},\"returned_bytes\":{},\"throughput_mib_s\":{}}}",
+                "{{\"label\":\"{}\",\"start\":{},\"end\":{},\"wall_ns\":{},\"returned_bytes\":{},\"canonical_bytes_authenticated\":{},\"objects_authenticated\":{},\"throughput_mib_s\":{}}}",
                 measurement.label,
                 measurement.range.start,
                 measurement.range.end,
                 measurement.wall_ns,
                 measurement.returned_bytes,
+                measurement.canonical_bytes_authenticated,
+                measurement.objects_authenticated,
                 mib_per_second(
                     u64::try_from(measurement.returned_bytes).unwrap_or(0),
                     measurement.wall_ns
@@ -3064,22 +4102,40 @@ fn row_json(
         })
         .collect::<Vec<_>>()
         .join(",");
+    let is_full_file = operation == "full";
+    let capture_mib_s = is_full_file
+        .then(|| mib_per_second(size, phases.durable_capture_total_ns))
+        .unwrap_or_else(|| "Unavailable".to_string());
+    let complete_mib_s = is_full_file
+        .then(|| mib_per_second(size, phases.complete_lifecycle_total_ns))
+        .unwrap_or_else(|| "Unavailable".to_string());
+    let source_cdc_nested = !operation.starts_with("dir-");
+    let precommit_reconstructs = operation != "dir-lookup";
     Ok(format!(
-        "{{\"qualification\":false,\"purpose\":\"release_current_implementation_baseline\",\"throughput_measurement_admissible\":{eligible},\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{},\"source_cdc_wall_ns\":{source_cdc_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":false,\"precommit_includes_reconstruction\":true,\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"raw_bytes_hashed\":{raw_bytes_hashed},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"cpu_ns\":\"Unavailable\",\"rss_bytes\":\"Unavailable\",\"allocated_store_delta_bytes\":\"Unavailable\",\"physical_db_bytes\":{},\"physical_journal_bytes\":{},\"physical_authority_sidecar_bytes\":{},\"physical_allocation_bytes\":\"Unavailable\",\"q_high_water\":\"Unavailable\",\"q_single_canonical_max\":{},\"w_bytes\":{},\"d_bytes\":{},\"sql_statements\":{},\"sql_rows\":{},\"blob_opens\":{},\"transactions\":{},\"commits\":{},\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"receipt_provenance\":\"first=Unavailable;cleanup_first=Unavailable;reconciliation=observed-fresh-reopen;dominant=Unavailable\",\"error\":{error_json}}}",
+        "{{\"qualification\":false,\"purpose\":\"profile_selection\",\"throughput_measurement_admissible\":false,\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{size},\"input_size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"build_profile\":\"release\",\"debug_assertions\":false,\"base_preparation_in_measured_interval\":false,\"base_copy_method\":\"regenerated-isolated-database\",\"source_cache_state\":\"warm_or_unknown_after_manifest_preflight\",\"store_state\":\"fresh_logical_store_cache_unknown\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{verification_ns},\"source_cdc_wall_ns\":{source_cdc_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":{source_cdc_nested},\"precommit_includes_reconstruction\":{precommit_reconstructs},\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"raw_bytes_hashed\":{raw_bytes_hashed},\"changed_work_bytes\":{source_bytes_read},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"cpu_ns\":\"Unavailable\",\"rss_bytes\":\"Unavailable\",\"sqlite_pre_logical_database_bytes\":{},\"sqlite_post_logical_database_bytes\":{},\"sqlite_pre_apparent_database_bytes\":{},\"sqlite_post_apparent_database_bytes\":{},\"sqlite_pre_allocated_database_bytes\":{},\"sqlite_post_allocated_database_bytes\":{},\"allocated_store_delta_bytes\":{},\"physical_db_bytes\":{},\"physical_journal_bytes\":{},\"physical_authority_sidecar_bytes\":{},\"physical_allocation_bytes\":{},\"peak_journal_bytes\":\"Unavailable\",\"peak_temporary_bytes\":\"Unavailable\",\"q_high_water\":\"Unavailable\",\"q_single_canonical_max\":{},\"w_bytes\":{},\"d_bytes\":{},\"sql_preparations\":\"Unavailable\",\"sql_statements\":{},\"sql_rows\":{},\"blob_opens\":{},\"blob_reads\":{},\"blob_writes\":{},\"transactions\":{},\"commits\":{},\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\",\"busy_events\":\"Unavailable\",\"locked_events\":\"Unavailable\",\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"file_height\":\"Unavailable\",\"process_io\":\"Unavailable\",\"host_physical_io\":\"Unavailable\",\"receipt_provenance\":\"first=Unavailable;cleanup_first=Unavailable;reconciliation=observed-fresh-reopen;dominant=Unavailable\",\"error\":{error_json}}}",
         candidate.name,
         if size == SOURCE_100 { "S1-100" } else { "S1-512" },
         hex_id(root),
         hex_id(transition),
-        started.elapsed().as_nanos(),
-        optional_u64_json(database_bytes),
-        optional_u64_json(journal_bytes),
-        optional_u64_json(authority_bytes),
+        optional_u64_json(physical_before.logical_database),
+        optional_u64_json(physical_after.logical_database),
+        optional_u64_json(physical_before.apparent_database),
+        optional_u64_json(physical_after.apparent_database),
+        optional_u64_json(physical_before.allocated_database),
+        optional_u64_json(physical_after.allocated_database),
+        optional_i128_json(allocated_store_delta),
+        optional_u64_json(physical_after.apparent_database),
+        optional_u64_json(physical_after.apparent_journal),
+        optional_u64_json(physical_after.apparent_authority),
+        optional_u64_json(physical_after.allocated_store()),
         metrics.q_single_canonical_max,
         metrics.w_bytes,
         metrics.d_bytes,
         metrics.sql_statements,
         metrics.sql_rows,
         metrics.blob_opens,
+        metrics.blob_reads,
+        metrics.blob_writes,
         metrics.transactions,
         metrics.commits,
         metrics.objects_created,
@@ -3096,7 +4152,6 @@ fn row_json(
         metrics.suffix_references,
         metrics.suffix_bytes,
         metrics.suffix_objects,
-        eligible = !warmup,
         source_cdc_ns = phases.source_cdc_ns,
         canonical_stage_ns = phases.canonical_cas_mapping_stage_ns,
         precommit_ns = phases.precommit_closure_validation_ns,
@@ -3115,10 +4170,12 @@ fn row_json(
         source_cdc_bytes_read = metrics.source_cdc_bytes_read,
         canonical_stage_source_bytes_read = metrics.canonical_stage_source_bytes_read,
         raw_bytes_hashed = metrics.raw_bytes_hashed,
-        capture_mib_s = mib_per_second(size, phases.durable_capture_total_ns),
-        complete_mib_s = mib_per_second(size, phases.complete_lifecycle_total_ns),
+        capture_mib_s = capture_mib_s,
+        complete_mib_s = complete_mib_s,
         reconstruction_mib_s = mib_per_second(size, phases.reconstruction_ns),
         ranges_json = ranges_json,
+        source_cdc_nested = source_cdc_nested,
+        precommit_reconstructs = precommit_reconstructs,
     ))
 }
 
@@ -3147,27 +4204,62 @@ fn run_row(
     warmup: bool,
 ) -> AnyResult<String> {
     require_optimized_benchmark()?;
-    prepare_sources_for(root, &[size])?;
+    let executable_sha256 = match env::var("WP4M_EXECUTABLE_SHA256") {
+        Ok(value) => value,
+        Err(_) => executable_sha256(&env::current_exe()?)?,
+    };
+    if executable_sha256.len() != 64
+        || !executable_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err("invalid campaign executable SHA-256".into());
+    }
     let source = source_path(root, size);
-    let (source_length, source_fingerprint) = source_hash(&source)?;
-    let expected_observations = (!operation.starts_with("dir-"))
-        .then(|| expected_file_observations(&source, operation, source_length, candidate))
-        .transpose()?;
-    let expected_reference_count = expected_observations
-        .as_ref()
-        .map(|(count, _, _, _, _)| *count);
-    let expected_fingerprint = expected_observations
-        .as_ref()
-        .map(|(_, fingerprint, _, _, _)| fingerprint.as_str());
-    let expected_sequence = expected_observations
-        .as_ref()
-        .map(|(_, _, sequence, _, _)| sequence.as_str());
-    let expected_ranges = expected_observations
-        .as_ref()
-        .map(|(_, _, _, ranges, _)| ranges.as_slice());
-    let expected_probes = expected_observations
-        .as_ref()
-        .map(|(_, _, _, _, probes)| probes.as_slice());
+    let db_path = row_database_path(root, candidate, size, operation, iteration);
+    if !db_path.is_file()
+        || !authority_path(&db_path).is_file()
+        || !expectations_path(&db_path).is_file()
+    {
+        return Err("row database was not prepared outside the measured process".into());
+    }
+    let PreparedExpectations {
+        source_length,
+        source_fingerprint,
+        edit_point,
+        expected_reference_count,
+        expected_fingerprint,
+        expected_sequence,
+        expected_ranges,
+        expected_probes,
+        base,
+    } = read_prepared_expectations(&expectations_path(&db_path))?;
+    if source_length != size {
+        return Err(CoreError::LengthMismatch {
+            expected: size,
+            actual: source_length,
+        }
+        .into());
+    }
+    if operation.starts_with("dir-") {
+        if expected_reference_count.is_some()
+            || expected_fingerprint.is_some()
+            || expected_sequence.is_some()
+            || !expected_ranges.is_empty()
+            || !expected_probes.is_empty()
+        {
+            return Err("directory row contains file expectations".into());
+        }
+    } else if expected_reference_count.is_none()
+        || expected_fingerprint.is_none()
+        || expected_sequence.is_none()
+        || expected_ranges.is_empty()
+        || expected_ranges.len() != expected_probes.len()
+    {
+        return Err("file row is missing prepared expectations".into());
+    }
+    let expected_fingerprint = expected_fingerprint.as_deref();
+    let expected_sequence = expected_sequence.as_deref();
     let expected_dir_replacement = if operation == "dir-replace" {
         Some((
             u64::try_from(DIRECTORY_ENTRIES / 2 + 1).map_err(|_| CoreError::LengthOverflow)?,
@@ -3176,24 +4268,71 @@ fn run_row(
     } else {
         None
     };
-    let db_path = root.join(format!(
-        "db-{}-{size}-{operation}-{iteration}.sqlite",
-        candidate.name
-    ));
-    remove_sqlite_image(&db_path)?;
     let mut metrics = Metrics::default();
-    let started = Instant::now();
     let mut store = Store::open(&db_path, candidate)?;
+    let physical_before = store.physical_snapshot();
+    if operation == "dir-lookup" {
+        let (base_root, base_transition, closure_digest) =
+            base.ok_or("prepared directory base is missing")?;
+        let lookup_started = Instant::now();
+        let timed_head = store
+            .current_head()?
+            .ok_or(CoreError::InvalidValidationReceipt)?;
+        if timed_head.1 != base_root || timed_head.2 != base_transition {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        let range_measurements =
+            verify_directory_lookups(&store, base_root, candidate, false, None, &mut metrics)?;
+        let lookup_end = Instant::now();
+        let elapsed = lookup_end.duration_since(lookup_started).as_nanos();
+        let phases = PhaseTimes {
+            range_verification_ns: elapsed,
+            complete_lifecycle_total_ns: elapsed,
+            ..PhaseTimes::default()
+        };
+        let physical_after = store.physical_snapshot();
+        drop(store);
+        return row_json(
+            candidate,
+            size,
+            operation,
+            iteration,
+            warmup,
+            &source_fingerprint,
+            0,
+            elapsed,
+            base_root,
+            base_transition,
+            None,
+            None,
+            0,
+            closure_digest,
+            metrics,
+            physical_before,
+            physical_after,
+            &phases,
+            &range_measurements,
+            &executable_sha256,
+            None,
+        );
+    }
     let mut phases = PhaseTimes::default();
-    let mut range_measurements = Vec::new();
     let durable_capture_start = Instant::now();
-    let qualification_start = Instant::now();
     let mut durable_cursor = durable_capture_start;
+    if matches!(
+        operation,
+        "same-middle" | "plus1-early" | "plus1-middle" | "dir-replace" | "dir-leading"
+    ) {
+        let (base_root, base_transition, _) = base.ok_or("prepared edit base is missing")?;
+        let head = store
+            .current_head()?
+            .ok_or(CoreError::InvalidValidationReceipt)?;
+        if head.1 != base_root || head.2 != base_transition {
+            return Err(CoreError::PublicationConflict.into());
+        }
+    }
     let (root_id, transition_id) = if operation == "full" {
-        timed_source_cdc(&source, &mut metrics)?;
-        let source_end = Instant::now();
-        phases.source_cdc_ns = source_end.duration_since(durable_cursor).as_nanos();
-        let stage_started = source_end;
+        let stage_started = durable_cursor;
         let (root_id, transition_id) = build_file(&mut store, &source, candidate, &mut metrics)?;
         let stage_end = Instant::now();
         phases.canonical_cas_mapping_stage_ns = stage_end.duration_since(stage_started).as_nanos();
@@ -3203,42 +4342,33 @@ fn run_row(
         || operation == "plus1-early"
         || operation == "plus1-middle"
     {
-        drop(store);
-        let base_path = root.join(format!(
-            "base-{}-{size}-{operation}-{iteration}.sqlite",
-            candidate.name
-        ));
-        remove_sqlite_image(&base_path)?;
-        let mut base_store = Store::open(&base_path, candidate)?;
-        let (base_root, base_transition) =
-            build_file(&mut base_store, &source, candidate, &mut metrics)?;
-        base_store.publish(None, base_root, base_transition, &mut metrics)?;
-        drop(base_store);
-        clone_sqlite_image(&base_path, &db_path)?;
-        store = Store::open(&db_path, candidate)?;
-        metrics = Metrics::default();
-        edit_file(&mut store, &source, candidate, operation, &mut metrics)?
+        let result = edit_file(
+            &mut store,
+            candidate,
+            operation,
+            edit_point.ok_or(CoreError::MissingObject)?,
+            &mut metrics,
+        )?;
+        let stage_end = Instant::now();
+        phases.canonical_cas_mapping_stage_ns = stage_end.duration_since(durable_cursor).as_nanos();
+        durable_cursor = stage_end;
+        result
     } else if operation == "dir-create" {
-        build_directory(&mut store, candidate, false, false, &mut metrics)?
+        let result = build_directory(&mut store, candidate, false, false, &mut metrics)?;
+        let stage_end = Instant::now();
+        phases.canonical_cas_mapping_stage_ns = stage_end.duration_since(durable_cursor).as_nanos();
+        durable_cursor = stage_end;
+        result
     } else if operation == "dir-replace" || operation == "dir-leading" {
-        drop(store);
-        let base_path = root.join(format!(
-            "base-{}-{size}-{operation}-{iteration}.sqlite",
-            candidate.name
-        ));
-        remove_sqlite_image(&base_path)?;
-        let mut base_store = Store::open(&base_path, candidate)?;
-        let (base_root, base_transition) =
-            build_directory(&mut base_store, candidate, false, false, &mut metrics)?;
-        base_store.publish(None, base_root, base_transition, &mut metrics)?;
-        drop(base_store);
-        clone_sqlite_image(&base_path, &db_path)?;
-        store = Store::open(&db_path, candidate)?;
-        metrics = Metrics::default();
-        edit_directory(&mut store, candidate, operation, &mut metrics)?
+        let result = edit_directory(&mut store, candidate, operation, &mut metrics)?;
+        let stage_end = Instant::now();
+        phases.canonical_cas_mapping_stage_ns = stage_end.duration_since(durable_cursor).as_nanos();
+        durable_cursor = stage_end;
+        result
     } else {
         return Err(format!("unknown operation {operation}").into());
     };
+    let precommit_started = durable_cursor;
     let expected_parent = if operation == "full" || operation == "dir-create" {
         None
     } else {
@@ -3265,11 +4395,6 @@ fn run_row(
         }])
     } else {
         None
-    };
-    let precommit_started = if operation == "full" {
-        durable_cursor
-    } else {
-        qualification_start
     };
     let transition_digest = verify_transition(
         &store,
@@ -3317,12 +4442,7 @@ fn run_row(
     let commit_end = Instant::now();
     phases.sqlite_commit_durability_ns = commit_end.duration_since(commit_started).as_nanos();
     phases.durable_capture_total_ns = commit_end.duration_since(durable_capture_start).as_nanos();
-    let capture_ns = if operation == "full" {
-        phases.durable_capture_total_ns
-    } else {
-        qualification_start.elapsed().as_nanos()
-    };
-    let capture_end_bytes = apparent_store_bytes(&store);
+    let capture_ns = phases.durable_capture_total_ns;
     let reopen_started = commit_end;
     drop(store);
     let mut store = Store::open(&db_path, candidate)?;
@@ -3390,16 +4510,26 @@ fn run_row(
     phases.reconstruction_ns = reconstruction_end
         .duration_since(reconstruction_started)
         .as_nanos();
-    if !operation.starts_with("dir-") {
+    let range_measurements = if !operation.starts_with("dir-") {
         let file_root = namespace_entry_id(&store, root_id, b"file", &mut metrics)?;
-        range_measurements = verify_ranges(
+        verify_ranges(
             &store,
             file_root,
-            expected_probes.ok_or(CoreError::MissingObject)?,
-            expected_ranges.ok_or(CoreError::MissingObject)?,
+            candidate,
+            &expected_probes,
+            &expected_ranges,
             &mut metrics,
-        )?;
-    }
+        )?
+    } else {
+        verify_directory_lookups(
+            &store,
+            root_id,
+            candidate,
+            operation == "dir-leading",
+            expected_dir_replacement,
+            &mut metrics,
+        )?
+    };
     if reconstructed_references != fresh_references {
         return Err(CoreError::PublicationConflict.into());
     }
@@ -3409,18 +4539,13 @@ fn run_row(
         return Err(CoreError::PublicationConflict.into());
     }
     let lifecycle_end = Instant::now();
-    if !operation.starts_with("dir-") {
-        phases.range_verification_ns = lifecycle_end.duration_since(reconstruction_end).as_nanos();
-    }
+    phases.range_verification_ns = lifecycle_end.duration_since(reconstruction_end).as_nanos();
     phases.complete_lifecycle_total_ns = lifecycle_end
         .duration_since(durable_capture_start)
         .as_nanos();
+    let physical_after = store.physical_snapshot();
     drop(store);
-    let qualification_ns = if operation == "full" {
-        phases.complete_lifecycle_total_ns
-    } else {
-        qualification_start.elapsed().as_nanos()
-    };
+    let qualification_ns = phases.complete_lifecycle_total_ns;
     let output = row_json(
         candidate,
         size,
@@ -3428,7 +4553,6 @@ fn run_row(
         iteration,
         warmup,
         &source_fingerprint,
-        started,
         capture_ns,
         qualification_ns,
         root_id,
@@ -3438,9 +4562,11 @@ fn run_row(
         fresh_references,
         closure_digest,
         metrics,
-        capture_end_bytes,
+        physical_before,
+        physical_after,
         &phases,
         &range_measurements,
+        &executable_sha256,
         None,
     )?;
     Ok(output)
@@ -3527,6 +4653,10 @@ fn json_usize_field(line: &str, key: &str) -> Option<usize> {
     json_u128_field(line, key)?.try_into().ok()
 }
 
+fn json_numeric_field_present(line: &str, key: &str) -> bool {
+    line.contains(&format!("\"{key}\":")) && json_string_field(line, key).is_none()
+}
+
 fn decimal_seconds_to_ns(value: &str) -> Option<u128> {
     let (whole, fraction) = value.split_once('.').unwrap_or((value, ""));
     let seconds = whole.parse::<u128>().ok()?;
@@ -3603,8 +4733,30 @@ fn invoke_campaign_row(
     output: &mut File,
     failures: &mut File,
     commands: &mut File,
+    resources: &mut File,
+    executable_sha256: &str,
 ) -> AnyResult<()> {
     let executable = env::current_exe()?;
+    let preparation_args = vec![
+        "--prepare-row".to_string(),
+        root.to_str().ok_or("non-UTF8 campaign root")?.to_string(),
+        candidate.name.to_string(),
+        size.to_string(),
+        operation.to_string(),
+        iteration.to_string(),
+    ];
+    writeln!(commands, "{:?} {:?}", executable, preparation_args)?;
+    let preparation = std::process::Command::new(&executable)
+        .args(&preparation_args)
+        .output()?;
+    if !preparation.status.success() {
+        return Err(format!(
+            "row preparation failed {}: {}",
+            candidate.name,
+            String::from_utf8_lossy(&preparation.stderr)
+        )
+        .into());
+    }
     let mut command = if Path::new("/usr/bin/time").is_file() {
         let mut command = std::process::Command::new("/usr/bin/time");
         command.arg("-l").arg(&executable);
@@ -3622,9 +4774,11 @@ fn invoke_campaign_row(
         warmup.to_string(),
     ];
     command.args(&args);
+    command.env("WP4M_EXECUTABLE_SHA256", executable_sha256);
     writeln!(
         commands,
-        "{:?} {:?}",
+        "WP4M_EXECUTABLE_SHA256={} {:?} {:?}",
+        executable_sha256,
         command.get_program(),
         command.get_args().collect::<Vec<_>>()
     )?;
@@ -3644,6 +4798,15 @@ fn invoke_campaign_row(
     }
     let stdout = String::from_utf8_lossy(&result.stdout);
     let stderr = String::from_utf8_lossy(&result.stderr);
+    writeln!(
+        resources,
+        "candidate={} size={} operation={} iteration={} warmup={}",
+        candidate.name, size, operation, iteration, warmup
+    )?;
+    resources.write_all(result.stderr.as_slice())?;
+    if !result.stderr.ends_with(b"\n") {
+        writeln!(resources)?;
+    }
     output.write_all(add_external_resource_metrics(&stdout, &stderr).as_bytes())?;
     Ok(())
 }
@@ -3661,6 +4824,7 @@ fn write_campaign_summary(root: &Path, jsonl: &Path, invocations: usize) -> AnyR
     let mut failures = 0_usize;
     let mut protected_metrics_available = true;
     let mut groups: BTreeMap<String, Vec<(usize, u128)>> = BTreeMap::new();
+    let mut default_full_lifecycle = Vec::new();
     for line in raw.lines().filter(|line| !line.trim().is_empty()) {
         let is_warmup = line.contains("\"warmup\":true");
         if is_warmup {
@@ -3671,9 +4835,14 @@ fn write_campaign_summary(root: &Path, jsonl: &Path, invocations: usize) -> AnyR
         if !line.contains("\"status\":\"PASS\"") {
             failures = failures.checked_add(1).ok_or(CoreError::LengthOverflow)?;
         }
-        if json_string_field(line, "cpu_ns").is_some()
-            || json_string_field(line, "rss_bytes").is_some()
-            || json_string_field(line, "allocated_store_delta_bytes").is_some()
+        if [
+            "cpu_ns",
+            "rss_bytes",
+            "allocated_store_delta_bytes",
+            "q_high_water",
+        ]
+        .iter()
+        .any(|key| !json_numeric_field_present(line, key))
         {
             protected_metrics_available = false;
         }
@@ -3690,10 +4859,15 @@ fn write_campaign_summary(root: &Path, jsonl: &Path, invocations: usize) -> AnyR
             continue;
         };
         let iteration = json_usize_field(line, "iteration").unwrap_or(0);
-        groups
-            .entry(format!("{candidate}|{size}|{operation}"))
-            .or_default()
-            .push((iteration, qualification));
+        if !is_warmup {
+            if candidate == "K64-F64" && size == u128::from(SOURCE_100) && operation == "full" {
+                default_full_lifecycle.push(qualification);
+            }
+            groups
+                .entry(format!("{candidate}|{size}|{operation}"))
+                .or_default()
+                .push((iteration, qualification));
+        }
     }
     let mut rows = String::new();
     let mut first = true;
@@ -3713,16 +4887,25 @@ fn write_campaign_summary(root: &Path, jsonl: &Path, invocations: usize) -> AnyR
             median(&samples).unwrap_or(0)
         ));
     }
-    let gate = if invocations != 198 || warmup != 33 || measured != 165 || failures != 0 {
+    let gate = if invocations != 144 || warmup != 24 || measured != 120 || failures != 0 {
         "FAIL"
     } else {
         "INCONCLUSIVE"
     };
+    let diagnostic_500ms = median(&default_full_lifecycle).map_or_else(
+        || "{\"status\":\"INCONCLUSIVE\",\"median_complete_lifecycle_wall_ns\":\"Unavailable\",\"target_ns\":500000000}".to_string(),
+        |value| {
+            format!(
+                "{{\"status\":\"{}\",\"median_complete_lifecycle_wall_ns\":{value},\"target_ns\":500000000}}",
+                if value <= 500_000_000 { "PASS" } else { "FAIL" }
+            )
+        },
+    );
     let summary_path = root.join("wp4m-profile-selection-summary.json");
     let mut summary = File::create(&summary_path)?;
     writeln!(
         summary,
-        "{{\"format\":1,\"invocations\":{invocations},\"warmup\":{warmup},\"measured\":{measured},\"row_failures\":{failures},\"protected_metrics_available\":{protected_metrics_available},\"internal_500ms_diagnostic\":\"Unavailable\",\"sql_sensitivity\":\"INCONCLUSIVE-no-low-SQL-control\",\"admissibility\":\"{gate}\",\"reason\":\"protected CPU/RSS/allocated deltas are not all present in row evidence\",\"rows\":[{rows}]}}"
+        "{{\"format\":1,\"campaign_scope\":\"100MiB-mini-plus-wide-directory\",\"invocations\":{invocations},\"warmup\":{warmup},\"measured\":{measured},\"row_failures\":{failures},\"protected_metrics_available\":{protected_metrics_available},\"internal_500ms_diagnostic\":{diagnostic_500ms},\"sql_sensitivity\":\"INCONCLUSIVE-no-low-SQL-control\",\"admissibility\":\"{gate}\",\"reason\":\"512MiB scaling, logical Q, and SQL-sensitivity evidence are outside this mini campaign\",\"candidate_status\":{{\"K64-F64\":\"INCONCLUSIVE-default-not-promoted\",\"K59-F101\":\"INCONCLUSIVE\",\"K256-F256\":\"INCONCLUSIVE\",\"DIR64K\":\"INCONCLUSIVE\",\"DIR256K\":\"INCONCLUSIVE-default-not-promoted\",\"DIR1M\":\"INCONCLUSIVE\"}},\"rows\":[{rows}]}}"
     )?;
     summary.sync_all()?;
     Ok(())
@@ -3735,6 +4918,8 @@ mod tests {
     use layerfs_core::cas::InMemoryCas;
     use layerfs_core::content::{ChunkReference, LogicalFile};
 
+    const COW_TEST_REFERENCES: u64 = 4_100;
+
     fn test_path(label: &str) -> PathBuf {
         env::temp_dir().join(format!(
             "layerfs-wp4m-{label}-{}",
@@ -3743,6 +4928,60 @@ mod tests {
                 .expect("clock")
                 .as_nanos()
         ))
+    }
+
+    fn uniform_file_observations(
+        position: u64,
+        replacement: u8,
+        inserted: bool,
+    ) -> (String, String) {
+        let mut raw = Hasher::new();
+        let mut sequence = Hasher::new();
+        for ordinal in 0..COW_TEST_REFERENCES + u64::from(inserted) {
+            let byte = if ordinal == position {
+                replacement
+            } else {
+                b'x'
+            };
+            raw.update(&[byte]);
+            sequence.update(&1_u32.to_be_bytes());
+            sequence.update(chunk_id(&[byte]).as_bytes());
+        }
+        (
+            raw.finalize().to_hex().to_string(),
+            sequence.finalize().to_hex().to_string(),
+        )
+    }
+
+    fn build_uniform_base(database: &Path, candidate: Candidate) -> (Store, ObjectId, ObjectId) {
+        let mut store = Store::open(database, candidate).expect("open base");
+        let mut metrics = Metrics::default();
+        store.begin(&mut metrics).expect("begin base");
+        let reference = make_reference(&mut store, b"x", &mut metrics).expect("reference");
+        let mut builder = FileBuilder::new(candidate);
+        for _ in 0..COW_TEST_REFERENCES {
+            builder
+                .push_reference(&mut store, reference, &mut metrics)
+                .expect("base reference");
+        }
+        let file = builder.finish(&mut store, &mut metrics).expect("file base");
+        let root = namespace_file_root(&mut store, file, &mut metrics).expect("namespace base");
+        let transition =
+            publish_transition(&mut store, None, root, &mut metrics).expect("base transition");
+        store
+            .publish(None, root, transition, &mut metrics)
+            .expect("publish base");
+        (store, root, file)
+    }
+
+    fn file_root_children(store: &Store, file: ObjectId) -> (u8, Vec<file_codec::FileChild>) {
+        let mut metrics = Metrics::default();
+        let (_, bytes) = store.get(file, &mut metrics).expect("file root");
+        let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)
+            .expect("file root mapping");
+        let (_, _, level, children) =
+            file_codec::parse_file_root(&payload).expect("file root body");
+        (level, children)
     }
 
     #[test]
@@ -3767,8 +5006,8 @@ mod tests {
                 build_file(&mut store, &source, candidate, &mut metrics).expect("candidate build");
             let file_root =
                 namespace_entry_id(&store, root, b"file", &mut metrics).expect("file root");
-            let sqlite =
-                read_file_range(&store, file_root, 4..24, &mut metrics).expect("sqlite range");
+            let sqlite = read_file_range(&store, file_root, candidate, 4..24, &mut metrics)
+                .expect("sqlite range");
             assert_eq!(sqlite, memory.bytes());
             store
                 .publish(None, root, transition, &mut metrics)
@@ -3787,6 +5026,270 @@ mod tests {
         drop(reopened);
         fs::remove_file(source).expect("source cleanup");
         remove_sqlite_image(&database).expect("database cleanup");
+
+        let boundary_database = test_path("parity-boundaries.sqlite");
+        let (store, _, file_root) = build_uniform_base(&boundary_database, candidate);
+        let mut cas = InMemoryCas::new();
+        let (chunk, _) = cas.put_chunk(b"x").expect("memory chunk");
+        let memory = LogicalFile::from_chunks(
+            &cas,
+            vec![ChunkReference::new(chunk, 1); COW_TEST_REFERENCES as usize],
+        )
+        .expect("memory boundary file");
+        let mut metrics = Metrics::default();
+        for range in [
+            0..0,
+            0..1,
+            63..65,
+            4_095..4_097,
+            4_099..4_100,
+            4_100..4_100,
+            0..4_100,
+        ] {
+            assert_eq!(
+                read_file_range(&store, file_root, candidate, range.clone(), &mut metrics)
+                    .expect("candidate boundary range"),
+                memory
+                    .read_range(&cas, range)
+                    .expect("memory boundary range")
+                    .bytes()
+            );
+        }
+        drop(store);
+        let store = Store::open(&boundary_database, candidate).expect("boundary reopen");
+        assert_eq!(
+            read_file_range(&store, file_root, candidate, 4_095..4_097, &mut metrics)
+                .expect("reopened branch boundary"),
+            b"xx"
+        );
+        drop(store);
+        remove_sqlite_image(&boundary_database).expect("boundary cleanup");
+    }
+
+    #[test]
+    fn measured_edit_starts_from_an_already_published_base() {
+        let root = test_path("prepared-edit");
+        fs::create_dir_all(&root).expect("root");
+        let source = source_path(&root, 256 * 1024);
+        fill_source(&source, 256 * 1024, 0x31).expect("source");
+        let candidate = FILE_CANDIDATES[0];
+        prepare_row_database(&root, candidate, 256 * 1024, "same-middle", 0)
+            .expect("untimed preparation");
+        let database = row_database_path(&root, candidate, 256 * 1024, "same-middle", 0);
+        let mut store = Store::open(&database, candidate).expect("prepared store");
+        assert_eq!(
+            store
+                .current_head()
+                .expect("prepared head")
+                .map(|head| head.0),
+            Some(1)
+        );
+
+        let prepared = read_prepared_expectations(&expectations_path(&database))
+            .expect("prepared expectations");
+        let point = prepared.edit_point.expect("prepared edit point");
+        assert!(prepared.base.is_some());
+        fs::remove_file(&source).expect("remove source before measured mutation");
+        let mut measured = Metrics::default();
+        edit_file(&mut store, candidate, "same-middle", point, &mut measured)
+            .expect("measured mutation");
+        assert_eq!(measured.transactions, 1);
+        assert_eq!(measured.commits, 0);
+        assert_eq!(
+            store
+                .current_head()
+                .expect("base remains visible")
+                .map(|head| head.0),
+            Some(1)
+        );
+        drop(store);
+        remove_sqlite_image(&database).expect("database cleanup");
+        fs::remove_dir(root).expect("root cleanup");
+    }
+
+    #[test]
+    fn cow_edits_reuse_the_unchanged_tree_and_account_for_the_exact_suffix() {
+        let candidate = FILE_CANDIDATES[0];
+
+        let same_database = test_path("same-count-cow.sqlite");
+        let (mut same_store, parent, before_file) = build_uniform_base(&same_database, candidate);
+        let (level, before_root_children) = file_root_children(&same_store, before_file);
+        assert_eq!(level, 1);
+        let mut before_metrics = Metrics::default();
+        let (_, before_branch_bytes) = same_store
+            .get(before_root_children[0].object_id, &mut before_metrics)
+            .expect("before branch");
+        let before_branch = file_codec::parse_file_children(
+            &file_codec::decode_mapping(&before_branch_bytes, file_codec::FILE_BRANCH_TAG)
+                .expect("before branch mapping"),
+            true,
+        )
+        .expect("before branch body")
+        .1;
+        let mut same_metrics = Metrics::default();
+        let (same_root, same_transition) = edit_file(
+            &mut same_store,
+            candidate,
+            "same-middle",
+            EditPoint {
+                reference_count: COW_TEST_REFERENCES,
+                position: COW_TEST_REFERENCES / 2,
+                byte_offset: COW_TEST_REFERENCES / 2,
+                replacement_length: 1,
+            },
+            &mut same_metrics,
+        )
+        .expect("same-count edit");
+        let same_file = namespace_entry_id(&same_store, same_root, b"file", &mut same_metrics)
+            .expect("same file");
+        let (_, after_root_children) = file_root_children(&same_store, same_file);
+        assert_eq!(before_root_children[1], after_root_children[1]);
+        let mut after_metrics = Metrics::default();
+        let (_, after_branch_bytes) = same_store
+            .get(after_root_children[0].object_id, &mut after_metrics)
+            .expect("after branch");
+        let after_branch = file_codec::parse_file_children(
+            &file_codec::decode_mapping(&after_branch_bytes, file_codec::FILE_BRANCH_TAG)
+                .expect("after branch mapping"),
+            true,
+        )
+        .expect("after branch body")
+        .1;
+        assert_eq!(
+            before_branch
+                .iter()
+                .zip(&after_branch)
+                .filter(|(before, after)| before.object_id != after.object_id)
+                .count(),
+            1
+        );
+        assert_eq!(same_metrics.pages, 1);
+        assert_eq!(same_metrics.branches, 1);
+        let operation = delta_codec::TransitionOperation::Replace {
+            path: b"file".to_vec(),
+            before: before_file,
+            after: same_file,
+        };
+        verify_transition(
+            &same_store,
+            same_transition,
+            Some(parent),
+            same_root,
+            Some(std::slice::from_ref(&operation)),
+            &mut same_metrics,
+        )
+        .expect("same transition replay");
+        let (fingerprint, sequence) =
+            uniform_file_observations(COW_TEST_REFERENCES / 2, 0x5a, false);
+        assert_eq!(
+            verify_file(
+                &same_store,
+                same_root,
+                candidate,
+                Some(&fingerprint),
+                Some(&sequence),
+                &mut same_metrics,
+            )
+            .expect("same-count content")
+            .1,
+            COW_TEST_REFERENCES
+        );
+        drop(same_store);
+        remove_sqlite_image(&same_database).expect("same cleanup");
+
+        for (label, position) in [("early", 0), ("middle", COW_TEST_REFERENCES / 2)] {
+            let database = test_path(&format!("plus-one-{label}.sqlite"));
+            let (mut store, parent, before_file) = build_uniform_base(&database, candidate);
+            let mut metrics = Metrics::default();
+            let (root, transition) = edit_file(
+                &mut store,
+                candidate,
+                if position == 0 {
+                    "plus1-early"
+                } else {
+                    "plus1-middle"
+                },
+                EditPoint {
+                    reference_count: COW_TEST_REFERENCES,
+                    position,
+                    byte_offset: position,
+                    replacement_length: 1,
+                },
+                &mut metrics,
+            )
+            .expect("plus-one edit");
+            assert_eq!(metrics.suffix_references, COW_TEST_REFERENCES - position);
+            assert_eq!(metrics.suffix_bytes, COW_TEST_REFERENCES - position);
+            assert_eq!(metrics.references, COW_TEST_REFERENCES - position + 1);
+            let (fingerprint, sequence) = uniform_file_observations(position, 0xa5, true);
+            assert_eq!(
+                verify_file(
+                    &store,
+                    root,
+                    candidate,
+                    Some(&fingerprint),
+                    Some(&sequence),
+                    &mut metrics,
+                )
+                .expect("plus-one content")
+                .1,
+                COW_TEST_REFERENCES + 1
+            );
+            let after_file =
+                namespace_entry_id(&store, root, b"file", &mut metrics).expect("after file");
+            let operation = delta_codec::TransitionOperation::Replace {
+                path: b"file".to_vec(),
+                before: before_file,
+                after: after_file,
+            };
+            verify_transition(
+                &store,
+                transition,
+                Some(parent),
+                root,
+                Some(std::slice::from_ref(&operation)),
+                &mut metrics,
+            )
+            .expect("plus-one transition replay");
+            drop(store);
+            remove_sqlite_image(&database).expect("plus-one cleanup");
+        }
+    }
+
+    #[test]
+    fn cow_edits_reject_a_corrupt_parent_mapping_before_rewrite() {
+        let candidate = FILE_CANDIDATES[0];
+        for operation in ["same-middle", "plus1-middle"] {
+            let database = test_path(&format!("corrupt-parent-{operation}.sqlite"));
+            let (mut store, _, file) = build_uniform_base(&database, candidate);
+            store
+                .connection
+                .execute(
+                    "UPDATE wp4m_objects SET canonical_bytes = zeroblob(20) WHERE object_id = ?1",
+                    params![file.as_bytes().as_slice()],
+                )
+                .expect("corrupt parent mapping");
+            let mut metrics = Metrics::default();
+            let error = edit_file(
+                &mut store,
+                candidate,
+                operation,
+                EditPoint {
+                    reference_count: COW_TEST_REFERENCES,
+                    position: COW_TEST_REFERENCES / 2,
+                    byte_offset: COW_TEST_REFERENCES / 2,
+                    replacement_length: 1,
+                },
+                &mut metrics,
+            )
+            .expect_err("corrupt parent must fail");
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::IdentityMismatch)
+            );
+            drop(store);
+            remove_sqlite_image(&database).expect("corrupt parent cleanup");
+        }
     }
 
     #[test]
@@ -3811,6 +5314,8 @@ mod tests {
                 .expect("fault provenance");
             assert_eq!(provenance.first, Some(CoreError::Io));
             assert_eq!(provenance.reconciliation, Reconciliation::NotAttempted);
+            assert_eq!(provenance.cleanup_first, None);
+            assert_eq!(provenance.dominant, Some(CoreError::Io));
         }
         let reopened = Store::open(&before_database, candidate).expect("reopen");
         assert!(reopened.current_head().expect("head").is_none());
@@ -3818,6 +5323,7 @@ mod tests {
         remove_sqlite_image(&before_database).expect("before cleanup");
 
         let after_database = test_path("fault-after.sqlite");
+        let authority_key;
         {
             let mut store = Store::open(&after_database, candidate).expect("open");
             let mut metrics = Metrics::default();
@@ -3834,22 +5340,157 @@ mod tests {
             assert_eq!(provenance.first, Some(CoreError::Io));
             assert_eq!(provenance.reconciliation, Reconciliation::RequestedVisible);
             assert_eq!(provenance.dominant, None);
+
+            let requested = store.current_head().expect("head").expect("visible head");
+            let requested_key = store
+                .publication_key(None, &requested)
+                .expect("requested key");
+            assert_eq!(
+                store.reconcile_publication(None, &requested, requested_key),
+                Reconciliation::RequestedVisible
+            );
+
+            let next_child = ObjectId::for_bytes(b"different-child");
+            let next_transition = ObjectId::for_bytes(b"different-transition");
+            let next_generation = requested.0.checked_add(1).expect("generation");
+            let next_receipt = ValidatedSnapshotReceiptV1 {
+                store_instance_id: store.store_instance_id,
+                validation_authority_id: store.validation_authority_id,
+                integrity_epoch: store.integrity_epoch,
+                head_generation: next_generation,
+                child_root_id: next_child,
+                transition_id: next_transition,
+                mapping_profile_id: ObjectId::from_bytes(&store.profile).expect("profile"),
+            }
+            .encode(&store.validation_key)
+            .expect("next receipt")
+            .to_vec();
+            assert_eq!(next_receipt.len(), 216);
+            let next = (next_generation, next_child, next_transition, next_receipt);
+            let next_key = store
+                .publication_key(Some(&requested), &next)
+                .expect("next key");
+            assert_eq!(
+                store.reconcile_publication(Some(&requested), &next, next_key),
+                Reconciliation::PriorVisible
+            );
+            assert_eq!(
+                store.reconcile_publication(
+                    None,
+                    &next,
+                    store.publication_key(None, &next).expect("different key")
+                ),
+                Reconciliation::DifferentHead
+            );
+
+            for malformed in [vec![0_u8; 215], vec![0_u8; 217]] {
+                store
+                    .connection
+                    .execute(
+                        "UPDATE wp4m_visible_head SET validation_receipt = ?1 WHERE id = 1",
+                        params![malformed],
+                    )
+                    .expect("malformed receipt");
+                let error = store.current_head().expect_err("receipt length must fail");
+                assert_eq!(
+                    error.downcast_ref::<CoreError>(),
+                    Some(&CoreError::InvalidValidationReceipt)
+                );
+            }
+
+            let mut corrupt_receipt = requested.3.clone();
+            corrupt_receipt[215] ^= 1;
+            store
+                .connection
+                .execute(
+                    "UPDATE wp4m_visible_head SET validation_receipt = ?1 WHERE id = 1",
+                    params![corrupt_receipt],
+                )
+                .expect("corrupt receipt");
+            let error = store.current_head().expect_err("corrupt MAC must fail");
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::InvalidValidationReceipt)
+            );
+
+            store
+                .connection
+                .execute(
+                    "UPDATE wp4m_visible_head SET validation_receipt = ?1 WHERE id = 1",
+                    params![next.3],
+                )
+                .expect("mismatched receipt");
+            let error = store
+                .current_head()
+                .expect_err("mismatched receipt must fail");
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::InvalidValidationReceipt)
+            );
+            assert_eq!(
+                store.reconcile_publication(None, &requested, requested_key),
+                Reconciliation::Ambiguous
+            );
+            authority_key = store.validation_key;
         }
         let authority = authority_path(&after_database);
         fs::remove_file(&authority).expect("authority removal");
-        assert!(Store::open(&after_database, candidate).is_err());
+        let error = Store::open(&after_database, candidate)
+            .err()
+            .expect("missing authority must fail");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::ValidationAuthorityUnavailable)
+        );
+        fs::write(&authority, [0_u8; 32]).expect("corrupt authority");
+        let error = Store::open(&after_database, candidate)
+            .err()
+            .expect("corrupt authority must fail");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::InvalidValidationReceipt)
+        );
+        fs::write(&authority, authority_key).expect("restore authority");
         remove_sqlite_image(&after_database).expect("after cleanup");
+
+        for (reconciliation, dominant) in [
+            (Reconciliation::NotAttempted, Some(CoreError::Io)),
+            (Reconciliation::RequestedVisible, None),
+            (Reconciliation::PriorVisible, Some(CoreError::Io)),
+            (
+                Reconciliation::DifferentHead,
+                Some(CoreError::PublicationConflict),
+            ),
+            (
+                Reconciliation::Ambiguous,
+                Some(CoreError::AmbiguousDurability),
+            ),
+        ] {
+            let provenance = failure_provenance(
+                Some(CoreError::Io),
+                Some(CoreError::LengthOverflow),
+                reconciliation,
+            );
+            assert_eq!(provenance.first, Some(CoreError::Io));
+            assert_eq!(provenance.cleanup_first, Some(CoreError::LengthOverflow));
+            assert_eq!(provenance.reconciliation, reconciliation);
+            assert_eq!(provenance.dominant, dominant);
+        }
         fs::remove_file(source).expect("source cleanup");
     }
 }
 
 fn run_campaign(root: &Path) -> AnyResult<()> {
     require_optimized_benchmark()?;
+    fs::create_dir_all(root)?;
+    let executable = env::current_exe()?;
+    let executable_sha256 = write_environment_record(root, &executable)?;
     prepare_sources(root)?;
     let jsonl = root.join("wp4m-profile-selection.jsonl");
     let mut output = File::create(&jsonl)?;
     let mut failures = File::create(root.join("wp4m-profile-selection-failures.jsonl"))?;
     let mut commands = File::create(root.join("wp4m-profile-selection-commands.txt"))?;
+    let mut resources = File::create(root.join("wp4m-profile-selection-resources.stderr"))?;
     let mut invocations = 0_usize;
     for iteration in 0..6 {
         let warmup = iteration == 0;
@@ -3857,30 +5498,7 @@ fn run_campaign(root: &Path) -> AnyResult<()> {
         let candidate_count = candidates.len();
         candidates.rotate_left(iteration % candidate_count);
         for candidate in candidates {
-            for size in [SOURCE_100, SOURCE_512] {
-                for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
-                    invoke_campaign_row(
-                        root,
-                        candidate,
-                        size,
-                        operation,
-                        iteration,
-                        warmup,
-                        &mut output,
-                        &mut failures,
-                        &mut commands,
-                    )?;
-                    invocations = invocations
-                        .checked_add(1)
-                        .ok_or(CoreError::LengthOverflow)?;
-                }
-            }
-        }
-        let mut directories = DIR_CANDIDATES.to_vec();
-        let directory_count = directories.len();
-        directories.rotate_left(iteration % directory_count);
-        for candidate in directories {
-            for operation in ["dir-create", "dir-replace", "dir-leading"] {
+            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
                 invoke_campaign_row(
                     root,
                     candidate,
@@ -3891,6 +5509,31 @@ fn run_campaign(root: &Path) -> AnyResult<()> {
                     &mut output,
                     &mut failures,
                     &mut commands,
+                    &mut resources,
+                    &executable_sha256,
+                )?;
+                invocations = invocations
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+            }
+        }
+        let mut directories = DIR_CANDIDATES.to_vec();
+        let directory_count = directories.len();
+        directories.rotate_left(iteration % directory_count);
+        for candidate in directories {
+            for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
+                invoke_campaign_row(
+                    root,
+                    candidate,
+                    SOURCE_100,
+                    operation,
+                    iteration,
+                    warmup,
+                    &mut output,
+                    &mut failures,
+                    &mut commands,
+                    &mut resources,
+                    &executable_sha256,
                 )?;
                 invocations = invocations
                     .checked_add(1)
@@ -3899,11 +5542,12 @@ fn run_campaign(root: &Path) -> AnyResult<()> {
         }
     }
     output.sync_all()?;
-    if invocations != 198 {
-        return Err(format!("campaign invocation count {invocations}, expected 198").into());
+    if invocations != 144 {
+        return Err(format!("campaign invocation count {invocations}, expected 144").into());
     }
     failures.sync_all()?;
     commands.sync_all()?;
+    resources.sync_all()?;
     write_campaign_summary(root, &jsonl, invocations)?;
     println!(
         "campaign COMPLETE invocations={invocations} jsonl={} summary={}",
@@ -3917,7 +5561,18 @@ fn main() -> AnyResult<()> {
     let args: Vec<String> = env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("--self-test") => self_test(Path::new(args.get(2).ok_or("missing self-test root")?)),
+        Some("--prepare-fixtures") => {
+            prepare_retained_fixtures(Path::new(args.get(2).ok_or("missing fixture root")?))
+        }
         Some("--campaign") => run_campaign(Path::new(args.get(2).ok_or("missing campaign root")?)),
+        Some("--prepare-row") => {
+            let root = Path::new(args.get(2).ok_or("missing row root")?);
+            let candidate = candidate_by_name(args.get(3).ok_or("missing candidate")?)?;
+            let size = args.get(4).ok_or("missing size")?.parse::<u64>()?;
+            let operation = args.get(5).ok_or("missing operation")?;
+            let iteration = args.get(6).ok_or("missing iteration")?.parse::<usize>()?;
+            prepare_row_database(root, candidate, size, operation, iteration)
+        }
         Some("--row") => {
             let root = Path::new(args.get(2).ok_or("missing row root")?);
             let candidate = candidate_by_name(args.get(3).ok_or("missing candidate")?)?;
@@ -3928,6 +5583,6 @@ fn main() -> AnyResult<()> {
             println!("{}", run_row(root, candidate, size, operation, iteration, warmup)?);
             Ok(())
         }
-        _ => Err("usage: --self-test ROOT | --campaign ROOT | --row ROOT CANDIDATE SIZE OP ITERATION WARMUP".into()),
+        _ => Err("usage: --self-test ROOT | --prepare-fixtures ROOT | --campaign ROOT | --prepare-row ROOT CANDIDATE SIZE OP ITERATION | --row ROOT CANDIDATE SIZE OP ITERATION WARMUP".into()),
     }
 }
