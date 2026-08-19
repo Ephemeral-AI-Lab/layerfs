@@ -26,6 +26,7 @@ use layerfs_core::{
     chunk_id, decode_object, encode_bytes_object_to, encode_object as encode_canonical_object,
     CanonicalName, CoreError, CoreResult, ObjectId,
 };
+use rusqlite::ffi;
 use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -69,6 +70,62 @@ const AMENDED_M45_RESULT_TRANSITION: &str =
     "f11cc9d84deae7f1871adca62cc562ab63dbb01e9c39771ed3522eab4007cee1";
 const AMENDED_M45_RESULT_CLOSURE: &str =
     "c0f6a39bf9939c89301bedb564516c5ec851321a1d89c69b2e95d4b1844a9587";
+const F1_STATUS_SCHEMA: &str = "f1-v2-status-codes-v1";
+const STATUS_OBSERVED: &str = "O";
+const STATUS_UNAVAILABLE_STATUS_API: &str = "U_STATUS_API";
+const F1_Q_EQUATION: &str = "Q1";
+const F1_STATUS_CODES: &[&str] = &[
+    "O",
+    "O_EXT",
+    "D",
+    "NA",
+    "U_WD",
+    "U_HEAP",
+    "U_STATUS_API",
+    "U_CACHE_HWM",
+    "U_DIRTY_CUR",
+    "U_VFS_IO",
+    "U_VFS_SYNC",
+    "U_JRN_PEAK",
+    "U_TMP_PEAK",
+    "U_PHYS_BYTES",
+    "U_PLAN",
+    "U_NATIVE_PREP",
+    "MIXED_IO",
+];
+const F1_ROW_STATUS_REPLACEMENTS: &[(&str, &str)] = &[
+    ("\"phase_counters\":\"Observed\"", "\"phase_counters\":\"O\""),
+    ("\"identity_hash_bytes\":\"Observed\"", "\"identity_hash_bytes\":\"O\""),
+    ("\"borrowed_bytes_encoding\":\"Observed\"", "\"borrowed_bytes_encoding\":\"O\""),
+    ("\"object_id_authentication_reuse\":\"Observed\"", "\"object_id_authentication_reuse\":\"O\""),
+    ("\"logical_q\":\"Observed\"", "\"logical_q\":\"O\""),
+    ("\"w_d\":\"Unavailable: governing cumulative definitions are not implemented\"", "\"w_d\":\"U_WD\""),
+    ("\"row_blob_copies\":\"Observed\"", "\"row_blob_copies\":\"O\""),
+    ("\"borrowed_row_blob_path\":\"Observed\"", "\"borrowed_row_blob_path\":\"O\""),
+    ("\"incremental_blob_api\":\"Observed\"", "\"incremental_blob_api\":\"O\""),
+    ("\"cpu_rss\":\"Observed externally per child by /usr/bin/time -l\"", "\"cpu_rss\":\"O_EXT\""),
+    ("\"other_heap_copy_bytes\":\"Unavailable\"", "\"other_heap_copy_bytes\":\"U_HEAP\""),
+    ("\"query_plans\":\"Unavailable\"", "\"query_plans\":\"U_PLAN\""),
+    ("\"native_sqlite_prepare_calls\":\"Unavailable\"", "\"native_sqlite_prepare_calls\":\"U_NATIVE_PREP\""),
+    ("\"blob_api_status\":\"Observed\"", "\"blob_api_status\":\"O\""),
+    ("\"sync_fsync_observations\":\"Unavailable\"", "\"sync_fsync_observations\":\"U_VFS_SYNC\""),
+    ("\"host_physical_io\":\"Unavailable\"", "\"host_physical_io\":\"U_PHYS_BYTES\""),
+    ("\"sqlite_page_cache_true_high_water\":\"Unavailable: SQLITE_DBSTATUS_CACHE_USED high-water is always zero by API contract\"", "\"sqlite_page_cache_true_high_water\":\"U_CACHE_HWM\""),
+    ("\"dirty_pages_current\":\"Unavailable: SQLite exposes dirty writes/spills but not current dirty-page count\"", "\"dirty_pages_current\":\"U_DIRTY_CUR\""),
+    ("\"main_db_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\"", "\"main_db_io_calls_bytes\":\"U_VFS_IO\""),
+    ("\"journal_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\"", "\"journal_io_calls_bytes\":\"U_VFS_IO\""),
+    ("\"sync_calls_wall\":\"Unavailable: VFS excluded; fs_usage/dtruss require unavailable privileges\"", "\"sync_calls_wall\":\"U_VFS_SYNC\""),
+    ("\"journal_true_peak\":\"Unavailable: DELETE journal can grow/disappear between snapshots\"", "\"journal_true_peak\":\"U_JRN_PEAK\""),
+    ("\"temporary_file_peak\":\"Unavailable: no filename/peak API under temp_store=FILE\"", "\"temporary_file_peak\":\"U_TMP_PEAK\""),
+    ("\"host_physical_io_bytes\":\"Unavailable: not derived from logical/allocation/block-operation counters\"", "\"host_physical_io_bytes\":\"U_PHYS_BYTES\""),
+    ("\"process_io\":\"Observed externally: separate user/system CPU and block-operation counts; byte-level physical I/O unavailable\"", "\"process_io\":\"MIXED_IO\""),
+    ("\"physical_io_cache_sync_temp_journal_status\":\"Mixed: supported SQLite/filesystem snapshots observed; unsupported VFS/privileged facts unavailable with reasons\"", "\"physical_io_cache_sync_temp_journal_status\":\"MIXED_IO\""),
+    ("\"q_equation\":\"pre_admitted_checked_sum:canonical+decoded_nodes+file_refs+tree_nodes+dfs+cdc+sql+expectations+ranges+receipts+report\"", "\"q_equation\":\"Q1\""),
+    ("\"peak_journal_bytes\":\"Unavailable\"", "\"peak_journal_bytes\":\"U_JRN_PEAK\""),
+    ("\"peak_temporary_bytes\":\"Unavailable\"", "\"peak_temporary_bytes\":\"U_TMP_PEAK\""),
+    ("\"w_bytes\":\"Unavailable\"", "\"w_bytes\":\"U_WD\""),
+    ("\"d_bytes\":\"Unavailable\"", "\"d_bytes\":\"U_WD\""),
+];
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 type StoreMetaRow = (
@@ -338,6 +395,23 @@ struct Metrics {
     borrowed_row_blob_bytes: u64,
     transactions: u64,
     commits: u64,
+    commit_returns: u64,
+    commit_return_successes: u64,
+    commit_return_errors: u64,
+    commit_reconciliation_calls: u64,
+    commit_publish_call_wall_ns: u128,
+    commit_dispatch_to_return_wall_ns: u128,
+    commit_reconciliation_wall_ns: u128,
+    measurement_sql_queries: u64,
+    measurement_sql_rows: u64,
+    measurement_status_reset_calls: u64,
+    measurement_status_reset_errors: u64,
+    sqlite_page_size: Option<u64>,
+    sqlite_status_before: SqliteStatusSnapshot,
+    sqlite_status_before_dispatch: SqliteStatusSnapshot,
+    sqlite_status_after_return: SqliteStatusSnapshot,
+    commit_dispatch_filesystem: PhysicalSnapshot,
+    commit_return_filesystem: PhysicalSnapshot,
     objects_created: u64,
     objects_reused: u64,
     objects_authenticated: u64,
@@ -471,6 +545,25 @@ fn finish_q(metrics: &mut Metrics) -> CoreResult<()> {
 
 fn validate_metric_equations(metrics: Metrics) -> CoreResult<()> {
     if metrics.commits > metrics.transactions
+        || metrics.commit_returns > metrics.commits
+        || metrics
+            .commit_return_successes
+            .checked_add(metrics.commit_return_errors)
+            .ok_or(CoreError::LengthOverflow)?
+            != metrics.commit_returns
+        || metrics.commit_reconciliation_calls > metrics.commit_returns
+        || metrics.commit_dispatch_to_return_wall_ns > metrics.commit_publish_call_wall_ns
+        || metrics.commit_reconciliation_wall_ns
+            > metrics
+                .commit_publish_call_wall_ns
+                .checked_sub(metrics.commit_dispatch_to_return_wall_ns)
+                .ok_or(CoreError::LengthOverflow)?
+        || metrics.measurement_sql_rows > metrics.measurement_sql_queries
+        || metrics.measurement_status_reset_errors > metrics.measurement_status_reset_calls
+        || metrics.sqlite_status_before.errors > metrics.sqlite_status_before.read_calls
+        || metrics.sqlite_status_before_dispatch.errors
+            > metrics.sqlite_status_before_dispatch.read_calls
+        || metrics.sqlite_status_after_return.errors > metrics.sqlite_status_after_return.read_calls
         || metrics.borrowed_row_blob_reads > metrics.row_blob_reads
         || metrics.borrowed_row_blob_bytes > metrics.canonical_bytes_authenticated
         || metrics.incremental_new_subtree_objects_authenticated > metrics.objects_authenticated
@@ -621,6 +714,45 @@ struct CountingWriter(usize);
 impl std::fmt::Write for CountingWriter {
     fn write_str(&mut self, value: &str) -> std::fmt::Result {
         self.0 = self.0.checked_add(value.len()).ok_or(std::fmt::Error)?;
+        Ok(())
+    }
+}
+
+trait RowOutput: std::fmt::Write {
+    fn remove_last_object_brace(&mut self) -> std::fmt::Result;
+}
+
+impl RowOutput for CountingWriter {
+    fn remove_last_object_brace(&mut self) -> std::fmt::Result {
+        self.0 = self.0.checked_sub(1).ok_or(std::fmt::Error)?;
+        Ok(())
+    }
+}
+
+impl RowOutput for String {
+    fn remove_last_object_brace(&mut self) -> std::fmt::Result {
+        (self.pop() == Some('}'))
+            .then_some(())
+            .ok_or(std::fmt::Error)
+    }
+}
+
+struct CompactStatusWriter<'a, W>(&'a mut W);
+
+impl<W: std::fmt::Write> std::fmt::Write for CompactStatusWriter<'_, W> {
+    fn write_str(&mut self, mut value: &str) -> std::fmt::Result {
+        while !value.is_empty() {
+            let next = F1_ROW_STATUS_REPLACEMENTS
+                .iter()
+                .filter_map(|(from, to)| value.find(from).map(|index| (index, *from, *to)))
+                .min_by_key(|(index, _, _)| *index);
+            let Some((index, from, to)) = next else {
+                return self.0.write_str(value);
+            };
+            self.0.write_str(&value[..index])?;
+            self.0.write_str(to)?;
+            value = &value[index + from.len()..];
+        }
         Ok(())
     }
 }
@@ -953,6 +1085,32 @@ struct PhysicalSnapshot {
     allocated_database: Option<u64>,
     allocated_journal: Option<u64>,
     allocated_authority: Option<u64>,
+    measurement_sql_queries: u64,
+    measurement_sql_rows: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct SqliteStatusSnapshot {
+    page_cache_used_bytes: Option<u64>,
+    cache_hits: Option<u64>,
+    cache_misses: Option<u64>,
+    dirty_pages_written: Option<u64>,
+    cache_spill_pages: Option<u64>,
+    read_calls: u64,
+    errors: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SqliteStatusError {
+    Sqlite(i32),
+    CurrentOutOfRange(i32),
+}
+
+fn checked_sqlite_status_current(result: i32, current: i32) -> Result<u64, SqliteStatusError> {
+    if result != ffi::SQLITE_OK {
+        return Err(SqliteStatusError::Sqlite(result));
+    }
+    u64::try_from(current).map_err(|_| SqliteStatusError::CurrentOutOfRange(current))
 }
 
 impl PhysicalSnapshot {
@@ -2351,6 +2509,21 @@ impl Store {
         }
     }
 
+    fn reconcile_publication_observed(
+        &self,
+        prior: Option<&VisibleHead>,
+        requested: &VisibleHead,
+        request_key: [u8; 32],
+        next_reconciliation_calls: u64,
+        metrics: &mut Metrics,
+    ) -> (Reconciliation, Option<FailureCause>) {
+        let started = Instant::now();
+        let result = self.reconcile_publication_accounted(prior, requested, request_key, metrics);
+        metrics.commit_reconciliation_calls = next_reconciliation_calls;
+        metrics.commit_reconciliation_wall_ns = started.elapsed().as_nanos();
+        result
+    }
+
     #[cfg(test)]
     fn install_different_complete_head_after_commit(
         &self,
@@ -2398,8 +2571,10 @@ impl Store {
         let fault = self.next_publish_fault.take();
         #[cfg(not(test))]
         let fault = None;
-        let provenance =
-            self.publish_with_fault(expected_head, child, transition, fault, metrics)?;
+        let started = Instant::now();
+        let result = self.publish_with_fault(expected_head, child, transition, fault, metrics);
+        metrics.commit_publish_call_wall_ns = started.elapsed().as_nanos();
+        let provenance = result?;
         if provenance.dominant.is_some() {
             return Err(PublicationFailure(provenance).into());
         }
@@ -2507,6 +2682,22 @@ impl Store {
             .commits
             .checked_add(1)
             .ok_or(CoreError::LengthOverflow)?;
+        let next_commit_returns = metrics
+            .commit_returns
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        let next_commit_return_successes = metrics
+            .commit_return_successes
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        let next_commit_return_errors = metrics
+            .commit_return_errors
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        let next_reconciliation_calls = metrics
+            .commit_reconciliation_calls
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         let next_sql_execute_calls = metrics
             .sql_execute_calls
             .checked_add(1)
@@ -2517,13 +2708,23 @@ impl Store {
             .ok_or(CoreError::LengthOverflow)?;
         metrics.sql_execute_calls = next_sql_execute_calls;
         metrics.commits = next_commits;
-        if self.connection.execute_batch("COMMIT").is_err() {
+        metrics.sqlite_status_before_dispatch = self.sqlite_status_snapshot();
+        metrics.commit_dispatch_filesystem = self.filesystem_snapshot();
+        let commit_started = Instant::now();
+        let commit_result = self.connection.execute_batch("COMMIT");
+        metrics.commit_dispatch_to_return_wall_ns = commit_started.elapsed().as_nanos();
+        metrics.commit_returns = next_commit_returns;
+        metrics.sqlite_status_after_return = self.sqlite_status_snapshot();
+        metrics.commit_return_filesystem = self.filesystem_snapshot();
+        if commit_result.is_err() {
+            metrics.commit_return_errors = next_commit_return_errors;
             self.active_transaction = None;
             self.same_open_authority_serial = invalidated_authority_serial;
-            let (reconciliation, reconciliation_error) = self.reconcile_publication_accounted(
+            let (reconciliation, reconciliation_error) = self.reconcile_publication_observed(
                 current.as_ref(),
                 &requested,
                 request_key,
+                next_reconciliation_calls,
                 metrics,
             );
             let cleanup_first = if reconciliation == Reconciliation::RequestedVisible {
@@ -2541,6 +2742,7 @@ impl Store {
                 reconciliation_error,
             ));
         }
+        metrics.commit_return_successes = next_commit_return_successes;
         self.active_transaction = None;
         self.same_open_authority_serial = invalidated_authority_serial;
         #[allow(unused_mut)]
@@ -2583,10 +2785,11 @@ impl Store {
             };
             #[allow(unused_mut)]
             let (mut reconciliation, mut reconciliation_error) = self
-                .reconcile_publication_accounted(
+                .reconcile_publication_observed(
                     current.as_ref(),
                     &requested,
                     request_key,
+                    next_reconciliation_calls,
                     metrics,
                 );
             #[cfg(test)]
@@ -2611,29 +2814,109 @@ impl Store {
         ))
     }
 
-    fn physical_snapshot(&self) -> PhysicalSnapshot {
+    fn sqlite_db_status(&self, operation: i32, reset: bool) -> Result<u64, SqliteStatusError> {
+        let mut current = 0_i32;
+        let mut high_water = 0_i32;
+        // SAFETY: this private benchmark is synchronous and single-threaded;
+        // `self` owns a live Connection for the entire call, no concurrent
+        // SQLite operation can close/mutate its handle, and both stack output
+        // pointers remain valid until sqlite3_db_status returns.
+        let result = unsafe {
+            ffi::sqlite3_db_status(
+                self.connection.handle(),
+                operation,
+                &mut current,
+                &mut high_water,
+                i32::from(reset),
+            )
+        };
+        checked_sqlite_status_current(result, current)
+    }
+
+    fn sqlite_status_snapshot(&self) -> SqliteStatusSnapshot {
+        let page_cache_used_bytes = self.sqlite_db_status(ffi::SQLITE_DBSTATUS_CACHE_USED, false);
+        let cache_hits = self.sqlite_db_status(ffi::SQLITE_DBSTATUS_CACHE_HIT, false);
+        let cache_misses = self.sqlite_db_status(ffi::SQLITE_DBSTATUS_CACHE_MISS, false);
+        let dirty_pages_written = self.sqlite_db_status(ffi::SQLITE_DBSTATUS_CACHE_WRITE, false);
+        let cache_spill_pages = self.sqlite_db_status(ffi::SQLITE_DBSTATUS_CACHE_SPILL, false);
+        let errors = [
+            &page_cache_used_bytes,
+            &cache_hits,
+            &cache_misses,
+            &dirty_pages_written,
+            &cache_spill_pages,
+        ]
+        .into_iter()
+        .filter(|result| result.is_err())
+        .count() as u64;
+        SqliteStatusSnapshot {
+            page_cache_used_bytes: page_cache_used_bytes.ok(),
+            cache_hits: cache_hits.ok(),
+            cache_misses: cache_misses.ok(),
+            dirty_pages_written: dirty_pages_written.ok(),
+            cache_spill_pages: cache_spill_pages.ok(),
+            read_calls: 5,
+            errors,
+        }
+    }
+
+    fn start_sqlite_observations(&self, metrics: &mut Metrics) {
+        let reset_results = [
+            ffi::SQLITE_DBSTATUS_CACHE_HIT,
+            ffi::SQLITE_DBSTATUS_CACHE_MISS,
+            ffi::SQLITE_DBSTATUS_CACHE_WRITE,
+            ffi::SQLITE_DBSTATUS_CACHE_SPILL,
+        ]
+        .map(|operation| self.sqlite_db_status(operation, true));
+        metrics.measurement_status_reset_calls = 4;
+        metrics.measurement_status_reset_errors = reset_results
+            .iter()
+            .filter(|result| result.is_err())
+            .count() as u64;
+        let page_size = self
+            .connection
+            .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
+            .ok();
+        metrics.measurement_sql_queries = 1;
+        metrics.measurement_sql_rows = u64::from(page_size.is_some());
+        metrics.sqlite_page_size = page_size.and_then(|value| u64::try_from(value).ok());
+        metrics.sqlite_status_before = self.sqlite_status_snapshot();
+    }
+
+    fn filesystem_snapshot(&self) -> PhysicalSnapshot {
         let mut journal = self.path.as_os_str().to_os_string();
         journal.push("-journal");
         let journal = PathBuf::from(journal);
-        let logical_database = self
-            .connection
-            .query_row("PRAGMA page_count", [], |row| row.get::<_, i64>(0))
-            .ok()
-            .and_then(|pages| {
-                self.connection
-                    .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
-                    .ok()
-                    .and_then(|page_size| pages.checked_mul(page_size))
-                    .and_then(|bytes| u64::try_from(bytes).ok())
-            });
         PhysicalSnapshot {
-            logical_database,
             apparent_database: apparent_file_bytes(&self.path),
             apparent_journal: apparent_file_bytes(&journal),
             apparent_authority: apparent_file_bytes(&self.authority_path),
             allocated_database: allocated_file_bytes(&self.path),
             allocated_journal: allocated_file_bytes(&journal),
             allocated_authority: allocated_file_bytes(&self.authority_path),
+            ..PhysicalSnapshot::default()
+        }
+    }
+
+    fn physical_snapshot(&self) -> PhysicalSnapshot {
+        let page_count = self
+            .connection
+            .query_row("PRAGMA page_count", [], |row| row.get::<_, i64>(0))
+            .ok();
+        let page_size = page_count.and_then(|_| {
+            self.connection
+                .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
+                .ok()
+        });
+        let logical_database = page_count
+            .zip(page_size)
+            .and_then(|(pages, page_size)| pages.checked_mul(page_size))
+            .and_then(|bytes| u64::try_from(bytes).ok());
+        PhysicalSnapshot {
+            logical_database,
+            measurement_sql_queries: 1 + u64::from(page_count.is_some()),
+            measurement_sql_rows: u64::from(page_count.is_some()) + u64::from(page_size.is_some()),
+            ..self.filesystem_snapshot()
         }
     }
 }
@@ -7769,6 +8052,30 @@ fn range_measurements_json(
     Ok(output)
 }
 
+fn observed_delta(after: Option<u64>, before: Option<u64>) -> CoreResult<Option<u64>> {
+    match (after, before) {
+        (Some(after), Some(before)) => after
+            .checked_sub(before)
+            .map(Some)
+            .ok_or(CoreError::LengthOverflow),
+        _ => Ok(None),
+    }
+}
+
+fn observed_product(left: Option<u64>, right: Option<u64>) -> CoreResult<Option<u64>> {
+    match (left, right) {
+        (Some(left), Some(right)) => left
+            .checked_mul(right)
+            .map(Some)
+            .ok_or(CoreError::LengthOverflow),
+        _ => Ok(None),
+    }
+}
+
+fn observed_max(values: &[Option<u64>]) -> Option<u64> {
+    values.iter().copied().flatten().max()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn row_json(
     candidate: Candidate,
@@ -7795,6 +8102,7 @@ fn row_json(
     publication: Option<PublicationOutcome>,
     error: Option<&str>,
 ) -> AnyResult<ChargedString> {
+    let _ = (F1_STATUS_CODES, F1_Q_EQUATION);
     let mut metrics = metrics;
     let pre_report_current = q_current();
     validate_metric_equations(metrics)?;
@@ -7818,6 +8126,101 @@ fn row_json(
         .and_then(|value| value.checked_add(phases.fresh_full_scrub_ns))
         .and_then(|value| value.checked_add(phases.reconstruction_ns))
         .and_then(|value| value.checked_add(phases.range_verification_ns));
+    let commit_pre_and_post_dispatch_wall_ns = metrics
+        .commit_publish_call_wall_ns
+        .checked_sub(metrics.commit_dispatch_to_return_wall_ns)
+        .ok_or(CoreError::LengthOverflow)?;
+    let commit_caller_wrapper_wall_ns = phases
+        .sqlite_commit_durability_ns
+        .checked_sub(metrics.commit_publish_call_wall_ns)
+        .ok_or(CoreError::LengthOverflow)?;
+    let commit_observation_sum_ns = metrics
+        .commit_dispatch_to_return_wall_ns
+        .checked_add(commit_pre_and_post_dispatch_wall_ns)
+        .and_then(|value| value.checked_add(commit_caller_wrapper_wall_ns))
+        .ok_or(CoreError::LengthOverflow)?;
+    let commit_return_status = if metrics.commit_returns == 0 {
+        "NotApplicable"
+    } else if metrics.commit_return_successes == metrics.commit_returns {
+        "ok"
+    } else if metrics.commit_return_errors == metrics.commit_returns {
+        "error"
+    } else {
+        "mixed"
+    };
+    let cache_hits = observed_delta(
+        metrics.sqlite_status_after_return.cache_hits,
+        metrics.sqlite_status_before.cache_hits,
+    )?;
+    let cache_misses = observed_delta(
+        metrics.sqlite_status_after_return.cache_misses,
+        metrics.sqlite_status_before.cache_misses,
+    )?;
+    let dirty_pages_written = observed_delta(
+        metrics.sqlite_status_after_return.dirty_pages_written,
+        metrics.sqlite_status_before.dirty_pages_written,
+    )?;
+    let cache_spill_pages = observed_delta(
+        metrics.sqlite_status_after_return.cache_spill_pages,
+        metrics.sqlite_status_before.cache_spill_pages,
+    )?;
+    let pager_write_bytes = observed_product(dirty_pages_written, metrics.sqlite_page_size)?;
+    let page_cache_snapshot_max = observed_max(&[
+        metrics.sqlite_status_before.page_cache_used_bytes,
+        metrics.sqlite_status_before_dispatch.page_cache_used_bytes,
+        metrics.sqlite_status_after_return.page_cache_used_bytes,
+    ]);
+    let journal_sampled_allocation_max = observed_max(&[
+        physical_before.allocated_journal,
+        metrics.commit_dispatch_filesystem.allocated_journal,
+        metrics.commit_return_filesystem.allocated_journal,
+        physical_after.allocated_journal,
+    ]);
+    let sqlite_status_classification = if metrics.measurement_status_reset_errors == 0
+        && metrics.sqlite_status_before.page_cache_used_bytes.is_some()
+        && metrics
+            .sqlite_status_before_dispatch
+            .page_cache_used_bytes
+            .is_some()
+        && metrics
+            .sqlite_status_after_return
+            .page_cache_used_bytes
+            .is_some()
+        && cache_hits.is_some()
+        && cache_misses.is_some()
+        && dirty_pages_written.is_some()
+        && cache_spill_pages.is_some()
+    {
+        STATUS_OBSERVED
+    } else {
+        STATUS_UNAVAILABLE_STATUS_API
+    };
+    let measurement_sql_queries = physical_before
+        .measurement_sql_queries
+        .checked_add(metrics.measurement_sql_queries)
+        .and_then(|value| value.checked_add(physical_after.measurement_sql_queries))
+        .ok_or(CoreError::LengthOverflow)?;
+    let measurement_sql_rows = physical_before
+        .measurement_sql_rows
+        .checked_add(metrics.measurement_sql_rows)
+        .and_then(|value| value.checked_add(physical_after.measurement_sql_rows))
+        .ok_or(CoreError::LengthOverflow)?;
+    let measurement_status_read_calls = metrics
+        .sqlite_status_before
+        .read_calls
+        .checked_add(metrics.sqlite_status_before_dispatch.read_calls)
+        .and_then(|value| value.checked_add(metrics.sqlite_status_after_return.read_calls))
+        .ok_or(CoreError::LengthOverflow)?;
+    let measurement_status_errors = metrics
+        .measurement_status_reset_errors
+        .checked_add(metrics.sqlite_status_before.errors)
+        .and_then(|value| value.checked_add(metrics.sqlite_status_before_dispatch.errors))
+        .and_then(|value| value.checked_add(metrics.sqlite_status_after_return.errors))
+        .ok_or(CoreError::LengthOverflow)?;
+    let measurement_status_calls = metrics
+        .measurement_status_reset_calls
+        .checked_add(measurement_status_read_calls)
+        .ok_or(CoreError::LengthOverflow)?;
     let phase_metrics_json = phase_metrics_json(phase_metrics, &mut metrics)?;
     let sql_calls = metrics
         .sql_query_calls
@@ -7890,10 +8293,11 @@ fn row_json(
     };
     let receipt_provenance = ProvenanceDisplay(publication_diagnostic);
     macro_rules! render_row {
-        ($writer:expr, $reported_q_high_water:expr, $report_output_bytes:expr) => {
-            write!(
-        $writer,
-        "{{\"qualification\":false,\"promotion\":false,\"rejection\":false,\"purpose\":\"wp4m_optimization_milestone\",\"milestone\":\"M4.5\",\"throughput_measurement_admissible\":false,\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{size},\"input_size_bytes\":{size},\"operation\":\"{operation}\",\"qualification_mode\":\"{qualification_mode_label}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"build_profile\":\"release\",\"debug_assertions\":false,\"base_preparation_in_measured_interval\":false,\"base_copy_method\":\"{base_copy_method}\",\"pre_edit_database_sha256\":\"{base_database_sha256}\",\"pre_edit_authority_sha256\":\"{base_authority_sha256}\",\"pre_edit_expectations_sha256\":\"{base_expectations_sha256}\",\"source_cache_state\":\"warm_or_unknown_after_manifest_preflight\",\"store_state\":\"fresh_logical_store_cache_unknown\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{verification_ns},\"source_cdc_wall_ns\":\"NestedInCanonicalStage\",\"same_open_authority_establishment_wall_ns\":{authority_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":{source_cdc_nested},\"precommit_includes_reconstruction\":{precommit_reconstructs},\"phase_counters\":[{phase_metrics_json}],\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{raw_hashes},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{canonical_id_hashes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"changed_work_bytes\":{source_bytes_read},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"measurement_status\":{{\"phase_counters\":\"Observed\",\"identity_hash_bytes\":\"Observed\",\"borrowed_bytes_encoding\":\"Observed\",\"object_id_authentication_reuse\":\"Observed\",\"logical_q\":\"Observed\",\"w_d\":\"Unavailable\",\"row_blob_copies\":\"Observed\",\"borrowed_row_blob_path\":\"Observed\",\"incremental_blob_api\":\"Observed\",\"cpu_rss\":\"Observed-by-parent-or-Unavailable\",\"other_heap_copy_bytes\":\"Unavailable\",\"sqlite_page_cache_bytes\":\"Unavailable\",\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\"}},\"sqlite_pre_logical_database_bytes\":{},\"sqlite_post_logical_database_bytes\":{},\"sqlite_pre_apparent_database_bytes\":{},\"sqlite_post_apparent_database_bytes\":{},\"sqlite_pre_allocated_database_bytes\":{},\"sqlite_post_allocated_database_bytes\":{},\"sqlite_pre_logical_store_bytes\":{},\"sqlite_post_logical_store_bytes\":{},\"sqlite_pre_apparent_store_bytes\":{},\"sqlite_post_apparent_store_bytes\":{},\"sqlite_pre_allocated_store_bytes\":{},\"sqlite_post_allocated_store_bytes\":{},\"allocated_store_delta_bytes\":{},\"physical_db_apparent_bytes\":{},\"physical_journal_apparent_bytes\":{},\"physical_authority_sidecar_apparent_bytes\":{},\"physical_db_allocated_bytes\":{},\"physical_journal_allocated_bytes\":{},\"physical_authority_sidecar_allocated_bytes\":{},\"physical_store_allocated_bytes\":{},\"peak_journal_bytes\":\"Unavailable\",\"peak_temporary_bytes\":\"Unavailable\",\"q_equation\":\"pre_admitted_checked_sum:canonical+decoded_nodes+file_refs+tree_nodes+dfs+cdc+sql+expectations+ranges+receipts+report\",\"q_high_water\":{logical_q_high_water},\"q_current\":{q_current},\"q_current_semantics\":\"after_report_output_drop\",\"q_report_output_bytes\":{report_output_bytes},\"q_cdc_base_live_bytes\":{q_cdc_base_live_bytes},\"q_cdc_old_window_bytes\":{q_cdc_old_window_bytes},\"q_cdc_old_chunk_slots_bytes\":{q_cdc_old_chunk_slots_bytes},\"q_cdc_scan_input_bytes\":{q_cdc_scan_input_bytes},\"q_cdc_overlap_current\":{q_cdc_overlap_current},\"q_fixed_envelope_removed\":true,\"leaf_batch_bound\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"w_bytes\":\"Unavailable\",\"d_bytes\":\"Unavailable\",\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_rewrite_bytes\":{canonical_rewrite_bytes},\"statement_cache_acquisitions\":{statement_cache_acquisitions},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_calls\":{},\"sql_rows_returned\":{},\"sql_query_calls\":{sql_query_calls},\"sql_execute_calls\":{sql_execute_calls},\"sql_rows_changed\":{sql_rows_changed},\"row_blob_reads\":{row_blob_reads},\"row_blob_writes\":{row_blob_writes},\"row_blob_copy_bytes\":{row_blob_copy_bytes},\"borrowed_row_blob_reads\":{borrowed_row_blob_reads},\"borrowed_row_blob_bytes\":{borrowed_row_blob_bytes},\"blob_api_status\":\"Observed\",\"blob_opens\":{},\"blob_reads\":{},\"blob_writes\":{},\"transactions\":{},\"commits\":{},\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\",\"busy_events\":\"Unavailable\",\"locked_events\":\"Unavailable\",\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"covered_equal_edges\":{covered_equal_edges},\"new_or_different_edges\":{new_or_different_edges},\"fully_authenticated_new_objects\":{fully_authenticated_new_objects},\"fully_authenticated_new_bytes\":{fully_authenticated_new_bytes},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"file_height\":\"Unavailable\",\"process_io\":\"Unavailable\",\"host_physical_io\":\"Unavailable\",\"physical_io_cache_sync_temp_journal_status\":\"Unavailable\",\"publication_status\":\"{publication_status}\",\"receipt_provenance\":\"{receipt_provenance}\",\"error\":{error_json}}}",
+        ($writer:expr, $reported_q_high_water:expr, $report_output_bytes:expr) => {{
+            let mut compact_writer = CompactStatusWriter($writer);
+            let result = write!(
+        &mut compact_writer,
+        "{{\"qualification\":false,\"promotion\":false,\"rejection\":false,\"purpose\":\"wp4m_f1_commit_io_observability\",\"milestone\":\"F1\",\"throughput_measurement_admissible\":false,\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{size},\"input_size_bytes\":{size},\"operation\":\"{operation}\",\"qualification_mode\":\"{qualification_mode_label}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"build_profile\":\"release\",\"debug_assertions\":false,\"base_preparation_in_measured_interval\":false,\"base_copy_method\":\"{base_copy_method}\",\"pre_edit_database_sha256\":\"{base_database_sha256}\",\"pre_edit_authority_sha256\":\"{base_authority_sha256}\",\"pre_edit_expectations_sha256\":\"{base_expectations_sha256}\",\"source_cache_state\":\"warm_or_unknown_after_manifest_preflight\",\"store_state\":\"fresh_logical_store_cache_unknown\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{verification_ns},\"source_cdc_wall_ns\":\"NestedInCanonicalStage\",\"same_open_authority_establishment_wall_ns\":{authority_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"commit_dispatches\":{commit_dispatches},\"commit_returns\":{commit_returns},\"commit_return_successes\":{commit_return_successes},\"commit_return_errors\":{commit_return_errors},\"commit_return_status\":\"{commit_return_status}\",\"commit_publish_call_wall_ns\":{commit_publish_call_wall_ns},\"commit_dispatch_to_return_wall_ns\":{commit_dispatch_to_return_wall_ns},\"commit_pre_and_post_dispatch_wall_ns\":{commit_pre_and_post_dispatch_wall_ns},\"commit_caller_wrapper_wall_ns\":{commit_caller_wrapper_wall_ns},\"commit_observation_sum_wall_ns\":{commit_observation_sum_ns},\"commit_timer_equation_matches\":{commit_timer_equation_matches},\"commit_reconciliation_calls\":{commit_reconciliation_calls},\"commit_reconciliation_wall_ns\":{commit_reconciliation_wall_ns},\"commit_reconciliation_timer_nested\":true,\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":{source_cdc_nested},\"precommit_includes_reconstruction\":{precommit_reconstructs},\"phase_counters\":[{phase_metrics_json}],\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{raw_hashes},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{canonical_id_hashes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"changed_work_bytes\":{source_bytes_read},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"measurement_status\":{{\"phase_counters\":\"Observed\",\"identity_hash_bytes\":\"Observed\",\"borrowed_bytes_encoding\":\"Observed\",\"object_id_authentication_reuse\":\"Observed\",\"logical_q\":\"Observed\",\"w_d\":\"Unavailable: governing cumulative definitions are not implemented\",\"row_blob_copies\":\"Observed\",\"borrowed_row_blob_path\":\"Observed\",\"incremental_blob_api\":\"Observed\",\"cpu_rss\":\"Observed externally per child by /usr/bin/time -l\",\"other_heap_copy_bytes\":\"Unavailable\",\"sqlite_page_cache\":\"{sqlite_status_classification}\",\"sqlite_page_cache_true_high_water\":\"Unavailable: SQLITE_DBSTATUS_CACHE_USED high-water is always zero by API contract\",\"dirty_pages_current\":\"Unavailable: SQLite exposes dirty writes/spills but not current dirty-page count\",\"main_db_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"journal_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"sync_calls_wall\":\"Unavailable: VFS excluded; fs_usage/dtruss require unavailable privileges\",\"journal_true_peak\":\"Unavailable: DELETE journal can grow/disappear between snapshots\",\"temporary_file_peak\":\"Unavailable: no filename/peak API under temp_store=FILE\",\"host_physical_io_bytes\":\"Unavailable: not derived from logical/allocation/block-operation counters\",\"query_plans\":\"Unavailable\"}},\"sqlite_page_size_bytes\":{sqlite_page_size_bytes},\"sqlite_page_cache_used_bytes_before\":{sqlite_cache_used_before},\"sqlite_page_cache_used_bytes_before_dispatch\":{sqlite_cache_used_before_dispatch},\"sqlite_page_cache_used_bytes_after_return\":{sqlite_cache_used_after_return},\"sqlite_page_cache_snapshot_max_bytes\":{sqlite_page_cache_snapshot_max_bytes},\"sqlite_cache_hits\":{sqlite_cache_hits},\"sqlite_cache_misses\":{sqlite_cache_misses},\"sqlite_main_db_dirty_pages_written\":{sqlite_dirty_pages_written},\"sqlite_main_db_pager_write_bytes\":{sqlite_pager_write_bytes},\"sqlite_cache_spill_pages\":{sqlite_cache_spill_pages},\"sqlite_runtime_journal_mode\":\"delete\",\"sqlite_runtime_synchronous\":2,\"sqlite_runtime_temp_store\":1,\"sqlite_runtime_mmap_size\":0,\"sqlite_pre_logical_database_bytes\":{},\"sqlite_post_logical_database_bytes\":{},\"sqlite_pre_apparent_database_bytes\":{},\"sqlite_post_apparent_database_bytes\":{},\"sqlite_pre_allocated_database_bytes\":{},\"sqlite_post_allocated_database_bytes\":{},\"sqlite_pre_logical_store_bytes\":{},\"sqlite_post_logical_store_bytes\":{},\"sqlite_pre_apparent_store_bytes\":{},\"sqlite_post_apparent_store_bytes\":{},\"sqlite_pre_allocated_store_bytes\":{},\"sqlite_post_allocated_store_bytes\":{},\"allocated_store_delta_bytes\":{},\"commit_dispatch_db_apparent_bytes\":{commit_dispatch_db_apparent_bytes},\"commit_dispatch_journal_apparent_bytes\":{commit_dispatch_journal_apparent_bytes},\"commit_dispatch_authority_apparent_bytes\":{commit_dispatch_authority_apparent_bytes},\"commit_dispatch_db_allocated_bytes\":{commit_dispatch_db_allocated_bytes},\"commit_dispatch_journal_allocated_bytes\":{commit_dispatch_journal_allocated_bytes},\"commit_dispatch_authority_allocated_bytes\":{commit_dispatch_authority_allocated_bytes},\"commit_return_db_apparent_bytes\":{commit_return_db_apparent_bytes},\"commit_return_journal_apparent_bytes\":{commit_return_journal_apparent_bytes},\"commit_return_authority_apparent_bytes\":{commit_return_authority_apparent_bytes},\"commit_return_db_allocated_bytes\":{commit_return_db_allocated_bytes},\"commit_return_journal_allocated_bytes\":{commit_return_journal_allocated_bytes},\"commit_return_authority_allocated_bytes\":{commit_return_authority_allocated_bytes},\"journal_sampled_allocation_max_bytes\":{journal_sampled_allocation_max_bytes},\"physical_db_apparent_bytes\":{},\"physical_journal_apparent_bytes\":{},\"physical_authority_sidecar_apparent_bytes\":{},\"physical_db_allocated_bytes\":{},\"physical_journal_allocated_bytes\":{},\"physical_authority_sidecar_allocated_bytes\":{},\"physical_store_allocated_bytes\":{},\"peak_journal_bytes\":\"Unavailable\",\"peak_temporary_bytes\":\"Unavailable\",\"q_equation\":\"pre_admitted_checked_sum:canonical+decoded_nodes+file_refs+tree_nodes+dfs+cdc+sql+expectations+ranges+receipts+report\",\"q_high_water\":{logical_q_high_water},\"q_current\":{q_current},\"q_current_semantics\":\"after_report_output_drop\",\"q_report_output_bytes\":{report_output_bytes},\"q_cdc_base_live_bytes\":{q_cdc_base_live_bytes},\"q_cdc_old_window_bytes\":{q_cdc_old_window_bytes},\"q_cdc_old_chunk_slots_bytes\":{q_cdc_old_chunk_slots_bytes},\"q_cdc_scan_input_bytes\":{q_cdc_scan_input_bytes},\"q_cdc_overlap_current\":{q_cdc_overlap_current},\"q_fixed_envelope_removed\":true,\"leaf_batch_bound\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"w_bytes\":\"Unavailable\",\"d_bytes\":\"Unavailable\",\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_rewrite_bytes\":{canonical_rewrite_bytes},\"statement_cache_acquisitions\":{statement_cache_acquisitions},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_calls\":{},\"sql_rows_returned\":{},\"sql_query_calls\":{sql_query_calls},\"sql_execute_calls\":{sql_execute_calls},\"sql_rows_changed\":{sql_rows_changed},\"row_blob_reads\":{row_blob_reads},\"row_blob_writes\":{row_blob_writes},\"row_blob_copy_bytes\":{row_blob_copy_bytes},\"borrowed_row_blob_reads\":{borrowed_row_blob_reads},\"borrowed_row_blob_bytes\":{borrowed_row_blob_bytes},\"blob_api_status\":\"Observed\",\"blob_opens\":{},\"blob_reads\":{},\"blob_writes\":{},\"transactions\":{},\"commits\":{},\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\",\"busy_events\":\"Unavailable\",\"locked_events\":\"Unavailable\",\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"covered_equal_edges\":{covered_equal_edges},\"new_or_different_edges\":{new_or_different_edges},\"fully_authenticated_new_objects\":{fully_authenticated_new_objects},\"fully_authenticated_new_bytes\":{fully_authenticated_new_bytes},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"file_height\":\"Unavailable\",\"process_io\":\"Observed externally: separate user/system CPU and block-operation counts; byte-level physical I/O unavailable\",\"host_physical_io\":\"Unavailable\",\"physical_io_cache_sync_temp_journal_status\":\"Mixed: supported SQLite/filesystem snapshots observed; unsupported VFS/privileged facts unavailable with reasons\",\"publication_status\":\"{publication_status}\",\"receipt_provenance\":\"{receipt_provenance}\",\"error\":{error_json}}}",
         candidate.name,
         if size == SOURCE_100 { "S1-100" } else { "S1-512" },
         root,
@@ -8011,8 +8415,82 @@ fn row_json(
         q_cdc_old_chunk_slots_bytes = metrics.q_cdc_old_chunk_slots_bytes,
         q_cdc_scan_input_bytes = metrics.q_cdc_scan_input_bytes,
         q_cdc_overlap_current = metrics.q_cdc_overlap_current,
-    )
-        };
+        commit_dispatches = metrics.commits,
+        commit_returns = metrics.commit_returns,
+        commit_return_successes = metrics.commit_return_successes,
+        commit_return_errors = metrics.commit_return_errors,
+        commit_return_status = commit_return_status,
+        commit_publish_call_wall_ns = metrics.commit_publish_call_wall_ns,
+        commit_dispatch_to_return_wall_ns = metrics.commit_dispatch_to_return_wall_ns,
+        commit_pre_and_post_dispatch_wall_ns = commit_pre_and_post_dispatch_wall_ns,
+        commit_caller_wrapper_wall_ns = commit_caller_wrapper_wall_ns,
+        commit_observation_sum_ns = commit_observation_sum_ns,
+        commit_timer_equation_matches =
+            commit_observation_sum_ns == phases.sqlite_commit_durability_ns,
+        commit_reconciliation_calls = metrics.commit_reconciliation_calls,
+        commit_reconciliation_wall_ns = metrics.commit_reconciliation_wall_ns,
+        sqlite_status_classification = sqlite_status_classification,
+        sqlite_page_size_bytes = JsonOptional(metrics.sqlite_page_size),
+        sqlite_cache_used_before =
+            JsonOptional(metrics.sqlite_status_before.page_cache_used_bytes),
+        sqlite_cache_used_before_dispatch = JsonOptional(
+            metrics
+                .sqlite_status_before_dispatch
+                .page_cache_used_bytes,
+        ),
+        sqlite_cache_used_after_return =
+            JsonOptional(metrics.sqlite_status_after_return.page_cache_used_bytes),
+        sqlite_page_cache_snapshot_max_bytes = JsonOptional(page_cache_snapshot_max),
+        sqlite_cache_hits = JsonOptional(cache_hits),
+        sqlite_cache_misses = JsonOptional(cache_misses),
+        sqlite_dirty_pages_written = JsonOptional(dirty_pages_written),
+        sqlite_pager_write_bytes = JsonOptional(pager_write_bytes),
+        sqlite_cache_spill_pages = JsonOptional(cache_spill_pages),
+        commit_dispatch_db_apparent_bytes =
+            JsonOptional(metrics.commit_dispatch_filesystem.apparent_database),
+        commit_dispatch_journal_apparent_bytes =
+            JsonOptional(metrics.commit_dispatch_filesystem.apparent_journal),
+        commit_dispatch_authority_apparent_bytes =
+            JsonOptional(metrics.commit_dispatch_filesystem.apparent_authority),
+        commit_dispatch_db_allocated_bytes =
+            JsonOptional(metrics.commit_dispatch_filesystem.allocated_database),
+        commit_dispatch_journal_allocated_bytes =
+            JsonOptional(metrics.commit_dispatch_filesystem.allocated_journal),
+        commit_dispatch_authority_allocated_bytes =
+            JsonOptional(metrics.commit_dispatch_filesystem.allocated_authority),
+        commit_return_db_apparent_bytes =
+            JsonOptional(metrics.commit_return_filesystem.apparent_database),
+        commit_return_journal_apparent_bytes =
+            JsonOptional(metrics.commit_return_filesystem.apparent_journal),
+        commit_return_authority_apparent_bytes =
+            JsonOptional(metrics.commit_return_filesystem.apparent_authority),
+        commit_return_db_allocated_bytes =
+            JsonOptional(metrics.commit_return_filesystem.allocated_database),
+        commit_return_journal_allocated_bytes =
+            JsonOptional(metrics.commit_return_filesystem.allocated_journal),
+        commit_return_authority_allocated_bytes =
+            JsonOptional(metrics.commit_return_filesystem.allocated_authority),
+        journal_sampled_allocation_max_bytes =
+            JsonOptional(journal_sampled_allocation_max),
+    );
+            result.and_then(|_| {
+                compact_writer.0.remove_last_object_brace()?;
+                write!(
+                    &mut compact_writer,
+                    ",\"measurement_status_schema\":\"{F1_STATUS_SCHEMA}\",\"instrumentation\":{{\"c\":\"{STATUS_OBSERVED}\",\"sql\":[{},{},{},{},{},{},{measurement_sql_queries},{measurement_sql_rows}],\"status\":[{},{},{},{},{measurement_status_calls},{measurement_status_errors}]}}}}",
+                    physical_before.measurement_sql_queries,
+                    physical_before.measurement_sql_rows,
+                    metrics.measurement_sql_queries,
+                    metrics.measurement_sql_rows,
+                    physical_after.measurement_sql_queries,
+                    physical_after.measurement_sql_rows,
+                    metrics.measurement_status_reset_calls,
+                    metrics.sqlite_status_before.read_calls,
+                    metrics.sqlite_status_before_dispatch.read_calls,
+                    metrics.sqlite_status_after_return.read_calls,
+                )
+            })
+        }};
     }
     metrics.q_current = q_current();
     let report_scratch_current = pre_report_current
@@ -8136,6 +8614,7 @@ fn capture_same_middle(
         let authority_metrics_ended = *metrics;
         let authority_ns = authority_started.elapsed().as_nanos();
 
+        store.start_sqlite_observations(metrics);
         let durable_capture_start = Instant::now();
         let mapping_metrics_started = *metrics;
         let _prior_head_receipt_charge = charge_capacity(metrics, 216)?;
@@ -8440,6 +8919,7 @@ fn run_row(
             &mut metrics,
         )?
     } else {
+        store.start_sqlite_observations(&mut metrics);
         let durable_capture_start = Instant::now();
         let mut durable_cursor = durable_capture_start;
         let mapping_metrics_started = metrics;
@@ -9448,6 +9928,37 @@ mod tests {
     }
 
     #[test]
+    fn f1_v2_status_code_dictionary_and_compaction_are_exact() {
+        assert_eq!(F1_STATUS_SCHEMA, "f1-v2-status-codes-v1");
+        assert_eq!(F1_Q_EQUATION, "Q1");
+        assert_eq!(F1_STATUS_CODES.len(), 17);
+        for (index, code) in F1_STATUS_CODES.iter().enumerate() {
+            assert!(!code.is_empty());
+            assert!(!F1_STATUS_CODES[..index].contains(code));
+        }
+
+        let verbose = F1_ROW_STATUS_REPLACEMENTS
+            .iter()
+            .map(|(from, _)| *from)
+            .collect::<String>();
+        let expected = F1_ROW_STATUS_REPLACEMENTS
+            .iter()
+            .map(|(_, to)| *to)
+            .collect::<String>();
+        let mut compact = String::new();
+        write!(CompactStatusWriter(&mut compact), "{verbose}").expect("compact statuses");
+        assert_eq!(compact, expected);
+        assert!(verbose.len() > compact.len());
+        for (_, to) in F1_ROW_STATUS_REPLACEMENTS {
+            let code = to
+                .rsplit_once(":\"")
+                .and_then(|(_, value)| value.strip_suffix('\"'))
+                .expect("replacement code");
+            assert!(F1_STATUS_CODES.contains(&code) || code == F1_Q_EQUATION);
+        }
+    }
+
+    #[test]
     fn row_json_reconciles_q_sql_and_changed_work_fields() {
         let metrics = Metrics {
             statement_cache_acquisitions: 3,
@@ -9463,13 +9974,19 @@ mod tests {
             incremental_new_or_different_edges: 4,
             incremental_new_subtree_objects_authenticated: 1,
             incremental_new_subtree_bytes_authenticated: 19,
+            transactions: 1,
+            commits: 1,
+            commit_returns: 1,
+            commit_return_successes: 1,
+            commit_publish_call_wall_ns: 7,
+            commit_dispatch_to_return_wall_ns: 4,
             q_high_water: 97,
             w_bytes: 101,
             d_bytes: 202,
             ..Metrics::default()
         };
         let mut invalid = metrics;
-        invalid.commits = 1;
+        invalid.commit_return_errors = 1;
         assert!(validate_metric_equations(invalid).is_err());
         let id = ObjectId::for_bytes(b"row-json-id");
         let json = row_json(
@@ -9490,7 +10007,12 @@ mod tests {
             metrics,
             PhysicalSnapshot::default(),
             PhysicalSnapshot::default(),
-            &PhaseTimes::default(),
+            &PhaseTimes {
+                sqlite_commit_durability_ns: 9,
+                durable_capture_total_ns: 9,
+                complete_lifecycle_total_ns: 9,
+                ..PhaseTimes::default()
+            },
             &[],
             "",
             &"0".repeat(64),
@@ -9507,7 +10029,7 @@ mod tests {
         )
         .expect("row JSON");
         let object = JsonObject::parse(&json).expect("structural row JSON");
-        assert_eq!(object.string("milestone"), Some("M4.5"));
+        assert_eq!(object.string("milestone"), Some("F1"));
         assert_eq!(
             object.u128("q_high_water"),
             Some(u128::try_from(json.len()).expect("JSON length"))
@@ -9524,12 +10046,42 @@ mod tests {
         assert_eq!(object.u128("statement_cache_acquisitions"), Some(3));
         assert_eq!(
             object.string("native_sqlite_prepare_calls"),
-            Some("Unavailable")
+            Some("U_NATIVE_PREP")
         );
         assert_eq!(object.u128("sql_query_calls"), Some(5));
         assert_eq!(object.u128("sql_execute_calls"), Some(2));
         assert_eq!(object.u128("sql_rows_returned"), Some(7));
         assert_eq!(object.u128("sql_rows_changed"), Some(1));
+        assert_eq!(
+            object.string("measurement_status_schema"),
+            Some(F1_STATUS_SCHEMA)
+        );
+        assert_eq!(object.string("q_equation"), Some(F1_Q_EQUATION));
+        assert_eq!(
+            object.fields.get("instrumentation").copied(),
+            Some(r#"{"c":"O","sql":[0,0,0,0,0,0,0,0],"status":[0,0,0,0,0,0]}"#)
+        );
+        let measurement_status = JsonObject::parse(
+            object
+                .fields
+                .get("measurement_status")
+                .expect("measurement status object"),
+        )
+        .expect("measurement status JSON");
+        assert_eq!(
+            measurement_status.string("phase_counters"),
+            Some(STATUS_OBSERVED)
+        );
+        assert_eq!(measurement_status.string("w_d"), Some("U_WD"));
+        assert_eq!(measurement_status.string("query_plans"), Some("U_PLAN"));
+        assert_eq!(object.u128("commit_dispatches"), Some(1));
+        assert_eq!(object.u128("commit_returns"), Some(1));
+        assert_eq!(object.string("commit_return_status"), Some("ok"));
+        assert_eq!(object.u128("commit_publish_call_wall_ns"), Some(7));
+        assert_eq!(object.u128("commit_dispatch_to_return_wall_ns"), Some(4));
+        assert_eq!(object.u128("commit_pre_and_post_dispatch_wall_ns"), Some(3));
+        assert_eq!(object.u128("commit_caller_wrapper_wall_ns"), Some(2));
+        assert_eq!(object.boolean("commit_timer_equation_matches"), Some(true));
         assert_eq!(object.u128("canonical_new_write_bytes"), Some(11));
         assert_eq!(
             object.u128("canonical_authenticated_nonnew_bytes"),
@@ -9548,8 +10100,8 @@ mod tests {
             object.string("physical_authority_sidecar_allocated_bytes"),
             Some("Unavailable")
         );
-        assert_eq!(object.string("w_bytes"), Some("Unavailable"));
-        assert_eq!(object.string("d_bytes"), Some("Unavailable"));
+        assert_eq!(object.string("w_bytes"), Some("U_WD"));
+        assert_eq!(object.string("d_bytes"), Some("U_WD"));
         assert_eq!(object.u128("covered_equal_edges"), Some(127));
         assert_eq!(object.u128("new_or_different_edges"), Some(4));
         assert_eq!(
@@ -11926,6 +12478,119 @@ mod tests {
     }
 
     #[test]
+    fn f1_commit_observations_separate_dispatch_return_and_reconciliation() {
+        let source = test_path("f1-commit-observation-source");
+        let database = test_path("f1-commit-observation.sqlite");
+        fs::write(&source, b"f1 commit observation").expect("source");
+        let candidate = FILE_CANDIDATES[0];
+        let mut store = Store::open(&database, candidate).expect("open");
+        let mut metrics = Metrics::default();
+        let physical_before = store.physical_snapshot();
+        assert_eq!(physical_before.measurement_sql_queries, 2);
+        assert_eq!(physical_before.measurement_sql_rows, 2);
+        assert_eq!(metrics.sql_query_calls, 0);
+        assert_eq!(metrics.statement_cache_acquisitions, 0);
+        store.start_sqlite_observations(&mut metrics);
+        assert_eq!(metrics.measurement_sql_queries, 1);
+        assert_eq!(metrics.measurement_sql_rows, 1);
+        assert_eq!(metrics.measurement_status_reset_calls, 4);
+        assert_eq!(metrics.measurement_status_reset_errors, 0);
+        assert_eq!(metrics.sqlite_status_before.read_calls, 5);
+        assert_eq!(metrics.sqlite_status_before.errors, 0);
+        let (root, transition) =
+            build_file(&mut store, &source, candidate, &mut metrics).expect("build");
+        let publication = store
+            .publish(None, root, transition, &mut metrics)
+            .expect("publish");
+        assert_eq!(publication.status, PublicationStatus::Committed);
+        assert_eq!(metrics.transactions, 1);
+        assert_eq!(metrics.commits, 1);
+        assert_eq!(metrics.commit_returns, 1);
+        assert_eq!(metrics.commit_return_successes, 1);
+        assert_eq!(metrics.commit_return_errors, 0);
+        assert_eq!(metrics.commit_reconciliation_calls, 0);
+        assert_eq!(metrics.commit_reconciliation_wall_ns, 0);
+        assert!(metrics.commit_publish_call_wall_ns >= metrics.commit_dispatch_to_return_wall_ns);
+        assert!(metrics.sqlite_status_before.page_cache_used_bytes.is_some());
+        assert!(metrics
+            .sqlite_status_before_dispatch
+            .page_cache_used_bytes
+            .is_some());
+        assert!(metrics
+            .sqlite_status_after_return
+            .dirty_pages_written
+            .is_some());
+        assert_eq!(metrics.sqlite_status_before_dispatch.read_calls, 5);
+        assert_eq!(metrics.sqlite_status_before_dispatch.errors, 0);
+        assert_eq!(metrics.sqlite_status_after_return.read_calls, 5);
+        assert_eq!(metrics.sqlite_status_after_return.errors, 0);
+        assert!(metrics
+            .commit_dispatch_filesystem
+            .apparent_journal
+            .is_some());
+        assert!(metrics.commit_return_filesystem.apparent_journal.is_some());
+        let workload_queries = metrics.sql_query_calls;
+        let workload_acquisitions = metrics.statement_cache_acquisitions;
+        let physical_after = store.physical_snapshot();
+        assert_eq!(physical_after.measurement_sql_queries, 2);
+        assert_eq!(physical_after.measurement_sql_rows, 2);
+        assert_eq!(metrics.sql_query_calls, workload_queries);
+        assert_eq!(metrics.statement_cache_acquisitions, workload_acquisitions);
+        assert_eq!(
+            physical_before.measurement_sql_queries
+                + metrics.measurement_sql_queries
+                + physical_after.measurement_sql_queries,
+            5
+        );
+        assert_eq!(
+            physical_before.measurement_sql_rows
+                + metrics.measurement_sql_rows
+                + physical_after.measurement_sql_rows,
+            5
+        );
+        assert_eq!(
+            metrics.measurement_status_reset_calls
+                + metrics.sqlite_status_before.read_calls
+                + metrics.sqlite_status_before_dispatch.read_calls
+                + metrics.sqlite_status_after_return.read_calls,
+            19
+        );
+        assert_eq!(
+            checked_sqlite_status_current(ffi::SQLITE_ERROR, 0),
+            Err(SqliteStatusError::Sqlite(ffi::SQLITE_ERROR))
+        );
+        assert_eq!(
+            checked_sqlite_status_current(ffi::SQLITE_OK, -1),
+            Err(SqliteStatusError::CurrentOutOfRange(-1))
+        );
+        validate_metric_equations(metrics).expect("observation equations");
+        assert_eq!(q_current(), 0);
+
+        let mut predispatch = Metrics::default();
+        store
+            .begin(&mut predispatch)
+            .expect("begin rejected publish");
+        let error = store
+            .publish(None, root, transition, &mut predispatch)
+            .expect_err("duplicate genesis must fail before COMMIT");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::PublicationConflict)
+        );
+        assert_eq!(predispatch.commits, 0);
+        assert_eq!(predispatch.commit_returns, 0);
+        assert_eq!(predispatch.commit_reconciliation_calls, 0);
+        store.rollback(&mut predispatch).expect("rollback");
+        assert_eq!(q_current(), 0);
+
+        assert!(observed_delta(Some(1), Some(2)).is_err());
+        assert!(observed_product(Some(u64::MAX), Some(2)).is_err());
+        drop(store);
+        fs::remove_file(source).expect("source cleanup");
+        remove_sqlite_image(&database).expect("database cleanup");
+    }
+
+    #[test]
     fn actual_commit_error_uses_fresh_reconciliation() {
         let source = test_path("commit-error-source");
         fs::write(&source, b"actual sqlite commit error").expect("source");
@@ -11947,6 +12612,10 @@ mod tests {
             assert_eq!(provenance.reconciliation_error, None);
             assert_eq!(provenance.dominant, Some(FailureCause::Core(CoreError::Io)));
             assert_eq!(metrics.commits, 1);
+            assert_eq!(metrics.commit_returns, 1);
+            assert_eq!(metrics.commit_return_successes, 0);
+            assert_eq!(metrics.commit_return_errors, 1);
+            assert_eq!(metrics.commit_reconciliation_calls, 1);
             assert!(store.active_transaction.is_none());
             assert!(store.current_head().expect("head after rollback").is_none());
             store
@@ -12032,6 +12701,10 @@ mod tests {
             assert_eq!(provenance.reconciliation_error, reconciliation_error);
             assert_eq!(provenance.dominant, dominant);
             assert_eq!(metrics.commits, 1);
+            assert_eq!(metrics.commit_returns, 1);
+            assert_eq!(metrics.commit_return_successes, 1);
+            assert_eq!(metrics.commit_return_errors, 0);
+            assert_eq!(metrics.commit_reconciliation_calls, 1);
             assert!(store.active_transaction.is_none());
             if reconciliation == Reconciliation::RequestedVisible {
                 assert_eq!(

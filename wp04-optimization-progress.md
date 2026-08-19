@@ -1,5 +1,55 @@
 # WP4-M optimization progress
 
+F1-v3 status (2026-08-19): **PASS; F2 eligible but not started**. The unchanged
+F1 observability implementation was rerun once with the prospectively frozen
+complete sequence `AB/AB/BA/AB/BA/AB` (pair 0 warmup, pairs 1-5 measured).
+The pre-execution dry-run, raw JSONL, and preflight all match exactly. Every
+semantic/custody/one-COMMIT/timer/terminal-Q gate passes; primary and
+independent summaries agree; storage/schema/no-residue passes; exact Q is
+`35,603 -> 37,302` (`+4.772070%`, 5/5); wall paired median is `-0.311203%`;
+CPU/RSS/peak/store gates pass; and v2's passing 100-test/static and release
+M4.5 proofs are hash-reused because source/executable bytes are unchanged.
+F1-v1 and F1-v2 remain historical FAIL/REVISE evidence. Retain v3; do not
+start F2, select/promote a profile, integrate production, claim Phase 4
+complete, or commit.
+
+F1-v2 historical status (2026-08-19): **FAIL / REVISE; F2 ineligible**. The compact-code
+repair passed every measured and semantic gate: 100/100 tests and all static
+checks; exact Q `35,603 -> 37,302` (`+4.772070%`, 5/5); durable wall paired
+median `+0.040155%`; CPU/RSS/peak/store gates; exact identities/work and one
+transaction/COMMIT; storage/schema/no-residue audit; independent recomputation;
+and the release M4.5 proof (`439.551291 -> 8.668667 ms`, Q `2,222,803`). The
+final protocol audit nevertheless fails because the frozen measured order was
+`AB/BA/AB/BA/AB` but the retained raw rows are `BA/AB/BA/AB/BA` after the AB
+warmup. No post-observation amendment or rerun is allowed. Preserve
+`target/wp4m-f1-commit-io-k64-20260819-v2` as informative non-acceptance
+evidence; do not advance to F2, select/promote a profile, integrate production,
+claim Phase 4 complete, or commit.
+
+F1-v1 historical status (2026-08-19): **FAIL / REVISE; F2 ineligible**. The one-variable
+caller-thread observability candidate added SQLite `DBSTATUS` pager/cache
+counters, exact COMMIT dispatch-to-return/reconciliation timing, and explicit
+filesystem snapshots without changing schema, write shape, durability,
+identities, transaction count, or COMMIT count. The retained 100-MiB full-create
+five-pair overhead result was wall-neutral: control/candidate durable medians
+were `936.497375 / 927.187541 ms` (`-0.994112%` arm median), paired median
+`-0.975234%`, and all 5/5 pairs were within the 5% ceiling. CPU/RSS/peak and
+allocated-delta median gates passed. The preregistered complete gate failed:
+the longer evidence row raised exact Q from `35,603` to `38,246` bytes
+(`+7.423532%`), and post-row APFS allocated DB bytes were not byte-identical
+within any pair despite identical `109,268,992` logical/apparent bytes and a
+favorable `-0.159750%` candidate allocated-delta median. No gate was relaxed
+after observation. The smallest release M4.5 proof passed one warmup plus one
+measured C0/C1 pair (`429.935542 -> 9.184333 ms`), exact identities/work,
+one transaction/COMMIT, Q `2,222,803`, terminal zero, and permanent C0/C1
+counters. Candidate source/executable SHA-256 are
+`aeb19ba3ff4c7a01326bd55de67cdfee88048c33961b9022706be69b4a5f55ed` /
+`1ac9754c8c9a72ad08aa872e29d1c78a814f3d4fa29db9581dd833c09e60f5a3`.
+Raw evidence is under
+`target/wp4m-f1-commit-io-k64-20260819-v1/`. Decision: preserve for revision;
+do not retain as the next control, revert silently, start F2, select/promote a
+profile, integrate production, or claim Phase 4 complete.
+
 F0 status (2026-08-19): **PASS; custody freeze complete**. The accepted M4.5
 state is clean commit `26f4f10122a16dd14474e93076c92f80876b798f`, tree
 `0c9042da733d9ca0045a93fb69eb709f8d77ef09`, with parent-to-commit binary
