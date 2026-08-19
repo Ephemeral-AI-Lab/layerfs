@@ -1,5 +1,26 @@
 # WP4-M optimization progress
 
+F3 terminal status (2026-08-19): **FAIL / revert; F4 ineligible**. Three
+prospectively versioned bounded immutable-CAS insertion shapes all prove the
+requested `5,372 -> 103` SQLite INSERT-execution reduction but fail the frozen
+performance/resource contract. V1 `RETURNING` regresses mapping/durable by
+12.068%/10.450%; v2 removes all returned inserted-ID rows but still regresses
+3.885%/4.141% and its final audit finds a wrong-kind later-duplicate gap; v3
+repairs that P0 and reaches the lower-bound fresh path of 103 optimistic
+INSERTs with zero group queries, fallbacks, or result rows. V3 nevertheless
+regresses mapping `489.054 -> 521.492 ms` (+6.633% arm, +6.661% paired, 0/5)
+and durable capture `653.849 -> 693.111 ms` (+6.005% arm, +5.767% paired,
+0/5); RSS/footprint also fail at +5.430%/+5.429%. Exact roots, transition,
+closure, 5,372 objects, 105,291,554 canonical bytes, 365,262 mapping bytes,
+5,373 changed rows, 10,748 row-BLOB writes, 26,676 dirty writes, 6,675 spills,
+FULL+DELETE, one transaction/COMMIT, storage endpoints, post-COMMIT work,
+release M4.5, and Q `1,147,173 <= 1,310,720` with terminal zero all pass.
+VFS/xSync/physical-byte causality remains Unavailable. Preserve v1, v2, the
+initial v3 permission-mode failure, and complete v3-r1 artifacts; restore the
+accepted F2-v3 source; retain additive reports only; make no commit and do not
+start F4, profile selection, production integration, backend work, or cap
+tuning.
+
 F2-v3 terminal status (2026-08-19): **PASS / retain; F3 eligible only as a
 separate reviewed task**. The prospectively frozen same-binary diagnostic
 isolated verifier-dependent pager/work redistribution and authorized the v3
@@ -191,6 +212,9 @@ Status: M0, M2, and M3 passed their predeclared affected-metric gates; M1 and M4
 | F2 bounded full-create construction proof | **FAIL / REVISE; F3 ineligible** | 929.420 -> 786.868 ms (-15.338%, 5/5) | 107.594 -> 127.086 | 1,615.793 -> 1,476.144 ms (-8.643%) | 61.889 -> 67.744 | pre-COMMIT queries -99.981%, BLOB/auth -100%; Q 55,325; CPU/RSS/storage pass; protected COMMIT +30.126%, 0/5 FAIL |
 | F2-v2 standalone-authority repair | **FAIL / REVISE; historical** | 916.758 -> 652.573 ms (-28.817%, 5/5) | 109.080 -> 153.239 | 1,608.325 -> 1,343.971 ms (-16.437%) | 62.177 -> 74.406 | authority/Q/hash/cleanup PASS; historical COMMIT/tiny/relative-Q contract failed |
 | F2-v3 accepted construction proof | **PASS / retain; F3 eligible separately** | 916.310 -> 659.593 ms (-28.016%, 5/5) | 109.133 -> 151.609 | 1,607.986 -> 1,353.841 ms (-15.805%) | 62.190 -> 73.864 | combined tail -67.150%, 5/5; exact pager/write/schema; absolute Q 55,325; CPU/RSS/footprint/store/tiny phases PASS |
+| F3-v1 grouped INSERT + RETURNING | **FAIL / REVISE** | 674.972 -> 745.510 ms (+10.450%, 0/5) | 148.154 -> 134.136 | 1,377.332 -> 1,453.100 ms (+5.501%) | 72.604 -> 68.818 | INSERTs 5,372->103 exact; mapping +12.068%; 5,372 extra result rows; RSS/peak fail |
+| F3-v2 prequery + grouped INSERT | **FAIL / REVISE** | 645.434 -> 672.161 ms (+4.141%, 0/5) | 154.935 -> 148.774 | 1,336.071 -> 1,359.882 ms (+1.782%) | 74.846 -> 73.536 | zero INSERT-return rows; 103 prequeries; wrong-kind duplicate audit P0; RSS/peak fail |
+| F3-v3 optimistic ABORT grouping | **FAIL / revert; terminal** | 653.849 -> 693.111 ms (+6.005%, 0/5) | 152.941 -> 144.277 | 1,345.911 -> 1,385.098 ms (+2.912%) | 74.299 -> 72.197 | minimum 103 INSERT/0 query/0 result fast path; mapping +6.633%; RSS/peak fail; F4 ineligible |
 
 Accepted M2 phase medians are mapping 511.358 ms, closure 391.551 ms, COMMIT 109.234 ms, reopen 1.100 ms, scrub 270.967 ms, reconstruction 421.991 ms, and ranges 0.665 ms. Both disjoint timer equations reconcile in all five rows. Against the frozen c96 baseline, accepted M2 capture is +2.316%, lifecycle is -1.534%, and reconstruction is -6.754%.
 

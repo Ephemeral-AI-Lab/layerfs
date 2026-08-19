@@ -1745,3 +1745,114 @@ These measurements do not alter the bound: accepted standalone full create
 remains `Theta(B + N)`, accepted construction memory remains
 `O(K + F*(H+1) + bounded buffers)`, and durable live space remains
 `Theta(B_u + N)`.
+
+## 25. F3 bounded SQLite CAS insertion grouping — terminal rejection
+
+Status: **FAIL / revert; accepted F2-v3 bounds remain active; F4 ineligible**.
+
+F3 tested one private fixed-cap insertion group under row cap 64 and total
+owned canonical-byte cap 1,048,576. Each input remains completely canonical-
+validated. Distinct first occurrences are inserted, conflicts are fully
+authenticated, later occurrences retain exact created/reused classification,
+and one ordered `PutEvidence` is issued only after the complete group succeeds.
+The structure introduces no source/reference/object-sized resident state.
+
+For source bytes `B`, occurrence count `N`, accepted frontier capacities `K/F`,
+file height `H`, and fixed insertion caps `R=64`, `C=1,048,576`:
+
+```text
+T_F3 = Theta(B + N) + O(number_of_groups * R^2)
+M_F3 = O(K + F*(H+1) + C + fixed R-sized SQL/result/evidence buffers)
+S_F3 = Theta(B_u + N)
+```
+
+Because `R` and `C` are frozen constants, bounded duplicate/result scans do not
+change the full-create class. The conservative all-path ceiling is at most
+`16 * 64^2 = 65,536` ID comparisons per group. The exact logical-Q contract is:
+
+```text
+fixed/scalar/iterator envelope                         4,096
+64 GroupInput descriptors                  64 * 72      4,608
+owned pending canonical buffers                       1,048,576
+maximum incoming canonical overlap                       32,781
+64 pending construction results             64 * 16      1,024
+maximum generated INSERT SQL                               767
+64 bounded incumbent/result ObjectIds        64 * 32      2,048
+64 ordered PutEvidence values                64 * 80      5,120
+maximum decoded incumbent payload + charge                 33,024
+maximum mapping encode-buffer overlap                       8,747
+conservative analytical ceiling                        1,209,997
+authorized absolute cap                               1,310,720
+measured v3 high-water                                1,147,173
+terminal current                                               0
+```
+
+The analytical sum is deliberately conservative; fast and fallback statement
+buffers are sequential, not simultaneous. The preregistration's 1,210,008
+figure retained a 778-byte conservative SQL term. V3's exact longest retry SQL
+is 767 bytes, reducing the same equation by 11 bytes; both remain below the
+unchanged cap. The measured external RSS/footprint costs are separately
+protected and are not hidden inside logical Q.
+
+### 25.1 Exhausted exact-classification shapes
+
+The three immutable candidates cover the safe SQLite mechanisms for learning
+which submitted IDs were created:
+
+| Shape | Group write/read/result work on fresh fixture | Exact outcome |
+|---|---|---|
+| v1 `INSERT ... RETURNING` | 103 writes; 5,372 inserted-ID results | correct; wall and memory FAIL |
+| v2 incumbent prequery then INSERT | 103 reads + 103 writes; zero INSERT results | performance FAIL; later-duplicate kind audit defect |
+| v3 `INSERT OR ABORT`, query/retry only on uniqueness | 103 writes; zero reads/results/fallbacks | semantic PASS; wall and memory FAIL |
+
+The v3 fast path is the lower bound under the frozen caps: one successful write
+statement per group, no classification query, no returned row, and no fallback
+work. Exact direct counters are:
+
+```text
+object occurrences / unique IDs                5,372 / 5,372
+groups / optimistic writes                         103 / 103
+fallbacks / reads / retries / result IDs           0 / 0 / 0 / 0
+mapping acquisitions / executes / queries        103 / 104 / 0
+INSERT bound rows / BLOB binds                 5,372 / 10,744
+created / reused                               5,372 / 0
+proof evidence / edges                        5,372 / 5,371
+```
+
+`INSERT OR IGNORE` plus a changed count does not identify conflict positions.
+Post-query or savepoint variants add work and reduce to v2/v3. No-op update or
+replace semantics weaken immutable CAS and can change trigger/write behavior.
+Hooks, temporary markers/tables, sidecars, or cross-group history violate the
+schema/state/one-variable bounds. Thus no fourth exact-classification
+primitive is accepted in scope.
+
+### 25.2 Measurement and retained bound
+
+Against accepted F2-v3, v3 medians are:
+
+```text
+mapping/CAS       489.054042 -> 521.491917 ms  +6.632779%, 0/5
+durable capture   653.848625 -> 693.110583 ms  +6.004747%, 0/5
+complete lifecycle 1,345.911375 -> 1,385.097667 ms +2.911506%, 0/5
+RSS               93,241,344 -> 98,304,000 B  +5.429626%, 0/5
+peak footprint    92,045,744 -> 97,042,888 B  +5.428979%, 0/5
+```
+
+Candidate/control identities, logical writes, final dirty writes 26,676,
+spills 6,675, sampled journal allocation 20,480, schema/endpoints,
+FULL+DELETE, one transaction/COMMIT, reconstruction/ranges, and M4.5 remain
+exact. VFS calls/bytes, xSync calls/wall, true journal/temp peaks, and physical
+media I/O remain **Unavailable**.
+
+F3 therefore establishes a negative constant-factor result, not a new retained
+algorithm. After source reversion, accepted full create remains exactly §24:
+
+```text
+T_full_create = Theta(B + N)
+M_construction = O(K + F*(H+1) + bounded accepted buffers)
+S_live = Theta(B_u + N)
+```
+
+The intentional 1-MiB insertion group and its SQL/result buffers are absent
+from the retained source. No F4 eligibility, profile choice, format change,
+production extraction, or backend claim follows from F3.
