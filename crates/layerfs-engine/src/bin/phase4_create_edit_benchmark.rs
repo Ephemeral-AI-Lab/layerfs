@@ -459,6 +459,17 @@ struct Metrics {
     incremental_new_or_different_edges: u64,
     incremental_new_subtree_objects_authenticated: u64,
     incremental_new_subtree_bytes_authenticated: u64,
+    construction_put_evidences: u64,
+    construction_edges_covered: u64,
+    construction_leaf_summaries: u64,
+    construction_branch_summaries: u64,
+    construction_file_summaries: u64,
+    construction_workspace_summaries: u64,
+    construction_transition_summaries: u64,
+    construction_proof_consumptions: u64,
+    construction_source_hash_bytes: u64,
+    construction_source_hashes: u64,
+    construction_cdc_entries: u64,
     w_bytes: u64,
     d_bytes: u64,
 }
@@ -569,6 +580,7 @@ fn validate_metric_equations(metrics: Metrics) -> CoreResult<()> {
         || metrics.incremental_new_subtree_objects_authenticated > metrics.objects_authenticated
         || metrics.incremental_new_subtree_bytes_authenticated
             > metrics.canonical_bytes_authenticated
+        || metrics.construction_proof_consumptions > 1
     {
         return Err(CoreError::LengthMismatch {
             expected: 0,
@@ -1327,6 +1339,28 @@ struct SameOpenValidationPermit {
     _receipt_charge: CapacityCharge,
 }
 
+#[repr(C)]
+#[derive(Debug)]
+struct PutEvidence {
+    object_id: ObjectId,
+    canonical_len: u64,
+    open_identity: u64,
+    transaction_identity: u64,
+    authority_serial: u64,
+    mutation_serial: u64,
+    kind: ObjectKind,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+struct ConstructionNodeProof {
+    object_id: ObjectId,
+    total_raw: u64,
+    references: u64,
+    transaction_identity: u64,
+    level: u8,
+}
+
 impl SameOpenValidationWitness {
     fn consume(
         &mut self,
@@ -1405,6 +1439,8 @@ impl SameOpenValidationPermit {
 struct ActiveTransaction {
     identity: u64,
     witness_issued: bool,
+    construction_proof_issued: bool,
+    construction_proof_consumed: bool,
 }
 
 fn add(value: &mut u64, amount: u64) -> CoreResult<()> {
@@ -1533,7 +1569,7 @@ fn write_phase_metric_json(
         .ok_or(CoreError::LengthOverflow)?;
     write!(
         writer,
-        "{{\"phase\":\"{name}\",\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{},\"canonical_bytes_authenticated\":{canonical_bytes_authenticated},\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"statement_cache_acquisitions\":{},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_query_calls\":{},\"sql_execute_calls\":{},\"sql_rows_returned\":{},\"sql_rows_changed\":{},\"row_blob_reads\":{},\"row_blob_writes\":{},\"row_blob_copy_bytes\":{},\"borrowed_row_blob_reads\":{},\"borrowed_row_blob_bytes\":{},\"incremental_blob_opens\":{},\"incremental_blob_reads\":{},\"incremental_blob_writes\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"commits\":{},\"references\":{},\"pages\":{},\"branches\":{},\"incremental_qualification_calls\":{},\"incremental_prior_spine_objects_authenticated\":{},\"incremental_prior_spine_bytes_authenticated\":{},\"incremental_replacement_spine_objects_authenticated\":{},\"incremental_replacement_spine_bytes_authenticated\":{},\"incremental_receipt_covered_edges\":{},\"incremental_new_or_different_edges\":{},\"incremental_new_subtree_objects_authenticated\":{},\"incremental_new_subtree_bytes_authenticated\":{},\"other_heap_copy_bytes\":\"Unavailable\"}}",
+        "{{\"phase\":\"{name}\",\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{},\"canonical_bytes_authenticated\":{canonical_bytes_authenticated},\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"statement_cache_acquisitions\":{},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_query_calls\":{},\"sql_execute_calls\":{},\"sql_rows_returned\":{},\"sql_rows_changed\":{},\"row_blob_reads\":{},\"row_blob_writes\":{},\"row_blob_copy_bytes\":{},\"borrowed_row_blob_reads\":{},\"borrowed_row_blob_bytes\":{},\"incremental_blob_opens\":{},\"incremental_blob_reads\":{},\"incremental_blob_writes\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"commits\":{},\"references\":{},\"pages\":{},\"branches\":{},\"incremental_qualification_calls\":{},\"incremental_prior_spine_objects_authenticated\":{},\"incremental_prior_spine_bytes_authenticated\":{},\"incremental_replacement_spine_objects_authenticated\":{},\"incremental_replacement_spine_bytes_authenticated\":{},\"incremental_receipt_covered_edges\":{},\"incremental_new_or_different_edges\":{},\"incremental_new_subtree_objects_authenticated\":{},\"incremental_new_subtree_bytes_authenticated\":{},\"construction_put_evidences\":{construction_put_evidences},\"construction_edges_covered\":{construction_edges_covered},\"construction_leaf_summaries\":{construction_leaf_summaries},\"construction_branch_summaries\":{construction_branch_summaries},\"construction_file_summaries\":{construction_file_summaries},\"construction_workspace_summaries\":{construction_workspace_summaries},\"construction_transition_summaries\":{construction_transition_summaries},\"construction_proof_consumptions\":{construction_proof_consumptions},\"construction_source_hash_bytes\":{construction_source_hash_bytes},\"construction_source_hashes\":{construction_source_hashes},\"construction_cdc_entries\":{construction_cdc_entries},\"other_heap_copy_bytes\":\"Unavailable\"}}",
         metric_delta(after.raw_hashes, before.raw_hashes)?,
         metric_delta(after.canonical_id_hashes, before.canonical_id_hashes)?,
         metric_delta(after.objects_created, before.objects_created)?,
@@ -1613,6 +1649,50 @@ fn write_phase_metric_json(
         metric_delta(
             after.incremental_new_subtree_bytes_authenticated,
             before.incremental_new_subtree_bytes_authenticated,
+        )?,
+        construction_put_evidences = metric_delta(
+            after.construction_put_evidences,
+            before.construction_put_evidences,
+        )?,
+        construction_edges_covered = metric_delta(
+            after.construction_edges_covered,
+            before.construction_edges_covered,
+        )?,
+        construction_leaf_summaries = metric_delta(
+            after.construction_leaf_summaries,
+            before.construction_leaf_summaries,
+        )?,
+        construction_branch_summaries = metric_delta(
+            after.construction_branch_summaries,
+            before.construction_branch_summaries,
+        )?,
+        construction_file_summaries = metric_delta(
+            after.construction_file_summaries,
+            before.construction_file_summaries,
+        )?,
+        construction_workspace_summaries = metric_delta(
+            after.construction_workspace_summaries,
+            before.construction_workspace_summaries,
+        )?,
+        construction_transition_summaries = metric_delta(
+            after.construction_transition_summaries,
+            before.construction_transition_summaries,
+        )?,
+        construction_proof_consumptions = metric_delta(
+            after.construction_proof_consumptions,
+            before.construction_proof_consumptions,
+        )?,
+        construction_source_hash_bytes = metric_delta(
+            after.construction_source_hash_bytes,
+            before.construction_source_hash_bytes,
+        )?,
+        construction_source_hashes = metric_delta(
+            after.construction_source_hashes,
+            before.construction_source_hashes,
+        )?,
+        construction_cdc_entries = metric_delta(
+            after.construction_cdc_entries,
+            before.construction_cdc_entries,
         )?,
         borrowed_bytes_encode_calls = metric_delta(
             after.borrowed_bytes_encode_calls,
@@ -1717,6 +1797,7 @@ struct Store {
     integrity_epoch: u64,
     open_identity: u64,
     same_open_authority_serial: u64,
+    mutation_serial: u64,
     next_transaction_identity: u64,
     active_transaction: Option<ActiveTransaction>,
     #[cfg(test)]
@@ -1935,6 +2016,7 @@ impl Store {
             integrity_epoch,
             open_identity: next_open_identity()?,
             same_open_authority_serial: 0,
+            mutation_serial: 0,
             next_transaction_identity: 0,
             active_transaction: None,
             #[cfg(test)]
@@ -1982,6 +2064,32 @@ impl Store {
         })
     }
 
+    fn mark_construction_proof_issued(
+        &mut self,
+        proof: &FullCreateConstructionProof,
+    ) -> CoreResult<()> {
+        let scope = &proof.workspace.file.scope;
+        let transaction = self
+            .active_transaction
+            .as_mut()
+            .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+        if proof.expectation.is_none()
+            || transaction.construction_proof_issued
+            || transaction.identity != scope.transaction_identity
+            || scope.open_identity != self.open_identity
+            || scope.store_instance_id != self.store_instance_id
+            || scope.validation_authority_id != self.validation_authority_id
+            || scope.integrity_epoch != self.integrity_epoch
+            || scope.profile != self.profile
+            || scope.authority_serial != self.same_open_authority_serial
+            || scope.last_mutation_serial != self.mutation_serial
+        {
+            return Err(CoreError::ValidationAuthorityUnavailable);
+        }
+        transaction.construction_proof_issued = true;
+        Ok(())
+    }
+
     fn begin(&mut self, metrics: &mut Metrics) -> AnyResult<()> {
         if self.active_transaction.is_some() {
             return Err(CoreError::PublicationConflict.into());
@@ -2005,6 +2113,8 @@ impl Store {
         self.active_transaction = Some(ActiveTransaction {
             identity: next_transaction_identity,
             witness_issued: false,
+            construction_proof_issued: false,
+            construction_proof_consumed: false,
         });
         Ok(())
     }
@@ -2087,6 +2197,56 @@ impl Store {
         Ok((id, canonical_len))
     }
 
+    fn put_generated_bytes_with_evidence(
+        &mut self,
+        value: &[u8],
+        metrics: &mut Metrics,
+    ) -> AnyResult<(ObjectId, usize, PutEvidence)> {
+        let canonical = encode_charged_bytes_object(value, metrics)?;
+        add(&mut metrics.borrowed_bytes_encode_calls, 1)?;
+        add_len(&mut metrics.borrowed_bytes_encode_input_bytes, value.len())?;
+        let id = object_id_accounted(&canonical, metrics)?;
+        let canonical_len = canonical.len();
+        self.put_authenticated(id, ObjectKind::Bytes, &canonical, true, metrics)?;
+        let evidence = self.issue_put_evidence(id, ObjectKind::Bytes, canonical_len)?;
+        Ok((id, canonical_len, evidence))
+    }
+
+    fn put_with_evidence(
+        &mut self,
+        id: ObjectId,
+        canonical: &[u8],
+        metrics: &mut Metrics,
+    ) -> AnyResult<PutEvidence> {
+        let decoded_charge = charge_capacity(metrics, decoded_object_q(canonical)?)?;
+        let object = layerfs_core::validate_identity(canonical, id)?;
+        let kind = object.kind();
+        drop(object);
+        drop(decoded_charge);
+        self.put_authenticated(id, kind, canonical, false, metrics)?;
+        self.issue_put_evidence(id, kind, canonical.len())
+    }
+
+    fn issue_put_evidence(
+        &self,
+        object_id: ObjectId,
+        kind: ObjectKind,
+        canonical_len: usize,
+    ) -> AnyResult<PutEvidence> {
+        let transaction = self
+            .active_transaction
+            .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+        Ok(PutEvidence {
+            object_id,
+            canonical_len: u64::try_from(canonical_len).map_err(|_| CoreError::LengthOverflow)?,
+            open_identity: self.open_identity,
+            transaction_identity: transaction.identity,
+            authority_serial: self.same_open_authority_serial,
+            mutation_serial: self.mutation_serial,
+            kind,
+        })
+    }
+
     fn put_authenticated(
         &mut self,
         id: ObjectId,
@@ -2095,6 +2255,10 @@ impl Store {
         reused_object_id: bool,
         metrics: &mut Metrics,
     ) -> AnyResult<()> {
+        let next_mutation_serial = self
+            .mutation_serial
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         add(&mut metrics.objects_authenticated, 1)?;
         add_len(&mut metrics.canonical_bytes_authenticated, canonical.len())?;
         if reused_object_id {
@@ -2122,6 +2286,7 @@ impl Store {
             add(&mut metrics.objects_created, 1)?;
             add(&mut metrics.row_blob_writes, 2)?;
             add_len(&mut metrics.canonical_bytes_written, canonical.len())?;
+            self.mutation_serial = next_mutation_serial;
             return Ok(());
         }
         let mut statement = self
@@ -2144,6 +2309,7 @@ impl Store {
         drop(existing_object);
         drop(decoded_charge);
         add(&mut metrics.objects_reused, 1)?;
+        self.mutation_serial = next_mutation_serial;
         Ok(())
     }
 
@@ -2921,6 +3087,615 @@ impl Store {
     }
 }
 
+const Q_CONSTRUCTION_STATE_BYTES: usize = 4_096;
+const Q_PUT_EVIDENCE_BYTES: usize = 80;
+
+fn exact_vec_capacity<T>(capacity: usize) -> CoreResult<Vec<T>> {
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(capacity)
+        .map_err(|_| CoreError::AllocationFailed)?;
+    if values.capacity() != capacity {
+        return Err(CoreError::AllocationFailed);
+    }
+    Ok(values)
+}
+
+fn construction_frontier_bytes(
+    candidate: Candidate,
+    expected_references: u64,
+) -> CoreResult<(usize, usize)> {
+    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
+    let height = usize::from(file_codec::expected_file_level(
+        expected_references,
+        profile,
+    )?);
+    let leaf_count = if expected_references == 0 {
+        0
+    } else {
+        expected_references
+            .checked_add(u64::try_from(candidate.k - 1).map_err(|_| CoreError::LengthOverflow)?)
+            .ok_or(CoreError::LengthOverflow)?
+            / u64::try_from(candidate.k).map_err(|_| CoreError::LengthOverflow)?
+    };
+    let fanout = u64::try_from(candidate.f).map_err(|_| CoreError::LengthOverflow)?;
+    let mut top_children = leaf_count;
+    for _ in 0..height {
+        top_children = top_children
+            .checked_add(fanout - 1)
+            .ok_or(CoreError::LengthOverflow)?
+            / fanout;
+    }
+    let exact_full_topology = top_children == fanout;
+    let levels = height
+        .checked_add(1)
+        .and_then(|value| value.checked_add(usize::from(exact_full_topology)))
+        .ok_or(CoreError::LengthOverflow)?;
+    let frontier_bytes = candidate
+        .k
+        .checked_mul(std::mem::size_of::<file_codec::FileReference>())
+        .and_then(|value| {
+            levels
+                .checked_mul(
+                    std::mem::size_of::<Vec<file_codec::FileChild>>()
+                        .checked_add(
+                            candidate
+                                .f
+                                .checked_mul(std::mem::size_of::<file_codec::FileChild>())?,
+                        )?
+                        .checked_add(std::mem::size_of::<u64>())?
+                        .checked_add(std::mem::size_of::<Vec<ConstructionNodeProof>>())?
+                        .checked_add(
+                            candidate
+                                .f
+                                .checked_mul(std::mem::size_of::<ConstructionNodeProof>())?,
+                        )?,
+                )
+                .and_then(|levels_bytes| value.checked_add(levels_bytes))
+        })
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok((levels, frontier_bytes))
+}
+
+struct ConstructionState {
+    source_hasher: Hasher,
+    sequence_hasher: Hasher,
+    proof_levels: Vec<Vec<ConstructionNodeProof>>,
+    store_instance_id: [u8; 16],
+    validation_authority_id: [u8; 32],
+    profile: [u8; 32],
+    open_identity: u64,
+    transaction_identity: u64,
+    authority_serial: u64,
+    integrity_epoch: u64,
+    last_mutation_serial: u64,
+    expected_references: u64,
+    leaf_references: u64,
+    leaf_total: u64,
+    _fixed_charge: CapacityCharge,
+    _frontier_charge: CapacityCharge,
+    _evidence_slot_charge: CapacityCharge,
+}
+
+struct ConstructionScopeProof {
+    store_instance_id: [u8; 16],
+    validation_authority_id: [u8; 32],
+    profile: [u8; 32],
+    open_identity: u64,
+    transaction_identity: u64,
+    authority_serial: u64,
+    integrity_epoch: u64,
+    last_mutation_serial: u64,
+    _charge: CapacityCharge,
+}
+
+struct FileConstructionProof {
+    scope: ConstructionScopeProof,
+    source_fingerprint: [u8; 32],
+    cdc_sequence: [u8; 32],
+    file: ConstructionNodeProof,
+}
+
+struct WorkspaceConstructionProof {
+    file: FileConstructionProof,
+    root: ObjectId,
+}
+
+struct FullCreateConstructionProof {
+    workspace: WorkspaceConstructionProof,
+    transition: ObjectId,
+    expectation: Option<FullCreateExpectation>,
+    consumed: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FullCreateExpectation {
+    source_fingerprint: [u8; 32],
+    cdc_sequence: [u8; 32],
+    references: u64,
+    root: ObjectId,
+    transition: ObjectId,
+    closure: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FullCreateQualification {
+    source_fingerprint: [u8; 32],
+    cdc_sequence: [u8; 32],
+    references: u64,
+    total_raw: u64,
+    root: ObjectId,
+    transition: ObjectId,
+    closure: [u8; 32],
+}
+
+fn full_create_expectation(
+    base: Option<(ObjectId, ObjectId, [u8; 32])>,
+    references: Option<u64>,
+    fingerprint: Option<&str>,
+    sequence: Option<&str>,
+) -> AnyResult<FullCreateExpectation> {
+    let (root, transition, closure) = base.ok_or(CoreError::PublicationConflict)?;
+    Ok(FullCreateExpectation {
+        source_fingerprint: ObjectId::from_bytes(&decode_hex(
+            fingerprint.ok_or(CoreError::PublicationConflict)?,
+        )?)?
+        .to_bytes(),
+        cdc_sequence: ObjectId::from_bytes(&decode_hex(
+            sequence.ok_or(CoreError::PublicationConflict)?,
+        )?)?
+        .to_bytes(),
+        references: references.ok_or(CoreError::PublicationConflict)?,
+        root,
+        transition,
+        closure,
+    })
+}
+
+enum RootConstructionCoverage {
+    Children(Vec<ConstructionNodeProof>),
+    Collapsed(ConstructionNodeProof),
+}
+
+impl ConstructionState {
+    fn new(
+        store: &Store,
+        candidate: Candidate,
+        expected_references: u64,
+        metrics: &mut Metrics,
+    ) -> AnyResult<(Self, usize)> {
+        if std::mem::size_of::<PutEvidence>() != Q_PUT_EVIDENCE_BYTES
+            || std::mem::size_of::<ConstructionNodeProof>() != 64
+            || std::mem::size_of::<Self>() > Q_CONSTRUCTION_STATE_BYTES
+        {
+            return Err(CoreError::AllocationFailed.into());
+        }
+        let transaction_identity = store
+            .active_transaction
+            .ok_or(CoreError::ValidationAuthorityUnavailable)?
+            .identity;
+        let (levels, frontier_bytes) = construction_frontier_bytes(candidate, expected_references)?;
+        let fixed_charge = charge_capacity(metrics, Q_CONSTRUCTION_STATE_BYTES)?;
+        let frontier_charge = charge_capacity(metrics, frontier_bytes)?;
+        let evidence_slot_charge = charge_capacity(metrics, Q_PUT_EVIDENCE_BYTES)?;
+        let mut proof_levels = exact_vec_capacity(levels)?;
+        for _ in 0..levels {
+            proof_levels.push(exact_vec_capacity(candidate.f)?);
+        }
+        Ok((
+            Self {
+                source_hasher: Hasher::new(),
+                sequence_hasher: Hasher::new(),
+                proof_levels,
+                store_instance_id: store.store_instance_id,
+                validation_authority_id: store.validation_authority_id,
+                profile: store.profile,
+                open_identity: store.open_identity,
+                transaction_identity,
+                authority_serial: store.same_open_authority_serial,
+                integrity_epoch: store.integrity_epoch,
+                last_mutation_serial: store.mutation_serial,
+                expected_references,
+                leaf_references: 0,
+                leaf_total: 0,
+                _fixed_charge: fixed_charge,
+                _frontier_charge: frontier_charge,
+                _evidence_slot_charge: evidence_slot_charge,
+            },
+            levels,
+        ))
+    }
+
+    fn accept_put(
+        &mut self,
+        evidence: PutEvidence,
+        expected_id: ObjectId,
+        expected_kind: ObjectKind,
+        expected_len: usize,
+        metrics: &mut Metrics,
+    ) -> CoreResult<()> {
+        let expected_mutation = self
+            .last_mutation_serial
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        if evidence.object_id != expected_id
+            || evidence.kind != expected_kind
+            || evidence.canonical_len
+                != u64::try_from(expected_len).map_err(|_| CoreError::LengthOverflow)?
+            || evidence.open_identity != self.open_identity
+            || evidence.transaction_identity != self.transaction_identity
+            || evidence.authority_serial != self.authority_serial
+            || evidence.mutation_serial != expected_mutation
+        {
+            return Err(CoreError::ValidationAuthorityUnavailable);
+        }
+        self.last_mutation_serial = evidence.mutation_serial;
+        add(&mut metrics.construction_put_evidences, 1)
+    }
+
+    fn observe_chunk(
+        &mut self,
+        evidence: PutEvidence,
+        reference: file_codec::FileReference,
+        bytes: &[u8],
+        metrics: &mut Metrics,
+    ) -> CoreResult<()> {
+        self.accept_put(
+            evidence,
+            reference.object_id,
+            ObjectKind::Bytes,
+            bytes
+                .len()
+                .checked_add(layerfs_core::object::HEADER_LEN + 4)
+                .ok_or(CoreError::LengthOverflow)?,
+            metrics,
+        )?;
+        if chunk_id(bytes) != reference.raw_id
+            || u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?
+                != reference.raw_length
+        {
+            return Err(CoreError::ChunkIdentityMismatch);
+        }
+        self.source_hasher.update(bytes);
+        self.sequence_hasher
+            .update(&reference.raw_length.to_be_bytes());
+        self.sequence_hasher.update(reference.raw_id.as_bytes());
+        self.leaf_references = self
+            .leaf_references
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.leaf_total = self
+            .leaf_total
+            .checked_add(u64::from(reference.raw_length))
+            .ok_or(CoreError::LengthOverflow)?;
+        add_len(&mut metrics.construction_source_hash_bytes, bytes.len())?;
+        add(&mut metrics.construction_cdc_entries, 1)
+    }
+
+    fn fold_leaf(
+        &mut self,
+        evidence: PutEvidence,
+        id: ObjectId,
+        canonical_len: usize,
+        references: &[file_codec::FileReference],
+        metrics: &mut Metrics,
+    ) -> CoreResult<ConstructionNodeProof> {
+        let references_count =
+            u64::try_from(references.len()).map_err(|_| CoreError::LengthOverflow)?;
+        let total = references.iter().try_fold(0_u64, |sum, reference| {
+            sum.checked_add(u64::from(reference.raw_length))
+                .ok_or(CoreError::LengthOverflow)
+        })?;
+        if references_count == 0
+            || self.leaf_references != references_count
+            || self.leaf_total != total
+        {
+            return Err(CoreError::NonCanonicalPagePartition);
+        }
+        self.accept_put(evidence, id, ObjectKind::Bytes, canonical_len, metrics)?;
+        self.leaf_references = 0;
+        self.leaf_total = 0;
+        add(&mut metrics.construction_edges_covered, references_count)?;
+        add(&mut metrics.construction_leaf_summaries, 1)?;
+        Ok(ConstructionNodeProof {
+            object_id: id,
+            total_raw: total,
+            references: references_count,
+            transaction_identity: self.transaction_identity,
+            level: 0,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn fold_branch(
+        &mut self,
+        evidence: PutEvidence,
+        id: ObjectId,
+        canonical_len: usize,
+        level: usize,
+        children: &[file_codec::FileChild],
+        proofs: Vec<ConstructionNodeProof>,
+        metrics: &mut Metrics,
+    ) -> CoreResult<ConstructionNodeProof> {
+        if children.is_empty() || children.len() != proofs.len() {
+            return Err(CoreError::NonCanonicalPagePartition);
+        }
+        let mut total = 0_u64;
+        let mut references = 0_u64;
+        for (child, proof) in children.iter().zip(proofs) {
+            if proof.object_id != child.object_id
+                || usize::from(proof.level) != level
+                || proof.transaction_identity != self.transaction_identity
+            {
+                return Err(CoreError::WrongLogicalRole);
+            }
+            total = total
+                .checked_add(proof.total_raw)
+                .ok_or(CoreError::LengthOverflow)?;
+            references = references
+                .checked_add(proof.references)
+                .ok_or(CoreError::LengthOverflow)?;
+            if child.cumulative_end != total {
+                return Err(CoreError::LengthMismatch {
+                    expected: child.cumulative_end,
+                    actual: total,
+                });
+            }
+        }
+        self.accept_put(evidence, id, ObjectKind::Bytes, canonical_len, metrics)?;
+        add(
+            &mut metrics.construction_edges_covered,
+            u64::try_from(children.len()).map_err(|_| CoreError::LengthOverflow)?,
+        )?;
+        add(&mut metrics.construction_branch_summaries, 1)?;
+        Ok(ConstructionNodeProof {
+            object_id: id,
+            total_raw: total,
+            references,
+            transaction_identity: self.transaction_identity,
+            level: u8::try_from(level + 1).map_err(|_| CoreError::MappingDepthExceeded)?,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn finish_file(
+        mut self,
+        evidence: PutEvidence,
+        id: ObjectId,
+        canonical_len: usize,
+        level: usize,
+        total_raw: u64,
+        references: u64,
+        children: &[file_codec::FileChild],
+        coverage: RootConstructionCoverage,
+        metrics: &mut Metrics,
+    ) -> CoreResult<FileConstructionProof> {
+        if self.leaf_references != 0
+            || self.leaf_total != 0
+            || references != self.expected_references
+        {
+            return Err(CoreError::NonCanonicalPagePartition);
+        }
+        match coverage {
+            RootConstructionCoverage::Children(proofs) => {
+                if children.len() != proofs.len() {
+                    return Err(CoreError::NonCanonicalPagePartition);
+                }
+                let mut actual_total = 0_u64;
+                let mut actual_references = 0_u64;
+                for (child, proof) in children.iter().zip(proofs) {
+                    if child.object_id != proof.object_id
+                        || usize::from(proof.level) != level
+                        || proof.transaction_identity != self.transaction_identity
+                    {
+                        return Err(CoreError::WrongLogicalRole);
+                    }
+                    actual_total = actual_total
+                        .checked_add(proof.total_raw)
+                        .ok_or(CoreError::LengthOverflow)?;
+                    actual_references = actual_references
+                        .checked_add(proof.references)
+                        .ok_or(CoreError::LengthOverflow)?;
+                    if child.cumulative_end != actual_total {
+                        return Err(CoreError::LengthMismatch {
+                            expected: child.cumulative_end,
+                            actual: actual_total,
+                        });
+                    }
+                }
+                if actual_total != total_raw || actual_references != references {
+                    return Err(CoreError::LengthMismatch {
+                        expected: total_raw,
+                        actual: actual_total,
+                    });
+                }
+            }
+            RootConstructionCoverage::Collapsed(proof) => {
+                if proof.transaction_identity != self.transaction_identity
+                    || proof.total_raw != total_raw
+                    || proof.references != references
+                    || usize::from(proof.level) <= level
+                    || children.last().map_or(0, |child| child.cumulative_end) != total_raw
+                {
+                    return Err(CoreError::LengthMismatch {
+                        expected: total_raw,
+                        actual: proof.total_raw,
+                    });
+                }
+            }
+        }
+        self.accept_put(evidence, id, ObjectKind::Bytes, canonical_len, metrics)?;
+        add(
+            &mut metrics.construction_edges_covered,
+            u64::try_from(children.len()).map_err(|_| CoreError::LengthOverflow)?,
+        )?;
+        add(&mut metrics.construction_file_summaries, 1)?;
+        add(&mut metrics.construction_source_hashes, 1)?;
+        drop(self._frontier_charge);
+        self._fixed_charge.absorb(self._evidence_slot_charge)?;
+        Ok(FileConstructionProof {
+            scope: ConstructionScopeProof {
+                store_instance_id: self.store_instance_id,
+                validation_authority_id: self.validation_authority_id,
+                profile: self.profile,
+                open_identity: self.open_identity,
+                transaction_identity: self.transaction_identity,
+                authority_serial: self.authority_serial,
+                integrity_epoch: self.integrity_epoch,
+                last_mutation_serial: self.last_mutation_serial,
+                _charge: self._fixed_charge,
+            },
+            source_fingerprint: *self.source_hasher.finalize().as_bytes(),
+            cdc_sequence: *self.sequence_hasher.finalize().as_bytes(),
+            file: ConstructionNodeProof {
+                object_id: id,
+                total_raw,
+                references,
+                transaction_identity: self.transaction_identity,
+                level: u8::try_from(level).map_err(|_| CoreError::MappingDepthExceeded)?,
+            },
+        })
+    }
+}
+
+impl ConstructionScopeProof {
+    fn accept_put(
+        &mut self,
+        evidence: PutEvidence,
+        id: ObjectId,
+        kind: ObjectKind,
+        metrics: &mut Metrics,
+    ) -> CoreResult<()> {
+        let expected_mutation = self
+            .last_mutation_serial
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        if evidence.object_id != id
+            || evidence.kind != kind
+            || evidence.open_identity != self.open_identity
+            || evidence.transaction_identity != self.transaction_identity
+            || evidence.authority_serial != self.authority_serial
+            || evidence.mutation_serial != expected_mutation
+        {
+            return Err(CoreError::ValidationAuthorityUnavailable);
+        }
+        self.last_mutation_serial = evidence.mutation_serial;
+        add(&mut metrics.construction_put_evidences, 1)
+    }
+}
+
+impl FileConstructionProof {
+    fn fold_workspace(
+        mut self,
+        evidence: PutEvidence,
+        root: ObjectId,
+        metrics: &mut Metrics,
+    ) -> CoreResult<WorkspaceConstructionProof> {
+        self.scope
+            .accept_put(evidence, root, ObjectKind::Directory, metrics)?;
+        add(&mut metrics.construction_edges_covered, 1)?;
+        add(&mut metrics.construction_workspace_summaries, 1)?;
+        Ok(WorkspaceConstructionProof { file: self, root })
+    }
+}
+
+impl WorkspaceConstructionProof {
+    fn fold_transition(
+        mut self,
+        evidence: PutEvidence,
+        transition: ObjectId,
+        metrics: &mut Metrics,
+    ) -> CoreResult<FullCreateConstructionProof> {
+        self.file
+            .scope
+            .accept_put(evidence, transition, ObjectKind::Bytes, metrics)?;
+        add(&mut metrics.construction_edges_covered, 1)?;
+        add(&mut metrics.construction_transition_summaries, 1)?;
+        Ok(FullCreateConstructionProof {
+            workspace: self,
+            transition,
+            expectation: None,
+            consumed: false,
+        })
+    }
+}
+
+impl FullCreateConstructionProof {
+    fn bind_expectation(&mut self, expected: FullCreateExpectation) -> CoreResult<()> {
+        let file = &self.workspace.file;
+        if self.expectation.is_some()
+            || file.source_fingerprint != expected.source_fingerprint
+            || file.cdc_sequence != expected.cdc_sequence
+            || file.file.references != expected.references
+            || self.workspace.root != expected.root
+            || self.transition != expected.transition
+        {
+            return Err(CoreError::PublicationConflict);
+        }
+        self.expectation = Some(expected);
+        Ok(())
+    }
+
+    fn consume(
+        &mut self,
+        store: &mut Store,
+        expected: FullCreateExpectation,
+        metrics: &mut Metrics,
+    ) -> AnyResult<FullCreateQualification> {
+        if self.consumed {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        self.consumed = true;
+        if self.expectation != Some(expected) {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        let scope = &self.workspace.file.scope;
+        let transaction = store
+            .active_transaction
+            .as_mut()
+            .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+        if !transaction.construction_proof_issued
+            || transaction.construction_proof_consumed
+            || transaction.identity != scope.transaction_identity
+        {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        transaction.construction_proof_consumed = true;
+        if scope.open_identity != store.open_identity
+            || scope.store_instance_id != store.store_instance_id
+            || scope.validation_authority_id != store.validation_authority_id
+            || scope.integrity_epoch != store.integrity_epoch
+            || scope.profile != store.profile
+            || scope.authority_serial != store.same_open_authority_serial
+            || scope.last_mutation_serial != store.mutation_serial
+        {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        if store.current_head_accounted(metrics)?.is_some() {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        let file = &self.workspace.file;
+        if file.source_fingerprint != expected.source_fingerprint
+            || file.cdc_sequence != expected.cdc_sequence
+            || file.file.references != expected.references
+            || self.workspace.root != expected.root
+            || self.transition != expected.transition
+        {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        add(&mut metrics.construction_proof_consumptions, 1)?;
+        Ok(FullCreateQualification {
+            source_fingerprint: file.source_fingerprint,
+            cdc_sequence: file.cdc_sequence,
+            references: file.file.references,
+            total_raw: file.file.total_raw,
+            root: self.workspace.root,
+            transition: self.transition,
+            closure: expected.closure,
+        })
+    }
+}
+
 struct FileBuilder {
     candidate: Candidate,
     leaf: Vec<file_codec::FileReference>,
@@ -2928,6 +3703,7 @@ struct FileBuilder {
     level_totals: Vec<u64>,
     total_raw: u64,
     references: u64,
+    construction: Option<ConstructionState>,
 }
 
 impl FileBuilder {
@@ -2939,7 +3715,34 @@ impl FileBuilder {
             level_totals: Vec::new(),
             total_raw: 0,
             references: 0,
+            construction: None,
         }
+    }
+
+    fn new_proving(
+        candidate: Candidate,
+        expected_references: u64,
+        store: &Store,
+        metrics: &mut Metrics,
+    ) -> AnyResult<Self> {
+        let (construction, level_count) =
+            ConstructionState::new(store, candidate, expected_references, metrics)?;
+        let leaf = exact_vec_capacity(candidate.k)?;
+        let mut levels = exact_vec_capacity(level_count)?;
+        let mut level_totals = exact_vec_capacity(level_count)?;
+        for _ in 0..level_count {
+            levels.push(exact_vec_capacity(candidate.f)?);
+            level_totals.push(0);
+        }
+        Ok(Self {
+            candidate,
+            leaf,
+            levels,
+            level_totals,
+            total_raw: 0,
+            references: 0,
+            construction: Some(construction),
+        })
     }
 
     fn push_bytes(
@@ -2955,17 +3758,28 @@ impl FileBuilder {
         let raw_id = chunk_id_accounted(bytes, metrics)?;
         add(&mut metrics.borrowed_source_encode_calls, 1)?;
         add_len(&mut metrics.borrowed_source_encode_input_bytes, bytes.len())?;
-        let (object_id, _) = store.put_generated_bytes(bytes, metrics)?;
+        let (object_id, evidence) = if self.construction.is_some() {
+            let (object_id, _, evidence) =
+                store.put_generated_bytes_with_evidence(bytes, metrics)?;
+            (object_id, Some(evidence))
+        } else {
+            (store.put_generated_bytes(bytes, metrics)?.0, None)
+        };
+        let reference = file_codec::FileReference {
+            raw_id,
+            raw_length,
+            object_id,
+        };
+        if let Some(construction) = self.construction.as_mut() {
+            construction.observe_chunk(
+                evidence.ok_or(CoreError::ValidationAuthorityUnavailable)?,
+                reference,
+                bytes,
+                metrics,
+            )?;
+        }
         add(&mut metrics.chunks, 1)?;
-        self.push_reference(
-            store,
-            file_codec::FileReference {
-                raw_id,
-                raw_length,
-                object_id,
-            },
-            metrics,
-        )
+        self.push_reference(store, reference, metrics)
     }
 
     fn push_reference(
@@ -2992,6 +3806,9 @@ impl FileBuilder {
     }
 
     fn seed_reference(&mut self, reference: file_codec::FileReference) -> AnyResult<()> {
+        if self.construction.is_some() {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
         if self.leaf.len() >= self.candidate.k {
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
@@ -3014,6 +3831,9 @@ impl FileBuilder {
         raw_length: u64,
         references: u64,
     ) -> AnyResult<()> {
+        if self.construction.is_some() {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
         while self.levels.len() <= level {
             self.levels.push(Vec::with_capacity(self.candidate.f));
             self.level_totals.push(0);
@@ -3046,10 +3866,33 @@ impl FileBuilder {
         metrics: &mut Metrics,
     ) -> AnyResult<()> {
         let children = std::mem::take(&mut self.levels[level]);
+        let proofs = self
+            .construction
+            .as_mut()
+            .map(|construction| std::mem::take(&mut construction.proof_levels[level]));
         self.level_totals[level] = 0;
         let branch_level = u8::try_from(level + 1).map_err(|_| CoreError::MappingDepthExceeded)?;
         let inner = encode_charged_file_branch(branch_level, &children, metrics)?;
-        let (id, canonical_len) = store.put_generated_bytes(&inner, metrics)?;
+        let (id, canonical_len, evidence) = if self.construction.is_some() {
+            let (id, canonical_len, evidence) =
+                store.put_generated_bytes_with_evidence(&inner, metrics)?;
+            (id, canonical_len, Some(evidence))
+        } else {
+            let (id, canonical_len) = store.put_generated_bytes(&inner, metrics)?;
+            (id, canonical_len, None)
+        };
+        let proof = match self.construction.as_mut() {
+            Some(construction) => Some(construction.fold_branch(
+                evidence.ok_or(CoreError::ValidationAuthorityUnavailable)?,
+                id,
+                canonical_len,
+                level,
+                &children,
+                proofs.ok_or(CoreError::ValidationAuthorityUnavailable)?,
+                metrics,
+            )?),
+            None => None,
+        };
         add(&mut metrics.branches, 1)?;
         add_len(&mut metrics.mapping_bytes_rewritten, canonical_len)?;
         let end = children.last().map_or(0, |child| child.cumulative_end);
@@ -3060,6 +3903,7 @@ impl FileBuilder {
                 object_id: id,
                 cumulative_end: end,
             },
+            proof,
             metrics,
         )
     }
@@ -3069,8 +3913,12 @@ impl FileBuilder {
         store: &mut Store,
         level: usize,
         child: file_codec::FileChild,
+        proof: Option<ConstructionNodeProof>,
         metrics: &mut Metrics,
     ) -> AnyResult<()> {
+        if self.construction.is_some() && level >= self.levels.len() {
+            return Err(CoreError::NonCanonicalPagePartition.into());
+        }
         while self.levels.len() <= level {
             self.levels.push(Vec::with_capacity(self.candidate.f));
             self.level_totals.push(0);
@@ -3083,13 +3931,53 @@ impl FileBuilder {
             cumulative_end,
         });
         self.level_totals[level] = cumulative_end;
+        match self.construction.as_mut() {
+            Some(construction) => {
+                let proof = proof.ok_or(CoreError::ValidationAuthorityUnavailable)?;
+                if proof.object_id != child.object_id
+                    || proof.total_raw != child.cumulative_end
+                    || usize::from(proof.level) != level
+                    || proof.transaction_identity != construction.transaction_identity
+                {
+                    return Err(CoreError::LengthMismatch {
+                        expected: child.cumulative_end,
+                        actual: proof.total_raw,
+                    }
+                    .into());
+                }
+                construction.proof_levels[level].push(proof);
+            }
+            None if proof.is_some() => return Err(CoreError::ValidationAuthorityUnavailable.into()),
+            None => {}
+        }
         if self.levels[level].len() == self.candidate.f {
             self.flush_level_with_store(store, level, metrics)?;
         }
         Ok(())
     }
 
-    fn finish(mut self, store: &mut Store, metrics: &mut Metrics) -> AnyResult<ObjectId> {
+    fn finish(self, store: &mut Store, metrics: &mut Metrics) -> AnyResult<ObjectId> {
+        let (id, proof) = self.finish_inner(store, metrics)?;
+        if proof.is_some() {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        Ok(id)
+    }
+
+    fn finish_proven(
+        self,
+        store: &mut Store,
+        metrics: &mut Metrics,
+    ) -> AnyResult<(ObjectId, FileConstructionProof)> {
+        let (id, proof) = self.finish_inner(store, metrics)?;
+        Ok((id, proof.ok_or(CoreError::ValidationAuthorityUnavailable)?))
+    }
+
+    fn finish_inner(
+        mut self,
+        store: &mut Store,
+        metrics: &mut Metrics,
+    ) -> AnyResult<(ObjectId, Option<FileConstructionProof>)> {
         self.flush_leaf_with_store(store, metrics)?;
         loop {
             let nonempty: Vec<usize> = self
@@ -3115,7 +4003,27 @@ impl FileBuilder {
         } else {
             std::mem::take(&mut self.levels[level])
         };
+        let mut proofs = self
+            .construction
+            .as_mut()
+            .map(|construction| std::mem::take(&mut construction.proof_levels[level]));
+        let mut collapsed = None;
         while level > 0 && children.len() == 1 {
+            if let Some(level_proofs) = proofs.take() {
+                let mut level_proofs = level_proofs.into_iter();
+                let proof = level_proofs
+                    .next()
+                    .ok_or(CoreError::NonCanonicalPagePartition)?;
+                if level_proofs.next().is_some()
+                    || proof.object_id != children[0].object_id
+                    || usize::from(proof.level) != level
+                {
+                    return Err(CoreError::NonCanonicalPagePartition.into());
+                }
+                if collapsed.is_none() {
+                    collapsed = Some(proof);
+                }
+            }
             let bytes = store.get_bytes(children[0].object_id, metrics)?;
             let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_BRANCH_TAG)?;
             let _branch_children_charge = charge_decoded_file_children(payload, false, metrics)?;
@@ -3136,9 +4044,35 @@ impl FileBuilder {
             &children,
             metrics,
         )?;
-        let (id, canonical_len) = store.put_generated_bytes(&inner, metrics)?;
+        let (id, canonical_len, evidence) = if self.construction.is_some() {
+            let (id, canonical_len, evidence) =
+                store.put_generated_bytes_with_evidence(&inner, metrics)?;
+            (id, canonical_len, Some(evidence))
+        } else {
+            let (id, canonical_len) = store.put_generated_bytes(&inner, metrics)?;
+            (id, canonical_len, None)
+        };
+        let proof = match self.construction.take() {
+            Some(construction) => Some(construction.finish_file(
+                evidence.ok_or(CoreError::ValidationAuthorityUnavailable)?,
+                id,
+                canonical_len,
+                level,
+                self.total_raw,
+                self.references,
+                &children,
+                match collapsed {
+                    Some(proof) => RootConstructionCoverage::Collapsed(proof),
+                    None => RootConstructionCoverage::Children(
+                        proofs.ok_or(CoreError::ValidationAuthorityUnavailable)?,
+                    ),
+                },
+                metrics,
+            )?),
+            None => None,
+        };
         add_len(&mut metrics.mapping_bytes_rewritten, canonical_len)?;
-        Ok(id)
+        Ok((id, proof))
     }
 
     fn flush_leaf_with_store(&mut self, store: &mut Store, metrics: &mut Metrics) -> AnyResult<()> {
@@ -3146,7 +4080,24 @@ impl FileBuilder {
             return Ok(());
         }
         let inner = encode_charged_file_leaf(&self.leaf, metrics)?;
-        let (id, canonical_len) = store.put_generated_bytes(&inner, metrics)?;
+        let (id, canonical_len, evidence) = if self.construction.is_some() {
+            let (id, canonical_len, evidence) =
+                store.put_generated_bytes_with_evidence(&inner, metrics)?;
+            (id, canonical_len, Some(evidence))
+        } else {
+            let (id, canonical_len) = store.put_generated_bytes(&inner, metrics)?;
+            (id, canonical_len, None)
+        };
+        let proof = match self.construction.as_mut() {
+            Some(construction) => Some(construction.fold_leaf(
+                evidence.ok_or(CoreError::ValidationAuthorityUnavailable)?,
+                id,
+                canonical_len,
+                &self.leaf,
+                metrics,
+            )?),
+            None => None,
+        };
         add(&mut metrics.pages, 1)?;
         add_len(&mut metrics.mapping_bytes_rewritten, canonical_len)?;
         let leaf_total = self.leaf.iter().try_fold(0_u64, |total, reference| {
@@ -3161,6 +4112,7 @@ impl FileBuilder {
                 object_id: id,
                 cumulative_end: leaf_total,
             },
+            proof,
             metrics,
         )?;
         self.leaf.clear();
@@ -3195,6 +4147,18 @@ fn put_mapping(
     Ok(id)
 }
 
+fn put_mapping_with_evidence(
+    store: &mut Store,
+    inner: ChargedVec<u8>,
+    metrics: &mut Metrics,
+) -> AnyResult<(ObjectId, PutEvidence)> {
+    let canonical = encode_charged_bytes_object(&inner, metrics)?;
+    let id = object_id_accounted(&canonical, metrics)?;
+    let evidence = store.put_with_evidence(id, &canonical, metrics)?;
+    add_len(&mut metrics.mapping_bytes_rewritten, canonical.len())?;
+    Ok((id, evidence))
+}
+
 fn namespace_file_root(
     store: &mut Store,
     file_root: ObjectId,
@@ -3213,6 +4177,26 @@ fn namespace_file_root(
     store.put(id, &canonical, metrics)?;
     add_len(&mut metrics.mapping_bytes_rewritten, canonical.len())?;
     Ok(id)
+}
+
+fn namespace_file_root_with_evidence(
+    store: &mut Store,
+    file_root: ObjectId,
+    metrics: &mut Metrics,
+) -> AnyResult<(ObjectId, PutEvidence)> {
+    let _directory_charge = charge_capacity(metrics, 256 + 256 + b"file".len())?;
+    let name = CanonicalName::from_bytes(b"file")?;
+    let object = Object::directory(vec![DirectoryEntry::new(
+        name,
+        ObjectReference::new(ObjectKind::Bytes, file_root),
+    )])?;
+    let canonical_len = 9 + 4 + 4 + b"file".len() + 1 + 32;
+    let mut canonical = ChargedVec::with_capacity(canonical_len, metrics)?;
+    layerfs_core::encode_object_to(&object, &mut *canonical)?;
+    let id = object_id_accounted(&canonical, metrics)?;
+    let evidence = store.put_with_evidence(id, &canonical, metrics)?;
+    add_len(&mut metrics.mapping_bytes_rewritten, canonical.len())?;
+    Ok((id, evidence))
 }
 
 fn resolve_namespace_file_root(
@@ -4190,6 +5174,15 @@ fn publish_transition(
     publish_transition_with_operations(store, parent, child, &[], metrics)
 }
 
+fn publish_genesis_transition_with_evidence(
+    store: &mut Store,
+    child: ObjectId,
+    metrics: &mut Metrics,
+) -> AnyResult<(ObjectId, PutEvidence)> {
+    let inner = encode_charged_transition(None, child, 0, &[], metrics)?;
+    put_mapping_with_evidence(store, inner, metrics)
+}
+
 fn publish_transition_with_operations(
     store: &mut Store,
     parent: Option<ObjectId>,
@@ -4418,6 +5411,43 @@ fn build_file(
     let root = namespace_file_root(store, file_root, metrics)?;
     let transition = publish_transition(store, None, root, metrics)?;
     Ok((root, transition))
+}
+
+fn build_file_construction(
+    store: &mut Store,
+    source: &Path,
+    candidate: Candidate,
+    expected_references: u64,
+    metrics: &mut Metrics,
+) -> AnyResult<(ObjectId, ObjectId, FullCreateConstructionProof)> {
+    store.begin(metrics)?;
+    let mut builder = FileBuilder::new_proving(candidate, expected_references, store, metrics)?;
+    FastCdc::new().scan(File::open(source)?, |chunk| {
+        builder
+            .push_bytes(store, chunk, metrics)
+            .map_err(|error| core_failure(error.as_ref()))
+    })?;
+    let (file_root, file_proof) = builder.finish_proven(store, metrics)?;
+    let (root, workspace_evidence) = namespace_file_root_with_evidence(store, file_root, metrics)?;
+    let workspace_proof = file_proof.fold_workspace(workspace_evidence, root, metrics)?;
+    let (transition, transition_evidence) =
+        publish_genesis_transition_with_evidence(store, root, metrics)?;
+    let proof = workspace_proof.fold_transition(transition_evidence, transition, metrics)?;
+    Ok((root, transition, proof))
+}
+
+fn build_file_proven(
+    store: &mut Store,
+    source: &Path,
+    candidate: Candidate,
+    expected: FullCreateExpectation,
+    metrics: &mut Metrics,
+) -> AnyResult<(ObjectId, ObjectId, FullCreateConstructionProof)> {
+    let (root, transition, mut proof) =
+        build_file_construction(store, source, candidate, expected.references, metrics)?;
+    proof.bind_expectation(expected)?;
+    store.mark_construction_proof_issued(&proof)?;
+    Ok((root, transition, proof))
 }
 
 fn prepare_same_middle_oracle(
@@ -7727,6 +8757,49 @@ fn prepare_row_database(
     let mut store = Store::open(&db_path, candidate)?;
     let needs_file_base = matches!(operation, "same-middle" | "plus1-early" | "plus1-middle");
     let needs_directory_base = matches!(operation, "dir-lookup" | "dir-replace" | "dir-leading");
+    if operation == "full" {
+        drop(store);
+        let oracle_path = root.join(format!(
+            "f2-oracle-{}-{size}-{iteration}.sqlite",
+            candidate.name
+        ));
+        if oracle_path.exists()
+            || authority_path(&oracle_path).exists()
+            || expectations_path(&oracle_path).exists()
+        {
+            return Err("F2 full-create oracle path already exists".into());
+        }
+        let mut oracle_store = Store::open(&oracle_path, candidate)?;
+        let mut oracle_metrics = Metrics::default();
+        let (root_id, transition_id) =
+            build_file(&mut oracle_store, &source, candidate, &mut oracle_metrics)?;
+        let transition_digest = verify_transition(
+            &oracle_store,
+            transition_id,
+            None,
+            root_id,
+            None,
+            &mut oracle_metrics,
+        )?;
+        let content_digest = verify_file(
+            &oracle_store,
+            root_id,
+            candidate,
+            expected.expected_fingerprint.as_deref(),
+            expected.expected_sequence.as_deref(),
+            &mut oracle_metrics,
+        )?
+        .0;
+        expected.base = Some((
+            root_id,
+            transition_id,
+            combined_closure_digest(transition_digest, content_digest),
+        ));
+        oracle_store.publish(None, root_id, transition_id, &mut oracle_metrics)?;
+        drop(oracle_store);
+        write_prepared_expectations(&expectations_path(&db_path), &expected)?;
+        return Ok(());
+    }
     if !needs_file_base && !needs_directory_base {
         drop(store);
         write_prepared_expectations(&expectations_path(&db_path), &expected)?;
@@ -8272,14 +9345,22 @@ fn row_json(
         env::var("WP4M_BASE_AUTHORITY_SHA256").unwrap_or_else(|_| "Unavailable".to_string());
     let base_expectations_sha256 =
         env::var("WP4M_BASE_EXPECTATIONS_SHA256").unwrap_or_else(|_| "Unavailable".to_string());
-    let precommit_reconstructs = operation != "dir-lookup" && operation != "same-middle";
-    let qualification_mode_label = if operation == "same-middle" {
+    let precommit_reconstructs =
+        operation != "dir-lookup" && operation != "same-middle" && operation != "full";
+    let qualification_mode_label = if operation == "full" {
+        "C1-construction-proof"
+    } else if operation == "same-middle" {
         match qualification_mode()? {
             QualificationMode::FullClosure => "C0-full-closure",
             QualificationMode::ChangedSpine => "C1-changed-spine",
         }
     } else {
         "not-applicable"
+    };
+    let (purpose, milestone) = if operation == "full" {
+        ("wp4m_f2_construction_proof", "F2")
+    } else {
+        ("wp4m_f1_commit_io_observability", "F1")
     };
     let (publication_status, publication_diagnostic) = match publication {
         Some(PublicationOutcome { status, diagnostic }) => {
@@ -8297,7 +9378,7 @@ fn row_json(
             let mut compact_writer = CompactStatusWriter($writer);
             let result = write!(
         &mut compact_writer,
-        "{{\"qualification\":false,\"promotion\":false,\"rejection\":false,\"purpose\":\"wp4m_f1_commit_io_observability\",\"milestone\":\"F1\",\"throughput_measurement_admissible\":false,\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{size},\"input_size_bytes\":{size},\"operation\":\"{operation}\",\"qualification_mode\":\"{qualification_mode_label}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"build_profile\":\"release\",\"debug_assertions\":false,\"base_preparation_in_measured_interval\":false,\"base_copy_method\":\"{base_copy_method}\",\"pre_edit_database_sha256\":\"{base_database_sha256}\",\"pre_edit_authority_sha256\":\"{base_authority_sha256}\",\"pre_edit_expectations_sha256\":\"{base_expectations_sha256}\",\"source_cache_state\":\"warm_or_unknown_after_manifest_preflight\",\"store_state\":\"fresh_logical_store_cache_unknown\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{verification_ns},\"source_cdc_wall_ns\":\"NestedInCanonicalStage\",\"same_open_authority_establishment_wall_ns\":{authority_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"commit_dispatches\":{commit_dispatches},\"commit_returns\":{commit_returns},\"commit_return_successes\":{commit_return_successes},\"commit_return_errors\":{commit_return_errors},\"commit_return_status\":\"{commit_return_status}\",\"commit_publish_call_wall_ns\":{commit_publish_call_wall_ns},\"commit_dispatch_to_return_wall_ns\":{commit_dispatch_to_return_wall_ns},\"commit_pre_and_post_dispatch_wall_ns\":{commit_pre_and_post_dispatch_wall_ns},\"commit_caller_wrapper_wall_ns\":{commit_caller_wrapper_wall_ns},\"commit_observation_sum_wall_ns\":{commit_observation_sum_ns},\"commit_timer_equation_matches\":{commit_timer_equation_matches},\"commit_reconciliation_calls\":{commit_reconciliation_calls},\"commit_reconciliation_wall_ns\":{commit_reconciliation_wall_ns},\"commit_reconciliation_timer_nested\":true,\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":{source_cdc_nested},\"precommit_includes_reconstruction\":{precommit_reconstructs},\"phase_counters\":[{phase_metrics_json}],\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{raw_hashes},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{canonical_id_hashes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"changed_work_bytes\":{source_bytes_read},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"measurement_status\":{{\"phase_counters\":\"Observed\",\"identity_hash_bytes\":\"Observed\",\"borrowed_bytes_encoding\":\"Observed\",\"object_id_authentication_reuse\":\"Observed\",\"logical_q\":\"Observed\",\"w_d\":\"Unavailable: governing cumulative definitions are not implemented\",\"row_blob_copies\":\"Observed\",\"borrowed_row_blob_path\":\"Observed\",\"incremental_blob_api\":\"Observed\",\"cpu_rss\":\"Observed externally per child by /usr/bin/time -l\",\"other_heap_copy_bytes\":\"Unavailable\",\"sqlite_page_cache\":\"{sqlite_status_classification}\",\"sqlite_page_cache_true_high_water\":\"Unavailable: SQLITE_DBSTATUS_CACHE_USED high-water is always zero by API contract\",\"dirty_pages_current\":\"Unavailable: SQLite exposes dirty writes/spills but not current dirty-page count\",\"main_db_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"journal_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"sync_calls_wall\":\"Unavailable: VFS excluded; fs_usage/dtruss require unavailable privileges\",\"journal_true_peak\":\"Unavailable: DELETE journal can grow/disappear between snapshots\",\"temporary_file_peak\":\"Unavailable: no filename/peak API under temp_store=FILE\",\"host_physical_io_bytes\":\"Unavailable: not derived from logical/allocation/block-operation counters\",\"query_plans\":\"Unavailable\"}},\"sqlite_page_size_bytes\":{sqlite_page_size_bytes},\"sqlite_page_cache_used_bytes_before\":{sqlite_cache_used_before},\"sqlite_page_cache_used_bytes_before_dispatch\":{sqlite_cache_used_before_dispatch},\"sqlite_page_cache_used_bytes_after_return\":{sqlite_cache_used_after_return},\"sqlite_page_cache_snapshot_max_bytes\":{sqlite_page_cache_snapshot_max_bytes},\"sqlite_cache_hits\":{sqlite_cache_hits},\"sqlite_cache_misses\":{sqlite_cache_misses},\"sqlite_main_db_dirty_pages_written\":{sqlite_dirty_pages_written},\"sqlite_main_db_pager_write_bytes\":{sqlite_pager_write_bytes},\"sqlite_cache_spill_pages\":{sqlite_cache_spill_pages},\"sqlite_runtime_journal_mode\":\"delete\",\"sqlite_runtime_synchronous\":2,\"sqlite_runtime_temp_store\":1,\"sqlite_runtime_mmap_size\":0,\"sqlite_pre_logical_database_bytes\":{},\"sqlite_post_logical_database_bytes\":{},\"sqlite_pre_apparent_database_bytes\":{},\"sqlite_post_apparent_database_bytes\":{},\"sqlite_pre_allocated_database_bytes\":{},\"sqlite_post_allocated_database_bytes\":{},\"sqlite_pre_logical_store_bytes\":{},\"sqlite_post_logical_store_bytes\":{},\"sqlite_pre_apparent_store_bytes\":{},\"sqlite_post_apparent_store_bytes\":{},\"sqlite_pre_allocated_store_bytes\":{},\"sqlite_post_allocated_store_bytes\":{},\"allocated_store_delta_bytes\":{},\"commit_dispatch_db_apparent_bytes\":{commit_dispatch_db_apparent_bytes},\"commit_dispatch_journal_apparent_bytes\":{commit_dispatch_journal_apparent_bytes},\"commit_dispatch_authority_apparent_bytes\":{commit_dispatch_authority_apparent_bytes},\"commit_dispatch_db_allocated_bytes\":{commit_dispatch_db_allocated_bytes},\"commit_dispatch_journal_allocated_bytes\":{commit_dispatch_journal_allocated_bytes},\"commit_dispatch_authority_allocated_bytes\":{commit_dispatch_authority_allocated_bytes},\"commit_return_db_apparent_bytes\":{commit_return_db_apparent_bytes},\"commit_return_journal_apparent_bytes\":{commit_return_journal_apparent_bytes},\"commit_return_authority_apparent_bytes\":{commit_return_authority_apparent_bytes},\"commit_return_db_allocated_bytes\":{commit_return_db_allocated_bytes},\"commit_return_journal_allocated_bytes\":{commit_return_journal_allocated_bytes},\"commit_return_authority_allocated_bytes\":{commit_return_authority_allocated_bytes},\"journal_sampled_allocation_max_bytes\":{journal_sampled_allocation_max_bytes},\"physical_db_apparent_bytes\":{},\"physical_journal_apparent_bytes\":{},\"physical_authority_sidecar_apparent_bytes\":{},\"physical_db_allocated_bytes\":{},\"physical_journal_allocated_bytes\":{},\"physical_authority_sidecar_allocated_bytes\":{},\"physical_store_allocated_bytes\":{},\"peak_journal_bytes\":\"Unavailable\",\"peak_temporary_bytes\":\"Unavailable\",\"q_equation\":\"pre_admitted_checked_sum:canonical+decoded_nodes+file_refs+tree_nodes+dfs+cdc+sql+expectations+ranges+receipts+report\",\"q_high_water\":{logical_q_high_water},\"q_current\":{q_current},\"q_current_semantics\":\"after_report_output_drop\",\"q_report_output_bytes\":{report_output_bytes},\"q_cdc_base_live_bytes\":{q_cdc_base_live_bytes},\"q_cdc_old_window_bytes\":{q_cdc_old_window_bytes},\"q_cdc_old_chunk_slots_bytes\":{q_cdc_old_chunk_slots_bytes},\"q_cdc_scan_input_bytes\":{q_cdc_scan_input_bytes},\"q_cdc_overlap_current\":{q_cdc_overlap_current},\"q_fixed_envelope_removed\":true,\"leaf_batch_bound\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"w_bytes\":\"Unavailable\",\"d_bytes\":\"Unavailable\",\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_rewrite_bytes\":{canonical_rewrite_bytes},\"statement_cache_acquisitions\":{statement_cache_acquisitions},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_calls\":{},\"sql_rows_returned\":{},\"sql_query_calls\":{sql_query_calls},\"sql_execute_calls\":{sql_execute_calls},\"sql_rows_changed\":{sql_rows_changed},\"row_blob_reads\":{row_blob_reads},\"row_blob_writes\":{row_blob_writes},\"row_blob_copy_bytes\":{row_blob_copy_bytes},\"borrowed_row_blob_reads\":{borrowed_row_blob_reads},\"borrowed_row_blob_bytes\":{borrowed_row_blob_bytes},\"blob_api_status\":\"Observed\",\"blob_opens\":{},\"blob_reads\":{},\"blob_writes\":{},\"transactions\":{},\"commits\":{},\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\",\"busy_events\":\"Unavailable\",\"locked_events\":\"Unavailable\",\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"covered_equal_edges\":{covered_equal_edges},\"new_or_different_edges\":{new_or_different_edges},\"fully_authenticated_new_objects\":{fully_authenticated_new_objects},\"fully_authenticated_new_bytes\":{fully_authenticated_new_bytes},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"file_height\":\"Unavailable\",\"process_io\":\"Observed externally: separate user/system CPU and block-operation counts; byte-level physical I/O unavailable\",\"host_physical_io\":\"Unavailable\",\"physical_io_cache_sync_temp_journal_status\":\"Mixed: supported SQLite/filesystem snapshots observed; unsupported VFS/privileged facts unavailable with reasons\",\"publication_status\":\"{publication_status}\",\"receipt_provenance\":\"{receipt_provenance}\",\"error\":{error_json}}}",
+        "{{\"qualification\":false,\"promotion\":false,\"rejection\":false,\"purpose\":\"{purpose}\",\"milestone\":\"{milestone}\",\"throughput_measurement_admissible\":false,\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{size},\"input_size_bytes\":{size},\"operation\":\"{operation}\",\"qualification_mode\":\"{qualification_mode_label}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"build_profile\":\"release\",\"debug_assertions\":false,\"base_preparation_in_measured_interval\":false,\"base_copy_method\":\"{base_copy_method}\",\"pre_edit_database_sha256\":\"{base_database_sha256}\",\"pre_edit_authority_sha256\":\"{base_authority_sha256}\",\"pre_edit_expectations_sha256\":\"{base_expectations_sha256}\",\"source_cache_state\":\"warm_or_unknown_after_manifest_preflight\",\"store_state\":\"fresh_logical_store_cache_unknown\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{verification_ns},\"source_cdc_wall_ns\":\"NestedInCanonicalStage\",\"same_open_authority_establishment_wall_ns\":{authority_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"commit_dispatches\":{commit_dispatches},\"commit_returns\":{commit_returns},\"commit_return_successes\":{commit_return_successes},\"commit_return_errors\":{commit_return_errors},\"commit_return_status\":\"{commit_return_status}\",\"commit_publish_call_wall_ns\":{commit_publish_call_wall_ns},\"commit_dispatch_to_return_wall_ns\":{commit_dispatch_to_return_wall_ns},\"commit_pre_and_post_dispatch_wall_ns\":{commit_pre_and_post_dispatch_wall_ns},\"commit_caller_wrapper_wall_ns\":{commit_caller_wrapper_wall_ns},\"commit_observation_sum_wall_ns\":{commit_observation_sum_ns},\"commit_timer_equation_matches\":{commit_timer_equation_matches},\"commit_reconciliation_calls\":{commit_reconciliation_calls},\"commit_reconciliation_wall_ns\":{commit_reconciliation_wall_ns},\"commit_reconciliation_timer_nested\":true,\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":{source_cdc_nested},\"precommit_includes_reconstruction\":{precommit_reconstructs},\"phase_counters\":[{phase_metrics_json}],\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{raw_hashes},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{canonical_id_hashes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"changed_work_bytes\":{source_bytes_read},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"measurement_status\":{{\"phase_counters\":\"Observed\",\"identity_hash_bytes\":\"Observed\",\"borrowed_bytes_encoding\":\"Observed\",\"object_id_authentication_reuse\":\"Observed\",\"logical_q\":\"Observed\",\"w_d\":\"Unavailable: governing cumulative definitions are not implemented\",\"row_blob_copies\":\"Observed\",\"borrowed_row_blob_path\":\"Observed\",\"incremental_blob_api\":\"Observed\",\"cpu_rss\":\"Observed externally per child by /usr/bin/time -l\",\"other_heap_copy_bytes\":\"Unavailable\",\"sqlite_page_cache\":\"{sqlite_status_classification}\",\"sqlite_page_cache_true_high_water\":\"Unavailable: SQLITE_DBSTATUS_CACHE_USED high-water is always zero by API contract\",\"dirty_pages_current\":\"Unavailable: SQLite exposes dirty writes/spills but not current dirty-page count\",\"main_db_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"journal_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"sync_calls_wall\":\"Unavailable: VFS excluded; fs_usage/dtruss require unavailable privileges\",\"journal_true_peak\":\"Unavailable: DELETE journal can grow/disappear between snapshots\",\"temporary_file_peak\":\"Unavailable: no filename/peak API under temp_store=FILE\",\"host_physical_io_bytes\":\"Unavailable: not derived from logical/allocation/block-operation counters\",\"query_plans\":\"Unavailable\"}},\"sqlite_page_size_bytes\":{sqlite_page_size_bytes},\"sqlite_page_cache_used_bytes_before\":{sqlite_cache_used_before},\"sqlite_page_cache_used_bytes_before_dispatch\":{sqlite_cache_used_before_dispatch},\"sqlite_page_cache_used_bytes_after_return\":{sqlite_cache_used_after_return},\"sqlite_page_cache_snapshot_max_bytes\":{sqlite_page_cache_snapshot_max_bytes},\"sqlite_cache_hits\":{sqlite_cache_hits},\"sqlite_cache_misses\":{sqlite_cache_misses},\"sqlite_main_db_dirty_pages_written\":{sqlite_dirty_pages_written},\"sqlite_main_db_pager_write_bytes\":{sqlite_pager_write_bytes},\"sqlite_cache_spill_pages\":{sqlite_cache_spill_pages},\"sqlite_runtime_journal_mode\":\"delete\",\"sqlite_runtime_synchronous\":2,\"sqlite_runtime_temp_store\":1,\"sqlite_runtime_mmap_size\":0,\"sqlite_pre_logical_database_bytes\":{},\"sqlite_post_logical_database_bytes\":{},\"sqlite_pre_apparent_database_bytes\":{},\"sqlite_post_apparent_database_bytes\":{},\"sqlite_pre_allocated_database_bytes\":{},\"sqlite_post_allocated_database_bytes\":{},\"sqlite_pre_logical_store_bytes\":{},\"sqlite_post_logical_store_bytes\":{},\"sqlite_pre_apparent_store_bytes\":{},\"sqlite_post_apparent_store_bytes\":{},\"sqlite_pre_allocated_store_bytes\":{},\"sqlite_post_allocated_store_bytes\":{},\"allocated_store_delta_bytes\":{},\"commit_dispatch_db_apparent_bytes\":{commit_dispatch_db_apparent_bytes},\"commit_dispatch_journal_apparent_bytes\":{commit_dispatch_journal_apparent_bytes},\"commit_dispatch_authority_apparent_bytes\":{commit_dispatch_authority_apparent_bytes},\"commit_dispatch_db_allocated_bytes\":{commit_dispatch_db_allocated_bytes},\"commit_dispatch_journal_allocated_bytes\":{commit_dispatch_journal_allocated_bytes},\"commit_dispatch_authority_allocated_bytes\":{commit_dispatch_authority_allocated_bytes},\"commit_return_db_apparent_bytes\":{commit_return_db_apparent_bytes},\"commit_return_journal_apparent_bytes\":{commit_return_journal_apparent_bytes},\"commit_return_authority_apparent_bytes\":{commit_return_authority_apparent_bytes},\"commit_return_db_allocated_bytes\":{commit_return_db_allocated_bytes},\"commit_return_journal_allocated_bytes\":{commit_return_journal_allocated_bytes},\"commit_return_authority_allocated_bytes\":{commit_return_authority_allocated_bytes},\"journal_sampled_allocation_max_bytes\":{journal_sampled_allocation_max_bytes},\"physical_db_apparent_bytes\":{},\"physical_journal_apparent_bytes\":{},\"physical_authority_sidecar_apparent_bytes\":{},\"physical_db_allocated_bytes\":{},\"physical_journal_allocated_bytes\":{},\"physical_authority_sidecar_allocated_bytes\":{},\"physical_store_allocated_bytes\":{},\"peak_journal_bytes\":\"Unavailable\",\"peak_temporary_bytes\":\"Unavailable\",\"q_equation\":\"pre_admitted_checked_sum:canonical+decoded_nodes+file_refs+tree_nodes+dfs+cdc+sql+expectations+ranges+receipts+report\",\"q_high_water\":{logical_q_high_water},\"q_current\":{q_current},\"q_current_semantics\":\"after_report_output_drop\",\"q_report_output_bytes\":{report_output_bytes},\"q_cdc_base_live_bytes\":{q_cdc_base_live_bytes},\"q_cdc_old_window_bytes\":{q_cdc_old_window_bytes},\"q_cdc_scan_input_bytes\":{q_cdc_scan_input_bytes},\"q_cdc_overlap_current\":{q_cdc_overlap_current},\"q_fixed_envelope_removed\":true,\"leaf_batch_bound\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"w_bytes\":\"Unavailable\",\"d_bytes\":\"Unavailable\",\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_rewrite_bytes\":{canonical_rewrite_bytes},\"statement_cache_acquisitions\":{statement_cache_acquisitions},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_calls\":{},\"sql_rows_returned\":{},\"sql_query_calls\":{sql_query_calls},\"sql_execute_calls\":{sql_execute_calls},\"sql_rows_changed\":{sql_rows_changed},\"row_blob_reads\":{row_blob_reads},\"row_blob_writes\":{row_blob_writes},\"row_blob_copy_bytes\":{row_blob_copy_bytes},\"borrowed_row_blob_reads\":{borrowed_row_blob_reads},\"borrowed_row_blob_bytes\":{borrowed_row_blob_bytes},\"blob_api_status\":\"Observed\",\"blob_opens\":{},\"blob_reads\":{},\"blob_writes\":{},\"transactions\":{},\"commits\":{},\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\",\"busy_events\":\"Unavailable\",\"locked_events\":\"Unavailable\",\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"covered_equal_edges\":{covered_equal_edges},\"new_or_different_edges\":{new_or_different_edges},\"fully_authenticated_new_objects\":{fully_authenticated_new_objects},\"fully_authenticated_new_bytes\":{fully_authenticated_new_bytes},\"construction_put_evidences\":{construction_put_evidences},\"construction_edges_covered\":{construction_edges_covered},\"construction_leaf_summaries\":{construction_leaf_summaries},\"construction_branch_summaries\":{construction_branch_summaries},\"construction_file_summaries\":{construction_file_summaries},\"construction_workspace_summaries\":{construction_workspace_summaries},\"construction_transition_summaries\":{construction_transition_summaries},\"construction_proof_consumptions\":{construction_proof_consumptions},\"construction_source_hash_bytes\":{construction_source_hash_bytes},\"construction_source_hashes\":{construction_source_hashes},\"construction_cdc_entries\":{construction_cdc_entries},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"file_height\":\"Unavailable\",\"process_io\":\"Observed externally: separate user/system CPU and block-operation counts; byte-level physical I/O unavailable\",\"host_physical_io\":\"Unavailable\",\"physical_io_cache_sync_temp_journal_status\":\"Mixed: supported SQLite/filesystem snapshots observed; unsupported VFS/privileged facts unavailable with reasons\",\"publication_status\":\"{publication_status}\",\"receipt_provenance\":\"{receipt_provenance}\",\"error\":{error_json}}}",
         candidate.name,
         if size == SOURCE_100 { "S1-100" } else { "S1-512" },
         root,
@@ -8348,6 +9429,8 @@ fn row_json(
         metrics.suffix_references,
         metrics.suffix_bytes,
         metrics.suffix_objects,
+        purpose = purpose,
+        milestone = milestone,
         qualification_mode_label = qualification_mode_label,
         authority_ns = phases.same_open_authority_establishment_ns,
         canonical_stage_ns = phases.canonical_cas_mapping_stage_ns,
@@ -8393,6 +9476,17 @@ fn row_json(
         fully_authenticated_new_objects = metrics
             .incremental_new_subtree_objects_authenticated,
         fully_authenticated_new_bytes = metrics.incremental_new_subtree_bytes_authenticated,
+        construction_put_evidences = metrics.construction_put_evidences,
+        construction_edges_covered = metrics.construction_edges_covered,
+        construction_leaf_summaries = metrics.construction_leaf_summaries,
+        construction_branch_summaries = metrics.construction_branch_summaries,
+        construction_file_summaries = metrics.construction_file_summaries,
+        construction_workspace_summaries = metrics.construction_workspace_summaries,
+        construction_transition_summaries = metrics.construction_transition_summaries,
+        construction_proof_consumptions = metrics.construction_proof_consumptions,
+        construction_source_hash_bytes = metrics.construction_source_hash_bytes,
+        construction_source_hashes = metrics.construction_source_hashes,
+        construction_cdc_entries = metrics.construction_cdc_entries,
         row_blob_reads = metrics.row_blob_reads,
         row_blob_writes = metrics.row_blob_writes,
         row_blob_copy_bytes = metrics.row_blob_copy_bytes,
@@ -8412,7 +9506,6 @@ fn row_json(
         report_output_bytes = $report_output_bytes,
         q_cdc_base_live_bytes = metrics.q_cdc_base_live_bytes,
         q_cdc_old_window_bytes = metrics.q_cdc_old_window_bytes,
-        q_cdc_old_chunk_slots_bytes = metrics.q_cdc_old_chunk_slots_bytes,
         q_cdc_scan_input_bytes = metrics.q_cdc_scan_input_bytes,
         q_cdc_overlap_current = metrics.q_cdc_overlap_current,
         commit_dispatches = metrics.commits,
@@ -8477,7 +9570,8 @@ fn row_json(
                 compact_writer.0.remove_last_object_brace()?;
                 write!(
                     &mut compact_writer,
-                    ",\"measurement_status_schema\":\"{F1_STATUS_SCHEMA}\",\"instrumentation\":{{\"c\":\"{STATUS_OBSERVED}\",\"sql\":[{},{},{},{},{},{},{measurement_sql_queries},{measurement_sql_rows}],\"status\":[{},{},{},{},{measurement_status_calls},{measurement_status_errors}]}}}}",
+                    ",\"q_cdc_old_chunk_slots_bytes\":{},\"measurement_status_schema\":\"{F1_STATUS_SCHEMA}\",\"instrumentation\":{{\"c\":\"{STATUS_OBSERVED}\",\"sql\":[{},{},{},{},{},{},{measurement_sql_queries},{measurement_sql_rows}],\"status\":[{},{},{},{},{measurement_status_calls},{measurement_status_errors}]}}}}",
+                    metrics.q_cdc_old_chunk_slots_bytes,
                     physical_before.measurement_sql_queries,
                     physical_before.measurement_sql_rows,
                     metrics.measurement_sql_queries,
@@ -8823,6 +9917,16 @@ fn run_row(
         (_, Some(_)) => return Err("non-same-middle row contains an edit oracle".into()),
         (_, None) => (None, None),
     };
+    let full_create_expected = (operation == "full")
+        .then(|| {
+            full_create_expectation(
+                base,
+                expected_reference_count,
+                expected_fingerprint_owned.as_deref(),
+                expected_sequence_owned.as_deref(),
+            )
+        })
+        .transpose()?;
     let qualification_mode = qualification_mode()?;
     let expected_dir_replacement = if operation == "dir-replace" {
         Some((
@@ -8938,15 +10042,20 @@ fn run_row(
         } else {
             None
         };
-        let (root_id, transition_id) = if operation == "full" {
+        let (root_id, transition_id, mut full_create_proof) = if operation == "full" {
             let stage_started = durable_cursor;
-            let (root_id, transition_id) =
-                build_file(&mut store, &source, candidate, &mut metrics)?;
+            let (root_id, transition_id, proof) = build_file_proven(
+                &mut store,
+                &source,
+                candidate,
+                full_create_expected.ok_or(CoreError::PublicationConflict)?,
+                &mut metrics,
+            )?;
             let stage_end = Instant::now();
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(stage_started).as_nanos();
             durable_cursor = stage_end;
-            (root_id, transition_id)
+            (root_id, transition_id, Some(proof))
         } else if operation == "plus1-early" || operation == "plus1-middle" {
             let result = edit_file(
                 &mut store,
@@ -8960,21 +10069,21 @@ fn run_row(
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(durable_cursor).as_nanos();
             durable_cursor = stage_end;
-            result
+            (result.0, result.1, None)
         } else if operation == "dir-create" {
             let result = build_directory(&mut store, candidate, false, false, &mut metrics)?;
             let stage_end = Instant::now();
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(durable_cursor).as_nanos();
             durable_cursor = stage_end;
-            result
+            (result.0, result.1, None)
         } else if operation == "dir-replace" || operation == "dir-leading" {
             let result = edit_directory(&mut store, candidate, operation, &mut metrics)?;
             let stage_end = Instant::now();
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(durable_cursor).as_nanos();
             durable_cursor = stage_end;
-            result
+            (result.0, result.1, None)
         } else {
             return Err(format!("unknown operation {operation}").into());
         };
@@ -9003,45 +10112,65 @@ fn run_row(
             } else {
                 (None, None)
             };
-        let transition_digest = verify_transition(
-            &store,
-            transition_id,
-            expected_parent,
-            root_id,
-            expected_operations.as_deref(),
-            &mut metrics,
-        )?;
-        let (closure_digest, actual_references) = if operation.starts_with("dir-") {
-            let digest = verify_directory(
-                &store,
-                root_id,
-                candidate,
-                u64::try_from(DIRECTORY_ENTRIES + usize::from(operation == "dir-leading"))
-                    .map_err(|_| CoreError::LengthOverflow)?,
-                expected_dir_replacement,
-                &mut metrics,
-            )?;
-            (combined_closure_digest(transition_digest, digest), 0)
-        } else {
-            let (digest, references, _) = verify_file(
-                &store,
-                root_id,
-                candidate,
-                expected_fingerprint_owned.as_deref(),
-                expected_sequence_owned.as_deref(),
-                &mut metrics,
-            )?;
-            if expected_reference_count != Some(references) {
-                return Err(CoreError::LengthMismatch {
-                    expected: expected_reference_count.unwrap_or(0),
-                    actual: references,
-                }
-                .into());
+        let (closure_digest, actual_references) = if operation == "full" {
+            let qualification = full_create_proof
+                .as_mut()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?
+                .consume(
+                    &mut store,
+                    full_create_expected.ok_or(CoreError::PublicationConflict)?,
+                    &mut metrics,
+                )?;
+            if qualification.root != root_id
+                || qualification.transition != transition_id
+                || qualification.total_raw != size
+            {
+                return Err(CoreError::PublicationConflict.into());
             }
-            (
-                combined_closure_digest(transition_digest, digest),
-                references,
-            )
+            let result = (qualification.closure, qualification.references);
+            drop(full_create_proof.take());
+            result
+        } else {
+            let transition_digest = verify_transition(
+                &store,
+                transition_id,
+                expected_parent,
+                root_id,
+                expected_operations.as_deref(),
+                &mut metrics,
+            )?;
+            if operation.starts_with("dir-") {
+                let digest = verify_directory(
+                    &store,
+                    root_id,
+                    candidate,
+                    u64::try_from(DIRECTORY_ENTRIES + usize::from(operation == "dir-leading"))
+                        .map_err(|_| CoreError::LengthOverflow)?,
+                    expected_dir_replacement,
+                    &mut metrics,
+                )?;
+                (combined_closure_digest(transition_digest, digest), 0)
+            } else {
+                let (digest, references, _) = verify_file(
+                    &store,
+                    root_id,
+                    candidate,
+                    expected_fingerprint_owned.as_deref(),
+                    expected_sequence_owned.as_deref(),
+                    &mut metrics,
+                )?;
+                if expected_reference_count != Some(references) {
+                    return Err(CoreError::LengthMismatch {
+                        expected: expected_reference_count.unwrap_or(0),
+                        actual: references,
+                    }
+                    .into());
+                }
+                (
+                    combined_closure_digest(transition_digest, digest),
+                    references,
+                )
+            }
         };
         let precommit_end = Instant::now();
         let precommit_metrics_ended = metrics;
@@ -10482,6 +11611,596 @@ mod tests {
         let mut witness = establish_same_open_file_witness(store, candidate, None, None, metrics)
             .expect("base full scrub witness");
         witness.consume(store, metrics).expect("consume witness")
+    }
+
+    fn digest_array(value: &str) -> [u8; 32] {
+        decode_hex(value)
+            .expect("hex digest")
+            .try_into()
+            .expect("32-byte digest")
+    }
+
+    fn build_proven_chunks(
+        store: &mut Store,
+        candidate: Candidate,
+        chunks: &[Vec<u8>],
+        metrics: &mut Metrics,
+    ) -> (
+        ObjectId,
+        ObjectId,
+        FullCreateConstructionProof,
+        FullCreateExpectation,
+    ) {
+        store.begin(metrics).expect("begin construction");
+        let mut builder = FileBuilder::new_proving(candidate, chunks.len() as u64, store, metrics)
+            .expect("proving builder");
+        let mut source = Hasher::new();
+        let mut sequence = Hasher::new();
+        for chunk in chunks {
+            source.update(chunk);
+            sequence.update(&(chunk.len() as u32).to_be_bytes());
+            sequence.update(chunk_id(chunk).as_bytes());
+            builder
+                .push_bytes(store, chunk, metrics)
+                .expect("push proven chunk");
+        }
+        let (file_root, file_proof) = builder
+            .finish_proven(store, metrics)
+            .expect("finish proven file");
+        let (root, root_evidence) =
+            namespace_file_root_with_evidence(store, file_root, metrics).expect("workspace");
+        let workspace = file_proof
+            .fold_workspace(root_evidence, root, metrics)
+            .expect("workspace proof");
+        let (transition, transition_evidence) =
+            publish_genesis_transition_with_evidence(store, root, metrics).expect("transition");
+        let mut proof = workspace
+            .fold_transition(transition_evidence, transition, metrics)
+            .expect("transition proof");
+        let transition_digest = verify_transition(store, transition, None, root, None, metrics)
+            .expect("transition shadow");
+        let (content_digest, references, _) =
+            verify_file(store, root, candidate, None, None, metrics).expect("file shadow");
+        assert_eq!(references, chunks.len() as u64);
+        let expectation = FullCreateExpectation {
+            source_fingerprint: *source.finalize().as_bytes(),
+            cdc_sequence: *sequence.finalize().as_bytes(),
+            references,
+            root,
+            transition,
+            closure: combined_closure_digest(transition_digest, content_digest),
+        };
+        proof
+            .bind_expectation(expectation)
+            .expect("bind expectation");
+        store
+            .mark_construction_proof_issued(&proof)
+            .expect("proof issuance");
+        (root, transition, proof, expectation)
+    }
+
+    #[test]
+    fn f2_construction_proof_type_sizes_and_retained_q_are_exact() {
+        assert_eq!(std::mem::size_of::<ObjectId>(), 32);
+        assert_eq!(std::mem::size_of::<ObjectKind>(), 1);
+        assert_eq!(std::mem::size_of::<Hasher>(), 1_920);
+        assert_eq!(std::mem::size_of::<file_codec::FileReference>(), 68);
+        assert_eq!(std::mem::size_of::<file_codec::FileChild>(), 40);
+        assert_eq!(std::mem::size_of::<Vec<u8>>(), 24);
+        assert_eq!(std::mem::size_of::<PutEvidence>(), 80);
+        assert_eq!(std::mem::size_of::<ConstructionNodeProof>(), 64);
+        assert!(std::mem::size_of::<ConstructionState>() <= Q_CONSTRUCTION_STATE_BYTES);
+        let (levels, frontier) =
+            construction_frontier_bytes(FILE_CANDIDATES[0], 5_284).expect("frontier");
+        assert_eq!(levels, 2);
+        assert_eq!(frontier, 17_776);
+        assert_eq!(
+            Q_CONSTRUCTION_STATE_BYTES + frontier + Q_PUT_EVIDENCE_BYTES,
+            21_952
+        );
+    }
+
+    #[test]
+    fn f2_shadow_proof_matches_the_full_verifier_exactly() {
+        let source = test_path("f2-shadow.source");
+        fill_source(&source, 256 * 1024, 0x11).expect("source");
+        let candidate = FILE_CANDIDATES[0];
+        let (expected_references, fingerprint, sequence, _, _) =
+            expected_file_observations(&source, "full", 256 * 1024, candidate)
+                .expect("expectations");
+        let database = test_path("f2-shadow.sqlite");
+        let mut store = Store::open(&database, candidate).expect("store");
+        let mut metrics = Metrics::default();
+        let (root, transition, mut proof) = build_file_construction(
+            &mut store,
+            &source,
+            candidate,
+            expected_references,
+            &mut metrics,
+        )
+        .expect("proven construction");
+        let transition_digest =
+            verify_transition(&store, transition, None, root, None, &mut metrics)
+                .expect("full transition verifier");
+        let (content_digest, references, total_raw) = verify_file(
+            &store,
+            root,
+            candidate,
+            Some(&fingerprint),
+            Some(&sequence),
+            &mut metrics,
+        )
+        .expect("full file verifier");
+        let closure = combined_closure_digest(transition_digest, content_digest);
+        let expectation = FullCreateExpectation {
+            source_fingerprint: digest_array(&fingerprint),
+            cdc_sequence: digest_array(&sequence),
+            references: expected_references,
+            root,
+            transition,
+            closure,
+        };
+        proof
+            .bind_expectation(expectation)
+            .expect("bind expectation");
+        store
+            .mark_construction_proof_issued(&proof)
+            .expect("issue proof");
+        let qualification = proof
+            .consume(&mut store, expectation, &mut metrics)
+            .expect("consume proof");
+        assert_eq!(qualification.references, references);
+        assert_eq!(qualification.total_raw, total_raw);
+        assert_eq!(qualification.root, root);
+        assert_eq!(qualification.transition, transition);
+        assert_eq!(qualification.closure, closure);
+        assert_eq!(qualification.source_fingerprint, digest_array(&fingerprint));
+        assert_eq!(qualification.cdc_sequence, digest_array(&sequence));
+        assert_eq!(metrics.construction_proof_consumptions, 1);
+        assert_eq!(
+            metrics.construction_put_evidences,
+            metrics
+                .chunks
+                .checked_add(metrics.pages)
+                .and_then(|value| value.checked_add(metrics.branches))
+                .and_then(|value| value.checked_add(3))
+                .expect("put equation")
+        );
+        assert_eq!(
+            metrics.construction_edges_covered,
+            metrics
+                .references
+                .checked_add(metrics.pages)
+                .and_then(|value| value.checked_add(metrics.branches))
+                .and_then(|value| value.checked_add(2))
+                .expect("edge equation")
+        );
+        let error = proof
+            .consume(&mut store, expectation, &mut metrics)
+            .expect_err("proof is single-use");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::ValidationAuthorityUnavailable)
+        );
+        drop(proof);
+        store.rollback(&mut metrics).expect("rollback shadow row");
+        finish_q(&mut metrics).expect("terminal Q");
+        drop(store);
+        remove_sqlite_image(&database).expect("database cleanup");
+        fs::remove_file(source).expect("source cleanup");
+    }
+
+    #[test]
+    fn f2_topology_boundaries_and_duplicate_reuse_stay_bounded() {
+        let candidate = Candidate {
+            name: "F2-K2-F2",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+        for count in [0_usize, 1, 2, 3, 4, 5, 9] {
+            let database = test_path(&format!("f2-topology-{count}.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let mut metrics = Metrics::default();
+            let chunks = (0..count)
+                .map(|index| {
+                    if index % 2 == 0 {
+                        b"duplicate".to_vec()
+                    } else {
+                        format!("unique-{index}").into_bytes()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let (_, _, mut proof, expectation) =
+                build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
+            let qualification = proof
+                .consume(&mut store, expectation, &mut metrics)
+                .expect("qualification");
+            assert_eq!(qualification.references, count as u64);
+            assert_eq!(
+                qualification.total_raw,
+                chunks.iter().map(|chunk| chunk.len() as u64).sum::<u64>()
+            );
+            assert_eq!(
+                proof.workspace.file.file.level,
+                file_codec::expected_file_level(
+                    count as u64,
+                    file_codec::FileMappingProfile::new(candidate.k, candidate.f),
+                )
+                .expect("expected level")
+            );
+            if count >= 3 {
+                assert!(metrics.objects_reused > 0);
+            }
+            drop(proof);
+            store.rollback(&mut metrics).expect("rollback");
+            finish_q(&mut metrics).expect("terminal Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("database cleanup");
+        }
+    }
+
+    #[test]
+    fn f2_proof_rejects_summary_namespace_transition_authority_and_mutation_drift() {
+        let candidate = Candidate {
+            name: "F2-ADVERSARY",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+
+        let summary_database = test_path("f2-summary-drift.sqlite");
+        let mut summary_store = Store::open(&summary_database, candidate).expect("store");
+        let mut summary_metrics = Metrics::default();
+        summary_store.begin(&mut summary_metrics).expect("begin");
+        let mut builder =
+            FileBuilder::new_proving(candidate, 1, &summary_store, &mut summary_metrics)
+                .expect("builder");
+        builder
+            .push_bytes(&mut summary_store, b"summary", &mut summary_metrics)
+            .expect("chunk");
+        builder.total_raw += 1;
+        let error = builder
+            .finish_proven(&mut summary_store, &mut summary_metrics)
+            .err()
+            .expect("wrong root summary");
+        assert!(matches!(
+            error.downcast_ref::<CoreError>(),
+            Some(CoreError::LengthMismatch { .. })
+        ));
+        summary_store
+            .rollback(&mut summary_metrics)
+            .expect("rollback summary");
+        finish_q(&mut summary_metrics).expect("summary Q");
+        drop(summary_store);
+        remove_sqlite_image(&summary_database).expect("summary cleanup");
+
+        for case in [
+            "source",
+            "sequence",
+            "count",
+            "root",
+            "transition",
+            "closure",
+            "authority",
+        ] {
+            let database = test_path(&format!("f2-{case}-drift.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let mut metrics = Metrics::default();
+            let chunks = vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec()];
+            let (_, _, mut proof, mut expectation) =
+                build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
+            match case {
+                "source" => expectation.source_fingerprint[0] ^= 1,
+                "sequence" => expectation.cdc_sequence[0] ^= 1,
+                "count" => expectation.references += 1,
+                "root" => expectation.root = ObjectId::for_bytes(b"wrong-root"),
+                "transition" => expectation.transition = ObjectId::for_bytes(b"wrong-transition"),
+                "closure" => expectation.closure[0] ^= 1,
+                "authority" => store.validation_authority_id[0] ^= 1,
+                _ => unreachable!(),
+            }
+            let error = proof
+                .consume(&mut store, expectation, &mut metrics)
+                .expect_err("drift must fail");
+            assert!(matches!(
+                error.downcast_ref::<CoreError>(),
+                Some(CoreError::PublicationConflict | CoreError::InvalidValidationReceipt)
+            ));
+            drop(proof);
+            store.rollback(&mut metrics).expect("rollback drift");
+            finish_q(&mut metrics).expect("drift Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("drift cleanup");
+        }
+
+        let mutation_database = test_path("f2-mutation.sqlite");
+        let mut store = Store::open(&mutation_database, candidate).expect("store");
+        let mut metrics = Metrics::default();
+        let chunks = vec![b"mutation".to_vec()];
+        let (_, _, mut proof, expectation) =
+            build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
+        let extra = encode_canonical_object(&Object::bytes(b"extra".to_vec()).expect("extra"))
+            .expect("extra canonical");
+        store
+            .put(ObjectId::for_bytes(&extra), &extra, &mut metrics)
+            .expect("later mutation");
+        let error = proof
+            .consume(&mut store, expectation, &mut metrics)
+            .expect_err("mutation invalidates proof");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::InvalidValidationReceipt)
+        );
+        drop(proof);
+        store.rollback(&mut metrics).expect("rollback mutation");
+        finish_q(&mut metrics).expect("mutation Q");
+        drop(store);
+        remove_sqlite_image(&mutation_database).expect("mutation cleanup");
+    }
+
+    #[test]
+    fn f2_proof_is_invalid_after_rollback_commit_or_reopen() {
+        let candidate = Candidate {
+            name: "F2-LIFECYCLE",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+        for case in ["rollback", "commit", "reopen"] {
+            let database = test_path(&format!("f2-{case}.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let mut metrics = Metrics::default();
+            let chunks = vec![b"lifecycle".to_vec()];
+            let (root, transition, mut proof, expectation) =
+                build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
+            match case {
+                "rollback" => store.rollback(&mut metrics).expect("rollback"),
+                "commit" => {
+                    store
+                        .publish(None, root, transition, &mut metrics)
+                        .expect("commit");
+                }
+                "reopen" => {
+                    store
+                        .rollback(&mut metrics)
+                        .expect("rollback before reopen");
+                    drop(store);
+                    store = Store::open(&database, candidate).expect("reopen");
+                }
+                _ => unreachable!(),
+            }
+            let error = proof
+                .consume(&mut store, expectation, &mut metrics)
+                .expect_err("lifecycle invalidation");
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::ValidationAuthorityUnavailable)
+            );
+            drop(proof);
+            if store.active_transaction.is_some() {
+                store.rollback(&mut metrics).expect("final rollback");
+            }
+            finish_q(&mut metrics).expect("terminal Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("database cleanup");
+        }
+    }
+
+    #[test]
+    fn f2_evidence_rejects_wrong_role_missing_object_and_overflow() {
+        let candidate = Candidate {
+            name: "F2-ERRORS",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+
+        let role_database = test_path("f2-wrong-role.sqlite");
+        let mut role_store = Store::open(&role_database, candidate).expect("store");
+        let mut role_metrics = Metrics::default();
+        role_store.begin(&mut role_metrics).expect("begin");
+        let (mut state, _) = ConstructionState::new(&role_store, candidate, 0, &mut role_metrics)
+            .expect("construction state");
+        let (id, len, evidence) = role_store
+            .put_generated_bytes_with_evidence(b"role", &mut role_metrics)
+            .expect("bytes evidence");
+        let error = state
+            .accept_put(evidence, id, ObjectKind::Directory, len, &mut role_metrics)
+            .expect_err("wrong role");
+        assert_eq!(error, CoreError::ValidationAuthorityUnavailable);
+        drop(state);
+        role_store
+            .rollback(&mut role_metrics)
+            .expect("role rollback");
+        finish_q(&mut role_metrics).expect("role Q");
+        drop(role_store);
+        remove_sqlite_image(&role_database).expect("role cleanup");
+
+        let missing_database = test_path("f2-missing.sqlite");
+        let mut missing_store = Store::open(&missing_database, candidate).expect("store");
+        let mut missing_metrics = Metrics::default();
+        let chunks = vec![b"missing".to_vec()];
+        let (root, _, mut proof, expectation) =
+            build_proven_chunks(&mut missing_store, candidate, &chunks, &mut missing_metrics);
+        let missing_id = canonical_bytes(chunks[0].clone()).expect("chunk id").0;
+        missing_store
+            .connection
+            .execute(
+                "DELETE FROM wp4m_objects WHERE object_id = ?1",
+                params![missing_id.as_bytes().as_slice()],
+            )
+            .expect("delete injected object");
+        missing_store.mutation_serial += 1;
+        let verifier_error = verify_file(
+            &missing_store,
+            root,
+            candidate,
+            None,
+            None,
+            &mut missing_metrics,
+        )
+        .expect_err("full verifier rejects missing object");
+        assert_eq!(
+            verifier_error.downcast_ref::<CandidateError>(),
+            Some(&CandidateError::MissingObject(missing_id))
+        );
+        let proof_error = proof
+            .consume(&mut missing_store, expectation, &mut missing_metrics)
+            .expect_err("mutation invalidates proof");
+        assert_eq!(
+            proof_error.downcast_ref::<CoreError>(),
+            Some(&CoreError::InvalidValidationReceipt)
+        );
+        drop(proof);
+        missing_store
+            .rollback(&mut missing_metrics)
+            .expect("missing rollback");
+        finish_q(&mut missing_metrics).expect("missing Q");
+        drop(missing_store);
+        remove_sqlite_image(&missing_database).expect("missing cleanup");
+
+        let overflow_database = test_path("f2-overflow.sqlite");
+        let mut overflow_store = Store::open(&overflow_database, candidate).expect("store");
+        let mut overflow_metrics = Metrics::default();
+        overflow_store.begin(&mut overflow_metrics).expect("begin");
+        overflow_store.mutation_serial = u64::MAX;
+        let overflow = overflow_store
+            .put_generated_bytes_with_evidence(b"overflow", &mut overflow_metrics)
+            .expect_err("serial overflow");
+        assert_eq!(
+            overflow.downcast_ref::<CoreError>(),
+            Some(&CoreError::LengthOverflow)
+        );
+        overflow_store.mutation_serial = 0;
+        overflow_store
+            .rollback(&mut overflow_metrics)
+            .expect("overflow rollback");
+        finish_q(&mut overflow_metrics).expect("overflow Q");
+        assert_eq!(
+            construction_frontier_bytes(
+                Candidate {
+                    name: "F2-OVERFLOW",
+                    k: usize::MAX,
+                    f: 2,
+                    directory_page: 256 * 1024,
+                },
+                1,
+            ),
+            Err(CoreError::LengthOverflow)
+        );
+        drop(overflow_store);
+        remove_sqlite_image(&overflow_database).expect("overflow cleanup");
+    }
+
+    #[test]
+    fn f2_candidate_publishes_once_and_fresh_verification_recomputes_closure() {
+        let source = test_path("f2-publish.source");
+        fill_source(&source, 256 * 1024, 0x11).expect("source");
+        let candidate = FILE_CANDIDATES[0];
+        let (references, fingerprint, sequence, _, _) =
+            expected_file_observations(&source, "full", 256 * 1024, candidate)
+                .expect("expectations");
+
+        let oracle_database = test_path("f2-publish-oracle.sqlite");
+        let mut oracle = Store::open(&oracle_database, candidate).expect("oracle");
+        let mut oracle_metrics = Metrics::default();
+        let (root, transition) =
+            build_file(&mut oracle, &source, candidate, &mut oracle_metrics).expect("oracle build");
+        let transition_digest =
+            verify_transition(&oracle, transition, None, root, None, &mut oracle_metrics)
+                .expect("oracle transition");
+        let content_digest = verify_file(
+            &oracle,
+            root,
+            candidate,
+            Some(&fingerprint),
+            Some(&sequence),
+            &mut oracle_metrics,
+        )
+        .expect("oracle file")
+        .0;
+        let expectation = FullCreateExpectation {
+            source_fingerprint: digest_array(&fingerprint),
+            cdc_sequence: digest_array(&sequence),
+            references,
+            root,
+            transition,
+            closure: combined_closure_digest(transition_digest, content_digest),
+        };
+        oracle
+            .rollback(&mut oracle_metrics)
+            .expect("oracle rollback");
+        drop(oracle);
+
+        let database = test_path("f2-publish.sqlite");
+        let mut store = Store::open(&database, candidate).expect("store");
+        let mut metrics = Metrics::default();
+        let (actual_root, actual_transition, mut proof) =
+            build_file_proven(&mut store, &source, candidate, expectation, &mut metrics)
+                .expect("candidate build");
+        let precommit = metrics;
+        let qualification = proof
+            .consume(&mut store, expectation, &mut metrics)
+            .expect("candidate qualification");
+        assert_eq!(qualification.root, root);
+        assert_eq!(qualification.transition, transition);
+        assert_eq!(
+            metric_delta(metrics.sql_query_calls, precommit.sql_query_calls),
+            Ok(1)
+        );
+        assert_eq!(
+            metric_delta(metrics.sql_rows_returned, precommit.sql_rows_returned),
+            Ok(0)
+        );
+        assert_eq!(
+            metric_delta(metrics.row_blob_reads, precommit.row_blob_reads),
+            Ok(0)
+        );
+        assert_eq!(
+            metric_delta(
+                metrics.objects_authenticated,
+                precommit.objects_authenticated
+            ),
+            Ok(0)
+        );
+        drop(proof);
+        store
+            .publish(None, actual_root, actual_transition, &mut metrics)
+            .expect("one COMMIT");
+        assert_eq!(metrics.transactions, 1);
+        assert_eq!(metrics.commits, 1);
+        drop(store);
+
+        let mut fresh = Store::open(&database, candidate).expect("fresh reopen");
+        let head = fresh.current_head().expect("head").expect("visible head");
+        assert_eq!((head.1, head.2), (root, transition));
+        let fresh_transition =
+            verify_transition(&fresh, transition, None, root, None, &mut metrics)
+                .expect("fresh transition");
+        let (_, fresh_references) =
+            scrub_file(&mut fresh, root, candidate, &mut metrics).expect("fresh scrub");
+        let (fresh_content, reconstructed_references, total_raw) = reconstruct_file(
+            &fresh,
+            root,
+            candidate,
+            Some(&fingerprint),
+            Some(&sequence),
+            &mut metrics,
+        )
+        .expect("fresh reconstruction");
+        assert_eq!(fresh_references, references);
+        assert_eq!(reconstructed_references, references);
+        assert_eq!(total_raw, 256 * 1024);
+        assert_eq!(
+            combined_closure_digest(fresh_transition, fresh_content),
+            expectation.closure
+        );
+        drop(fresh);
+        finish_q(&mut metrics).expect("terminal Q");
+        remove_sqlite_image(&oracle_database).expect("oracle cleanup");
+        remove_sqlite_image(&database).expect("database cleanup");
+        fs::remove_file(source).expect("source cleanup");
     }
 
     #[test]

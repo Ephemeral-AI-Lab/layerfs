@@ -1334,3 +1334,128 @@ remains 2,222,803 bytes with terminal zero. C1 RSS arm median is 0.175% lower;
 peak-footprint arm median is 0.129% higher, so §13.6 does not trigger the
 15-pair extension. The accepted path-local complexity and limitations above
 are unchanged.
+
+## 22. F2 bounded full-create construction-proof analysis
+
+Status: source-linked terminal analysis for the private K64/F64 F2 candidate.
+The candidate is `FAIL / REVISE` because its prospectively protected COMMIT
+wall regressed; this section records the proven mechanism and honest bounds,
+not acceptance, profile promotion, production integration, or F3 authority.
+
+### 22.1 Algorithm and authority
+
+For each canonical object constructed during the existing source pass, the
+private Store returns a move-only evidence value only after either:
+
+```text
+new row inserted with the exact canonical ObjectId/kind/length
+or
+conflicting incumbent fetched, fully ObjectId-authenticated, and byte-equal
+```
+
+Evidence is transaction/open/authority/mutation ordered. The existing
+`FileBuilder` consumes chunk evidence immediately, folds exact count/length/ID
+facts into each leaf, then folds leaf proofs into its bounded branch frontier.
+File, singleton-workspace, and genesis-transition construction finish one
+proof bound to the exact store/open/authority/epoch/profile/transaction,
+source fingerprint, CDC sequence/count, root, transition, and separately
+prepared full-verifier expectation. Mutation, rollback, COMMIT, reopen,
+replay, second use, or any mismatch invalidates it.
+
+The ordered closure digest remains the existing flat root-first transcript.
+It is not derived by composing bottom-up subtree digests. A separately prepared
+full verifier freezes the expected scalar outside the row; fresh post-COMMIT
+reconstruction recomputes it independently. No linear construction-event list
+is retained.
+
+### 22.2 Time complexity
+
+Let `S` be source bytes, `N` references, `K` leaf capacity, `F` fanout, and
+`H` canonical file-root branch level. The proof adds:
+
+```text
+source fingerprint during the existing source read = Theta(S)
+CDC sequence accumulator                           = Theta(N)
+leaf/branch/file/workspace/transition folds        = Theta(N/K) objects/edges
+single-use pre-COMMIT consumption                  = O(1) + one head query
+```
+
+The removed control replay was:
+
+```text
+Theta(reachable canonical/raw bytes + edge occurrences)
+```
+
+Therefore both before and after remain:
+
+```text
+T_full_create = Theta(source bytes + references)
+```
+
+F2 is pass elimination, not an asymptotic improvement to full creation. The
+retained row moves pre-COMMIT from 5,373 queries/BLOB reads/authentications and
+105,291,608 canonical plus 104,857,600 raw hash bytes to one empty-head query
+and zero replay authentication. It adds one 104,857,600-byte source
+fingerprint during the source pass. Measured mapping/proof-construction wall
+rose `403.402 -> 606.564 ms`; pre-COMMIT fell `386.637 -> 0.068 ms`.
+
+### 22.3 Exact live memory
+
+Target sizes are:
+
+```text
+PutEvidence=80, ConstructionNodeProof=64,
+FileReference=68, FileChild=40, Vec=24, Hasher=1,920 bytes.
+```
+
+Let `P=ceil(N/K)`, let `H` be canonical height, and let `R` be the root child
+count after exactly `H` ceiling divisions by `F`. The existing streaming
+builder temporarily creates and later collapses one extra unary full level
+when `R=F`, so:
+
+```text
+L = H + 1 + usize(R == F)
+
+Q_proof(K,F,H)
+  = 4,096
+  + K*68
+  + L*(24 + F*40)
+  + L*8
+  + L*(24 + F*64)
+  + 80
+
+M_proof = O(K + F*H)
+```
+
+For retained K64/F64 `N=5,284`, `P=83`, `H=1`, `R=2`, `L=2`, so exact
+proof-owned charge is 21,952 bytes. Measured total Q is 55,325 bytes, under
+the preregistered 73,728-byte cap, and every exit returns to zero. No
+all-reference/object/event vector, visited set, cache/map, source-sized spool,
+table, sidecar, or serialized metadata exists.
+
+### 22.4 Durable space and work
+
+The candidate and F1-v3 control are exact on 5,372 created objects,
+105,291,554 new canonical bytes, 365,262 mapping bytes, SQL writes/changed
+rows, BLOB writes, one transaction/COMMIT, schema, logical/apparent DB bytes,
+root, transition, closure, reconstruction, and ranges. Hence:
+
+```text
+S_live_F2 = Theta(S_u + N)  # unchanged
+```
+
+APFS allocated-store-delta median decreases
+`118,042,624 -> 109,248,512` bytes, but allocation is not physical I/O.
+VFS read/write bytes, sync calls/wall, and byte-level media I/O remain
+Unavailable.
+
+### 22.5 Measured terminal interpretation
+
+Durable capture improves `929.420 -> 786.868 ms` (`-15.338%`, paired median
+`-15.629%`, 5/5), while complete lifecycle improves
+`1,615.793 -> 1,476.144 ms`. CPU/RSS/peak pass. COMMIT regresses
+`135.886 -> 176.823 ms` (`+30.126%`, paired median `+28.184%`, 0/5). Because
+COMMIT was prospectively protected at 5%, F2 is `FAIL / REVISE` despite the
+correct mechanism and material durable gain. F3 remains ineligible. Full
+create, fresh scrub, reconstruction, and complete lifecycle retain their
+previous honest linear bounds.

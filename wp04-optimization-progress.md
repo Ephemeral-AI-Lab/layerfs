@@ -1,5 +1,20 @@
 # WP4-M optimization progress
 
+F2 status (2026-08-19): **FAIL / REVISE; F3 ineligible**. The private bounded
+full-create construction proof passes shadow equivalence, authority,
+adversarial, exact-Q, storage/schema, one-COMMIT, and release M4.5 gates. It
+reduces pre-COMMIT SQL queries `5,373 -> 1` (`-99.981388%`) and BLOB reads/
+object authentications `5,373 -> 0`; durable capture improves
+`929.420 -> 786.868 ms` (`-15.337802%`, paired median `-15.628724%`, 5/5),
+CPU/RSS/peak/storage pass, and Q is `55,325 <= 73,728` with terminal zero.
+The prospectively protected COMMIT phase regresses
+`135.886 -> 176.823 ms` (`+30.125789%`, paired `+28.184244%`, 0/5), so no
+threshold is relaxed and F2 is not accepted as the next control. Preserve the
+uncommitted candidate and versioned evidence under
+`target/wp4m-f2-construction-proof-k64-20260819-v1`; do not start F3,
+select/promote a profile, integrate production, claim Phase 4 complete, or
+commit.
+
 F1-v3 status (2026-08-19): **PASS; F2 eligible but not started**. The unchanged
 F1 observability implementation was rerun once with the prospectively frozen
 complete sequence `AB/AB/BA/AB/BA/AB` (pair 0 warmup, pairs 1-5 measured).
@@ -116,6 +131,7 @@ Status: M0, M2, and M3 passed their predeclared affected-metric gates; M1 and M4
 | M4.5 repaired exact-CDC same-count changed spine | **PASS private milestone** | C0 443.143 -> C1 9.001 ms same-middle durable latency (-97.969%) | Unavailable for edit | 1,134.436 -> 710.947 ms same-open lifecycle (-37.329%) | Unavailable for edit | exact FastCDC/rejoin; byte-identical DB+authority custody 12/12; 5/5 wins; CPU/Q/RSS/peak/storage pass |
 | M4.5 v3 terminal exact-CDC changed spine | **PASS final M4.5 milestone** | C0 440.023209 -> C1 9.134334 ms same-middle durable latency (-97.924124%) | Unavailable for edit | 1,134.875792 -> 703.763750 ms same-open lifecycle | Unavailable for edit | prospective §13.3A XOR; exact Q 2,222,803; 12/12 official and 30/30 extension arm copies; 5/5 wins; 20-pair RSS/peak adjudication pass |
 | M4.5 v4 checkpoint follow-up | **PASS; F0-freeze ready** | C0 446.457042 -> C1 8.540708 ms same-middle durable latency (-98.087003%) | Unavailable for edit | 1,153.324459 -> 716.367834 ms same-open lifecycle | Unavailable for edit | exact-capacity adoption guard; direct H=2 proof; exact Q 2,222,803; 12/12 copied arms; 5/5 wins; memory extension not triggered |
+| F2 bounded full-create construction proof | **FAIL / REVISE; F3 ineligible** | 929.420 -> 786.868 ms (-15.338%, 5/5) | 107.594 -> 127.086 | 1,615.793 -> 1,476.144 ms (-8.643%) | 61.889 -> 67.744 | pre-COMMIT queries -99.981%, BLOB/auth -100%; Q 55,325; CPU/RSS/storage pass; protected COMMIT +30.126%, 0/5 FAIL |
 
 Accepted M2 phase medians are mapping 511.358 ms, closure 391.551 ms, COMMIT 109.234 ms, reopen 1.100 ms, scrub 270.967 ms, reconstruction 421.991 ms, and ranges 0.665 ms. Both disjoint timer equations reconcile in all five rows. Against the frozen c96 baseline, accepted M2 capture is +2.316%, lifecycle is -1.534%, and reconstruction is -6.754%.
 
