@@ -1337,6 +1337,10 @@ are unchanged.
 
 ## 22. F2 bounded full-create construction-proof analysis
 
+Historical F2-v1 analysis only. Section 23 supersedes its runtime-authority,
+exact-Q, redundant-hash, and protected post-COMMIT interpretations while
+preserving the v1 measurements as immutable **FAIL / REVISE** evidence.
+
 Status: source-linked terminal analysis for the private K64/F64 F2 candidate.
 The candidate is `FAIL / REVISE` because its prospectively protected COMMIT
 wall regressed; this section records the proven mechanism and honest bounds,
@@ -1459,3 +1463,285 @@ COMMIT was prospectively protected at 5%, F2 is `FAIL / REVISE` despite the
 correct mechanism and material durable gain. F3 remains ineligible. Full
 create, fresh scrub, reconstruction, and complete lifecycle retain their
 previous honest linear bounds.
+
+## 23. F2-v2 standalone construction-proof correction
+
+Status: prospective/source-linked correction to historical §22. Section 22
+describes immutable F2-v1 **FAIL / REVISE** evidence and is not standalone
+publication authority: v1 bound proof consumption to an externally prebuilt
+root, transition, and closure. V2 removes that runtime dependency.
+
+### 23.1 Before/after authority and time
+
+The F1 control constructs every canonical object once, then replays the full
+reachable transition/file closure from SQLite before COMMIT. V2 instead issues
+private move-only evidence after each successful canonical insertion or fully
+authenticated, role/length/byte-equal incumbent. The existing streaming
+builder folds exact occurrence, edge, count, raw-length, ObjectId, level, and
+cumulative-end facts through chunk, leaf, branch, file, singleton workspace,
+and Genesis transition summaries.
+
+The proof is issued and consumed using only the live transaction's open,
+store, validation authority, epoch, profile, transaction, authority serial,
+mutation serial, empty head, one-pass source fingerprint, ordered CDC
+sequence/count, total raw length, file root, workspace root, and transition.
+It does not contain or require an external root/transition/closure oracle.
+Optional golden values are compared only after fresh post-COMMIT root-first
+verification. The flat closure transcript remains noncomposable and is not a
+construction summary.
+
+Let `B` be source bytes and `N` ordered chunk-reference occurrences. With
+fixed profile bounds:
+
+```text
+source/FastCDC/raw ChunkId pass                     = Theta(B)
+whole-source fingerprint in that same pass          = Theta(B)
+ordered CDC accumulator                             = Theta(N)
+canonical CAS writes/authenticated incumbent bytes  = Theta(B + N)
+leaf/upper summary objects                          = Theta(N/K) + upper levels
+authenticated occurrence and strong-edge folding    = Theta(N)
+pre-COMMIT proof consumption                        = O(1) + one head query
+fresh post-COMMIT closure/reconstruction             = Theta(B + N)
+```
+
+Therefore standalone full create remains exactly:
+
+```text
+T_full_create = Theta(B + N)
+```
+
+This is pass elimination and constant-factor work reduction, not a change in
+the lower-bound class. V2 removes both the duplicate SQLite closure replay and
+v1's unaccounted second raw `chunk_id(bytes)` over every just-derived chunk.
+Required raw ChunkId hashing, the distinct whole-source fingerprint, and the
+canonical ObjectId domains remain.
+
+### 23.2 Exact live structures and Q
+
+There is no source-sized or all-reference/object/event list, map, cache,
+visited set, spool, table, sidecar, serialized metadata, or dependency. Live
+semantic construction state consists of:
+
+- one bounded chunk/canonical/SQL encoding window;
+- one at-most-`K` leaf reference vector;
+- one at-most-`F` child vector and one at-most-`F` proof-summary vector per
+  active builder level;
+- one cumulative total per active level;
+- two fixed BLAKE3 hashers and scalar scope/counter fields; and
+- one 80-byte per-put evidence slot.
+
+For canonical height `H`, including the existing builder's possible temporary
+unary-collapse level, the honest bound is:
+
+```text
+M_construction
+  = O(K + F*(H+1)
+      + bounded chunk/SQL/encoding/output buffers)
+```
+
+Let `R` be the root child count after exactly `H` ceiling divisions and
+`L = H + 1 + usize(R == F)`. Target-layout exact charge is:
+
+```text
+Q_proof(K,F,H)
+  = 4,096
+  + K*68
+  + L*(24 + F*40)
+  + L*8
+  + L*(24 + F*64)
+  + 80
+```
+
+For retained `K=F=64`, `N=5,284`, `H=1`, `L=2`, the exact proof-owned peak is
+`21,952` bytes. V2's `FileBuilder` owns the frontier charge for exactly as long
+as the charged leaf/level/total/proof capacities exist. Unary collapse/root
+finalization first drops moved children and all frontier allocations, then the
+charge; the scan for nonempty levels does not allocate. The remaining fixed
+proof plus evidence-slot charge is `4,176` bytes until proof drop. Checked
+admission, allocation refusal, overflow, construction error, rollback,
+successful consume, and report delivery all terminate at Q zero.
+
+### 23.3 Durable work and space
+
+For source unique-byte total `B_u`:
+
+```text
+summary objects = Theta(N/K) plus geometrically smaller upper levels
+authenticated occurrence/edge work = Theta(N)
+S_live = Theta(B_u + N)
+```
+
+Schema, serialized bytes, CAS identities, file/workspace/transition topology,
+SQL write shape, BLOB writes, DELETE/FULL durability, one writer transaction,
+one COMMIT, and independent post-COMMIT work are unchanged. Existing CAS
+history and no-GC bounds remain unchanged.
+
+V1 measurements are not exact-Q or standalone-authority acceptance evidence.
+Its corrected audit also fails protected COMMIT, fresh-reopen pair-count, and
+range pair-count gates. V2 may replace §22's candidate interpretation only
+after all correctness, exact-Q, storage, M4.5, five-pair performance, manifest,
+and final read-only audit gates pass. Until then F2 is **FAIL / REVISE** and F3
+is ineligible.
+
+### 23.4 F2-v2 measured closure
+
+The frozen v2 source/executable are
+`c8ac86be3a97bbcc6b980e93bc7539532e2093c0e6fe741429ef4a26cb3cc158` /
+`68b599b819da9f05c76d35efd807c5d5f03266dfb7d4ed0cc78da269c4b891c0`.
+Direct counters confirm exactly one required raw ChunkId pass over
+104,857,600 bytes / 5,284 chunks, one distinct source-fingerprint pass, and
+5,284 CDC accumulator entries. The former unaccounted third source-sized hash
+is absent. Candidate pre-COMMIT is one query and zero rows/BLOB/authentication.
+
+Measured medians are `398.408 -> 486.716 ms` for mapping/proof construction,
+`386.597 -> 0.052 ms` for pre-COMMIT, `129.875 -> 164.052 ms` for COMMIT,
+and `916.758 -> 652.573 ms` for durable capture. This is a 99.987%
+pre-COMMIT wall reduction and 28.817% durable improvement with 5/5 wins, while
+COMMIT regresses 26.315% with 0/5 protected pairs. Complete lifecycle improves
+`1,608.325 -> 1,343.971 ms` (16.437%). These observations change no bound:
+full create remains `Theta(B + N)` and independent scrub/reconstruction remain
+linear.
+
+All candidate rows satisfy exact `Q_proof=21,952`, total
+`q_high_water=55,325 <= 73,728`, and terminal zero. The separately
+preregistered v2 control-relative Q gate fails (`37,301 -> 55,325`), but the
+governing bounded-state equation and absolute cap pass. Durable space, schema,
+write shape, and one transaction/COMMIT are exact control matches.
+
+The diagnostic-only 200-ms idle demonstrates that the outer COMMIT phase timer
+includes caller delay after precommit: its median rises by 199.892 ms and the
+caller-wrapper component absorbs the idle. Nested SQLite dispatch-to-return is
+`167.886 -> 160.304 ms` (paired `-1.082%`, one +6.629% pair), so the idle does
+not reliably cure the acceptance regression. Physical writeback/sync causality
+remains Unavailable.
+
+Final F2-v2 disposition is **FAIL / REVISE** because COMMIT, fresh-reopen arm
+median, ranges 4/5, and the extra v2 relative-Q gate fail. F3 is ineligible.
+
+## 24. F2-v3 accepted bounded construction proof
+
+Status: **PASS / retain; F3 eligible only as a separate task**. This section
+supersedes only the v2 terminal acceptance disposition in §23.4. It does not
+alter the historical v1/v2 measurements or loosen their frozen gates.
+
+### 24.1 Exact time bound and eliminated amplification
+
+For raw source bytes `B`, ordered CDC occurrences `N`, leaf capacity `K`,
+branch fanout `F`, and canonical file height `H`, accepted full create does:
+
+```text
+one source/CDC/raw-ChunkId pass                         Theta(B)
+one whole-source fingerprint nested in that pass       Theta(B)
+canonical CAS insert or exact incumbent authentication  Theta(B + N)
+authenticated occurrence/edge summary folding           Theta(N)
+summary-object construction                              Theta(N/K) + upper levels
+pre-COMMIT proof consumption                             O(1) + one head query
+fresh post-COMMIT closure/scrub/reconstruction           Theta(B + N)
+```
+
+The two `Theta(B)` hashes have distinct required trust domains and share the
+same single source read. There is no third source-sized hash. The former
+5,373-row SQLite/BLOB/authentication closure replay is absent from candidate
+pre-COMMIT. Therefore:
+
+```text
+T_full_create = Theta(B + N)
+```
+
+This is a proven constant-factor/pass elimination, not an asymptotic-class
+change. Fresh ordered-closure verification remains root-first and linear; its
+flat digest is neither assumed nor changed to be subtree-composable.
+
+### 24.2 Exact live data structures and bound
+
+The accepted private construction path retains only:
+
+- one bounded chunk/canonical/SQLite encoding window;
+- one at-most-`K` `FileReference` leaf frontier;
+- one at-most-`F` canonical child frontier and one at-most-`F` proof-summary
+  frontier for each active builder level, including possible unary collapse;
+- one cumulative total per active level;
+- two fixed BLAKE3 hashers and scalar scope/counter bindings; and
+- one 80-byte move-only per-put evidence slot.
+
+It retains no `Theta(B)`/`Theta(N)` resident list, event transcript, source
+spool, object/reference collection, map, cache, visited set, table, sidecar,
+public proof framework, dependency, or serialized metadata. The honest bound
+is:
+
+```text
+M_construction
+  = O(K + F*(H+1)
+      + bounded chunk/SQL/encoding/output buffers)
+```
+
+With `R` the root child count after `H` ceiling divisions and
+`L = H + 1 + usize(R == F)`, the exact target-layout proof charge remains:
+
+```text
+Q_proof(K,F,H)
+  = 4,096
+  + K*68
+  + L*(24 + F*40)
+  + L*8
+  + L*(24 + F*64)
+  + 80
+```
+
+At retained K64/F64 (`N=5,284`, `H=1`, `R=2`, `L=2`), `Q_proof=21,952`
+bytes. The five measured candidate rows all have total `q_high_water=55,325`
+bytes, satisfy the authorized `<=73,728` cap, and terminate at zero. Owner
+charges overlap exactly with live frontier/proof capacities; checked
+admission, overflow, allocation/fold/issuance error, rollback, consume,
+reopen/replay rejection, and report cleanup all return Q to zero.
+
+### 24.3 Durable space and unchanged format
+
+Summary objects are `Theta(N/K)` plus geometrically smaller upper levels;
+authenticated occurrence/edge work is `Theta(N)`. With unique raw bytes `B_u`:
+
+```text
+S_live = Theta(B_u + N)
+```
+
+Accepted v3 adds zero metadata, schema, table, sidecar, or endpoint and leaves
+CAS/CDC identities, canonical bytes, file/workspace/transition topology,
+SQLite write shape, DELETE/FULL mode, single transaction/COMMIT, publication,
+reconciliation, and post-COMMIT verification unchanged. All row databases
+retain schema SHA-256 `e83baa35…162`, 109,268,992 bytes, 5,372 objects, one
+meta row, one visible head, a 32-byte authority endpoint, and no residual
+journal/WAL/SHM.
+
+### 24.4 Accepted measurement and phase-coupling interpretation
+
+Against sealed F1-v3, measured medians are:
+
+```text
+mapping/proof construction      400.461209 -> 492.776500 ms
+pre-COMMIT qualification        387.464834 ->   0.051458 ms
+standalone outer COMMIT         126.053792 -> 168.425625 ms
+qualification + COMMIT          512.861458 -> 168.477083 ms
+durable capture                 916.310250 -> 659.592708 ms
+complete lifecycle            1,607.986125 -> 1,353.840916 ms
+```
+
+The durable improvement is 28.016% (paired 27.725%, 5/5); the combined-tail
+improvement is 67.150% (paired 67.513%, 5/5). SQL queries fall 5,373 to 1 and
+row-BLOB reads/authentications 5,373 to zero. Total CPU falls 16.049%; RSS,
+peak footprint, and allocated-store delta improve. Exact final dirty writes
+remain 26,676/26,676 and spills 6,676/6,675.
+
+The prospectively run same-binary diagnostic establishes that full-verifier
+activity changes named pager/filesystem state before COMMIT and shifts work
+between qualification and dispatch without extra logical writes or durability
+work. Standalone COMMIT's accepted-row +33.614% remains a reported engine-
+phase diagnostic; it is not erased or claimed to be harmless generally. VFS
+calls/bytes, xSync calls/wall, true journal/temp peaks, and physical media I/O
+remain **Unavailable**, so physical causality is not claimed. The accepted
+prospective contract hard-protects exact pager/write/durability equations,
+combined tail, durable total, total/system CPU, storage, and post-COMMIT work.
+
+These measurements do not alter the bound: accepted standalone full create
+remains `Theta(B + N)`, accepted construction memory remains
+`O(K + F*(H+1) + bounded buffers)`, and durable live space remains
+`Theta(B_u + N)`.

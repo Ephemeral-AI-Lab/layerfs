@@ -193,6 +193,12 @@ enum PublishFault {
     AfterCommitUnavailable,
 }
 
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PutFault {
+    DeleteIncumbentAfterConflict,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Reconciliation {
     NotAttempted,
@@ -1802,6 +1808,8 @@ struct Store {
     active_transaction: Option<ActiveTransaction>,
     #[cfg(test)]
     next_publish_fault: Option<PublishFault>,
+    #[cfg(test)]
+    next_put_fault: Option<PutFault>,
     connection: Connection,
 }
 
@@ -2021,6 +2029,8 @@ impl Store {
             active_transaction: None,
             #[cfg(test)]
             next_publish_fault: None,
+            #[cfg(test)]
+            next_put_fault: None,
             connection,
         })
     }
@@ -2073,8 +2083,7 @@ impl Store {
             .active_transaction
             .as_mut()
             .ok_or(CoreError::ValidationAuthorityUnavailable)?;
-        if proof.expectation.is_none()
-            || transaction.construction_proof_issued
+        if transaction.construction_proof_issued
             || transaction.identity != scope.transaction_identity
             || scope.open_identity != self.open_identity
             || scope.store_instance_id != self.store_instance_id
@@ -2289,20 +2298,43 @@ impl Store {
             self.mutation_serial = next_mutation_serial;
             return Ok(());
         }
-        let mut statement = self
-            .connection
-            .prepare_cached("SELECT canonical_bytes FROM wp4m_objects WHERE object_id = ?1")?;
+        drop(statement);
+        #[cfg(test)]
+        if self.next_put_fault.take() == Some(PutFault::DeleteIncumbentAfterConflict) {
+            self.connection.execute(
+                "DELETE FROM wp4m_objects WHERE object_id = ?1",
+                params![id.as_bytes().as_slice()],
+            )?;
+        }
+        let mut statement = self.connection.prepare_cached(
+            "SELECT kind, canonical_length, canonical_bytes
+                   FROM wp4m_objects WHERE object_id = ?1",
+        )?;
         observe_statement_cache_acquisition(metrics)?;
         let mut rows = statement.query(params![id.as_bytes().as_slice()])?;
         observe_query_call(metrics)?;
         let row = rows.next()?.ok_or(CandidateError::MissingObject(id))?;
         observe_rows_returned(metrics, 1)?;
-        let existing = row.get_ref(0)?.as_blob()?;
+        let incumbent_kind = row.get::<_, i64>(0)?;
+        let incumbent_length = row.get::<_, i64>(1)?;
+        let existing = row.get_ref(2)?.as_blob()?;
         observe_row_blobs(metrics, &[existing.len()])?;
         let decoded_charge = charge_capacity(metrics, decoded_object_q(existing)?)?;
         let existing_object = layerfs_core::validate_identity(existing, id)?;
         add(&mut metrics.objects_authenticated, 1)?;
         add_len(&mut metrics.canonical_bytes_authenticated, existing.len())?;
+        if incumbent_kind != i64::from(kind as u8) || existing_object.kind() != kind {
+            return Err(CoreError::WrongLogicalRole.into());
+        }
+        if incumbent_length
+            != i64::try_from(existing.len()).map_err(|_| CoreError::LengthOverflow)?
+        {
+            return Err(CoreError::LengthMismatch {
+                expected: u64::try_from(existing.len()).map_err(|_| CoreError::LengthOverflow)?,
+                actual: u64::try_from(incumbent_length).map_err(|_| CoreError::LengthOverflow)?,
+            }
+            .into());
+        }
         if existing != canonical {
             return Err(CoreError::IdentityMismatch.into());
         }
@@ -3173,7 +3205,6 @@ struct ConstructionState {
     leaf_references: u64,
     leaf_total: u64,
     _fixed_charge: CapacityCharge,
-    _frontier_charge: CapacityCharge,
     _evidence_slot_charge: CapacityCharge,
 }
 
@@ -3204,18 +3235,7 @@ struct WorkspaceConstructionProof {
 struct FullCreateConstructionProof {
     workspace: WorkspaceConstructionProof,
     transition: ObjectId,
-    expectation: Option<FullCreateExpectation>,
     consumed: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct FullCreateExpectation {
-    source_fingerprint: [u8; 32],
-    cdc_sequence: [u8; 32],
-    references: u64,
-    root: ObjectId,
-    transition: ObjectId,
-    closure: [u8; 32],
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3226,30 +3246,6 @@ struct FullCreateQualification {
     total_raw: u64,
     root: ObjectId,
     transition: ObjectId,
-    closure: [u8; 32],
-}
-
-fn full_create_expectation(
-    base: Option<(ObjectId, ObjectId, [u8; 32])>,
-    references: Option<u64>,
-    fingerprint: Option<&str>,
-    sequence: Option<&str>,
-) -> AnyResult<FullCreateExpectation> {
-    let (root, transition, closure) = base.ok_or(CoreError::PublicationConflict)?;
-    Ok(FullCreateExpectation {
-        source_fingerprint: ObjectId::from_bytes(&decode_hex(
-            fingerprint.ok_or(CoreError::PublicationConflict)?,
-        )?)?
-        .to_bytes(),
-        cdc_sequence: ObjectId::from_bytes(&decode_hex(
-            sequence.ok_or(CoreError::PublicationConflict)?,
-        )?)?
-        .to_bytes(),
-        references: references.ok_or(CoreError::PublicationConflict)?,
-        root,
-        transition,
-        closure,
-    })
 }
 
 enum RootConstructionCoverage {
@@ -3263,7 +3259,7 @@ impl ConstructionState {
         candidate: Candidate,
         expected_references: u64,
         metrics: &mut Metrics,
-    ) -> AnyResult<(Self, usize)> {
+    ) -> AnyResult<(Self, usize, CapacityCharge)> {
         if std::mem::size_of::<PutEvidence>() != Q_PUT_EVIDENCE_BYTES
             || std::mem::size_of::<ConstructionNodeProof>() != 64
             || std::mem::size_of::<Self>() > Q_CONSTRUCTION_STATE_BYTES
@@ -3299,10 +3295,10 @@ impl ConstructionState {
                 leaf_references: 0,
                 leaf_total: 0,
                 _fixed_charge: fixed_charge,
-                _frontier_charge: frontier_charge,
                 _evidence_slot_charge: evidence_slot_charge,
             },
             levels,
+            frontier_charge,
         ))
     }
 
@@ -3350,9 +3346,8 @@ impl ConstructionState {
                 .ok_or(CoreError::LengthOverflow)?,
             metrics,
         )?;
-        if chunk_id(bytes) != reference.raw_id
-            || u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?
-                != reference.raw_length
+        if u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?
+            != reference.raw_length
         {
             return Err(CoreError::ChunkIdentityMismatch);
         }
@@ -3531,7 +3526,6 @@ impl ConstructionState {
         )?;
         add(&mut metrics.construction_file_summaries, 1)?;
         add(&mut metrics.construction_source_hashes, 1)?;
-        drop(self._frontier_charge);
         self._fixed_charge.absorb(self._evidence_slot_charge)?;
         Ok(FileConstructionProof {
             scope: ConstructionScopeProof {
@@ -3587,10 +3581,11 @@ impl ConstructionScopeProof {
 impl FileConstructionProof {
     fn fold_workspace(
         mut self,
-        evidence: PutEvidence,
-        root: ObjectId,
+        store: &mut Store,
         metrics: &mut Metrics,
-    ) -> CoreResult<WorkspaceConstructionProof> {
+    ) -> AnyResult<WorkspaceConstructionProof> {
+        let (root, evidence) =
+            namespace_file_root_with_evidence(store, self.file.object_id, metrics)?;
         self.scope
             .accept_put(evidence, root, ObjectKind::Directory, metrics)?;
         add(&mut metrics.construction_edges_covered, 1)?;
@@ -3602,10 +3597,11 @@ impl FileConstructionProof {
 impl WorkspaceConstructionProof {
     fn fold_transition(
         mut self,
-        evidence: PutEvidence,
-        transition: ObjectId,
+        store: &mut Store,
         metrics: &mut Metrics,
-    ) -> CoreResult<FullCreateConstructionProof> {
+    ) -> AnyResult<FullCreateConstructionProof> {
+        let (transition, evidence) =
+            publish_genesis_transition_with_evidence(store, self.root, metrics)?;
         self.file
             .scope
             .accept_put(evidence, transition, ObjectKind::Bytes, metrics)?;
@@ -3614,41 +3610,21 @@ impl WorkspaceConstructionProof {
         Ok(FullCreateConstructionProof {
             workspace: self,
             transition,
-            expectation: None,
             consumed: false,
         })
     }
 }
 
 impl FullCreateConstructionProof {
-    fn bind_expectation(&mut self, expected: FullCreateExpectation) -> CoreResult<()> {
-        let file = &self.workspace.file;
-        if self.expectation.is_some()
-            || file.source_fingerprint != expected.source_fingerprint
-            || file.cdc_sequence != expected.cdc_sequence
-            || file.file.references != expected.references
-            || self.workspace.root != expected.root
-            || self.transition != expected.transition
-        {
-            return Err(CoreError::PublicationConflict);
-        }
-        self.expectation = Some(expected);
-        Ok(())
-    }
-
     fn consume(
         &mut self,
         store: &mut Store,
-        expected: FullCreateExpectation,
         metrics: &mut Metrics,
     ) -> AnyResult<FullCreateQualification> {
         if self.consumed {
             return Err(CoreError::ValidationAuthorityUnavailable.into());
         }
         self.consumed = true;
-        if self.expectation != Some(expected) {
-            return Err(CoreError::PublicationConflict.into());
-        }
         let scope = &self.workspace.file.scope;
         let transaction = store
             .active_transaction
@@ -3675,14 +3651,6 @@ impl FullCreateConstructionProof {
             return Err(CoreError::PublicationConflict.into());
         }
         let file = &self.workspace.file;
-        if file.source_fingerprint != expected.source_fingerprint
-            || file.cdc_sequence != expected.cdc_sequence
-            || file.file.references != expected.references
-            || self.workspace.root != expected.root
-            || self.transition != expected.transition
-        {
-            return Err(CoreError::PublicationConflict.into());
-        }
         add(&mut metrics.construction_proof_consumptions, 1)?;
         Ok(FullCreateQualification {
             source_fingerprint: file.source_fingerprint,
@@ -3691,9 +3659,44 @@ impl FullCreateConstructionProof {
             total_raw: file.file.total_raw,
             root: self.workspace.root,
             transition: self.transition,
-            closure: expected.closure,
         })
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_full_create_qualification(
+    qualification: &FullCreateQualification,
+    source_fingerprint: [u8; 32],
+    cdc_sequence: [u8; 32],
+    references: u64,
+    total_raw: u64,
+    root: ObjectId,
+    transition: ObjectId,
+) -> CoreResult<()> {
+    if qualification.source_fingerprint != source_fingerprint
+        || qualification.cdc_sequence != cdc_sequence
+        || qualification.references != references
+        || qualification.total_raw != total_raw
+        || qualification.root != root
+        || qualification.transition != transition
+    {
+        return Err(CoreError::PublicationConflict);
+    }
+    Ok(())
+}
+
+fn validate_full_create_golden(
+    golden: Option<(ObjectId, ObjectId, [u8; 32])>,
+    root: ObjectId,
+    transition: ObjectId,
+    closure: [u8; 32],
+) -> CoreResult<()> {
+    if golden.is_some_and(|(golden_root, golden_transition, golden_closure)| {
+        golden_root != root || golden_transition != transition || golden_closure != closure
+    }) {
+        return Err(CoreError::PublicationConflict);
+    }
+    Ok(())
 }
 
 struct FileBuilder {
@@ -3704,6 +3707,8 @@ struct FileBuilder {
     total_raw: u64,
     references: u64,
     construction: Option<ConstructionState>,
+    // Declared last so unwind drops every charged frontier owner first.
+    frontier_charge: Option<CapacityCharge>,
 }
 
 impl FileBuilder {
@@ -3716,6 +3721,7 @@ impl FileBuilder {
             total_raw: 0,
             references: 0,
             construction: None,
+            frontier_charge: None,
         }
     }
 
@@ -3725,7 +3731,7 @@ impl FileBuilder {
         store: &Store,
         metrics: &mut Metrics,
     ) -> AnyResult<Self> {
-        let (construction, level_count) =
+        let (construction, level_count, frontier_charge) =
             ConstructionState::new(store, candidate, expected_references, metrics)?;
         let leaf = exact_vec_capacity(candidate.k)?;
         let mut levels = exact_vec_capacity(level_count)?;
@@ -3742,6 +3748,7 @@ impl FileBuilder {
             total_raw: 0,
             references: 0,
             construction: Some(construction),
+            frontier_charge: Some(frontier_charge),
         })
     }
 
@@ -3980,17 +3987,26 @@ impl FileBuilder {
     ) -> AnyResult<(ObjectId, Option<FileConstructionProof>)> {
         self.flush_leaf_with_store(store, metrics)?;
         loop {
-            let nonempty: Vec<usize> = self
-                .levels
-                .iter()
-                .enumerate()
-                .filter_map(|(index, children)| (!children.is_empty()).then_some(index))
-                .collect();
-            if nonempty.len() <= 1 {
+            let mut first = None;
+            let mut multiple = false;
+            for (index, children) in self.levels.iter().enumerate() {
+                if children.is_empty() {
+                    continue;
+                }
+                if first.is_some() {
+                    multiple = true;
+                    break;
+                }
+                first = Some(index);
+            }
+            if !multiple {
                 break;
             }
-            let level = nonempty[0];
-            self.flush_level_with_store(store, level, metrics)?;
+            self.flush_level_with_store(
+                store,
+                first.ok_or(CoreError::NonCanonicalPagePartition)?,
+                metrics,
+            )?;
         }
         let mut level = self
             .levels
@@ -4072,6 +4088,11 @@ impl FileBuilder {
             None => None,
         };
         add_len(&mut metrics.mapping_bytes_rewritten, canonical_len)?;
+        drop(children);
+        drop(std::mem::take(&mut self.leaf));
+        drop(std::mem::take(&mut self.levels));
+        drop(std::mem::take(&mut self.level_totals));
+        drop(self.frontier_charge.take());
         Ok((id, proof))
     }
 
@@ -5420,7 +5441,6 @@ fn build_file_construction(
     expected_references: u64,
     metrics: &mut Metrics,
 ) -> AnyResult<(ObjectId, ObjectId, FullCreateConstructionProof)> {
-    store.begin(metrics)?;
     let mut builder = FileBuilder::new_proving(candidate, expected_references, store, metrics)?;
     FastCdc::new().scan(File::open(source)?, |chunk| {
         builder
@@ -5428,11 +5448,13 @@ fn build_file_construction(
             .map_err(|error| core_failure(error.as_ref()))
     })?;
     let (file_root, file_proof) = builder.finish_proven(store, metrics)?;
-    let (root, workspace_evidence) = namespace_file_root_with_evidence(store, file_root, metrics)?;
-    let workspace_proof = file_proof.fold_workspace(workspace_evidence, root, metrics)?;
-    let (transition, transition_evidence) =
-        publish_genesis_transition_with_evidence(store, root, metrics)?;
-    let proof = workspace_proof.fold_transition(transition_evidence, transition, metrics)?;
+    if file_proof.file.object_id != file_root {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    let workspace_proof = file_proof.fold_workspace(store, metrics)?;
+    let root = workspace_proof.root;
+    let proof = workspace_proof.fold_transition(store, metrics)?;
+    let transition = proof.transition;
     Ok((root, transition, proof))
 }
 
@@ -5440,12 +5462,11 @@ fn build_file_proven(
     store: &mut Store,
     source: &Path,
     candidate: Candidate,
-    expected: FullCreateExpectation,
+    expected_references: u64,
     metrics: &mut Metrics,
 ) -> AnyResult<(ObjectId, ObjectId, FullCreateConstructionProof)> {
-    let (root, transition, mut proof) =
-        build_file_construction(store, source, candidate, expected.references, metrics)?;
-    proof.bind_expectation(expected)?;
+    let (root, transition, proof) =
+        build_file_construction(store, source, candidate, expected_references, metrics)?;
     store.mark_construction_proof_issued(&proof)?;
     Ok((root, transition, proof))
 }
@@ -8298,6 +8319,10 @@ fn decode_hex(value: &str) -> AnyResult<Vec<u8>> {
     Ok(decoded)
 }
 
+fn decode_digest(value: &str) -> AnyResult<[u8; 32]> {
+    Ok(ObjectId::from_bytes(&decode_hex(value)?)?.to_bytes())
+}
+
 fn probe_label(value: &str) -> AnyResult<&'static str> {
     match value {
         "zero" => Ok("zero"),
@@ -9668,7 +9693,8 @@ struct CaptureOutcome {
     expected_parent: Option<ObjectId>,
     expected_operations: Option<Vec<delta_codec::TransitionOperation>>,
     expected_operations_charge: Option<CapacityCharge>,
-    closure_digest: [u8; 32],
+    // Full-create closure is deliberately unavailable until fresh root-first verification.
+    closure_digest: Option<[u8; 32]>,
     actual_references: u64,
     phases: PhaseTimes,
     capture_ns: u128,
@@ -9781,10 +9807,89 @@ fn capture_same_middle(
             expected_parent: Some(base_root),
             expected_operations: Some(expected_operations),
             expected_operations_charge: Some(expected_operations_charge),
-            closure_digest: expected.closure,
+            closure_digest: Some(expected.closure),
             actual_references: references,
             phases: PhaseTimes {
                 same_open_authority_establishment_ns: authority_ns,
+                canonical_cas_mapping_stage_ns: mapping_end
+                    .duration_since(durable_capture_start)
+                    .as_nanos(),
+                precommit_closure_validation_ns: precommit_end
+                    .duration_since(mapping_end)
+                    .as_nanos(),
+                sqlite_commit_durability_ns: commit_end.duration_since(precommit_end).as_nanos(),
+                durable_capture_total_ns: capture_ns,
+                ..PhaseTimes::default()
+            },
+            capture_ns,
+            durable_capture_start,
+            commit_end,
+            authority_metrics_started,
+            authority_metrics_ended,
+            mapping_metrics_started,
+            mapping_metrics_ended,
+            precommit_metrics_started,
+            precommit_metrics_ended,
+            commit_metrics_started,
+            commit_metrics_ended,
+            publication,
+        })
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn capture_full_create(
+    store: &mut Store,
+    source: &Path,
+    candidate: Candidate,
+    source_size: u64,
+    expected_references: u64,
+    expected_fingerprint: &str,
+    expected_sequence: &str,
+    metrics: &mut Metrics,
+) -> AnyResult<CaptureOutcome> {
+    let expected_fingerprint = decode_digest(expected_fingerprint)?;
+    let expected_sequence = decode_digest(expected_sequence)?;
+    let authority_metrics_started = *metrics;
+    let authority_metrics_ended = *metrics;
+    store.start_sqlite_observations(metrics);
+    let durable_capture_start = Instant::now();
+    let mapping_metrics_started = *metrics;
+    store.transaction_attempt(metrics, |store, metrics| {
+        let (root_id, transition_id, mut proof) =
+            build_file_proven(store, source, candidate, expected_references, metrics)?;
+        let mapping_end = Instant::now();
+        let mapping_metrics_ended = *metrics;
+
+        let precommit_metrics_started = *metrics;
+        let qualification = proof.consume(store, metrics)?;
+        validate_full_create_qualification(
+            &qualification,
+            expected_fingerprint,
+            expected_sequence,
+            expected_references,
+            source_size,
+            root_id,
+            transition_id,
+        )?;
+        drop(proof);
+        let precommit_end = Instant::now();
+        let precommit_metrics_ended = *metrics;
+
+        let commit_metrics_started = *metrics;
+        let publication = store.publish(None, root_id, transition_id, metrics)?;
+        let commit_end = Instant::now();
+        let commit_metrics_ended = *metrics;
+        let capture_ns = commit_end.duration_since(durable_capture_start).as_nanos();
+        Ok(CaptureOutcome {
+            root_id,
+            transition_id,
+            expected_parent: None,
+            expected_operations: None,
+            expected_operations_charge: None,
+            closure_digest: None,
+            actual_references: qualification.references,
+            phases: PhaseTimes {
                 canonical_cas_mapping_stage_ns: mapping_end
                     .duration_since(durable_capture_start)
                     .as_nanos(),
@@ -9917,16 +10022,7 @@ fn run_row(
         (_, Some(_)) => return Err("non-same-middle row contains an edit oracle".into()),
         (_, None) => (None, None),
     };
-    let full_create_expected = (operation == "full")
-        .then(|| {
-            full_create_expectation(
-                base,
-                expected_reference_count,
-                expected_fingerprint_owned.as_deref(),
-                expected_sequence_owned.as_deref(),
-            )
-        })
-        .transpose()?;
+    let full_create_golden = (operation == "full").then_some(base).flatten();
     let qualification_mode = qualification_mode()?;
     let expected_dir_replacement = if operation == "dir-replace" {
         Some((
@@ -10022,6 +10118,21 @@ fn run_row(
             base_transition,
             &mut metrics,
         )?
+    } else if operation == "full" {
+        capture_full_create(
+            &mut store,
+            &source,
+            candidate,
+            size,
+            expected_reference_count.ok_or(CoreError::LengthOverflow)?,
+            expected_fingerprint_owned
+                .as_deref()
+                .ok_or("missing full-create fingerprint")?,
+            expected_sequence_owned
+                .as_deref()
+                .ok_or("missing full-create CDC sequence")?,
+            &mut metrics,
+        )?
     } else {
         store.start_sqlite_observations(&mut metrics);
         let durable_capture_start = Instant::now();
@@ -10042,21 +10153,8 @@ fn run_row(
         } else {
             None
         };
-        let (root_id, transition_id, mut full_create_proof) = if operation == "full" {
-            let stage_started = durable_cursor;
-            let (root_id, transition_id, proof) = build_file_proven(
-                &mut store,
-                &source,
-                candidate,
-                full_create_expected.ok_or(CoreError::PublicationConflict)?,
-                &mut metrics,
-            )?;
-            let stage_end = Instant::now();
-            phases.canonical_cas_mapping_stage_ns =
-                stage_end.duration_since(stage_started).as_nanos();
-            durable_cursor = stage_end;
-            (root_id, transition_id, Some(proof))
-        } else if operation == "plus1-early" || operation == "plus1-middle" {
+        let (root_id, transition_id) = if operation == "plus1-early" || operation == "plus1-middle"
+        {
             let result = edit_file(
                 &mut store,
                 candidate,
@@ -10069,21 +10167,21 @@ fn run_row(
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(durable_cursor).as_nanos();
             durable_cursor = stage_end;
-            (result.0, result.1, None)
+            (result.0, result.1)
         } else if operation == "dir-create" {
             let result = build_directory(&mut store, candidate, false, false, &mut metrics)?;
             let stage_end = Instant::now();
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(durable_cursor).as_nanos();
             durable_cursor = stage_end;
-            (result.0, result.1, None)
+            (result.0, result.1)
         } else if operation == "dir-replace" || operation == "dir-leading" {
             let result = edit_directory(&mut store, candidate, operation, &mut metrics)?;
             let stage_end = Instant::now();
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(durable_cursor).as_nanos();
             durable_cursor = stage_end;
-            (result.0, result.1, None)
+            (result.0, result.1)
         } else {
             return Err(format!("unknown operation {operation}").into());
         };
@@ -10112,25 +10210,7 @@ fn run_row(
             } else {
                 (None, None)
             };
-        let (closure_digest, actual_references) = if operation == "full" {
-            let qualification = full_create_proof
-                .as_mut()
-                .ok_or(CoreError::ValidationAuthorityUnavailable)?
-                .consume(
-                    &mut store,
-                    full_create_expected.ok_or(CoreError::PublicationConflict)?,
-                    &mut metrics,
-                )?;
-            if qualification.root != root_id
-                || qualification.transition != transition_id
-                || qualification.total_raw != size
-            {
-                return Err(CoreError::PublicationConflict.into());
-            }
-            let result = (qualification.closure, qualification.references);
-            drop(full_create_proof.take());
-            result
-        } else {
+        let (closure_digest, actual_references) = {
             let transition_digest = verify_transition(
                 &store,
                 transition_id,
@@ -10192,7 +10272,7 @@ fn run_row(
             expected_parent,
             expected_operations,
             expected_operations_charge: _expected_operations_charge,
-            closure_digest,
+            closure_digest: Some(closure_digest),
             actual_references,
             phases,
             capture_ns,
@@ -10333,12 +10413,13 @@ fn run_row(
         if reconstructed_references != fresh_references {
             return Err(CoreError::PublicationConflict.into());
         }
+        let fresh_closure = combined_closure_digest(fresh_transition_digest, fresh_content_digest);
         if fresh_references != actual_references
-            || combined_closure_digest(fresh_transition_digest, fresh_content_digest)
-                != closure_digest
+            || closure_digest.is_some_and(|expected| expected != fresh_closure)
         {
             return Err(CoreError::PublicationConflict.into());
         }
+        validate_full_create_golden(full_create_golden, root_id, transition_id, fresh_closure)?;
         let lifecycle_end = Instant::now();
         let range_metrics_ended = metrics;
         phases.range_verification_ns = lifecycle_end.duration_since(reconstruction_end).as_nanos();
@@ -10420,7 +10501,7 @@ fn run_row(
             expected_reference_count,
             report_expected_sequence.as_deref(),
             fresh_references,
-            closure_digest,
+            fresh_closure,
             metrics,
             physical_before,
             physical_after,
@@ -11620,6 +11701,16 @@ mod tests {
             .expect("32-byte digest")
     }
 
+    #[derive(Clone, Copy)]
+    struct ConstructionGolden {
+        source_fingerprint: [u8; 32],
+        cdc_sequence: [u8; 32],
+        references: u64,
+        root: ObjectId,
+        transition: ObjectId,
+        closure: [u8; 32],
+    }
+
     fn build_proven_chunks(
         store: &mut Store,
         candidate: Candidate,
@@ -11629,7 +11720,7 @@ mod tests {
         ObjectId,
         ObjectId,
         FullCreateConstructionProof,
-        FullCreateExpectation,
+        ConstructionGolden,
     ) {
         store.begin(metrics).expect("begin construction");
         let mut builder = FileBuilder::new_proving(candidate, chunks.len() as u64, store, metrics)
@@ -11647,22 +11738,21 @@ mod tests {
         let (file_root, file_proof) = builder
             .finish_proven(store, metrics)
             .expect("finish proven file");
-        let (root, root_evidence) =
-            namespace_file_root_with_evidence(store, file_root, metrics).expect("workspace");
+        assert_eq!(file_proof.file.object_id, file_root);
         let workspace = file_proof
-            .fold_workspace(root_evidence, root, metrics)
+            .fold_workspace(store, metrics)
             .expect("workspace proof");
-        let (transition, transition_evidence) =
-            publish_genesis_transition_with_evidence(store, root, metrics).expect("transition");
-        let mut proof = workspace
-            .fold_transition(transition_evidence, transition, metrics)
+        let root = workspace.root;
+        let proof = workspace
+            .fold_transition(store, metrics)
             .expect("transition proof");
+        let transition = proof.transition;
         let transition_digest = verify_transition(store, transition, None, root, None, metrics)
             .expect("transition shadow");
         let (content_digest, references, _) =
             verify_file(store, root, candidate, None, None, metrics).expect("file shadow");
         assert_eq!(references, chunks.len() as u64);
-        let expectation = FullCreateExpectation {
+        let golden = ConstructionGolden {
             source_fingerprint: *source.finalize().as_bytes(),
             cdc_sequence: *sequence.finalize().as_bytes(),
             references,
@@ -11670,13 +11760,10 @@ mod tests {
             transition,
             closure: combined_closure_digest(transition_digest, content_digest),
         };
-        proof
-            .bind_expectation(expectation)
-            .expect("bind expectation");
         store
             .mark_construction_proof_issued(&proof)
             .expect("proof issuance");
-        (root, transition, proof, expectation)
+        (root, transition, proof, golden)
     }
 
     #[test]
@@ -11701,6 +11788,57 @@ mod tests {
     }
 
     #[test]
+    fn f2_frontier_q_stays_owned_through_unary_root_finalization() {
+        let candidate = Candidate {
+            name: "F2-Q-UNARY",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+        let database = test_path("f2-q-unary.sqlite");
+        let mut store = Store::open(&database, candidate).expect("store");
+        let mut metrics = Metrics::default();
+        store.begin(&mut metrics).expect("begin");
+        let (_, frontier) = construction_frontier_bytes(candidate, 4).expect("frontier");
+        let expected_live = Q_CONSTRUCTION_STATE_BYTES + frontier + Q_PUT_EVIDENCE_BYTES;
+        let mut builder =
+            FileBuilder::new_proving(candidate, 4, &store, &mut metrics).expect("builder");
+        assert_eq!(q_current(), expected_live as u64);
+        for chunk in [b"aa".as_slice(), b"bb", b"cc", b"dd"] {
+            builder
+                .push_bytes(&mut store, chunk, &mut metrics)
+                .expect("push chunk");
+        }
+        assert_eq!(q_current(), expected_live as u64);
+        let (file, file_proof) = builder
+            .finish_proven(&mut store, &mut metrics)
+            .expect("finish file");
+        assert_eq!(file, file_proof.file.object_id);
+        assert_eq!(
+            q_current(),
+            (Q_CONSTRUCTION_STATE_BYTES + Q_PUT_EVIDENCE_BYTES) as u64
+        );
+        let workspace = file_proof
+            .fold_workspace(&mut store, &mut metrics)
+            .expect("workspace");
+        let mut proof = workspace
+            .fold_transition(&mut store, &mut metrics)
+            .expect("transition");
+        store.mark_construction_proof_issued(&proof).expect("issue");
+        let _ = proof.consume(&mut store, &mut metrics).expect("consume");
+        assert_eq!(
+            q_current(),
+            (Q_CONSTRUCTION_STATE_BYTES + Q_PUT_EVIDENCE_BYTES) as u64
+        );
+        drop(proof);
+        assert_eq!(q_current(), 0);
+        store.rollback(&mut metrics).expect("rollback");
+        finish_q(&mut metrics).expect("terminal Q");
+        drop(store);
+        remove_sqlite_image(&database).expect("cleanup");
+    }
+
+    #[test]
     fn f2_shadow_proof_matches_the_full_verifier_exactly() {
         let source = test_path("f2-shadow.source");
         fill_source(&source, 256 * 1024, 0x11).expect("source");
@@ -11711,6 +11849,7 @@ mod tests {
         let database = test_path("f2-shadow.sqlite");
         let mut store = Store::open(&database, candidate).expect("store");
         let mut metrics = Metrics::default();
+        store.begin(&mut metrics).expect("begin construction");
         let (root, transition, mut proof) = build_file_construction(
             &mut store,
             &source,
@@ -11732,28 +11871,20 @@ mod tests {
         )
         .expect("full file verifier");
         let closure = combined_closure_digest(transition_digest, content_digest);
-        let expectation = FullCreateExpectation {
-            source_fingerprint: digest_array(&fingerprint),
-            cdc_sequence: digest_array(&sequence),
-            references: expected_references,
-            root,
-            transition,
-            closure,
-        };
-        proof
-            .bind_expectation(expectation)
-            .expect("bind expectation");
         store
             .mark_construction_proof_issued(&proof)
             .expect("issue proof");
         let qualification = proof
-            .consume(&mut store, expectation, &mut metrics)
+            .consume(&mut store, &mut metrics)
             .expect("consume proof");
         assert_eq!(qualification.references, references);
         assert_eq!(qualification.total_raw, total_raw);
         assert_eq!(qualification.root, root);
         assert_eq!(qualification.transition, transition);
-        assert_eq!(qualification.closure, closure);
+        assert_eq!(
+            combined_closure_digest(transition_digest, content_digest),
+            closure
+        );
         assert_eq!(qualification.source_fingerprint, digest_array(&fingerprint));
         assert_eq!(qualification.cdc_sequence, digest_array(&sequence));
         assert_eq!(metrics.construction_proof_consumptions, 1);
@@ -11776,7 +11907,7 @@ mod tests {
                 .expect("edge equation")
         );
         let error = proof
-            .consume(&mut store, expectation, &mut metrics)
+            .consume(&mut store, &mut metrics)
             .expect_err("proof is single-use");
         assert_eq!(
             error.downcast_ref::<CoreError>(),
@@ -11811,16 +11942,22 @@ mod tests {
                     }
                 })
                 .collect::<Vec<_>>();
-            let (_, _, mut proof, expectation) =
+            let (_, _, mut proof, golden) =
                 build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
             let qualification = proof
-                .consume(&mut store, expectation, &mut metrics)
+                .consume(&mut store, &mut metrics)
                 .expect("qualification");
             assert_eq!(qualification.references, count as u64);
             assert_eq!(
                 qualification.total_raw,
                 chunks.iter().map(|chunk| chunk.len() as u64).sum::<u64>()
             );
+            assert_eq!(qualification.source_fingerprint, golden.source_fingerprint);
+            assert_eq!(qualification.cdc_sequence, golden.cdc_sequence);
+            assert_eq!(qualification.references, golden.references);
+            assert_eq!(qualification.root, golden.root);
+            assert_eq!(qualification.transition, golden.transition);
+            assert_ne!(golden.closure, [0; 32]);
             assert_eq!(
                 proof.workspace.file.file.level,
                 file_codec::expected_file_level(
@@ -11876,36 +12013,36 @@ mod tests {
         remove_sqlite_image(&summary_database).expect("summary cleanup");
 
         for case in [
-            "source",
-            "sequence",
-            "count",
-            "root",
-            "transition",
-            "closure",
+            "open",
+            "store",
             "authority",
+            "epoch",
+            "profile",
+            "transaction",
         ] {
             let database = test_path(&format!("f2-{case}-drift.sqlite"));
             let mut store = Store::open(&database, candidate).expect("store");
             let mut metrics = Metrics::default();
             let chunks = vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec()];
-            let (_, _, mut proof, mut expectation) =
+            let (_, _, mut proof, _) =
                 build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
             match case {
-                "source" => expectation.source_fingerprint[0] ^= 1,
-                "sequence" => expectation.cdc_sequence[0] ^= 1,
-                "count" => expectation.references += 1,
-                "root" => expectation.root = ObjectId::for_bytes(b"wrong-root"),
-                "transition" => expectation.transition = ObjectId::for_bytes(b"wrong-transition"),
-                "closure" => expectation.closure[0] ^= 1,
-                "authority" => store.validation_authority_id[0] ^= 1,
+                "open" => proof.workspace.file.scope.open_identity ^= 1,
+                "store" => proof.workspace.file.scope.store_instance_id[0] ^= 1,
+                "authority" => proof.workspace.file.scope.validation_authority_id[0] ^= 1,
+                "epoch" => proof.workspace.file.scope.integrity_epoch ^= 1,
+                "profile" => proof.workspace.file.scope.profile[0] ^= 1,
+                "transaction" => proof.workspace.file.scope.transaction_identity ^= 1,
                 _ => unreachable!(),
             }
             let error = proof
-                .consume(&mut store, expectation, &mut metrics)
+                .consume(&mut store, &mut metrics)
                 .expect_err("drift must fail");
             assert!(matches!(
                 error.downcast_ref::<CoreError>(),
-                Some(CoreError::PublicationConflict | CoreError::InvalidValidationReceipt)
+                Some(
+                    CoreError::ValidationAuthorityUnavailable | CoreError::InvalidValidationReceipt
+                )
             ));
             drop(proof);
             store.rollback(&mut metrics).expect("rollback drift");
@@ -11918,7 +12055,7 @@ mod tests {
         let mut store = Store::open(&mutation_database, candidate).expect("store");
         let mut metrics = Metrics::default();
         let chunks = vec![b"mutation".to_vec()];
-        let (_, _, mut proof, expectation) =
+        let (_, _, mut proof, _) =
             build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
         let extra = encode_canonical_object(&Object::bytes(b"extra".to_vec()).expect("extra"))
             .expect("extra canonical");
@@ -11926,7 +12063,7 @@ mod tests {
             .put(ObjectId::for_bytes(&extra), &extra, &mut metrics)
             .expect("later mutation");
         let error = proof
-            .consume(&mut store, expectation, &mut metrics)
+            .consume(&mut store, &mut metrics)
             .expect_err("mutation invalidates proof");
         assert_eq!(
             error.downcast_ref::<CoreError>(),
@@ -11952,7 +12089,7 @@ mod tests {
             let mut store = Store::open(&database, candidate).expect("store");
             let mut metrics = Metrics::default();
             let chunks = vec![b"lifecycle".to_vec()];
-            let (root, transition, mut proof, expectation) =
+            let (root, transition, mut proof, _) =
                 build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
             match case {
                 "rollback" => store.rollback(&mut metrics).expect("rollback"),
@@ -11971,7 +12108,7 @@ mod tests {
                 _ => unreachable!(),
             }
             let error = proof
-                .consume(&mut store, expectation, &mut metrics)
+                .consume(&mut store, &mut metrics)
                 .expect_err("lifecycle invalidation");
             assert_eq!(
                 error.downcast_ref::<CoreError>(),
@@ -12000,8 +12137,9 @@ mod tests {
         let mut role_store = Store::open(&role_database, candidate).expect("store");
         let mut role_metrics = Metrics::default();
         role_store.begin(&mut role_metrics).expect("begin");
-        let (mut state, _) = ConstructionState::new(&role_store, candidate, 0, &mut role_metrics)
-            .expect("construction state");
+        let (mut state, _, frontier_charge) =
+            ConstructionState::new(&role_store, candidate, 0, &mut role_metrics)
+                .expect("construction state");
         let (id, len, evidence) = role_store
             .put_generated_bytes_with_evidence(b"role", &mut role_metrics)
             .expect("bytes evidence");
@@ -12010,6 +12148,7 @@ mod tests {
             .expect_err("wrong role");
         assert_eq!(error, CoreError::ValidationAuthorityUnavailable);
         drop(state);
+        drop(frontier_charge);
         role_store
             .rollback(&mut role_metrics)
             .expect("role rollback");
@@ -12021,7 +12160,7 @@ mod tests {
         let mut missing_store = Store::open(&missing_database, candidate).expect("store");
         let mut missing_metrics = Metrics::default();
         let chunks = vec![b"missing".to_vec()];
-        let (root, _, mut proof, expectation) =
+        let (root, _, mut proof, _) =
             build_proven_chunks(&mut missing_store, candidate, &chunks, &mut missing_metrics);
         let missing_id = canonical_bytes(chunks[0].clone()).expect("chunk id").0;
         missing_store
@@ -12046,7 +12185,7 @@ mod tests {
             Some(&CandidateError::MissingObject(missing_id))
         );
         let proof_error = proof
-            .consume(&mut missing_store, expectation, &mut missing_metrics)
+            .consume(&mut missing_store, &mut missing_metrics)
             .expect_err("mutation invalidates proof");
         assert_eq!(
             proof_error.downcast_ref::<CoreError>(),
@@ -12120,14 +12259,7 @@ mod tests {
         )
         .expect("oracle file")
         .0;
-        let expectation = FullCreateExpectation {
-            source_fingerprint: digest_array(&fingerprint),
-            cdc_sequence: digest_array(&sequence),
-            references,
-            root,
-            transition,
-            closure: combined_closure_digest(transition_digest, content_digest),
-        };
+        let golden_closure = combined_closure_digest(transition_digest, content_digest);
         oracle
             .rollback(&mut oracle_metrics)
             .expect("oracle rollback");
@@ -12136,38 +12268,48 @@ mod tests {
         let database = test_path("f2-publish.sqlite");
         let mut store = Store::open(&database, candidate).expect("store");
         let mut metrics = Metrics::default();
-        let (actual_root, actual_transition, mut proof) =
-            build_file_proven(&mut store, &source, candidate, expectation, &mut metrics)
-                .expect("candidate build");
-        let precommit = metrics;
-        let qualification = proof
-            .consume(&mut store, expectation, &mut metrics)
-            .expect("candidate qualification");
-        assert_eq!(qualification.root, root);
-        assert_eq!(qualification.transition, transition);
+        let outcome = capture_full_create(
+            &mut store,
+            &source,
+            candidate,
+            256 * 1024,
+            references,
+            &fingerprint,
+            &sequence,
+            &mut metrics,
+        )
+        .expect("standalone candidate capture");
+        assert_eq!(outcome.root_id, root);
+        assert_eq!(outcome.transition_id, transition);
+        assert!(outcome.closure_digest.is_none());
         assert_eq!(
-            metric_delta(metrics.sql_query_calls, precommit.sql_query_calls),
+            metric_delta(
+                outcome.precommit_metrics_ended.sql_query_calls,
+                outcome.precommit_metrics_started.sql_query_calls
+            ),
             Ok(1)
         );
         assert_eq!(
-            metric_delta(metrics.sql_rows_returned, precommit.sql_rows_returned),
-            Ok(0)
-        );
-        assert_eq!(
-            metric_delta(metrics.row_blob_reads, precommit.row_blob_reads),
+            metric_delta(
+                outcome.precommit_metrics_ended.sql_rows_returned,
+                outcome.precommit_metrics_started.sql_rows_returned
+            ),
             Ok(0)
         );
         assert_eq!(
             metric_delta(
-                metrics.objects_authenticated,
-                precommit.objects_authenticated
+                outcome.precommit_metrics_ended.row_blob_reads,
+                outcome.precommit_metrics_started.row_blob_reads
             ),
             Ok(0)
         );
-        drop(proof);
-        store
-            .publish(None, actual_root, actual_transition, &mut metrics)
-            .expect("one COMMIT");
+        assert_eq!(
+            metric_delta(
+                outcome.precommit_metrics_ended.objects_authenticated,
+                outcome.precommit_metrics_started.objects_authenticated
+            ),
+            Ok(0)
+        );
         assert_eq!(metrics.transactions, 1);
         assert_eq!(metrics.commits, 1);
         drop(store);
@@ -12194,13 +12336,485 @@ mod tests {
         assert_eq!(total_raw, 256 * 1024);
         assert_eq!(
             combined_closure_digest(fresh_transition, fresh_content),
-            expectation.closure
+            golden_closure
         );
         drop(fresh);
         finish_q(&mut metrics).expect("terminal Q");
         remove_sqlite_image(&oracle_database).expect("oracle cleanup");
         remove_sqlite_image(&database).expect("database cleanup");
         fs::remove_file(source).expect("source cleanup");
+    }
+
+    #[test]
+    fn f2_standalone_mismatch_replay_second_issuance_and_overflow_are_rejected() {
+        let candidate = Candidate {
+            name: "F2-BINDINGS",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+        let chunks = vec![b"left".to_vec(), b"right".to_vec(), b"tail".to_vec()];
+        for case in ["source", "sequence", "count", "total", "root", "transition"] {
+            let database = test_path(&format!("f2-binding-{case}.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let mut metrics = Metrics::default();
+            let (_, _, mut proof, golden) =
+                build_proven_chunks(&mut store, candidate, &chunks, &mut metrics);
+            let qualification = proof
+                .consume(&mut store, &mut metrics)
+                .expect("construction qualification");
+            let mut source = golden.source_fingerprint;
+            let mut sequence = golden.cdc_sequence;
+            let mut references = golden.references;
+            let mut total = qualification.total_raw;
+            let mut root = golden.root;
+            let mut transition = golden.transition;
+            match case {
+                "source" => source[0] ^= 1,
+                "sequence" => sequence[0] ^= 1,
+                "count" => references += 1,
+                "total" => total += 1,
+                "root" => root = ObjectId::for_bytes(b"wrong root"),
+                "transition" => transition = ObjectId::for_bytes(b"wrong transition"),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                validate_full_create_qualification(
+                    &qualification,
+                    source,
+                    sequence,
+                    references,
+                    total,
+                    root,
+                    transition,
+                ),
+                Err(CoreError::PublicationConflict)
+            );
+            drop(proof);
+            store.rollback(&mut metrics).expect("rollback mismatch");
+            finish_q(&mut metrics).expect("mismatch Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("mismatch cleanup");
+        }
+
+        let first_database = test_path("f2-cross-store-first.sqlite");
+        let second_database = test_path("f2-cross-store-second.sqlite");
+        let mut first = Store::open(&first_database, candidate).expect("first store");
+        let mut second = Store::open(&second_database, candidate).expect("second store");
+        let mut metrics = Metrics::default();
+        let (_, _, mut proof, _) =
+            build_proven_chunks(&mut first, candidate, &chunks, &mut metrics);
+        assert_eq!(
+            first.mark_construction_proof_issued(&proof),
+            Err(CoreError::ValidationAuthorityUnavailable)
+        );
+        second.begin(&mut metrics).expect("second begin");
+        let error = proof
+            .consume(&mut second, &mut metrics)
+            .expect_err("cross-store replay");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::ValidationAuthorityUnavailable)
+        );
+        second.rollback(&mut metrics).expect("second rollback");
+        first.rollback(&mut metrics).expect("first rollback");
+        drop(proof);
+        finish_q(&mut metrics).expect("cross-store Q");
+        drop(first);
+        drop(second);
+        remove_sqlite_image(&first_database).expect("first cleanup");
+        remove_sqlite_image(&second_database).expect("second cleanup");
+
+        let overflow_source = test_path("f2-consume-overflow.source");
+        fill_source(&overflow_source, 64 * 1024, 0x35).expect("overflow source");
+        let (references, _, _, _, _) =
+            expected_file_observations(&overflow_source, "full", 64 * 1024, candidate)
+                .expect("overflow observations");
+        let overflow_database = test_path("f2-consume-overflow.sqlite");
+        let mut overflow_store = Store::open(&overflow_database, candidate).expect("store");
+        let mut overflow_metrics = Metrics::default();
+        let error = overflow_store
+            .transaction_attempt(&mut overflow_metrics, |store, metrics| {
+                let (_, _, mut proof) =
+                    build_file_proven(store, &overflow_source, candidate, references, metrics)?;
+                metrics.construction_proof_consumptions = u64::MAX;
+                proof.consume(store, metrics)?;
+                Ok(())
+            })
+            .expect_err("consumption counter overflow");
+        assert!(error.downcast_ref::<PublicationFailure>().is_some());
+        assert!(overflow_store.active_transaction.is_none());
+        finish_q(&mut overflow_metrics).expect("overflow Q");
+        drop(overflow_store);
+        remove_sqlite_image(&overflow_database).expect("overflow cleanup");
+        fs::remove_file(overflow_source).expect("overflow source cleanup");
+    }
+
+    #[test]
+    fn f2_transaction_attempt_cleans_source_allocation_and_fold_failures() {
+        let candidate = FILE_CANDIDATES[0];
+        let zero = "00".repeat(32);
+
+        let missing_database = test_path("f2-cleanup-missing-source.sqlite");
+        let mut missing_store = Store::open(&missing_database, candidate).expect("store");
+        let mut missing_metrics = Metrics::default();
+        let error = capture_full_create(
+            &mut missing_store,
+            &test_path("f2-source-does-not-exist"),
+            candidate,
+            1,
+            0,
+            &zero,
+            &zero,
+            &mut missing_metrics,
+        )
+        .err()
+        .expect("missing source");
+        assert!(error.downcast_ref::<PublicationFailure>().is_some());
+        assert!(missing_store.active_transaction.is_none());
+        assert_eq!(missing_metrics.transactions, 1);
+        assert_eq!(missing_metrics.commits, 0);
+        finish_q(&mut missing_metrics).expect("missing-source Q");
+        drop(missing_store);
+        remove_sqlite_image(&missing_database).expect("missing cleanup");
+
+        let source = test_path("f2-cleanup-fold.source");
+        fill_source(&source, 64 * 1024, 0x44).expect("source");
+        let (_, fingerprint, sequence, _, _) =
+            expected_file_observations(&source, "full", 64 * 1024, candidate)
+                .expect("observations");
+        let fold_database = test_path("f2-cleanup-fold.sqlite");
+        let mut fold_store = Store::open(&fold_database, candidate).expect("store");
+        let mut fold_metrics = Metrics::default();
+        let error = capture_full_create(
+            &mut fold_store,
+            &source,
+            candidate,
+            64 * 1024,
+            0,
+            &fingerprint,
+            &sequence,
+            &mut fold_metrics,
+        )
+        .err()
+        .expect("wrong construction count");
+        assert!(error.downcast_ref::<PublicationFailure>().is_some());
+        assert!(fold_store.active_transaction.is_none());
+        assert_eq!(fold_metrics.commits, 0);
+        finish_q(&mut fold_metrics).expect("fold Q");
+        drop(fold_store);
+        remove_sqlite_image(&fold_database).expect("fold cleanup");
+        fs::remove_file(source).expect("source cleanup");
+
+        let allocation_database = test_path("f2-cleanup-allocation.sqlite");
+        let mut allocation_store = Store::open(&allocation_database, candidate).expect("store");
+        let mut allocation_metrics = Metrics::default();
+        let oversized = Candidate {
+            name: "F2-ALLOCATION-OVERFLOW",
+            k: usize::MAX,
+            f: 2,
+            directory_page: candidate.directory_page,
+        };
+        let error = allocation_store
+            .transaction_attempt(&mut allocation_metrics, |store, metrics| {
+                let _ = FileBuilder::new_proving(oversized, 1, store, metrics)?;
+                Ok(())
+            })
+            .expect_err("allocation overflow");
+        assert!(error.downcast_ref::<PublicationFailure>().is_some());
+        assert!(allocation_store.active_transaction.is_none());
+        finish_q(&mut allocation_metrics).expect("allocation Q");
+        drop(allocation_store);
+        remove_sqlite_image(&allocation_database).expect("allocation cleanup");
+    }
+
+    #[test]
+    fn f2_unary_collapse_rejects_equal_total_wrong_child_order_and_corrupt_branch() {
+        let candidate = Candidate {
+            name: "F2-UNARY",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+        for case in ["wrong-child", "wrong-order", "corrupt-branch"] {
+            let database = test_path(&format!("f2-unary-{case}.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let mut metrics = Metrics::default();
+            store.begin(&mut metrics).expect("begin");
+            let mut builder =
+                FileBuilder::new_proving(candidate, 4, &store, &mut metrics).expect("builder");
+            for chunk in [b"aa".as_slice(), b"bb", b"cc", b"dd"] {
+                builder
+                    .push_bytes(&mut store, chunk, &mut metrics)
+                    .expect("push chunk");
+            }
+            let branch = builder.levels[1][0].object_id;
+            match case {
+                "wrong-child" => {
+                    builder.levels[1][0].object_id = ObjectId::for_bytes(b"equal-total-wrong");
+                }
+                "wrong-order" => {
+                    let bytes = store.get_bytes(branch, &mut metrics).expect("branch bytes");
+                    let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_BRANCH_TAG)
+                        .expect("branch mapping");
+                    let (level, mut children) =
+                        file_codec::parse_file_children(payload, true).expect("branch children");
+                    children.swap(0, 1);
+                    let wrong = canonical_bytes(
+                        file_codec::encode_file_branch(level, &children).expect("wrong order"),
+                    )
+                    .expect("wrong canonical")
+                    .1;
+                    drop(bytes);
+                    store
+                        .connection
+                        .execute(
+                            "UPDATE wp4m_objects SET canonical_bytes = ?1 WHERE object_id = ?2",
+                            params![wrong, branch.as_bytes().as_slice()],
+                        )
+                        .expect("inject wrong order");
+                }
+                "corrupt-branch" => {
+                    store
+                        .connection
+                        .execute(
+                            "UPDATE wp4m_objects SET canonical_bytes = ?1 WHERE object_id = ?2",
+                            params![b"corrupt".as_slice(), branch.as_bytes().as_slice()],
+                        )
+                        .expect("corrupt branch");
+                }
+                _ => unreachable!(),
+            }
+            let error = builder
+                .finish_proven(&mut store, &mut metrics)
+                .err()
+                .expect("unary collapse must reject");
+            assert!(matches!(
+                error.downcast_ref::<CoreError>(),
+                Some(
+                    CoreError::NonCanonicalPagePartition
+                        | CoreError::IdentityMismatch
+                        | CoreError::UnexpectedEof
+                )
+            ));
+            store.rollback(&mut metrics).expect("rollback");
+            finish_q(&mut metrics).expect("unary Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("unary cleanup");
+        }
+    }
+
+    #[test]
+    fn f2_optional_golden_and_genesis_transition_contract_are_exact() {
+        let root = ObjectId::for_bytes(b"root");
+        let transition = ObjectId::for_bytes(b"transition");
+        let closure = [7_u8; 32];
+        assert_eq!(
+            validate_full_create_golden(None, root, transition, closure),
+            Ok(())
+        );
+        for case in ["root", "transition", "closure"] {
+            let mut golden = (root, transition, closure);
+            match case {
+                "root" => golden.0 = ObjectId::for_bytes(b"wrong root"),
+                "transition" => golden.1 = ObjectId::for_bytes(b"wrong transition"),
+                "closure" => golden.2[0] ^= 1,
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                validate_full_create_golden(Some(golden), root, transition, closure),
+                Err(CoreError::PublicationConflict)
+            );
+        }
+
+        let candidate = FILE_CANDIDATES[0];
+        for case in ["parent", "child", "kind", "operation"] {
+            let database = test_path(&format!("f2-transition-{case}.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let mut metrics = Metrics::default();
+            let error = store
+                .transaction_attempt(&mut metrics, |store, metrics| {
+                    let root_object = Object::directory(Vec::new())?;
+                    let root_canonical = encode_canonical_object(&root_object)?;
+                    let expected_root = ObjectId::for_bytes(&root_canonical);
+                    store.put(expected_root, &root_canonical, metrics)?;
+                    let bytes = encode_canonical_object(&Object::bytes(b"wrong kind".to_vec())?)?;
+                    let bytes_id = ObjectId::for_bytes(&bytes);
+                    store.put(bytes_id, &bytes, metrics)?;
+                    let wrong_transition = match case {
+                        "parent" => {
+                            publish_transition(store, Some(expected_root), expected_root, metrics)?
+                        }
+                        "child" => publish_transition(
+                            store,
+                            None,
+                            ObjectId::for_bytes(b"wrong child"),
+                            metrics,
+                        )?,
+                        "kind" => publish_transition(store, None, bytes_id, metrics)?,
+                        "operation" => {
+                            let operation = delta_codec::TransitionOperation::Replace {
+                                path: b"file".to_vec(),
+                                before: bytes_id,
+                                after: bytes_id,
+                            };
+                            publish_transition_with_operations(
+                                store,
+                                None,
+                                expected_root,
+                                &[operation],
+                                metrics,
+                            )?
+                        }
+                        _ => unreachable!(),
+                    };
+                    verify_transition(store, wrong_transition, None, expected_root, None, metrics)?;
+                    Ok(())
+                })
+                .expect_err("non-genesis transition");
+            assert!(error.downcast_ref::<PublicationFailure>().is_some());
+            assert!(store.active_transaction.is_none());
+            finish_q(&mut metrics).expect("transition Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("transition cleanup");
+        }
+
+        for case in ["name", "kind", "multiple"] {
+            let database = test_path(&format!("f2-namespace-{case}.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let mut metrics = Metrics::default();
+            let error = store
+                .transaction_attempt(&mut metrics, |store, metrics| {
+                    let file_inner = file_codec::encode_file_root(0, 0, 0, 0, &[])?;
+                    let (file, file_canonical) = canonical_bytes(file_inner)?;
+                    store.put(file, &file_canonical, metrics)?;
+                    let name =
+                        CanonicalName::from_bytes(if case == "name" { b"wrong" } else { b"file" })?;
+                    let kind = if case == "kind" {
+                        ObjectKind::Directory
+                    } else {
+                        ObjectKind::Bytes
+                    };
+                    let mut entries =
+                        vec![DirectoryEntry::new(name, ObjectReference::new(kind, file))];
+                    if case == "multiple" {
+                        entries.push(DirectoryEntry::new(
+                            CanonicalName::from_bytes(b"other")?,
+                            ObjectReference::new(ObjectKind::Bytes, file),
+                        ));
+                    }
+                    let root_canonical = encode_canonical_object(&Object::directory(entries)?)?;
+                    let root = ObjectId::for_bytes(&root_canonical);
+                    store.put(root, &root_canonical, metrics)?;
+                    verify_file(store, root, candidate, None, None, metrics)?;
+                    Ok(())
+                })
+                .expect_err("wrong namespace");
+            let failure = error
+                .downcast_ref::<PublicationFailure>()
+                .expect("publication failure");
+            assert_eq!(
+                failure.0.first,
+                Some(FailureCause::Core(CoreError::WrongLogicalRole))
+            );
+            assert!(store.active_transaction.is_none());
+            finish_q(&mut metrics).expect("namespace Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("namespace cleanup");
+        }
+    }
+
+    #[test]
+    fn f2_incumbent_missing_role_length_malformed_and_unequal_rows_fail_before_evidence() {
+        let candidate = Candidate {
+            name: "F2-INCUMBENT",
+            k: 2,
+            f: 2,
+            directory_page: 256 * 1024,
+        };
+        let payload = b"incumbent";
+        let expected = encode_canonical_object(&Object::bytes(payload.to_vec()).expect("bytes"))
+            .expect("canonical");
+        let expected_id = ObjectId::for_bytes(&expected);
+        for case in ["missing", "role", "length", "malformed", "unequal"] {
+            let database = test_path(&format!("f2-incumbent-{case}.sqlite"));
+            let mut store = Store::open(&database, candidate).expect("store");
+            let (kind, length, bytes) = match case {
+                "missing" => (
+                    ObjectKind::Bytes as u8,
+                    expected.len() as i64,
+                    expected.clone(),
+                ),
+                "role" => (
+                    ObjectKind::Directory as u8,
+                    expected.len() as i64,
+                    expected.clone(),
+                ),
+                "length" => (
+                    ObjectKind::Bytes as u8,
+                    expected.len() as i64 + 1,
+                    expected.clone(),
+                ),
+                "malformed" => (ObjectKind::Bytes as u8, 3, b"bad".to_vec()),
+                "unequal" => {
+                    let other = encode_canonical_object(
+                        &Object::bytes(b"different".to_vec()).expect("different bytes"),
+                    )
+                    .expect("different canonical");
+                    (ObjectKind::Bytes as u8, other.len() as i64, other)
+                }
+                _ => unreachable!(),
+            };
+            store
+                .connection
+                .execute(
+                    "INSERT INTO wp4m_objects
+                       (object_id, kind, canonical_length, canonical_bytes)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![expected_id.as_bytes().as_slice(), kind, length, bytes],
+                )
+                .expect("inject incumbent");
+            if case == "missing" {
+                store.next_put_fault = Some(PutFault::DeleteIncumbentAfterConflict);
+            }
+            let mut metrics = Metrics::default();
+            let error = store
+                .transaction_attempt(&mut metrics, |store, metrics| {
+                    let mut builder = FileBuilder::new_proving(candidate, 1, store, metrics)?;
+                    builder.push_bytes(store, payload, metrics)?;
+                    Ok(())
+                })
+                .expect_err("incumbent must reject");
+            let failure = error
+                .downcast_ref::<PublicationFailure>()
+                .expect("publication failure");
+            match case {
+                "missing" => assert_eq!(
+                    failure.0.first,
+                    Some(FailureCause::MissingObject(expected_id))
+                ),
+                "role" => assert_eq!(
+                    failure.0.first,
+                    Some(FailureCause::Core(CoreError::WrongLogicalRole))
+                ),
+                "length" => assert!(matches!(
+                    failure.0.first,
+                    Some(FailureCause::Core(CoreError::LengthMismatch { .. }))
+                )),
+                "malformed" | "unequal" => assert!(matches!(
+                    failure.0.first,
+                    Some(FailureCause::Core(
+                        CoreError::IdentityMismatch | CoreError::UnexpectedEof
+                    ))
+                )),
+                _ => unreachable!(),
+            }
+            assert!(store.active_transaction.is_none());
+            assert_eq!(metrics.construction_put_evidences, 0);
+            finish_q(&mut metrics).expect("incumbent Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("incumbent cleanup");
+        }
     }
 
     #[test]

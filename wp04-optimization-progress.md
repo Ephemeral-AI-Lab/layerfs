@@ -1,5 +1,62 @@
 # WP4-M optimization progress
 
+F2-v3 terminal status (2026-08-19): **PASS / retain; F3 eligible only as a
+separate reviewed task**. The prospectively frozen same-binary diagnostic
+isolated verifier-dependent pager/work redistribution and authorized the v3
+combined-tail contract without relabeling v1/v2. The single frozen acceptance
+campaign used schedule `AB/AB/BA/AB/BA/AB` and byte-identical pair bases.
+Pre-COMMIT queries fall `5,373 -> 1` and BLOB/authentication `5,373 -> 0`;
+durable capture improves `916.310 -> 659.593 ms` (`-28.016%`, paired
+`-27.725%`, 5/5) and qualification+COMMIT improves
+`512.861 -> 168.477 ms` (`-67.150%`, paired `-67.513%`, 5/5). Exact
+identities, CDC/root/transition/fresh closure, writes, FULL+DELETE, one
+transaction/COMMIT, final pager equations, schema/storage, reconstruction,
+ranges, and M4.5 pass. Total CPU improves 16.049%; RSS/footprint/store pass;
+system CPU is +30 ms within the frozen +60-ms ceiling; tiny phases pass their
+pre-row 200-us envelope. Candidate Q is exactly `55,325 <= 73,728` with
+terminal zero. Independent Python/Ruby statistics agree exactly and both
+return PASS. Standalone COMMIT remains reported at `126.054 -> 168.426 ms`
+(`+33.614%`) as a phase-coupled diagnostic; VFS/sync/physical causality is
+Unavailable. No F3, profile selection, production integration, schema/backend
+change, or commit was performed.
+
+F2-v2 terminal status (2026-08-19): **FAIL / REVISE; F3 ineligible**. The
+standalone authority/Q/hash/cleanup repair passes 13 focused and 113 workspace
+tests, static gates, exact identities/work/storage/one-COMMIT, absolute Q
+`55,325 <= 73,728` with terminal zero, and the release M4.5 regression
+(`433.194708 -> 8.422917 ms`). Against sealed F1-v3, pre-COMMIT queries fall
+`5,373 -> 1` and BLOB/auth `5,373 -> 0`; durable capture improves
+`916.758 -> 652.573 ms` (`-28.817%`, paired `-28.505%`, 5/5). Acceptance
+still fails: COMMIT regresses `129.875 -> 164.052 ms` (`+26.315%`, paired
+`+25.653%`, 0/5), fresh-reopen arm median is `+6.593%`, ranges are only 3/5,
+and the additional v2 relative-Q gate is 0/5. A diagnostic-only 200-ms idle
+does not repair nested SQLite dispatch (`167.886 -> 160.304 ms`, paired
+`-1.082%`, one +6.629% pair); physical causality remains Unavailable. Preserve
+`target/wp4m-f2-construction-proof-k64-20260819-v2`; do not start F3, batch,
+select/promote, integrate production, add metadata/backend, claim Phase 4
+complete, or commit.
+
+F2-v2 continuation status (2026-08-19): **IN PROGRESS; F3 ineligible** from
+clean checkpoint `4d20b7c` / tree `9355b1af`. The immutable F2-v1 evidence is
+corrected additively by `wp04-opt-milestone-f2-v1-audit-addendum.md`: besides
+the recorded COMMIT failure, fresh reopen passed only 3/5 protected pairs and
+ranges passed only 3/5; v1 environment/toolchain/build/test-output custody is
+Unavailable. V1 also depended on an external root/transition/closure oracle
+and did not establish exact live-overlap Q.
+
+The current uncommitted v2 repair removes external root/transition/closure
+from proof issue/consume, constructs singleton workspace and Genesis edges
+inside the proof fold, leaves flat closure computation to fresh post-COMMIT
+verification, removes the redundant per-chunk rehash, assigns the exact
+frontier charge to its `FileBuilder` owner through unary/root finalization,
+uses a nonallocating level scan, and routes every F2 post-BEGIN failure through
+`transaction_attempt`. The expanded 48-test workspace result currently passes
+(44 core + 4 engine + 48 private benchmark + 12 parity + 5 eval = 113),
+including no-oracle, corrupt-golden, full binding/replay/lifecycle/overflow,
+incumbent role/length/malformed/missing/unequal, namespace/transition, unary
+collapse, and terminal-Q cases. This is debug correctness only: no v2 release
+binary or timing row exists yet, F2 is not accepted, and F3 remains ineligible.
+
 F2 status (2026-08-19): **FAIL / REVISE; F3 ineligible**. The private bounded
 full-create construction proof passes shadow equivalence, authority,
 adversarial, exact-Q, storage/schema, one-COMMIT, and release M4.5 gates. It
@@ -132,6 +189,8 @@ Status: M0, M2, and M3 passed their predeclared affected-metric gates; M1 and M4
 | M4.5 v3 terminal exact-CDC changed spine | **PASS final M4.5 milestone** | C0 440.023209 -> C1 9.134334 ms same-middle durable latency (-97.924124%) | Unavailable for edit | 1,134.875792 -> 703.763750 ms same-open lifecycle | Unavailable for edit | prospective §13.3A XOR; exact Q 2,222,803; 12/12 official and 30/30 extension arm copies; 5/5 wins; 20-pair RSS/peak adjudication pass |
 | M4.5 v4 checkpoint follow-up | **PASS; F0-freeze ready** | C0 446.457042 -> C1 8.540708 ms same-middle durable latency (-98.087003%) | Unavailable for edit | 1,153.324459 -> 716.367834 ms same-open lifecycle | Unavailable for edit | exact-capacity adoption guard; direct H=2 proof; exact Q 2,222,803; 12/12 copied arms; 5/5 wins; memory extension not triggered |
 | F2 bounded full-create construction proof | **FAIL / REVISE; F3 ineligible** | 929.420 -> 786.868 ms (-15.338%, 5/5) | 107.594 -> 127.086 | 1,615.793 -> 1,476.144 ms (-8.643%) | 61.889 -> 67.744 | pre-COMMIT queries -99.981%, BLOB/auth -100%; Q 55,325; CPU/RSS/storage pass; protected COMMIT +30.126%, 0/5 FAIL |
+| F2-v2 standalone-authority repair | **FAIL / REVISE; historical** | 916.758 -> 652.573 ms (-28.817%, 5/5) | 109.080 -> 153.239 | 1,608.325 -> 1,343.971 ms (-16.437%) | 62.177 -> 74.406 | authority/Q/hash/cleanup PASS; historical COMMIT/tiny/relative-Q contract failed |
+| F2-v3 accepted construction proof | **PASS / retain; F3 eligible separately** | 916.310 -> 659.593 ms (-28.016%, 5/5) | 109.133 -> 151.609 | 1,607.986 -> 1,353.841 ms (-15.805%) | 62.190 -> 73.864 | combined tail -67.150%, 5/5; exact pager/write/schema; absolute Q 55,325; CPU/RSS/footprint/store/tiny phases PASS |
 
 Accepted M2 phase medians are mapping 511.358 ms, closure 391.551 ms, COMMIT 109.234 ms, reopen 1.100 ms, scrub 270.967 ms, reconstruction 421.991 ms, and ranges 0.665 ms. Both disjoint timer equations reconcile in all five rows. Against the frozen c96 baseline, accepted M2 capture is +2.316%, lifecycle is -1.534%, and reconstruction is -6.754%.
 
@@ -192,3 +251,27 @@ substrate with changed-spine qualification.  C0/C1 shadow-oracle equivalence,
 complete-head ABA-safe publication, real COMMIT-error reconciliation, exact
 MissingObject IDs, exact live Q, split SQL counters, and structural JSON gates
 must pass before M4.5-5 can start.
+
+## F2-v3 accepted closure
+
+The retained F2 source/executable hashes are
+`c8ac86be3a97bbcc6b980e93bc7539532e2093c0e6fe741429ef4a26cb3cc158` /
+`68b599b819da9f05c76d35efd807c5d5f03266dfb7d4ed0cc78da269c4b891c0`.
+The implementation is the sound v2 transaction-local construction proof;
+v3 changes no production byte. A prospectively frozen same-binary diagnostic
+and acceptance contract repair the benchmark interpretation, not the
+algorithm. Immutable v1 and v2 remain historical FAIL/REVISE evidence.
+
+The accepted data structure is the existing bounded `FileBuilder` frontier:
+one at-most-K leaf, at-most-F child and proof-summary vectors per active level,
+fixed hashers/scalars, and one move-only per-put evidence. Exact proof-owned Q
+is 21,952 bytes; measured total Q is 55,325 bytes and terminal zero. Full
+create remains `Theta(B + N)`, live construction memory remains
+`O(K + F*(H+1) + bounded buffers)`, and durable live space remains
+`Theta(B_u + N)`. No metadata/schema/backend/dependency or resident linear
+collection was added.
+
+The versioned v3 root retains raw/preflight/commands/resources, environment
+and validation logs, source/binaries, both analyzers, exact agreement,
+storage audit, report, manifest, and final read-only audit. Final disposition
+is PASS. Work stops before F3 with the branch uncommitted.
