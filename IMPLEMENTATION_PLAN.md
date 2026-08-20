@@ -2,14 +2,14 @@
 
 This plan implements the restart specification in
 [`SPEC.md`](SPEC.md) and uses the benchmark contract in
-[`eval.md`](eval.md).
+[`implementation-detail/evaluation.md`](implementation-detail/evaluation.md).
 
 The evaluation harness starts before the storage engine. We do not wait for
 the SDK or the final integration phase to discover that capture is still
 `O(file size)`.
 
 The executable Phase 4 plan is maintained in
-[PHASE_4_IMPLEMENTATION_PLAN.md](PHASE_4_IMPLEMENTATION_PLAN.md).
+[implementation-detail/phase-4/storage/sqlite/implementation-plan.md](implementation-detail/phase-4/storage/sqlite/implementation-plan.md).
 
 The first qualified host composition is:
 
@@ -37,7 +37,7 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
   ```
 
 - Create the deterministic dataset generator for the single-file and mixed-tree
-  datasets in `eval.md`.
+  datasets in `implementation-detail/evaluation.md`.
 - Create the benchmark result format and artifact writer.
 - Create the correctness oracle that compares a materialized directory with an
   expected directory tree.
@@ -51,7 +51,7 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 
 ### 2. What to test
 
-- Run B0 from [`eval.md`](eval.md) twice and confirm identical dataset
+- Run B0 from [`implementation-detail/evaluation.md`](implementation-detail/evaluation.md) twice and confirm identical dataset
   manifests and root inputs.
 - Verify the result artifact records the source commit, dirty-tree state,
   dataset hash, benchmark command, and APFS environment.
@@ -103,7 +103,7 @@ copy-on-write behavior. Any APFS optimization is a later measured option.
 - Canonical output is identical on APFS case-sensitive and case-insensitive
   volumes when the same canonical input is supplied.
 - Core tests run without SQLite, APFS APIs, or filesystem-specific imports.
-- Run the Phase 1 microbenchmark in [`eval.md`](eval.md) for representative
+- Run the Phase 1 microbenchmark in [`implementation-detail/evaluation.md`](implementation-detail/evaluation.md) for representative
   byte objects, directory fan-outs, and short/maximal canonical paths.
 - Record the benchmark source fingerprint, per-case timings, correctness, and
   an external peak-memory observation or an explicit unavailable status.
@@ -301,7 +301,7 @@ content-tree shape is selected; no Phase 1 format decision depends on them.
 - Test both case-sensitive and case-insensitive APFS behavior if available;
   canonical path semantics must not rely on volume case behavior.
 - Measure B1/B2/B3 cold, warm, and reopened states using the precise labels in
-  `eval.md`.
+  `implementation-detail/evaluation.md`.
 - Test interruption or failure during a file replacement and verify that the
   LayerFS root remains unchanged.
 

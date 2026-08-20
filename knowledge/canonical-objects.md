@@ -11,10 +11,10 @@ documents are:
 
 | Authority | Purpose |
 |---|---|
-| [Phase 1 implementation specification](../PHASE_1_IMPLEMENTATION_SPEC.md) | Exact Phase 1 contract and acceptance requirements |
+| [Phase 1 implementation specification](../implementation-detail/phase-1.md) | Exact Phase 1 contract and acceptance requirements |
 | [LayerFS restart specification](../SPEC.md) | System architecture and ownership boundaries |
 | [Implementation plan](../IMPLEMENTATION_PLAN.md) | Phase order and test gates |
-| [Evaluation plan](../eval.md) | Benchmark workloads and evidence |
+| [Evaluation plan](../implementation-detail/evaluation.md) | Benchmark workloads and evidence |
 
 If this document and those documents disagree, update this explanation after
 resolving the normative document first.
