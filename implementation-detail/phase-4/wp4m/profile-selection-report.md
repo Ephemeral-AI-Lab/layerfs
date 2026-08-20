@@ -7,12 +7,31 @@ Status on 2026-08-21:
 ```text
 CP-0006 fixed-radix compact lane: PASS / RETAIN
 WP4-M:                            COMPLETE
-WP4-P:                            ELIGIBLE, NOT COMPLETE
-K64/F64:                          policy-selected input to WP4-P
-DIR256K:                          unmeasured fallback input to WP4-P
-compatibility promotion:          false
+WP4-P:                            COMPLETE / PASS
+WP4:                              COMPLETE
+WP5:                              ELIGIBLE / PENDING
+K64/F64 + DIR256K:                one compatibility-promoted profile
+DIR256K selection basis:          unmeasured fallback
+compatibility promotion:          true by WP4-P only
 Phase 4:                          not complete
 ```
+
+WP4-P is COMPLETE / PASS under `../wp4p/promotion.md`. K64/F64 + DIR256K is
+the one compatibility-promoted profile; losers/selectors are deleted;
+production profile ID is
+`b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1`;
+and selected goldens plus core/benchmark/parity/workspace/clippy gates pass.
+Both independent audits pass after the exact 2,010-entry maximum delta-page
+corpus case was added. WP4 is complete and WP5 is eligible/pending; overall
+Phase 4 is not complete.
+
+Verification counts are core 44 PASS, selected goldens 2 PASS/1 intentionally
+ignored printer, benchmark 54 PASS, parity 14 PASS, full workspace
+all-target/all-feature PASS, and clippy `-D warnings` PASS. Golden TSV, golden
+test, and selected benchmark hashes are respectively `6de8c752...a7330`,
+`727fe668...49701`, and `2209930d...6dbea`. No benchmark was rerun for WP4-P.
+CP-0006 remains `qualification=false` and `promotion=false`; compatibility
+authority comes only from the later WP4-P promotion gates.
 
 The compact campaign completed 27/27 rows under the configured 120-second
 ceiling: six warmups, 18 measured capture/edit rows, and three nonmedian
@@ -58,10 +77,11 @@ Evidence:
 | release executable | `7e91b90fecb9b314bfc2706c49184f09ff1e884db34804fc61772aabcf3dbb36` |
 | runner | `965cc07fccc9f8aed8bea342b011d18e66bbf1e2d5680193cec6ea28b8e40c25` |
 
-This completes measurement/policy selection only. WP4-P must delete losing
-profiles and selectors, regenerate and fingerprint selected-only K64/F64 and
-DIR256K goldens, and pass its audit before either choice has compatibility
-authority. WP5 and later production integration remain blocked until then.
+This completes CP-0006 measurement/policy selection only. WP4-P subsequently
+deleted the losing profiles/selectors, froze and fingerprinted the selected-only
+K64/F64 + DIR256K goldens, and passed both independent audits. WP4-P and WP4
+are complete; WP5 is eligible/pending against the one compatibility-promoted
+profile. Overall Phase 4 is not complete.
 
 ## Historical 216-row campaign — terminal NO-GO under its original contract
 

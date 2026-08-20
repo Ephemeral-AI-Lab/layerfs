@@ -1,10 +1,10 @@
-//! Phase-4 candidate file mapping primitives.
-//!
-//! The candidate selector lives in the benchmark.  This module only owns the
-//! byte grammar shared by the candidate layouts.
+//! Selected Phase-4 file mapping primitives.
 
 use crate::identity::{ChunkId, ObjectId, DIGEST_BYTES};
-use crate::limits::MAX_CHILD_REFERENCES;
+use crate::limits::{
+    DIRECTORY_PAGE_CEILING, FILE_BRANCH_CAPACITY, FILE_LEAF_CAPACITY, MAPPING_PROFILE_FIELD_BYTES,
+    MAX_CHILD_REFERENCES,
+};
 use crate::object::{encode_object, Object};
 use crate::{CoreError, CoreResult};
 
@@ -20,19 +20,19 @@ pub const DELTA_PAGE_TAG: u8 = 0x06;
 pub const FILE_REF_BYTES: usize = 68;
 pub const FILE_DESCRIPTOR_BYTES: usize = 40;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct FileMappingProfile {
-    pub leaf_capacity: usize,
-    pub branch_capacity: usize,
-}
-
-impl FileMappingProfile {
-    pub const fn new(leaf_capacity: usize, branch_capacity: usize) -> Self {
-        Self {
-            leaf_capacity,
-            branch_capacity,
-        }
+pub fn selected_mapping_profile_id() -> ObjectId {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"layerfs/mapping-profile/v1\0");
+    for value in [
+        FILE_LEAF_CAPACITY as u32,
+        FILE_BRANCH_CAPACITY as u32,
+        DIRECTORY_PAGE_CEILING as u32,
+        MAPPING_PROFILE_FIELD_BYTES as u32,
+    ] {
+        hasher.update(&value.to_be_bytes());
     }
+    ObjectId::from_bytes(hasher.finalize().as_bytes())
+        .expect("BLAKE3 selected mapping-profile digest is 32 bytes")
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -279,12 +279,11 @@ pub fn parse_file_children(payload: &[u8], with_level: bool) -> CoreResult<(u8, 
 
 pub fn validate_file_leaf(
     references: &[FileReference],
-    profile: FileMappingProfile,
     final_leaf: bool,
 ) -> CoreResult<(u64, u64)> {
     if references.is_empty()
-        || references.len() > profile.leaf_capacity
-        || (!final_leaf && references.len() != profile.leaf_capacity)
+        || references.len() > FILE_LEAF_CAPACITY
+        || (!final_leaf && references.len() != FILE_LEAF_CAPACITY)
     {
         return Err(CoreError::NonCanonicalPagePartition);
     }
@@ -299,14 +298,10 @@ pub fn validate_file_leaf(
     ))
 }
 
-pub fn validate_file_children(
-    children: &[FileChild],
-    profile: FileMappingProfile,
-    final_node: bool,
-) -> CoreResult<(u64, u64)> {
+pub fn validate_file_children(children: &[FileChild], final_node: bool) -> CoreResult<(u64, u64)> {
     if children.is_empty()
-        || children.len() > profile.branch_capacity
-        || (!final_node && children.len() != profile.branch_capacity)
+        || children.len() > FILE_BRANCH_CAPACITY
+        || (!final_node && children.len() != FILE_BRANCH_CAPACITY)
     {
         return Err(CoreError::NonCanonicalPagePartition);
     }
@@ -323,23 +318,20 @@ pub fn validate_file_children(
     ))
 }
 
-pub fn expected_file_level(reference_count: u64, profile: FileMappingProfile) -> CoreResult<u8> {
-    if reference_count == 0 || profile.leaf_capacity == 0 || profile.branch_capacity == 0 {
+pub fn expected_file_level(reference_count: u64) -> CoreResult<u8> {
+    if reference_count == 0 {
         return Ok(0);
     }
     let leaves = reference_count
         .checked_add(
-            u64::try_from(profile.leaf_capacity)
+            u64::try_from(FILE_LEAF_CAPACITY)
                 .map_err(|_| CoreError::LengthOverflow)?
                 .checked_sub(1)
                 .ok_or(CoreError::LengthOverflow)?,
         )
         .ok_or(CoreError::LengthOverflow)?
-        / u64::try_from(profile.leaf_capacity).map_err(|_| CoreError::LengthOverflow)?;
-    let fanout = u64::try_from(profile.branch_capacity).map_err(|_| CoreError::LengthOverflow)?;
-    if fanout == 1 && leaves > 1 {
-        return Err(CoreError::NonCanonicalPagePartition);
-    }
+        / u64::try_from(FILE_LEAF_CAPACITY).map_err(|_| CoreError::LengthOverflow)?;
+    let fanout = u64::try_from(FILE_BRANCH_CAPACITY).map_err(|_| CoreError::LengthOverflow)?;
     let mut capacity = fanout;
     let mut level = 0_u8;
     while leaves > capacity {

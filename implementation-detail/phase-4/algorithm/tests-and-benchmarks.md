@@ -1,6 +1,6 @@
 # Phase 4 algorithm test and benchmark specification
 
-- Status: CP-0006 PASS; WP4-M evidence complete; WP4-P pending
+- Status: WP4-P COMPLETE / PASS; WP4 complete; WP5 eligible/pending; Phase 4 not complete
 - Date: 2026-08-20
 - Branch: `codex/empty-worktree`
 - Applies to: WP4-M through WP14
@@ -19,8 +19,8 @@ Requirements apply in this order:
    unavailable-evidence fallback.
 2. `../rollback/spec.md` controls every Phase 4
    direction and acceptance target not prospectively amended above.
-3. `../mapping/logical-persistence.md` controls candidate and promoted
-   canonical bytes, identities, roles, bounds, and profile-selection rules.
+3. `../mapping/logical-persistence.md` controls selected and promoted canonical
+   bytes, identities, roles, bounds, and profile rules.
 4. `../storage/sqlite/visible-head.md` is the sole authority for
    the narrow SQLite schema-v1 to schema-v2 transition required by the complete
    visible-head tuple. It does not authorize a general migration framework.
@@ -53,7 +53,7 @@ The following evidence classes are distinct:
 | Evidence | Purpose | Selects format | Qualifies 200/300 MiB/s |
 |---|---|---:|---:|
 | existing custody baseline | Prove inherited Phase 1-3 and SQLite behavior remains healthy | no | no |
-| direct WP4 correctness tests | Prove candidate bytes, identities, errors, bounds, and semantics | no | no |
+| direct WP4 correctness tests | Prove selected bytes, identities, errors, bounds, and semantics | no | no |
 | historical WP4-M profile-selection campaign | Preserve its original terminal NO-GO; no relabeling | no | no |
 | prospective WP4-M fixed-radix fast lane | Validate policy-selected K64/F64 and make WP4-P eligible | yes | no |
 | post-WP4-P unoptimized baseline | Establish the fair final-profile Memory/SQLite starting point | already selected | SQLite row may be reported, but is not the final optimized decision |
@@ -126,7 +126,7 @@ pre-WP4-M custody check
 
 The current incomplete implementation is not used as a fake full-workload
 performance baseline. The first comparable algorithm benchmark waits for the
-minimum WP4-M candidate codec and SQLite measurement path.
+minimum selected codec and SQLite measurement path.
 
 ## 5. Pre-WP4-M custody baseline
 
@@ -162,11 +162,10 @@ do not rerun a broad Cargo wall solely to duplicate unchanged evidence.
 Correctness is a prerequisite to timing. A failed correctness row produces no
 performance result.
 
-### 6.1 File mapping golden vectors
+### 6.1 Selected file mapping golden vectors
 
-For the fast lane, test K64/F64 directly. Existing private K59/F101 and
-K256/F256 vectors may remain until WP4-P deletes them, but they are not rerun
-or used to qualify this prospective evidence. Test:
+Test only K64/F64. K59/F101 and K256/F256 are historical evidence and must be
+deleted from live constants, selectors, and fixtures during WP4-P. Test:
 
 - empty file;
 - one reference;
@@ -190,14 +189,11 @@ Every success asserts:
 - decode then encode byte identity; and
 - deterministic repetition across independent constructions.
 
-Each temporary profile has a private, domain-separated candidate profile ID
-and its own expected mapping, node, root, and delta IDs. Only raw source bytes,
-CDC boundaries, raw `ChunkId` values, and reconstructed logical bytes are
-required to match across different profiles. Memory and SQLite must match all
-IDs within the same profile.
-
-Pre-promotion vectors are temporary measurement fixtures. After WP4-P, delete
-them and independently generate authoritative goldens for the one winner.
+The selected production profile has one production profile ID and one expected
+mapping, node, root, delta, and receipt corpus. Memory and SQLite must match all
+selected-profile identities. Candidate-era vectors are measurement evidence,
+not the normative corpus; WP4-P independently generates and fingerprints the
+authoritative selected-only goldens.
 
 ### 6.2 File mapping malformed vectors
 
@@ -305,9 +301,9 @@ policy-budget validation cases; their 5% wall ratios are diagnostic only.
 
 ### 6.6 Directory mapping tests
 
-For the fast lane, test the DIR256K complete canonical page ceiling. Existing
-private DIR64K and DIR1M cases may remain until WP4-P deletes them, but they are
-not rerun for prospective evidence. Test:
+Test only the DIR256K complete canonical page ceiling. DIR64K and DIR1M remain
+historical evidence and must be deleted from live constants, selectors, and
+fixtures during WP4-P. Test:
 
 - empty directory;
 - one entry;
@@ -689,7 +685,7 @@ Do not rerun the deleted wide-directory campaign for WP4-M. Record comparative
 DIR64K, DIR256K, and DIR1M performance evidence as
 `Unavailable(custody_lost)` and retain DIR256K through the predeclared
 fallback. This is not a measured win. Directory canonical correctness and
-malformed-input tests remain required; WP4-P owns selected-only DIR256K
+malformed-input tests remain required; WP4-P completed selected-only DIR256K
 goldens and deletion of the other ceilings.
 
 ### 7.4 Campaign execution
@@ -728,9 +724,10 @@ database cloning, fixture verification, or cache conditioning.
 
 Use one untimed warmup per row, followed by three measured blocks in balanced
 row and size order rather than running all measurements of one shape first.
-Preserve raw JSONL and generate summaries afterward. Each database uses the
-existing domain-separated K64/F64 candidate profile ID; isolated paths
-alone are not an authentication binding.
+Preserve raw JSONL and generate summaries afterward. Historical CP-0006
+databases used the private K64/F64 candidate ID. WP4-P selected-only tests use
+the production profile ID; isolated paths alone are not an authentication
+binding.
 
 Run one measured invocation per process so external high-water RSS belongs to
 that row. If the platform cannot observe RSS, record `Unavailable`; do not
@@ -778,7 +775,7 @@ excess fails WP4-M and requires a separately approved specification.
 Record comparative directory metrics as `Unavailable(custody_lost)` and retain
 DIR256K by policy fallback, not measured ranking. WP4-M requires no new
 directory performance row. Direct DIR256K correctness remains a prerequisite;
-selected-only golden regeneration and removal of DIR64K/DIR1M belong to WP4-P.
+WP4-P completed selected-only golden regeneration and removal of DIR64K/DIR1M.
 
 The 100-MiB 500.000-ms minimum and 333.333-ms stretch thresholds are reported
 as WP4-M credibility diagnostics, not format-promotion blockers. They become
@@ -791,9 +788,9 @@ executions/BLOB opens, `Q/W/D`, wall, and CPU separately. Use the validated
 count/byte equations for the analytical 100-GiB projection; do not extrapolate
 a 100-GiB wall time from routine timings.
 
-## 8. WP4-P promotion tests
+## 8. WP4-P promotion tests — COMPLETE / PASS
 
-After selection:
+WP4-P completed the following selected-only promotion sequence:
 
 1. delete every losing profile, constant, selector, and candidate-only fixture;
 2. ensure no public format/configuration selector remains;
@@ -804,8 +801,46 @@ After selection:
 6. run an independent read-only correctness/performance audit; and
 7. expose only the promoted profile to WP5+ production integration.
 
-No compatibility-bearing production golden or final performance baseline is
-created before these steps succeed.
+Use the exact production profile-ID preimage frozen in `spec.md` and
+`../mapping/logical-persistence.md`. Record the computed ID, selected-only
+manifest/spec/source hashes, deletion proof, and audit hash in
+`../wp4p/promotion.md`.
+
+No WP4-M, 512-MiB, 100-GiB runtime, or new performance campaign is required.
+The performance audit is read-only against CP-0006 and the selected-only diff.
+
+Implementation and independent audit verification is complete:
+
+```text
+production profile ID:
+  b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1
+core:             44 PASS
+selected goldens: 2 PASS, 1 intentionally ignored manifest printer
+benchmark:        54 PASS
+engine parity:    14 PASS
+workspace:        all-target/all-feature PASS
+clippy:           -D warnings PASS
+active losing-profile/selector search: zero matches
+independent correctness audit: PASS
+read-only performance audit: PASS; CP-0006 remains controlling
+```
+
+Golden TSV SHA-256 is
+`6de8c75299f09148046fe2a17c0162c64a40503e1b20c4b9090ab97e709a7330`;
+golden test SHA-256 is
+`727fe6683eb1d85860e34d1cf5d709c1d4b323545437f43dfbe75e394c549701`;
+selected benchmark SHA-256 is
+`2209930d7721e6a392b5151115c62fab724decde6e9b80f25e1d90b80506dbea`.
+The final corpus includes the exact 2,010-entry maximum delta-page case that
+closed the correctness-audit finding. WP4-P is COMPLETE / PASS, the production
+profile ID above identifies the one compatibility-promoted K64/F64 + DIR256K
+profile, WP4 is complete, and WP5 is eligible/pending. Overall Phase 4 is not
+complete.
+
+No benchmark was rerun for promotion. CP-0006 remains `qualification=false`
+and `promotion=false`; the later WP4-P audit and selected corpus provide
+compatibility authority without relabeling that performance evidence. The
+ordinary final-profile performance baseline remains later work.
 
 ## 9. Post-promotion unoptimized baseline
 

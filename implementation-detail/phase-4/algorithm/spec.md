@@ -1,6 +1,6 @@
 # Phase 4 CAS + CDC + COW algorithm specification
 
-- Status: CP-0006 PASS; WP4-M evidence complete; WP4-P pending
+- Status: WP4-P COMPLETE / PASS; WP4 complete; WP5 eligible/pending; Phase 4 not complete
 - Date: 2026-08-20
 - Branch: `codex/empty-worktree`
 - Applies to: WP4-M through WP14 of the Phase 4 rollback plan
@@ -29,7 +29,7 @@ Requirements apply in this order:
    prospectively amended above.
 3. `../storage/sqlite/visible-head.md` is the sole authority for
    the SQLite schema revision and version-1 handling required by this mapping.
-4. `../mapping/logical-persistence.md` controls exact candidate bytes,
+4. `../mapping/logical-persistence.md` controls exact selected bytes,
    object roles, identities, strong edges, bounds, and profile-promotion
    procedure.
 5. This document controls the algorithmic division of work, required data
@@ -41,10 +41,12 @@ Requirements apply in this order:
    controls work-package order and verification.
 
 If this document conflicts with exact canonical bytes or identity rules in the
-mapping specification, the mapping specification controls. If a candidate
-profile loses the required WP4-M A/B, WP4-P replaces the candidate constants,
-deletes the losing alternatives, and updates this document before production
-format promotion.
+mapping specification, the mapping specification controls. WP4-P completed
+with exactly one compatibility-promoted K64/F64 + DIR256K profile. The
+selected-only deletion, golden, fingerprint, and independent audit gates all
+passed. A later profile replacement still requires a separate specification;
+WP4-P did not create a format-negotiation surface or authorize another
+campaign.
 
 The source fingerprints at creation of this specification are:
 
@@ -105,10 +107,12 @@ The selected data-structure family is:
 - bounded delta pages plus an authenticated delta index; and
 - immutable canonical objects addressed only by Phase 1 `ObjectId`.
 
-The prospective fast lane policy-selects K64/F64 and retains DIR256K through an
-unavailable-evidence fallback. This accepts suffix-linear count-changing edits
-without calling either profile optimal or compatibility-bearing before WP4-P.
-The policy changes no canonical bytes, metadata, schema, or identity.
+The one compatibility-promoted production profile is K64/F64 + DIR256K, with
+the existing 8-MiB delta-page ceiling and production profile ID
+`b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1`.
+WP4-P deleted the losing alternatives and froze the independent goldens. This
+accepts suffix-linear count-changing edits without calling either selected
+constant a measured or global optimum.
 
 ## 3. Goals
 
@@ -212,10 +216,9 @@ The production path is:
 
 The current schema-version-1 `visible_root` column cannot represent the frozen
 complete visible head, and its root row conflates content identity with
-parentage. WP4-M may use only isolated candidate databases. WP7 may change the
-production schema only under
-`../storage/sqlite/visible-head.md` after WP4-P promotes one
-profile.
+parentage. WP4-M used only isolated candidate databases. WP7 may change the
+production schema only under `../storage/sqlite/visible-head.md` and only for
+the one WP4-P-promoted profile.
 
 ## 6. Notation
 
@@ -224,15 +227,15 @@ profile.
 | `S` | raw source bytes in one logical file |
 | `N` | ordered chunk-reference occurrences |
 | `U` | unique canonical chunk objects |
-| `K` | references per file leaf candidate |
-| `F` | children per file branch/root candidate |
+| `K=64` | references per selected file leaf |
+| `F=64` | children per selected file branch/root |
 | `P = ceil(N/K)` | file leaf count |
 | `H` | branch levels between file root and leaf |
 | `X_b` | bytes in the edit/resynchronization region |
 | `X_c` | changed/new reference occurrences after CDC rejoin |
 | `Z` | suffix references repacked by a count-changing fixed-ordinal edit |
 | `E` | entries in a logical directory |
-| `B_d` | canonical directory page ceiling candidate |
+| `B_d=262,144` | selected canonical directory page ceiling |
 | `T` | ordered delta-entry count |
 | `A` | canonical bytes authenticated by an operation |
 | `V` | strong-edge occurrences visited by an operation |
@@ -269,7 +272,7 @@ crates/layerfs-core/src/
   cow/persistence.rs               directory/root persistence algorithms
   delta/mod.rs                     existing delta semantics
   delta/codec.rs                   durable delta algorithm
-  limits.rs                        one promoted profile after WP4-P
+  limits.rs                        one promoted K64/F64 + DIR256K profile
   error.rs                         typed failures
 
 crates/layerfs-engine/src/
@@ -285,11 +288,10 @@ SQLite remains in the current engine module unless a later independently
 justified refactor proves that moving it reduces real complexity. There is no
 public engine trait or factory solely to dispatch between Memory and SQLite.
 
-WP4-M may contain a private benchmark/test selector for candidate profiles.
-Each candidate database and receipt must use the exact private
-domain-separated profile ID in the mapping specification. WP4-P must delete
-that selector, every candidate ID, and every losing constant, branch, and
-fixture before final goldens or production promotion.
+WP4-M contained a private benchmark/test selector and private profile IDs.
+WP4-P deleted that selector, every candidate ID, and every losing constant,
+branch, and fixture before compatibility promotion. The live path uses only
+the production profile ID recorded by `../wp4p/promotion.md`.
 
 ## 8. Shared capture algorithm
 
@@ -453,7 +455,7 @@ raw length  u32
 canonical chunk ObjectId [32]
 ```
 
-The candidates are:
+The historical WP4-M comparison used:
 
 | Candidate | Leaf capacity `K` | Branch fan-out `F` | Purpose |
 |---|---:|---:|---|
@@ -461,9 +463,10 @@ The candidates are:
 | K59/F101 | 59 | 101 | near-complete-4-KiB canonical objects |
 | K256/F256 | 256 | 256 | lower object/SQL-call count candidate |
 
-K64/F64 is policy-selected for the prospective compact WP4-M validation. The
-other private choices remain only until WP4-P deletes them. Policy selection
-does not claim that K64/F64 is globally optimal.
+WP4-P selects K64/F64 as the only production target. K59/F101 and K256/F256
+are historical comparison inputs and must not remain in live encoding,
+validation, configuration, or profile-ID paths. This selection is a policy
+choice, not a global-optimality claim.
 
 ### 11.2 Streaming radix construction
 
@@ -516,8 +519,7 @@ memory = O(H + K + one chunk + output window)
 
 For a range contained in one leaf, `B_v=O(H)`, `L_v=1`, and this reduces to
 `O(F*H + K + C_v + returned bytes)`. Branch and leaf search is linear in the
-bounded candidate fan-out unless the promoted codec freezes a different local
-search structure.
+bounded selected fan-out; WP4-P does not change this local search structure.
 
 Without a valid receipt, skipped cumulative summaries lack authority. The
 operation must first perform a full scrub or return the exact validation-
@@ -624,22 +626,21 @@ A durable directory consists of:
 User names appear only in entry pages and remain in strict canonical order.
 They cannot collide with wrapper schema names.
 
-### 12.2 Candidate page ceilings
+### 12.2 Selected directory page ceiling
 
-WP4-M compares complete canonical page ceilings of:
+The historical WP4-M comparison considered complete canonical page ceilings
+of 64 KiB, 256 KiB, and 1 MiB. WP4-P selects exactly:
 
-- 64 KiB;
-- 256 KiB; and
-- 1 MiB.
+- DIR256K: 262,144 complete canonical bytes.
 
-Pages are greedily packed without splitting an entry. A page ceiling is a
-physical/locality candidate, not a maximum logical directory size. The
+Pages are greedily packed without splitting an entry. The page ceiling is not
+a maximum logical directory size. The
 existing direct-reference limit continues to apply per canonical Directory
 object.
 
-Greedy-to-16-MiB pages are rejected as the default because one child-ID change
-could rewrite and authenticate approximately 16 MiB of metadata. The smaller
-candidates trade page count against point-update and authentication bytes.
+Greedy-to-16-MiB pages are rejected because one child-ID change could rewrite
+and authenticate approximately 16 MiB of metadata. DIR64K and DIR1M remain
+historical evidence only and are deleted from live selectors during WP4-P.
 
 ### 12.3 Construction and lookup
 
@@ -670,8 +671,8 @@ separate measured core optimization; the durable page format alone does not
 make that CPU path logarithmic.
 
 Greedy count-changing insertion/removal can repack the later page suffix and
-remain `O(E)` in the worst case. The wide-directory A/B must measure both
-same-size replacement and leading insertion before selecting `B_d`.
+remain `O(E)` in the worst case. DIR256K is an explicitly unmeasured fallback;
+WP4-P makes no measured-winner claim.
 
 ## 13. Delta algorithm
 
@@ -937,7 +938,7 @@ result may call reconstruction or a range read native materialization.
 | fast reopen | fixed head/receipt/root work then lazy paths | not equivalent to fresh scrub |
 | full reconstruction | `Theta(S + N + mapping auth)` | small-object/SQL constants matter |
 | directory replace | one page + index + wrapper per ancestor | current in-memory map clone may be `O(E)` |
-| directory leading insert | worst `O(E)` | candidate page split weakness |
+| directory leading insert | worst `O(E)` | selected DIR256K split weakness |
 | delta replay | linear encoded order plus invoked COW work | no sorting/dedup shortcut |
 
 The implementation may improve constants but may not claim a better Big-O
@@ -993,12 +994,12 @@ ceiling may be introduced. Exact structural object limits, logical depth,
 backend capacity, live allocation, and checked arithmetic overflow remain
 valid independent limits.
 
-## 21. Prospective fast-lane profile policy
+## 21. Selected profile and WP4-P promotion policy
 
 ### 21.1 File profile
 
-WP4-M runs only K64/F64 on deterministic 1-MiB, 10-MiB, and retained 100-MiB
-fixtures. Every row is labeled:
+WP4-M ran only K64/F64 on deterministic 1-MiB, 10-MiB, and retained 100-MiB
+fixtures. Its retained rows remain labeled:
 
 ```text
 qualification=false
@@ -1029,8 +1030,8 @@ fixture generation, and manifest preflight occur before this wall. No row may
 be omitted. A 512-MiB run is optional occasional scale evidence and cannot
 close WP4-M or replace a routine row.
 
-K64/F64 is policy-selected, so no challenger ranking or SQL-sensitivity probe
-is required. All correctness, identity, closure, one-transaction/one-COMMIT,
+K64/F64 is selected for the only production profile, so no challenger ranking
+or SQL-sensitivity probe is required. All correctness, identity, closure, one-transaction/one-COMMIT,
 reopen, reconstruction, range, exact suffix-model, checked-resource, and
 bounded-Q gates still apply. Q must return to zero and remain independent of
 source or suffix size.
@@ -1047,12 +1048,13 @@ The deleted historical campaign cannot provide promotion-bearing directory
 comparisons. WP4-M records DIR64K, DIR256K, and DIR1M comparative evidence as
 `Unavailable(custody_lost)` and retains DIR256K by predeclared fallback, not as
 a measured winner. No new wide-directory performance campaign is required for
-WP4-M. Direct DIR256K correctness remains mandatory; WP4-P owns deletion of
-the alternatives and selected-only independent goldens.
+WP4-M. DIR256K is the selected production ceiling by explicit unmeasured
+fallback. Direct DIR256K correctness remains mandatory; WP4-P deleted the
+alternatives and froze the selected-only independent goldens before promotion.
 
 ### 21.3 Promotion
 
-WP4-P must:
+WP4-P completed all of these exit requirements:
 
 1. select exactly one file K/F and one directory page ceiling;
 2. delete all losing constants, code branches, selectors, and candidate
@@ -1061,6 +1063,30 @@ WP4-P must:
 4. fingerprint the promoted specification and vectors;
 5. pass independent read-only correctness and performance audits; and
 6. expose only the promoted profile to WP5+ production integration.
+
+The exact production profile-ID preimage is:
+
+```text
+BLAKE3("layerfs/mapping-profile/v1\0"
+  || u32be(64) || u32be(64)
+  || u32be(262144) || u32be(8388608))
+```
+
+The independently verified production profile ID is:
+
+```text
+b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1
+```
+
+The selected implementation/golden suites and both independent read-only
+audits pass. The missing exact 2,010-entry maximum delta-page corpus case was
+added before the audits passed. The final selected TSV and independent golden
+test SHA-256 values are respectively
+`6de8c75299f09148046fe2a17c0162c64a40503e1b20c4b9090ab97e709a7330`
+and `727fe6683eb1d85860e34d1cf5d709c1d4b323545437f43dfbe75e394c549701`.
+The terminal promotion ledger owns the terminal artifact fingerprints. WP4-P
+is COMPLETE / PASS, the one profile above is compatibility-promoted, WP4 is
+complete, and WP5 is eligible/pending. Overall Phase 4 is not complete.
 
 The 500.000-ms minimum and 333.333-ms stretch values are reported during
 WP4-M as credibility diagnostics, not pre-optimization promotion blockers.
@@ -1170,8 +1196,10 @@ The algorithm must be implemented in this order:
 1. **WP4-M:** run the prospective 24-row K64/F64 capture schedule plus three
    nonmedian complete-roundtrip checks within 120 seconds and record the
    DIR256K fallback.
-2. **WP4-P:** delete alternatives, regenerate selected-only goldens, and audit.
-3. **WP5:** finalize shared core mapping and bounded object-read reconstruction.
+2. **WP4-P:** COMPLETE / PASS; one K64/F64 + DIR256K compatibility profile is
+   promoted and WP4 is complete.
+3. **WP5:** eligible/pending; finalize shared core mapping and bounded
+   object-read reconstruction.
 4. **WP6:** add the Memory semantic lane.
 5. **WP7:** integrate the promoted mapping with SQLite.
 6. **WP8/WP9 baseline:** establish the unoptimized fair Memory/SQLite rows.
@@ -1202,7 +1230,7 @@ The final Phase 4 result must be exactly one of:
    optimized SQLite still misses the target and measured SQLite-specific work
    is dominant.
 
-Memory alone cannot satisfy the durable target. The profile-selection A/B
+Memory alone cannot satisfy the durable target. The retained WP4-M evidence
 cannot satisfy it. A fresh reconstruction cannot be called materialization.
 
 ## 27. Fast-lane execution choices

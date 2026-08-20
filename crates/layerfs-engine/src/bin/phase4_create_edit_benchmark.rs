@@ -1,10 +1,12 @@
-//! WP4-M private candidate campaign.
+//! Phase-4 selected-profile correctness and regression harness.
 //!
-//! This executable is intentionally the only profile selector.  It owns the
-//! candidate-only SQLite schema and never opens the production v1 engine.
+//! The private SQLite schema is fixed to K64/F64 + DIR256K and never opens the
+//! production v1 engine.
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, HashMap};
+#[cfg(test)]
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::env;
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
@@ -34,15 +36,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const SOURCE_1: u64 = 1024 * 1024;
 const SOURCE_10: u64 = 10 * 1024 * 1024;
 const SOURCE_100: u64 = 100 * 1024 * 1024;
-const SOURCE_512: u64 = 512 * 1024 * 1024;
 const RETAINED_CDC_100: u64 = 5_284;
-const RETAINED_CDC_512: u64 = 27_162;
 const RETAINED_RAW_100: &str = "bb883eecf4ea85d80432953791dcc352243da94175e7503e2c476afe9bd0bab7";
-const RETAINED_RAW_512: &str = "84f895c546504bd80a343c7c7300b26cc010dad27c7c897efc6f37fc2821efc2";
+#[cfg(test)]
 const RETAINED_CDC_SEQUENCE_100: &str =
     "5bb376c3c54d8724973a7b160acab599f2f5cee4b4a56e855ff0cbe987425994";
-const RETAINED_CDC_SEQUENCE_512: &str =
-    "8b9c305cc4e128acbbe16d6aea4d000f3a483604c7b5f914d953bcccd7225d0b";
 const RETAINED_SEED: u64 = 0x4c41594552534653;
 const DIRECTORY_ENTRIES: usize = 100_000;
 const DIRECTORY_NAME_BYTES: usize = 255;
@@ -348,56 +346,12 @@ struct Candidate {
     directory_page: usize,
 }
 
-const FILE_CANDIDATES: [Candidate; 3] = [
-    Candidate {
-        name: "K64-F64",
-        k: 64,
-        f: 64,
-        directory_page: 256 * 1024,
-    },
-    Candidate {
-        name: "K59-F101",
-        k: 59,
-        f: 101,
-        directory_page: 256 * 1024,
-    },
-    Candidate {
-        name: "K256-F256",
-        k: 256,
-        f: 256,
-        directory_page: 256 * 1024,
-    },
-];
-
-const DIR_CANDIDATES: [Candidate; 3] = [
-    Candidate {
-        name: "DIR256K",
-        k: 64,
-        f: 64,
-        directory_page: 256 * 1024,
-    },
-    Candidate {
-        name: "DIR64K",
-        k: 64,
-        f: 64,
-        directory_page: 64 * 1024,
-    },
-    Candidate {
-        name: "DIR1M",
-        k: 64,
-        f: 64,
-        directory_page: 1024 * 1024,
-    },
-];
-
-const CAMPAIGN_ORDER: [[usize; 3]; 6] = [
-    [1, 0, 2],
-    [1, 0, 2],
-    [2, 0, 1],
-    [1, 0, 2],
-    [2, 0, 1],
-    [1, 0, 2],
-];
+const SELECTED_PROFILE: Candidate = Candidate {
+    name: "K64-F64",
+    k: 64,
+    f: 64,
+    directory_page: 256 * 1024,
+};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct Metrics {
@@ -1315,12 +1269,11 @@ struct ChargedPreparedExpectations {
 }
 
 fn require_amended_m45_expectations(
-    candidate: Candidate,
     size: u64,
     operation: &str,
     expected: &PreparedExpectations,
 ) -> AnyResult<()> {
-    if candidate.name != "K64-F64" || size != SOURCE_100 || operation != "same-middle" {
+    if size != SOURCE_100 || operation != "same-middle" {
         return Ok(());
     }
     let point = expected.edit_point.ok_or(CoreError::PublicationConflict)?;
@@ -2050,137 +2003,46 @@ fn combined_closure_digest(transition: [u8; 32], content: [u8; 32]) -> [u8; 32] 
     *hasher.finalize().as_bytes()
 }
 
-fn profile_id(candidate: Candidate) -> CoreResult<[u8; 32]> {
-    let mut hasher = Hasher::new();
-    hasher.update(b"layerfs/mapping-profile/wp4m/v1\0");
-    hasher.update(
-        &u32::try_from(candidate.k)
-            .map_err(|_| CoreError::LengthOverflow)?
-            .to_be_bytes(),
-    );
-    hasher.update(
-        &u32::try_from(candidate.f)
-            .map_err(|_| CoreError::LengthOverflow)?
-            .to_be_bytes(),
-    );
-    hasher.update(
-        &u32::try_from(candidate.directory_page)
-            .map_err(|_| CoreError::LengthOverflow)?
-            .to_be_bytes(),
-    );
-    hasher.update(&(8 * 1024 * 1024_u32).to_be_bytes());
-    Ok(*hasher.finalize().as_bytes())
+fn profile_id() -> [u8; 32] {
+    file_codec::selected_mapping_profile_id().to_bytes()
 }
 
-fn frozen_100_result(
-    candidate: Candidate,
-    operation: &str,
-) -> AnyResult<Option<(ObjectId, ObjectId, [u8; 32])>> {
-    let values = match (candidate.name, operation) {
-        ("K64-F64", "full") => (
+fn frozen_100_result(operation: &str) -> AnyResult<Option<(ObjectId, ObjectId, [u8; 32])>> {
+    let values = match operation {
+        "full" => (
             "2d41c27f96b0332475fb8ec3c46a336c9c8a8084408bc545e5cbb24d51cb25d0",
             "ba15fd20469414de99c135fc90a5c5ad028f99f115b8c0d138ace9ec98536412",
             "d6aac6e40cc851dd6295dbeec6488f1c5ebefa7520f86b0cd12bdcdce1f0d54a",
         ),
-        ("K64-F64", "same-middle") => (
+        "same-middle" => (
             "d1a69475b0f8e25e44d7bd625a679b596ea2a8b3347ef8c15fafa13f654b299b",
             "f11cc9d84deae7f1871adca62cc562ab63dbb01e9c39771ed3522eab4007cee1",
             "c0f6a39bf9939c89301bedb564516c5ec851321a1d89c69b2e95d4b1844a9587",
         ),
-        ("K64-F64", "plus1-early") => (
+        "plus1-early" => (
             "4648eb987df7b46844135218cdbd73cbd8480d34b74a832f123fdfb1221869eb",
             "ac12e88bc47967043647484112ab5d1113d7f0ebbaa8c9026749b9123d8e949a",
             "e86efa7aaeaaf8f983c8fcaf48b5c206ce6d53d2be502cfc05a33dede544c5f1",
         ),
-        ("K64-F64", "plus1-middle") => (
+        "plus1-middle" => (
             "41e9b48e1af960a4587027b929608d50686b59cd9dc22a625cbb5548379539b9",
             "bfcc3537f01f17265ecef026e5fc5ccf4a4da599c4659ddd4259a8bd63ff74a9",
             "4eb35ed21ded2bf3135d058a6a0da042db1af3c53d74d119e82c956a9c07110a",
         ),
-        ("K59-F101", "full") => (
-            "41c5f8dc523a727ccbb4abe6dc1b0051010337965979e71d522b4f36dea12cef",
-            "3797824c4e5eaa8d75c9154c7ca6f1a210cbae6a3bdf66b60ec43058780b91e7",
-            "a944b36024a2fdd632be2739d974b57b2281d9de566d3d82525a9eb95badd890",
-        ),
-        ("K59-F101", "same-middle") => (
-            "0f92c57fa6451acce27b74042d1c9589af55d04fd0409c29b84e4b1219150133",
-            "fc24e1e11b0f95bef467b2ef6405efbf6ec102a94f67e5e33b9ae27f5aab5b2b",
-            "0969576c7e0019fe9900078b7f91b7f8b9c5a20b908e86b3d040fc7cd4b13941",
-        ),
-        ("K59-F101", "plus1-early") => (
-            "88deb40b282ab31ca9b9a3794537d79c5ec4eaf839ec025a1ebf9e5823637701",
-            "ad03cfcc4c6cd30189f6bca51ab4c35eda2e8bb9dd645e27f965c7dac00fae20",
-            "d7262b783d534ac54446f278f7f9d17b5fa0ff50ef2b4803aa78582b7282883f",
-        ),
-        ("K59-F101", "plus1-middle") => (
-            "c66d32b843d022a4da13e57f16d8b0e5f0a447098efb8c34aea1d49743f92ace",
-            "068fc4158154e4d2abf68a1c74a54a45d320554f9df457226019c22329c597a5",
-            "dff386cbc55d48857e46331d6282f4b597bb297ef93865cacbc5f72a822e69d1",
-        ),
-        ("K256-F256", "full") => (
-            "1d48c647d37ef9186c8377bacbf154ae4d93ca256dc05b97a411fbb0d22538be",
-            "9485cd1f1e9459ec5ccdc006318ffabdeea290469dc2a8bab924d325c1fc5c22",
-            "0aa3cceab4dde98f6083fba3edc6267fbee68e3933f09569a3e266147c0dde27",
-        ),
-        ("K256-F256", "same-middle") => (
-            "290734354816c3cccc8be8062cbb1602f439006535454b104034e4c290ef8bd5",
-            "bc748668585d88cb54664e5c5a93fa5c5e6c42278fd1c8d54e18d18305ec0cdd",
-            "cd25222d51f6e4c37776f0fb523a51ac2f6256e62c19b51062f8bf6f0df99cd6",
-        ),
-        ("K256-F256", "plus1-early") => (
-            "fbf5b0a5baeb996d9121d9d4b1da691f117f631836cfac7bee47def787363e81",
-            "17c93617cf9a6654a6a8058cbf023f03e8844b7050e0014109292e1550d65250",
-            "59399d1d42fb5963590249c810b755ad25de4f13a15e57f3fbdb05cae6f74b98",
-        ),
-        ("K256-F256", "plus1-middle") => (
-            "00bc25e1132dc6e9efee17287bc88f785c3d0295db063767bc10485a6fdc94c1",
-            "767da2937502ac1ba4f9692e09fa45d47cd3ee83a261fdafb3b4e842fe700632",
-            "a9931e987b584a10254c58c08da5fc984e7e208f32dde1144aae0dce5503986f",
-        ),
-        ("DIR64K", "dir-create") | ("DIR64K", "dir-lookup") => (
-            "451905e619ea74aba4d271a0616ff1543b51b5fd67aff33c721c550307f543ea",
-            "0ab027cb1ef0239634b92aa4846dc71cb1eba5189d56b37cfd99ba9a2e97827d",
-            "dcb86f04ef876a6a7284b79e99a21e8bbd19ff0a66d66a0a92fdb0577967126c",
-        ),
-        ("DIR64K", "dir-replace") => (
-            "80bad8c60f849824788d3add8d89e7a4a9e6359e95b862bdbd3fe625eaee85a9",
-            "acd2d9634f6ca7adcbc0cf90bd2f8f9e507782aa8b8f11b7735eb892ddd88df7",
-            "77efaa5776bb411cac4309423dd7ff04bbdcca7384eefa65f2ea63db08b918e3",
-        ),
-        ("DIR64K", "dir-leading") => (
-            "1a600306e4af1e29da90581a162c1c3c782b99503c50ffee344393ae019c2a50",
-            "b18dd89a51642c45e84817ed229071f0dd0be767e870d0e73a5e8a01125d940b",
-            "6d732e9efe07c5d39d3fbcdb22dc87006917202cc60ad1d816f9400e76a8be53",
-        ),
-        ("DIR256K", "dir-create") | ("DIR256K", "dir-lookup") => (
+        "dir-create" | "dir-lookup" => (
             "9d9eadc6432de69940e63d54311a9243d3f175ac4a0d882968a85fcd8c454bd6",
             "ae9f39d6889211e0603babd73c32ec0cea0a8ecb55d925458956d1ee64552efb",
             "9d850bf4a87337576b493144ef2042f6216730da8977195ef643f47d6b1b7b94",
         ),
-        ("DIR256K", "dir-replace") => (
+        "dir-replace" => (
             "8cf39abfd2f5948df5822bfd6ba6302b5655fbc6e086184c2feb280b3daf4b87",
             "bc6ff3b9fefe89738b06fa13c94683518ea82533782cbd74b93025ee09660130",
             "ce58f5954f09765bf62a7d3533cbee22a52842f01497680772507bea1575c0a2",
         ),
-        ("DIR256K", "dir-leading") => (
+        "dir-leading" => (
             "3a5d482b9621609602011fd1e5ffbe0b41c1f721fe89dcb7a08674f53eb08819",
             "b3ba5cdaef2a7b4ca91dca3a2cee14e5d12b27246117e31887e7ceb3f27dffd1",
             "1dc30260a0008df91ebcdedcb2f1abd15e472eceba915b30357c01b50c3bc01d",
-        ),
-        ("DIR1M", "dir-create") | ("DIR1M", "dir-lookup") => (
-            "de9b0c9379af459993b8f753196bc032bcb7e266c5310f47d2a23394c3f82281",
-            "6e5d021ac3e2840d5d124cc3c05ffad780b867f0700a53803a0fd24d3a1ede67",
-            "cfc842dac50514bd36b7ed218daba835d26e75b199fe1126417c133cf7482e86",
-        ),
-        ("DIR1M", "dir-replace") => (
-            "9640464ed79a3843bfb83964f79a856f100d75fe6e0a312fa6695eaf4f328b77",
-            "7ed294db597603aa29a5b51c07fce8550ad3bfb8b360912896b5ac345f1aa121",
-            "06a7f38cedcc8441afafc9d4a303b33a917582a45c7e89f5c0114662c9f0ab5d",
-        ),
-        ("DIR1M", "dir-leading") => (
-            "29026f4596dceb3aa36fe687b7045b78ff1759b7bf208d9ed5dd52f830f672a8",
-            "5babc1520417e6831af6b0ade45df2bb8abde7552e06d91701658e322142cc6a",
-            "515c381545fea041d6cd1d87a0e7267188be6e0f64342e22833848fe3eb37a3c",
         ),
         _ => return Ok(None),
     };
@@ -2267,7 +2129,7 @@ impl Store {
 
     fn open_inner(
         path: &Path,
-        candidate: Candidate,
+        _candidate: Candidate,
         mut metrics: Option<&mut Metrics>,
     ) -> AnyResult<Self> {
         let connection = Connection::open(path)?;
@@ -2323,7 +2185,7 @@ impl Store {
             observe_execute_call(metrics, 0)?;
             observe_execute_call(metrics, 0)?;
         }
-        let profile = profile_id(candidate)?;
+        let profile = profile_id();
         let existing: Option<StoreMetaRow> = connection
             .query_row(
                 "SELECT profile_id, store_instance_id, validation_authority_id, integrity_epoch
@@ -3577,11 +3439,7 @@ fn construction_frontier_bytes(
     candidate: Candidate,
     expected_references: u64,
 ) -> CoreResult<(usize, usize)> {
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
-    let height = usize::from(file_codec::expected_file_level(
-        expected_references,
-        profile,
-    )?);
+    let height = usize::from(file_codec::expected_file_level(expected_references)?);
     let leaf_count = if expected_references == 0 {
         0
     } else {
@@ -4747,7 +4605,6 @@ fn source_label(size: u64) -> String {
         SOURCE_1 => "S1-1".to_string(),
         SOURCE_10 => "S1-10".to_string(),
         SOURCE_100 => "S1-100".to_string(),
-        SOURCE_512 => "S1-512".to_string(),
         _ => format!("S1-{size}"),
     }
 }
@@ -4765,7 +4622,6 @@ fn fill_source(path: &Path, size: u64, seed: u64) -> AnyResult<()> {
             0x41 => "S1-1",
             0x4a => "S1-10",
             0x51 => "S1-100",
-            0x52 => "S1-512",
             _ => return Err("unknown deterministic source seed".into()),
         };
         fill_retained_buffer(&mut buffer, written, label);
@@ -4799,109 +4655,6 @@ fn fill_retained_buffer(buffer: &mut [u8], offset: u64, salt: &str) {
             (state >> 24) as u8
         };
     }
-}
-
-fn prepare_sources(root: &Path) -> AnyResult<()> {
-    prepare_sources_for(root, &[SOURCE_100, SOURCE_512], false)
-}
-
-fn prepare_sources_for(root: &Path, sizes: &[u64], create_missing: bool) -> AnyResult<()> {
-    fs::create_dir_all(root)?;
-    let mut manifest = String::from(
-        "{\"format\":1,\"fixture_origin\":\"phase2-deterministic-retained-generator\",\"fixtures\":[",
-    );
-    for &size in sizes {
-        let path = source_path(root, size);
-        if !path.exists() && create_missing {
-            fill_source(&path, size, if size == SOURCE_100 { 0x51 } else { 0x52 })?;
-        }
-        if fs::metadata(&path).ok().map(|metadata| metadata.len()) != Some(size) {
-            return Err(format!(
-                "retained fixture {} is missing; generate/copy it outside the campaign first",
-                path.display()
-            )
-            .into());
-        }
-        let expected = if size == SOURCE_100 {
-            RETAINED_CDC_100
-        } else {
-            RETAINED_CDC_512
-        };
-        let expected_raw = if size == SOURCE_100 {
-            RETAINED_RAW_100
-        } else {
-            RETAINED_RAW_512
-        };
-        let expected_sequence = if size == SOURCE_100 {
-            RETAINED_CDC_SEQUENCE_100
-        } else {
-            RETAINED_CDC_SEQUENCE_512
-        };
-        let (actual_length, source_fingerprint) = source_hash(&path)?;
-        let (chunks, sequence_fingerprint) = source_cdc_sequence(&path)?;
-        if actual_length != size {
-            return Err(CoreError::LengthMismatch {
-                expected: size,
-                actual: actual_length,
-            }
-            .into());
-        }
-        if chunks != expected {
-            return Err(format!(
-                "retained fixture {} has {chunks} CDC chunks, expected {expected}",
-                path.display()
-            )
-            .into());
-        }
-        if source_fingerprint != expected_raw || sequence_fingerprint != expected_sequence {
-            return Err(format!(
-                "retained fixture {} fingerprint mismatch: raw={} sequence={}",
-                path.display(),
-                source_fingerprint,
-                sequence_fingerprint
-            )
-            .into());
-        }
-        if !manifest.ends_with('[') {
-            manifest.push(',');
-        }
-        manifest.push_str(&format!(
-            "{{\"name\":\"{}\",\"size_bytes\":{},\"raw_fingerprint\":\"{}\",\"cdc_references\":{},\"cdc_sequence_fingerprint\":\"{}\"}}",
-            path.file_name().and_then(|name| name.to_str()).unwrap_or("unknown"),
-            size,
-            source_fingerprint,
-            chunks,
-            sequence_fingerprint
-        ));
-    }
-    manifest.push_str("]}\n");
-    let manifest_path = root.join("wp4m-retained-fixture-manifest.json");
-    if !manifest_path.exists() && create_missing {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&manifest_path)?;
-        file.write_all(manifest.as_bytes())?;
-        file.sync_all()?;
-    }
-    let retained_manifest = fs::read_to_string(&manifest_path).map_err(|error| {
-        format!(
-            "retained fixture manifest {} is missing; custody it outside the campaign: {error}",
-            manifest_path.display()
-        )
-    })?;
-    if retained_manifest != manifest {
-        return Err(format!(
-            "retained fixture manifest {} does not match the frozen raw/CDC fingerprints",
-            manifest_path.display()
-        )
-        .into());
-    }
-    Ok(())
-}
-
-fn prepare_retained_fixtures(root: &Path) -> AnyResult<()> {
-    prepare_sources_for(root, &[SOURCE_100, SOURCE_512], true)
 }
 
 fn prepare_fast_fixture(root: &Path, size: u64) -> AnyResult<()> {
@@ -5545,24 +5298,21 @@ fn tail_exact_rejoin(
 fn file_reference_at_ordinal(
     store: &Store,
     file_root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     ordinal: u64,
     metrics: &mut Metrics,
 ) -> AnyResult<file_codec::FileReference> {
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
     let root_bytes = store.get_bytes(file_root, metrics)?;
     let payload = file_codec::decode_mapping(&root_bytes, file_codec::FILE_ROOT_TAG)?;
     let _children_charge = charge_decoded_file_children(payload, true, metrics)?;
     let (_, _, reference_count, mut level, children) = file_codec::parse_file_root(payload)?;
-    if ordinal >= reference_count
-        || level != file_codec::expected_file_level(reference_count, profile)?
-    {
+    if ordinal >= reference_count || level != file_codec::expected_file_level(reference_count)? {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    file_codec::validate_file_children(&children, profile, true)?;
+    file_codec::validate_file_children(&children, true)?;
     let mut local = ordinal;
     let (mut node, mut final_node) = {
-        let capacity = subtree_reference_capacity(profile, level)?;
+        let capacity = subtree_reference_capacity(level)?;
         let index = usize::try_from(local / capacity).map_err(|_| CoreError::LengthOverflow)?;
         local %= capacity;
         (
@@ -5581,11 +5331,11 @@ fn file_reference_at_ordinal(
         if branch_level != level {
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
-        file_codec::validate_file_children(&children, profile, final_node)?;
+        file_codec::validate_file_children(&children, final_node)?;
         level = level
             .checked_sub(1)
             .ok_or(CoreError::MappingDepthExceeded)?;
-        let capacity = subtree_reference_capacity(profile, level)?;
+        let capacity = subtree_reference_capacity(level)?;
         let index = usize::try_from(local / capacity).map_err(|_| CoreError::LengthOverflow)?;
         local %= capacity;
         final_node = final_node && index + 1 == children.len();
@@ -5598,7 +5348,7 @@ fn file_reference_at_ordinal(
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
     let _references_charge = charge_decoded_file_references(payload, metrics)?;
     let references = file_codec::parse_file_leaf(payload)?;
-    file_codec::validate_file_leaf(&references, profile, final_node)?;
+    file_codec::validate_file_leaf(&references, final_node)?;
     references
         .get(usize::try_from(local).map_err(|_| CoreError::LengthOverflow)?)
         .copied()
@@ -6182,7 +5932,6 @@ fn rewrite_same_node_by_offset(
     id: ObjectId,
     level: u8,
     final_node: bool,
-    profile: file_codec::FileMappingProfile,
     node_start: u64,
     target: u64,
     replacement: file_codec::FileReference,
@@ -6197,7 +5946,7 @@ fn rewrite_same_node_by_offset(
         let _refs_charge = charge_decoded_file_references(payload, metrics)?;
         let mut refs = file_codec::parse_file_leaf(payload)?;
         observe_file_references(metrics, refs.len())?;
-        file_codec::validate_file_leaf(&refs, profile, final_node)?;
+        file_codec::validate_file_leaf(&refs, final_node)?;
         let mut offset = node_start;
         let mut changed = false;
         for reference in &mut refs {
@@ -6229,7 +5978,7 @@ fn rewrite_same_node_by_offset(
     if branch_level != level {
         return Err(CoreError::NonCanonicalOrdering.into());
     }
-    file_codec::validate_file_children(&children, profile, final_node)?;
+    file_codec::validate_file_children(&children, final_node)?;
     let total = children.last().map_or(0, |child| child.cumulative_end);
     let mut previous = 0_u64;
     let mut changed = false;
@@ -6249,7 +5998,6 @@ fn rewrite_same_node_by_offset(
                     .checked_sub(1)
                     .ok_or(CoreError::MappingDepthExceeded)?,
                 final_node && index + 1 == child_count,
-                profile,
                 child_start,
                 target,
                 replacement,
@@ -6278,7 +6026,7 @@ fn rewrite_same_node_by_offset(
 fn rewrite_same_root_by_offset(
     store: &mut Store,
     root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     target: u64,
     replacement: file_codec::FileReference,
     metrics: &mut Metrics,
@@ -6288,11 +6036,10 @@ fn rewrite_same_root_by_offset(
     let _children_charge = charge_decoded_file_children(payload, true, metrics)?;
     let (mode, total_raw, reference_count, level, mut children) =
         file_codec::parse_file_root(payload)?;
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
-    if level != file_codec::expected_file_level(reference_count, profile)? {
+    if level != file_codec::expected_file_level(reference_count)? {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    file_codec::validate_file_children(&children, profile, true)?;
+    file_codec::validate_file_children(&children, true)?;
     let mut previous = 0_u64;
     let mut changed = false;
     let child_count = children.len();
@@ -6305,7 +6052,6 @@ fn rewrite_same_root_by_offset(
                 child.object_id,
                 level,
                 index + 1 == child_count,
-                profile,
                 child_start,
                 target,
                 replacement,
@@ -6343,7 +6089,6 @@ fn rewrite_same_node_by_ordinal(
     id: ObjectId,
     level: u8,
     final_node: bool,
-    profile: file_codec::FileMappingProfile,
     node_start: u64,
     node_references: u64,
     replacement_start: u64,
@@ -6366,8 +6111,7 @@ fn rewrite_same_node_by_ordinal(
         let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?;
         let _references_charge = charge_decoded_file_references(payload, metrics)?;
         let mut references = file_codec::parse_file_leaf(payload)?;
-        let (actual_count, old_total) =
-            file_codec::validate_file_leaf(&references, profile, final_node)?;
+        let (actual_count, old_total) = file_codec::validate_file_leaf(&references, final_node)?;
         if actual_count != node_references {
             return Err(CoreError::LengthMismatch {
                 expected: node_references,
@@ -6422,11 +6166,11 @@ fn rewrite_same_node_by_ordinal(
     if branch_level != level {
         return Err(CoreError::NonCanonicalOrdering.into());
     }
-    file_codec::validate_file_children(&children, profile, final_node)?;
+    file_codec::validate_file_children(&children, final_node)?;
     let child_level = level
         .checked_sub(1)
         .ok_or(CoreError::MappingDepthExceeded)?;
-    let child_capacity = subtree_reference_capacity(profile, child_level)?;
+    let child_capacity = subtree_reference_capacity(child_level)?;
     let mut old_previous = 0_u64;
     let mut new_previous = 0_u64;
     let mut consumed_references = 0_u64;
@@ -6454,7 +6198,6 @@ fn rewrite_same_node_by_ordinal(
                 child.object_id,
                 child_level,
                 final_node && index + 1 == child_count,
-                profile,
                 child_start,
                 child_references,
                 replacement_start,
@@ -6510,7 +6253,7 @@ fn rewrite_same_node_by_ordinal(
 fn rewrite_same_root_by_ordinal(
     store: &mut Store,
     root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     replacement_start: u64,
     replacements: &[file_codec::FileReference],
     metrics: &mut Metrics,
@@ -6528,12 +6271,11 @@ fn rewrite_same_root_by_ordinal(
     if replacement_count == 0 || replacement_end > reference_count {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
-    if level != file_codec::expected_file_level(reference_count, profile)? {
+    if level != file_codec::expected_file_level(reference_count)? {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    file_codec::validate_file_children(&children, profile, true)?;
-    let child_capacity = subtree_reference_capacity(profile, level)?;
+    file_codec::validate_file_children(&children, true)?;
+    let child_capacity = subtree_reference_capacity(level)?;
     let mut old_previous = 0_u64;
     let mut new_previous = 0_u64;
     let mut consumed_references = 0_u64;
@@ -6559,7 +6301,6 @@ fn rewrite_same_root_by_ordinal(
                 child.object_id,
                 level,
                 index + 1 == child_count,
-                profile,
                 child_start,
                 child_references,
                 replacement_start,
@@ -6614,13 +6355,9 @@ fn rewrite_same_root_by_ordinal(
     Ok(new_id)
 }
 
-fn subtree_reference_capacity(
-    profile: file_codec::FileMappingProfile,
-    level: u8,
-) -> CoreResult<u64> {
-    let mut capacity =
-        u64::try_from(profile.leaf_capacity).map_err(|_| CoreError::LengthOverflow)?;
-    let fanout = u64::try_from(profile.branch_capacity).map_err(|_| CoreError::LengthOverflow)?;
+fn subtree_reference_capacity(level: u8) -> CoreResult<u64> {
+    let mut capacity = u64::try_from(SELECTED_PROFILE.k).map_err(|_| CoreError::LengthOverflow)?;
+    let fanout = u64::try_from(SELECTED_PROFILE.f).map_err(|_| CoreError::LengthOverflow)?;
     for _ in 0..level {
         capacity = capacity
             .checked_mul(fanout)
@@ -6636,7 +6373,6 @@ fn rebuild_plus_one_suffix(
     level: u8,
     final_node: bool,
     local_position: u64,
-    profile: file_codec::FileMappingProfile,
     inserted: file_codec::FileReference,
     builder: &mut FileBuilder,
     active: &mut Vec<ObjectId>,
@@ -6658,7 +6394,7 @@ fn rebuild_plus_one_suffix(
             let _references_charge = charge_decoded_file_references(payload, metrics)?;
             let references = file_codec::parse_file_leaf(payload)?;
             observe_file_references(metrics, references.len())?;
-            let (count, total) = file_codec::validate_file_leaf(&references, profile, final_node)?;
+            let (count, total) = file_codec::validate_file_leaf(&references, final_node)?;
             let local = usize::try_from(local_position).map_err(|_| CoreError::LengthOverflow)?;
             if local >= references.len() {
                 return Err(CoreError::NonCanonicalPagePartition.into());
@@ -6685,11 +6421,11 @@ fn rebuild_plus_one_suffix(
         if branch_level != level {
             return Err(CoreError::NonCanonicalOrdering.into());
         }
-        file_codec::validate_file_children(&children, profile, final_node)?;
+        file_codec::validate_file_children(&children, final_node)?;
         let child_level = level
             .checked_sub(1)
             .ok_or(CoreError::MappingDepthExceeded)?;
-        let child_capacity = subtree_reference_capacity(profile, child_level)?;
+        let child_capacity = subtree_reference_capacity(child_level)?;
         let selected = usize::try_from(local_position / child_capacity)
             .map_err(|_| CoreError::LengthOverflow)?;
         if selected >= children.len() {
@@ -6719,7 +6455,6 @@ fn rebuild_plus_one_suffix(
                     child_level,
                     final_node && index + 1 == children.len(),
                     local_position % child_capacity,
-                    profile,
                     inserted,
                     builder,
                     active,
@@ -6743,7 +6478,6 @@ fn rebuild_plus_one_suffix(
                     child.object_id,
                     child_level,
                     final_node && index + 1 == children.len(),
-                    profile,
                     active,
                     &mut |store, reference, metrics| {
                         builder.push_reference(store, reference, metrics)?;
@@ -6780,25 +6514,24 @@ fn rebuild_plus_one_suffix(
 fn rebuild_plus_one_root(
     store: &mut Store,
     root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     position: u64,
     inserted: file_codec::FileReference,
     builder: &mut FileBuilder,
     metrics: &mut Metrics,
 ) -> AnyResult<(u64, u64)> {
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
     let bytes = store.get_bytes(root, metrics)?;
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
     let _children_charge = charge_decoded_file_children(payload, true, metrics)?;
     let (_, declared_total, declared_references, level, children) =
         file_codec::parse_file_root(payload)?;
     if position >= declared_references
-        || level != file_codec::expected_file_level(declared_references, profile)?
+        || level != file_codec::expected_file_level(declared_references)?
     {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    file_codec::validate_file_children(&children, profile, true)?;
-    let child_capacity = subtree_reference_capacity(profile, level)?;
+    file_codec::validate_file_children(&children, true)?;
+    let child_capacity = subtree_reference_capacity(level)?;
     let selected =
         usize::try_from(position / child_capacity).map_err(|_| CoreError::LengthOverflow)?;
     if selected >= children.len() {
@@ -6837,7 +6570,6 @@ fn rebuild_plus_one_root(
                 level,
                 index + 1 == children.len(),
                 position % child_capacity,
-                profile,
                 inserted,
                 builder,
                 &mut active,
@@ -6861,7 +6593,6 @@ fn rebuild_plus_one_root(
                 child.object_id,
                 level,
                 index + 1 == children.len(),
-                profile,
                 &mut active,
                 &mut |store, reference, metrics| {
                     builder.push_reference(store, reference, metrics)?;
@@ -7064,7 +6795,6 @@ fn edit_file_same_middle_cdc(
 fn walk_file_root_references<F>(
     store: &mut Store,
     id: ObjectId,
-    profile: file_codec::FileMappingProfile,
     active: &mut Vec<ObjectId>,
     callback: &mut F,
     metrics: &mut Metrics,
@@ -7082,7 +6812,7 @@ where
         let _children_charge = charge_decoded_file_children(payload, true, metrics)?;
         let (_, expected_length, expected_references, level, children) =
             file_codec::parse_file_root(payload)?;
-        if level != file_codec::expected_file_level(expected_references, profile)? {
+        if level != file_codec::expected_file_level(expected_references)? {
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
         if expected_references == 0 {
@@ -7091,7 +6821,7 @@ where
             }
             return Ok((0, 0));
         }
-        file_codec::validate_file_children(&children, profile, true)?;
+        file_codec::validate_file_children(&children, true)?;
         let child_count = children.len();
         let mut length = 0_u64;
         let mut references = 0_u64;
@@ -7102,7 +6832,6 @@ where
                 child.object_id,
                 level,
                 index + 1 == child_count,
-                profile,
                 active,
                 callback,
                 metrics,
@@ -7141,7 +6870,6 @@ fn walk_file_references<F>(
     id: ObjectId,
     level: u8,
     final_node: bool,
-    profile: file_codec::FileMappingProfile,
     active: &mut Vec<ObjectId>,
     callback: &mut F,
     metrics: &mut Metrics,
@@ -7162,7 +6890,7 @@ where
         let _references_charge = charge_decoded_file_references(payload, metrics)?;
         let references = file_codec::parse_file_leaf(payload)?;
         observe_file_references(metrics, references.len())?;
-        file_codec::validate_file_leaf(&references, profile, final_node)?;
+        file_codec::validate_file_leaf(&references, final_node)?;
         let mut length = 0_u64;
         for reference in references {
             callback(store, reference, metrics)?;
@@ -7182,7 +6910,7 @@ where
         if branch_level != level {
             return Err(CoreError::NonCanonicalOrdering.into());
         }
-        file_codec::validate_file_children(&children, profile, final_node)?;
+        file_codec::validate_file_children(&children, final_node)?;
         let child_count = children.len();
         let mut length = 0_u64;
         let mut references = 0_u64;
@@ -7195,7 +6923,6 @@ where
                     .checked_sub(1)
                     .ok_or(CoreError::MappingDepthExceeded)?,
                 final_node && index + 1 == child_count,
-                profile,
                 active,
                 callback,
                 metrics,
@@ -7228,7 +6955,6 @@ fn stream_file(
     id: ObjectId,
     level: u8,
     final_node: bool,
-    profile: file_codec::FileMappingProfile,
     batch_leaf_reads: bool,
     active: &mut Vec<ObjectId>,
     hasher: &mut Hasher,
@@ -7256,7 +6982,7 @@ fn stream_file(
         let _references_charge = charge_decoded_file_references(payload, metrics)?;
         let references = file_codec::parse_file_leaf(payload)?;
         observe_file_references(metrics, references.len())?;
-        file_codec::validate_file_leaf(&references, profile, final_node)?;
+        file_codec::validate_file_leaf(&references, final_node)?;
         *reference_count = (*reference_count)
             .checked_add(u64::try_from(references.len()).map_err(|_| CoreError::LengthOverflow)?)
             .ok_or(CoreError::LengthOverflow)?;
@@ -7292,7 +7018,7 @@ fn stream_file(
             Ok(())
         };
         if batch_leaf_reads {
-            store.for_each_leaf_bytes(&references, profile.leaf_capacity, metrics, &mut consume)?;
+            store.for_each_leaf_bytes(&references, SELECTED_PROFILE.k, metrics, &mut consume)?;
         } else {
             for reference in references {
                 store.with_borrowed_bytes(reference.object_id, metrics, |canonical, metrics| {
@@ -7308,7 +7034,7 @@ fn stream_file(
     if branch_level != level {
         return Err(CoreError::NonCanonicalOrdering.into());
     }
-    file_codec::validate_file_children(&children, profile, final_node)?;
+    file_codec::validate_file_children(&children, final_node)?;
     let child_count = children.len();
     let mut previous_end = 0_u64;
     for (index, child) in children.into_iter().enumerate() {
@@ -7321,7 +7047,6 @@ fn stream_file(
                 .checked_sub(1)
                 .ok_or(CoreError::MappingDepthExceeded)?,
             final_node && index + 1 == child_count,
-            profile,
             batch_leaf_reads,
             active,
             hasher,
@@ -7363,7 +7088,7 @@ fn stream_file(
 fn read_file_range(
     store: &Store,
     root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     range: std::ops::Range<u64>,
     metrics: &mut Metrics,
 ) -> AnyResult<ChargedVec<u8>> {
@@ -7380,8 +7105,7 @@ fn read_file_range(
     let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
     let _children_charge = charge_decoded_file_children(payload, true, metrics)?;
     let (_, total, references, level, children) = file_codec::parse_file_root(payload)?;
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
-    if level != file_codec::expected_file_level(references, profile)? {
+    if level != file_codec::expected_file_level(references)? {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
     if references == 0 {
@@ -7389,7 +7113,7 @@ fn read_file_range(
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
     } else {
-        file_codec::validate_file_children(&children, profile, true)?;
+        file_codec::validate_file_children(&children, true)?;
     }
     if range.end > total {
         return Err(CoreError::InvalidRange {
@@ -7426,7 +7150,6 @@ fn read_file_range(
             child.object_id,
             level,
             index + 1 == child_count,
-            profile,
             child_start,
             &range,
             &mut output,
@@ -7443,7 +7166,6 @@ fn route_file_range(
     id: ObjectId,
     level: u8,
     final_node: bool,
-    profile: file_codec::FileMappingProfile,
     node_start: u64,
     range: &std::ops::Range<u64>,
     output: &mut Vec<u8>,
@@ -7465,7 +7187,7 @@ fn route_file_range(
         let refs = file_codec::parse_file_leaf(payload)?;
         let refs_len = refs.len();
         observe_file_references(metrics, refs_len)?;
-        file_codec::validate_file_leaf(&refs, profile, final_node)?;
+        file_codec::validate_file_leaf(&refs, final_node)?;
         let mut offset = node_start;
         for reference in refs {
             let end = offset
@@ -7504,7 +7226,7 @@ fn route_file_range(
     if branch_level != level {
         return Err(CoreError::NonCanonicalOrdering.into());
     }
-    file_codec::validate_file_children(&children, profile, final_node)?;
+    file_codec::validate_file_children(&children, final_node)?;
     let mut previous = 0_u64;
     let child_count = children.len();
     for (index, child) in children.into_iter().enumerate() {
@@ -7523,7 +7245,6 @@ fn route_file_range(
                     .checked_sub(1)
                     .ok_or(CoreError::MappingDepthExceeded)?,
                 final_node && index + 1 == child_count,
-                profile,
                 child_start,
                 range,
                 output,
@@ -7598,7 +7319,6 @@ fn verify_changed_file_pair(
     replacement: ObjectId,
     level: u8,
     final_node: bool,
-    profile: file_codec::FileMappingProfile,
     prior_active: &mut Vec<ObjectId>,
     replacement_active: &mut Vec<ObjectId>,
     metrics: &mut Metrics,
@@ -7628,9 +7348,9 @@ fn verify_changed_file_pair(
             observe_file_references(metrics, prior_references.len())?;
             observe_file_references(metrics, replacement_references.len())?;
             let (prior_count, prior_total) =
-                file_codec::validate_file_leaf(&prior_references, profile, final_node)?;
+                file_codec::validate_file_leaf(&prior_references, final_node)?;
             let (replacement_count, replacement_total) =
-                file_codec::validate_file_leaf(&replacement_references, profile, final_node)?;
+                file_codec::validate_file_leaf(&replacement_references, final_node)?;
             if prior_count != replacement_count {
                 return Err(CoreError::LengthMismatch {
                     expected: prior_count,
@@ -7692,8 +7412,8 @@ fn verify_changed_file_pair(
         {
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
-        file_codec::validate_file_children(&prior_children, profile, final_node)?;
-        file_codec::validate_file_children(&replacement_children, profile, final_node)?;
+        file_codec::validate_file_children(&prior_children, final_node)?;
+        file_codec::validate_file_children(&replacement_children, final_node)?;
         let changed_count = prior_children
             .iter()
             .zip(&replacement_children)
@@ -7756,7 +7476,6 @@ fn verify_changed_file_pair(
                     .checked_sub(1)
                     .ok_or(CoreError::MappingDepthExceeded)?,
                 pair.final_node,
-                profile,
                 prior_active,
                 replacement_active,
                 metrics,
@@ -7787,7 +7506,7 @@ fn verify_same_count_changed_spine(
     store: &Store,
     permit: SameOpenValidationPermit,
     replacement_root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     metrics: &mut Metrics,
 ) -> AnyResult<()> {
     let _head_receipt_charge = charge_capacity(metrics, 216)?;
@@ -7846,19 +7565,18 @@ fn verify_same_count_changed_spine(
         replacement_level,
         replacement_children,
     ) = file_codec::parse_file_root(replacement_payload)?;
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
     if prior_mode != replacement_mode
         || prior_total != replacement_total
         || prior_references != replacement_references
         || prior_level != replacement_level
         || prior_children.len() != replacement_children.len()
-        || prior_level != file_codec::expected_file_level(prior_references, profile)?
-        || replacement_level != file_codec::expected_file_level(replacement_references, profile)?
+        || prior_level != file_codec::expected_file_level(prior_references)?
+        || replacement_level != file_codec::expected_file_level(replacement_references)?
     {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    file_codec::validate_file_children(&prior_children, profile, true)?;
-    file_codec::validate_file_children(&replacement_children, profile, true)?;
+    file_codec::validate_file_children(&prior_children, true)?;
+    file_codec::validate_file_children(&replacement_children, true)?;
     let active_capacity = usize::from(prior_level)
         .checked_add(3)
         .ok_or(CoreError::LengthOverflow)?;
@@ -7898,7 +7616,6 @@ fn verify_same_count_changed_spine(
                 replacement_child.object_id,
                 prior_level,
                 index + 1 == prior_children.len(),
-                profile,
                 &mut prior_active,
                 &mut replacement_active,
                 metrics,
@@ -8065,7 +7782,7 @@ fn reconstruct_file(
 fn verify_file_inner(
     store: &Store,
     root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     expected_fingerprint: Option<&str>,
     expected_sequence: Option<&str>,
     batch_leaf_reads: bool,
@@ -8099,8 +7816,7 @@ fn verify_file_inner(
     let (_, expected_length, expected_references, level, root_children) =
         file_codec::parse_file_root(payload)?;
     let expected_level = level;
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
-    if expected_level != file_codec::expected_file_level(expected_references, profile)? {
+    if expected_level != file_codec::expected_file_level(expected_references)? {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
     if expected_references == 0 {
@@ -8108,7 +7824,7 @@ fn verify_file_inner(
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
     } else {
-        file_codec::validate_file_children(&root_children, profile, true)?;
+        file_codec::validate_file_children(&root_children, true)?;
     }
     let mut hasher = Hasher::new();
     let mut sequence_hasher = Hasher::new();
@@ -8132,7 +7848,6 @@ fn verify_file_inner(
             child.object_id,
             root_level,
             index + 1 == child_count,
-            profile,
             batch_leaf_reads,
             &mut active,
             &mut hasher,
@@ -8189,7 +7904,7 @@ fn verify_file_inner(
 fn scrub_file(
     store: &mut Store,
     root: ObjectId,
-    candidate: Candidate,
+    _candidate: Candidate,
     metrics: &mut Metrics,
 ) -> AnyResult<(u64, u64)> {
     let file_root = resolve_namespace_file_root(store, root, metrics)?;
@@ -8198,8 +7913,7 @@ fn scrub_file(
     let _root_children_charge = charge_decoded_file_children(payload, true, metrics)?;
     let (_, expected_length, expected_references, level, _root_children) =
         file_codec::parse_file_root(payload)?;
-    let profile = file_codec::FileMappingProfile::new(candidate.k, candidate.f);
-    if level != file_codec::expected_file_level(expected_references, profile)? {
+    if level != file_codec::expected_file_level(expected_references)? {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
     let active_capacity = usize::from(level)
@@ -8224,14 +7938,8 @@ fn scrub_file(
             Ok(())
         })
     };
-    let (length, references) = walk_file_root_references(
-        store,
-        file_root,
-        profile,
-        &mut active,
-        &mut callback,
-        metrics,
-    )?;
+    let (length, references) =
+        walk_file_root_references(store, file_root, &mut active, &mut callback, metrics)?;
     file_codec::validate_file_root_summary(
         expected_length,
         expected_references,
@@ -8689,7 +8397,7 @@ fn verify_directory(
         file_codec::decode_mapping(&index_bytes, file_codec::DIR_INDEX_TAG)?,
         metrics,
     )?;
-    let mut partition = dir_codec::DirectoryPartitionValidator::new(candidate.directory_page);
+    let mut partition = dir_codec::DirectoryPartitionValidator::new();
     let mut total = 0_u64;
     let mut replacement_seen = false;
     let mut expected_number = first_number;
@@ -9425,168 +9133,6 @@ fn row_database_path(
     ))
 }
 
-fn template_root(root: &Path, candidate: Candidate, size: u64, operation: &str) -> PathBuf {
-    root.join("templates")
-        .join(candidate.name)
-        .join(size.to_string())
-        .join(operation)
-}
-
-fn template_database_path(
-    root: &Path,
-    candidate: Candidate,
-    size: u64,
-    operation: &str,
-) -> PathBuf {
-    row_database_path(
-        &template_root(root, candidate, size, operation),
-        candidate,
-        size,
-        operation,
-        0,
-    )
-}
-
-fn master_operation(operation: &str) -> &str {
-    match operation {
-        "same-middle" | "plus1-early" | "plus1-middle" => "same-middle",
-        "dir-lookup" | "dir-replace" => "dir-lookup",
-        _ => operation,
-    }
-}
-
-fn copy_file_bytes(source: &Path, destination: &Path) -> AnyResult<()> {
-    let mut input = File::open(source)?;
-    let mut output = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)?;
-    let mut buffer = vec![0_u8; 1024 * 1024];
-    loop {
-        let read = input.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        output.write_all(&buffer[..read])?;
-    }
-    output.sync_all()?;
-    Ok(())
-}
-
-fn copy_row_start(
-    root: &Path,
-    candidate: Candidate,
-    size: u64,
-    operation: &str,
-    iteration: usize,
-) -> AnyResult<(String, String, String)> {
-    let destination = row_database_path(root, candidate, size, operation, iteration);
-    let destination_authority = authority_path(&destination);
-    let destination_expectations = expectations_path(&destination);
-    for path in [
-        destination.as_path(),
-        destination_authority.as_path(),
-        destination_expectations.as_path(),
-    ] {
-        if path.exists() {
-            return Err(format!("row start already exists: {}", path.display()).into());
-        }
-    }
-    let database_master =
-        template_database_path(root, candidate, size, master_operation(operation));
-    let expectation_master = template_database_path(root, candidate, size, operation);
-    copy_file_bytes(&database_master, &destination)?;
-    copy_file_bytes(&authority_path(&database_master), &destination_authority)?;
-    copy_file_bytes(
-        &expectations_path(&expectation_master),
-        &destination_expectations,
-    )?;
-    Ok((
-        executable_sha256(&destination)?,
-        executable_sha256(&destination_authority)?,
-        executable_sha256(&destination_expectations)?,
-    ))
-}
-
-fn prepare_campaign_templates(root: &Path) -> AnyResult<()> {
-    let manifest_path = root.join("wp4m-campaign-master-manifest.json");
-    if manifest_path.exists() || root.join("templates").exists() {
-        return Err("campaign templates or master manifest already exist".into());
-    }
-    let mut records = Vec::new();
-    for candidate in FILE_CANDIDATES {
-        for size in [SOURCE_100, SOURCE_512] {
-            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
-                let template = template_root(root, candidate, size, operation);
-                fs::create_dir_all(&template)?;
-                prepare_row_database(&template, root, candidate, size, operation, 0)?;
-                let database = template_database_path(root, candidate, size, operation);
-                let mut expectation_metrics = Metrics::default();
-                let expectation = read_prepared_expectations(
-                    &expectations_path(&database),
-                    &mut expectation_metrics,
-                )?;
-                let (result_root, result_transition, result_closure) = expectation
-                    .value
-                    .result
-                    .ok_or("template result golden is missing")?;
-                drop(expectation);
-                finish_q(&mut expectation_metrics)?;
-                records.push(format!(
-                    "{{\"candidate\":\"{}\",\"profile_id\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"result_root\":\"{result_root}\",\"result_transition\":\"{result_transition}\",\"result_closure\":\"{}\",\"database_sha256\":\"{}\",\"authority_sha256\":\"{}\",\"expectations_sha256\":\"{}\"}}",
-                    candidate.name,
-                    hex_bytes(&profile_id(candidate)?),
-                    hex_bytes(&result_closure),
-                    executable_sha256(&database)?,
-                    executable_sha256(&authority_path(&database))?,
-                    executable_sha256(&expectations_path(&database))?,
-                ));
-            }
-        }
-    }
-    for candidate in DIR_CANDIDATES {
-        for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
-            let template = template_root(root, candidate, SOURCE_100, operation);
-            fs::create_dir_all(&template)?;
-            prepare_row_database(&template, root, candidate, SOURCE_100, operation, 0)?;
-            let database = template_database_path(root, candidate, SOURCE_100, operation);
-            let mut expectation_metrics = Metrics::default();
-            let expectation = read_prepared_expectations(
-                &expectations_path(&database),
-                &mut expectation_metrics,
-            )?;
-            let (result_root, result_transition, result_closure) = expectation
-                .value
-                .result
-                .ok_or("template result golden is missing")?;
-            drop(expectation);
-            finish_q(&mut expectation_metrics)?;
-            records.push(format!(
-                "{{\"candidate\":\"{}\",\"profile_id\":\"{}\",\"size_bytes\":{},\"operation\":\"{operation}\",\"directory_entries\":{},\"result_root\":\"{result_root}\",\"result_transition\":\"{result_transition}\",\"result_closure\":\"{}\",\"database_sha256\":\"{}\",\"authority_sha256\":\"{}\",\"expectations_sha256\":\"{}\"}}",
-                candidate.name,
-                hex_bytes(&profile_id(candidate)?),
-                SOURCE_100,
-                DIRECTORY_ENTRIES,
-                hex_bytes(&result_closure),
-                executable_sha256(&database)?,
-                executable_sha256(&authority_path(&database))?,
-                executable_sha256(&expectations_path(&database))?,
-            ));
-        }
-    }
-    let mut manifest = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(manifest_path)?;
-    writeln!(
-        manifest,
-        "{{\"format\":1,\"purpose\":\"profile_selection\",\"templates\":[{}]}}",
-        records.join(",")
-    )?;
-    manifest.sync_all()?;
-    Ok(())
-}
-
 fn prepare_row_database(
     root: &Path,
     source_root: &Path,
@@ -9948,7 +9494,7 @@ fn prepare_row_database(
         oracle_store.rollback(&mut oracle_metrics)?;
     }
     if size == SOURCE_100 {
-        if let Some(frozen) = frozen_100_result(candidate, operation)? {
+        if let Some(frozen) = frozen_100_result(operation)? {
             if Some(frozen) != expected.result {
                 return Err(format!(
                     "frozen 100-MiB result mismatch for {} {operation}: frozen={frozen:?} actual={:?}",
@@ -9958,7 +9504,7 @@ fn prepare_row_database(
             }
         }
     }
-    require_amended_m45_expectations(candidate, size, operation, &expected)?;
+    require_amended_m45_expectations(size, operation, &expected)?;
     write_prepared_expectations(&expectations_path(&db_path), &expected)?;
     Ok(())
 }
@@ -10055,16 +9601,6 @@ impl std::fmt::Display for ProvenanceDisplay {
     }
 }
 
-fn command_text(program: &str, arguments: &[&str]) -> AnyResult<String> {
-    let output = std::process::Command::new(program)
-        .args(arguments)
-        .output()?;
-    if !output.status.success() {
-        return Err(format!("{program} {:?} failed", arguments).into());
-    }
-    Ok(String::from_utf8(output.stdout)?.trim().to_string())
-}
-
 fn executable_sha256(path: &Path) -> AnyResult<String> {
     let output = std::process::Command::new("shasum")
         .args(["-a", "256"])
@@ -10082,58 +9618,6 @@ fn executable_sha256(path: &Path) -> AnyResult<String> {
         return Err("invalid executable SHA-256".into());
     }
     Ok(digest)
-}
-
-fn json_escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-}
-
-fn write_environment_record(root: &Path, executable: &Path) -> AnyResult<String> {
-    let executable_sha256 = executable_sha256(executable)?;
-    let rustc = command_text("rustc", &["-Vv"])?;
-    let target = rustc
-        .lines()
-        .find_map(|line| line.strip_prefix("host: "))
-        .ok_or("rustc host triple unavailable")?;
-    let cargo = command_text("cargo", &["-V"])?;
-    let commit = command_text("git", &["rev-parse", "HEAD"])?;
-    let status = command_text("git", &["status", "--short"])?;
-    let uname = command_text("uname", &["-a"])?;
-    let cpu = command_text("sysctl", &["-n", "machdep.cpu.brand_string"])
-        .unwrap_or_else(|_| "Unavailable".to_string());
-    let memory =
-        command_text("sysctl", &["-n", "hw.memsize"]).unwrap_or_else(|_| "Unavailable".to_string());
-    let cores =
-        command_text("sysctl", &["-n", "hw.ncpu"]).unwrap_or_else(|_| "Unavailable".to_string());
-    let sqlite = Connection::open_in_memory()?
-        .query_row("SELECT sqlite_version()", [], |row| row.get::<_, String>(0))?;
-    let rustflags = env::var("RUSTFLAGS").unwrap_or_default();
-    let encoded_rustflags = env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
-    let mut record = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(root.join("wp4m-profile-selection-environment.json"))?;
-    writeln!(
-        record,
-        "{{\"format\":1,\"build_command\":\"cargo build --release -p layerfs-engine --bin phase4_create_edit_benchmark\",\"build_profile\":\"release\",\"debug_assertions\":false,\"executable\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"git_commit\":\"{commit}\",\"git_status\":\"{}\",\"rustc_vv\":\"{}\",\"cargo_version\":\"{}\",\"target_triple\":\"{target}\",\"sqlite_version\":\"{sqlite}\",\"rustflags\":\"{}\",\"cargo_encoded_rustflags\":\"{}\",\"os_uname\":\"{}\",\"cpu\":\"{}\",\"memory_bytes\":\"{}\",\"logical_cpu_count\":\"{}\"}}",
-        json_escape(&executable.display().to_string()),
-        json_escape(&status),
-        json_escape(&rustc),
-        json_escape(&cargo),
-        json_escape(&rustflags),
-        json_escape(&encoded_rustflags),
-        json_escape(&uname),
-        json_escape(&cpu),
-        json_escape(&memory),
-        json_escape(&cores),
-    )?;
-    record.sync_all()?;
-    Ok(executable_sha256)
 }
 
 fn write_range_measurements(
@@ -10231,7 +9715,7 @@ fn row_json(
     let mut metrics = metrics;
     let pre_report_current = q_current();
     validate_metric_equations(metrics)?;
-    let profile_bytes = profile_id(candidate)?;
+    let profile_bytes = profile_id();
     let profile = HexBytes(&profile_bytes);
     let status = if error.is_some() { "FAIL" } else { "PASS" };
     let error_json = ErrorJson(error);
@@ -10425,12 +9909,7 @@ fn row_json(
         source_label(size)
     };
     let file_height = expected_references
-        .map(|references| {
-            file_codec::expected_file_level(
-                references,
-                file_codec::FileMappingProfile::new(candidate.k, candidate.f),
-            )
-        })
+        .map(file_codec::expected_file_level)
         .transpose()?;
     let (publication_status, publication_diagnostic) = match publication {
         Some(PublicationOutcome { status, diagnostic }) => {
@@ -10725,18 +10204,11 @@ fn row_json(
     Ok(output)
 }
 
-fn candidate_by_name(name: &str) -> AnyResult<Candidate> {
-    FILE_CANDIDATES
-        .iter()
-        .chain(DIR_CANDIDATES.iter())
-        .find(|candidate| candidate.name == name)
-        .copied()
-        .ok_or_else(|| format!("unknown candidate {name}").into())
-}
-
 fn require_optimized_benchmark() -> AnyResult<()> {
     if cfg!(debug_assertions) {
-        return Err("throughput/campaign rows require an optimized --release build (debug_assertions=false)".into());
+        return Err(
+            "measured rows require an optimized --release build (debug_assertions=false)".into(),
+        );
     }
     Ok(())
 }
@@ -10997,14 +10469,14 @@ fn run_row(
     require_optimized_benchmark()?;
     let executable_sha256 = executable_sha256(&env::current_exe()?)?;
     if env::var("WP4M_EXECUTABLE_SHA256").is_ok_and(|expected| expected != executable_sha256) {
-        return Err("running executable SHA-256 does not match campaign custody".into());
+        return Err("running executable SHA-256 does not match row custody".into());
     }
     if executable_sha256.len() != 64
         || !executable_sha256
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit())
     {
-        return Err("invalid campaign executable SHA-256".into());
+        return Err("invalid row executable SHA-256".into());
     }
     let source = source_path(root, size);
     let db_path = row_database_path(root, candidate, size, operation, iteration);
@@ -11035,7 +10507,7 @@ fn run_row(
     )?;
     let mut metrics = Metrics::default();
     let prepared = read_prepared_expectations(&expectations_path(&db_path), &mut metrics)?;
-    require_amended_m45_expectations(candidate, size, operation, &prepared.value)?;
+    require_amended_m45_expectations(size, operation, &prepared.value)?;
     let ChargedPreparedExpectations {
         value:
             PreparedExpectations {
@@ -11061,7 +10533,7 @@ fn run_row(
         .into());
     }
     let frozen_result = (size == SOURCE_100)
-        .then(|| frozen_100_result(candidate, operation))
+        .then(|| frozen_100_result(operation))
         .transpose()?
         .flatten();
     let prepared_result = prepared_result.ok_or("prepared row is missing its result golden")?;
@@ -11848,8 +11320,8 @@ fn run_row(
 fn self_test(root: &Path) -> AnyResult<()> {
     fs::create_dir_all(root)?;
     let source = root.join("self-test.bin");
-    fill_source(&source, 256 * 1024, 0x11)?;
-    let candidate = FILE_CANDIDATES[0];
+    fill_source(&source, 256 * 1024, 0x41)?;
+    let candidate = SELECTED_PROFILE;
     let db = root.join("self-test.sqlite");
     if db.exists() {
         fs::remove_file(&db)?;
@@ -11922,10 +11394,12 @@ fn self_test(root: &Path) -> AnyResult<()> {
     Ok(())
 }
 
+#[cfg(test)]
 struct JsonObject<'a> {
     fields: BTreeMap<&'a str, &'a str>,
 }
 
+#[cfg(test)]
 impl<'a> JsonObject<'a> {
     fn parse(input: &'a str) -> AnyResult<Self> {
         let input = input.trim();
@@ -12017,6 +11491,7 @@ impl<'a> JsonObject<'a> {
     }
 }
 
+#[cfg(test)]
 fn json_string_end(bytes: &[u8], start: usize) -> AnyResult<usize> {
     let mut index = start.checked_add(1).ok_or(CoreError::LengthOverflow)?;
     while index < bytes.len() {
@@ -12028,368 +11503,6 @@ fn json_string_end(bytes: &[u8], start: usize) -> AnyResult<usize> {
         }
     }
     Err("unterminated JSON string".into())
-}
-
-fn decimal_seconds_to_ns(value: &str) -> Option<u128> {
-    let (whole, fraction) = value.split_once('.').unwrap_or((value, ""));
-    let seconds = whole.parse::<u128>().ok()?;
-    let mut nanoseconds = 0_u128;
-    for byte in fraction.as_bytes().iter().take(9) {
-        nanoseconds = nanoseconds
-            .checked_mul(10)?
-            .checked_add(u128::from(byte.saturating_sub(b'0')))?;
-    }
-    for _ in fraction.len().min(9)..9 {
-        nanoseconds = nanoseconds.checked_mul(10)?;
-    }
-    seconds
-        .checked_mul(1_000_000_000)
-        .and_then(|value| value.checked_add(nanoseconds))
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct ExternalResourceMetrics {
-    user_cpu_ns: Option<u128>,
-    system_cpu_ns: Option<u128>,
-    rss_bytes: Option<u64>,
-    peak_footprint_bytes: Option<u64>,
-    block_input_operations: Option<u64>,
-    block_output_operations: Option<u64>,
-}
-
-fn external_resource_metrics(stderr: &str) -> ExternalResourceMetrics {
-    let mut metrics = ExternalResourceMetrics::default();
-    for line in stderr.lines() {
-        let tokens: Vec<&str> = line.split_whitespace().collect();
-        if let Some(index) = tokens.iter().position(|token| *token == "user") {
-            if index > 0 {
-                metrics.user_cpu_ns = decimal_seconds_to_ns(tokens[index - 1]);
-            }
-        }
-        if let Some(index) = tokens.iter().position(|token| *token == "sys") {
-            if index > 0 {
-                metrics.system_cpu_ns = decimal_seconds_to_ns(tokens[index - 1]);
-            }
-        }
-        let first_number = || tokens.iter().find_map(|token| token.parse::<u64>().ok());
-        if line.contains("maximum resident set size") {
-            metrics.rss_bytes = first_number();
-        } else if line.contains("peak memory footprint") {
-            metrics.peak_footprint_bytes = first_number();
-        } else if line.contains("block input operations") {
-            metrics.block_input_operations = first_number();
-        } else if line.contains("block output operations") {
-            metrics.block_output_operations = first_number();
-        }
-    }
-    metrics
-}
-
-fn add_external_resource_metrics(stdout: &str, stderr: &str) -> AnyResult<String> {
-    let metrics = external_resource_metrics(stderr);
-    let cpu_ns = metrics.user_cpu_ns.and_then(|user| {
-        metrics
-            .system_cpu_ns
-            .and_then(|system| user.checked_add(system))
-    });
-    let mut line = stdout.trim_end().to_string();
-    JsonObject::parse(&line)?;
-    if line.pop() != Some('}') {
-        return Err("row JSON lost its object terminator".into());
-    }
-    writeln!(
-        &mut line,
-        ",\"user_cpu_ns\":{},\"system_cpu_ns\":{},\"cpu_ns\":{},\"rss_bytes\":{},\"peak_footprint_bytes\":{},\"block_input_operations\":{},\"block_output_operations\":{}}}",
-        metrics.user_cpu_ns.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-        metrics.system_cpu_ns.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-        cpu_ns.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-        metrics.rss_bytes.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-        metrics.peak_footprint_bytes.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-        metrics.block_input_operations.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-        metrics.block_output_operations.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-    )
-    .map_err(|_| CoreError::Io)?;
-    Ok(line)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn invoke_campaign_row(
-    root: &Path,
-    candidate: Candidate,
-    size: u64,
-    operation: &str,
-    iteration: usize,
-    warmup: bool,
-    output: &mut File,
-    failures: &mut File,
-    commands: &mut File,
-    resources: &mut File,
-    started: &mut File,
-    returned: &mut File,
-    benchmark_sha256: &str,
-) -> AnyResult<()> {
-    let executable = env::current_exe()?;
-    let (database_sha256, authority_sha256, expectations_sha256) =
-        copy_row_start(root, candidate, size, operation, iteration)?;
-    let row_id = format!("block-{iteration}-{}-{size}-{operation}", candidate.name);
-    writeln!(
-        started,
-        "{{\"row_id\":\"{row_id}\",\"candidate\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"database_sha256\":\"{database_sha256}\",\"authority_sha256\":\"{authority_sha256}\",\"expectations_sha256\":\"{expectations_sha256}\"}}",
-        candidate.name,
-    )?;
-    started.sync_all()?;
-    let mut command = if Path::new("/usr/bin/time").is_file() {
-        let mut command = std::process::Command::new("/usr/bin/time");
-        command.arg("-l").arg(&executable);
-        command
-    } else {
-        std::process::Command::new(&executable)
-    };
-    let args = vec![
-        "--row".to_string(),
-        root.to_str().ok_or("non-UTF8 campaign root")?.to_string(),
-        candidate.name.to_string(),
-        size.to_string(),
-        operation.to_string(),
-        iteration.to_string(),
-        warmup.to_string(),
-    ];
-    command.args(&args);
-    command.env("WP4M_EXECUTABLE_SHA256", benchmark_sha256);
-    command.env(
-        "WP4M_BASE_COPY_METHOD",
-        "physical-byte-copy-identical-database-authority-expectations",
-    );
-    command.env("WP4M_BASE_DATABASE_SHA256", &database_sha256);
-    command.env("WP4M_BASE_AUTHORITY_SHA256", &authority_sha256);
-    command.env("WP4M_BASE_EXPECTATIONS_SHA256", &expectations_sha256);
-    writeln!(
-        commands,
-        "WP4M_EXECUTABLE_SHA256={} WP4M_BASE_COPY_METHOD=physical-byte-copy-identical-database-authority-expectations WP4M_BASE_DATABASE_SHA256={} WP4M_BASE_AUTHORITY_SHA256={} WP4M_BASE_EXPECTATIONS_SHA256={} {:?} {:?}",
-        benchmark_sha256,
-        database_sha256,
-        authority_sha256,
-        expectations_sha256,
-        command.get_program(),
-        command.get_args().collect::<Vec<_>>()
-    )?;
-    commands.sync_all()?;
-    let result = command.output()?;
-    let row_root = root.join("rows");
-    fs::create_dir_all(&row_root)?;
-    let stdout_path = row_root.join(format!("{row_id}.stdout"));
-    let stderr_path = row_root.join(format!("{row_id}.time.stderr"));
-    let mut row_stdout = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&stdout_path)?;
-    row_stdout.write_all(&result.stdout)?;
-    row_stdout.sync_all()?;
-    let mut row_stderr = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&stderr_path)?;
-    row_stderr.write_all(&result.stderr)?;
-    row_stderr.sync_all()?;
-    writeln!(
-        returned,
-        "{{\"row_id\":\"{row_id}\",\"success\":{},\"exit_code\":{},\"stdout_sha256\":\"{}\",\"stderr_sha256\":\"{}\"}}",
-        result.status.success(),
-        result.status.code().map_or(-1, |code| code),
-        executable_sha256(&stdout_path)?,
-        executable_sha256(&stderr_path)?,
-    )?;
-    returned.sync_all()?;
-    if !result.status.success() {
-        let stderr = String::from_utf8_lossy(&result.stderr).replace('\n', " ");
-        writeln!(
-            failures,
-            "{{\"candidate\":\"{}\",\"size_bytes\":{},\"operation\":\"{}\",\"iteration\":{},\"stderr\":\"{}\"}}",
-            candidate.name,
-            size,
-            operation,
-            iteration,
-            stderr.replace('"', "'")
-        )?;
-        failures.sync_all()?;
-        writeln!(
-            output,
-            "{{\"qualification\":false,\"purpose\":\"profile_selection\",\"status\":\"FAIL\",\"row_id\":\"{row_id}\",\"candidate\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"error\":\"child exit {}\"}}",
-            candidate.name,
-            result.status.code().map_or(-1, |code| code),
-        )?;
-        output.sync_all()?;
-        return Err(format!("row failed {}: {stderr}", candidate.name).into());
-    }
-    let stdout = String::from_utf8_lossy(&result.stdout);
-    let stderr = String::from_utf8_lossy(&result.stderr);
-    writeln!(
-        resources,
-        "candidate={} size={} operation={} iteration={} warmup={}",
-        candidate.name, size, operation, iteration, warmup
-    )?;
-    resources.write_all(result.stderr.as_slice())?;
-    if !result.stderr.ends_with(b"\n") {
-        writeln!(resources)?;
-    }
-    resources.sync_all()?;
-    match add_external_resource_metrics(&stdout, &stderr) {
-        Ok(row) => output.write_all(row.as_bytes())?,
-        Err(error) => {
-            writeln!(
-                output,
-                "{{\"qualification\":false,\"purpose\":\"profile_selection\",\"status\":\"FAIL\",\"row_id\":\"{row_id}\",\"candidate\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"error\":\"strict row parse failed\"}}",
-                candidate.name,
-            )?;
-            output.sync_all()?;
-            return Err(error);
-        }
-    }
-    output.sync_all()?;
-    Ok(())
-}
-
-fn median(values: &[u128]) -> Option<u128> {
-    let mut values = values.to_vec();
-    values.sort_unstable();
-    values.get(values.len() / 2).copied()
-}
-
-fn write_campaign_summary(root: &Path, jsonl: &Path, invocations: usize) -> AnyResult<()> {
-    let raw = fs::read_to_string(jsonl)?;
-    let mut warmup = 0_usize;
-    let mut measured = 0_usize;
-    let mut failures = 0_usize;
-    let mut protected_metrics_available = true;
-    let mut groups: BTreeMap<String, Vec<(usize, u128)>> = BTreeMap::new();
-    let mut paired_modes: BTreeMap<(u128, String, usize), BTreeMap<String, u128>> = BTreeMap::new();
-    let mut default_full_lifecycle = Vec::new();
-    for line in raw.lines().filter(|line| !line.trim().is_empty()) {
-        let object = JsonObject::parse(line)?;
-        let is_warmup = object
-            .boolean("warmup")
-            .ok_or("row JSON warmup field is not boolean")?;
-        if is_warmup {
-            warmup = warmup.checked_add(1).ok_or(CoreError::LengthOverflow)?;
-        } else {
-            measured = measured.checked_add(1).ok_or(CoreError::LengthOverflow)?;
-        }
-        if object.string("status") != Some("PASS") {
-            failures = failures.checked_add(1).ok_or(CoreError::LengthOverflow)?;
-        }
-        if [
-            "cpu_ns",
-            "rss_bytes",
-            "allocated_store_delta_bytes",
-            "q_high_water",
-        ]
-        .iter()
-        .any(|key| !object.numeric(key))
-        {
-            protected_metrics_available = false;
-        }
-        let Some(candidate) = object.string("candidate") else {
-            continue;
-        };
-        let Some(size) = object.u128("size_bytes") else {
-            continue;
-        };
-        let Some(operation) = object.string("operation") else {
-            continue;
-        };
-        let Some(qualification) = object.u128("sqlite_qualification_wall_ns") else {
-            continue;
-        };
-        let iteration = object.usize("iteration").unwrap_or(0);
-        if !is_warmup {
-            if candidate == "K64-F64" && size == u128::from(SOURCE_100) && operation == "full" {
-                default_full_lifecycle.push(qualification);
-            }
-            groups
-                .entry(format!("{candidate}|{size}|{operation}"))
-                .or_default()
-                .push((iteration, qualification));
-            if let Some(mode) = object.string("qualification_mode") {
-                paired_modes
-                    .entry((size, operation.to_string(), iteration))
-                    .or_default()
-                    .insert(mode.to_string(), qualification);
-            }
-        }
-    }
-    let mut rows = String::new();
-    let mut first = true;
-    for (key, values) in &groups {
-        let mut samples: Vec<u128> = values.iter().map(|(_, value)| *value).collect();
-        samples.sort_unstable();
-        let min = samples.first().copied().unwrap_or(0);
-        let max = samples.last().copied().unwrap_or(0);
-        let spread = max.saturating_sub(min);
-        if !first {
-            rows.push(',');
-        }
-        first = false;
-        rows.push_str(&format!(
-            "{{\"group\":\"{key}\",\"samples\":{},\"median_sqlite_qualification_wall_ns\":{},\"min_ns\":{min},\"max_ns\":{max},\"spread_ns\":{spread}}}",
-            samples.len(),
-            median(&samples).unwrap_or(0)
-        ));
-    }
-    let mut paired_effects = String::new();
-    let mut paired_first = true;
-    let mut causal_pairs = 0_usize;
-    let mut causal_wins = 0_usize;
-    for ((size, operation, iteration), modes) in &paired_modes {
-        let (Some(c0), Some(c1)) = (modes.get("C0-full-closure"), modes.get("C1-changed-spine"))
-        else {
-            continue;
-        };
-        causal_pairs = causal_pairs
-            .checked_add(1)
-            .ok_or(CoreError::LengthOverflow)?;
-        causal_wins = causal_wins
-            .checked_add(usize::from(c1 < c0))
-            .ok_or(CoreError::LengthOverflow)?;
-        if !paired_first {
-            paired_effects.push(',');
-        }
-        paired_first = false;
-        let delta_ns = i128::try_from(*c1)
-            .map_err(|_| CoreError::LengthOverflow)?
-            .checked_sub(i128::try_from(*c0).map_err(|_| CoreError::LengthOverflow)?)
-            .ok_or(CoreError::LengthOverflow)?;
-        write!(
-            &mut paired_effects,
-            "{{\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"c0_ns\":{c0},\"c1_ns\":{c1},\"paired_delta_ns\":{delta_ns},\"c1_win\":{}}}",
-            c1 < c0,
-        )
-        .map_err(|_| CoreError::Io)?;
-    }
-    let gate = if invocations != 216 || warmup != 36 || measured != 180 || failures != 0 {
-        "FAIL"
-    } else {
-        "INCONCLUSIVE"
-    };
-    let diagnostic_500ms = median(&default_full_lifecycle).map_or_else(
-        || "{\"status\":\"INCONCLUSIVE\",\"median_complete_lifecycle_wall_ns\":\"Unavailable\",\"target_ns\":500000000}".to_string(),
-        |value| {
-            format!(
-                "{{\"status\":\"{}\",\"median_complete_lifecycle_wall_ns\":{value},\"target_ns\":500000000}}",
-                if value <= 500_000_000 { "PASS" } else { "FAIL" }
-            )
-        },
-    );
-    let summary_path = root.join("wp4m-profile-selection-summary.json");
-    let mut summary = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&summary_path)?;
-    writeln!(
-        summary,
-        "{{\"format\":3,\"campaign_scope\":\"WP4-M-100-512-file-plus-wide-directory\",\"purpose\":\"profile_selection\",\"invocations\":{invocations},\"warmup\":{warmup},\"measured\":{measured},\"row_failures\":{failures},\"protected_metrics_available\":{protected_metrics_available},\"internal_500ms_diagnostic\":{diagnostic_500ms},\"sql_sensitivity\":\"PENDING-independent-counter-analysis\",\"legacy_qualification_mode_pairs\":{{\"pairs\":{causal_pairs},\"wins\":{causal_wins},\"effects\":[{paired_effects}]}},\"admissibility\":\"{gate}\",\"reason\":\"preliminary in-process grouping only; two independent raw-derived analyzers control disposition\",\"candidate_status\":{{\"K64-F64\":\"PENDING-default-not-promoted\",\"K59-F101\":\"PENDING\",\"K256-F256\":\"PENDING\",\"DIR64K\":\"PENDING\",\"DIR256K\":\"PENDING-default-not-promoted\",\"DIR1M\":\"PENDING\"}},\"rows\":[{rows}]}}"
-    )?;
-    summary.sync_all()?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -12415,11 +11528,11 @@ mod tests {
             fast_operation("materialize-fresh").expect("materialize"),
             "materialize-fresh"
         );
-        assert!(fast_operation("campaign").is_err());
+        assert!(fast_operation("unknown").is_err());
         assert!(require_fast_size(SOURCE_1).is_ok());
         assert!(require_fast_size(SOURCE_10).is_ok());
         assert!(require_fast_size(SOURCE_100).is_ok());
-        assert!(require_fast_size(SOURCE_512).is_err());
+        assert!(require_fast_size(512 * 1024 * 1024).is_err());
         assert_eq!(
             fs::metadata(source_path(&root, SOURCE_1))
                 .expect("fixture")
@@ -12431,7 +11544,7 @@ mod tests {
         assert!(record.contains("\"fixture\":\"S1-1\""));
         assert!(record.contains("\"size_bytes\":1048576"));
         assert!(prepare_fast_fixture(&root, SOURCE_1).is_err());
-        assert!(prepare_fast_fixture(&root, SOURCE_512).is_err());
+        assert!(prepare_fast_fixture(&root, 512 * 1024 * 1024).is_err());
         fs::remove_dir_all(root).expect("fixture cleanup");
     }
 
@@ -12440,7 +11553,7 @@ mod tests {
         assert!(require_fixed_radix_acceptance_size(SOURCE_1).is_ok());
         assert!(require_fixed_radix_acceptance_size(SOURCE_10).is_ok());
         assert!(require_fixed_radix_acceptance_size(SOURCE_100).is_ok());
-        assert!(require_fixed_radix_acceptance_size(SOURCE_512).is_err());
+        assert!(require_fixed_radix_acceptance_size(512 * 1024 * 1024).is_err());
         assert!(require_fixed_radix_acceptance_size(SOURCE_100 + 1).is_err());
         assert_eq!(
             [
@@ -12463,15 +11576,15 @@ mod tests {
                 assert!(fixed_radix_acceptance_operation(size, operation).is_err());
             }
         }
-        assert!(fixed_radix_acceptance_operation(SOURCE_512, "write").is_err());
+        assert!(fixed_radix_acceptance_operation(512 * 1024 * 1024, "write").is_err());
         assert!(fixed_radix_acceptance_operation(SOURCE_100, "edit-plus1").is_err());
         assert!(fixed_radix_acceptance_operation(SOURCE_100, "dir-create").is_err());
     }
 
     #[test]
-    fn wp4m_profiles_have_exact_ids_topology_goldens_and_q() {
+    fn selected_profile_has_exact_id_topology_goldens_and_q() {
         assert_eq!(
-            frozen_100_result(FILE_CANDIDATES[0], "same-middle")
+            frozen_100_result("same-middle")
                 .expect("amended M4.5 golden")
                 .expect("amended M4.5 result"),
             (
@@ -12483,114 +11596,69 @@ mod tests {
                     .to_bytes(),
             )
         );
-        let file_expected = [
-            (
-                "cbf5709c59629c812a6ed3e9ea94a9226deab71547d2ab6c0fca596ccfe357e9",
-                (83_u64, 2_u64, 86_u64, 365_143_u64),
-                (425_u64, 7_u64, 433_u64, 1_876_448_u64),
-            ),
-            (
-                "4b25fe3cbea42238c15008a36aa1a54cd4ce4ccf83e645d6f1ddecb0592bfcd2",
-                (90, 0, 91, 365_481),
-                (461, 5, 467, 1_878_758),
-            ),
-            (
-                "a56e2cd87ac827e81a9c361f83ff962f1d1c51719530f8c9fe32466dda3bf135",
-                (21, 0, 22, 360_789),
-                (107, 0, 108, 1_854_341),
-            ),
-        ];
-        for (candidate, (profile, topology_100, topology_512)) in
-            FILE_CANDIDATES.into_iter().zip(file_expected)
-        {
-            assert_eq!(hex_bytes(&profile_id(candidate).expect("profile")), profile);
-            for (references, expected) in [
-                (RETAINED_CDC_100, topology_100),
-                (RETAINED_CDC_512, topology_512),
-            ] {
-                let leaves = references.div_ceil(candidate.k as u64);
-                let mut current = leaves;
-                let mut branches = 0_u64;
-                let mut mapping = 68_u64
-                    .checked_mul(references)
-                    .and_then(|value| value.checked_add(28 * leaves))
-                    .expect("leaf mapping bytes");
-                while current > candidate.f as u64 {
-                    let next = current.div_ceil(candidate.f as u64);
-                    mapping = mapping
-                        .checked_add(40 * current + 29 * next)
-                        .expect("branch mapping bytes");
-                    branches += next;
-                    current = next;
-                }
-                let objects = leaves + branches + 1;
-                let mapping = mapping
-                    .checked_add(49 + 40 * current)
-                    .expect("mapping bytes");
-                assert_eq!((leaves, branches, objects, mapping), expected);
-            }
-            let mut metrics = Metrics::default();
-            let (_, expected_q) =
-                ordinary_frontier_bytes(candidate, RETAINED_CDC_100).expect("ordinary frontier");
-            let builder = FileBuilder::new(candidate, RETAINED_CDC_100, &mut metrics)
-                .expect("charged builder");
-            assert_eq!(q_current(), expected_q as u64);
-            drop(builder);
-            assert_eq!(q_current(), 0);
-            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
-                assert!(frozen_100_result(candidate, operation)
-                    .expect("frozen result")
-                    .is_some());
-            }
+        assert_eq!(
+            hex_bytes(&profile_id()),
+            "b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1"
+        );
+
+        let candidate = SELECTED_PROFILE;
+        let references = RETAINED_CDC_100;
+        let leaves = references.div_ceil(candidate.k as u64);
+        let mut current = leaves;
+        let mut branches = 0_u64;
+        let mut mapping = 68_u64
+            .checked_mul(references)
+            .and_then(|value| value.checked_add(28 * leaves))
+            .expect("leaf mapping bytes");
+        while current > candidate.f as u64 {
+            let next = current.div_ceil(candidate.f as u64);
+            mapping = mapping
+                .checked_add(40 * current + 29 * next)
+                .expect("branch mapping bytes");
+            branches += next;
+            current = next;
+        }
+        let objects = leaves + branches + 1;
+        mapping = mapping
+            .checked_add(49 + 40 * current)
+            .expect("mapping bytes");
+        assert_eq!((leaves, branches, objects, mapping), (83, 2, 86, 365_143));
+
+        let mut metrics = Metrics::default();
+        let (_, expected_q) =
+            ordinary_frontier_bytes(candidate, references).expect("ordinary frontier");
+        let builder = FileBuilder::new(candidate, references, &mut metrics).expect("builder");
+        assert_eq!(q_current(), expected_q as u64);
+        drop(builder);
+        assert_eq!(q_current(), 0);
+        for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
+            assert!(frozen_100_result(operation)
+                .expect("frozen file result")
+                .is_some());
         }
 
-        let directory_expected = [
-            (
-                "cbf5709c59629c812a6ed3e9ea94a9226deab71547d2ab6c0fca596ccfe357e9",
-                897_usize,
-                112_usize,
-            ),
-            (
-                "fb990cfac5a203c1d3a5adeddc407db51e0314ead9da4e19a5147a7a9edb08e7",
-                224,
-                447,
-            ),
-            (
-                "01475837ef4aeca16b0d31f7b5fa49033aae420e23b598e9185de42d37d2a388",
-                3_590,
-                28,
-            ),
-        ];
-        for (candidate, (profile, entries_per_page, pages)) in
-            DIR_CANDIDATES.into_iter().zip(directory_expected)
-        {
-            assert_eq!(hex_bytes(&profile_id(candidate).expect("profile")), profile);
-            assert_eq!(
-                (candidate.directory_page - 13) / DIRECTORY_ENTRY_ENCODED_BYTES,
-                entries_per_page
-            );
-            assert_eq!(DIRECTORY_ENTRIES.div_ceil(entries_per_page), pages);
-            let mut metrics = Metrics::default();
-            let entries = greedy_directory_entries(
-                1,
-                DIRECTORY_ENTRIES,
-                ObjectId::for_bytes(b"child"),
-                candidate,
-                &mut metrics,
-            )
-            .expect("charged directory page");
-            assert_eq!(entries.len(), entries_per_page);
-            assert_eq!(
-                q_current(),
-                u64::try_from(entries_per_page * Q_DIRECTORY_ENTRY_BYTES).expect("q")
-            );
-            drop(entries);
-            assert_eq!(q_current(), 0);
-            for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
-                assert!(frozen_100_result(candidate, operation)
-                    .expect("frozen result")
-                    .is_some());
-            }
+        let entries_per_page = (candidate.directory_page - 13) / DIRECTORY_ENTRY_ENCODED_BYTES;
+        assert_eq!(entries_per_page, 897);
+        assert_eq!(DIRECTORY_ENTRIES.div_ceil(entries_per_page), 112);
+        let entries = greedy_directory_entries(
+            1,
+            DIRECTORY_ENTRIES,
+            ObjectId::for_bytes(b"child"),
+            candidate,
+            &mut metrics,
+        )
+        .expect("charged directory page");
+        assert_eq!(entries.len(), entries_per_page);
+        assert_eq!(
+            q_current(),
+            u64::try_from(entries_per_page * Q_DIRECTORY_ENTRY_BYTES).expect("q")
+        );
+        drop(entries);
+        assert_eq!(q_current(), 0);
+        for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
+            assert!(frozen_100_result(operation)
+                .expect("frozen directory result")
+                .is_some());
         }
     }
 
@@ -12630,66 +11698,65 @@ mod tests {
     }
 
     #[test]
-    fn every_directory_profile_rejects_an_authenticated_wrong_child_role() {
-        for candidate in DIR_CANDIDATES {
-            let database = test_path(&format!("wrong-directory-child-{}", candidate.name));
-            let mut metrics = Metrics::default();
-            {
-                let mut store = Store::open(&database, candidate).expect("open");
-                store.begin(&mut metrics).expect("begin");
-                let wrong_child = put_mapping(
-                    &mut store,
-                    encode_charged_directory_metadata(7, &mut metrics).expect("wrong child"),
-                    &mut metrics,
-                )
-                .expect("put wrong child");
-                let entry_charge =
-                    charge_capacity(&mut metrics, Q_DIRECTORY_ENTRY_BYTES).expect("entry charge");
-                let entries = vec![DirectoryEntry::new(
-                    directory_name(1).expect("name"),
-                    ObjectReference::new(ObjectKind::Bytes, wrong_child),
-                )];
-                let (page, _) = page_object(&mut store, &entries, &mut metrics).expect("page");
-                let page_ref_bytes =
-                    std::mem::size_of::<dir_codec::DirectoryPageRef>() + DIRECTORY_NAME_BYTES;
-                let mut pages =
-                    ChargedVec::with_item_charge(1, page_ref_bytes, &mut metrics).expect("pages");
-                pages.push(dir_codec::DirectoryPageRef {
-                    count: 1,
-                    first_name: entries[0].name().as_bytes().to_vec(),
-                    object_id: page,
-                });
-                let metadata = put_mapping(
-                    &mut store,
-                    encode_charged_directory_metadata(0, &mut metrics).expect("metadata"),
-                    &mut metrics,
-                )
-                .expect("put metadata");
-                let index = put_mapping(
-                    &mut store,
-                    encode_charged_directory_index(1, &pages, &mut metrics).expect("index"),
-                    &mut metrics,
-                )
-                .expect("put index");
-                let wrapper = encode_charged_directory_wrapper(metadata, index, &mut metrics)
-                    .expect("wrapper");
-                let root = object_id_accounted(&wrapper, &mut metrics).expect("root id");
-                store.put(root, &wrapper, &mut metrics).expect("put root");
-                let error = verify_directory(&store, root, candidate, 1, 1, None, &mut metrics)
-                    .expect_err("wrong child role");
-                assert_eq!(
-                    error.downcast_ref::<CoreError>(),
-                    Some(&CoreError::WrongLogicalRole)
-                );
-                store.rollback(&mut metrics).expect("rollback");
-                drop(wrapper);
-                drop(pages);
-                drop(entries);
-                drop(entry_charge);
-            }
-            finish_q(&mut metrics).expect("terminal Q");
-            remove_sqlite_image(&database).expect("cleanup");
+    fn selected_directory_profile_rejects_an_authenticated_wrong_child_role() {
+        let candidate = SELECTED_PROFILE;
+        let database = test_path(&format!("wrong-directory-child-{}", candidate.name));
+        let mut metrics = Metrics::default();
+        {
+            let mut store = Store::open(&database, candidate).expect("open");
+            store.begin(&mut metrics).expect("begin");
+            let wrong_child = put_mapping(
+                &mut store,
+                encode_charged_directory_metadata(7, &mut metrics).expect("wrong child"),
+                &mut metrics,
+            )
+            .expect("put wrong child");
+            let entry_charge =
+                charge_capacity(&mut metrics, Q_DIRECTORY_ENTRY_BYTES).expect("entry charge");
+            let entries = vec![DirectoryEntry::new(
+                directory_name(1).expect("name"),
+                ObjectReference::new(ObjectKind::Bytes, wrong_child),
+            )];
+            let (page, _) = page_object(&mut store, &entries, &mut metrics).expect("page");
+            let page_ref_bytes =
+                std::mem::size_of::<dir_codec::DirectoryPageRef>() + DIRECTORY_NAME_BYTES;
+            let mut pages =
+                ChargedVec::with_item_charge(1, page_ref_bytes, &mut metrics).expect("pages");
+            pages.push(dir_codec::DirectoryPageRef {
+                count: 1,
+                first_name: entries[0].name().as_bytes().to_vec(),
+                object_id: page,
+            });
+            let metadata = put_mapping(
+                &mut store,
+                encode_charged_directory_metadata(0, &mut metrics).expect("metadata"),
+                &mut metrics,
+            )
+            .expect("put metadata");
+            let index = put_mapping(
+                &mut store,
+                encode_charged_directory_index(1, &pages, &mut metrics).expect("index"),
+                &mut metrics,
+            )
+            .expect("put index");
+            let wrapper =
+                encode_charged_directory_wrapper(metadata, index, &mut metrics).expect("wrapper");
+            let root = object_id_accounted(&wrapper, &mut metrics).expect("root id");
+            store.put(root, &wrapper, &mut metrics).expect("put root");
+            let error = verify_directory(&store, root, candidate, 1, 1, None, &mut metrics)
+                .expect_err("wrong child role");
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::WrongLogicalRole)
+            );
+            store.rollback(&mut metrics).expect("rollback");
+            drop(wrapper);
+            drop(pages);
+            drop(entries);
+            drop(entry_charge);
         }
+        finish_q(&mut metrics).expect("terminal Q");
+        remove_sqlite_image(&database).expect("cleanup");
     }
 
     #[test]
@@ -12773,7 +11840,7 @@ mod tests {
     #[test]
     fn real_sqlite_read_precharges_canonical_and_decoded_overlap() {
         let database = test_path("real-q-read.sqlite");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let canonical =
             encode_canonical_object(&Object::bytes(b"payload".to_vec()).expect("object"))
                 .expect("canonical");
@@ -12814,7 +11881,7 @@ mod tests {
     }
 
     #[test]
-    fn campaign_json_parser_is_structural() {
+    fn row_json_parser_is_structural() {
         let row = r#"{"status":"PASS","warmup":false,"iteration":7,"nested":{"status":"FAIL","fake":"\"warmup\":true"},"values":[1,{"iteration":99}],"q_high_water":123}"#;
         let object = JsonObject::parse(row).expect("valid object");
         assert_eq!(object.string("status"), Some("PASS"));
@@ -12889,7 +11956,7 @@ mod tests {
         assert!(validate_metric_equations(invalid).is_err());
         let id = ObjectId::for_bytes(b"row-json-id");
         let json = row_json(
-            FILE_CANDIDATES[0],
+            SELECTED_PROFILE,
             SOURCE_100,
             "same-middle",
             1,
@@ -13070,7 +12137,7 @@ mod tests {
         let size = 4 * 1024 * 1024_u64;
         fill_source(&source, size, 0x51).expect("write source");
         let point = prepared_edit_point(&source, "same-middle").expect("edit point");
-        let expected = expected_file_observations(&source, "same-middle", size, FILE_CANDIDATES[0])
+        let expected = expected_file_observations(&source, "same-middle", size, SELECTED_PROFILE)
             .expect("prepared observations");
         let exact = exact_same_middle_observations(&source, point);
         assert_eq!(
@@ -13157,16 +12224,11 @@ mod tests {
                     .to_bytes(),
             }),
         };
-        require_amended_m45_expectations(FILE_CANDIDATES[0], SOURCE_100, "same-middle", &expected)
+        require_amended_m45_expectations(SOURCE_100, "same-middle", &expected)
             .expect("frozen amended row");
         expected.expected_sequence = Some("00".repeat(32));
-        let error = require_amended_m45_expectations(
-            FILE_CANDIDATES[0],
-            SOURCE_100,
-            "same-middle",
-            &expected,
-        )
-        .expect_err("identity drift must fail");
+        let error = require_amended_m45_expectations(SOURCE_100, "same-middle", &expected)
+            .expect_err("identity drift must fail");
         assert_eq!(
             error.downcast_ref::<CoreError>(),
             Some(&CoreError::PublicationConflict)
@@ -13479,7 +12541,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<ConstructionNodeProof>(), 64);
         assert!(std::mem::size_of::<ConstructionState>() <= Q_CONSTRUCTION_STATE_BYTES);
         let (levels, frontier) =
-            construction_frontier_bytes(FILE_CANDIDATES[0], 5_284).expect("frontier");
+            construction_frontier_bytes(SELECTED_PROFILE, 5_284).expect("frontier");
         assert_eq!(levels, 2);
         assert_eq!(frontier, 17_776);
         assert_eq!(
@@ -13542,8 +12604,8 @@ mod tests {
     #[test]
     fn f2_shadow_proof_matches_the_full_verifier_exactly() {
         let source = test_path("f2-shadow.source");
-        fill_source(&source, 256 * 1024, 0x11).expect("source");
-        let candidate = FILE_CANDIDATES[0];
+        fill_source(&source, 256 * 1024, 0x41).expect("source");
+        let candidate = SELECTED_PROFILE;
         let (expected_references, fingerprint, sequence, _, _) =
             expected_file_observations(&source, "full", 256 * 1024, candidate)
                 .expect("expectations");
@@ -13623,77 +12685,71 @@ mod tests {
     }
 
     #[test]
-    fn f2_construction_proof_and_fresh_verification_cover_every_file_profile() {
-        let source = test_path("all-profile-construction.source");
-        fill_source(&source, 256 * 1024, 0x11).expect("source");
-        for candidate in FILE_CANDIDATES {
-            let (expected_references, fingerprint, sequence, _, _) =
-                expected_file_observations(&source, "full", 256 * 1024, candidate)
-                    .expect("expectations");
-            let database = test_path(&format!("all-profile-{}.sqlite", candidate.name));
-            let mut metrics = Metrics::default();
-            let (root, transition) = {
-                let mut store = Store::open(&database, candidate).expect("store");
-                store.begin(&mut metrics).expect("begin");
-                let (root, transition, mut proof) = build_file_construction(
-                    &mut store,
-                    &source,
-                    candidate,
-                    expected_references,
-                    &mut metrics,
-                )
-                .expect("construction");
-                store
-                    .mark_construction_proof_issued(&proof)
-                    .expect("issue proof");
-                let qualification = proof.consume(&mut store, &mut metrics).expect("proof");
-                assert_eq!(qualification.references, expected_references);
-                assert_eq!(
-                    (qualification.root, qualification.transition),
-                    (root, transition)
-                );
-                store
-                    .publish(None, root, transition, &mut metrics)
-                    .expect("publish");
-                drop(proof);
+    fn f2_construction_proof_and_fresh_verification_cover_selected_profile() {
+        let source = test_path("selected-profile-construction.source");
+        fill_source(&source, 256 * 1024, 0x41).expect("source");
+        let candidate = SELECTED_PROFILE;
+        let (expected_references, fingerprint, sequence, _, _) =
+            expected_file_observations(&source, "full", 256 * 1024, candidate)
+                .expect("expectations");
+        let database = test_path(&format!("all-profile-{}.sqlite", candidate.name));
+        let mut metrics = Metrics::default();
+        let (root, transition) = {
+            let mut store = Store::open(&database, candidate).expect("store");
+            store.begin(&mut metrics).expect("begin");
+            let (root, transition, mut proof) = build_file_construction(
+                &mut store,
+                &source,
+                candidate,
+                expected_references,
+                &mut metrics,
+            )
+            .expect("construction");
+            store
+                .mark_construction_proof_issued(&proof)
+                .expect("issue proof");
+            let qualification = proof.consume(&mut store, &mut metrics).expect("proof");
+            assert_eq!(qualification.references, expected_references);
+            assert_eq!(
+                (qualification.root, qualification.transition),
                 (root, transition)
-            };
-            {
-                let store = Store::open(&database, candidate).expect("fresh reopen");
-                let transition_digest =
-                    verify_transition(&store, transition, None, root, None, &mut metrics)
-                        .expect("transition");
-                let (content_digest, references, total) = verify_file(
-                    &store,
-                    root,
-                    candidate,
-                    Some(&fingerprint),
-                    Some(&sequence),
-                    &mut metrics,
-                )
-                .expect("fresh file");
-                assert_ne!(
-                    combined_closure_digest(transition_digest, content_digest),
-                    [0; 32]
-                );
-                assert_eq!(references, expected_references);
-                assert_eq!(total, 256 * 1024);
-            }
-            finish_q(&mut metrics).expect("terminal Q");
-            remove_sqlite_image(&database).expect("cleanup");
+            );
+            store
+                .publish(None, root, transition, &mut metrics)
+                .expect("publish");
+            drop(proof);
+            (root, transition)
+        };
+        {
+            let store = Store::open(&database, candidate).expect("fresh reopen");
+            let transition_digest =
+                verify_transition(&store, transition, None, root, None, &mut metrics)
+                    .expect("transition");
+            let (content_digest, references, total) = verify_file(
+                &store,
+                root,
+                candidate,
+                Some(&fingerprint),
+                Some(&sequence),
+                &mut metrics,
+            )
+            .expect("fresh file");
+            assert_ne!(
+                combined_closure_digest(transition_digest, content_digest),
+                [0; 32]
+            );
+            assert_eq!(references, expected_references);
+            assert_eq!(total, 256 * 1024);
         }
+        finish_q(&mut metrics).expect("terminal Q");
+        remove_sqlite_image(&database).expect("cleanup");
         fs::remove_file(source).expect("source cleanup");
     }
 
     #[test]
     fn f2_topology_boundaries_and_duplicate_reuse_stay_bounded() {
-        let candidate = Candidate {
-            name: "F2-K2-F2",
-            k: 2,
-            f: 2,
-            directory_page: 256 * 1024,
-        };
-        for count in [0_usize, 1, 2, 3, 4, 5, 9] {
+        let candidate = SELECTED_PROFILE;
+        for count in [0_usize, 1, 63, 64, 65, 4_097] {
             let database = test_path(&format!("f2-topology-{count}.sqlite"));
             let mut store = Store::open(&database, candidate).expect("store");
             let mut metrics = Metrics::default();
@@ -13724,11 +12780,7 @@ mod tests {
             assert_ne!(golden.closure, [0; 32]);
             assert_eq!(
                 proof.workspace.file.file.level,
-                file_codec::expected_file_level(
-                    count as u64,
-                    file_codec::FileMappingProfile::new(candidate.k, candidate.f),
-                )
-                .expect("expected level")
+                file_codec::expected_file_level(count as u64).expect("expected level")
             );
             if count >= 3 {
                 assert!(metrics.objects_reused > 0);
@@ -13743,12 +12795,7 @@ mod tests {
 
     #[test]
     fn f2_proof_rejects_summary_namespace_transition_authority_and_mutation_drift() {
-        let candidate = Candidate {
-            name: "F2-ADVERSARY",
-            k: 2,
-            f: 2,
-            directory_page: 256 * 1024,
-        };
+        let candidate = SELECTED_PROFILE;
 
         let summary_database = test_path("f2-summary-drift.sqlite");
         let mut summary_store = Store::open(&summary_database, candidate).expect("store");
@@ -13999,8 +13046,8 @@ mod tests {
     #[test]
     fn f2_candidate_publishes_once_and_fresh_verification_recomputes_closure() {
         let source = test_path("f2-publish.source");
-        fill_source(&source, 256 * 1024, 0x11).expect("source");
-        let candidate = FILE_CANDIDATES[0];
+        fill_source(&source, 256 * 1024, 0x41).expect("source");
+        let candidate = SELECTED_PROFILE;
         let (references, fingerprint, sequence, _, _) =
             expected_file_observations(&source, "full", 256 * 1024, candidate)
                 .expect("expectations");
@@ -14111,12 +13158,7 @@ mod tests {
 
     #[test]
     fn f2_standalone_mismatch_replay_second_issuance_and_overflow_are_rejected() {
-        let candidate = Candidate {
-            name: "F2-BINDINGS",
-            k: 2,
-            f: 2,
-            directory_page: 256 * 1024,
-        };
+        let candidate = SELECTED_PROFILE;
         let chunks = vec![b"left".to_vec(), b"right".to_vec(), b"tail".to_vec()];
         for case in ["source", "sequence", "count", "total", "root", "transition"] {
             let database = test_path(&format!("f2-binding-{case}.sqlite"));
@@ -14190,7 +13232,7 @@ mod tests {
         remove_sqlite_image(&second_database).expect("second cleanup");
 
         let overflow_source = test_path("f2-consume-overflow.source");
-        fill_source(&overflow_source, 64 * 1024, 0x35).expect("overflow source");
+        fill_source(&overflow_source, 64 * 1024, 0x41).expect("overflow source");
         let (references, _, _, _, _) =
             expected_file_observations(&overflow_source, "full", 64 * 1024, candidate)
                 .expect("overflow observations");
@@ -14216,7 +13258,7 @@ mod tests {
 
     #[test]
     fn f2_transaction_attempt_cleans_source_allocation_and_fold_failures() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let zero = "00".repeat(32);
 
         let missing_database = test_path("f2-cleanup-missing-source.sqlite");
@@ -14243,7 +13285,7 @@ mod tests {
         remove_sqlite_image(&missing_database).expect("missing cleanup");
 
         let source = test_path("f2-cleanup-fold.source");
-        fill_source(&source, 64 * 1024, 0x44).expect("source");
+        fill_source(&source, 64 * 1024, 0x41).expect("source");
         let (_, fingerprint, sequence, _, _) =
             expected_file_observations(&source, "full", 64 * 1024, candidate)
                 .expect("observations");
@@ -14391,7 +13433,7 @@ mod tests {
             );
         }
 
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         for case in ["parent", "child", "kind", "operation"] {
             let database = test_path(&format!("f2-transition-{case}.sqlite"));
             let mut store = Store::open(&database, candidate).expect("store");
@@ -14584,7 +13626,7 @@ mod tests {
     #[test]
     fn candidate_store_rebinds_cached_object_statements_without_weakening_immutable_handoff() {
         let database = test_path("cached-object-statements.sqlite");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let canonical_a = encode_canonical_object(&Object::bytes(b"a".to_vec()).expect("object a"))
             .expect("canonical a");
         let canonical_b = encode_canonical_object(&Object::bytes(b"b".to_vec()).expect("object b"))
@@ -14635,7 +13677,7 @@ mod tests {
     #[test]
     fn candidate_borrowed_bytes_preserve_typed_failures_and_callback_errors() {
         let database = test_path("borrowed-bytes-errors.sqlite");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let canonical =
             encode_canonical_object(&Object::bytes(b"payload".to_vec()).expect("object"))
                 .expect("canonical");
@@ -14708,7 +13750,7 @@ mod tests {
     #[test]
     fn candidate_generated_bytes_preserve_identity_and_external_authentication() {
         let database = test_path("generated-bytes-identity.sqlite");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let mut metrics = Metrics::default();
         let value = b"generated payload";
         let expected =
@@ -14765,7 +13807,7 @@ mod tests {
     #[test]
     fn candidate_leaf_batches_preserve_duplicates_and_reject_missing_or_mismatched_rows() {
         let database = test_path("leaf-batches.sqlite");
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let mut store = Store::open(&database, candidate).expect("open");
         let mut metrics = Metrics::default();
         let x = make_reference(&mut store, b"x", &mut metrics).expect("x reference");
@@ -14851,7 +13893,7 @@ mod tests {
                 .expect("memory file");
         let memory = logical.read_range(&cas, 4..24).expect("memory range");
 
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let mut metrics = Metrics::default();
         let (root, transition) = {
             let mut store = Store::open(&database, candidate).expect("candidate open");
@@ -14929,12 +13971,12 @@ mod tests {
         let size = (1_u64..=16)
             .map(|multiple| multiple * 256 * 1024)
             .find(|size| {
-                fill_source(&source, *size, 0x31).expect("candidate source");
+                fill_source(&source, *size, 0x41).expect("candidate source");
                 let point = prepared_edit_point(&source, "same-middle").expect("candidate point");
                 exact_same_middle_observations(&source, point).0 == point.reference_count
             })
             .expect("small deterministic same-count fixture");
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         prepare_row_database(&root, &root, candidate, size, "same-middle", 0)
             .expect("untimed preparation");
         let database = row_database_path(&root, candidate, size, "same-middle", 0);
@@ -15045,7 +14087,7 @@ mod tests {
 
     #[test]
     fn cow_edits_reuse_the_unchanged_tree_and_account_for_the_exact_suffix() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
 
         let same_database = test_path("same-count-cow.sqlite");
         let (mut same_store, parent, before_file) = build_uniform_base(&same_database, candidate);
@@ -15196,7 +14238,7 @@ mod tests {
 
     #[test]
     fn cow_edits_reject_a_corrupt_parent_mapping_before_rewrite() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         for operation in ["same-middle", "plus1-middle"] {
             let database = test_path(&format!("corrupt-parent-{operation}.sqlite"));
             let (mut store, _, file) = build_uniform_base(&database, candidate);
@@ -15233,7 +14275,7 @@ mod tests {
 
     #[test]
     fn witnessed_changed_spine_authenticates_all_differences_before_commit() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
 
         let database = test_path("witnessed-spine.sqlite");
         let (mut store, parent, before_file) = build_uniform_base(&database, candidate);
@@ -15450,7 +14492,7 @@ mod tests {
 
     #[test]
     fn witnessed_spine_handles_multiple_children_final_partial_leaf_and_mode() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let database = test_path("witnessed-spine-multiple.sqlite");
         let (mut store, parent, before_file) = build_uniform_base(&database, candidate);
         let mut metrics = Metrics::default();
@@ -15661,7 +14703,7 @@ mod tests {
 
     #[test]
     fn changed_spine_accepts_same_count_length_redistribution() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let database = test_path("witnessed-spine-redistributed-lengths.sqlite");
         let (mut store, parent, before_file) = build_uniform_base(&database, candidate);
         let mut metrics = Metrics::default();
@@ -15755,17 +14797,14 @@ mod tests {
 
     #[test]
     fn deep_changed_spine_proves_height_union_and_bounded_qualification() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let database = test_path("witnessed-spine-deep.sqlite");
         let (mut store, parent, before_file) = build_deep_uniform_base(&database, candidate);
         let (height, root_children) = file_root_children(&store, before_file);
         assert_eq!(height, 2);
         assert_eq!(root_children.len(), 2);
         assert_eq!(
-            file_codec::expected_file_level(
-                DEEP_COW_TEST_REFERENCES,
-                file_codec::FileMappingProfile::new(candidate.k, candidate.f),
-            ),
+            file_codec::expected_file_level(DEEP_COW_TEST_REFERENCES),
             Ok(height)
         );
 
@@ -16064,7 +15103,7 @@ mod tests {
 
     #[test]
     fn full_and_incremental_shadow_both_reject_malformed_summary() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let database = test_path("witnessed-spine-malformed.sqlite");
         let (mut store, parent, before_file) = build_uniform_base(&database, candidate);
         let mut metrics = Metrics::default();
@@ -16131,7 +15170,7 @@ mod tests {
 
     #[test]
     fn same_open_witness_requires_full_scrub_and_is_exactly_single_use() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let database = test_path("same-open-witness.sqlite");
         let (mut store, root, file) = build_uniform_base(&database, candidate);
         let head = store.current_head().expect("head").expect("visible head");
@@ -16282,7 +15321,7 @@ mod tests {
 
     #[test]
     fn witness_requires_the_exact_complete_namespace_closure() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let database = test_path("witness-complete-namespace.sqlite");
         let mut store = Store::open(&database, candidate).expect("open");
         let mut metrics = Metrics::default();
@@ -16330,7 +15369,7 @@ mod tests {
 
     #[test]
     fn failed_rollback_invalidates_an_unconsumed_witness() {
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let database = test_path("failed-rollback-witness.sqlite");
         let (mut store, _, _) = build_uniform_base(&database, candidate);
         let mut metrics = Metrics::default();
@@ -16363,7 +15402,7 @@ mod tests {
     fn publication_faults_record_reconciliation_and_require_private_authority() {
         let source = test_path("fault-source");
         fs::write(&source, b"publication-fault-test").expect("source");
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
 
         let before_database = test_path("fault-before.sqlite");
         {
@@ -16579,7 +15618,7 @@ mod tests {
         let source = test_path("f1-commit-observation-source");
         let database = test_path("f1-commit-observation.sqlite");
         fs::write(&source, b"f1 commit observation").expect("source");
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let mut store = Store::open(&database, candidate).expect("open");
         let mut metrics = Metrics::default();
         let physical_before = store.physical_snapshot();
@@ -16692,7 +15731,7 @@ mod tests {
         let source = test_path("commit-error-source");
         fs::write(&source, b"actual sqlite commit error").expect("source");
         let database = test_path("commit-error.sqlite");
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         {
             let mut store = Store::open(&database, candidate).expect("open");
             let mut metrics = Metrics::default();
@@ -16732,10 +15771,10 @@ mod tests {
         let source = test_path("publish-diagnostic-source");
         let database = test_path("publish-diagnostic.sqlite");
         fs::write(&source, b"publish diagnostic").expect("source");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let mut metrics = Metrics::default();
         let (root, transition) =
-            build_file(&mut store, &source, FILE_CANDIDATES[0], &mut metrics).expect("build");
+            build_file(&mut store, &source, SELECTED_PROFILE, &mut metrics).expect("build");
         store.next_publish_fault = Some(PublishFault::AfterCommitBeforeAck);
         let publication = store
             .publish(None, root, transition, &mut metrics)
@@ -16786,10 +15825,10 @@ mod tests {
             ),
         ] {
             let database = test_path(&format!("commit-boundary-{label}.sqlite"));
-            let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+            let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
             let mut metrics = Metrics::default();
             let (root, transition) =
-                build_file(&mut store, &source, FILE_CANDIDATES[0], &mut metrics).expect("build");
+                build_file(&mut store, &source, SELECTED_PROFILE, &mut metrics).expect("build");
             let provenance = store
                 .publish_with_fault(None, root, transition, Some(fault), &mut metrics)
                 .expect("lost acknowledgement provenance");
@@ -16834,7 +15873,7 @@ mod tests {
     #[test]
     fn begin_counter_overflow_precedes_sql_and_leaves_connection_usable() {
         let database = test_path("begin-overflow.sqlite");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let mut metrics = Metrics {
             sql_execute_calls: u64::MAX,
             ..Metrics::default()
@@ -16864,7 +15903,7 @@ mod tests {
     #[test]
     fn transaction_attempt_rolls_back_with_exact_first_cause() {
         let database = test_path("transaction-attempt.sqlite");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let mut metrics = Metrics::default();
         let missing = ObjectId::for_bytes(b"missing transaction object");
         let error = store
@@ -16892,10 +15931,10 @@ mod tests {
         let source = test_path("postcommit-source");
         let database = test_path("postcommit.sqlite");
         fs::write(&source, b"postcommit publication").expect("source");
-        let mut store = Store::open(&database, FILE_CANDIDATES[0]).expect("open");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("open");
         let mut metrics = Metrics::default();
         let (root, transition) =
-            build_file(&mut store, &source, FILE_CANDIDATES[0], &mut metrics).expect("build");
+            build_file(&mut store, &source, SELECTED_PROFILE, &mut metrics).expect("build");
         store
             .publish(None, root, transition, &mut metrics)
             .expect("publish");
@@ -16931,7 +15970,7 @@ mod tests {
         let source = test_path("complete-head-source");
         let database = test_path("complete-head.sqlite");
         fs::write(&source, b"complete-head-test").expect("source");
-        let candidate = FILE_CANDIDATES[0];
+        let candidate = SELECTED_PROFILE;
         let mut store = Store::open(&database, candidate).expect("open");
         let mut metrics = Metrics::default();
         let (root, transition) =
@@ -16970,176 +16009,6 @@ mod tests {
         fs::remove_file(source).expect("source cleanup");
         remove_sqlite_image(&database).expect("database cleanup");
     }
-}
-
-fn run_campaign(root: &Path) -> AnyResult<()> {
-    require_optimized_benchmark()?;
-    fs::create_dir_all(root)?;
-    let executable = env::current_exe()?;
-    let executable_sha256 = write_environment_record(root, &executable)?;
-    prepare_sources(root)?;
-    let jsonl = root.join("wp4m-profile-selection.jsonl");
-    let planned_path = root.join("wp4m-profile-selection-planned.tsv");
-    let started_path = root.join("wp4m-profile-selection-started.jsonl");
-    let returned_path = root.join("wp4m-profile-selection-returned.jsonl");
-    let mut planned = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&planned_path)?;
-    writeln!(
-        planned,
-        "row_id\tblock\twarmup\tcandidate\tsize_bytes\toperation\tposition"
-    )?;
-    for (block, candidate_order) in CAMPAIGN_ORDER.iter().enumerate() {
-        let warmup = block == 0;
-        for size in [SOURCE_100, SOURCE_512] {
-            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
-                for (position, candidate_index) in candidate_order.iter().enumerate() {
-                    let candidate = FILE_CANDIDATES[*candidate_index];
-                    writeln!(
-                        planned,
-                        "block-{block}-{}-{size}-{operation}\t{block}\t{warmup}\t{}\t{size}\t{operation}\t{position}",
-                        candidate.name,
-                        candidate.name,
-                    )?;
-                }
-            }
-        }
-        for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
-            for (position, candidate_index) in candidate_order.iter().enumerate() {
-                let candidate = DIR_CANDIDATES[*candidate_index];
-                writeln!(
-                    planned,
-                    "block-{block}-{}-{}-{operation}\t{block}\t{warmup}\t{}\t{}\t{operation}\t{position}",
-                    candidate.name,
-                    SOURCE_100,
-                    candidate.name,
-                    SOURCE_100,
-                )?;
-            }
-        }
-    }
-    planned.sync_all()?;
-    if fs::read_to_string(&planned_path)?.lines().skip(1).count() != 216 {
-        return Err("planned schedule is not exactly 216 rows".into());
-    }
-    prepare_campaign_templates(root)?;
-    if q_current() != 0 {
-        return Err(CoreError::LengthMismatch {
-            expected: 0,
-            actual: q_current(),
-        }
-        .into());
-    }
-    let mut output = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&jsonl)?;
-    let mut failures = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(root.join("wp4m-profile-selection-failures.jsonl"))?;
-    let mut commands = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(root.join("wp4m-profile-selection-commands.txt"))?;
-    let mut resources = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(root.join("wp4m-profile-selection-resources.stderr"))?;
-    let mut started = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&started_path)?;
-    let mut returned = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&returned_path)?;
-    let mut invocations = 0_usize;
-    for (iteration, candidate_order) in CAMPAIGN_ORDER.iter().enumerate() {
-        let warmup = iteration == 0;
-        for size in [SOURCE_100, SOURCE_512] {
-            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
-                for candidate_index in candidate_order {
-                    let candidate = FILE_CANDIDATES[*candidate_index];
-                    invoke_campaign_row(
-                        root,
-                        candidate,
-                        size,
-                        operation,
-                        iteration,
-                        warmup,
-                        &mut output,
-                        &mut failures,
-                        &mut commands,
-                        &mut resources,
-                        &mut started,
-                        &mut returned,
-                        &executable_sha256,
-                    )?;
-                    invocations = invocations
-                        .checked_add(1)
-                        .ok_or(CoreError::LengthOverflow)?;
-                }
-            }
-        }
-        for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
-            for candidate_index in candidate_order {
-                let candidate = DIR_CANDIDATES[*candidate_index];
-                invoke_campaign_row(
-                    root,
-                    candidate,
-                    SOURCE_100,
-                    operation,
-                    iteration,
-                    warmup,
-                    &mut output,
-                    &mut failures,
-                    &mut commands,
-                    &mut resources,
-                    &mut started,
-                    &mut returned,
-                    &executable_sha256,
-                )?;
-                invocations = invocations
-                    .checked_add(1)
-                    .ok_or(CoreError::LengthOverflow)?;
-            }
-        }
-    }
-    output.sync_all()?;
-    if invocations != 216 {
-        return Err(format!("campaign invocation count {invocations}, expected 216").into());
-    }
-    failures.sync_all()?;
-    commands.sync_all()?;
-    resources.sync_all()?;
-    started.sync_all()?;
-    returned.sync_all()?;
-    for (path, expected) in [
-        (&started_path, 216_usize),
-        (&returned_path, 216_usize),
-        (&jsonl, 216_usize),
-    ] {
-        let actual = fs::read_to_string(path)?
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .count();
-        if actual != expected {
-            return Err(format!(
-                "custody row count {}: {actual}, expected {expected}",
-                path.display()
-            )
-            .into());
-        }
-    }
-    write_campaign_summary(root, &jsonl, invocations)?;
-    println!(
-        "campaign COMPLETE invocations={invocations} jsonl={} summary={}",
-        jsonl.display(),
-        root.join("wp4m-profile-selection-summary.json").display()
-    );
-    Ok(())
 }
 
 fn fast_operation(value: &str) -> AnyResult<&'static str> {
@@ -17186,26 +16055,10 @@ fn require_fixed_radix_acceptance_size(size: u64) -> AnyResult<()> {
     }
 }
 
-fn require_archival_override() -> AnyResult<()> {
-    if env::var("LAYERFS_ALLOW_RETIRED_PROFILE_CAMPAIGN").as_deref() == Ok("1") {
-        Ok(())
-    } else {
-        Err("retired profile machinery requires an explicit archival override".into())
-    }
-}
-
 fn main() -> AnyResult<()> {
     let args: Vec<String> = env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("--self-test") => self_test(Path::new(args.get(2).ok_or("missing self-test root")?)),
-        Some("--prepare-fixtures") | Some("--campaign") => Err(
-            "the exhaustive WP4-M profile campaign is retired; use the bounded --fast-* lane"
-                .into(),
-        ),
-        Some("--retired-prepare-fixtures") => {
-            require_archival_override()?;
-            prepare_retained_fixtures(Path::new(args.get(2).ok_or("missing fixture root")?))
-        }
         Some("--fast-fixture") => {
             let root = Path::new(args.get(2).ok_or("missing fast fixture root")?);
             let size = args.get(3).ok_or("missing fast fixture size")?.parse::<u64>()?;
@@ -17217,7 +16070,7 @@ fn main() -> AnyResult<()> {
             require_fast_size(size)?;
             let operation = fast_operation(args.get(4).ok_or("missing fast operation")?)?;
             let iteration = args.get(5).ok_or("missing iteration")?.parse::<usize>()?;
-            prepare_row_database(root, root, FILE_CANDIDATES[0], size, operation, iteration)
+            prepare_row_database(root, root, SELECTED_PROFILE, size, operation, iteration)
         }
         Some("--fast-row") => {
             let root = Path::new(args.get(2).ok_or("missing fast row root")?);
@@ -17233,7 +16086,7 @@ fn main() -> AnyResult<()> {
             };
             let output = run_row(
                 root,
-                FILE_CANDIDATES[0],
+                SELECTED_PROFILE,
                 size,
                 operation,
                 iteration,
@@ -17266,7 +16119,7 @@ fn main() -> AnyResult<()> {
                 args.get(4).ok_or("missing fixed-radix operation")?,
             )?;
             let iteration = args.get(5).ok_or("missing iteration")?.parse::<usize>()?;
-            prepare_row_database(root, root, FILE_CANDIDATES[0], size, operation, iteration)
+            prepare_row_database(root, root, SELECTED_PROFILE, size, operation, iteration)
         }
         Some("--fixed-radix-acceptance-row") => {
             let root = Path::new(args.get(2).ok_or("missing fixed-radix row root")?);
@@ -17290,53 +16143,12 @@ fn main() -> AnyResult<()> {
             };
             let output = run_row(
                 root,
-                FILE_CANDIDATES[0],
+                SELECTED_PROFILE,
                 size,
                 operation,
                 iteration,
                 warmup,
                 validation,
-            )?;
-            println!("{output}");
-            drop(output);
-            if q_current() != 0 {
-                return Err(CoreError::LengthMismatch {
-                    expected: 0,
-                    actual: q_current(),
-                }
-                .into());
-            }
-            Ok(())
-        }
-        Some("--retired-profile-campaign") => {
-            require_archival_override()?;
-            run_campaign(Path::new(args.get(2).ok_or("missing campaign root")?))
-        }
-        Some("--prepare-row") => {
-            require_archival_override()?;
-            let root = Path::new(args.get(2).ok_or("missing row root")?);
-            let candidate = candidate_by_name(args.get(3).ok_or("missing candidate")?)?;
-            let size = args.get(4).ok_or("missing size")?.parse::<u64>()?;
-            let operation = args.get(5).ok_or("missing operation")?;
-            let iteration = args.get(6).ok_or("missing iteration")?.parse::<usize>()?;
-            prepare_row_database(root, root, candidate, size, operation, iteration)
-        }
-        Some("--row") => {
-            require_archival_override()?;
-            let root = Path::new(args.get(2).ok_or("missing row root")?);
-            let candidate = candidate_by_name(args.get(3).ok_or("missing candidate")?)?;
-            let size = args.get(4).ok_or("missing size")?.parse::<u64>()?;
-            let operation = args.get(5).ok_or("missing operation")?;
-            let iteration = args.get(6).ok_or("missing iteration")?.parse::<usize>()?;
-            let warmup = args.get(7).ok_or("missing warmup")?.parse::<bool>()?;
-            let output = run_row(
-                root,
-                candidate,
-                size,
-                operation,
-                iteration,
-                warmup,
-                RowValidation::CompleteRoundTrip,
             )?;
             println!("{output}");
             drop(output);

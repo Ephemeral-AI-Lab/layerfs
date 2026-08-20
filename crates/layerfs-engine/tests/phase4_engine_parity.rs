@@ -260,8 +260,7 @@ fn directory_index_rejects_more_than_the_direct_reference_limit() {
 
 #[test]
 fn file_partition_rules_and_height_are_checked() {
-    let profile = file_codec::FileMappingProfile::new(4, 3);
-    let references = (0..4)
+    let references = (0..64)
         .map(|index| {
             let bytes = [u8::try_from(index).expect("byte")];
             file_codec::FileReference {
@@ -271,35 +270,29 @@ fn file_partition_rules_and_height_are_checked() {
             }
         })
         .collect::<Vec<_>>();
-    assert!(file_codec::validate_file_leaf(&references, profile, false).is_ok());
+    assert!(file_codec::validate_file_leaf(&references, false).is_ok());
     assert_eq!(
-        file_codec::validate_file_leaf(&references[..3], profile, false),
+        file_codec::validate_file_leaf(&references[..63], false),
         Err(CoreError::NonCanonicalPagePartition)
     );
     assert_eq!(
-        file_codec::validate_file_leaf(&references, profile, true).expect("final leaf"),
-        (4, 4)
+        file_codec::validate_file_leaf(&references, true).expect("final leaf"),
+        (64, 64)
     );
 
-    let children = (1_u8..=3)
+    let children = (1_u8..=64)
         .map(|end| file_codec::FileChild {
             object_id: ObjectId::for_bytes(&[end]),
             cumulative_end: u64::from(end),
         })
         .collect::<Vec<_>>();
-    assert!(file_codec::validate_file_children(&children, profile, false).is_ok());
+    assert!(file_codec::validate_file_children(&children, false).is_ok());
     assert_eq!(
-        file_codec::validate_file_children(&children[..2], profile, false),
+        file_codec::validate_file_children(&children[..63], false),
         Err(CoreError::NonCanonicalPagePartition)
     );
-    assert_eq!(
-        file_codec::expected_file_level(12, profile).expect("height"),
-        0
-    );
-    assert_eq!(
-        file_codec::expected_file_level(13, profile).expect("height"),
-        1
-    );
+    assert_eq!(file_codec::expected_file_level(4_096).expect("height"), 0);
+    assert_eq!(file_codec::expected_file_level(4_097).expect("height"), 1);
     assert_eq!(
         file_codec::validate_file_root_summary(9, 3, 9, 2),
         Err(CoreError::LengthMismatch {
@@ -340,23 +333,18 @@ fn file_partition_rules_and_height_are_checked() {
         file_codec::parse_file_children(&trailing_children, false),
         Err(CoreError::TrailingBytes)
     );
-    assert_eq!(
-        file_codec::expected_file_level(2, file_codec::FileMappingProfile::new(1, 1)),
-        Err(CoreError::NonCanonicalPagePartition)
-    );
 }
 
 #[test]
 fn sparse_nonfinal_branch_is_rejected_by_shared_validator() {
-    let profile = file_codec::FileMappingProfile::new(4, 3);
-    let children = (1_u8..=2)
+    let children = (1_u8..=63)
         .map(|end| file_codec::FileChild {
             object_id: ObjectId::from_bytes(&[end; 32]).expect("child"),
             cumulative_end: u64::from(end),
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        file_codec::validate_file_children(&children, profile, false),
+        file_codec::validate_file_children(&children, false),
         Err(CoreError::NonCanonicalPagePartition)
     );
 }
@@ -364,16 +352,18 @@ fn sparse_nonfinal_branch_is_rejected_by_shared_validator() {
 #[test]
 fn directory_partition_rejects_cross_page_duplicates() {
     let child = ObjectId::for_bytes(b"child");
-    let entry = |name: &str| {
+    let entry = |number: usize| {
+        let mut name = format!("{number:08}-").into_bytes();
+        name.resize(255, b'x');
         DirectoryEntry::new(
-            CanonicalName::new(name).expect("name"),
+            CanonicalName::from_bytes(&name).expect("name"),
             layerfs_core::ObjectReference::new(layerfs_core::ObjectKind::Bytes, child),
         )
     };
-    let first = vec![entry("0001"), entry("0002")];
-    let second = vec![entry("0003"), entry("0004")];
+    let first = (1..=897).map(entry).collect::<Vec<_>>();
+    let second = vec![entry(898), entry(899)];
     let first_ref = dir_codec::DirectoryPageRef {
-        count: 2,
+        count: 897,
         first_name: first[0].name().as_bytes().to_vec(),
         object_id: child,
     };
@@ -383,13 +373,12 @@ fn directory_partition_rejects_cross_page_duplicates() {
         object_id: child,
     };
     assert!(dir_codec::validate_directory_partition(
-        4,
+        899,
         &[(&first, &first_ref), (&second, &second_ref)],
-        95,
     )
     .is_ok());
 
-    let duplicate = vec![entry("0002"), entry("0004")];
+    let duplicate = vec![entry(897), entry(899)];
     let duplicate_ref = dir_codec::DirectoryPageRef {
         count: 2,
         first_name: duplicate[0].name().as_bytes().to_vec(),
@@ -397,9 +386,8 @@ fn directory_partition_rejects_cross_page_duplicates() {
     };
     assert_eq!(
         dir_codec::validate_directory_partition(
-            4,
+            899,
             &[(&first, &first_ref), (&duplicate, &duplicate_ref)],
-            95,
         ),
         Err(CoreError::NameCollision)
     );

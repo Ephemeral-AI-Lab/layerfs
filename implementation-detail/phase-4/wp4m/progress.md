@@ -3,7 +3,8 @@
 ## Current terminal status — CP-0006
 
 WP4-M fixed-radix compact lane status (2026-08-21): **PASS / COMPLETE;
-WP4-P eligible but not complete; compatibility promotion=false**. CP-0006
+CP-0006 promotion=false; subsequent WP4-P COMPLETE / PASS; WP4 complete; WP5
+eligible/pending; overall Phase 4 not complete**. CP-0006
 completed 27/27 rows in an observed 50-second console wall under the configured
 120-second ceiling: six warmups, 18 measured rows, and three complete
 roundtrips. Python and Ruby independently return PASS with no reasons. The
@@ -14,11 +15,22 @@ Python, Ruby, executable, and runner hashes are respectively `b3596ff6...72e1`,
 `d080f0f8...4f5`, `86cd7018...7114`, `7e91b90f...dbb36`, and
 `965cc07f...40c25`.
 
-K64/F64 is policy-selected and DIR256K is the unmeasured fallback, but neither
-is compatibility-promoted. The next and only compatibility-bearing step is
-WP4-P: delete losers/selectors, regenerate and fingerprint selected-only
-goldens, and pass the promotion audit. WP5+ remains blocked until WP4-P
-completes. No further WP4-M campaign or 512-MiB run is required.
+K64/F64 + DIR256K is the one compatibility-promoted profile; DIR256K remains
+the unmeasured fallback. Losers/selectors are deleted, production profile ID
+`b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1`
+is frozen, and selected golden plus core/benchmark/parity/workspace/clippy gates
+pass. Both independent audits pass after the exact 2,010-entry maximum
+delta-page corpus case was added. WP4 is complete and WP5 is eligible/pending;
+overall Phase 4 is not complete. No benchmark was rerun, and no further WP4-M
+campaign or 512-MiB run is required.
+
+WP4-P verification is core 44 PASS, selected goldens 2 PASS/1 intentionally
+ignored printer, benchmark 54 PASS, parity 14 PASS, full workspace
+all-target/all-feature PASS, and clippy `-D warnings` PASS. Golden TSV, golden
+test, and selected benchmark hashes are `6de8c752...a7330`,
+`727fe668...49701`, and `2209930d...6dbea`. CP-0006 remains
+`qualification=false` and `promotion=false`; compatibility authority comes
+only from WP4-P.
 
 ## Historical 216-row campaign — original-contract NO-GO / custody lost
 

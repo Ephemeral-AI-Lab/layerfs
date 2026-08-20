@@ -238,7 +238,7 @@ run_row() {
         select(
           $row.status == "PASS" and $row.error == null and
           $row.candidate == "K64-F64" and
-          $row.profile_id == "cbf5709c59629c812a6ed3e9ea94a9226deab71547d2ab6c0fca596ccfe357e9" and
+          $row.profile_id == "b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1" and
           $row.size_bytes == $size and $row.input_size_bytes == $size and
           $row.operation == $engine_operation and $row.warmup == $warmup and
           $row.source_fingerprint == $expected_source and

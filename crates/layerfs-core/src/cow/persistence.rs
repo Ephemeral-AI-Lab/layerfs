@@ -1,9 +1,9 @@
-//! Candidate directory page/index/wrapper bytes.
+//! Selected directory page/index/wrapper bytes.
 
 use crate::content::persistence::{mapping_bytes, DIR_INDEX_TAG, DIR_METADATA_TAG};
 use crate::format::CanonicalName;
 use crate::identity::ObjectId;
-use crate::limits::MAX_CHILD_REFERENCES;
+use crate::limits::{DIRECTORY_PAGE_CEILING, MAX_CHILD_REFERENCES};
 use crate::object::{encode_object, DirectoryEntry, Object, ObjectKind, ObjectReference};
 use crate::{CoreError, CoreResult};
 
@@ -133,31 +133,24 @@ pub fn parse_directory_index(payload: &[u8]) -> CoreResult<Vec<DirectoryPageRef>
 pub fn validate_directory_partition(
     total_entries: u32,
     pages: &[(&[DirectoryEntry], &DirectoryPageRef)],
-    page_ceiling: usize,
 ) -> CoreResult<()> {
-    let mut validator = DirectoryPartitionValidator::new(page_ceiling);
+    let mut validator = DirectoryPartitionValidator::new();
     for (entries, descriptor) in pages {
         validator.push(entries, descriptor)?;
     }
     validator.finish(total_entries)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DirectoryPartitionValidator {
-    page_ceiling: usize,
     total: u64,
     previous_last: Option<Vec<u8>>,
     previous_encoded_size: Option<usize>,
 }
 
 impl DirectoryPartitionValidator {
-    pub fn new(page_ceiling: usize) -> Self {
-        Self {
-            page_ceiling,
-            total: 0,
-            previous_last: None,
-            previous_encoded_size: None,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn push(
@@ -172,7 +165,7 @@ impl DirectoryPartitionValidator {
         if entries.is_empty()
             || entries.len()
                 != usize::try_from(descriptor.count).map_err(|_| CoreError::LengthOverflow)?
-            || encoded_size > self.page_ceiling
+            || encoded_size > DIRECTORY_PAGE_CEILING
             || entries[0].name().as_bytes() != descriptor.first_name.as_slice()
         {
             return Err(CoreError::NonCanonicalPagePartition);
@@ -190,7 +183,7 @@ impl DirectoryPartitionValidator {
                 .ok_or(CoreError::NonCanonicalPagePartition)?
                 .checked_add(directory_entry_bytes(&entries[0])?)
                 .ok_or(CoreError::LengthOverflow)?
-                <= self.page_ceiling
+                <= DIRECTORY_PAGE_CEILING
             {
                 return Err(CoreError::NonCanonicalPagePartition);
             }
@@ -259,7 +252,7 @@ mod tests {
             first_name: b"b".to_vec(),
             object_id: ObjectId::for_bytes(b"second"),
         };
-        let mut validator = DirectoryPartitionValidator::new(1_024);
+        let mut validator = DirectoryPartitionValidator::new();
         validator.push(&first, &first_ref).expect("first page");
         assert_eq!(
             validator.push(&second, &second_ref),
@@ -272,7 +265,7 @@ mod tests {
             first_name: b"a".to_vec(),
             object_id: ObjectId::for_bytes(b"duplicate"),
         };
-        let mut validator = DirectoryPartitionValidator::new(51);
+        let mut validator = DirectoryPartitionValidator::new();
         validator.push(&first, &first_ref).expect("first page");
         assert_eq!(
             validator.push(&duplicate, &duplicate_ref),

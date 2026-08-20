@@ -10,7 +10,7 @@ SIZES = (1_048_576, 10_485_760, 104_857_600)
 OPS = ("write", "edit-same", "edit-plus1-early", "edit-plus1-middle")
 ARMS = tuple((size, "write") for size in SIZES) + tuple((SIZES[-1], op) for op in OPS[1:])
 ENGINE_OPS = dict(zip(OPS, ("full", "same-middle", "plus1-early", "plus1-middle")))
-PROFILE = "cbf5709c59629c812a6ed3e9ea94a9226deab71547d2ab6c0fca596ccfe357e9"
+PROFILE = "b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1"
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 APPROVED_100_GIB_MIDDLE_BUDGET = {
     "approved": True,

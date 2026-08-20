@@ -7,13 +7,21 @@ rejected evidence.
 
 ## Current status
 
-CP-0006 PASS closes WP4-M. WP4-P is eligible but incomplete. K64/F64 is the
-policy-selected file input and DIR256K is the unmeasured directory fallback;
-neither is compatibility-promoted. F3/F4 NO-GO results remain historical and
-unchanged. No further WP4-M or 512-MiB campaign is required.
+CP-0006 PASS closes WP4-M without promoting its rows. WP4-P is COMPLETE / PASS:
+losers/selectors are deleted, the one compatibility-promoted K64/F64 + DIR256K
+profile has production ID
+`b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1`
+and final TSV/golden-test hashes `6de8c752...a7330` / `727fe668...49701`.
+Core 44, selected goldens 2 PASS/1 ignored printer, benchmark 54, parity 14,
+full workspace, clippy, deletion, and both independent audit gates pass after
+the exact 2,010-entry maximum delta-page corpus fix. WP4 is complete; WP5 is
+eligible/pending. Overall Phase 4 is not complete. DIR256K remains explicitly
+an unmeasured fallback. No benchmark was rerun, and no further WP4-M or
+512-MiB campaign is required.
 
 - [Fast-lane amendment](wp4m/fixed-radix-fast-lane-amendment.md)
 - [Compact evidence contract](wp4m/fixed-radix-compact-evidence-contract.md)
+- [WP4-P promotion ledger](wp4p/promotion.md)
 - [Terminal profile report](wp4m/profile-selection-report.md)
 - [CP-0006 report](test-checkpoint-report/cp-0006-dirty-e55f1b325eab-fixed-radix-acceptance.md)
 - [CP-0006 raw JSONL](test-checkpoint-report/cp-0006-dirty-e55f1b325eab-fixed-radix-acceptance.jsonl)

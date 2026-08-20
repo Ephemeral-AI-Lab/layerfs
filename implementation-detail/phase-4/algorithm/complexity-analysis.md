@@ -1,6 +1,6 @@
 # Phase 4 algorithm-complexity analysis
 
-Status: WP4-M compact evidence complete; WP4-P eligible; no compatibility promotion
+Status: WP4-P COMPLETE / PASS; WP4 complete; WP5 eligible/pending; Phase 4 not complete
 
 Date: 2026-08-17
 
@@ -10,21 +10,26 @@ writes, reconstruction, and future native materialization
 ## 1. Purpose and authority
 
 This record states the time, resident-memory, and durable-space complexity of
-the candidate in `../mapping/logical-persistence.md`. It distinguishes:
+the selected profile in `../mapping/logical-persistence.md`. It distinguishes:
 
 - unavoidable semantic work from removable implementation amplification;
 - full capture/scrub/materialization from incremental and range operations;
 - peak live allocation from cumulative streamed work;
-- the current fixed-radix candidate from a promoted final format; and
+- the compatibility-promoted fixed-radix profile from later performance claims; and
 - asymptotic bounds from measured throughput.
 
-This document grants no format or compatibility authority. CP-0006 completes
-WP4-M under the prospective compact contract: K64/F64 is policy-selected and
-DIR256K is the unmeasured fallback. Neither has compatibility authority until
-WP4-P deletes alternatives, regenerates selected-only goldens, fingerprints
-the specification/vectors, and passes audit. A 512-MiB run is optional scale
-evidence only. Big-O and the retained measurements are not evidence of 200 or
-300 MiB/s.
+This document grants no independent format or compatibility authority.
+CP-0006 completed WP4-M without promotion. WP4-P subsequently deleted the
+alternatives, froze the production profile ID and selected-only goldens, and
+passed both independent audits. K64/F64 + DIR256K is now the one
+compatibility-promoted profile, with DIR256K still explicitly an unmeasured
+fallback. A 512-MiB run is optional scale evidence only. Big-O and the retained
+measurements are not evidence of 200 or 300 MiB/s.
+
+Selected-only implementation verification passes with production profile ID
+`b0ebb845409ef995a5fa454bb23d10a80c6ecf44deb7832ca2ce1213eb0f4ba1`,
+zero active losing-profile/selector matches, and green core, golden, benchmark,
+parity, workspace, and clippy gates. This changes no complexity result.
 
 The controlling invariants remain:
 
@@ -546,8 +551,8 @@ authenticated mapping bytes = O(index bytes + B_d)
 ```
 
 Whole-object authentication means the byte-I/O bound is not merely
-`O(log E)`: the complete bounded index and page are hashed. The A/B chooses the
-best physical constant.
+`O(log E)`: the complete bounded index and selected DIR256K page are hashed.
+DIR256K is a policy fallback, not a measured best physical constant.
 
 ### 10.3 Same-size child replacement
 
@@ -564,12 +569,12 @@ For 100,000 maximum-name entries:
 | Page ceiling | Max pages | Max index | Same-size replacement ceiling |
 |---:|---:|---:|---:|
 | 64 KiB | 447 | 131,003 bytes | 196,628 bytes / 3 objects |
-| 256 KiB candidate | 112 | 32,848 bytes | 295,081 bytes / 3 objects |
+| 256 KiB selected fallback | 112 | 32,848 bytes | 295,081 bytes / 3 objects |
 | 1 MiB | 28 | 8,236 bytes | 1,056,901 bytes / 3 objects |
 
 The earlier near-16-MiB page preference could rewrite approximately 16.8 MiB
-for one child. The 256-KiB candidate reduces that ceiling by about 57 times,
-but it is not called optimal before the physical-I/O A/B.
+for one child. DIR256K reduces that ceiling by about 57 times but remains an
+explicitly unmeasured fallback, not an optimality claim.
 
 ### 10.4 Count-changing insertion/removal
 
@@ -1005,10 +1010,11 @@ new capture, full scrub, full reconstruction, and clean native materialization
 remain linear in the bytes or closure they must process.
 ```
 
-The fixed-radix candidate passed the prospective policy/model gate with its
-known suffix-linear count-changing behavior stated explicitly. WP4-M is
-complete and WP4-P is eligible. Compatibility remains unpromoted until WP4-P
-deletes alternatives and freezes selected-only audited vectors.
+The selected fixed-radix profile passed the prospective policy/model gate with
+its known suffix-linear count-changing behavior stated explicitly. WP4-M
+remains nonpromoting evidence. WP4-P is COMPLETE / PASS, one K64/F64 + DIR256K
+profile is compatibility-promoted, WP4 is complete, and WP5 is
+eligible/pending. Overall Phase 4 is not complete.
 
 ## 21. M4.5 repaired same-count changed-spine analysis
 
@@ -2137,8 +2143,16 @@ directionally useful but is not an accepted sealed WP4-M checkpoint.
 
 ## 29. CP-0006 compact fixed-radix terminal analysis
 
-Status: **PASS / RETAIN; WP4-M complete; WP4-P eligible; compatibility not
-promoted**.
+Status: **PASS / RETAIN; WP4-M complete; CP-0006 promotion=false; subsequent
+WP4-P COMPLETE / PASS**.
+
+WP4-P selected-only deletion, production profile identity, golden, and test
+work now verify. Both independent audits pass after adding the exact
+2,010-entry maximum delta-page corpus case. The final selected TSV and golden
+test hashes are `6de8c752...a7330` and `727fe668...49701`. This changes no
+complexity class and required no benchmark rerun. CP-0006 itself remains
+`qualification=false` and `promotion=false`; compatibility authority comes
+only from the completed WP4-P gate.
 
 The configured routine ceiling is 120 seconds; the terminal runner console
 observed 50 seconds. The exact schedule is 24 capture rows—six arms with one
@@ -2177,8 +2191,11 @@ same-count edit:     path-local changed region + leaf/ancestor spine
 count-changing edit: O(suffix), worst-case Theta(N)
 resident memory:     bounded; no source/all-reference resident structure
 WP4-M:               complete
-WP4-P:               eligible
-compatibility:       not promoted
+WP4-P:               complete / pass
+WP4:                 complete
+WP5:                 eligible / pending
+compatibility:       one K64/F64 + DIR256K profile promoted by WP4-P
+Phase 4:             not complete
 ```
 
 Evidence hashes are raw `b3596ff6...72e1`, Python `d080f0f8...4f5`, Ruby

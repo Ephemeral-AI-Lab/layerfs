@@ -35,8 +35,12 @@ and the complete WP4-M milestone history.
 
 Current controlling status:
 
-- WP4-M: CP-0006 `PASS / COMPLETE`; WP4-P eligible but not complete.
-- K64/F64: policy-selected; DIR256K: unmeasured fallback; neither promoted.
+- WP4-M: CP-0006 `PASS / COMPLETE`; its rows remain `promotion=false`.
+- WP4-P: `COMPLETE / PASS`; WP4 complete; WP5 eligible/pending; overall Phase 4
+  not complete.
+- K64/F64 + DIR256K: one compatibility-promoted profile; DIR256K remains an
+  unmeasured fallback; production profile ID is `b0ebb845...f4ba1`; final
+  TSV/golden-test hashes are `6de8c752...a7330` / `727fe668...49701`.
 - Routine evidence: 27 rows at 1/10/100 MiB under a 120-second ceiling; no
   512-MiB or 100-GiB runtime fixture.
 - F2-v3 construction proof: retained.
