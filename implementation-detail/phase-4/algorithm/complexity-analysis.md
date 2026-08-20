@@ -1949,3 +1949,93 @@ the external verification attestation SHA-256 is
 The initially malformed delimiter inventory is preserved as historical
 failed-closed evidence and is not used for custody. This adds no algorithm or
 implementation change.
+
+## 26. F4-A accepted-path residual attribution — terminal NO-GO
+
+Status: **VALID / NO-GO; accepted F2-v3 remains retained; F4-B/F5/F6
+ineligible**.
+
+F4-A adds no retained algorithm. It observes the exact accepted full-create
+path and leaves its bounds unchanged:
+
+```text
+T_full_create = Theta(B + N)
+M_construction = O(K + F*(H+1) + bounded buffers)
+S_live = Theta(B_u + N)
+```
+
+The measured mapping parent is 524.111750 ms. Disjoint medians are source
+16.468330 ms, CDC 128.723024 ms, raw/construction/ObjectId hashing
+95.185147/89.067215/96.068155 ms, encode 3.161540 ms, bind 1.385969 ms,
+transient-bind upper bound 2.745299 ms, explicit copy zero, VDBE+pager
+48.853618 ms, direct VFS 24.281657 ms, and residual 4.543490 ms. Standalone
+COMMIT is 112.144334 ms, partitioned into an 18.199272-ms VDBE+pager composite
+and 93.030990-ms direct VFS wall.
+
+The three large hash lanes produce distinct required identities/qualification;
+CDC is the required frozen boundary scan; COMMIT VFS is required B-tree write
+and FULL/DELETE durability work. They are not directly removable budgets.
+System SQLite does not expose individual VDBE/pager wall, so their composite is
+ineligible rather than guessed. The only eligible explicit-copy lane is zero in
+all five measured rows. No mechanism passes the prospective 33-ms/4-of-5 gate.
+
+All semantic, pager/storage, one-COMMIT, resource, integrity, and terminal-Q
+checks pass. Diagnostic source is restored to accepted F2-v3. No complexity,
+schema, profile, durability, carrier, production, or implementation change is
+retained.
+
+## 27. F4-A2 FastCDC materialization attribution — terminal NO-GO
+
+Status: **VALID / NO-GO; accepted F2-v3 remains retained; F4-B/F5/F6 are
+ineligible; the current format-preserving F4 search is closed**.
+
+F4-A2 changes no retained algorithm or asymptotic bound. It compares:
+
+```text
+A  retained FastCDC gear/boundaries + scanner-owned complete-chunk writes
+B  exact same-gear boundary-only scalar state, no complete-chunk writes
+C  B + minimum required one-buffer carry/replacement copies
+```
+
+All lanes keep the accepted 32,768-byte input window, 8/16/32-KiB minimum/
+target/maximum, normalization, gear table, masks, pending-byte behavior,
+source-read progression, final partial chunk, and boundary sink. B/C replace
+the complete chunk only with checked length/offset state; C adds one bounded
+32,768-byte carry buffer. Therefore the retained and hypothetical complexity
+classes remain:
+
+```text
+accepted CDC time       = Theta(B)
+boundary-only CDC time  = Theta(B)
+accepted scanner memory = O(32 KiB input + 32 KiB complete chunk)
+hypothetical memory     = O(32 KiB input + 32 KiB carry + fixed state)
+```
+
+The exact fixture produces 5,284 chunks. Under the accepted read/pending
+contract, 2,084 chunks are borrowable from one live window and 3,200 require
+carry: 3,199 ordinary window-straddling chunks plus one boundary delayed by
+the one-byte pending lookahead. Required/copied bytes are exactly 67,072,778,
+copy calls are 7,343, and maximum live carry/capacity is 32,768 bytes.
+Terminal diagnostic heap is zero. Direct carry wall is
+`1.921987/1.972353/1.906844/1.861943/1.904530 ms`, median `1.906844 ms`.
+
+The controlling A/C schedule is `AC/CA/AC/CA/AC`; C already includes required
+replacement work. After subtracting the frozen 397,875-ns mechanism observer
+ceiling, directly removable budgets are:
+
+```text
+3.701583, 1.363542, 3.076167, 5.517375, 4.210667 ms
+median/min/max/spread = 3.701583/1.363542/5.517375/4.153833 ms
+rows >=33 ms = 0/5
+```
+
+Supplemental A-minus-B gross materialization has median 6.419750 ms and is
+nonadjacent/descriptive only. Even that gross figure is far below 33 ms before
+carry or observer subtraction. Exact boundaries, fingerprint, read shape,
+timer/carry equations, focused/workspace/static checks, source restoration,
+and independent recomputation pass.
+
+Thus full-create CDC retains the same necessary `Theta(B)` work and bounded
+memory class. Scanner-owned materialization is a small constant-factor cost,
+not a credible 33-ms lever on this retained path. No borrowed-window scanner,
+format/profile/schema/durability change, or production code is retained.

@@ -298,7 +298,15 @@ The expected benefit is fewer SQLite API/statement crossings. Total row and
 byte work stays linear. Reject or revise if mapping improves but COMMIT,
 journal allocation, RSS/Q, or durable total regresses enough to erase the win.
 
-## 10. F4 — Optimize one measured residual at a time
+## 10. F4 — Attribute first, then optimize one measured residual at a time
+
+F4-A is a diagnostic-only amendment after terminal F3 `NO-GO`. It may
+instrument the accepted F2-v3 100-MiB path, but it cannot implement a candidate.
+Its controlling contract and `>=33 ms` directly removable-budget gate are in
+[`../f4/report.md`](../f4/report.md). F4-B remains ineligible unless F4-A
+returns `GO` for one isolated mechanism; F5/F6 remain blocked.
+
+Terminal result: F4-A returns `NO-GO`. F4-B, F5, and F6 remain ineligible.
 
 Break the remaining mapping phase into non-overlapping counters/timers where
 possible:

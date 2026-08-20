@@ -1,5 +1,37 @@
 # WP4-M optimization progress
 
+F4-A2 terminal status (2026-08-20): **VALID / NO-GO; retain accepted F2-v3;
+close format-preserving F4**. The exact same-gear diagnostic compared accepted
+scanner-owned complete-chunk materialization (A) with boundary-only plus all
+required bounded carry work (C) under adjacent `AC/CA/AC/CA/AC` pairs; B ran
+later as supplemental boundary-only evidence. Net A-C budgets after the
+prospectively frozen `0.397875 ms` observer ceiling are
+`3.701583/1.363542/3.076167/5.517375/4.210667 ms`: median `3.701583 ms`,
+0/5 at the 33-ms gate. Exact 104,857,600 bytes, 3,201 reads, 5,284 boundaries,
+and CDC fingerprint `5bb376c3…5994` pass in all 18 rows. C copies exactly
+67,072,778 bytes for 3,200 carry-required chunks using 7,343 calls, one
+32,768-byte buffer, and terminal heap zero; median direct carry wall is
+1.906844 ms. Eight focused and 121 workspace tests, static checks, release
+self-test, and two-analyzer agreement pass. Accepted source is restored at
+`c8ac86be…cc158`; no optimization is retained. F4-B/F5/F6 remain ineligible;
+any broader physical-profile experiment requires explicit authorization.
+
+F4-A terminal status (2026-08-20): **VALID / NO-GO; retain accepted F2-v3**.
+From clean documentation checkpoint
+`83d085bd80e82ae22b4a9766f2fc8aed03501fb8`, one warmup and five measured
+accepted-path rows partition mapping and standalone COMMIT without double
+counting. Medians are mapping 524.111750 ms; source 16.468330; CDC 128.723024;
+three distinct required hash lanes 95.185147/89.067215/96.068155; encode
+3.161540; bind 1.385969; transient-copy upper bound 2.745299; explicit copy
+zero; mapping VDBE+pager 48.853618 and VFS 24.281657; COMMIT 112.144334 with
+VDBE+pager 18.199272 and VFS 93.030990 ms. The large hash/CDC/VFS lanes are
+required work, not removable budget; stripped system SQLite leaves VDBE/pager
+an ineligible composite. The only eligible explicit-copy lane is zero in 5/5,
+so no mechanism passes the 33-ms/4-of-5 gate. All identities, one COMMIT,
+pager/storage, six integrity checks, Q terminal zero, tests, and source
+restoration pass. Do not optimize, start F5/F6, change profile/schema/
+durability, resurrect F3, build a carrier, integrate production, or commit.
+
 F3 causal-diagnostic closure (2026-08-20): **VALID / NO-GO; retain accepted
 F2-v3; F4 ineligible**. The earlier universal-exhaustion wording is narrowed:
 v1/v2/v3 tested three classification shapes at the same R64/B1MiB envelope,
