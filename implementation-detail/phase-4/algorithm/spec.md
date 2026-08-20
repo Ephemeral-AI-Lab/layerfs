@@ -1,8 +1,7 @@
 # Phase 4 CAS + CDC + COW algorithm specification
 
-- Status: candidate algorithm contract; profile selection and implementation
-  pending
-- Date: 2026-08-17
+- Status: CP-0006 PASS; WP4-M evidence complete; WP4-P pending
+- Date: 2026-08-20
 - Branch: `codex/empty-worktree`
 - Applies to: WP4-M through WP14 of the Phase 4 rollback plan
 
@@ -22,19 +21,23 @@ It exists to prevent three kinds of drift:
 
 Requirements apply in this order:
 
-1. `../rollback/spec.md` controls the active
-   Phase 4 direction, correctness gates, and performance targets.
-2. `../storage/sqlite/visible-head.md` is the sole authority for
+1. `../wp4m/fixed-radix-fast-lane-amendment.md` controls the prospective
+   compact K64/F64 evidence, count-changing-edit policy, and DIR256K
+   unavailable-evidence fallback.
+2. `../rollback/spec.md` controls every active
+   Phase 4 direction, correctness gate, and performance target not
+   prospectively amended above.
+3. `../storage/sqlite/visible-head.md` is the sole authority for
    the SQLite schema revision and version-1 handling required by this mapping.
-3. `../mapping/logical-persistence.md` controls exact candidate bytes,
+4. `../mapping/logical-persistence.md` controls exact candidate bytes,
    object roles, identities, strong edges, bounds, and profile-promotion
    procedure.
-4. This document controls the algorithmic division of work, required data
+5. This document controls the algorithmic division of work, required data
    flow, asymptotic behavior, and implementation boundaries.
-5. `complexity-analysis.md` supplies derived equations and
+6. `complexity-analysis.md` supplies derived equations and
    explanatory analysis. It does not independently grant compatibility
    authority.
-6. `../rollback/implementation-plan.md`
+7. `../rollback/implementation-plan.md`
    controls work-package order and verification.
 
 If this document conflicts with exact canonical bytes or identity rules in the
@@ -102,9 +105,10 @@ The selected data-structure family is:
 - bounded delta pages plus an authenticated delta index; and
 - immutable canonical objects addressed only by Phase 1 `ObjectId`.
 
-The exact file leaf capacity `K`, branch fan-out `F`, and directory page
-ceiling remain measurement candidates until WP4-P. No candidate is called
-optimal or compatibility-bearing before that promotion.
+The prospective fast lane policy-selects K64/F64 and retains DIR256K through an
+unavailable-evidence fallback. This accepts suffix-linear count-changing edits
+without calling either profile optimal or compatibility-bearing before WP4-P.
+The policy changes no canonical bytes, metadata, schema, or identity.
 
 ## 3. Goals
 
@@ -457,8 +461,9 @@ The candidates are:
 | K59/F101 | 59 | 101 | near-complete-4-KiB canonical objects |
 | K256/F256 | 256 | 256 | lower object/SQL-call count candidate |
 
-These are temporary WP4-M choices. The algorithm must not assume that K64 is
-optimal merely because retained in-memory evidence favored it.
+K64/F64 is policy-selected for the prospective compact WP4-M validation. The
+other private choices remain only until WP4-P deletes them. Policy selection
+does not claim that K64/F64 is globally optimal.
 
 ### 11.2 Streaming radix construction
 
@@ -587,15 +592,23 @@ time and new mapping history = O(Z)
 worst case Z = Theta(N)
 ```
 
-WP4-P must not hide this weakness. The forced `+1` reference row at 100 MiB
-and 512 MiB is a format gate, not an optional regression. The 5% local ratio is
-only an alarm because it can compare two linear quantities. Promotion also
-requires the measured 100-to-512-MiB suffix slope, analytical rewritten-object/
-byte projection at 100 GiB, and an explicitly approved absolute 100-GiB
-middle-insert budget. That budget is not a file-size admission limit. If fixed
-ordinal grouping fails it, the only authorized next candidate is a
-deterministic, history-independent content-defined/prolly boundary algorithm
-over the ordered reference stream. No such structure is added speculatively.
+WP4-P must not hide this weakness. The forced `+1` rows run only against the
+frozen 100-MiB fixture and are mandatory exact-model diagnostics. Their ratio
+to full-capture wall, including a value above 5%, is not a rejection under the
+prospective fast-lane contract. CP-0003's 10-MiB middle workflow changes 531
+references to 530, so no same-count or other edit-classification claim is made
+at 10 MiB. CP-0004 remains the prior workflow baseline.
+
+For the retained-density 100-GiB K64/F64 model, the declared analytical middle
+`+1` bound is
+exactly and at most 2,705,409 rewritten references, 42,273 leaves, 673 branches,
+42,947 mapping objects, and 186,891,342 canonical mapping bytes. The early
+worst-case diagnostic is separately 5,410,817 references, 84,545 leaves, 1,343
+branches, 85,889 objects, and 373,777,332 bytes; it is not the middle budget.
+The equations must reproduce both rows exactly. These are suffix-linear work
+models, not wall-time or logarithmic claims. A model mismatch or middle-bound
+excess requires a separately approved specification; no prolly algorithm is
+required by this fast lane.
 
 ## 12. Directory algorithms
 
@@ -918,7 +931,7 @@ result may call reconstruction or a range read native materialization.
 | same-count small edit | `O(X_b + X_c + K + F*H)` | namespace ancestor work remains |
 | EOF append | appended/rescanned bytes plus rightmost spine | durability can dominate tiny appends |
 | EOF truncate | boundary path plus leaf/spine | old objects become residue; no GC |
-| middle count change | bounded resident memory, worst `O(Z)` | mandatory format rejection gate |
+| middle count change | bounded resident memory, worst `O(Z)` | accepted suffix-linear policy; exact middle budget applies |
 | arbitrary range | `O(F*B_v + K*L_v + C_v + returned bytes)` with receipt | full scrub required without authority |
 | full scrub | `Theta(A + V)` | intentionally complete |
 | fast reopen | fixed head/receipt/root work then lazy paths | not equivalent to fresh scrub |
@@ -969,82 +982,73 @@ For the retained-density K64/F64 model:
 - root-to-chunk path: root, two branches, leaf, chunk.
 
 These values are analytical projections, not a fabricated benchmark. The
-qualification campaign measures 100 MiB and 512 MiB and compares observed
-per-byte/per-object slopes with the equations. It must report projection
-uncertainty.
+routine campaign measures full writes and roundtrips at 1 MiB, 10 MiB, and
+100 MiB and compares observed per-byte/per-object scaling with the equations.
+Its edit arms run only at 100 MiB. It must report projection uncertainty. A
+512-MiB run is optional occasional scale evidence, not WP4-M closure or routine
+evidence.
 
 No arbitrary 100,000-reference, 2-GiB, 3-GiB, graph-work, or cumulative-output
 ceiling may be introduced. Exact structural object limits, logical depth,
 backend capacity, live allocation, and checked arithmetic overflow remain
 valid independent limits.
 
-## 21. Candidate profile selection
+## 21. Prospective fast-lane profile policy
 
 ### 21.1 File profile
 
-WP4-M must compare K64/F64, K59/F101, and K256/F256 on identical 100-MiB and
-512-MiB fixtures. Every row is labeled:
+WP4-M runs only K64/F64 on deterministic 1-MiB, 10-MiB, and retained 100-MiB
+fixtures. Every row is labeled:
 
 ```text
 qualification=false
-purpose=profile_selection
+purpose=fixed_radix_acceptance
+milestone=WP4-M-FIXED-RADIX
+candidate=K64-F64
+promotion=false
 ```
 
-The comparison includes full capture, full scrub/reopen, reconstruction,
-prefix/middle/EOF/cross-boundary ranges, same-count middle edit, and forced
-`+1` early/middle edit.
+The six capture arms are full writes at 1, 10, and 100 MiB plus same-count
+middle, forced `+1` early, and forced `+1` middle edits only at 100 MiB. One
+warmup and three measured invocations per arm produce 24 capture invocations.
+Only capture or edit publication work enters their medians. The 1/10-MiB arms
+are write scaling smokes and carry no edit-classification claim; CP-0003 proves
+its 10-MiB middle workflow is a 531-to-530 count change, while CP-0004 remains
+the prior workflow baseline.
 
-K64/F64 is the default. The predeclared primary metric is the complete
-100-MiB full-cycle SQLite median, guarded by 512-MiB scaling and range,
-same-count-edit, forced-`+1`, CPU, allocated-store-delta, logical-Q, and
-external-RSS observations. A challenger replaces it only if its overall
-primary median improves by at least 5%, it is faster in at least four of five
-paired matched blocks, and no protected outcome/resource median regresses by
-more than 5% at either size. If a required observation is unavailable,
-rankings reverse between sizes, or the win is dominated by a removable per-row
-SQL crossing, the result is inconclusive and retains K64/F64 pending the
-smallest counter-driven SQL-sensitivity probe.
+One separately labeled full-write complete-roundtrip check per size then
+performs fresh reopen, closure authentication, full streamed reconstruction,
+fingerprint comparison, and exact ranges outside all medians. Thus the package
+contains 27 total invocations. The roundtrip rows emit
+`row_kind=roundtrip-check`, `validation_scope=complete-roundtrip`, and
+`throughput_measurement_admissible=false`.
 
-Fixed ordinal grouping is rejected if it violates the measured suffix-rewrite
-model or the approved 100-GiB middle-insert analytical work budget over
-rewritten reference occurrences, leaves/branches/objects, canonical mapping
-bytes, and optional rewrite-to-capture amplification. The local 5% ratio,
-measured 100/512-MiB slope, and analytical 100-GiB work projection are all
-mandatory evidence; none alone is sufficient. Projected 100-GiB latency is a
-nonbinding estimate with stated uncertainty, not a fabricated benchmark or an
-admission ceiling.
+The externally measured package wall spans dispatch of the first invocation
+through return of the 27th and must not exceed 120 seconds. Binary build,
+fixture generation, and manifest preflight occur before this wall. No row may
+be omitted. A 512-MiB run is optional occasional scale evidence and cannot
+close WP4-M or replace a routine row.
+
+K64/F64 is policy-selected, so no challenger ranking or SQL-sensitivity probe
+is required. All correctness, identity, closure, one-transaction/one-COMMIT,
+reopen, reconstruction, range, exact suffix-model, checked-resource, and
+bounded-Q gates still apply. Q must return to zero and remain independent of
+source or suffix size.
+
+The local forced-`+1` 5% ratio is mandatory diagnostic evidence, not a
+rejection. Report 1-to-10-to-100-MiB full-write scaling and reproduce section
+11.7's middle and early 100-GiB equations exactly. Exceeding the middle
+budget or departing from the declared model rejects the fast lane. Projected
+100-GiB latency remains nonbinding and is not a file-admission ceiling.
 
 ### 21.2 Directory profile
 
-WP4-M compares 64-KiB, 256-KiB, and 1-MiB canonical page ceilings on one
-identical wide-directory corpus. It measures create, reopen/full validation,
-point lookup, same-size replacement, and leading insertion.
-
-The 256-KiB ceiling is the default. The predeclared primary metric is complete
-same-size middle-child `edit_verification_wall`. Protected outcome/resource
-metrics are create/full-validation wall and CPU, point-lookup latency,
-same-size replacement `edit_publish_wall` and `edit_verification_wall`,
-leading-insert publication/verification latency, allocated-store delta,
-logical Q, and external RSS. A challenger replaces the default only if its
-overall primary median improves by at least 5%, it is faster in at least four
-of five paired matched blocks, and no protected median regresses by more than
-5%. An unavailable or split result retains 256 KiB.
-
-The winner must balance:
-
-- canonical and physical page bytes;
-- number of mapping objects, rows, statements, and BLOB opens;
-- point-lookup authentication bytes;
-- same-size replacement rewrite bytes;
-- count-changing suffix rewrite bytes;
-- CPU and wall time; and
-- peak logical memory/RSS.
-
-The listed object/page/SQL/auth/rewrite quantities are mandatory diagnostics,
-not uniform 5%-nonregression guards. No candidate is selected from
-object-count arithmetic alone. If removable SQL crossings could reverse the
-ranking, the same private bounded sensitivity probe and defer rule as section
-21.1 applies.
+The deleted historical campaign cannot provide promotion-bearing directory
+comparisons. WP4-M records DIR64K, DIR256K, and DIR1M comparative evidence as
+`Unavailable(custody_lost)` and retains DIR256K by predeclared fallback, not as
+a measured winner. No new wide-directory performance campaign is required for
+WP4-M. Direct DIR256K correctness remains mandatory; WP4-P owns deletion of
+the alternatives and selected-only independent goldens.
 
 ### 21.3 Promotion
 
@@ -1163,21 +1167,22 @@ No performance row is accepted unless it proves:
 
 The algorithm must be implemented in this order:
 
-1. **WP4-M:** minimum private candidate codec/SQLite measurement path.
-2. **WP8/WP9 selection campaign:** non-qualifying file and directory A/B.
-3. **WP4-P:** select one profile, delete alternatives, regenerate goldens.
-4. **WP5:** finalize shared core mapping and bounded object-read reconstruction.
-5. **WP6:** add the Memory semantic lane.
-6. **WP7:** integrate the promoted mapping with SQLite.
-7. **WP8/WP9 baseline:** establish the unoptimized fair Memory/SQLite rows.
-8. **WP10:** optimize duplicate authentication/closure only when counters
+1. **WP4-M:** run the prospective 24-row K64/F64 capture schedule plus three
+   nonmedian complete-roundtrip checks within 120 seconds and record the
+   DIR256K fallback.
+2. **WP4-P:** delete alternatives, regenerate selected-only goldens, and audit.
+3. **WP5:** finalize shared core mapping and bounded object-read reconstruction.
+4. **WP6:** add the Memory semantic lane.
+5. **WP7:** integrate the promoted mapping with SQLite.
+6. **WP8/WP9 baseline:** establish the unoptimized fair Memory/SQLite rows.
+7. **WP10:** optimize duplicate authentication/closure only when counters
    prove it dominates.
-9. **WP11:** optimize SQLite statements/batches only when counters prove it
+8. **WP11:** optimize SQLite statements/batches only when counters prove it
    dominates.
-10. **WP12:** optimize remaining measured core encode/hash/COW/CDC work.
-11. **WP13:** audit compatibility requirements for a future backend without
+9. **WP12:** optimize remaining measured core encode/hash/COW/CDC work.
+10. **WP13:** audit compatibility requirements for a future backend without
    implementing one.
-12. **WP14:** run the stable-source final campaign and select the Phase 4
+11. **WP14:** run the stable-source final campaign and select the Phase 4
    outcome.
 
 No production compatibility-bearing codec begins from an unmeasured profile.
@@ -1200,32 +1205,16 @@ The final Phase 4 result must be exactly one of:
 Memory alone cannot satisfy the durable target. The profile-selection A/B
 cannot satisfy it. A fresh reconstruction cannot be called materialization.
 
-## 27. Pending benchmark discussion
+## 27. Fast-lane execution choices
 
-This specification freezes what each accepted row must prove, but these
-campaign-policy choices should be agreed before benchmark implementation:
+The runner manifest prospectively freezes the 1/10/100-MiB source fingerprints,
+generator version, edit bytes and offsets, range probes, timer
+version, and expected identities/counters before any invocation. A bounded
+hashing sink is sufficient for the three complete-roundtrip checks because native
+destination materialization is outside Phase 4.
 
-1. the exact deterministic 1/10/100-MiB fixture generator and whether the
-   retained 512-MiB fixture is reused byte-for-byte or regenerated under a new
-   manifest version;
-2. the exact edit offsets and replacement byte sequences for one-byte, 4-KiB,
-   1-MiB, same-count, and forced `+1` reference cases;
-3. the practical cold-APFS conditioning procedure, or whether cold state is
-   reported `Unavailable` and only controlled warm/unknown campaigns are
-   promotion-bearing;
-4. whether full reconstruction is streamed to a hashing sink or a temporary
-   destination file in Phase 4; the default recommendation is a bounded
-   hashing sink because native destination I/O belongs to materialization;
-5. the bounded SQLite batch candidates used only after the unoptimized
-   baseline identifies statement/API cost;
-6. the exact external RSS/physical-I/O observation commands and their timer
-   boundaries; and
-7. the acceptable analytical work budget for a forced +1 middle insert at
-   100 GiB, expressed in rewritten reference occurrences,
-   leaves/branches/objects, canonical mapping bytes, and optional
-   rewrite-to-capture amplification. Projected latency remains nonbinding
-   unless a later specification freezes a calibrated model and safety margin;
-   this edit-policy gate never limits file admission.
-
-Until these are settled, benchmark code may implement correctness fixtures and
-counter plumbing, but it must not publish a promotion or 200/300-MiB/s claim.
+Use `warm_or_unknown` unless cold APFS state is directly established. RSS,
+physical I/O, and cache state may be `Unavailable`; they may not be fabricated
+from logical counters. No batching experiment is required or authorized by the
+fast lane. Section 11.7 freezes the count-changing work budget; projected
+100-GiB latency remains nonbinding.

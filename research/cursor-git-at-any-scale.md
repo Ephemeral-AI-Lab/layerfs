@@ -197,10 +197,10 @@ source + CDC
 
 Relevant local contracts:
 
-- [Logical persistence mapping](../../../mapping/logical-persistence.md)
-- [Visible-head migration specification](../../../storage/sqlite/visible-head.md)
-- [Algorithm complexity analysis](../../../algorithm/complexity-analysis.md)
-- [Retained full-create lifecycle](../planning/retained-100-mib-lifecycle.md)
+- [Logical persistence mapping](../implementation-detail/phase-4/mapping/logical-persistence.md)
+- [Visible-head migration specification](../implementation-detail/phase-4/storage/sqlite/visible-head.md)
+- [Algorithm complexity analysis](../implementation-detail/phase-4/algorithm/complexity-analysis.md)
+- [Retained full-create lifecycle](../implementation-detail/phase-4/wp4m/f-series/planning/retained-100-mib-lifecycle.md)
 
 Cursor therefore validates LayerFS's immutable-bulk/atomic-head separation. It
 does not show that the current logical object graph should change.
@@ -217,7 +217,7 @@ After pre-sizing removed buffer-growth copies, the measured improvement was
 only approximately `0.09%` to `0.94%`, below the `5%` promotion threshold.
 Contiguous ownership alone was not a useful speed optimization.
 
-See [Phase 2 packed-CAS evidence](../../../../phase-2/opt-2-packed-cas.md).
+See [Phase 2 packed-CAS evidence](../implementation-detail/phase-2/opt-2-packed-cas.md).
 
 ### 5.2 The Phase 4B carrier failed in its index and replay paths
 
@@ -251,9 +251,9 @@ historical evidence only.
 
 See:
 
-- [Append-only first-implementation findings](../../../storage/append-only/first-implementation-findings.md)
-- [Rejected Phase 4B specification](../../../storage/append-only/spec.md)
-- [Rollback deletion record](../../../rollback/deletion-record.md)
+- [Append-only first-implementation findings](../implementation-detail/phase-4/storage/append-only/first-implementation-findings.md)
+- [Rejected Phase 4B specification](../implementation-detail/phase-4/storage/append-only/spec.md)
+- [Rollback deletion record](../implementation-detail/phase-4/rollback/deletion-record.md)
 
 The lesson is not "append-only can never work." It is:
 
@@ -433,7 +433,7 @@ predicted or durable wall fails the preregistered gate.
 The architecture already permits a later file-backed carrier only if large
 SQLite BLOB rows are directly proven to dominate:
 
-- [LayerFS durable-storage architecture](../../../../../architecture.md)
+- [LayerFS durable-storage architecture](../architecture.md)
 
 This diagnostic is a last resort. Do not run it merely because sequential
 writes appear attractive. First require terminal evidence that SQLite-specific

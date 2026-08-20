@@ -1,6 +1,6 @@
 # Phase 4 algorithm-complexity analysis
 
-Status: WP4-C companion analysis; candidate format, not compatibility authority
+Status: WP4-M compact evidence complete; WP4-P eligible; no compatibility promotion
 
 Date: 2026-08-17
 
@@ -18,11 +18,12 @@ the candidate in `../mapping/logical-persistence.md`. It distinguishes:
 - the current fixed-radix candidate from a promoted final format; and
 - asymptotic bounds from measured throughput.
 
-This document grants no format or compatibility authority. The file constants
-`K` and `F` and the directory page ceiling remain WP4-M measurement candidates.
-WP4-P may freeze exactly one winning profile only after the required 100-MiB
-and 512-MiB comparisons. Until then, Big-O notation describes the candidate
-family and the exact provisional profiles; it is not evidence of 200 or
+This document grants no format or compatibility authority. CP-0006 completes
+WP4-M under the prospective compact contract: K64/F64 is policy-selected and
+DIR256K is the unmeasured fallback. Neither has compatibility authority until
+WP4-P deletes alternatives, regenerates selected-only goldens, fingerprints
+the specification/vectors, and passes audit. A 512-MiB run is optional scale
+evidence only. Big-O and the retained measurements are not evidence of 200 or
 300 MiB/s.
 
 The controlling invariants remain:
@@ -491,11 +492,12 @@ whole-suffix ceilings are:
 | 512 MiB, 27,162 -> 27,163 refs | 1,876,516 bytes / 433 objects |
 | 100 GiB retained-density | 373,777,332 bytes / 85,889 objects |
 
-WP4-P must reject fixed ordinal grouping if the forced `+1` row fails the
-measurement gate. Only then is a deterministic, history-independent
-content-defined/prolly reference tree justified. Its target expected behavior
-would be local page changes plus `O(log N)` ancestors, but no such format or
-claim exists yet.
+Under the prospective fixed-radix policy, the former 5% forced-`+1` ratio is a
+mandatory diagnostic, not a rejection gate. Binding failures are disagreement
+with the exact suffix equations or exceeding the declared 100-GiB analytical
+middle bound. Count-changing work remains `O(Z)`, worst-case `Theta(N)`. No
+prolly implementation or logarithmic count-changing claim is required by
+WP4-M.
 
 ### 9.6 Namespace ancestor propagation
 
@@ -945,9 +947,10 @@ live mapping disk space      = Theta(S_u + N)
 - Native materialization and incremental destination authority are later
   phases, not WP4 results.
 
-## 19. Measurement obligations
+## 19. Measurement obligations — superseded historical campaign contract
 
-Big-O notation is a design filter, not throughput evidence. WP4-M must compare
+Big-O notation is a design filter, not throughput evidence. The original
+WP4-M contract required comparison of
 K64/F64, K59/F101, and K256/F256 and directory ceilings 64 KiB, 256 KiB, and
 1 MiB on identical 100-MiB and 512-MiB fixtures. It must include:
 
@@ -972,9 +975,11 @@ Every row must record at least:
 - durability boundaries; and
 - cache conditioning and unavailable observations explicitly.
 
-Source generation remains outside timers. The 100-GiB rows remain analytical;
-the 100/512-MiB slopes test whether the measured per-byte/per-object model
-supports the projection.
+Source generation remains outside timers. The prospective amendment superseded
+this exhaustive obligation with the exact 27-row CP-0006 compact contract:
+1/10/100-MiB writes, 100-MiB same/`+1` edits, three roundtrips, two independent
+analyzers, and a 120-second configured ceiling. The 100-GiB calculation remains
+formula-only; it is not a runtime or latency projection.
 
 Native APFS materialization requires a later distinct benchmark that includes
 destination namespace creation, payload writes, metadata application,
@@ -1000,10 +1005,10 @@ new capture, full scrub, full reconstruction, and clean native materialization
 remain linear in the bytes or closure they must process.
 ```
 
-The fixed-radix candidate is promotable only if measured constants are good and
-the count-changing-edit gate passes. Otherwise WP4-P must reject it and measure
-the narrowly defined deterministic content-defined/prolly alternative rather
-than freezing a known `O(N)` small-edit failure mode.
+The fixed-radix candidate passed the prospective policy/model gate with its
+known suffix-linear count-changing behavior stated explicitly. WP4-M is
+complete and WP4-P is eligible. Compatibility remains unpromoted until WP4-P
+deletes alternatives and freezes selected-only audited vectors.
 
 ## 21. M4.5 repaired same-count changed-spine analysis
 
@@ -2039,3 +2044,143 @@ Thus full-create CDC retains the same necessary `Theta(B)` work and bounded
 memory class. Scanner-owned materialization is a small constant-factor cost,
 not a credible 33-ms lever on this retained path. No borrowed-window scanner,
 format/profile/schema/durability change, or production code is retained.
+
+## 28. Historical WP4-M private profile comparison — original-contract NO-GO
+
+Historical status: **216-row campaign and 252-database audit complete;
+correctness/storage evidence PASS; performance FAIL; terminal custody
+incomplete; overall WP4-M acceptance not claimed; WP4-P ineligible; no profile
+selected or promoted**.
+
+WP4-M preserves the file topology equations in section 12.5 and measures three
+private `(K,F)` tuples at the same frozen CDC stream. At 100/512 MiB the exact
+file mapping topology remains:
+
+| Profile | 100 MiB leaves/branches/objects/bytes | 512 MiB leaves/branches/objects/bytes |
+|---|---|---|
+| K64/F64 | 83 / 2 / 86 / 365,143 | 425 / 7 / 433 / 1,876,448 |
+| K59/F101 | 90 / 0 / 91 / 365,481 | 461 / 5 / 467 / 1,878,758 |
+| K256/F256 | 21 / 0 / 22 / 360,789 | 107 / 0 / 108 / 1,854,341 |
+
+All operations retain:
+
+```text
+full create       Theta(B + N)
+same-count COW    O(K + F*H) plus bounded CDC rejoin
+count-changing    Theta(N-p) worst-case suffix repartition
+range             O(Vb*Bv + Vl*Lv + Cv + returned_bytes)
+directory create  Theta(E)
+directory lookup  O(log P + log entries_in_page) after authenticated index/page
+directory replace O(B_d + index_bytes)
+directory leading Theta(E) worst-case greedy repack
+```
+
+Measured 100→512 full-publish/lifecycle slopes are respectively 4.541/4.956
+for K64/F64, 4.731/5.026 for K59/F101, and 4.581/4.997 for K256/F256. No file
+challenger reaches the 5%/4-of-5 primary gate. K59/F101 and K256/F256 improve
+100-MiB lifecycle by only 0.804% and 0.246%, then regress 0.595% and 0.593% at
+512 MiB.
+
+The fixed-ordinal alarm proves the asymptotic weakness directly. Across all
+profiles/sizes, forced-`+1` publish consumes 61.997–71.417% of unchanged full
+capture, versus the 5% limit. Exact suffix references/objects/bytes match the
+model. At retained 100-GiB density `N=5,410,816`:
+
+| Profile | Position | Rewritten refs | Changed leaves | Changed branches | Mapping objects | Mapping bytes |
+|---|---|---:|---:|---:|---:|---:|
+| K64/F64 | early | 5,410,817 | 84,545 | 1,343 | 85,889 | 373,777,332 |
+| K64/F64 | middle | 2,705,409 | 42,273 | 673 | 42,947 | 186,891,342 |
+| K59/F101 | early | 5,410,817 | 91,709 | 918 | 92,628 | 374,235,159 |
+| K59/F101 | middle | 2,705,431 | 45,855 | 460 | 46,316 | 187,121,397 |
+| K256/F256 | early | 5,410,817 | 21,137 | 83 | 21,221 | 369,378,648 |
+| K256/F256 | middle | 2,705,409 | 10,569 | 42 | 10,612 | 184,693,971 |
+
+These are exact work projections, not wall-time extrapolations.
+
+For directories, the 100,000-entry page/object equations remain 447/450 for
+64 KiB, 112/115 for 256 KiB, and 28/31 for 1 MiB. The count-changing leading
+row respects the 100,000-child bound by starting with the 99,999-entry prefix
+and finishing at 100,000. DIR64K improves lookup 26.681% with 5/5 wins, but its
+primary replacement is only 0.0045% faster with 1/5 and its create/leading
+rows regress about 3%. DIR1M replacement and lookup regress 0.251% and
+247.744%. Neither challenger passes the directory primary gate.
+
+The governing resource separation is observed across all 216 rows:
+
+```text
+max Q = 5,784,006 bytes; terminal Q = 0 in 216/216
+max W = 2,701,803,204 bytes
+max D =   537,957,075 bytes
+```
+
+Thus cumulative W/D exceed source scale while live Q remains bounded by
+`O(K + F*H + bounded buffers)` for files and bounded page/index owners for
+directories. The direct audit passes all 252 row/master images. Six APFS
+allocated-block observations decrease after close; synced row-end allocation,
+current allocation, and drift are kept distinct from apparent/logical bytes.
+
+K64/F64 100-MiB durable capture regresses from accepted F2-v3 659.593 to
+706.598 ms (+7.127%), and same-middle durable edit regresses from accepted
+M4.5-v4 8.541 to 9.154 ms (+7.179%), although the latter complete lifecycle is
+flat. These are additional performance blockers, not semantic failures.
+
+The historical complexity conclusion remains useful: changing K/F constants
+cannot remove the linear count-changing suffix. WP4-P must not begin from this
+deleted campaign evidence alone. CP-0006 and the prospective amendment now
+provide the separate controlling basis for WP4-P eligibility.
+
+The preregistered complete manifest/seal of the 65-GiB artifact root was NOT
+RUN under the user's terminal runtime cap. No partial manifest is treated as
+equivalent, the root remains unsealed, and external attestation/final audit are
+unavailable. Therefore the measured complexity/performance no-go remains
+directionally useful but is not an accepted sealed WP4-M checkpoint.
+
+## 29. CP-0006 compact fixed-radix terminal analysis
+
+Status: **PASS / RETAIN; WP4-M complete; WP4-P eligible; compatibility not
+promoted**.
+
+The configured routine ceiling is 120 seconds; the terminal runner console
+observed 50 seconds. The exact schedule is 24 capture rows—six arms with one
+warmup and three measured samples—plus three complete-roundtrip writes. Sizes
+are 1/10/100 MiB; edit classifications occur only on the frozen 100-MiB
+fixture. No 512-MiB or 100-GiB runtime work occurred.
+
+| Arm | Median | Spread |
+|---|---:|---:|
+| 1-MiB write | 7.191667 ms | 0.453709 ms |
+| 10-MiB write | 64.032292 ms | 2.079208 ms |
+| 100-MiB write | 603.327666 ms | 4.355416 ms |
+| 100-MiB same-count middle | 8.639167 ms | 0.671625 ms |
+| 100-MiB `+1` early | 432.939417 ms | 3.411376 ms |
+| 100-MiB `+1` middle | 432.324667 ms | 6.974376 ms |
+
+Write wall slopes are 8.903679x, 9.422241x, and 83.892603x for 1→10,
+10→100, and 1→100 MiB. Mapping-byte slopes are 9.606250x, 9.901919x, and
+95.120312x. These support linear full-create shape without claiming a larger
+runtime fixture.
+
+The early `+1` row rewrites 5,285 reference occurrences, 83 leaves, two
+branches, 86 mapping objects, 104,857,600 raw bytes, and 365,495 mapping bytes.
+The middle row rewrites 2,643 occurrences, 42 leaves, two branches, 45 mapping
+objects, 52,377,184 raw bytes, and 185,915 mapping bytes. Their 71.758588% and
+71.656695% ratios are nonbinding diagnostics. The formula-only 100-GiB middle
+bound independently checks 2,705,409 occurrences, 42,273 leaves, 673 branches,
+42,947 objects, and 186,891,342 mapping bytes; `latency_projection=false`.
+
+All 27 rows have one successful transaction/COMMIT, stable identities and
+byte-identical pre-edit custody, exact W/D/Q equations, and terminal Q zero;
+maximum Q is 2,222,803 bytes. Python and Ruby independently return PASS.
+
+```text
+same-count edit:     path-local changed region + leaf/ancestor spine
+count-changing edit: O(suffix), worst-case Theta(N)
+resident memory:     bounded; no source/all-reference resident structure
+WP4-M:               complete
+WP4-P:               eligible
+compatibility:       not promoted
+```
+
+Evidence hashes are raw `b3596ff6...72e1`, Python `d080f0f8...4f5`, Ruby
+`86cd7018...7114`, executable `7e91b90f...dbb36`, and runner
+`965cc07f...40c25`.

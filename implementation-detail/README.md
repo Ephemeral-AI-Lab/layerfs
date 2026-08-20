@@ -7,7 +7,7 @@ only the stable project entry documents:
 - [Restart specification](../SPEC.md)
 - [Architecture](../architecture.md)
 - [Implementation plan](../IMPLEMENTATION_PLAN.md)
-- [Note to read after Phase 4](../NOTE_TO_READ_AFTER_PHASE_4.md)
+- [Mem9/Drive9 layered-filesystem distillation](../research/mem9-drive9-layered-filesystem-distilled.md)
 
 The sealed benchmark and custody evidence under `target/` remains at its
 historical paths and is not reorganized here.
@@ -35,14 +35,21 @@ and the complete WP4-M milestone history.
 
 Current controlling status:
 
+- WP4-M: CP-0006 `PASS / COMPLETE`; WP4-P eligible but not complete.
+- K64/F64: policy-selected; DIR256K: unmeasured fallback; neither promoted.
+- Routine evidence: 27 rows at 1/10/100 MiB under a 120-second ceiling; no
+  512-MiB or 100-GiB runtime fixture.
 - F2-v3 construction proof: retained.
 - F3 insertion grouping and causal diagnostic: terminal `NO-GO`; F2-v3 remains
   the accepted implementation.
-- F4: not started or authorized by this reorganization.
+- F4-A: terminal `NO-GO` from documentation checkpoint
+  `83d085bd80e82ae22b4a9766f2fc8aed03501fb8`; no isolated removable mechanism
+  passes the 33-ms/4-of-5 gate and no optimization is authorized.
 
 See the [WP4-M rolling progress ledger](phase-4/wp4m/progress.md), the
 [terminal F3 report](phase-4/wp4m/f-series/f3/report.md), and the
-[post-F3 planning note](phase-4/wp4m/f-series/f3/read-after.md).
+[Cursor Git research note](../research/cursor-git-at-any-scale.md), and the
+[F4-A diagnostic](phase-4/wp4m/f-series/f4/report.md).
 
 ## Organization rules
 

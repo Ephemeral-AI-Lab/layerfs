@@ -1,7 +1,7 @@
 # Phase 4 logical persistence mapping
 
-Status: WP4-C candidate specification complete; WP4-P promotion/goldens pending
-Date: 2026-08-17
+Status: WP4-C and WP4-M complete; CP-0006 PASS; WP4-P pending and eligible
+Date: 2026-08-20
 Scope: exact durable mapping research and specification only; no production
 codec, engine integration, benchmark implementation, or WP5+ work
 
@@ -34,18 +34,22 @@ this is not a change to Phase 3 mutation semantics. Conversely, the old
 direct-reference bound, not a logical-file or closure bound. File length,
 reference count, descriptor totals, and cumulative work use checked `u64`.
 
-Fixed capacity 64 is frozen **only** as the evidence-backed implementation
-candidate for fixed-width file leaves and file branches. It is not claimed
-optimal and has a
-mandatory pre-release format A/B against the exact near-4-KiB leaf/branch fits
-and one larger candidate. Directory and delta records are variable-width and
-have no 64-entry rule. Directory pages greedily use a candidate 262,144-byte page
-ceiling; delta pages greedily use the existing 8 MiB Bytes-field ceiling. Both
-retain the existing 100,000 direct-reference limit.
+The prospective fast-lane amendment at
+`../wp4m/fixed-radix-fast-lane-amendment.md` policy-selects fixed capacities
+K64/F64 for compact WP4-M validation while honestly accepting suffix-linear
+count-changing edits. It does not claim K64/F64 optimal or grant compatibility
+authority before WP4-P. Directory and delta records are variable-width and have
+no 64-entry rule. DIR256K is retained through the amendment's
+unavailable-evidence fallback; delta pages greedily use the existing 8 MiB
+Bytes-field ceiling. Both retain the existing 100,000 direct-reference limit.
 
 ## 2. Controlling contracts and semantic inventory
 
 ### 2.1 Authority
+
+`../wp4m/fixed-radix-fast-lane-amendment.md` controls only its prospective
+WP4-M evidence, count-changing-edit policy, and DIR256K fallback deltas. The
+remaining authority below is unchanged.
 
 This record preserves:
 
@@ -184,10 +188,10 @@ outer kind Bytes, obtains `R`, checks `len(R) == raw_length`, and recomputes
 ## 5. File-node mapping
 
 This section freezes the exact **fixed-radix candidate** that WP5 implements
-first. It is not yet external compatibility authority: section 12.7's forced
-count-changing-edit gate must pass before the candidate becomes the final v1
-format. Draft golden IDs from earlier revisions have no deployed compatibility
-authority and do not constrain this simpler grammar.
+first. It is not yet external compatibility authority: section 12.7's compact
+K64/F64 validation and WP4-P must pass before the candidate becomes the final
+v1 format. Draft golden IDs from earlier revisions have no deployed
+compatibility authority and do not constrain this simpler grammar.
 
 ### 5.1 Reference leaves
 
@@ -363,20 +367,16 @@ candidate, not as a durable/SQLite optimum.
 The exact near-4-KiB leaf alternative is K59: `Leaf(59)=4,040` and
 `Leaf(60)=4,108`. For branches, F101 is the largest complete branch not above
 4,096 bytes (`29+40*101=4,069`; F102 is 4,109). These are canonical-object
-fits, not claims about SQLite physical-page residence. The smallest pre-release
-A/B is K64/F64 versus K59/F101 and K256/F256. It records canonical objects and
-bytes, hash/auth bytes, SQL statements/rows, BLOB/page and physical DB bytes,
-CPU/RSS, range paths, and both edit shapes at 100 MiB and retained 512 MiB.
+fits, not claims about SQLite physical-page residence. The historical campaign
+compared K64/F64, K59/F101, and K256/F256 at 100 MiB and retained 512 MiB. It
+remains a custody-lost `NO-GO`, not the active closure schedule.
 
 Fixed ordinal grouping is canonical and bounded but a count-changing early
-edit can repack the entire suffix. It is therefore the simplest implementation
-candidate, not a performance-qualified compatibility freeze. Section 12.5
-gives the exact O(suffix) equations and section 12.7 gives the promotion gate.
-If it fails, the only next format candidate is deterministic,
-history-independent content-defined/prolly boundaries over the ordered
-reference stream. A history-dependent split is semantically invalid because
-construction history would change the `NodeId`; no prolly tree is added in
-WP4.
+edit can repack the entire suffix. The active fast lane accepts that documented
+`O(suffix)` tradeoff under section 12.7's exact analytical budget; it makes no
+logarithmic claim. A future deterministic, history-independent
+content-defined/prolly mapping would require a separately approved canonical
+format specification and is not required by WP4-M.
 
 ## 6. Directory-node mapping
 
@@ -1165,8 +1165,10 @@ names are not.
 The record currently specifies one exact **candidate** topology and rejects an
 unknown mapping version before interpreting version-dependent fields. The
 candidate is not deployed compatibility authority and cannot be promoted to
-final v1 until section 12.7's mandatory K/F and count-changing-edit gates pass.
-Earlier draft golden IDs likewise have no compatibility authority.
+final v1 until section 12.7's compact K64/F64 validation and WP4-P pass. The
+active fast-lane amendment changes the evidence and count-changing-edit policy,
+not canonical bytes or identities. Earlier draft golden IDs likewise have no
+compatibility authority.
 
 After promotion, an encoder emits exactly one canonical profile. A future page
 capacity/topology change uses a new mapping version/profile and intentionally
@@ -1180,14 +1182,16 @@ only the narrow SQLite schema transition in
 
 The mapping must leave a credible route to the 100-MiB durable target of
 200 MiB/s (500 ms) and stretch target of 300 MiB/s (333.333 ms), but WP4 does
-not claim either target. Local qualification uses the same deterministic source
-at retained 100 MiB and 512 MiB, generated outside the timer, with one warmup
-and at least five alternating measured runs. The rows separate per-byte
+not claim either target. Routine WP4-M closure uses full writes and roundtrips
+at deterministic 1-MiB, 10-MiB, and retained 100-MiB sources plus edit arms
+only at 100 MiB, with inputs generated outside the timer and one warmup plus
+three measured runs per capture arm. The rows separate per-byte
 CDC/hash/canonical/payload I/O, per-object/SQL cost, per-file/transaction fixed
 cost, index-height transitions, SQLite physical amplification, Q/RSS, and
 reopen/range/edit path work. The 100-GiB requirement is analytical capacity and
 cost validation, never a local 100-GiB benchmark or naive wall-time
-extrapolation.
+extrapolation. Retained 512-MiB work is occasional scale evidence only, not
+routine closure or a condition of WP4-P eligibility.
 
 ### 12.1 Exact object counts under the frozen CDC profile
 
@@ -1270,8 +1274,8 @@ statement per object, whole-closure replay after a valid section 9.5 receipt,
 or an unbounded dedup/visited map. Those are implementation choices or current
 baseline costs: WP5+ may remove them with bounded verified-buffer handoff,
 batching, authenticated receipts/caches, and the bounded traversal/spool rules
-without changing any candidate bytes or IDs. Actual pass, SQL, object, authentication,
-peak-Q, and RSS counters remain mandatory A/B evidence.
+without changing any candidate bytes or IDs. Actual pass, SQL, object,
+authentication, peak-Q, and RSS counters remain mandatory validation evidence.
 
 Exact native/SQLite copy counts cannot be frozen before WP5/WP7 code exists.
 The required counters are canonical bytes materialized, payload copies,
@@ -1376,7 +1380,9 @@ child's own mapping are excluded. The simple candidates are:
 | **262,144 (256 KiB, candidate)** | **112** | **32,848** | **115** | **295,081 bytes / 3 objects** |
 | 1,048,576 (1 MiB) | 28 | 8,236 | 31 | 1,056,901 bytes / 3 objects |
 
-For the candidate, a worst-case count-changing insertion may repack the entire suffix.
+For the candidate, a worst-case count-changing insertion may repack the entire
+suffix. This is the accepted fast-lane policy limitation, not a logarithmic or
+path-local operation.
 The complete maximum-name directory mapping ceiling is
 `100,000*292 + 112*13 + 32,848 + 89 + 28 = 29,234,421` canonical bytes and
 115 mapping objects: the terms are entry bodies, one Phase 1 envelope per
@@ -1385,14 +1391,12 @@ removes 335 maximum mapping objects versus 64 KiB while keeping a same-size
 replacement under 300,000 canonical bytes; it is the selected credibility
 tradeoff, not a measured optimum.
 
-The smallest later wide-directory A/B compares these exact 64-KiB, 256-KiB,
-and 1-MiB candidates on identical canonical 100,000-entry directories for
-create, full reopen, point lookup, a same-size child replacement, and a leading
-count-changing insert. It reports page/index/object/SQL counts, bytes encoded,
-hashed, authenticated, rewritten and transferred, wall/CPU/RSS, and remote
-request stages. Before promotion, a different winner replaces this candidate;
-after promotion, a capacity change requires a new mapping version. No adaptive
-or history-dependent tree is added to the candidate.
+The original contract required a wide-directory A/B across these three
+ceilings. Its promotion-bearing custody is now unavailable, so the prospective
+fast lane retains DIR256K through the explicit unavailable-evidence fallback
+rather than calling it a measured winner. After promotion, a capacity change
+requires a new mapping version. No adaptive or history-dependent tree is added
+to the candidate.
 
 ### 12.6 Future remote round trips
 
@@ -1423,22 +1427,31 @@ qualify this candidate. It establishes plausibility, not success. K64/F64 and
 the 256-KiB directory page are the strongest evidence-backed starting choices,
 not global optima.
 
-Before this candidate becomes final v1 compatibility authority, the smallest
-qualifying A/B runs identical 100-MiB and retained 512-MiB sources with one
-warmup and at least five alternating measurements. It compares exactly:
+The earlier 216-row multi-profile campaign is a terminal `NO-GO` under its
+original contract, and its deleted approximately 65-GiB evidence root no
+longer has promotion-bearing custody. The prospective amendment does not
+relabel that campaign. Before this candidate becomes final v1 compatibility
+authority, WP4-M instead runs the compact K64/F64 validation specified in
+`../wp4m/fixed-radix-fast-lane-amendment.md`: full-write arms at deterministic
+1-MiB, 10-MiB, and retained 100-MiB plus same-count middle, forced `+1` early,
+and forced `+1` middle edit arms only at 100 MiB. One warmup and three measured
+invocations across those six arms produce 24 capture invocations, plus one
+separately labeled nonmedian full-write complete-roundtrip check per size, for
+27 total invocations.
 
-- K64/F64 baseline;
-- K59/F101, the nearest complete-canonical-object 4-KiB fits; and
-- K256/F256, the one larger lower-object-count alternative.
-
-It covers full create/capture, full scrub and reopen, full streamed
-reconstruction, prefix/middle/EOF ranges, retained same-count middle edit, and
-a forced +1-reference early/middle edit. It records wall/CPU/RSS, Q/W/D,
-objects, identity-hash operations/bytes, auth bytes, SQL statements/rows,
+The 24-row schedule measures full-write or edit publication work only.
+Post-boundary semantic checks do not enter those medians. The 1/10-MiB arms are
+write/roundtrip scaling smokes only: CP-0003 proves its 10-MiB middle workflow
+changes 531 references to 530, so no edit-classification claim is made there.
+CP-0004 remains the prior workflow baseline. The three
+complete-roundtrip checks cover close/fresh reopen, closure authentication,
+full streamed reconstruction, fingerprints, and prefix/middle/EOF ranges
+outside the medians. The package records wall/CPU/RSS, Q/W/D, objects,
+identity-hash operations/bytes, auth bytes, SQL statements/rows,
 BLOB/page/WAL/physical DB bytes, created/reused/unreachable bytes, index height,
-and remote-equivalent stages. Source generation is outside all timers. A
-synthetic metadata-only boundary test exercises every file-index height change
-not crossed by the 100/512-MiB payload rows.
+and remote-equivalent stages. Source generation is outside all timers. The
+external package wall spans the first dispatch through the 27th return and must
+not exceed 120 seconds; build and fixture preflight occur before that wall.
 
 Profile promotion requires all identity, range, reopen, receipt-adversary,
 atomicity, and constant-live-memory gates. The 100-MiB 500.000-ms minimum and
@@ -1448,68 +1461,43 @@ during WP4-M; they are not a pre-optimization WP4-P blocker. The controlling
 measured WP10-WP12 optimizations and the WP14 full campaign. A profile cannot
 win by omitting work merely because these diagnostics are nonblocking.
 
-K64/F64 and the 256-KiB directory ceiling are the defaults. Each candidate
-family predeclares one primary metric. A challenger replaces its default only
-when all of these hold:
+K64/F64 is policy-selected for the fast lane; the compact evidence validates
+that default rather than ranking challengers. Every scheduled arm's topology and
+rewrite counter must agree exactly with the fixed-radix equations for the
+authenticated CDC stream. DIR256K is retained as
+`Unavailable(custody_lost)`, not as a measured winner. WP4-P still owns deletion
+of every losing constant, selector, and fixture plus selected-only goldens and
+the final audit.
 
-1. its overall primary median improves by at least 5%;
-2. it is faster in at least four of five paired matched blocks;
-3. no protected outcome/resource median regresses by more than 5% at either
-   applicable measured size; and
-4. every required observation is available and the result is not reversed by
-   cross-size evidence or explained only by a removable per-row SQL crossing.
-
-The file primary is complete 100-MiB full-cycle SQLite wall time, guarded by
-512-MiB scaling and protected complete-capture/full-validation, range,
-same-count-edit, forced-`+1`, CPU, allocated-store-delta, logical-Q, and
-external-RSS medians. The directory primary is complete same-size middle-child
-`edit_verification_wall`; protected metrics are create/full-validation
-wall/CPU, point-lookup latency, same-size-replacement `edit_publish_wall` and
-`edit_verification_wall`, leading-insert publication/verification latency,
-allocated-store delta, logical Q, and external RSS.
-
-Mapping-object/page counts, logical canonical/auth/rewrite bytes, and SQL
-executions/rows/BLOB opens are mandatory diagnostics, not uniform
-5%-nonregression guards: candidate layouts necessarily trade those quantities.
-If removable SQL crossings could reverse either family, run the
-smallest private bounded prepared/batch sensitivity probe with identical
-semantics. A reversed or unclear result is inconclusive and retains the
-default; the probe grants no production batching authority.
-
-The forced +1-reference 5% ratio is a local regression alarm, not proof that a
-linear suffix rewrite scales acceptably: both it and full capture can be
-linear. WP4-M must also report measured rewritten objects/bytes and the
-100-to-512-MiB slope, then project the same quantities analytically at 100 GiB.
-Before WP4-P may promote fixed ordinal grouping, the project must freeze an
-explicit acceptable 100-GiB middle-insert analytical work budget over rewritten
-reference occurrences, leaves/branches/objects, canonical mapping bytes, and
-optionally rewrite-to-new-capture amplification. That budget is an edit-policy
-gate, never a file-admission ceiling. Projected 100-GiB latency is reported only
-as a nonbinding estimate with its model and uncertainty; no absolute latency
-gate exists without a later specification that freezes calibration hardware,
-model, samples, and safety margin. If the measured local gate or approved
-analytical work budget fails, the only next format A/B is deterministic
-history-independent content-defined/prolly boundaries over the reference
-stream; WP4 does not add that complexity without the failure evidence.
+The forced +1-reference 5% ratio is a mandatory local diagnostic, not a
+rejection gate. WP4-M reports it, measured 1-to-10-to-100-MiB full-write
+scaling, and the exact 100-GiB retained-density projections. The declared
+analytical middle bound is at most 2,705,409 rewritten references, 42,273 leaves, 673 branches,
+42,947 mapping objects, and 186,891,342 canonical mapping bytes; the equations
+must reproduce those values exactly. The separate known early worst case is
+5,410,817 references, 84,545 leaves, 1,343 branches, 85,889 mapping objects,
+and 373,777,332 bytes. It remains diagnostic and is not substituted for the
+declared middle bound. Both are suffix-linear work models, never wall-time or
+logarithmic claims.
 
 Initial capture/full reconstruction may scale with source bytes. With a valid
 section 9.5 receipt, reopen/range/same-count edit must scale with the bounded
 index/change path, not total file bytes. The fixed candidate makes no such claim
-for count-changing edits. No 100-GiB local run is required: the 100/512-MiB
-slopes validate the per-byte/per-object model, while section 12.1 remains an
-analytical capacity/cost projection with stated uncertainty.
+for count-changing edits. No 100-GiB local run is required: routine scaling
+checks the per-byte/per-object model, while section 12.1 remains an analytical
+capacity/cost projection with stated uncertainty. A 512-MiB run is optional
+occasional scale evidence and cannot replace a routine row.
 
 This completes **WP4-C, the candidate specification**, but not **WP4-P,
 compatibility-profile promotion**. The executable dependency order is:
 
-1. `WP4-M` implements only the shared codec and SQLite path needed to measure
-   file K64/F64, K59/F101, and K256/F256 plus directory 64-KiB, 256-KiB, and
-   1-MiB ceilings. Profile selection is private to tests and the benchmark.
-2. The WP8/WP9 profile-selection lane runs this section's A/B. Its rows are
-   explicitly non-qualifying and cannot support a product or throughput claim.
-3. WP4-P selects one file K/F pair and one directory ceiling, deletes every
-   losing profile and the private selector, and makes the winners the only
-   production format.
+1. `WP4-M` runs the prospective 24-invocation K64/F64 capture schedule plus
+   three nonmedian complete-roundtrip checks within 120 seconds and records
+   DIR256K comparative evidence as `Unavailable(custody_lost)`.
+2. The compact rows remain explicitly non-qualifying for the 200/300-MiB/s
+   product target and cannot be relabeled.
+3. WP4-P deletes every losing profile and private selector and makes K64/F64 +
+   DIR256K the only production format.
 4. WP4-P regenerates independent final goldens and their fingerprint, obtains
    the final read-only audit, and only then marks WP4 complete.
 5. WP5 reruns its frozen-format exit check against the single promoted profile;
@@ -1577,23 +1565,21 @@ What changed after the objection:
   validation under an explicit store-integrity authority, never fetched-byte
   authentication.
 
-The original missing-authority stop is retracted, but a new explicit selection
-condition remains: the user forbids irrevocable fixed-ordinal compatibility
-before section 12.7's 100/512-MiB K/F and +1-reference rows. The candidate byte
-grammar is exact enough to implement and measure, but final v1 selection,
-current golden IDs, and WP4-P ledger completion remain pending that gate. No
-production codec, engine integration, benchmark code, or prolly alternative is
-implemented by WP4.
+The original missing-authority stop is retracted. CP-0006 passed section 12.7's
+1/10/100-MiB write/roundtrip smokes and 100-MiB edit rows, completing WP4-M.
+Irrevocable compatibility remains blocked on WP4-P selected-only goldens,
+fingerprinting, loser/selector deletion, and audit. No production codec or
+prolly alternative is authorized by this result.
 
 ## 14. Independent golden vectors
 
-**Blocked pending section 12.7.** The candidate root/branch grammar and receipt
+**Blocked pending WP4-P execution.** The candidate root/branch grammar and receipt
 introduced after the prior audit intentionally change file, directory, root,
 delta, transition, and failure bytes/IDs. The material retained in sections
 14.2-14.8 is a **withdrawn prior-draft research trace**, not a normative corpus
 and not input to WP5. Only the Phase 1 chunk-domain examples remain unchanged.
-After the K/F gate selects the final profile, WP4 must regenerate all dependent
-success/failure bytes with an independent packer/hasher, add file-branch and
+WP4-P must regenerate all dependent success/failure bytes with an independent
+packer/hasher, add file-branch and
 receipt adversary vectors, recompute the slice fingerprint, and obtain a fresh
 immutable read-only audit before ledger completion.
 
@@ -2254,12 +2240,13 @@ fa62b4ac5f88bdf929ea2da4fe16415c3da5f7d1f928d1eda0564f8397bb5325
 - [x] Memory, SQLite, and plausible remote immutable-object plus atomic
   publication requirements are frozen without implementing a third backend in
   sections 7, 9, and 12.6.
-- [ ] The 200/300 MiB/s credibility gate, exact retained 100/512-MiB rows,
-  100-GiB analytical equations, file/directory COW, and the smallest K/F and
-  count-changing A/B are specified in section 12; the measurements are pending.
+- [x] The 200/300 MiB/s credibility diagnostics, exact routine 1/10/100-MiB
+  rows, 100-GiB analytical equations, file/directory COW, declared middle-edit
+  bound, and prospective compact K64/F64 lane are specified in section 12 and
+  the fast-lane amendment; CP-0006 passed the 27-invocation package.
 - [ ] Replacement exact success/failure bytes, IDs, reconstructed semantics,
   strong edges, receipt adversary cases, and independent fingerprint are
-  pending section 12.7 selection; section 14's old dependent vectors are
+  pending WP4-P selected-only regeneration; section 14's old dependent vectors are
   withdrawn.
 - [x] The dependency order, private provisional measurement authority, loser
   deletion point, and absence of pre-promotion compatibility/product authority
@@ -2283,10 +2270,9 @@ itself does not:
 - implement batching, receipts, caches, or remote transport; or
 - authorize a public or compatibility-bearing multi-profile production path.
 
-The next authorized step is only WP4-M and the WP8/WP9 non-qualifying
-profile-selection lane described in section 12.7. After that evidence returns,
-WP4-P deletes the alternatives, promotes one profile, regenerates final
-goldens, and completes the audit. The WP7 integration must also resolve
+The next authorized step is WP4-P. CP-0006 completed WP4-M's 27-invocation
+K64/F64 package. WP4-P deletes the alternatives, promotes K64/F64 + DIR256K,
+regenerates final goldens, and completes the audit. The WP7 integration must also resolve
 root-parent convergence exactly as specified in section 7 rather than
 perpetuating parent as immutable root content. WP5+ must not present any
 candidate as deployed v1 before WP4-P completes.

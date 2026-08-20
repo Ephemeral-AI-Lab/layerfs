@@ -1,7 +1,7 @@
 # Phase 4 algorithm test and benchmark specification
 
-- Status: candidate test contract; WP4-M implementation and measurements pending
-- Date: 2026-08-17
+- Status: CP-0006 PASS; WP4-M evidence complete; WP4-P pending
+- Date: 2026-08-20
 - Branch: `codex/empty-worktree`
 - Applies to: WP4-M through WP14
 
@@ -14,18 +14,21 @@ does not define another storage format or algorithm.
 
 Requirements apply in this order:
 
-1. `../rollback/spec.md` controls the Phase 4
-   direction and acceptance targets.
-2. `../mapping/logical-persistence.md` controls candidate and promoted
+1. `../wp4m/fixed-radix-fast-lane-amendment.md` controls the prospective
+   compact K64/F64 evidence, count-changing-edit policy, and DIR256K
+   unavailable-evidence fallback.
+2. `../rollback/spec.md` controls every Phase 4
+   direction and acceptance target not prospectively amended above.
+3. `../mapping/logical-persistence.md` controls candidate and promoted
    canonical bytes, identities, roles, bounds, and profile-selection rules.
-3. `../storage/sqlite/visible-head.md` is the sole authority for
+4. `../storage/sqlite/visible-head.md` is the sole authority for
    the narrow SQLite schema-v1 to schema-v2 transition required by the complete
    visible-head tuple. It does not authorize a general migration framework.
-4. `spec.md` controls the algorithms and ownership
+5. `spec.md` controls the algorithms and ownership
    boundaries under test.
-5. This document controls test cases, campaign order, timer boundaries, and
+6. This document controls test cases, campaign order, timer boundaries, and
    evidence classification.
-6. `../rollback/implementation-plan.md`
+7. `../rollback/implementation-plan.md`
    controls work-package order and ledger completion.
 
 The source-artifact fingerprints when this test specification was created are:
@@ -51,7 +54,8 @@ The following evidence classes are distinct:
 |---|---|---:|---:|
 | existing custody baseline | Prove inherited Phase 1-3 and SQLite behavior remains healthy | no | no |
 | direct WP4 correctness tests | Prove candidate bytes, identities, errors, bounds, and semantics | no | no |
-| WP4-M profile-selection campaign | Select one file K/F and one directory page ceiling | yes | no |
+| historical WP4-M profile-selection campaign | Preserve its original terminal NO-GO; no relabeling | no | no |
+| prospective WP4-M fixed-radix fast lane | Validate policy-selected K64/F64 and make WP4-P eligible | yes | no |
 | post-WP4-P unoptimized baseline | Establish the fair final-profile Memory/SQLite starting point | already selected | SQLite row may be reported, but is not the final optimized decision |
 | optimization A/B | Prove a named optimization changes its expected cost without weakening semantics | no | only the complete qualifying row counts |
 | WP14 final campaign | Make the final Phase 4 decision on unchanged source | no | yes, SQLite only |
@@ -93,6 +97,18 @@ diagnostic historical row only.
 Neither row is the baseline for the promoted mapping. The deleted append-only
 carrier is not rerun and is not a candidate.
 
+### 3.3 Historical WP4-M profile campaign
+
+The earlier 216-row, 252-database campaign remains a terminal `NO-GO` under
+its original contract. Its forced-`+1` ratios of 61.997% through 71.417%
+failed the then-binding 5% gate, and its required complete manifest, seal,
+external attestation, and final audit were not completed.
+
+The former approximately 65-GiB evidence root has been deleted. Remaining
+reports are directional history, not custody or promotion evidence. The
+prospective fast-lane specification does not relabel those rows; it requires
+new compact K64/F64 evidence under a new purpose label.
+
 ## 4. Test and baseline sequence
 
 Run evidence in this order:
@@ -100,7 +116,7 @@ Run evidence in this order:
 ```text
 pre-WP4-M custody check
     -> focused WP4-M correctness tests while implementing
-    -> non-qualifying profile-selection A/B
+    -> prospective 24-row K64/F64 schedule plus three roundtrip checks
     -> WP4-P selects one profile and deletes alternatives
     -> final promoted-format goldens and full correctness suite
     -> unoptimized Memory/SQLite baseline
@@ -148,7 +164,9 @@ performance result.
 
 ### 6.1 File mapping golden vectors
 
-For K64/F64, K59/F101, and K256/F256, test:
+For the fast lane, test K64/F64 directly. Existing private K59/F101 and
+K256/F256 vectors may remain until WP4-P deletes them, but they are not rerun
+or used to qualify this prospective evidence. Test:
 
 - empty file;
 - one reference;
@@ -282,12 +300,14 @@ Every case asserts:
 - unchanged object identities; and
 - successful authenticated reopen and ranges.
 
-The `+1` cases must not claim path-local complexity. They are the fixed-ordinal
-format rejection gate.
+The `+1` cases must not claim path-local complexity. They are exact-model and
+policy-budget validation cases; their 5% wall ratios are diagnostic only.
 
 ### 6.6 Directory mapping tests
 
-For 64-KiB, 256-KiB, and 1-MiB complete canonical page ceilings, test:
+For the fast lane, test the DIR256K complete canonical page ceiling. Existing
+private DIR64K and DIR1M cases may remain until WP4-P deletes them, but they are
+not rerun for prospective evidence. Test:
 
 - empty directory;
 - one entry;
@@ -500,7 +520,7 @@ manufacture zero-cost durable success.
 
 ### 6.12 Resource and 100-GiB analytical tests
 
-Run real streamed resource tests at 100 MiB and 512 MiB. Assert:
+Run routine streamed resource tests at 1 MiB, 10 MiB, and 100 MiB. Assert:
 
 - no source-sized input or output buffer;
 - declared maximum canonical-object window;
@@ -509,7 +529,8 @@ Run real streamed resource tests at 100 MiB and 512 MiB. Assert:
 - cumulative work/output `W/D` may exceed resident `Q`;
 - exact allocation preflight failure for an eager result that would exceed
   its admitted live budget; and
-- successful streamed 512-MiB reconstruction with reusable windows.
+- successful streamed reconstruction with reusable windows at every routine
+  size.
 
 The exact resource contract is:
 
@@ -520,9 +541,12 @@ The exact resource contract is:
 - every Q term is charged once, growth is transactional, refusal occurs before
   allocation, release restores the live baseline, and high-water never falls;
 - `Q == 1 GiB` followed by a one-byte charge fails before allocation;
-- streamed 512-MiB reconstruction grows D while Q remains window-bounded; and
+- streamed routine reconstruction grows D while Q remains window-bounded; and
 - synthetic W or D growth from `u64::MAX` by one fails before append, receive,
   or delivery.
+
+A retained 512-MiB resource run is occasional scale evidence only. It is not a
+routine WP4-M row, closure gate, or condition of WP4-P eligibility.
 
 Logical Q is not RSS, allocator overhead, SQLite cache, or the OS page cache;
 those are observed separately and may be `Unavailable`.
@@ -539,13 +563,16 @@ and checked equations to prove:
   output ceiling; and
 - typed arithmetic failure at the real representational boundary.
 
-## 7. WP4-M profile-selection benchmark
+## 7. Prospective WP4-M fixed-radix fast-lane validation
 
 Every row in this campaign emits:
 
 ```text
 qualification=false
-purpose=profile_selection
+purpose=fixed_radix_acceptance
+milestone=WP4-M-FIXED-RADIX
+candidate=K64-F64
+promotion=false
 ```
 
 It cannot support a product, compatibility, or 200/300-MiB/s claim.
@@ -554,13 +581,14 @@ It cannot support a product, compatibility, or 200/300-MiB/s claim.
 
 Prepare and fingerprint outside all engine timers:
 
+- the deterministic 1-MiB and 10-MiB sources;
 - the identical retained 100-MiB source;
-- the identical retained 512-MiB source;
-- exact same-count replacement bytes and offsets;
-- exact forced `+1` early and middle edits;
+- exact 100-MiB same-count replacement bytes and offsets;
+- exact 100-MiB forced `+1` early and middle edits;
 - exact prefix, middle, EOF, cross-chunk, cross-leaf, and cross-branch probes;
   and
-- one deterministic 100,000-entry wide directory.
+- the authenticated K64/F64 expected topology and rewrite equations for every
+  row.
 
 The manifest records generator version/seed, raw source fingerprint, logical
 fingerprint, CDC-sequence fingerprint, creation/reuse outcomes, range bytes,
@@ -579,38 +607,54 @@ been read, hashed to the expected `ObjectId`, decoded under the expected role,
 and its strong edges have been validated. It is a bounded rolling observation,
 not content identity, a receipt, or permission to skip authentication.
 
-The manifest also records each candidate's private profile ID and that
-profile's expected canonical mapping IDs, roots, and deltas; those IDs are not
-assumed equal across K/F or directory-ceiling candidates. The wide-directory
-fixture records the exact ordered names, metadata, child IDs, repeated-child
-pattern, candidate page partitions, expected closure digest, and lookup/edit
-targets, so a candidate cannot change the corpus while changing its ceiling.
+The manifest records the K64/F64 private profile ID and expected canonical
+mapping IDs, roots, and deltas. It also records the exact model-derived
+topology and rewrite counters so measured rows cannot silently change their
+reference stream or insertion position.
 
-### 7.2 File candidate matrix
+### 7.2 K64/F64 row matrix
 
-Compare K64/F64, K59/F101, and K256/F256 on both source sizes. Use four rows per
-candidate/size:
+Run exactly six K64/F64 capture arms:
 
-| Row | Timed and verified work |
+| Arm | Work inside the fast-lane median |
 |---|---|
-| full cycle | capture, one durable commit, close/reopen, fresh full scrub, full streamed reconstruction, and all exact ranges |
-| same-count middle edit | bounded rejoin, publication, reopen, final verification |
-| forced `+1` early edit | count change and suffix repartitioning |
-| forced `+1` middle edit | count change and suffix repartitioning |
+| 1-MiB full write | capture, mapping construction, closure qualification, and one durable publication |
+| 10-MiB full write | capture, mapping construction, closure qualification, and one durable publication |
+| 100-MiB full write | capture, mapping construction, closure qualification, and one durable publication |
+| 100-MiB same-count middle edit | bounded rejoin and one durable publication |
+| 100-MiB forced `+1` early edit | count change, suffix repartitioning, and one durable publication |
+| 100-MiB forced `+1` middle edit | count change, suffix repartitioning, and one durable publication |
+
+The 1-MiB and 10-MiB arms are write/roundtrip scaling smokes only. CP-0003
+proves that the 10-MiB middle workflow changes 531 references to 530, so this
+routine makes no edit-classification claim at 10 MiB. CP-0004 remains the prior
+workflow baseline and is not relabeled.
 
 This is:
 
 ```text
-3 profiles * 2 sizes * 4 rows * (1 warmup + 5 measured) = 144 invocations
+6 capture arms * (1 warmup + 3 measured) = 24 invocations
 ```
 
-Range operations inside the full-cycle row retain their own phase latency and
-object/byte counters without requiring another complete 512-MiB campaign.
-The full-cycle row uses the exact `capture_publish_wall` and
-`sqlite_qualification_wall` boundaries in section 9.2; its primary comparison
-is `sqlite_qualification_wall`.
+After the schedule, run one separately labeled full-write complete-roundtrip
+check per size:
 
-Every edit row records two nested timers:
+```text
+24 capture invocations + 3 complete-roundtrip checks = 27 total invocations
+```
+
+Each complete-roundtrip check performs durable capture/publication, drops all
+handles and operation-local state, constructs a fresh engine, authenticates the
+required head/delta/closure, streams and fingerprints the whole file, and
+verifies exact ranges. It emits `row_kind=roundtrip-check`,
+`validation_scope=complete-roundtrip`, and
+`throughput_measurement_admissible=false`; it is outside all fast-lane medians.
+
+The scheduled full-write row measures the existing `capture_publish_wall`
+boundary only. Final semantic checks may run after the measured boundary but
+must not be folded into the median.
+
+Every edit row may record two nested timers:
 
 ```text
 edit_publish_wall:
@@ -630,140 +674,122 @@ edit_verification_wall:
   + streamed reconstruction/fingerprint and exact ranges
 ```
 
+Only `edit_publish_wall` enters the fast-lane median. Post-boundary
+verification remains correctness evidence and `edit_verification_wall` is a
+nonmedian diagnostic when emitted.
+
 Base-store preparation and cloning are outside both timers. The forced `+1`
 5% alarm compares `edit_publish_wall` with the same size's new-file
 full-capture `capture_publish_wall`; the complete row remains separately
 reported and cannot be substituted for that comparison.
 
-### 7.3 Directory candidate matrix
+### 7.3 Directory unavailable-evidence fallback
 
-Compare 64-KiB, 256-KiB, and 1-MiB page ceilings on:
-
-- create, commit, reopen/full validation, and point lookups;
-- same-size middle child replacement; and
-- leading insertion.
-
-This is:
-
-```text
-3 ceilings * 3 rows * (1 warmup + 5 measured) = 54 invocations
-```
+Do not rerun the deleted wide-directory campaign for WP4-M. Record comparative
+DIR64K, DIR256K, and DIR1M performance evidence as
+`Unavailable(custody_lost)` and retain DIR256K through the predeclared
+fallback. This is not a measured win. Directory canonical correctness and
+malformed-input tests remain required; WP4-P owns selected-only DIR256K
+goldens and deletion of the other ceilings.
 
 ### 7.4 Campaign execution
 
 Build one release benchmark binary once on stable source. Run one warmup and
-five measured iterations with:
+three measured iterations with:
 
 - source generation and fingerprint preflight outside the timer;
 - an isolated SQLite database in the exact scenario starting state per row;
 - no compiler or unrelated benchmark contention;
-- alternating candidate order to reduce cache/thermal bias;
+- balanced row and size order to reduce cache/thermal bias;
 - identical timer-boundary version;
 - one JSON object per run; and
 - no human-formatted output in the timed path.
 
-The full-cycle and directory-create rows start from a fresh empty candidate
-database. Edit rows start from a separately prepared, committed base image with
-an exact fingerprint; preparing and cloning that base is outside the timer, and
-each measured row receives a fresh isolated clone. Directory replacement and
-insertion rows likewise start from their exact committed wide-directory base.
-The clone must be an ordinary byte copy or the base must be regenerated; a
-clonefile/reflink cannot support allocated-byte comparison. The database,
+The full-write rows start from a fresh empty K64/F64 database. Edit rows start
+from a separately prepared, committed base image with an exact fingerprint;
+preparing and cloning that base is outside the timer, and each measured row
+receives a fresh isolated clone. The clone must be an ordinary byte copy or the
+base must be regenerated; a clonefile/reflink cannot support allocated-byte
+comparison. The database,
 protected receipt/key/epoch authority, and any inseparable sidecars are copied
 as one snapshot. Record the copy method and starting allocation. If shared
-extents cannot be excluded, physical allocation is `Unavailable` for profile
-selection.
+extents cannot be excluded, physical allocation is `Unavailable` for the fast
+lane.
 
 The per-row precondition is machine-readable:
 
 | Row | Required starting state outside timer |
 |---|---|
-| full cycle / directory create | fresh empty candidate store |
-| same-count / forced `+1` file edit | byte-identical committed base source, mapping, head, receipt authority, and database image for that candidate |
-| directory replacement / insertion | byte-identical committed wide-directory base and candidate database image |
+| full write / complete roundtrip | fresh empty K64/F64 store |
+| same-count / forced `+1` file edit | byte-identical committed base source, mapping, head, receipt authority, and K64/F64 database image |
 
 The timer starts at the first actual edit/source read, not at base construction,
 database cloning, fixture verification, or cache conditioning.
 
-Use one untimed warmup per row, followed by five matched blocks in balanced
-candidate order rather than running all measurements of one candidate first.
-Preserve raw JSONL and generate summaries afterward. Each candidate database
-uses its domain-separated candidate profile ID; isolated paths alone are not
-an authentication binding.
+Use one untimed warmup per row, followed by three measured blocks in balanced
+row and size order rather than running all measurements of one shape first.
+Preserve raw JSONL and generate summaries afterward. Each database uses the
+existing domain-separated K64/F64 candidate profile ID; isolated paths
+alone are not an authentication binding.
 
 Run one measured invocation per process so external high-water RSS belongs to
-that row. If the platform cannot observe RSS, record `Unavailable`; because RSS
-is protected, an unavailable challenger comparison is inconclusive. Record the
-exact conditioning steps and use `warm_or_unknown` unless a controlled
+that row. If the platform cannot observe RSS, record `Unavailable`; do not
+replace it with zero or logical Q. Record the exact conditioning steps and use
+`warm_or_unknown` unless a controlled
 machine-level procedure directly establishes another cache state.
 
-### 7.5 File-profile promotion gate
+The external routine-package timer starts immediately before the first
+invocation dispatch and stops only after the 27th return. The full package must
+finish in at most 120 seconds. Binary build, fixture generation, and manifest
+preflight are outside this package wall; scheduled rows and roundtrip checks
+are not.
 
-K64/F64 is the deterministic default. A challenger replaces it only if it
-improves the primary 100-MiB complete full-cycle median by at least 5%, wins at
-least four of five matched blocks, and regresses no protected 100/512-MiB
-complete capture/full validation, range, same-count edit, forced-`+1`, CPU,
-allocated-store-delta, Q, or RSS median by more than 5%. Missing observations,
-reversed cross-size evidence, or a win explained only by removable per-row SQL
-crossings is inconclusive rather than a format promotion.
+### 7.5 K64/F64 fast-lane acceptance gate
 
-When statement/BLOB-open counters show that removable per-object SQL crossings
-could reverse the ranking, run one private bounded prepared/batch sensitivity
-probe with identical semantics and candidate inputs. It is measurement code,
-not a production feature or a new abstraction. A reversed or statistically
-unclear ranking defers promotion; the probe never overrides correctness or a
-protected regression.
+K64/F64 is policy-selected. This campaign validates it; no challenger ranking
+or SQL-sensitivity probe is required. Reject a row for correctness,
+authentication, atomicity, durability, bounded-memory, or exact-model failure.
 
-Reject fixed ordinal grouping if the forced `+1` edit at 100 or 512 MiB:
+The forced `+1` ratio to unchanged full-capture wall is mandatory diagnostic
+evidence, but exceeding 5% is not a rejection under this prospective contract.
+Report measured 1-to-10-to-100-MiB full-write scaling without a logarithmic
+claim. Edit medians and classifications apply only to the frozen 100-MiB
+fixture.
 
-- exceeds 5% of that size's unchanged full-capture median; or
-- departs from the declared suffix-rewrite byte/row model.
+At retained 100-GiB density, the fixed equations must reproduce the declared
+analytical middle `+1` bound exactly and must not exceed it:
 
-The 5% comparison is an alarm, not the scalability proof. Report the measured
-100-to-512-MiB slope, the exact fixed-ordinal suffix-rewrite equation, and its
-analytical 100-GiB early/middle-edit projection. WP4-P must not promote a fixed
-profile until an explicit 100-GiB middle-insert analytical work budget is
-approved over rewritten reference occurrences, leaves/branches/objects,
-canonical mapping bytes, and optional rewrite-to-capture amplification. That
-budget is an edit-policy gate, not a file-size admission limit. Any projected
-100-GiB latency is nonbinding and must state its model and uncertainty.
+| Quantity | Exact value and ceiling |
+|---|---:|
+| rewritten references | 2,705,409 |
+| changed leaves | 42,273 |
+| changed branches | 673 |
+| mapping objects | 42,947 |
+| canonical mapping bytes | 186,891,342 |
 
-Only after the local measurement gate or approved analytical work budget fails
-may WP4 authorize the narrow deterministic history-independent/prolly fallback
-experiment.
+Record the separate early worst-case diagnostic as exactly 5,410,817
+references, 84,545 leaves, 1,343 branches, 85,889 mapping objects, and
+373,777,332 canonical mapping bytes. It is not the approved middle budget.
+Neither projection is a wall-time claim. A model mismatch or middle-budget
+excess fails WP4-M and requires a separately approved specification.
 
-### 7.6 Directory-profile promotion gate
+### 7.6 Directory fallback acceptance
 
-The 256-KiB directory ceiling is the deterministic default. The primary is the
-complete same-size middle-child `edit_verification_wall`. A challenger must
-improve its overall median by at least 5%, be faster in at least four of five
-paired matched blocks, and regress none of these protected outcome/resource
-medians by more than 5%:
-
-- create and full-validation wall/CPU;
-- point-lookup latency;
-- same-size replacement `edit_publish_wall` and `edit_verification_wall`;
-- leading-insert publication and verification latency;
-- allocated-store delta;
-- logical `Q` and external RSS.
-
-Mapping/page objects, logical canonical/auth/rewrite bytes, SQL
-executions/rows/BLOB opens, and page counts remain mandatory diagnostics but
-are not uniform 5%-nonregression guards. Object-count arithmetic alone does not
-select the winner. Missing or reversed evidence leaves the 256-KiB default in
-place. If removable SQL crossings could reverse the ranking, run the same
-private bounded sensitivity probe and defer rule as section 7.5.
+Record comparative directory metrics as `Unavailable(custody_lost)` and retain
+DIR256K by policy fallback, not measured ranking. WP4-M requires no new
+directory performance row. Direct DIR256K correctness remains a prerequisite;
+selected-only golden regeneration and removal of DIR64K/DIR1M belong to WP4-P.
 
 The 100-MiB 500.000-ms minimum and 333.333-ms stretch thresholds are reported
 as WP4-M credibility diagnostics, not format-promotion blockers. They become
 binding product gates only in the unchanged-source WP14 campaign after shared
 core and SQLite optimization.
 
-For every 100/512-MiB pair, compare observed leaf/branch/object counts,
-canonical bytes, SQL executions/BLOB opens, `Q/W/D`, and rewritten bytes with
-the candidate equations. Report absolute and percentage residuals. Use the
-validated count/byte equations for the analytical 100-GiB projection; do not
-extrapolate a 100-GiB wall time from two local timings.
+For every scheduled arm, require zero residual for model-owned
+leaf/branch/object, canonical-byte, and rewritten-reference counts. Report SQL
+executions/BLOB opens, `Q/W/D`, wall, and CPU separately. Use the validated
+count/byte equations for the analytical 100-GiB projection; do not extrapolate
+a 100-GiB wall time from routine timings.
 
 ## 8. WP4-P promotion tests
 
@@ -794,8 +820,8 @@ the unoptimized baseline before WP10-WP12 performance changes.
 | 10 MiB | new, unchanged, one-byte edit, 4-KiB edit, 1-MiB edit, full replacement |
 | 100 MiB | new, unchanged, one-byte edit, 4-KiB edit, 1-MiB edit, full replacement, prepend, append, truncate, EOF no-op, scattered edit |
 
-Run Memory and SQLite. The retained 512-MiB fixture remains a profile/scaling
-check and does not multiply the complete ordinary scenario matrix.
+Run Memory and SQLite. The retained 512-MiB fixture remains optional occasional
+scale evidence and does not multiply the routine or ordinary scenario matrix.
 
 After the promoted profile is fixed, run one deterministic repeat-heavy
 100-MiB diagnostic with the same timer boundary. It must report occurrence
@@ -910,9 +936,10 @@ bytes or zero.
 
 ### 9.5 Repetition and statistics
 
-Use one warmup and five measured runs per required row. Every promotion-bearing
-WP4-M, baseline, optimization-A/B, and WP14 engine/scenario/iteration runs in
-its own process; warmups use separate invocations, and the external
+Except for section 7's one-warmup/three-measured routine lane, use one warmup
+and five measured runs per required row. Every baseline, optimization-A/B, and
+WP14 engine/scenario/iteration runs in its own process; warmups use separate
+invocations, and the external
 orchestrator alternates row order. Campaign-wide RSS from a multi-row process
 is diagnostic only. Report:
 
@@ -922,7 +949,7 @@ is diagnostic only. Report:
 - max-minus-min spread; and
 - every raw row.
 
-Do not report p95 from five measurements. Alternate Memory/SQLite or
+Do not report p95 from three or five measurements. Alternate Memory/SQLite or
 baseline/candidate order where temporal state could bias the comparison.
 
 ### 9.6 APFS labels

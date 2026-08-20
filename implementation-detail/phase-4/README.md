@@ -5,6 +5,21 @@ and [Phase 3 COW/root/delta semantics](../phase-3.md). SQLite remains the
 accepted local durable engine. Historical append-only work is retained only as
 rejected evidence.
 
+## Current status
+
+CP-0006 PASS closes WP4-M. WP4-P is eligible but incomplete. K64/F64 is the
+policy-selected file input and DIR256K is the unmeasured directory fallback;
+neither is compatibility-promoted. F3/F4 NO-GO results remain historical and
+unchanged. No further WP4-M or 512-MiB campaign is required.
+
+- [Fast-lane amendment](wp4m/fixed-radix-fast-lane-amendment.md)
+- [Compact evidence contract](wp4m/fixed-radix-compact-evidence-contract.md)
+- [Terminal profile report](wp4m/profile-selection-report.md)
+- [CP-0006 report](test-checkpoint-report/cp-0006-dirty-e55f1b325eab-fixed-radix-acceptance.md)
+- [CP-0006 raw JSONL](test-checkpoint-report/cp-0006-dirty-e55f1b325eab-fixed-radix-acceptance.jsonl)
+- [Python analysis](test-checkpoint-report/cp-0006-dirty-e55f1b325eab-fixed-radix-python-analysis.json)
+- [Ruby analysis](test-checkpoint-report/cp-0006-dirty-e55f1b325eab-fixed-radix-ruby-analysis.json)
+
 ## Core contracts
 
 ### Algorithm
@@ -94,7 +109,10 @@ M4.5 has multiple reports and therefore one folder:
 - [F2 — retained construction proof](wp4m/f-series/f2/report.md)
 - [F2-v1 audit addendum](wp4m/f-series/f2/v1-audit-addendum.md)
 - [F3 — terminal insertion-grouping and causal-diagnostic report](wp4m/f-series/f3/report.md)
-- [Read after F3](wp4m/f-series/f3/read-after.md)
+- [Cursor Git research note](../../research/cursor-git-at-any-scale.md)
+- [F4-A — accepted F2-v3 residual attribution](wp4m/f-series/f4/report.md)
 
-Current status: F2-v3 is retained. F3 is terminal `NO-GO`; no F3-v4 is
-authorized. This document reorganization does not create or authorize F4.
+Historical optimization status: F2-v3 is retained. F3 is terminal `NO-GO`;
+no F3-v4 is authorized. F4-A is terminal `NO-GO`: no isolated removable
+mechanism passes the 33-ms/4-of-5 gate. These results do not reopen WP4-M or
+authorize F5/F6.

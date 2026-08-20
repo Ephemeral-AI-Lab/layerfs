@@ -313,21 +313,24 @@ Split WP4 into two explicit states:
 - **WP4-C — candidate specification:** complete when the candidate grammar,
   bounds, semantics, failure rules, and measurement gate have passed review.
   This authorizes only WP4-M below; it grants no compatibility authority.
+- **WP4-M — policy measurement:** complete from CP-0006's 27/27 compact PASS.
+  K64/F64 is policy-selected and DIR256K is the unmeasured fallback; neither
+  is compatibility-promoted.
 - **WP4-P — compatibility-profile promotion:** complete only after the A/B
-  selects one file K/F pair and one directory-page ceiling, every losing
+  input is frozen, every losing
   alternative and selector is deleted, independent final goldens are
   regenerated and fingerprinted, and the final read-only audit passes.
 
 No public or compatibility-bearing production codec begins before WP4-P.
 
-## 9A. WP4-M — Provisional profile measurement lane
+## 9A. WP4-M — completed compact profile measurement lane
 
 ### Narrow authority
 
-Implement only the shared codec and SQLite measurement path needed to compare:
-
-- file K64/F64, K59/F101, and K256/F256; and
-- directory 64-KiB, 256-KiB, and 1-MiB page ceilings.
+CP-0006 completed the prospective compact K64/F64 path: 1/10/100-MiB writes,
+100-MiB same/`+1` edits, and three roundtrips. DIR256K is carried forward by
+the declared unmeasured fallback. The prior multi-profile 100/512 campaign is
+historical custody-lost NO-GO evidence and is not the current authority.
 
 The selector is private to tests and the benchmark. Do not add a public feature
 flag, provider abstraction, format-negotiation surface, or permanent
@@ -340,21 +343,21 @@ candidate-only schema authority in
 ### Dependency order
 
 1. WP4-C candidate specification.
-2. WP4-M provisional shared codec/SQLite measurement path.
-3. WP8/WP9 non-qualifying profile-selection A/B at 100 and 512 MiB.
-4. WP4-P winner promotion, loser/selector deletion, final independent goldens,
+2. WP4-M compact shared codec/SQLite measurement path — complete at CP-0006.
+3. WP4-P policy-input promotion, loser/selector deletion, final independent goldens,
    fingerprint, and read-only audit.
-5. WP5 frozen-format exit rerun and finalization of WP5 and later production
+4. WP5 frozen-format exit rerun and finalization of WP5 and later production
    work against the single promoted profile.
 
-Every provisional row must say `qualification=false` and `purpose=profile_selection`.
+Every CP-0006 row says `qualification=false`, `promotion=false`,
+`purpose=fixed_radix_acceptance`, and `milestone=WP4-M-FIXED-RADIX`.
 It cannot support a product, compatibility, or 200/300-MiB/s claim.
 
 ### Exit condition
 
-Return the complete section 12.7 counter set and A/B rows to WP4-P. Immediately
-after selection, delete losing constants, branches, fixtures, and the private
-selector before generating final goldens or rerunning WP5's exit checks.
+Exit satisfied by CP-0006. WP4-P is eligible. It must delete losing constants,
+branches, fixtures, and the private selector before generating final goldens
+or rerunning WP5's exit checks.
 
 ## 10. WP5 — Implement the shared mapping
 
@@ -568,10 +571,10 @@ missing closure, missing durability, failed reopen, or unequal logical output.
 Build once, then run one warmup and five measured iterations per required row
 without compiler contention. Keep source generation outside timing.
 
-The first campaign is the section 12.7 100/512-MiB profile-selection A/B and
-returns evidence to WP4-P; it emits no qualifying product claim. After WP4-P,
-delete the provisional selector, rerun WP5's exit check, and rebuild the
-single-profile binary before establishing the ordinary fair baseline below.
+CP-0006 completed the WP4-M compact profile evidence and made WP4-P eligible;
+the historical 100/512-MiB A/B is not rerun. After WP4-P, delete the
+provisional selector, rerun WP5's exit check, and rebuild the single-profile
+binary before establishing the ordinary fair baseline below.
 
 Example shape; finalize flags with the binary:
 
@@ -902,8 +905,8 @@ condition and exact verification evidence are recorded.
 | WP2 delete `PackedInMemoryCas` | complete | final core CAS/content/eval source hashes recorded in `deletion-record.md` | Packed implementation, entry points, helpers, tests, and workspace eval benchmark modes deleted; ordinary `InMemoryCas`/COW paths pass core checks. |
 | WP3 post-deletion baseline | complete | implementation commit `f595046e150e60dda6e3f06d915bbc283e20e952`; final active source hashes recorded in `deletion-record.md` | Metadata, workspace tests, all-target/all-feature checks, format, and diff gates pass; WP4-C is complete and WP4-P remains pending. |
 | WP4-C candidate mapping specification | complete | candidate record SHA-256 `3e94b054e6bf0eb198f6b04287d8a6cb209fb2925450b6c6bc6a69c84ab63e06`; narrow schema-authority record SHA-256 `cfddcc291cfff40ffcfd19e8e93ba2a4e51b3b16c412d137ece5463acc7625df` | Scalable checked-u64 candidate, receipt trust boundary, 100-GiB analytical equations, rejection reconciliation, and executable selection dependency are recorded in `../mapping/logical-persistence.md`; `../storage/sqlite/visible-head.md` separately authorizes only the complete-head schema transition. Neither grants candidate compatibility authority. |
-| WP4-M provisional profile measurement lane | pending | — | Private benchmark/test-only comparison of file K64/F64, K59/F101, K256/F256 and directory 64-KiB/256-KiB/1-MiB; every row is non-qualifying. |
-| WP4-P compatibility-profile promotion | pending | — | Await 100/512-MiB A/B, loser/selector deletion, single-profile promotion, replacement independent goldens/fingerprint, and final audit. |
+| WP4-M provisional profile measurement lane | complete | CP-0006 raw `b3596ff61b1314bad66f38675bc8acecccaa57d6a8686e30a0e224e91c8f72e1` | 27/27 compact PASS; Python/Ruby agreement; one transaction/COMMIT and terminal Q zero in every row; K64/F64 policy-selected; DIR256K fallback; `promotion=false`. |
+| WP4-P compatibility-profile promotion | pending / eligible | — | Await loser/selector deletion, K64/F64 + DIR256K selected-only goldens, specification/vector fingerprint, and final audit. |
 | WP5 implement/finalize shared mapping | pending | — | Provisional shared code may be measured only under WP4-M; rerun the frozen-format exit after WP4-P with one surviving profile. |
 | WP6 Memory semantic engine | pending | — | — |
 | WP7 SQLite mapping integration | pending | — | — |

@@ -108,7 +108,7 @@ pub fn decode_transition(payload: &[u8]) -> CoreResult<DecodedTransition> {
     }
     let has_parent = payload[0];
     if has_parent > 1 {
-        return Err(CoreError::InvalidMappingTag { tag: has_parent });
+        return Err(CoreError::InvalidMappingDiscriminator { value: has_parent });
     }
     let mut offset = 1_usize;
     let parent = if has_parent == 1 {
@@ -134,6 +134,9 @@ pub fn decode_transition(payload: &[u8]) -> CoreResult<DecodedTransition> {
             .try_into()
             .map_err(|_| CoreError::UnexpectedEof)?,
     );
+    if usize::try_from(entry_count).map_err(|_| CoreError::LengthOverflow)? > MAX_CHILD_REFERENCES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
     let page_count = usize::try_from(u32::from_be_bytes(
         payload[offset + 4..fields_end]
             .try_into()
@@ -142,6 +145,9 @@ pub fn decode_transition(payload: &[u8]) -> CoreResult<DecodedTransition> {
     .map_err(|_| CoreError::LengthOverflow)?;
     if (entry_count == 0) != (page_count == 0) {
         return Err(CoreError::NonCanonicalPagePartition);
+    }
+    if parent.is_none() && (entry_count != 0 || page_count != 0) {
+        return Err(CoreError::DeltaConflict);
     }
     offset = fields_end;
     let bytes = page_count
@@ -207,7 +213,7 @@ pub fn measure_mapping_transition_pages(bytes: &[u8]) -> CoreResult<usize> {
     let parent_bytes = match payload[0] {
         0 => 0,
         1 => 32,
-        tag => return Err(CoreError::InvalidMappingTag { tag }),
+        value => return Err(CoreError::InvalidMappingDiscriminator { value }),
     };
     let offset = 1usize
         .checked_add(parent_bytes)
@@ -262,7 +268,7 @@ pub fn measure_mapping_delta_page(bytes: &[u8]) -> CoreResult<(usize, usize)> {
             0x01 | 0x02 => 32,
             0x03 => 64,
             0x04 => 72,
-            _ => return Err(CoreError::InvalidMappingTag { tag: kind }),
+            _ => return Err(CoreError::InvalidMappingDiscriminator { value: kind }),
         };
         offset = offset.checked_add(tail).ok_or(CoreError::LengthOverflow)?;
         if offset > payload.len() {
@@ -340,7 +346,7 @@ pub fn decode_delta_page(payload: &[u8]) -> CoreResult<Vec<TransitionOperation>>
                 after: read_id(payload, &mut offset)?,
                 after_mode: read_u32(payload, &mut offset)?,
             },
-            _ => return Err(CoreError::InvalidMappingTag { tag: kind }),
+            _ => return Err(CoreError::InvalidMappingDiscriminator { value: kind }),
         };
         entries.push(entry);
     }

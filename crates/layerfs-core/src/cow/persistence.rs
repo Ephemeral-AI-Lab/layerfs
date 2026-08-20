@@ -54,6 +54,15 @@ pub fn parse_directory_index(payload: &[u8]) -> CoreResult<Vec<DirectoryPageRef>
     if payload.len() < 8 {
         return Err(CoreError::UnexpectedEof);
     }
+    let total_entries = u32::from_be_bytes(
+        payload[..4]
+            .try_into()
+            .map_err(|_| CoreError::UnexpectedEof)?,
+    );
+    if usize::try_from(total_entries).map_err(|_| CoreError::LengthOverflow)? > MAX_CHILD_REFERENCES
+    {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
     let page_count = usize::try_from(u32::from_be_bytes(
         payload[4..8]
             .try_into()
@@ -106,19 +115,9 @@ pub fn parse_directory_index(payload: &[u8]) -> CoreResult<Vec<DirectoryPageRef>
     if offset != payload.len() {
         return Err(CoreError::TrailingBytes);
     }
-    if total
-        != u64::from(u32::from_be_bytes(
-            payload[..4]
-                .try_into()
-                .map_err(|_| CoreError::UnexpectedEof)?,
-        ))
-    {
+    if total != u64::from(total_entries) {
         return Err(CoreError::LengthMismatch {
-            expected: u64::from(u32::from_be_bytes(
-                payload[..4]
-                    .try_into()
-                    .map_err(|_| CoreError::UnexpectedEof)?,
-            )),
+            expected: u64::from(total_entries),
             actual: total,
         });
     }

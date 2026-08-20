@@ -56,6 +56,9 @@ pub enum CoreError {
     InvalidMappingTag {
         tag: u8,
     },
+    InvalidMappingDiscriminator {
+        value: u8,
+    },
     UnsupportedMappingVersion {
         version: u16,
     },
@@ -66,6 +69,9 @@ pub enum CoreError {
     AllocationBudgetExceeded,
     AllocationFailed,
     InvalidValidationReceipt,
+    SchemaMismatch,
+    ProfileMismatch,
+    InvalidRecord(&'static str),
     SchemaMigrationRequired,
     ValidationAuthorityUnavailable,
     PublicationConflict,
@@ -130,6 +136,9 @@ impl fmt::Display for CoreError {
             Self::DeltaConflict => formatter.write_str("delta entry conflicts with current tree"),
             Self::WrongLogicalRole => formatter.write_str("wrong logical object role"),
             Self::InvalidMappingTag { tag } => write!(formatter, "invalid mapping tag {tag:#x}"),
+            Self::InvalidMappingDiscriminator { value } => {
+                write!(formatter, "invalid mapping discriminator {value:#x}")
+            }
             Self::UnsupportedMappingVersion { version } => {
                 write!(formatter, "unsupported mapping version {version}")
             }
@@ -140,6 +149,9 @@ impl fmt::Display for CoreError {
             Self::AllocationBudgetExceeded => formatter.write_str("allocation budget exceeded"),
             Self::AllocationFailed => formatter.write_str("allocation failed"),
             Self::InvalidValidationReceipt => formatter.write_str("invalid validation receipt"),
+            Self::SchemaMismatch => formatter.write_str("schema mismatch"),
+            Self::ProfileMismatch => formatter.write_str("profile mismatch"),
+            Self::InvalidRecord(record) => write!(formatter, "invalid {record} record"),
             Self::SchemaMigrationRequired => formatter.write_str("schema migration required"),
             Self::ValidationAuthorityUnavailable => {
                 formatter.write_str("validation authority unavailable")

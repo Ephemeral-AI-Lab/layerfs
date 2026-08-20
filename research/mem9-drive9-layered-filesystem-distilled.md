@@ -1,4 +1,4 @@
-# Note to Read After Phase 4 — Layered Workspace Lessons for LayerFS
+# Mem9/Drive9 Layered-Filesystem Research — Distilled for LayerFS
 
 Status: future architecture note only. Read this document after Phase 4 has a
 terminal disposition and final read-only audit. It does not modify, extend, or

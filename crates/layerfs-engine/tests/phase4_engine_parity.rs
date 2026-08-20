@@ -137,6 +137,63 @@ fn malformed_mapping_and_identity_mismatch_are_rejected() {
 }
 
 #[test]
+fn mapping_roles_discriminators_and_zero_length_topology_are_exact() {
+    let child = ObjectId::for_bytes(b"zero-length-child");
+    let root = canonical_mapping(
+        file_codec::encode_file_root(
+            0,
+            0,
+            1,
+            0,
+            &[file_codec::FileChild {
+                object_id: child,
+                cumulative_end: 0,
+            }],
+        )
+        .expect("all-zero nonempty root"),
+    );
+    let payload =
+        file_codec::decode_mapping(&root, file_codec::FILE_ROOT_TAG).expect("file-root role");
+    assert_eq!(
+        file_codec::parse_file_root(payload).expect("all-zero nonempty root"),
+        (
+            0,
+            0,
+            1,
+            0,
+            vec![file_codec::FileChild {
+                object_id: child,
+                cumulative_end: 0,
+            }],
+        )
+    );
+    assert_eq!(
+        file_codec::decode_mapping(&root, file_codec::FILE_LEAF_TAG),
+        Err(CoreError::WrongLogicalRole)
+    );
+
+    let mut bad_parent = vec![2];
+    bad_parent.extend_from_slice(child.as_bytes());
+    bad_parent.extend_from_slice(&0_u32.to_be_bytes());
+    bad_parent.extend_from_slice(&0_u32.to_be_bytes());
+    assert_eq!(
+        delta_codec::decode_transition(&bad_parent),
+        Err(CoreError::InvalidMappingDiscriminator { value: 2 })
+    );
+
+    let mut bad_operation = Vec::new();
+    bad_operation.extend_from_slice(&1_u32.to_be_bytes());
+    bad_operation.push(0);
+    bad_operation.extend_from_slice(&1_u32.to_be_bytes());
+    bad_operation.push(b'a');
+    bad_operation.extend_from_slice(child.as_bytes());
+    assert_eq!(
+        delta_codec::decode_delta_page(&bad_operation),
+        Err(CoreError::InvalidMappingDiscriminator { value: 0 })
+    );
+}
+
+#[test]
 fn directory_pages_and_wrappers_are_canonical() {
     let child = ObjectId::for_bytes(b"child");
     let entries = vec![
@@ -178,6 +235,26 @@ fn directory_pages_and_wrappers_are_canonical() {
     assert_eq!(
         decode_object(&wrapper).expect("wrapper decode").kind(),
         layerfs_core::ObjectKind::Directory
+    );
+}
+
+#[test]
+fn directory_index_rejects_more_than_the_direct_reference_limit() {
+    let inner = dir_codec::encode_directory_index(
+        100_001,
+        &[dir_codec::DirectoryPageRef {
+            count: 100_001,
+            first_name: b"a".to_vec(),
+            object_id: ObjectId::for_bytes(b"page"),
+        }],
+    )
+    .expect("oversized index bytes");
+    let canonical = canonical_mapping(inner);
+    let payload = file_codec::decode_mapping(&canonical, file_codec::DIR_INDEX_TAG)
+        .expect("directory-index role");
+    assert_eq!(
+        dir_codec::parse_directory_index(payload),
+        Err(CoreError::ObjectLimitExceeded)
     );
 }
 

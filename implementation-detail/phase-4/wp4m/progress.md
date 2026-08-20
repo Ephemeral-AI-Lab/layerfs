@@ -1,5 +1,49 @@
 # WP4-M optimization progress
 
+## Current terminal status — CP-0006
+
+WP4-M fixed-radix compact lane status (2026-08-21): **PASS / COMPLETE;
+WP4-P eligible but not complete; compatibility promotion=false**. CP-0006
+completed 27/27 rows in an observed 50-second console wall under the configured
+120-second ceiling: six warmups, 18 measured rows, and three complete
+roundtrips. Python and Ruby independently return PASS with no reasons. The
+100-MiB medians are full write `603.327666 ms`, same-count middle
+`8.639167 ms`, `+1` early `432.939417 ms`, and `+1` middle `432.324667 ms`.
+Maximum observed Q is `2,222,803` bytes and all 27 rows end at zero. The raw,
+Python, Ruby, executable, and runner hashes are respectively `b3596ff6...72e1`,
+`d080f0f8...4f5`, `86cd7018...7114`, `7e91b90f...dbb36`, and
+`965cc07f...40c25`.
+
+K64/F64 is policy-selected and DIR256K is the unmeasured fallback, but neither
+is compatibility-promoted. The next and only compatibility-bearing step is
+WP4-P: delete losers/selectors, regenerate and fingerprint selected-only
+goldens, and pass the promotion audit. WP5+ remains blocked until WP4-P
+completes. No further WP4-M campaign or 512-MiB run is required.
+
+## Historical 216-row campaign — original-contract NO-GO / custody lost
+
+WP4-M profile campaign bounded-close status (2026-08-20): **216-row campaign
+and 252-database audit COMPLETE; correctness/storage evidence PASS,
+performance FAIL; terminal custody INCOMPLETE; overall WP4-M acceptance not
+claimed; WP4-P ineligible**. The final private matrix completed 216/216
+planned/started/returned/raw processes
+(36 warmup, 180 measured), zero child failures, exact Q terminal zero, two
+agreeing independent analyzers, and a 252/252 read-only SQLite/storage audit.
+No file challenger reaches the 5%/4-of-5 primary gate; both reverse at 512
+MiB. No directory challenger reaches the replacement primary gate. All file
+profiles fail forced-`+1` at 61.997–71.417% of full capture versus the 5%
+limit. K64/F64 100-MiB durable capture is 706.598 ms / 141.523 MiB/s versus
+accepted F2-v3 659.593 ms / 151.609 MiB/s. K64/F64 and DIR256K remain defaults
+only by the then-frozen fallback; that campaign selected/promoted nothing. The leading
+directory row starts at 99,999 and finishes at the governing 100,000-child
+limit. Final executable is `925dff2d…230ec`; campaign source is
+`4e3b8e1f…ca1cc`. Under that historical contract WP4-P was ineligible; CP-0006
+now supersedes only that eligibility result. The preregistered
+complete manifest/seal over the 65-GiB root was NOT RUN under the user's
+runtime cap; no partial manifest substitutes for it, the root is not sealed,
+and external attestation/final audit are unavailable. Existing no-go findings
+are directional evidence, not a sealed promotion checkpoint.
+
 F4-A2 terminal status (2026-08-20): **VALID / NO-GO; retain accepted F2-v3;
 close format-preserving F4**. The exact same-gear diagnostic compared accepted
 scanner-owned complete-chunk materialization (A) with boundary-only plus all

@@ -127,7 +127,11 @@ pub fn decode_mapping(bytes: &[u8], expected_tag: u8) -> CoreResult<&[u8]> {
         return Err(CoreError::UnsupportedMappingVersion { version });
     }
     if payload[10] != expected_tag {
-        return Err(CoreError::InvalidMappingTag { tag: payload[10] });
+        return Err(match payload[10] {
+            FILE_ROOT_TAG | FILE_LEAF_TAG | FILE_BRANCH_TAG | DIR_INDEX_TAG | DIR_METADATA_TAG
+            | DELTA_INDEX_TAG | DELTA_PAGE_TAG => CoreError::WrongLogicalRole,
+            tag => CoreError::InvalidMappingTag { tag },
+        });
     }
     Ok(&payload[11..])
 }
@@ -371,7 +375,7 @@ pub fn parse_file_root(payload: &[u8]) -> CoreResult<(u32, u64, u64, u8, Vec<Fil
     let level = payload[20];
     let (_, children) = parse_file_children(&payload[20..], true)?;
     let final_end = children.last().map_or(0, |child| child.cumulative_end);
-    if final_end != total || (total == 0 && count_refs != 0) {
+    if final_end != total {
         return Err(CoreError::LengthMismatch {
             expected: total,
             actual: final_end,

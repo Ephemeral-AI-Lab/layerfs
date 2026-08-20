@@ -31,6 +31,8 @@ use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const SOURCE_1: u64 = 1024 * 1024;
+const SOURCE_10: u64 = 10 * 1024 * 1024;
 const SOURCE_100: u64 = 100 * 1024 * 1024;
 const SOURCE_512: u64 = 512 * 1024 * 1024;
 const RETAINED_CDC_100: u64 = 5_284;
@@ -43,6 +45,9 @@ const RETAINED_CDC_SEQUENCE_512: &str =
     "8b9c305cc4e128acbbe16d6aea4d000f3a483604c7b5f914d953bcccd7225d0b";
 const RETAINED_SEED: u64 = 0x4c41594552534653;
 const DIRECTORY_ENTRIES: usize = 100_000;
+const DIRECTORY_NAME_BYTES: usize = 255;
+const DIRECTORY_ENTRY_ENCODED_BYTES: usize = 4 + DIRECTORY_NAME_BYTES + 1 + 32;
+const Q_DIRECTORY_ENTRY_BYTES: usize = 256 + DIRECTORY_NAME_BYTES;
 const MAX_DEPTH: usize = 256;
 const MAX_EDIT_ORACLE_BYTES: usize = 32 * 1024;
 const MAX_PREPARED_EXPECTATION_BYTES: u64 = 128 * 1024;
@@ -99,6 +104,7 @@ const F1_ROW_STATUS_REPLACEMENTS: &[(&str, &str)] = &[
     ("\"borrowed_bytes_encoding\":\"Observed\"", "\"borrowed_bytes_encoding\":\"O\""),
     ("\"object_id_authentication_reuse\":\"Observed\"", "\"object_id_authentication_reuse\":\"O\""),
     ("\"logical_q\":\"Observed\"", "\"logical_q\":\"O\""),
+    ("\"w_d\":\"Observed\"", "\"w_d\":\"O\""),
     ("\"w_d\":\"Unavailable: governing cumulative definitions are not implemented\"", "\"w_d\":\"U_WD\""),
     ("\"row_blob_copies\":\"Observed\"", "\"row_blob_copies\":\"O\""),
     ("\"borrowed_row_blob_path\":\"Observed\"", "\"borrowed_row_blob_path\":\"O\""),
@@ -365,16 +371,16 @@ const FILE_CANDIDATES: [Candidate; 3] = [
 
 const DIR_CANDIDATES: [Candidate; 3] = [
     Candidate {
-        name: "DIR64K",
-        k: 64,
-        f: 64,
-        directory_page: 64 * 1024,
-    },
-    Candidate {
         name: "DIR256K",
         k: 64,
         f: 64,
         directory_page: 256 * 1024,
+    },
+    Candidate {
+        name: "DIR64K",
+        k: 64,
+        f: 64,
+        directory_page: 64 * 1024,
     },
     Candidate {
         name: "DIR1M",
@@ -382,6 +388,15 @@ const DIR_CANDIDATES: [Candidate; 3] = [
         f: 64,
         directory_page: 1024 * 1024,
     },
+];
+
+const CAMPAIGN_ORDER: [[usize; 3]; 6] = [
+    [1, 0, 2],
+    [1, 0, 2],
+    [2, 0, 1],
+    [1, 0, 2],
+    [2, 0, 1],
+    [1, 0, 2],
 ];
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -476,6 +491,15 @@ struct Metrics {
     construction_source_hash_bytes: u64,
     construction_source_hashes: u64,
     construction_cdc_entries: u64,
+    payload_io_bytes: u64,
+    tree_node_reconstruction_events: u64,
+    directory_entry_reconstruction_events: u64,
+    directory_entry_name_bytes: u64,
+    file_reference_reconstruction_events: u64,
+    delta_entry_reconstruction_events: u64,
+    delta_entry_path_bytes: u64,
+    traversal_spool_bytes_written: u64,
+    receipt_evidence_bytes_hashed: u64,
     w_bytes: u64,
     d_bytes: u64,
 }
@@ -561,6 +585,35 @@ fn finish_q(metrics: &mut Metrics) -> CoreResult<()> {
 }
 
 fn validate_metric_equations(metrics: Metrics) -> CoreResult<()> {
+    let expected_w = metrics
+        .canonical_bytes_authenticated
+        .checked_add(metrics.payload_io_bytes)
+        .and_then(|value| value.checked_add(metrics.objects_authenticated.checked_mul(64)?))
+        .and_then(|value| {
+            value.checked_add(metrics.tree_node_reconstruction_events.checked_mul(256)?)
+        })
+        .and_then(|value| {
+            value.checked_add(
+                metrics
+                    .directory_entry_reconstruction_events
+                    .checked_mul(256)?,
+            )
+        })
+        .and_then(|value| value.checked_add(metrics.directory_entry_name_bytes))
+        .and_then(|value| {
+            value.checked_add(
+                metrics
+                    .file_reference_reconstruction_events
+                    .checked_mul(96)?,
+            )
+        })
+        .and_then(|value| {
+            value.checked_add(metrics.delta_entry_reconstruction_events.checked_mul(256)?)
+        })
+        .and_then(|value| value.checked_add(metrics.delta_entry_path_bytes))
+        .and_then(|value| value.checked_add(metrics.traversal_spool_bytes_written))
+        .and_then(|value| value.checked_add(metrics.receipt_evidence_bytes_hashed))
+        .ok_or(CoreError::LengthOverflow)?;
     if metrics.commits > metrics.transactions
         || metrics.commit_returns > metrics.commits
         || metrics
@@ -587,6 +640,8 @@ fn validate_metric_equations(metrics: Metrics) -> CoreResult<()> {
         || metrics.incremental_new_subtree_bytes_authenticated
             > metrics.canonical_bytes_authenticated
         || metrics.construction_proof_consumptions > 1
+        || metrics.w_bytes != expected_w
+        || metrics.d_bytes > metrics.payload_io_bytes
     {
         return Err(CoreError::LengthMismatch {
             expected: 0,
@@ -706,6 +761,37 @@ impl<T> ChargedVec<T> {
         values
             .try_reserve_exact(capacity)
             .map_err(|_| CoreError::AllocationFailed)?;
+        if values.capacity() != capacity {
+            return Err(CoreError::AllocationFailed);
+        }
+        Ok(Self {
+            values,
+            _requested: requested,
+        })
+    }
+
+    fn from_exact_builder_with_item_charge(
+        capacity: usize,
+        bytes_per_item: usize,
+        metrics: &mut Metrics,
+        build: impl FnOnce() -> CoreResult<Vec<T>>,
+    ) -> CoreResult<Self> {
+        let requested = charge_capacity(
+            metrics,
+            capacity
+                .checked_mul(bytes_per_item)
+                .ok_or(CoreError::LengthOverflow)?,
+        )?;
+        let values = build()?;
+        if values.len() != capacity {
+            return Err(CoreError::LengthMismatch {
+                expected: u64::try_from(capacity).map_err(|_| CoreError::LengthOverflow)?,
+                actual: u64::try_from(values.len()).map_err(|_| CoreError::LengthOverflow)?,
+            });
+        }
+        if values.capacity() != capacity {
+            return Err(CoreError::AllocationFailed);
+        }
         Ok(Self {
             values,
             _requested: requested,
@@ -1018,6 +1104,45 @@ fn encode_charged_directory_index(
     })
 }
 
+fn encode_charged_directory_page(
+    entries: &[DirectoryEntry],
+    metrics: &mut Metrics,
+) -> CoreResult<ChargedVec<u8>> {
+    let canonical_len = entries.iter().try_fold(13_usize, |total, entry| {
+        total
+            .checked_add(4 + 1 + 32)
+            .and_then(|value| value.checked_add(entry.name().as_bytes().len()))
+            .ok_or(CoreError::LengthOverflow)
+    })?;
+    ChargedVec::from_exact_builder(canonical_len, metrics, || {
+        dir_codec::encode_directory_page(entries)
+    })
+}
+
+fn encode_charged_directory_wrapper(
+    metadata: ObjectId,
+    index: ObjectId,
+    metrics: &mut Metrics,
+) -> CoreResult<ChargedVec<u8>> {
+    const WRAPPER_BYTES: usize = 13 + 2 * (4 + 1 + 1 + 32);
+    ChargedVec::from_exact_builder(WRAPPER_BYTES, metrics, || {
+        dir_codec::encode_directory_wrapper(metadata, index)
+    })
+}
+
+fn decode_charged_directory_page_refs(
+    payload: &[u8],
+    metrics: &mut Metrics,
+) -> CoreResult<ChargedVec<dir_codec::DirectoryPageRef>> {
+    let page_count = u32_field(payload, 4)?;
+    let page_ref_bytes = std::mem::size_of::<dir_codec::DirectoryPageRef>()
+        .checked_add(DIRECTORY_NAME_BYTES)
+        .ok_or(CoreError::LengthOverflow)?;
+    ChargedVec::from_exact_builder_with_item_charge(page_count, page_ref_bytes, metrics, || {
+        dir_codec::parse_directory_index(payload)
+    })
+}
+
 fn decoded_object_q(bytes: &[u8]) -> CoreResult<usize> {
     if bytes.len() < layerfs_core::object::HEADER_LEN {
         return Err(CoreError::UnexpectedEof);
@@ -1180,6 +1305,7 @@ struct PreparedExpectations {
     expected_ranges: Vec<Vec<u8>>,
     expected_probes: Vec<(&'static str, std::ops::Range<u64>)>,
     base: Option<(ObjectId, ObjectId, [u8; 32])>,
+    result: Option<(ObjectId, ObjectId, [u8; 32])>,
     edit_oracle: Option<PreparedEditOracle>,
 }
 
@@ -1208,6 +1334,11 @@ fn require_amended_m45_expectations(
         AMENDED_M45_BASE_TRANSITION.parse::<ObjectId>()?,
         AMENDED_M45_BASE_CLOSURE.parse::<ObjectId>()?.to_bytes(),
     );
+    let expected_result = (
+        AMENDED_M45_RESULT_ROOT.parse::<ObjectId>()?,
+        AMENDED_M45_RESULT_TRANSITION.parse::<ObjectId>()?,
+        AMENDED_M45_RESULT_CLOSURE.parse::<ObjectId>()?.to_bytes(),
+    );
     if expected.source_length != SOURCE_100
         || expected.source_fingerprint != RETAINED_RAW_100
         || point.reference_count != RETAINED_CDC_100
@@ -1218,6 +1349,7 @@ fn require_amended_m45_expectations(
         || expected.expected_fingerprint.as_deref() != Some(AMENDED_M45_EDITED_FINGERPRINT)
         || expected.expected_sequence.as_deref() != Some(AMENDED_M45_CDC_SEQUENCE)
         || base != expected_base
+        || expected.result != Some(expected_result)
         || oracle.operation != "same-middle"
         || oracle.offset != AMENDED_M45_EDIT_OFFSET
         || oracle.removed.len() != AMENDED_M45_EDIT_LENGTH
@@ -1461,6 +1593,155 @@ fn add_len(value: &mut u64, amount: usize) -> CoreResult<()> {
     )
 }
 
+fn observe_authenticated_object(metrics: &mut Metrics, canonical_bytes: usize) -> CoreResult<()> {
+    let bytes = u64::try_from(canonical_bytes).map_err(|_| CoreError::LengthOverflow)?;
+    let objects = metrics
+        .objects_authenticated
+        .checked_add(1)
+        .ok_or(CoreError::LengthOverflow)?;
+    let canonical = metrics
+        .canonical_bytes_authenticated
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(bytes)
+        .and_then(|value| value.checked_add(64))
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.objects_authenticated = objects;
+    metrics.canonical_bytes_authenticated = canonical;
+    metrics.w_bytes = work;
+    Ok(())
+}
+
+fn observe_payload_input(metrics: &mut Metrics, bytes: usize) -> CoreResult<()> {
+    let bytes = u64::try_from(bytes).map_err(|_| CoreError::LengthOverflow)?;
+    let payload = metrics
+        .payload_io_bytes
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.payload_io_bytes = payload;
+    metrics.w_bytes = work;
+    Ok(())
+}
+
+fn observe_stream_output(metrics: &mut Metrics, bytes: usize) -> CoreResult<()> {
+    let bytes = u64::try_from(bytes).map_err(|_| CoreError::LengthOverflow)?;
+    let payload = metrics
+        .payload_io_bytes
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    let output = metrics
+        .d_bytes
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.payload_io_bytes = payload;
+    metrics.w_bytes = work;
+    metrics.d_bytes = output;
+    Ok(())
+}
+
+fn observe_tree_node_reconstruction(metrics: &mut Metrics) -> CoreResult<()> {
+    let events = metrics
+        .tree_node_reconstruction_events
+        .checked_add(1)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(256)
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.tree_node_reconstruction_events = events;
+    metrics.w_bytes = work;
+    Ok(())
+}
+
+fn observe_directory_entries(metrics: &mut Metrics, entries: &[DirectoryEntry]) -> CoreResult<()> {
+    let count = u64::try_from(entries.len()).map_err(|_| CoreError::LengthOverflow)?;
+    let name_bytes = entries.iter().try_fold(0_u64, |total, entry| {
+        total
+            .checked_add(
+                u64::try_from(entry.name().as_bytes().len())
+                    .map_err(|_| CoreError::LengthOverflow)?,
+            )
+            .ok_or(CoreError::LengthOverflow)
+    })?;
+    let events = metrics
+        .directory_entry_reconstruction_events
+        .checked_add(count)
+        .ok_or(CoreError::LengthOverflow)?;
+    let names = metrics
+        .directory_entry_name_bytes
+        .checked_add(name_bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(count.checked_mul(256).ok_or(CoreError::LengthOverflow)?)
+        .and_then(|value| value.checked_add(name_bytes))
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.directory_entry_reconstruction_events = events;
+    metrics.directory_entry_name_bytes = names;
+    metrics.w_bytes = work;
+    Ok(())
+}
+
+fn observe_delta_entries(
+    metrics: &mut Metrics,
+    entries: &[delta_codec::TransitionOperation],
+) -> CoreResult<()> {
+    let count = u64::try_from(entries.len()).map_err(|_| CoreError::LengthOverflow)?;
+    let path_bytes = entries.iter().try_fold(0_u64, |total, entry| {
+        let path = match entry {
+            delta_codec::TransitionOperation::Add { path, .. }
+            | delta_codec::TransitionOperation::Remove { path, .. }
+            | delta_codec::TransitionOperation::Replace { path, .. }
+            | delta_codec::TransitionOperation::Metadata { path, .. } => path,
+        };
+        total
+            .checked_add(u64::try_from(path.len()).map_err(|_| CoreError::LengthOverflow)?)
+            .ok_or(CoreError::LengthOverflow)
+    })?;
+    let events = metrics
+        .delta_entry_reconstruction_events
+        .checked_add(count)
+        .ok_or(CoreError::LengthOverflow)?;
+    let paths = metrics
+        .delta_entry_path_bytes
+        .checked_add(path_bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(count.checked_mul(256).ok_or(CoreError::LengthOverflow)?)
+        .and_then(|value| value.checked_add(path_bytes))
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.delta_entry_reconstruction_events = events;
+    metrics.delta_entry_path_bytes = paths;
+    metrics.w_bytes = work;
+    Ok(())
+}
+
+fn observe_receipt_evidence(metrics: &mut Metrics, bytes: usize) -> CoreResult<()> {
+    let bytes = u64::try_from(bytes).map_err(|_| CoreError::LengthOverflow)?;
+    let evidence = metrics
+        .receipt_evidence_bytes_hashed
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.receipt_evidence_bytes_hashed = evidence;
+    metrics.w_bytes = work;
+    Ok(())
+}
+
 fn observe_statement_cache_acquisition(metrics: &mut Metrics) -> CoreResult<()> {
     add(&mut metrics.statement_cache_acquisitions, 1)
 }
@@ -1499,19 +1780,17 @@ fn observe_borrowed_row_blob(metrics: &mut Metrics, length: usize) -> CoreResult
 }
 
 fn observe_file_references(metrics: &mut Metrics, count: usize) -> CoreResult<()> {
-    let _ = metrics;
-    let _ = u64::try_from(count).map_err(|_| CoreError::LengthOverflow)?;
-    Ok(())
-}
-
-fn observe_file_references_and_output(
-    metrics: &mut Metrics,
-    count: usize,
-    output_bytes: usize,
-) -> CoreResult<()> {
-    let _ = metrics;
-    let _ = u64::try_from(count).map_err(|_| CoreError::LengthOverflow)?;
-    let _ = u64::try_from(output_bytes).map_err(|_| CoreError::LengthOverflow)?;
+    let count = u64::try_from(count).map_err(|_| CoreError::LengthOverflow)?;
+    let events = metrics
+        .file_reference_reconstruction_events
+        .checked_add(count)
+        .ok_or(CoreError::LengthOverflow)?;
+    let work = metrics
+        .w_bytes
+        .checked_add(count.checked_mul(96).ok_or(CoreError::LengthOverflow)?)
+        .ok_or(CoreError::LengthOverflow)?;
+    metrics.file_reference_reconstruction_events = events;
+    metrics.w_bytes = work;
     Ok(())
 }
 
@@ -1793,6 +2072,125 @@ fn profile_id(candidate: Candidate) -> CoreResult<[u8; 32]> {
     Ok(*hasher.finalize().as_bytes())
 }
 
+fn frozen_100_result(
+    candidate: Candidate,
+    operation: &str,
+) -> AnyResult<Option<(ObjectId, ObjectId, [u8; 32])>> {
+    let values = match (candidate.name, operation) {
+        ("K64-F64", "full") => (
+            "2d41c27f96b0332475fb8ec3c46a336c9c8a8084408bc545e5cbb24d51cb25d0",
+            "ba15fd20469414de99c135fc90a5c5ad028f99f115b8c0d138ace9ec98536412",
+            "d6aac6e40cc851dd6295dbeec6488f1c5ebefa7520f86b0cd12bdcdce1f0d54a",
+        ),
+        ("K64-F64", "same-middle") => (
+            "d1a69475b0f8e25e44d7bd625a679b596ea2a8b3347ef8c15fafa13f654b299b",
+            "f11cc9d84deae7f1871adca62cc562ab63dbb01e9c39771ed3522eab4007cee1",
+            "c0f6a39bf9939c89301bedb564516c5ec851321a1d89c69b2e95d4b1844a9587",
+        ),
+        ("K64-F64", "plus1-early") => (
+            "4648eb987df7b46844135218cdbd73cbd8480d34b74a832f123fdfb1221869eb",
+            "ac12e88bc47967043647484112ab5d1113d7f0ebbaa8c9026749b9123d8e949a",
+            "e86efa7aaeaaf8f983c8fcaf48b5c206ce6d53d2be502cfc05a33dede544c5f1",
+        ),
+        ("K64-F64", "plus1-middle") => (
+            "41e9b48e1af960a4587027b929608d50686b59cd9dc22a625cbb5548379539b9",
+            "bfcc3537f01f17265ecef026e5fc5ccf4a4da599c4659ddd4259a8bd63ff74a9",
+            "4eb35ed21ded2bf3135d058a6a0da042db1af3c53d74d119e82c956a9c07110a",
+        ),
+        ("K59-F101", "full") => (
+            "41c5f8dc523a727ccbb4abe6dc1b0051010337965979e71d522b4f36dea12cef",
+            "3797824c4e5eaa8d75c9154c7ca6f1a210cbae6a3bdf66b60ec43058780b91e7",
+            "a944b36024a2fdd632be2739d974b57b2281d9de566d3d82525a9eb95badd890",
+        ),
+        ("K59-F101", "same-middle") => (
+            "0f92c57fa6451acce27b74042d1c9589af55d04fd0409c29b84e4b1219150133",
+            "fc24e1e11b0f95bef467b2ef6405efbf6ec102a94f67e5e33b9ae27f5aab5b2b",
+            "0969576c7e0019fe9900078b7f91b7f8b9c5a20b908e86b3d040fc7cd4b13941",
+        ),
+        ("K59-F101", "plus1-early") => (
+            "88deb40b282ab31ca9b9a3794537d79c5ec4eaf839ec025a1ebf9e5823637701",
+            "ad03cfcc4c6cd30189f6bca51ab4c35eda2e8bb9dd645e27f965c7dac00fae20",
+            "d7262b783d534ac54446f278f7f9d17b5fa0ff50ef2b4803aa78582b7282883f",
+        ),
+        ("K59-F101", "plus1-middle") => (
+            "c66d32b843d022a4da13e57f16d8b0e5f0a447098efb8c34aea1d49743f92ace",
+            "068fc4158154e4d2abf68a1c74a54a45d320554f9df457226019c22329c597a5",
+            "dff386cbc55d48857e46331d6282f4b597bb297ef93865cacbc5f72a822e69d1",
+        ),
+        ("K256-F256", "full") => (
+            "1d48c647d37ef9186c8377bacbf154ae4d93ca256dc05b97a411fbb0d22538be",
+            "9485cd1f1e9459ec5ccdc006318ffabdeea290469dc2a8bab924d325c1fc5c22",
+            "0aa3cceab4dde98f6083fba3edc6267fbee68e3933f09569a3e266147c0dde27",
+        ),
+        ("K256-F256", "same-middle") => (
+            "290734354816c3cccc8be8062cbb1602f439006535454b104034e4c290ef8bd5",
+            "bc748668585d88cb54664e5c5a93fa5c5e6c42278fd1c8d54e18d18305ec0cdd",
+            "cd25222d51f6e4c37776f0fb523a51ac2f6256e62c19b51062f8bf6f0df99cd6",
+        ),
+        ("K256-F256", "plus1-early") => (
+            "fbf5b0a5baeb996d9121d9d4b1da691f117f631836cfac7bee47def787363e81",
+            "17c93617cf9a6654a6a8058cbf023f03e8844b7050e0014109292e1550d65250",
+            "59399d1d42fb5963590249c810b755ad25de4f13a15e57f3fbdb05cae6f74b98",
+        ),
+        ("K256-F256", "plus1-middle") => (
+            "00bc25e1132dc6e9efee17287bc88f785c3d0295db063767bc10485a6fdc94c1",
+            "767da2937502ac1ba4f9692e09fa45d47cd3ee83a261fdafb3b4e842fe700632",
+            "a9931e987b584a10254c58c08da5fc984e7e208f32dde1144aae0dce5503986f",
+        ),
+        ("DIR64K", "dir-create") | ("DIR64K", "dir-lookup") => (
+            "451905e619ea74aba4d271a0616ff1543b51b5fd67aff33c721c550307f543ea",
+            "0ab027cb1ef0239634b92aa4846dc71cb1eba5189d56b37cfd99ba9a2e97827d",
+            "dcb86f04ef876a6a7284b79e99a21e8bbd19ff0a66d66a0a92fdb0577967126c",
+        ),
+        ("DIR64K", "dir-replace") => (
+            "80bad8c60f849824788d3add8d89e7a4a9e6359e95b862bdbd3fe625eaee85a9",
+            "acd2d9634f6ca7adcbc0cf90bd2f8f9e507782aa8b8f11b7735eb892ddd88df7",
+            "77efaa5776bb411cac4309423dd7ff04bbdcca7384eefa65f2ea63db08b918e3",
+        ),
+        ("DIR64K", "dir-leading") => (
+            "1a600306e4af1e29da90581a162c1c3c782b99503c50ffee344393ae019c2a50",
+            "b18dd89a51642c45e84817ed229071f0dd0be767e870d0e73a5e8a01125d940b",
+            "6d732e9efe07c5d39d3fbcdb22dc87006917202cc60ad1d816f9400e76a8be53",
+        ),
+        ("DIR256K", "dir-create") | ("DIR256K", "dir-lookup") => (
+            "9d9eadc6432de69940e63d54311a9243d3f175ac4a0d882968a85fcd8c454bd6",
+            "ae9f39d6889211e0603babd73c32ec0cea0a8ecb55d925458956d1ee64552efb",
+            "9d850bf4a87337576b493144ef2042f6216730da8977195ef643f47d6b1b7b94",
+        ),
+        ("DIR256K", "dir-replace") => (
+            "8cf39abfd2f5948df5822bfd6ba6302b5655fbc6e086184c2feb280b3daf4b87",
+            "bc6ff3b9fefe89738b06fa13c94683518ea82533782cbd74b93025ee09660130",
+            "ce58f5954f09765bf62a7d3533cbee22a52842f01497680772507bea1575c0a2",
+        ),
+        ("DIR256K", "dir-leading") => (
+            "3a5d482b9621609602011fd1e5ffbe0b41c1f721fe89dcb7a08674f53eb08819",
+            "b3ba5cdaef2a7b4ca91dca3a2cee14e5d12b27246117e31887e7ceb3f27dffd1",
+            "1dc30260a0008df91ebcdedcb2f1abd15e472eceba915b30357c01b50c3bc01d",
+        ),
+        ("DIR1M", "dir-create") | ("DIR1M", "dir-lookup") => (
+            "de9b0c9379af459993b8f753196bc032bcb7e266c5310f47d2a23394c3f82281",
+            "6e5d021ac3e2840d5d124cc3c05ffad780b867f0700a53803a0fd24d3a1ede67",
+            "cfc842dac50514bd36b7ed218daba835d26e75b199fe1126417c133cf7482e86",
+        ),
+        ("DIR1M", "dir-replace") => (
+            "9640464ed79a3843bfb83964f79a856f100d75fe6e0a312fa6695eaf4f328b77",
+            "7ed294db597603aa29a5b51c07fce8550ad3bfb8b360912896b5ac345f1aa121",
+            "06a7f38cedcc8441afafc9d4a303b33a917582a45c7e89f5c0114662c9f0ab5d",
+        ),
+        ("DIR1M", "dir-leading") => (
+            "29026f4596dceb3aa36fe687b7045b78ff1759b7bf208d9ed5dd52f830f672a8",
+            "5babc1520417e6831af6b0ade45df2bb8abde7552e06d91701658e322142cc6a",
+            "515c381545fea041d6cd1d87a0e7267188be6e0f64342e22833848fe3eb37a3c",
+        ),
+        _ => return Ok(None),
+    };
+    Ok(Some((
+        values.0.parse()?,
+        values.1.parse()?,
+        values.2.parse::<ObjectId>()?.to_bytes(),
+    )))
+}
+
 struct Store {
     path: PathBuf,
     authority_path: PathBuf,
@@ -1878,11 +2276,19 @@ impl Store {
             Ok(matches!(row.get_ref(0)?, ValueRef::Text(value) if value.eq_ignore_ascii_case(b"delete")))
         })?;
         if !delete_journal {
-            return Err(CoreError::PublicationConflict.into());
+            return Err(CoreError::ProfileMismatch.into());
         }
         connection.execute_batch(
             "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0;",
         )?;
+        let synchronous =
+            connection.query_row("PRAGMA synchronous", [], |row| row.get::<_, i64>(0))?;
+        let temp_store =
+            connection.query_row("PRAGMA temp_store", [], |row| row.get::<_, i64>(0))?;
+        let mmap_size = connection.query_row("PRAGMA mmap_size", [], |row| row.get::<_, i64>(0))?;
+        if synchronous != 2 || temp_store != 1 || mmap_size != 0 {
+            return Err(CoreError::ProfileMismatch.into());
+        }
         connection.execute_batch(
             "CREATE TABLE IF NOT EXISTS wp4m_meta (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -1947,11 +2353,39 @@ impl Store {
         {
             observe_row_blobs(metrics, lengths)?;
         }
+        let persisted_profile: Option<(i64, String, i64, i64, i64)> = connection
+            .query_row(
+                "SELECT schema_version, journal_mode, synchronous, temp_store, mmap_size
+                 FROM wp4m_meta WHERE id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .optional()?;
         let (store_instance_id, validation_authority_id, integrity_epoch, validation_key) =
             match existing {
                 Some((Some(value), Some(instance), Some(authority), Some(epoch), _))
                     if value == profile =>
                 {
+                    let persisted =
+                        persisted_profile.ok_or(CoreError::InvalidRecord("store_authority"))?;
+                    if persisted.0 != 5 {
+                        return Err(CoreError::SchemaMismatch.into());
+                    }
+                    if persisted.1 != "delete"
+                        || persisted.2 != 2
+                        || persisted.3 != 1
+                        || persisted.4 != 0
+                    {
+                        return Err(CoreError::ProfileMismatch.into());
+                    }
                     let validation_key = read_authority(&authority_path)?;
                     (
                         instance,
@@ -1960,7 +2394,10 @@ impl Store {
                         validation_key,
                     )
                 }
-                Some(_) => return Err(CoreError::InvalidValidationReceipt.into()),
+                Some((Some(_), Some(_), Some(_), Some(_), _)) => {
+                    return Err(CoreError::ProfileMismatch.into())
+                }
+                Some(_) => return Err(CoreError::InvalidRecord("store_authority").into()),
                 None => {
                     let now = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
@@ -2012,7 +2449,7 @@ impl Store {
                 &validation_key,
             )
         {
-            return Err(CoreError::InvalidValidationReceipt.into());
+            return Err(CoreError::InvalidRecord("store_authority").into());
         }
         Ok(Self {
             path: path.to_path_buf(),
@@ -2268,8 +2705,7 @@ impl Store {
             .mutation_serial
             .checked_add(1)
             .ok_or(CoreError::LengthOverflow)?;
-        add(&mut metrics.objects_authenticated, 1)?;
-        add_len(&mut metrics.canonical_bytes_authenticated, canonical.len())?;
+        observe_authenticated_object(metrics, canonical.len())?;
         if reused_object_id {
             add(&mut metrics.reused_object_id_authentications, 1)?;
             add_len(
@@ -2277,7 +2713,6 @@ impl Store {
                 canonical.len(),
             )?;
         }
-        add_len(&mut metrics.w_bytes, canonical.len())?;
         let mut statement = self.connection.prepare_cached(
             "INSERT INTO wp4m_objects (object_id, kind, canonical_length, canonical_bytes)
                  VALUES (?1, ?2, ?3, ?4)
@@ -2321,8 +2756,7 @@ impl Store {
         observe_row_blobs(metrics, &[existing.len()])?;
         let decoded_charge = charge_capacity(metrics, decoded_object_q(existing)?)?;
         let existing_object = layerfs_core::validate_identity(existing, id)?;
-        add(&mut metrics.objects_authenticated, 1)?;
-        add_len(&mut metrics.canonical_bytes_authenticated, existing.len())?;
+        observe_authenticated_object(metrics, existing.len())?;
         if incumbent_kind != i64::from(kind as u8) || existing_object.kind() != kind {
             return Err(CoreError::WrongLogicalRole.into());
         }
@@ -2356,7 +2790,6 @@ impl Store {
         observe_rows_returned(metrics, 1)?;
         let bytes = row.get_ref(0)?.as_blob()?;
         observe_row_blobs(metrics, &[bytes.len()])?;
-        add_len(&mut metrics.d_bytes, bytes.len())?;
         Ok(ChargedBytes::from_borrowed(bytes, metrics)?)
     }
 
@@ -2368,8 +2801,7 @@ impl Store {
         let bytes = self.read_canonical(id, metrics)?;
         let decoded_charge = charge_capacity(metrics, decoded_object_q(&bytes)?)?;
         let object = layerfs_core::validate_identity(&bytes, id)?;
-        add(&mut metrics.objects_authenticated, 1)?;
-        add_len(&mut metrics.canonical_bytes_authenticated, bytes.len())?;
+        observe_authenticated_object(metrics, bytes.len())?;
         // The guard is first so ordinary destructuring drops bytes/object before
         // their shared decoded-capacity charge.
         Ok((decoded_charge, object, bytes))
@@ -2378,8 +2810,7 @@ impl Store {
     fn get_bytes(&self, id: ObjectId, metrics: &mut Metrics) -> AnyResult<ChargedBytes> {
         let bytes = self.read_canonical(id, metrics)?;
         layerfs_core::validate_bytes_identity(&bytes, id)?;
-        add(&mut metrics.objects_authenticated, 1)?;
-        add_len(&mut metrics.canonical_bytes_authenticated, bytes.len())?;
+        observe_authenticated_object(metrics, bytes.len())?;
         Ok(bytes)
     }
 
@@ -2402,10 +2833,8 @@ impl Store {
         observe_rows_returned(metrics, 1)?;
         let canonical = row.get_ref(0)?.as_blob()?;
         observe_borrowed_row_blob(metrics, canonical.len())?;
-        add_len(&mut metrics.d_bytes, canonical.len())?;
         layerfs_core::validate_bytes_identity(canonical, id)?;
-        add(&mut metrics.objects_authenticated, 1)?;
-        add_len(&mut metrics.canonical_bytes_authenticated, canonical.len())?;
+        observe_authenticated_object(metrics, canonical.len())?;
         callback(canonical, metrics)
     }
 
@@ -2483,11 +2912,9 @@ impl Store {
                 _ => return Err(CoreError::WrongLogicalRole.into()),
             };
             observe_borrowed_row_blob(metrics, canonical.len())?;
-            add_len(&mut metrics.d_bytes, canonical.len())?;
             let reference = references[index];
             layerfs_core::validate_bytes_identity(canonical, reference.object_id)?;
-            add(&mut metrics.objects_authenticated, 1)?;
-            add_len(&mut metrics.canonical_bytes_authenticated, canonical.len())?;
+            observe_authenticated_object(metrics, canonical.len())?;
             callback(reference, canonical, metrics)?;
             index = index.checked_add(1).ok_or(CoreError::LengthOverflow)?;
         }
@@ -2557,17 +2984,20 @@ impl Store {
             return Ok(None);
         };
         observe_row_blobs(metrics, &lengths)?;
-        let generation = u64::from_be_bytes(generation.ok_or(CoreError::InvalidValidationReceipt)?);
-        let child = ObjectId::from_bytes(&child.ok_or(CoreError::InvalidValidationReceipt)?)?;
+        let generation =
+            u64::from_be_bytes(generation.ok_or(CoreError::InvalidRecord("visible_head"))?);
+        let child = ObjectId::from_bytes(&child.ok_or(CoreError::InvalidRecord("visible_head"))?)?;
         let transition =
-            ObjectId::from_bytes(&transition.ok_or(CoreError::InvalidValidationReceipt)?)?;
-        let validation_receipt = validation_receipt.ok_or(CoreError::InvalidValidationReceipt)?;
+            ObjectId::from_bytes(&transition.ok_or(CoreError::InvalidRecord("visible_head"))?)?;
+        let validation_receipt =
+            validation_receipt.ok_or(CoreError::InvalidRecord("visible_head"))?;
         let receipt = ValidatedSnapshotReceiptV1::decode(
             &validation_receipt,
             &self.validation_key,
             ObjectId::from_bytes(&self.profile)?,
             self.validation_authority_id,
         )?;
+        observe_receipt_evidence(metrics, validation_receipt.len())?;
         if receipt.store_instance_id != self.store_instance_id
             || receipt.integrity_epoch != self.integrity_epoch
             || receipt.head_generation != generation
@@ -2606,17 +3036,20 @@ impl Store {
             return Ok(None);
         };
         observe_row_blobs(metrics, &lengths)?;
-        let generation = u64::from_be_bytes(generation.ok_or(CoreError::InvalidValidationReceipt)?);
-        let child = ObjectId::from_bytes(&child.ok_or(CoreError::InvalidValidationReceipt)?)?;
+        let generation =
+            u64::from_be_bytes(generation.ok_or(CoreError::InvalidRecord("visible_head"))?);
+        let child = ObjectId::from_bytes(&child.ok_or(CoreError::InvalidRecord("visible_head"))?)?;
         let transition =
-            ObjectId::from_bytes(&transition.ok_or(CoreError::InvalidValidationReceipt)?)?;
-        let validation_receipt = validation_receipt.ok_or(CoreError::InvalidValidationReceipt)?;
+            ObjectId::from_bytes(&transition.ok_or(CoreError::InvalidRecord("visible_head"))?)?;
+        let validation_receipt =
+            validation_receipt.ok_or(CoreError::InvalidRecord("visible_head"))?;
         let receipt = ValidatedSnapshotReceiptV1::decode(
             &validation_receipt,
             &self.validation_key,
             ObjectId::from_bytes(&self.profile)?,
             self.validation_authority_id,
         )?;
+        observe_receipt_evidence(metrics, validation_receipt.len())?;
         if receipt.store_instance_id != self.store_instance_id
             || receipt.integrity_epoch != self.integrity_epoch
             || receipt.head_generation != generation
@@ -2702,6 +3135,11 @@ impl Store {
             }
         } else if authoritative.as_ref() == prior {
             (Reconciliation::PriorVisible, None)
+        } else if authoritative.is_none() {
+            (
+                Reconciliation::Ambiguous,
+                Some(FailureCause::Core(CoreError::AmbiguousDurability)),
+            )
         } else {
             (Reconciliation::DifferentHead, None)
         }
@@ -2826,7 +3264,9 @@ impl Store {
             mapping_profile_id: ObjectId::from_bytes(&self.profile)?,
         }
         .encode(&self.validation_key)?;
+        observe_receipt_evidence(metrics, receipt_bytes.len())?;
         let requested = (generation, child, transition, receipt_bytes);
+        observe_receipt_evidence(metrics, requested.3.len())?;
         let request_key = self.publication_key(current.as_ref(), &requested)?;
         let changed = match expected_head {
             None => self.connection.execute(
@@ -3187,6 +3627,32 @@ fn construction_frontier_bytes(
         })
         .ok_or(CoreError::LengthOverflow)?;
     Ok((levels, frontier_bytes))
+}
+
+fn ordinary_frontier_bytes(
+    candidate: Candidate,
+    expected_references: u64,
+) -> CoreResult<(usize, usize)> {
+    let (levels, proof_frontier_bytes) =
+        construction_frontier_bytes(candidate, expected_references)?;
+    let proof_only = levels
+        .checked_mul(
+            std::mem::size_of::<Vec<ConstructionNodeProof>>()
+                .checked_add(
+                    candidate
+                        .f
+                        .checked_mul(std::mem::size_of::<ConstructionNodeProof>())
+                        .ok_or(CoreError::LengthOverflow)?,
+                )
+                .ok_or(CoreError::LengthOverflow)?,
+        )
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok((
+        levels,
+        proof_frontier_bytes
+            .checked_sub(proof_only)
+            .ok_or(CoreError::LengthOverflow)?,
+    ))
 }
 
 struct ConstructionState {
@@ -3712,17 +4178,31 @@ struct FileBuilder {
 }
 
 impl FileBuilder {
-    fn new(candidate: Candidate) -> Self {
-        Self {
+    fn new(
+        candidate: Candidate,
+        expected_references: u64,
+        metrics: &mut Metrics,
+    ) -> CoreResult<Self> {
+        let (level_count, frontier_bytes) =
+            ordinary_frontier_bytes(candidate, expected_references)?;
+        let frontier_charge = charge_capacity(metrics, frontier_bytes)?;
+        let leaf = exact_vec_capacity(candidate.k)?;
+        let mut levels = exact_vec_capacity(level_count)?;
+        let mut level_totals = exact_vec_capacity(level_count)?;
+        for _ in 0..level_count {
+            levels.push(exact_vec_capacity(candidate.f)?);
+            level_totals.push(0);
+        }
+        Ok(Self {
             candidate,
-            leaf: Vec::with_capacity(candidate.k),
-            levels: Vec::new(),
-            level_totals: Vec::new(),
+            leaf,
+            levels,
+            level_totals,
             total_raw: 0,
             references: 0,
             construction: None,
-            frontier_charge: None,
-        }
+            frontier_charge: Some(frontier_charge),
+        })
     }
 
     fn new_proving(
@@ -3761,6 +4241,7 @@ impl FileBuilder {
         add_len(&mut metrics.source_bytes_read, bytes.len())?;
         add_len(&mut metrics.source_cdc_bytes_read, bytes.len())?;
         add_len(&mut metrics.canonical_stage_source_bytes_read, bytes.len())?;
+        observe_payload_input(metrics, bytes.len())?;
         let raw_length = u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
         let raw_id = chunk_id_accounted(bytes, metrics)?;
         add(&mut metrics.borrowed_source_encode_calls, 1)?;
@@ -3805,7 +4286,6 @@ impl FileBuilder {
             .ok_or(CoreError::LengthOverflow)?;
         add(&mut metrics.references, 1)?;
         self.leaf.push(reference);
-        observe_file_references(metrics, self.leaf.len())?;
         if self.leaf.len() == self.candidate.k {
             self.flush_leaf_with_store(store, metrics)?;
         }
@@ -4229,6 +4709,8 @@ fn resolve_namespace_file_root(
     let Object::Directory(entries) = object else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
+    observe_directory_entries(metrics, &entries)?;
     if entries.len() != 1
         || entries[0].name().as_bytes() != b"file"
         || entries[0].reference().kind() != ObjectKind::Bytes
@@ -4251,6 +4733,8 @@ fn namespace_entry_id(
     let Object::Directory(entries) = object else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
+    observe_directory_entries(metrics, &entries)?;
     entries
         .iter()
         .find(|entry| entry.name().as_bytes() == name)
@@ -4258,12 +4742,18 @@ fn namespace_entry_id(
         .ok_or_else(|| CoreError::WrongLogicalRole.into())
 }
 
+fn source_label(size: u64) -> String {
+    match size {
+        SOURCE_1 => "S1-1".to_string(),
+        SOURCE_10 => "S1-10".to_string(),
+        SOURCE_100 => "S1-100".to_string(),
+        SOURCE_512 => "S1-512".to_string(),
+        _ => format!("S1-{size}"),
+    }
+}
+
 fn source_path(root: &Path, size: u64) -> PathBuf {
-    root.join(if size == SOURCE_100 {
-        "S1-100.source"
-    } else {
-        "S1-512.source"
-    })
+    root.join(format!("{}.source", source_label(size)))
 }
 
 fn fill_source(path: &Path, size: u64, seed: u64) -> AnyResult<()> {
@@ -4271,11 +4761,14 @@ fn fill_source(path: &Path, size: u64, seed: u64) -> AnyResult<()> {
     let mut buffer = vec![0_u8; 1024 * 1024];
     let mut written = 0_u64;
     while written < size {
-        fill_retained_buffer(
-            &mut buffer,
-            written,
-            if seed == 0x51 { "S1-100" } else { "S1-512" },
-        );
+        let label = match seed {
+            0x41 => "S1-1",
+            0x4a => "S1-10",
+            0x51 => "S1-100",
+            0x52 => "S1-512",
+            _ => return Err("unknown deterministic source seed".into()),
+        };
+        fill_retained_buffer(&mut buffer, written, label);
         let remaining = size.checked_sub(written).ok_or(CoreError::LengthOverflow)?;
         let take = usize::try_from(
             remaining.min(u64::try_from(buffer.len()).map_err(|_| CoreError::LengthOverflow)?),
@@ -4409,6 +4902,100 @@ fn prepare_sources_for(root: &Path, sizes: &[u64], create_missing: bool) -> AnyR
 
 fn prepare_retained_fixtures(root: &Path) -> AnyResult<()> {
     prepare_sources_for(root, &[SOURCE_100, SOURCE_512], true)
+}
+
+fn prepare_fast_fixture(root: &Path, size: u64) -> AnyResult<()> {
+    let seed = match size {
+        SOURCE_1 => 0x41,
+        SOURCE_10 => 0x4a,
+        SOURCE_100 => 0x51,
+        _ => return Err("fast fixtures are limited to 1, 10, or 100 MiB".into()),
+    };
+    fs::create_dir_all(root)?;
+    let source = source_path(root, size);
+    if source.exists() {
+        return Err(format!("refusing to overwrite fast fixture {}", source.display()).into());
+    }
+    fill_source(&source, size, seed)?;
+    let (actual_size, fingerprint) = source_hash(&source)?;
+    let (references, sequence) = source_cdc_sequence(&source)?;
+    if actual_size != size {
+        return Err(CoreError::LengthMismatch {
+            expected: size,
+            actual: actual_size,
+        }
+        .into());
+    }
+    let record_path = root.join("phase4-fast-fixture.json");
+    let mut record = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&record_path)?;
+    writeln!(
+        record,
+        "{{\"format\":1,\"fixture\":\"{}\",\"size_bytes\":{size},\"raw_fingerprint\":\"{fingerprint}\",\"cdc_references\":{references},\"cdc_sequence_fingerprint\":\"{sequence}\"}}",
+        source_label(size),
+    )?;
+    record.sync_all()?;
+    println!(
+        "fixture={} size_bytes={size} raw_fingerprint={fingerprint} cdc_references={references} cdc_sequence={sequence}",
+        source.display(),
+    );
+    Ok(())
+}
+
+fn prepare_fixed_radix_acceptance_fixtures(root: &Path) -> AnyResult<()> {
+    fs::create_dir_all(root)?;
+    let manifest_path = root.join("wp4m-fixed-radix-fixture-manifest.json");
+    if manifest_path.exists() {
+        return Err("refusing to overwrite fixed-radix fixture manifest".into());
+    }
+    let fixtures = [
+        (
+            SOURCE_1,
+            0x41,
+            53_u64,
+            "f79de600cf44b20c4443e06d2e2b9e8819e956ba5a7bcc9cab4ffd8a08059cf8",
+        ),
+        (
+            SOURCE_10,
+            0x4a,
+            531_u64,
+            "e40db05d7407b92253e56099df402f03b399990014b2d1397e422ca305472449",
+        ),
+        (SOURCE_100, 0x51, RETAINED_CDC_100, RETAINED_RAW_100),
+    ];
+    let mut records = Vec::with_capacity(fixtures.len());
+    for (size, seed, expected_references, expected_fingerprint) in fixtures {
+        let source = source_path(root, size);
+        if source.exists() {
+            return Err(format!("refusing to overwrite fixture {}", source.display()).into());
+        }
+        fill_source(&source, size, seed)?;
+        let (actual_size, fingerprint) = source_hash(&source)?;
+        let (references, sequence) = source_cdc_sequence(&source)?;
+        if actual_size != size
+            || references != expected_references
+            || fingerprint != expected_fingerprint
+        {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        records.push(format!(
+            "{{\"fixture\":\"{}\",\"size_bytes\":{size},\"raw_fingerprint\":\"{fingerprint}\",\"cdc_references\":{references},\"cdc_sequence_fingerprint\":\"{sequence}\"}}",
+            source_label(size),
+        ));
+    }
+    let mut manifest = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(manifest_path)?;
+    writeln!(
+        manifest,
+        "{{\"format\":1,\"purpose\":\"fixed_radix_acceptance\",\"fixtures\":[{}]}}",
+        records.join(",")
+    )?;
+    manifest.sync_all()?;
+    Ok(())
 }
 
 fn source_hash(path: &Path) -> AnyResult<(u64, String)> {
@@ -4845,6 +5432,7 @@ fn make_reference(
 ) -> AnyResult<file_codec::FileReference> {
     add_len(&mut metrics.source_bytes_read, bytes.len())?;
     add_len(&mut metrics.canonical_stage_source_bytes_read, bytes.len())?;
+    observe_payload_input(metrics, bytes.len())?;
     store_reference(store, bytes, metrics)
 }
 
@@ -5117,6 +5705,7 @@ fn same_middle_rejoin_references(
     }
     drop(old_bytes);
     add_len(&mut metrics.source_bytes_read, replacement.len())?;
+    observe_payload_input(metrics, replacement.len())?;
     let old_suffix_start = predecessor_length
         .checked_add(removed_length)
         .ok_or(CoreError::LengthOverflow)?;
@@ -5251,8 +5840,19 @@ fn verify_transition(
             .ok_or(CoreError::LengthOverflow)?,
     )?;
     let decoded = delta_codec::decode_mapping_transition(&bytes)?;
-    if decoded.parent != expected_parent || decoded.child != expected_child {
-        return Err(CoreError::PublicationConflict.into());
+    if decoded.parent != expected_parent {
+        return Err(match (expected_parent, decoded.parent) {
+            (Some(expected), Some(actual)) => CoreError::DeltaParentMismatch { expected, actual },
+            _ => CoreError::DeltaConflict,
+        }
+        .into());
+    }
+    if decoded.child != expected_child {
+        return Err(CoreError::DeltaChildMismatch {
+            expected: expected_child,
+            actual: decoded.child,
+        }
+        .into());
     }
     let operation_count =
         usize::try_from(decoded.entry_count).map_err(|_| CoreError::LengthOverflow)?;
@@ -5275,6 +5875,7 @@ fn verify_transition(
                 .ok_or(CoreError::LengthOverflow)?,
         )?;
         let page_operations = delta_codec::decode_mapping_delta_page(&bytes)?;
+        observe_delta_entries(metrics, &page_operations)?;
         if page_operations.is_empty() {
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
@@ -5291,10 +5892,10 @@ fn verify_transition(
         .into());
     }
     if expected_operations.is_some_and(|expected| operations.as_slice() != expected) {
-        return Err(CoreError::PublicationConflict.into());
+        return Err(CoreError::DeltaConflict.into());
     }
     if expected_parent.is_none() && (!operations.is_empty() || !decoded.pages.is_empty()) {
-        return Err(CoreError::PublicationConflict.into());
+        return Err(CoreError::DeltaConflict.into());
     }
     if let Some(parent) = expected_parent {
         replay_shadow_transition(
@@ -5314,7 +5915,7 @@ fn verify_transition(
         &bytes,
     )?;
     if !matches!(object, Object::Directory(_)) {
-        return Err(CoreError::PublicationConflict.into());
+        return Err(CoreError::WrongLogicalRole.into());
     }
     Ok(*closure_hasher.finalize().as_bytes())
 }
@@ -5329,6 +5930,8 @@ fn shadow_root(store: &Store, id: ObjectId, metrics: &mut Metrics) -> AnyResult<
     let Object::Directory(entries) = decode_object(&bytes)? else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
+    observe_directory_entries(metrics, &entries)?;
     let children = entries
         .into_iter()
         .map(|entry| Ok((entry.name().clone(), shadow_node(entry.reference().id())?)))
@@ -5422,7 +6025,9 @@ fn build_file(
     metrics: &mut Metrics,
 ) -> AnyResult<(ObjectId, ObjectId)> {
     store.begin(metrics)?;
-    let mut builder = FileBuilder::new(candidate);
+    let expected_references = source_cdc_sequence(source)?.0;
+    let mut builder = FileBuilder::new(candidate, expected_references, metrics)?;
+    let _cdc_charge = charge_capacity(metrics, 32 * 1024)?;
     FastCdc::new().scan(File::open(source)?, |chunk| {
         builder
             .push_bytes(store, chunk, metrics)
@@ -5442,6 +6047,7 @@ fn build_file_construction(
     metrics: &mut Metrics,
 ) -> AnyResult<(ObjectId, ObjectId, FullCreateConstructionProof)> {
     let mut builder = FileBuilder::new_proving(candidate, expected_references, store, metrics)?;
+    let _cdc_charge = charge_capacity(metrics, 32 * 1024)?;
     FastCdc::new().scan(File::open(source)?, |chunk| {
         builder
             .push_bytes(store, chunk, metrics)
@@ -5495,7 +6101,7 @@ fn prepare_same_middle_oracle(
     let mut metrics = Metrics::default();
     store.begin(&mut metrics)?;
     let result: AnyResult<PreparedEditOracle> = (|| {
-        let mut builder = FileBuilder::new(candidate);
+        let mut builder = FileBuilder::new(candidate, edit_point.reference_count, &mut metrics)?;
         let mut ordinal = 0_u64;
         FastCdc::new().scan(
             edited_source_reader(
@@ -6203,7 +6809,12 @@ fn rebuild_plus_one_root(
     let mut suffix_references = 0_u64;
     let mut suffix_bytes = 0_u64;
     let suffix_objects_before = metrics.objects_authenticated;
-    let mut active = vec![root];
+    let active_capacity = usize::from(level)
+        .checked_add(2)
+        .ok_or(CoreError::LengthOverflow)?;
+    let _active_charge = charge_dfs_frames(active_capacity, metrics)?;
+    let mut active = Vec::with_capacity(active_capacity);
+    active.push(root);
     for (index, child) in children.iter().enumerate() {
         let child_length = child
             .cumulative_end
@@ -6363,7 +6974,13 @@ fn edit_file(
     let position = edit_point.position;
     let replacement = vec![0xa5];
     let inserted = make_reference(store, &replacement, metrics)?;
-    let mut builder = FileBuilder::new(candidate);
+    let mut builder = FileBuilder::new(
+        candidate,
+        reference_count
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?,
+        metrics,
+    )?;
     let (_, rebuilt_references) = rebuild_plus_one_root(
         store,
         file_parent,
@@ -6665,6 +7282,9 @@ fn stream_file(
             if chunk_id_accounted(raw, metrics)? != reference.raw_id {
                 return Err(CoreError::ChunkIdentityMismatch.into());
             }
+            if batch_leaf_reads {
+                observe_stream_output(metrics, raw.len())?;
+            }
             hasher.update(raw);
             *length = length
                 .checked_add(u64::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?)
@@ -6844,7 +7464,7 @@ fn route_file_range(
         let _refs_charge = charge_decoded_file_references(payload, metrics)?;
         let refs = file_codec::parse_file_leaf(payload)?;
         let refs_len = refs.len();
-        observe_file_references_and_output(metrics, refs_len, output.len())?;
+        observe_file_references(metrics, refs_len)?;
         file_codec::validate_file_leaf(&refs, profile, final_node)?;
         let mut offset = node_start;
         for reference in refs {
@@ -6855,18 +7475,21 @@ fn route_file_range(
                 store.with_borrowed_bytes(reference.object_id, metrics, |canonical, metrics| {
                     add(&mut metrics.closure_occurrences, 1)?;
                     let raw = layerfs_core::decode_bytes_object(canonical)?;
-                    if chunk_id_accounted(raw, metrics)? != reference.raw_id
-                        || u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?
-                            != reference.raw_length
+                    if u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?
+                        != reference.raw_length
                     {
+                        return Err(CoreError::ChunkLengthMismatch.into());
+                    }
+                    if chunk_id_accounted(raw, metrics)? != reference.raw_id {
                         return Err(CoreError::ChunkIdentityMismatch.into());
                     }
                     let start = usize::try_from(range.start.saturating_sub(offset))
                         .map_err(|_| CoreError::LengthOverflow)?;
                     let finish = usize::try_from(range.end.min(end) - offset)
                         .map_err(|_| CoreError::LengthOverflow)?;
+                    let delivered = finish.checked_sub(start).ok_or(CoreError::LengthOverflow)?;
+                    observe_stream_output(metrics, delivered)?;
                     output.extend_from_slice(&raw[start..finish]);
-                    observe_file_references_and_output(metrics, refs_len, output.len())?;
                     Ok(())
                 })?;
             }
@@ -7459,6 +8082,8 @@ fn verify_file_inner(
     let Object::Directory(entries) = namespace else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
+    observe_directory_entries(metrics, &entries)?;
     if entries.len() != 1
         || entries[0].name().as_bytes() != b"file"
         || entries[0].reference().kind() != ObjectKind::Bytes
@@ -7469,6 +8094,7 @@ fn verify_file_inner(
     let root_bytes = store.get_bytes(file_root, metrics)?;
     observe_closure(&mut closure_hasher, b"file-root", file_root, &root_bytes)?;
     let payload = file_codec::decode_mapping(&root_bytes, file_codec::FILE_ROOT_TAG)?;
+    observe_tree_node_reconstruction(metrics)?;
     let _root_children_charge = charge_decoded_file_children(payload, true, metrics)?;
     let (_, expected_length, expected_references, level, root_children) =
         file_codec::parse_file_root(payload)?;
@@ -7589,8 +8215,10 @@ fn scrub_file(
             let raw = layerfs_core::decode_bytes_object(canonical)?;
             if u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?
                 != reference.raw_length
-                || chunk_id_accounted(raw, metrics)? != reference.raw_id
             {
+                return Err(CoreError::ChunkLengthMismatch.into());
+            }
+            if chunk_id_accounted(raw, metrics)? != reference.raw_id {
                 return Err(CoreError::ChunkIdentityMismatch.into());
             }
             Ok(())
@@ -7694,21 +8322,34 @@ fn empty_file_root(store: &mut Store, metrics: &mut Metrics) -> AnyResult<Object
 }
 
 fn directory_name(number: usize) -> AnyResult<CanonicalName> {
-    CanonicalName::from_bytes(format!("{number:08}-{}", "x".repeat(246)).as_bytes())
-        .map_err(Into::into)
+    CanonicalName::from_bytes(&directory_name_bytes(number)?).map_err(Into::into)
+}
+
+fn directory_name_bytes(number: usize) -> CoreResult<[u8; DIRECTORY_NAME_BYTES]> {
+    let mut value = number;
+    let mut bytes = [b'x'; DIRECTORY_NAME_BYTES];
+    bytes[8] = b'-';
+    for index in (0..8).rev() {
+        bytes[index] = b'0' + u8::try_from(value % 10).map_err(|_| CoreError::LengthOverflow)?;
+        value /= 10;
+    }
+    if value != 0 {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    Ok(bytes)
 }
 
 fn page_object(
     store: &mut Store,
     entries: &[DirectoryEntry],
     metrics: &mut Metrics,
-) -> AnyResult<(ObjectId, Vec<u8>)> {
-    let canonical = dir_codec::encode_directory_page(entries)?;
+) -> AnyResult<(ObjectId, usize)> {
+    let canonical = encode_charged_directory_page(entries, metrics)?;
     let id = object_id_accounted(&canonical, metrics)?;
     store.put(id, &canonical, metrics)?;
     add(&mut metrics.pages, 1)?;
     add_len(&mut metrics.mapping_bytes_rewritten, canonical.len())?;
-    Ok((id, canonical))
+    Ok((id, canonical.len()))
 }
 
 fn greedy_directory_entries(
@@ -7716,21 +8357,29 @@ fn greedy_directory_entries(
     last_number: usize,
     child: ObjectId,
     candidate: Candidate,
-) -> AnyResult<Vec<DirectoryEntry>> {
+    metrics: &mut Metrics,
+) -> AnyResult<ChargedVec<DirectoryEntry>> {
     let end = last_number
         .checked_add(1)
         .ok_or(CoreError::LengthOverflow)?;
     if first >= end {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    let mut entries = Vec::new();
+    let remaining = end.checked_sub(first).ok_or(CoreError::LengthOverflow)?;
+    let capacity = candidate
+        .directory_page
+        .checked_sub(13)
+        .ok_or(CoreError::NonCanonicalPagePartition)?
+        / DIRECTORY_ENTRY_ENCODED_BYTES;
+    let capacity = capacity.min(remaining);
+    if capacity == 0 {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    let mut entries = ChargedVec::with_item_charge(capacity, Q_DIRECTORY_ENTRY_BYTES, metrics)?;
     let mut encoded_size = 9_usize.checked_add(4).ok_or(CoreError::LengthOverflow)?;
     for number in first..end {
         let name = directory_name(number)?;
-        let entry_size = 4_usize
-            .checked_add(name.as_bytes().len())
-            .and_then(|value| value.checked_add(1 + 32))
-            .ok_or(CoreError::LengthOverflow)?;
+        let entry_size = DIRECTORY_ENTRY_ENCODED_BYTES;
         let next_size = encoded_size
             .checked_add(entry_size)
             .ok_or(CoreError::LengthOverflow)?;
@@ -7752,7 +8401,7 @@ fn greedy_directory_entries(
 fn build_directory(
     store: &mut Store,
     candidate: Candidate,
-    leading: bool,
+    total: usize,
     replacement: bool,
     metrics: &mut Metrics,
 ) -> AnyResult<(ObjectId, ObjectId)> {
@@ -7764,22 +8413,23 @@ fn build_directory(
     } else {
         None
     };
-    let mut pages = Vec::new();
     let mut start = 1_usize;
-    let total = if leading {
-        DIRECTORY_ENTRIES
-            .checked_add(1)
-            .ok_or(CoreError::LengthOverflow)?
-    } else {
-        DIRECTORY_ENTRIES
-    };
-    let last_number = if leading { total - 1 } else { total };
+    let entries_per_page = candidate
+        .directory_page
+        .checked_sub(13)
+        .ok_or(CoreError::NonCanonicalPagePartition)?
+        / DIRECTORY_ENTRY_ENCODED_BYTES;
+    let page_capacity = total
+        .checked_add(entries_per_page - 1)
+        .ok_or(CoreError::LengthOverflow)?
+        / entries_per_page;
+    let page_ref_bytes = std::mem::size_of::<dir_codec::DirectoryPageRef>()
+        .checked_add(DIRECTORY_NAME_BYTES)
+        .ok_or(CoreError::LengthOverflow)?;
+    let mut pages = ChargedVec::with_item_charge(page_capacity, page_ref_bytes, metrics)?;
+    let last_number = total;
     while start <= total {
-        let first_number = if leading {
-            start.saturating_sub(1)
-        } else {
-            start
-        };
+        let first_number = start;
         let page_child = if replacement
             && start <= DIRECTORY_ENTRIES / 2
             && start.checked_add(1).ok_or(CoreError::LengthOverflow)? > DIRECTORY_ENTRIES / 2
@@ -7788,7 +8438,8 @@ fn build_directory(
         } else {
             child
         };
-        let entries = greedy_directory_entries(first_number, last_number, page_child, candidate)?;
+        let entries =
+            greedy_directory_entries(first_number, last_number, page_child, candidate, metrics)?;
         let count = entries.len();
         let (id, _) = page_object(store, &entries, metrics)?;
         pages.push(dir_codec::DirectoryPageRef {
@@ -7812,7 +8463,7 @@ fn build_directory(
         )?,
         metrics,
     )?;
-    let wrapper = dir_codec::encode_directory_wrapper(metadata, index)?;
+    let wrapper = encode_charged_directory_wrapper(metadata, index, metrics)?;
     let root = object_id_accounted(&wrapper, metrics)?;
     store.put(root, &wrapper, metrics)?;
     add_len(&mut metrics.mapping_bytes_rewritten, wrapper.len())?;
@@ -7824,11 +8475,12 @@ fn directory_parts(
     store: &Store,
     root: ObjectId,
     metrics: &mut Metrics,
-) -> AnyResult<Vec<dir_codec::DirectoryPageRef>> {
+) -> AnyResult<ChargedVec<dir_codec::DirectoryPageRef>> {
     let (_object_charge, object, _object_bytes) = store.get(root, metrics)?;
     let Object::Directory(entries) = object else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
     if entries.len() != 2
         || entries[0].name().as_bytes() != b"m"
         || entries[1].name().as_bytes() != b"t"
@@ -7846,19 +8498,7 @@ fn directory_parts(
     let index = entries[1].reference().id();
     let (_index_charge, _, bytes) = store.get(index, metrics)?;
     let payload = file_codec::decode_mapping(&bytes, file_codec::DIR_INDEX_TAG)?;
-    Ok(dir_codec::parse_directory_index(payload)?)
-}
-
-fn directory_page_entries(
-    store: &Store,
-    id: ObjectId,
-    metrics: &mut Metrics,
-) -> AnyResult<Vec<DirectoryEntry>> {
-    let (_object_charge, object, _object_bytes) = store.get(id, metrics)?;
-    let Object::Directory(entries) = object else {
-        return Err(CoreError::WrongLogicalRole.into());
-    };
-    Ok(entries)
+    Ok(decode_charged_directory_page_refs(payload, metrics)?)
 }
 
 fn edit_directory(
@@ -7870,16 +8510,20 @@ fn edit_directory(
     let (_, parent, _, _) = store
         .current_head_accounted(metrics)?
         .ok_or(CoreError::MissingObject)?;
-    let (_parent_charge, _, parent_bytes) = store.get(parent, metrics)?;
-    let Object::Directory(parent_entries) = decode_object(&parent_bytes)? else {
+    let (_parent_charge, parent_object, _parent_bytes) = store.get(parent, metrics)?;
+    let Object::Directory(parent_entries) = parent_object else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
     let before_index = parent_entries
         .iter()
         .find(|entry| entry.name().as_bytes() == b"t")
         .ok_or(CoreError::WrongLogicalRole)?
         .reference()
         .id();
+    drop(parent_entries);
+    drop(_parent_bytes);
+    drop(_parent_charge);
     let old_pages = directory_parts(store, parent, metrics)?;
     store.begin(metrics)?;
     let child = if operation == "dir-replace" {
@@ -7891,8 +8535,10 @@ fn edit_directory(
     } else {
         empty_file_root(store, metrics)?
     };
-    let mut pages = Vec::new();
-    if operation == "dir-replace" {
+    let page_ref_bytes = std::mem::size_of::<dir_codec::DirectoryPageRef>()
+        .checked_add(DIRECTORY_NAME_BYTES)
+        .ok_or(CoreError::LengthOverflow)?;
+    let pages = if operation == "dir-replace" {
         let target = DIRECTORY_ENTRIES / 2;
         let mut seen = 0_usize;
         let (page_index, local) = old_pages
@@ -7906,9 +8552,13 @@ fn edit_directory(
                 result
             })
             .ok_or(CoreError::NonCanonicalPagePartition)?;
-        pages = old_pages.clone();
+        let mut pages = ChargedVec::with_item_charge(old_pages.len(), page_ref_bytes, metrics)?;
+        pages.extend(old_pages.iter().cloned());
         let page = &old_pages[page_index];
-        let mut entries = directory_page_entries(store, page.object_id, metrics)?;
+        let (_entries_charge, decoded_page, _page_bytes) = store.get(page.object_id, metrics)?;
+        let Object::Directory(mut entries) = decoded_page else {
+            return Err(CoreError::WrongLogicalRole.into());
+        };
         if local >= entries.len() {
             return Err(CoreError::NonCanonicalPagePartition.into());
         }
@@ -7922,10 +8572,20 @@ fn edit_directory(
             first_name: entries[0].name().as_bytes().to_vec(),
             object_id: id,
         };
+        pages
     } else {
-        let total = DIRECTORY_ENTRIES
-            .checked_add(1)
-            .ok_or(CoreError::LengthOverflow)?;
+        drop(old_pages);
+        let total = DIRECTORY_ENTRIES;
+        let entries_per_page = candidate
+            .directory_page
+            .checked_sub(13)
+            .ok_or(CoreError::NonCanonicalPagePartition)?
+            / DIRECTORY_ENTRY_ENCODED_BYTES;
+        let page_capacity = total
+            .checked_add(entries_per_page - 1)
+            .ok_or(CoreError::LengthOverflow)?
+            / entries_per_page;
+        let mut pages = ChargedVec::with_item_charge(page_capacity, page_ref_bytes, metrics)?;
         let mut start = 0_usize;
         while start < total {
             let entries = greedy_directory_entries(
@@ -7933,6 +8593,7 @@ fn edit_directory(
                 total.checked_sub(1).ok_or(CoreError::LengthOverflow)?,
                 child,
                 candidate,
+                metrics,
             )?;
             let count = entries.len();
             let (id, _) = page_object(store, &entries, metrics)?;
@@ -7943,7 +8604,8 @@ fn edit_directory(
             });
             start = start.checked_add(count).ok_or(CoreError::LengthOverflow)?;
         }
-    }
+        pages
+    };
     let metadata = put_mapping(
         store,
         encode_charged_directory_metadata(0, metrics)?,
@@ -7952,14 +8614,13 @@ fn edit_directory(
     let index = put_mapping(
         store,
         encode_charged_directory_index(
-            u32::try_from(DIRECTORY_ENTRIES + usize::from(operation == "dir-leading"))
-                .map_err(|_| CoreError::LengthOverflow)?,
+            u32::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
             &pages,
             metrics,
         )?,
         metrics,
     )?;
-    let wrapper = dir_codec::encode_directory_wrapper(metadata, index)?;
+    let wrapper = encode_charged_directory_wrapper(metadata, index, metrics)?;
     let root = object_id_accounted(&wrapper, metrics)?;
     store.put(root, &wrapper, metrics)?;
     add_len(&mut metrics.mapping_bytes_rewritten, wrapper.len())?;
@@ -7983,6 +8644,7 @@ fn verify_directory(
     root: ObjectId,
     candidate: Candidate,
     expected_entries: u64,
+    first_number: usize,
     expected_replacement: Option<(u64, ObjectId)>,
     metrics: &mut Metrics,
 ) -> AnyResult<[u8; 32]> {
@@ -7992,6 +8654,7 @@ fn verify_directory(
     let Object::Directory(wrapper) = object else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
     if wrapper.len() != 2
         || wrapper[0].name().as_bytes() != b"m"
         || wrapper[1].name().as_bytes() != b"t"
@@ -8022,20 +8685,16 @@ fn verify_directory(
         index_id,
         &index_bytes,
     )?;
-    let pages = dir_codec::parse_directory_index(file_codec::decode_mapping(
-        &index_bytes,
-        file_codec::DIR_INDEX_TAG,
-    )?)?;
+    let pages = decode_charged_directory_page_refs(
+        file_codec::decode_mapping(&index_bytes, file_codec::DIR_INDEX_TAG)?,
+        metrics,
+    )?;
     let mut partition = dir_codec::DirectoryPartitionValidator::new(candidate.directory_page);
     let mut total = 0_u64;
     let mut replacement_seen = false;
-    let mut expected_number = if expected_entries == DIRECTORY_ENTRIES as u64 + 1 {
-        0
-    } else {
-        1
-    };
-    let mut previous_last: Option<Vec<u8>> = None;
-    for page in &pages {
+    let mut expected_number = first_number;
+    let mut previous_last: Option<[u8; DIRECTORY_NAME_BYTES]> = None;
+    for page in pages.iter() {
         let (_page_charge, page_object, page_bytes) = store.get(page.object_id, metrics)?;
         observe_closure(
             &mut closure_hasher,
@@ -8046,6 +8705,7 @@ fn verify_directory(
         let Object::Directory(entries) = page_object else {
             return Err(CoreError::WrongLogicalRole.into());
         };
+        observe_directory_entries(metrics, &entries)?;
         partition.push(&entries, page)?;
         let page_start = expected_number;
         let page_child = entries
@@ -8053,18 +8713,16 @@ fn verify_directory(
             .ok_or(CoreError::NonCanonicalPagePartition)?
             .reference()
             .id();
-        let last_directory_number = if expected_entries == DIRECTORY_ENTRIES as u64 + 1 {
-            expected_entries
-                .checked_sub(1)
-                .ok_or(CoreError::LengthOverflow)?
-        } else {
-            expected_entries
-        };
+        let last_directory_number = first_number
+            .checked_add(usize::try_from(expected_entries).map_err(|_| CoreError::LengthOverflow)?)
+            .and_then(|value| value.checked_sub(1))
+            .ok_or(CoreError::LengthOverflow)?;
         let greedy = greedy_directory_entries(
             page_start,
-            usize::try_from(last_directory_number).map_err(|_| CoreError::LengthOverflow)?,
+            last_directory_number,
             page_child,
             candidate,
+            metrics,
         )?;
         if entries.len() != usize::try_from(page.count).map_err(|_| CoreError::LengthOverflow)?
             || entries.first().map(|entry| entry.name().as_bytes())
@@ -8074,7 +8732,8 @@ fn verify_directory(
             return Err(CoreError::NonCanonicalOrdering.into());
         }
         for entry in &entries {
-            if entry.name().as_bytes() != directory_name(expected_number)?.as_bytes() {
+            let expected_name = directory_name_bytes(expected_number)?;
+            if entry.name().as_bytes() != expected_name {
                 return Err(CoreError::NonCanonicalOrdering.into());
             }
             if previous_last
@@ -8083,7 +8742,7 @@ fn verify_directory(
             {
                 return Err(CoreError::NonCanonicalPagePartition.into());
             }
-            previous_last = Some(entry.name().as_bytes().to_vec());
+            previous_last = Some(expected_name);
             expected_number = expected_number
                 .checked_add(1)
                 .ok_or(CoreError::LengthOverflow)?;
@@ -8115,6 +8774,8 @@ fn verify_directory(
             if child.kind() != ObjectKind::Bytes {
                 return Err(CoreError::WrongLogicalRole.into());
             }
+            file_codec::decode_mapping(&child_bytes, file_codec::FILE_ROOT_TAG)?;
+            observe_tree_node_reconstruction(metrics)?;
             add(&mut metrics.closure_occurrences, 1)?;
             total = total.checked_add(1).ok_or(CoreError::LengthOverflow)?;
         }
@@ -8144,6 +8805,7 @@ fn lookup_directory_entry(
     let Object::Directory(wrapper) = root_object else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_tree_node_reconstruction(metrics)?;
     if wrapper.len() != 2
         || wrapper[0].name().as_bytes() != b"m"
         || wrapper[1].name().as_bytes() != b"t"
@@ -8158,10 +8820,10 @@ fn lookup_directory_entry(
         return Err(CoreError::WrongLogicalRole.into());
     }
     let (_index_charge, _, index_bytes) = store.get(wrapper[1].reference().id(), metrics)?;
-    let pages = dir_codec::parse_directory_index(file_codec::decode_mapping(
-        &index_bytes,
-        file_codec::DIR_INDEX_TAG,
-    )?)?;
+    let pages = decode_charged_directory_page_refs(
+        file_codec::decode_mapping(&index_bytes, file_codec::DIR_INDEX_TAG)?,
+        metrics,
+    )?;
     let selected = pages
         .partition_point(|page| page.first_name.as_slice() <= name.as_bytes())
         .checked_sub(1)
@@ -8176,6 +8838,7 @@ fn lookup_directory_entry(
     let Object::Directory(entries) = page_object else {
         return Err(CoreError::WrongLogicalRole.into());
     };
+    observe_directory_entries(metrics, &entries)?;
     if entries.len() != usize::try_from(descriptor.count).map_err(|_| CoreError::LengthOverflow)?
         || entries.first().map(|entry| entry.name().as_bytes())
             != Some(descriptor.first_name.as_slice())
@@ -8193,6 +8856,7 @@ fn lookup_directory_entry(
     let child = entry.reference().id();
     let (_child_charge, _, child_bytes) = store.get(child, metrics)?;
     file_codec::decode_mapping(&child_bytes, file_codec::FILE_ROOT_TAG)?;
+    observe_tree_node_reconstruction(metrics)?;
     Ok(child)
 }
 
@@ -8215,8 +8879,12 @@ fn verify_directory_lookups(
     for (label, number) in [
         ("directory-lookup-first", first),
         ("directory-lookup-middle", middle),
-        ("directory-lookup-last", DIRECTORY_ENTRIES),
+        (
+            "directory-lookup-last",
+            DIRECTORY_ENTRIES - usize::from(leading),
+        ),
     ] {
+        let _name_charge = charge_capacity(metrics, Q_DIRECTORY_ENTRY_BYTES)?;
         let name = directory_name(number)?;
         let authenticated_before = metrics.canonical_bytes_authenticated;
         let objects_before = metrics.objects_authenticated;
@@ -8230,6 +8898,7 @@ fn verify_directory_lookups(
         if actual != expected {
             return Err(CoreError::ChunkIdentityMismatch.into());
         }
+        observe_stream_output(metrics, 32)?;
         measurements.push(RangeMeasurement {
             label,
             range: number..number,
@@ -8352,7 +9021,7 @@ fn exact_owned(value: &str) -> CoreResult<String> {
 
 fn prepared_expectations_preflight_capacity(body: &str) -> AnyResult<(usize, usize)> {
     let mut lines = body.lines();
-    if lines.next() != Some("LFS-WP4M-EXPECTATIONS-2") {
+    if lines.next() != Some("LFS-WP4M-EXPECTATIONS-3") {
         return Err("prepared expectation version mismatch".into());
     }
     let _ = expected_value(lines.next(), "source_length=")?;
@@ -8374,6 +9043,7 @@ fn prepared_expectations_preflight_capacity(body: &str) -> AnyResult<(usize, usi
         }
     }
     let _ = expected_value(lines.next(), "base=")?;
+    let _ = expected_value(lines.next(), "result=")?;
     let oracle = expected_value(lines.next(), "oracle=")?;
     if oracle != "-" {
         let mut values = oracle.split(',');
@@ -8438,7 +9108,7 @@ fn prepared_expectations_preflight_capacity(body: &str) -> AnyResult<(usize, usi
 
 fn write_prepared_expectations(path: &Path, expected: &PreparedExpectations) -> AnyResult<()> {
     let mut body = format!(
-        "LFS-WP4M-EXPECTATIONS-2\nsource_length={}\nsource_fingerprint={}\n",
+        "LFS-WP4M-EXPECTATIONS-3\nsource_length={}\nsource_fingerprint={}\n",
         expected.source_length, expected.source_fingerprint
     );
     if let Some(point) = expected.edit_point {
@@ -8467,6 +9137,14 @@ fn write_prepared_expectations(path: &Path, expected: &PreparedExpectations) -> 
         ));
     } else {
         body.push_str("base=-\n");
+    }
+    if let Some((root, transition, closure)) = expected.result {
+        body.push_str(&format!(
+            "result={root},{transition},{}\n",
+            hex_bytes(&closure)
+        ));
+    } else {
+        body.push_str("result=-\n");
     }
     if let Some(oracle) = &expected.edit_oracle {
         body.push_str(&format!(
@@ -8552,7 +9230,7 @@ fn read_prepared_expectations(
     let (result_capacity, range_count) = prepared_expectations_preflight_capacity(body)?;
     let result_charge = charge_capacity(metrics, result_capacity)?;
     let mut lines = body.lines();
-    if lines.next() != Some("LFS-WP4M-EXPECTATIONS-2") {
+    if lines.next() != Some("LFS-WP4M-EXPECTATIONS-3") {
         return Err("prepared expectation version mismatch".into());
     }
     let source_length = expected_value(lines.next(), "source_length=")?.parse::<u64>()?;
@@ -8618,6 +9296,23 @@ fn read_prepared_expectations(
         }
         Some((root, transition, closure))
     };
+    let result = expected_value(lines.next(), "result=")?;
+    let result = if result == "-" {
+        None
+    } else {
+        let mut values = result.split(',');
+        let root = values.next().ok_or("missing result root")?.parse()?;
+        let transition = values.next().ok_or("missing result transition")?.parse()?;
+        let closure = values
+            .next()
+            .ok_or("missing result closure")?
+            .parse::<ObjectId>()?
+            .to_bytes();
+        if values.next().is_some() {
+            return Err("malformed prepared result".into());
+        }
+        Some((root, transition, closure))
+    };
     let oracle = expected_value(lines.next(), "oracle=")?;
     let edit_oracle = if oracle == "-" {
         None
@@ -8679,6 +9374,7 @@ fn read_prepared_expectations(
         expected_ranges,
         expected_probes,
         base,
+        result,
         edit_oracle,
     };
     if prepared_expectations_capacity(&value)? != result_capacity {
@@ -8729,8 +9425,171 @@ fn row_database_path(
     ))
 }
 
+fn template_root(root: &Path, candidate: Candidate, size: u64, operation: &str) -> PathBuf {
+    root.join("templates")
+        .join(candidate.name)
+        .join(size.to_string())
+        .join(operation)
+}
+
+fn template_database_path(
+    root: &Path,
+    candidate: Candidate,
+    size: u64,
+    operation: &str,
+) -> PathBuf {
+    row_database_path(
+        &template_root(root, candidate, size, operation),
+        candidate,
+        size,
+        operation,
+        0,
+    )
+}
+
+fn master_operation(operation: &str) -> &str {
+    match operation {
+        "same-middle" | "plus1-early" | "plus1-middle" => "same-middle",
+        "dir-lookup" | "dir-replace" => "dir-lookup",
+        _ => operation,
+    }
+}
+
+fn copy_file_bytes(source: &Path, destination: &Path) -> AnyResult<()> {
+    let mut input = File::open(source)?;
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)?;
+    let mut buffer = vec![0_u8; 1024 * 1024];
+    loop {
+        let read = input.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        output.write_all(&buffer[..read])?;
+    }
+    output.sync_all()?;
+    Ok(())
+}
+
+fn copy_row_start(
+    root: &Path,
+    candidate: Candidate,
+    size: u64,
+    operation: &str,
+    iteration: usize,
+) -> AnyResult<(String, String, String)> {
+    let destination = row_database_path(root, candidate, size, operation, iteration);
+    let destination_authority = authority_path(&destination);
+    let destination_expectations = expectations_path(&destination);
+    for path in [
+        destination.as_path(),
+        destination_authority.as_path(),
+        destination_expectations.as_path(),
+    ] {
+        if path.exists() {
+            return Err(format!("row start already exists: {}", path.display()).into());
+        }
+    }
+    let database_master =
+        template_database_path(root, candidate, size, master_operation(operation));
+    let expectation_master = template_database_path(root, candidate, size, operation);
+    copy_file_bytes(&database_master, &destination)?;
+    copy_file_bytes(&authority_path(&database_master), &destination_authority)?;
+    copy_file_bytes(
+        &expectations_path(&expectation_master),
+        &destination_expectations,
+    )?;
+    Ok((
+        executable_sha256(&destination)?,
+        executable_sha256(&destination_authority)?,
+        executable_sha256(&destination_expectations)?,
+    ))
+}
+
+fn prepare_campaign_templates(root: &Path) -> AnyResult<()> {
+    let manifest_path = root.join("wp4m-campaign-master-manifest.json");
+    if manifest_path.exists() || root.join("templates").exists() {
+        return Err("campaign templates or master manifest already exist".into());
+    }
+    let mut records = Vec::new();
+    for candidate in FILE_CANDIDATES {
+        for size in [SOURCE_100, SOURCE_512] {
+            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
+                let template = template_root(root, candidate, size, operation);
+                fs::create_dir_all(&template)?;
+                prepare_row_database(&template, root, candidate, size, operation, 0)?;
+                let database = template_database_path(root, candidate, size, operation);
+                let mut expectation_metrics = Metrics::default();
+                let expectation = read_prepared_expectations(
+                    &expectations_path(&database),
+                    &mut expectation_metrics,
+                )?;
+                let (result_root, result_transition, result_closure) = expectation
+                    .value
+                    .result
+                    .ok_or("template result golden is missing")?;
+                drop(expectation);
+                finish_q(&mut expectation_metrics)?;
+                records.push(format!(
+                    "{{\"candidate\":\"{}\",\"profile_id\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"result_root\":\"{result_root}\",\"result_transition\":\"{result_transition}\",\"result_closure\":\"{}\",\"database_sha256\":\"{}\",\"authority_sha256\":\"{}\",\"expectations_sha256\":\"{}\"}}",
+                    candidate.name,
+                    hex_bytes(&profile_id(candidate)?),
+                    hex_bytes(&result_closure),
+                    executable_sha256(&database)?,
+                    executable_sha256(&authority_path(&database))?,
+                    executable_sha256(&expectations_path(&database))?,
+                ));
+            }
+        }
+    }
+    for candidate in DIR_CANDIDATES {
+        for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
+            let template = template_root(root, candidate, SOURCE_100, operation);
+            fs::create_dir_all(&template)?;
+            prepare_row_database(&template, root, candidate, SOURCE_100, operation, 0)?;
+            let database = template_database_path(root, candidate, SOURCE_100, operation);
+            let mut expectation_metrics = Metrics::default();
+            let expectation = read_prepared_expectations(
+                &expectations_path(&database),
+                &mut expectation_metrics,
+            )?;
+            let (result_root, result_transition, result_closure) = expectation
+                .value
+                .result
+                .ok_or("template result golden is missing")?;
+            drop(expectation);
+            finish_q(&mut expectation_metrics)?;
+            records.push(format!(
+                "{{\"candidate\":\"{}\",\"profile_id\":\"{}\",\"size_bytes\":{},\"operation\":\"{operation}\",\"directory_entries\":{},\"result_root\":\"{result_root}\",\"result_transition\":\"{result_transition}\",\"result_closure\":\"{}\",\"database_sha256\":\"{}\",\"authority_sha256\":\"{}\",\"expectations_sha256\":\"{}\"}}",
+                candidate.name,
+                hex_bytes(&profile_id(candidate)?),
+                SOURCE_100,
+                DIRECTORY_ENTRIES,
+                hex_bytes(&result_closure),
+                executable_sha256(&database)?,
+                executable_sha256(&authority_path(&database))?,
+                executable_sha256(&expectations_path(&database))?,
+            ));
+        }
+    }
+    let mut manifest = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(manifest_path)?;
+    writeln!(
+        manifest,
+        "{{\"format\":1,\"purpose\":\"profile_selection\",\"templates\":[{}]}}",
+        records.join(",")
+    )?;
+    manifest.sync_all()?;
+    Ok(())
+}
+
 fn prepare_row_database(
     root: &Path,
+    source_root: &Path,
     candidate: Candidate,
     size: u64,
     operation: &str,
@@ -8738,7 +9597,7 @@ fn prepare_row_database(
 ) -> AnyResult<()> {
     let db_path = row_database_path(root, candidate, size, operation, iteration);
     remove_sqlite_image(&db_path)?;
-    let source = source_path(root, size);
+    let source = source_path(source_root, size);
     let (source_length, source_fingerprint) = source_hash(&source)?;
     if source_length != size {
         return Err(CoreError::LengthMismatch {
@@ -8750,8 +9609,18 @@ fn prepare_row_database(
     let edit_point = matches!(operation, "same-middle" | "plus1-early" | "plus1-middle")
         .then(|| prepared_edit_point(&source, operation))
         .transpose()?;
+    let observation_operation = if matches!(
+        operation,
+        "materialize-warm" | "materialize-fresh" | "read-range" | "reopen"
+    ) {
+        "full"
+    } else {
+        operation
+    };
     let observations = (!operation.starts_with("dir-"))
-        .then(|| expected_file_observations(&source, operation, source_length, candidate))
+        .then(|| {
+            expected_file_observations(&source, observation_operation, source_length, candidate)
+        })
         .transpose()?;
     let mut expected = match observations {
         Some((references, fingerprint, sequence, ranges, probes)) => PreparedExpectations {
@@ -8764,6 +9633,7 @@ fn prepare_row_database(
             expected_ranges: ranges,
             expected_probes: probes,
             base: None,
+            result: None,
             edit_oracle: None,
         },
         None => PreparedExpectations {
@@ -8776,11 +9646,21 @@ fn prepare_row_database(
             expected_ranges: Vec::new(),
             expected_probes: Vec::new(),
             base: None,
+            result: None,
             edit_oracle: None,
         },
     };
     let mut store = Store::open(&db_path, candidate)?;
-    let needs_file_base = matches!(operation, "same-middle" | "plus1-early" | "plus1-middle");
+    let needs_file_base = matches!(
+        operation,
+        "same-middle"
+            | "plus1-early"
+            | "plus1-middle"
+            | "materialize-warm"
+            | "materialize-fresh"
+            | "read-range"
+            | "reopen"
+    );
     let needs_directory_base = matches!(operation, "dir-lookup" | "dir-replace" | "dir-leading");
     if operation == "full" {
         drop(store);
@@ -8820,27 +9700,65 @@ fn prepare_row_database(
             transition_id,
             combined_closure_digest(transition_digest, content_digest),
         ));
+        expected.result = expected.base;
         oracle_store.publish(None, root_id, transition_id, &mut oracle_metrics)?;
         drop(oracle_store);
         write_prepared_expectations(&expectations_path(&db_path), &expected)?;
+        remove_sqlite_image(&oracle_path)?;
         return Ok(());
     }
     if !needs_file_base && !needs_directory_base {
+        if operation == "dir-create" {
+            let mut metrics = Metrics::default();
+            let (root, transition) = build_directory(
+                &mut store,
+                candidate,
+                DIRECTORY_ENTRIES,
+                false,
+                &mut metrics,
+            )?;
+            let transition_digest =
+                verify_transition(&store, transition, None, root, None, &mut metrics)?;
+            let content_digest = verify_directory(
+                &store,
+                root,
+                candidate,
+                DIRECTORY_ENTRIES as u64,
+                1,
+                None,
+                &mut metrics,
+            )?;
+            expected.result = Some((
+                root,
+                transition,
+                combined_closure_digest(transition_digest, content_digest),
+            ));
+            store.rollback(&mut metrics)?;
+        }
         drop(store);
         write_prepared_expectations(&expectations_path(&db_path), &expected)?;
         return Ok(());
     }
 
     let mut metrics = Metrics::default();
+    let directory_base_entries = DIRECTORY_ENTRIES
+        .checked_sub(usize::from(operation == "dir-leading"))
+        .ok_or(CoreError::LengthOverflow)?;
     let (root_id, transition_id) = if needs_file_base {
         build_file(
             &mut store,
-            &source_path(root, size),
+            &source_path(source_root, size),
             candidate,
             &mut metrics,
         )?
     } else {
-        build_directory(&mut store, candidate, false, false, &mut metrics)?
+        build_directory(
+            &mut store,
+            candidate,
+            directory_base_entries,
+            false,
+            &mut metrics,
+        )?
     };
     let transition_digest =
         verify_transition(&store, transition_id, None, root_id, None, &mut metrics)?;
@@ -8851,7 +9769,8 @@ fn prepare_row_database(
             &store,
             root_id,
             candidate,
-            u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+            u64::try_from(directory_base_entries).map_err(|_| CoreError::LengthOverflow)?,
+            1,
             None,
             &mut metrics,
         )?
@@ -8891,7 +9810,8 @@ fn prepare_row_database(
             &store,
             root_id,
             candidate,
-            u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+            u64::try_from(directory_base_entries).map_err(|_| CoreError::LengthOverflow)?,
+            1,
             None,
             &mut reopened_metrics,
         )?
@@ -8931,8 +9851,112 @@ fn prepare_row_database(
                 .as_deref()
                 .ok_or("missing edited CDC sequence")?,
         )?);
+        let oracle = expected
+            .edit_oracle
+            .as_ref()
+            .ok_or(CoreError::PublicationConflict)?;
+        expected.result = Some((
+            oracle.result_root,
+            oracle.result_transition,
+            oracle.result_closure,
+        ));
         drop(oracle_store);
         remove_sqlite_image(&oracle_path)?;
+    } else if operation == "dir-lookup"
+        || matches!(
+            operation,
+            "materialize-warm" | "materialize-fresh" | "read-range" | "reopen"
+        )
+    {
+        expected.result = expected.base;
+    } else {
+        let mut oracle_store = Store::open(&db_path, candidate)?;
+        let mut oracle_metrics = Metrics::default();
+        let prior = oracle_store
+            .current_head_accounted(&mut oracle_metrics)?
+            .ok_or(CoreError::InvalidValidationReceipt)?;
+        let (result_root, result_transition) = if operation.starts_with("plus1-") {
+            edit_file(
+                &mut oracle_store,
+                candidate,
+                operation,
+                expected.edit_point.ok_or(CoreError::MissingObject)?,
+                false,
+                &mut oracle_metrics,
+            )?
+        } else {
+            edit_directory(&mut oracle_store, candidate, operation, &mut oracle_metrics)?
+        };
+        let (path, before, after) = if operation.starts_with("dir-") {
+            (
+                &b"t"[..],
+                namespace_entry_id(&oracle_store, prior.1, b"t", &mut oracle_metrics)?,
+                namespace_entry_id(&oracle_store, result_root, b"t", &mut oracle_metrics)?,
+            )
+        } else {
+            (
+                &b"file"[..],
+                namespace_entry_id(&oracle_store, prior.1, b"file", &mut oracle_metrics)?,
+                namespace_entry_id(&oracle_store, result_root, b"file", &mut oracle_metrics)?,
+            )
+        };
+        let (operations, _operations_charge) =
+            charged_replace_operation(path, before, after, &mut oracle_metrics)?;
+        let transition_digest = verify_transition(
+            &oracle_store,
+            result_transition,
+            Some(prior.1),
+            result_root,
+            Some(&operations),
+            &mut oracle_metrics,
+        )?;
+        let content_digest = if operation.starts_with("dir-") {
+            let replacement = (operation == "dir-replace")
+                .then(|| {
+                    Ok::<_, Box<dyn std::error::Error>>((
+                        u64::try_from(DIRECTORY_ENTRIES / 2 + 1)
+                            .map_err(|_| CoreError::LengthOverflow)?,
+                        canonical_bytes(file_codec::encode_file_root(1, 0, 0, 0, &[])?)?.0,
+                    ))
+                })
+                .transpose()?;
+            verify_directory(
+                &oracle_store,
+                result_root,
+                candidate,
+                u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+                usize::from(operation != "dir-leading"),
+                replacement,
+                &mut oracle_metrics,
+            )?
+        } else {
+            verify_file(
+                &oracle_store,
+                result_root,
+                candidate,
+                expected.expected_fingerprint.as_deref(),
+                expected.expected_sequence.as_deref(),
+                &mut oracle_metrics,
+            )?
+            .0
+        };
+        expected.result = Some((
+            result_root,
+            result_transition,
+            combined_closure_digest(transition_digest, content_digest),
+        ));
+        oracle_store.rollback(&mut oracle_metrics)?;
+    }
+    if size == SOURCE_100 {
+        if let Some(frozen) = frozen_100_result(candidate, operation)? {
+            if Some(frozen) != expected.result {
+                return Err(format!(
+                    "frozen 100-MiB result mismatch for {} {operation}: frozen={frozen:?} actual={:?}",
+                    candidate.name, expected.result
+                )
+                .into());
+            }
+        }
     }
     require_amended_m45_expectations(candidate, size, operation, &expected)?;
     write_prepared_expectations(&expectations_path(&db_path), &expected)?;
@@ -9090,7 +10114,10 @@ fn write_environment_record(root: &Path, executable: &Path) -> AnyResult<String>
         .query_row("SELECT sqlite_version()", [], |row| row.get::<_, String>(0))?;
     let rustflags = env::var("RUSTFLAGS").unwrap_or_default();
     let encoded_rustflags = env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
-    let mut record = File::create(root.join("wp4m-profile-selection-environment.json"))?;
+    let mut record = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("wp4m-profile-selection-environment.json"))?;
     writeln!(
         record,
         "{{\"format\":1,\"build_command\":\"cargo build --release -p layerfs-engine --bin phase4_create_edit_benchmark\",\"build_profile\":\"release\",\"debug_assertions\":false,\"executable\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"git_commit\":\"{commit}\",\"git_status\":\"{}\",\"rustc_vv\":\"{}\",\"cargo_version\":\"{}\",\"target_triple\":\"{target}\",\"sqlite_version\":\"{sqlite}\",\"rustflags\":\"{}\",\"cargo_encoded_rustflags\":\"{}\",\"os_uname\":\"{}\",\"cpu\":\"{}\",\"memory_bytes\":\"{}\",\"logical_cpu_count\":\"{}\"}}",
@@ -9357,11 +10384,15 @@ fn row_json(
         wall_ns: phases.reconstruction_ns,
         available: true,
     };
-    let source_cdc_nested = !operation.starts_with("dir-");
+    let source_cdc_nested = matches!(
+        operation,
+        "full" | "same-middle" | "plus1-early" | "plus1-middle"
+    );
     let base_copy_method = match env::var("WP4M_BASE_COPY_METHOD").as_deref() {
-        Ok("physical-byte-copy-identical-database-authority") => {
-            "physical-byte-copy-identical-database-authority"
+        Ok("physical-byte-copy-identical-database-authority-expectations") => {
+            "physical-byte-copy-identical-database-authority-expectations"
         }
+        Ok("fixed-radix-acceptance-master-copy") => "fixed-radix-acceptance-master-copy",
         _ => "regenerated-isolated-database",
     };
     let base_database_sha256 =
@@ -9370,8 +10401,10 @@ fn row_json(
         env::var("WP4M_BASE_AUTHORITY_SHA256").unwrap_or_else(|_| "Unavailable".to_string());
     let base_expectations_sha256 =
         env::var("WP4M_BASE_EXPECTATIONS_SHA256").unwrap_or_else(|_| "Unavailable".to_string());
-    let precommit_reconstructs =
-        operation != "dir-lookup" && operation != "same-middle" && operation != "full";
+    let precommit_reconstructs = matches!(
+        operation,
+        "plus1-early" | "plus1-middle" | "dir-create" | "dir-replace" | "dir-leading"
+    );
     let qualification_mode_label = if operation == "full" {
         "C1-construction-proof"
     } else if operation == "same-middle" {
@@ -9382,11 +10415,23 @@ fn row_json(
     } else {
         "not-applicable"
     };
-    let (purpose, milestone) = if operation == "full" {
-        ("wp4m_f2_construction_proof", "F2")
+    let purpose = "profile_selection";
+    let milestone = "WP4-M";
+    let directory_row = operation.starts_with("dir-");
+    let reported_size_bytes = if directory_row { 0 } else { size };
+    let fixture_label = if directory_row {
+        "wide-directory-100000".to_string()
     } else {
-        ("wp4m_f1_commit_io_observability", "F1")
+        source_label(size)
     };
+    let file_height = expected_references
+        .map(|references| {
+            file_codec::expected_file_level(
+                references,
+                file_codec::FileMappingProfile::new(candidate.k, candidate.f),
+            )
+        })
+        .transpose()?;
     let (publication_status, publication_diagnostic) = match publication {
         Some(PublicationOutcome { status, diagnostic }) => {
             let status = match status {
@@ -9403,9 +10448,14 @@ fn row_json(
             let mut compact_writer = CompactStatusWriter($writer);
             let result = write!(
         &mut compact_writer,
-        "{{\"qualification\":false,\"promotion\":false,\"rejection\":false,\"purpose\":\"{purpose}\",\"milestone\":\"{milestone}\",\"throughput_measurement_admissible\":false,\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{size},\"input_size_bytes\":{size},\"operation\":\"{operation}\",\"qualification_mode\":\"{qualification_mode_label}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"build_profile\":\"release\",\"debug_assertions\":false,\"base_preparation_in_measured_interval\":false,\"base_copy_method\":\"{base_copy_method}\",\"pre_edit_database_sha256\":\"{base_database_sha256}\",\"pre_edit_authority_sha256\":\"{base_authority_sha256}\",\"pre_edit_expectations_sha256\":\"{base_expectations_sha256}\",\"source_cache_state\":\"warm_or_unknown_after_manifest_preflight\",\"store_state\":\"fresh_logical_store_cache_unknown\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{verification_ns},\"source_cdc_wall_ns\":\"NestedInCanonicalStage\",\"same_open_authority_establishment_wall_ns\":{authority_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"commit_dispatches\":{commit_dispatches},\"commit_returns\":{commit_returns},\"commit_return_successes\":{commit_return_successes},\"commit_return_errors\":{commit_return_errors},\"commit_return_status\":\"{commit_return_status}\",\"commit_publish_call_wall_ns\":{commit_publish_call_wall_ns},\"commit_dispatch_to_return_wall_ns\":{commit_dispatch_to_return_wall_ns},\"commit_pre_and_post_dispatch_wall_ns\":{commit_pre_and_post_dispatch_wall_ns},\"commit_caller_wrapper_wall_ns\":{commit_caller_wrapper_wall_ns},\"commit_observation_sum_wall_ns\":{commit_observation_sum_ns},\"commit_timer_equation_matches\":{commit_timer_equation_matches},\"commit_reconciliation_calls\":{commit_reconciliation_calls},\"commit_reconciliation_wall_ns\":{commit_reconciliation_wall_ns},\"commit_reconciliation_timer_nested\":true,\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":{source_cdc_nested},\"precommit_includes_reconstruction\":{precommit_reconstructs},\"phase_counters\":[{phase_metrics_json}],\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{raw_hashes},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{canonical_id_hashes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"changed_work_bytes\":{source_bytes_read},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"measurement_status\":{{\"phase_counters\":\"Observed\",\"identity_hash_bytes\":\"Observed\",\"borrowed_bytes_encoding\":\"Observed\",\"object_id_authentication_reuse\":\"Observed\",\"logical_q\":\"Observed\",\"w_d\":\"Unavailable: governing cumulative definitions are not implemented\",\"row_blob_copies\":\"Observed\",\"borrowed_row_blob_path\":\"Observed\",\"incremental_blob_api\":\"Observed\",\"cpu_rss\":\"Observed externally per child by /usr/bin/time -l\",\"other_heap_copy_bytes\":\"Unavailable\",\"sqlite_page_cache\":\"{sqlite_status_classification}\",\"sqlite_page_cache_true_high_water\":\"Unavailable: SQLITE_DBSTATUS_CACHE_USED high-water is always zero by API contract\",\"dirty_pages_current\":\"Unavailable: SQLite exposes dirty writes/spills but not current dirty-page count\",\"main_db_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"journal_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"sync_calls_wall\":\"Unavailable: VFS excluded; fs_usage/dtruss require unavailable privileges\",\"journal_true_peak\":\"Unavailable: DELETE journal can grow/disappear between snapshots\",\"temporary_file_peak\":\"Unavailable: no filename/peak API under temp_store=FILE\",\"host_physical_io_bytes\":\"Unavailable: not derived from logical/allocation/block-operation counters\",\"query_plans\":\"Unavailable\"}},\"sqlite_page_size_bytes\":{sqlite_page_size_bytes},\"sqlite_page_cache_used_bytes_before\":{sqlite_cache_used_before},\"sqlite_page_cache_used_bytes_before_dispatch\":{sqlite_cache_used_before_dispatch},\"sqlite_page_cache_used_bytes_after_return\":{sqlite_cache_used_after_return},\"sqlite_page_cache_snapshot_max_bytes\":{sqlite_page_cache_snapshot_max_bytes},\"sqlite_cache_hits\":{sqlite_cache_hits},\"sqlite_cache_misses\":{sqlite_cache_misses},\"sqlite_main_db_dirty_pages_written\":{sqlite_dirty_pages_written},\"sqlite_main_db_pager_write_bytes\":{sqlite_pager_write_bytes},\"sqlite_cache_spill_pages\":{sqlite_cache_spill_pages},\"sqlite_runtime_journal_mode\":\"delete\",\"sqlite_runtime_synchronous\":2,\"sqlite_runtime_temp_store\":1,\"sqlite_runtime_mmap_size\":0,\"sqlite_pre_logical_database_bytes\":{},\"sqlite_post_logical_database_bytes\":{},\"sqlite_pre_apparent_database_bytes\":{},\"sqlite_post_apparent_database_bytes\":{},\"sqlite_pre_allocated_database_bytes\":{},\"sqlite_post_allocated_database_bytes\":{},\"sqlite_pre_logical_store_bytes\":{},\"sqlite_post_logical_store_bytes\":{},\"sqlite_pre_apparent_store_bytes\":{},\"sqlite_post_apparent_store_bytes\":{},\"sqlite_pre_allocated_store_bytes\":{},\"sqlite_post_allocated_store_bytes\":{},\"allocated_store_delta_bytes\":{},\"commit_dispatch_db_apparent_bytes\":{commit_dispatch_db_apparent_bytes},\"commit_dispatch_journal_apparent_bytes\":{commit_dispatch_journal_apparent_bytes},\"commit_dispatch_authority_apparent_bytes\":{commit_dispatch_authority_apparent_bytes},\"commit_dispatch_db_allocated_bytes\":{commit_dispatch_db_allocated_bytes},\"commit_dispatch_journal_allocated_bytes\":{commit_dispatch_journal_allocated_bytes},\"commit_dispatch_authority_allocated_bytes\":{commit_dispatch_authority_allocated_bytes},\"commit_return_db_apparent_bytes\":{commit_return_db_apparent_bytes},\"commit_return_journal_apparent_bytes\":{commit_return_journal_apparent_bytes},\"commit_return_authority_apparent_bytes\":{commit_return_authority_apparent_bytes},\"commit_return_db_allocated_bytes\":{commit_return_db_allocated_bytes},\"commit_return_journal_allocated_bytes\":{commit_return_journal_allocated_bytes},\"commit_return_authority_allocated_bytes\":{commit_return_authority_allocated_bytes},\"journal_sampled_allocation_max_bytes\":{journal_sampled_allocation_max_bytes},\"physical_db_apparent_bytes\":{},\"physical_journal_apparent_bytes\":{},\"physical_authority_sidecar_apparent_bytes\":{},\"physical_db_allocated_bytes\":{},\"physical_journal_allocated_bytes\":{},\"physical_authority_sidecar_allocated_bytes\":{},\"physical_store_allocated_bytes\":{},\"peak_journal_bytes\":\"Unavailable\",\"peak_temporary_bytes\":\"Unavailable\",\"q_equation\":\"pre_admitted_checked_sum:canonical+decoded_nodes+file_refs+tree_nodes+dfs+cdc+sql+expectations+ranges+receipts+report\",\"q_high_water\":{logical_q_high_water},\"q_current\":{q_current},\"q_current_semantics\":\"after_report_output_drop\",\"q_report_output_bytes\":{report_output_bytes},\"q_cdc_base_live_bytes\":{q_cdc_base_live_bytes},\"q_cdc_old_window_bytes\":{q_cdc_old_window_bytes},\"q_cdc_scan_input_bytes\":{q_cdc_scan_input_bytes},\"q_cdc_overlap_current\":{q_cdc_overlap_current},\"q_fixed_envelope_removed\":true,\"leaf_batch_bound\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"w_bytes\":\"Unavailable\",\"d_bytes\":\"Unavailable\",\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_rewrite_bytes\":{canonical_rewrite_bytes},\"statement_cache_acquisitions\":{statement_cache_acquisitions},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_calls\":{},\"sql_rows_returned\":{},\"sql_query_calls\":{sql_query_calls},\"sql_execute_calls\":{sql_execute_calls},\"sql_rows_changed\":{sql_rows_changed},\"row_blob_reads\":{row_blob_reads},\"row_blob_writes\":{row_blob_writes},\"row_blob_copy_bytes\":{row_blob_copy_bytes},\"borrowed_row_blob_reads\":{borrowed_row_blob_reads},\"borrowed_row_blob_bytes\":{borrowed_row_blob_bytes},\"blob_api_status\":\"Observed\",\"blob_opens\":{},\"blob_reads\":{},\"blob_writes\":{},\"transactions\":{},\"commits\":{},\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\",\"busy_events\":\"Unavailable\",\"locked_events\":\"Unavailable\",\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"covered_equal_edges\":{covered_equal_edges},\"new_or_different_edges\":{new_or_different_edges},\"fully_authenticated_new_objects\":{fully_authenticated_new_objects},\"fully_authenticated_new_bytes\":{fully_authenticated_new_bytes},\"construction_put_evidences\":{construction_put_evidences},\"construction_edges_covered\":{construction_edges_covered},\"construction_leaf_summaries\":{construction_leaf_summaries},\"construction_branch_summaries\":{construction_branch_summaries},\"construction_file_summaries\":{construction_file_summaries},\"construction_workspace_summaries\":{construction_workspace_summaries},\"construction_transition_summaries\":{construction_transition_summaries},\"construction_proof_consumptions\":{construction_proof_consumptions},\"construction_source_hash_bytes\":{construction_source_hash_bytes},\"construction_source_hashes\":{construction_source_hashes},\"construction_cdc_entries\":{construction_cdc_entries},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"file_height\":\"Unavailable\",\"process_io\":\"Observed externally: separate user/system CPU and block-operation counts; byte-level physical I/O unavailable\",\"host_physical_io\":\"Unavailable\",\"physical_io_cache_sync_temp_journal_status\":\"Mixed: supported SQLite/filesystem snapshots observed; unsupported VFS/privileged facts unavailable with reasons\",\"publication_status\":\"{publication_status}\",\"receipt_provenance\":\"{receipt_provenance}\",\"error\":{error_json}}}",
+        "{{\"qualification\":false,\"promotion\":false,\"rejection\":false,\"purpose\":\"{purpose}\",\"milestone\":\"{milestone}\",\"throughput_measurement_admissible\":false,\"status\":\"{status}\",\"candidate\":\"{}\",\"profile_id\":\"{profile}\",\"size_bytes\":{reported_size_bytes},\"input_size_bytes\":{reported_size_bytes},\"directory_entries\":{},\"operation\":\"{operation}\",\"qualification_mode\":\"{qualification_mode_label}\",\"iteration\":{iteration},\"warmup\":{warmup},\"fixture\":\"{}\",\"fixture_manifest\":\"wp4m-retained-fixture-manifest.json\",\"source_fingerprint\":\"{source_fingerprint}\",\"expected_cdc_references\":{expected_references_json},\"expected_cdc_sequence_fingerprint\":{expected_sequence_json},\"actual_cdc_references\":{actual_references},\"ordered_closure_digest\":\"{closure_digest}\",\"root_id\":\"{}\",\"transition_id\":\"{}\",\"executable_sha256\":\"{executable_sha256}\",\"build_profile\":\"release\",\"debug_assertions\":false,\"base_preparation_in_measured_interval\":false,\"base_copy_method\":\"{base_copy_method}\",\"pre_edit_database_sha256\":\"{base_database_sha256}\",\"pre_edit_authority_sha256\":\"{base_authority_sha256}\",\"pre_edit_expectations_sha256\":\"{base_expectations_sha256}\",\"source_cache_state\":\"warm_or_unknown_after_manifest_preflight\",\"store_state\":\"fresh_logical_store_cache_unknown\",\"capture_publish_wall_ns\":{capture_ns},\"sqlite_qualification_wall_ns\":{verification_ns},\"elapsed_wall_ns\":{verification_ns},\"source_cdc_wall_ns\":\"NestedInCanonicalStage\",\"same_open_authority_establishment_wall_ns\":{authority_ns},\"canonical_cas_mapping_stage_wall_ns\":{canonical_stage_ns},\"precommit_closure_validation_wall_ns\":{precommit_ns},\"sqlite_commit_durability_wall_ns\":{commit_ns},\"commit_dispatches\":{commit_dispatches},\"commit_returns\":{commit_returns},\"commit_return_successes\":{commit_return_successes},\"commit_return_errors\":{commit_return_errors},\"commit_return_status\":\"{commit_return_status}\",\"commit_publish_call_wall_ns\":{commit_publish_call_wall_ns},\"commit_dispatch_to_return_wall_ns\":{commit_dispatch_to_return_wall_ns},\"commit_pre_and_post_dispatch_wall_ns\":{commit_pre_and_post_dispatch_wall_ns},\"commit_caller_wrapper_wall_ns\":{commit_caller_wrapper_wall_ns},\"commit_observation_sum_wall_ns\":{commit_observation_sum_ns},\"commit_timer_equation_matches\":{commit_timer_equation_matches},\"commit_reconciliation_calls\":{commit_reconciliation_calls},\"commit_reconciliation_wall_ns\":{commit_reconciliation_wall_ns},\"commit_reconciliation_timer_nested\":true,\"durable_capture_total_wall_ns\":{durable_ns},\"fresh_reopen_head_wall_ns\":{reopen_ns},\"fresh_full_scrub_wall_ns\":{scrub_ns},\"reconstruction_wall_ns\":{reconstruction_ns},\"range_verification_wall_ns\":{range_ns},\"complete_lifecycle_total_wall_ns\":{lifecycle_ns},\"durable_phase_sum_ns\":{durable_sum_ns},\"durable_phase_sum_matches\":{durable_matches},\"lifecycle_phase_sum_ns\":{lifecycle_sum_ns},\"lifecycle_phase_sum_matches\":{lifecycle_matches},\"source_cdc_nested_in_mapping_stage\":{source_cdc_nested},\"precommit_includes_reconstruction\":{precommit_reconstructs},\"phase_counters\":[{phase_metrics_json}],\"source_bytes_read\":{source_bytes_read},\"source_cdc_bytes_read\":{source_cdc_bytes_read},\"canonical_stage_source_bytes_read\":{canonical_stage_source_bytes_read},\"identity_bytes_hashed\":{identity_bytes_hashed},\"raw_bytes_hashed\":{raw_bytes_hashed},\"raw_hashes\":{raw_hashes},\"canonical_id_bytes_hashed\":{canonical_id_bytes_hashed},\"canonical_id_hashes\":{canonical_id_hashes},\"canonical_authentication_hash_bytes\":{canonical_authentication_hash_bytes},\"canonical_authentication_hashes\":{canonical_authentication_hashes},\"reused_object_id_authentications\":{reused_object_id_authentications},\"reused_object_id_authentication_bytes\":{reused_object_id_authentication_bytes},\"borrowed_bytes_encode_calls\":{borrowed_bytes_encode_calls},\"borrowed_bytes_encode_input_bytes\":{borrowed_bytes_encode_input_bytes},\"borrowed_source_encode_calls\":{borrowed_source_encode_calls},\"borrowed_source_encode_input_bytes\":{borrowed_source_encode_input_bytes},\"changed_work_bytes\":{source_bytes_read},\"capture_mib_s\":\"{capture_mib_s}\",\"complete_lifecycle_mib_s\":\"{complete_mib_s}\",\"scrub_authentication_mib_s\":\"Unavailable\",\"reconstruction_mib_s\":\"{reconstruction_mib_s}\",\"range_measurements\":[{ranges_json}],\"measurement_status\":{{\"phase_counters\":\"Observed\",\"identity_hash_bytes\":\"Observed\",\"borrowed_bytes_encoding\":\"Observed\",\"object_id_authentication_reuse\":\"Observed\",\"logical_q\":\"Observed\",\"w_d\":\"Observed\",\"row_blob_copies\":\"Observed\",\"borrowed_row_blob_path\":\"Observed\",\"incremental_blob_api\":\"Observed\",\"cpu_rss\":\"Observed externally per child by /usr/bin/time -l\",\"other_heap_copy_bytes\":\"Unavailable\",\"sqlite_page_cache\":\"{sqlite_status_classification}\",\"sqlite_page_cache_true_high_water\":\"Unavailable: SQLITE_DBSTATUS_CACHE_USED high-water is always zero by API contract\",\"dirty_pages_current\":\"Unavailable: SQLite exposes dirty writes/spills but not current dirty-page count\",\"main_db_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"journal_io_calls_bytes\":\"Unavailable: requires VFS xRead/xWrite or privileged syscall trace\",\"sync_calls_wall\":\"Unavailable: VFS excluded; fs_usage/dtruss require unavailable privileges\",\"journal_true_peak\":\"Unavailable: DELETE journal can grow/disappear between snapshots\",\"temporary_file_peak\":\"Unavailable: no filename/peak API under temp_store=FILE\",\"host_physical_io_bytes\":\"Unavailable: not derived from logical/allocation/block-operation counters\",\"query_plans\":\"Unavailable\"}},\"sqlite_page_size_bytes\":{sqlite_page_size_bytes},\"sqlite_page_cache_used_bytes_before\":{sqlite_cache_used_before},\"sqlite_page_cache_used_bytes_before_dispatch\":{sqlite_cache_used_before_dispatch},\"sqlite_page_cache_used_bytes_after_return\":{sqlite_cache_used_after_return},\"sqlite_page_cache_snapshot_max_bytes\":{sqlite_page_cache_snapshot_max_bytes},\"sqlite_cache_hits\":{sqlite_cache_hits},\"sqlite_cache_misses\":{sqlite_cache_misses},\"sqlite_main_db_dirty_pages_written\":{sqlite_dirty_pages_written},\"sqlite_main_db_pager_write_bytes\":{sqlite_pager_write_bytes},\"sqlite_cache_spill_pages\":{sqlite_cache_spill_pages},\"sqlite_runtime_journal_mode\":\"delete\",\"sqlite_runtime_synchronous\":2,\"sqlite_runtime_temp_store\":1,\"sqlite_runtime_mmap_size\":0,\"sqlite_pre_logical_database_bytes\":{},\"sqlite_post_logical_database_bytes\":{},\"sqlite_pre_apparent_database_bytes\":{},\"sqlite_post_apparent_database_bytes\":{},\"sqlite_pre_allocated_database_bytes\":{},\"sqlite_post_allocated_database_bytes\":{},\"sqlite_pre_logical_store_bytes\":{},\"sqlite_post_logical_store_bytes\":{},\"sqlite_pre_apparent_store_bytes\":{},\"sqlite_post_apparent_store_bytes\":{},\"sqlite_pre_allocated_store_bytes\":{},\"sqlite_post_allocated_store_bytes\":{},\"allocated_store_delta_bytes\":{},\"commit_dispatch_db_apparent_bytes\":{commit_dispatch_db_apparent_bytes},\"commit_dispatch_journal_apparent_bytes\":{commit_dispatch_journal_apparent_bytes},\"commit_dispatch_authority_apparent_bytes\":{commit_dispatch_authority_apparent_bytes},\"commit_dispatch_db_allocated_bytes\":{commit_dispatch_db_allocated_bytes},\"commit_dispatch_journal_allocated_bytes\":{commit_dispatch_journal_allocated_bytes},\"commit_dispatch_authority_allocated_bytes\":{commit_dispatch_authority_allocated_bytes},\"commit_return_db_apparent_bytes\":{commit_return_db_apparent_bytes},\"commit_return_journal_apparent_bytes\":{commit_return_journal_apparent_bytes},\"commit_return_authority_apparent_bytes\":{commit_return_authority_apparent_bytes},\"commit_return_db_allocated_bytes\":{commit_return_db_allocated_bytes},\"commit_return_journal_allocated_bytes\":{commit_return_journal_allocated_bytes},\"commit_return_authority_allocated_bytes\":{commit_return_authority_allocated_bytes},\"journal_sampled_allocation_max_bytes\":{journal_sampled_allocation_max_bytes},\"physical_db_apparent_bytes\":{},\"physical_journal_apparent_bytes\":{},\"physical_authority_sidecar_apparent_bytes\":{},\"physical_db_allocated_bytes\":{},\"physical_journal_allocated_bytes\":{},\"physical_authority_sidecar_allocated_bytes\":{},\"physical_store_allocated_bytes\":{},\"peak_journal_bytes\":\"Unavailable\",\"peak_temporary_bytes\":\"Unavailable\",\"q_equation\":\"pre_admitted_checked_sum:canonical+decoded_nodes+file_refs+tree_nodes+dfs+cdc+sql+expectations+ranges+receipts+report\",\"q_high_water\":{logical_q_high_water},\"q_current\":{q_current},\"q_current_semantics\":\"after_report_output_drop\",\"q_report_output_bytes\":{report_output_bytes},\"q_cdc_base_live_bytes\":{q_cdc_base_live_bytes},\"q_cdc_old_window_bytes\":{q_cdc_old_window_bytes},\"q_cdc_scan_input_bytes\":{q_cdc_scan_input_bytes},\"q_cdc_overlap_current\":{q_cdc_overlap_current},\"q_fixed_envelope_removed\":true,\"leaf_batch_bound\":{},\"leaf_batch_queries\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"leaf_batch_query_bytes_max\":{},\"w_equation\":\"canonical+payload_io+64*object+256*tree+directory_entry_charge+96*file_reference+delta_entry_charge+spool+receipt\",\"w_bytes\":{},\"d_equation\":\"streamed_or_spooled_output\",\"d_bytes\":{},\"payload_io_bytes\":{},\"tree_node_reconstruction_events\":{},\"directory_entry_reconstruction_events\":{},\"directory_entry_name_bytes\":{},\"file_reference_reconstruction_events\":{},\"delta_entry_reconstruction_events\":{},\"delta_entry_path_bytes\":{},\"traversal_spool_bytes_written\":{},\"receipt_evidence_bytes_hashed\":{},\"canonical_new_write_bytes\":{canonical_new_write_bytes},\"canonical_authenticated_nonnew_bytes\":{canonical_authenticated_nonnew_bytes},\"canonical_rewrite_bytes\":{canonical_rewrite_bytes},\"statement_cache_acquisitions\":{statement_cache_acquisitions},\"native_sqlite_prepare_calls\":\"Unavailable\",\"sql_calls\":{},\"sql_rows_returned\":{},\"sql_query_calls\":{sql_query_calls},\"sql_execute_calls\":{sql_execute_calls},\"sql_rows_changed\":{sql_rows_changed},\"row_blob_reads\":{row_blob_reads},\"row_blob_writes\":{row_blob_writes},\"row_blob_copy_bytes\":{row_blob_copy_bytes},\"borrowed_row_blob_reads\":{borrowed_row_blob_reads},\"borrowed_row_blob_bytes\":{borrowed_row_blob_bytes},\"blob_api_status\":\"Observed\",\"blob_opens\":{},\"blob_reads\":{},\"blob_writes\":{},\"transactions\":{},\"commits\":{},\"sync_fsync_observations\":\"Unavailable\",\"query_plans\":\"Unavailable\",\"busy_events\":\"Unavailable\",\"locked_events\":\"Unavailable\",\"objects_created\":{},\"objects_reused\":{},\"objects_authenticated\":{},\"canonical_bytes_authenticated\":{},\"canonical_bytes_written\":{},\"mapping_bytes_rewritten\":{},\"covered_equal_edges\":{covered_equal_edges},\"new_or_different_edges\":{new_or_different_edges},\"fully_authenticated_new_objects\":{fully_authenticated_new_objects},\"fully_authenticated_new_bytes\":{fully_authenticated_new_bytes},\"construction_put_evidences\":{construction_put_evidences},\"construction_edges_covered\":{construction_edges_covered},\"construction_leaf_summaries\":{construction_leaf_summaries},\"construction_branch_summaries\":{construction_branch_summaries},\"construction_file_summaries\":{construction_file_summaries},\"construction_workspace_summaries\":{construction_workspace_summaries},\"construction_transition_summaries\":{construction_transition_summaries},\"construction_proof_consumptions\":{construction_proof_consumptions},\"construction_source_hash_bytes\":{construction_source_hash_bytes},\"construction_source_hashes\":{construction_source_hashes},\"construction_cdc_entries\":{construction_cdc_entries},\"closure_occurrences\":{},\"chunks\":{},\"references\":{},\"pages\":{},\"branches\":{},\"suffix_references\":{},\"suffix_bytes\":{},\"suffix_objects\":{},\"file_height\":{},\"process_io\":\"Observed externally: separate user/system CPU and block-operation counts; byte-level physical I/O unavailable\",\"host_physical_io\":\"Unavailable\",\"physical_io_cache_sync_temp_journal_status\":\"Mixed: supported SQLite/filesystem snapshots observed; unsupported VFS/privileged facts unavailable with reasons\",\"publication_status\":\"{publication_status}\",\"receipt_provenance\":\"{receipt_provenance}\",\"error\":{error_json}}}",
         candidate.name,
-        if size == SOURCE_100 { "S1-100" } else { "S1-512" },
+        if operation.starts_with("dir-") {
+            DIRECTORY_ENTRIES
+        } else {
+            0
+        },
+        fixture_label,
         root,
         transition,
         JsonOptional(physical_before.logical_database),
@@ -9433,6 +10483,17 @@ fn row_json(
         metrics.leaf_batch_references,
         metrics.leaf_batch_references_max,
         metrics.leaf_batch_query_bytes_max,
+        metrics.w_bytes,
+        metrics.d_bytes,
+        metrics.payload_io_bytes,
+        metrics.tree_node_reconstruction_events,
+        metrics.directory_entry_reconstruction_events,
+        metrics.directory_entry_name_bytes,
+        metrics.file_reference_reconstruction_events,
+        metrics.delta_entry_reconstruction_events,
+        metrics.delta_entry_path_bytes,
+        metrics.traversal_spool_bytes_written,
+        metrics.receipt_evidence_bytes_hashed,
         sql_calls,
         metrics.sql_rows_returned,
         metrics.blob_opens,
@@ -9454,8 +10515,10 @@ fn row_json(
         metrics.suffix_references,
         metrics.suffix_bytes,
         metrics.suffix_objects,
+        JsonOptional(file_height),
         purpose = purpose,
         milestone = milestone,
+        reported_size_bytes = reported_size_bytes,
         qualification_mode_label = qualification_mode_label,
         authority_ns = phases.same_open_authority_establishment_ns,
         canonical_stage_ns = phases.canonical_cas_mapping_stage_ns,
@@ -9711,6 +10774,12 @@ struct CaptureOutcome {
     publication: PublicationOutcome,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RowValidation {
+    CaptureOnly,
+    CompleteRoundTrip,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn capture_same_middle(
     store: &mut Store,
@@ -9923,6 +10992,7 @@ fn run_row(
     operation: &str,
     iteration: usize,
     warmup: bool,
+    validation: RowValidation,
 ) -> AnyResult<ChargedString> {
     require_optimized_benchmark()?;
     let executable_sha256 = executable_sha256(&env::current_exe()?)?;
@@ -9944,19 +11014,25 @@ fn run_row(
     {
         return Err("row database was not prepared outside the measured process".into());
     }
-    if operation == "same-middle" {
-        if env::var("WP4M_BASE_COPY_METHOD").as_deref()
-            != Ok("physical-byte-copy-identical-database-authority")
-        {
-            return Err("same-middle row requires a physical byte-copied base".into());
-        }
-        require_file_custody_hash("WP4M_BASE_DATABASE_SHA256", &db_path)?;
-        require_file_custody_hash("WP4M_BASE_AUTHORITY_SHA256", &authority_path(&db_path))?;
-        require_file_custody_hash(
-            "WP4M_BASE_EXPECTATIONS_SHA256",
-            &expectations_path(&db_path),
-        )?;
+    let fast_lane = env::var("LAYERFS_FAST_LANE").as_deref() == Ok("1");
+    let fixed_radix_acceptance = env::var("LAYERFS_FIXED_RADIX_ACCEPTANCE").as_deref() == Ok("1");
+    let base_method = env::var("WP4M_BASE_COPY_METHOD");
+    let accepted_base = base_method.as_deref()
+        == Ok("physical-byte-copy-identical-database-authority-expectations")
+        || (fast_lane && base_method.as_deref() == Ok("fast-lane-isolated-prepared-row"))
+        || (fixed_radix_acceptance
+            && base_method.as_deref() == Ok("fixed-radix-acceptance-master-copy"));
+    if !accepted_base {
+        return Err(
+            "row requires a physical byte-copied database/authority/expectation start".into(),
+        );
     }
+    require_file_custody_hash("WP4M_BASE_DATABASE_SHA256", &db_path)?;
+    require_file_custody_hash("WP4M_BASE_AUTHORITY_SHA256", &authority_path(&db_path))?;
+    require_file_custody_hash(
+        "WP4M_BASE_EXPECTATIONS_SHA256",
+        &expectations_path(&db_path),
+    )?;
     let mut metrics = Metrics::default();
     let prepared = read_prepared_expectations(&expectations_path(&db_path), &mut metrics)?;
     require_amended_m45_expectations(candidate, size, operation, &prepared.value)?;
@@ -9972,6 +11048,7 @@ fn run_row(
                 expected_ranges,
                 expected_probes,
                 base,
+                result: prepared_result,
                 edit_oracle,
             },
         _charge: _prepared_expectations_charge,
@@ -9982,6 +11059,14 @@ fn run_row(
             actual: source_length,
         }
         .into());
+    }
+    let frozen_result = (size == SOURCE_100)
+        .then(|| frozen_100_result(candidate, operation))
+        .transpose()?
+        .flatten();
+    let prepared_result = prepared_result.ok_or("prepared row is missing its result golden")?;
+    if frozen_result.is_some_and(|frozen| frozen != prepared_result) {
+        return Err(CoreError::PublicationConflict.into());
     }
     if operation.starts_with("dir-") {
         if expected_reference_count.is_some()
@@ -10000,6 +11085,153 @@ fn run_row(
     {
         return Err("file row is missing prepared expectations".into());
     }
+    if matches!(
+        operation,
+        "materialize-warm" | "materialize-fresh" | "read-range" | "reopen"
+    ) {
+        let (base_root, base_transition, base_closure) =
+            base.ok_or("prepared read base is missing")?;
+        if prepared_result != (base_root, base_transition, base_closure) {
+            return Err(CoreError::PublicationConflict.into());
+        }
+
+        let mut metrics = Metrics::default();
+        let open_metrics_started = metrics;
+        let open_started = Instant::now();
+        let store = Store::open_measured(&db_path, candidate, &mut metrics)?;
+        let _head_receipt_charge = charge_capacity(&mut metrics, 216)?;
+        let head = store
+            .current_head_accounted(&mut metrics)?
+            .ok_or(CoreError::InvalidValidationReceipt)?;
+        if head.1 != base_root || head.2 != base_transition {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        drop(_head_receipt_charge);
+        let open_end = Instant::now();
+        let open_metrics_ended = metrics;
+
+        if operation == "materialize-warm" {
+            let (_, references, total) = reconstruct_file(
+                &store,
+                base_root,
+                candidate,
+                expected_fingerprint_owned.as_deref(),
+                expected_sequence_owned.as_deref(),
+                &mut metrics,
+            )?;
+            if Some(references) != expected_reference_count || total != source_length {
+                return Err(CoreError::PublicationConflict.into());
+            }
+        }
+
+        let physical_before = store.physical_snapshot();
+        let operation_metrics_started = metrics;
+        let operation_started = Instant::now();
+        let mut range_measurements = None;
+        let actual_references = if operation.starts_with("materialize-") {
+            let (_, references, total) = reconstruct_file(
+                &store,
+                base_root,
+                candidate,
+                expected_fingerprint_owned.as_deref(),
+                expected_sequence_owned.as_deref(),
+                &mut metrics,
+            )?;
+            if Some(references) != expected_reference_count || total != source_length {
+                return Err(CoreError::PublicationConflict.into());
+            }
+            references
+        } else if operation == "read-range" {
+            let file_root = resolve_namespace_file_root(&store, base_root, &mut metrics)?;
+            range_measurements = Some(verify_ranges(
+                &store,
+                file_root,
+                candidate,
+                &expected_probes,
+                &expected_ranges,
+                &mut metrics,
+            )?);
+            expected_reference_count.ok_or(CoreError::LengthOverflow)?
+        } else {
+            expected_reference_count.ok_or(CoreError::LengthOverflow)?
+        };
+        let operation_end = Instant::now();
+        let operation_metrics_ended = metrics;
+        let physical_after = store.physical_snapshot();
+        drop(store);
+
+        let mut phases = PhaseTimes::default();
+        if operation == "reopen" || operation == "materialize-fresh" {
+            phases.fresh_reopen_head_ns = open_end.duration_since(open_started).as_nanos();
+        }
+        if operation.starts_with("materialize-") {
+            phases.reconstruction_ns = operation_end.duration_since(operation_started).as_nanos();
+        } else if operation == "read-range" {
+            phases.range_verification_ns =
+                operation_end.duration_since(operation_started).as_nanos();
+        }
+        phases.complete_lifecycle_total_ns = if operation == "materialize-fresh" {
+            operation_end.duration_since(open_started).as_nanos()
+        } else if operation == "reopen" {
+            open_end.duration_since(open_started).as_nanos()
+        } else {
+            operation_end.duration_since(operation_started).as_nanos()
+        };
+        let phase_metrics = [
+            (
+                "fresh_reopen_head",
+                open_metrics_started,
+                open_metrics_ended,
+            ),
+            (
+                "read_operation",
+                operation_metrics_started,
+                operation_metrics_ended,
+            ),
+        ];
+        let range_slice: &[RangeMeasurement] = match &range_measurements {
+            Some(measurements) => measurements.as_slice(),
+            None => &[],
+        };
+        let ranges_json = range_measurements_json(range_slice, &mut metrics)?;
+        drop(range_measurements);
+        let report_source_fingerprint = ChargedString::from_str(&source_fingerprint, &mut metrics)?;
+        let report_expected_sequence = expected_sequence_owned
+            .as_deref()
+            .map(|value| ChargedString::from_str(value, &mut metrics))
+            .transpose()?;
+        drop(expected_ranges);
+        drop(expected_probes);
+        drop(expected_fingerprint_owned);
+        drop(expected_sequence_owned);
+        drop(source_fingerprint);
+        drop(_prepared_expectations_charge);
+        return row_json(
+            candidate,
+            size,
+            operation,
+            iteration,
+            warmup,
+            &report_source_fingerprint,
+            0,
+            phases.complete_lifecycle_total_ns,
+            base_root,
+            base_transition,
+            expected_reference_count,
+            report_expected_sequence.as_deref(),
+            actual_references,
+            base_closure,
+            metrics,
+            physical_before,
+            physical_after,
+            &phases,
+            &phase_metrics,
+            &ranges_json,
+            &executable_sha256,
+            None,
+            None,
+        );
+    }
     let (expected_edit_result, expected_replacement) = match (operation, edit_oracle) {
         ("same-middle", Some(oracle)) => {
             let point = edit_point.ok_or(CoreError::MissingObject)?;
@@ -10016,13 +11248,20 @@ fn run_row(
             {
                 return Err(CoreError::PublicationConflict.into());
             }
-            (Some(oracle.result()), Some(oracle.inserted))
+            let result = oracle.result();
+            if prepared_result != (result.root, result.transition, result.closure) {
+                return Err(CoreError::PublicationConflict.into());
+            }
+            (Some(result), Some(oracle.inserted))
         }
         ("same-middle", None) => return Err("same-middle row is missing its oracle".into()),
         (_, Some(_)) => return Err("non-same-middle row contains an edit oracle".into()),
         (_, None) => (None, None),
     };
-    let full_create_golden = (operation == "full").then_some(base).flatten();
+    let full_create_golden = (operation == "full").then_some(prepared_result);
+    if (operation == "full") && base != Some(prepared_result) {
+        return Err(CoreError::PublicationConflict.into());
+    }
     let qualification_mode = qualification_mode()?;
     let expected_dir_replacement = if operation == "dir-replace" {
         Some((
@@ -10040,6 +11279,9 @@ fn run_row(
     if operation == "dir-lookup" {
         let (base_root, base_transition, closure_digest) =
             base.ok_or("prepared directory base is missing")?;
+        if prepared_result != (base_root, base_transition, closure_digest) {
+            return Err(CoreError::PublicationConflict.into());
+        }
         let lookup_started = Instant::now();
         let lookup_metrics_started = metrics;
         let timed_head = store
@@ -10169,7 +11411,13 @@ fn run_row(
             durable_cursor = stage_end;
             (result.0, result.1)
         } else if operation == "dir-create" {
-            let result = build_directory(&mut store, candidate, false, false, &mut metrics)?;
+            let result = build_directory(
+                &mut store,
+                candidate,
+                DIRECTORY_ENTRIES,
+                false,
+                &mut metrics,
+            )?;
             let stage_end = Instant::now();
             phases.canonical_cas_mapping_stage_ns =
                 stage_end.duration_since(durable_cursor).as_nanos();
@@ -10224,8 +11472,8 @@ fn run_row(
                     &store,
                     root_id,
                     candidate,
-                    u64::try_from(DIRECTORY_ENTRIES + usize::from(operation == "dir-leading"))
-                        .map_err(|_| CoreError::LengthOverflow)?,
+                    u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+                    usize::from(operation != "dir-leading"),
                     expected_dir_replacement,
                     &mut metrics,
                 )?;
@@ -10312,6 +11560,83 @@ fn run_row(
         publication,
     } = capture_outcome;
     phases = capture_phases;
+    if validation == RowValidation::CaptureOnly {
+        if (root_id, transition_id) != (prepared_result.0, prepared_result.1)
+            || closure_digest.is_some_and(|digest| digest != prepared_result.2)
+        {
+            return committed_result(
+                root_id,
+                transition_id,
+                Err(CoreError::PublicationConflict.into()),
+            );
+        }
+        phases.complete_lifecycle_total_ns = capture_ns;
+        let physical_after = store.physical_snapshot();
+        drop(store);
+        let phase_metrics = [
+            (
+                "same_open_authority",
+                authority_metrics_started,
+                authority_metrics_ended,
+            ),
+            (
+                "canonical_cas_mapping",
+                mapping_metrics_started,
+                mapping_metrics_ended,
+            ),
+            (
+                "precommit_closure",
+                precommit_metrics_started,
+                precommit_metrics_ended,
+            ),
+            (
+                "sqlite_commit",
+                commit_metrics_started,
+                commit_metrics_ended,
+            ),
+        ];
+        let ranges_json = range_measurements_json(&[], &mut metrics)?;
+        drop(expected_operations);
+        drop(_expected_operations_charge);
+        let report_source_fingerprint = ChargedString::from_str(&source_fingerprint, &mut metrics)?;
+        let report_expected_sequence = expected_sequence_owned
+            .as_deref()
+            .map(|value| ChargedString::from_str(value, &mut metrics))
+            .transpose()?;
+        drop(expected_ranges);
+        drop(expected_probes);
+        drop(expected_fingerprint_owned);
+        drop(expected_sequence_owned);
+        drop(expected_replacement);
+        drop(source_fingerprint);
+        drop(_prepared_expectations_charge);
+        let output = row_json(
+            candidate,
+            size,
+            operation,
+            iteration,
+            warmup,
+            &report_source_fingerprint,
+            capture_ns,
+            capture_ns,
+            root_id,
+            transition_id,
+            expected_reference_count,
+            report_expected_sequence.as_deref(),
+            actual_references,
+            prepared_result.2,
+            metrics,
+            physical_before,
+            physical_after,
+            &phases,
+            &phase_metrics,
+            &ranges_json,
+            &executable_sha256,
+            Some(publication),
+            None,
+        )?;
+        return Ok(output);
+    }
     let postcommit = (move || -> AnyResult<ChargedString> {
         let reopen_started = commit_end;
         let reopen_metrics_started = metrics;
@@ -10344,8 +11669,8 @@ fn run_row(
                 &store,
                 root_id,
                 candidate,
-                u64::try_from(DIRECTORY_ENTRIES + usize::from(operation == "dir-leading"))
-                    .map_err(|_| CoreError::LengthOverflow)?,
+                u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+                usize::from(operation != "dir-leading"),
                 expected_dir_replacement,
                 &mut metrics,
             )?;
@@ -10367,8 +11692,8 @@ fn run_row(
                 &store,
                 root_id,
                 candidate,
-                u64::try_from(DIRECTORY_ENTRIES + usize::from(operation == "dir-leading"))
-                    .map_err(|_| CoreError::LengthOverflow)?,
+                u64::try_from(DIRECTORY_ENTRIES).map_err(|_| CoreError::LengthOverflow)?,
+                usize::from(operation != "dir-leading"),
                 expected_dir_replacement,
                 &mut metrics,
             )?;
@@ -10417,6 +11742,9 @@ fn run_row(
         if fresh_references != actual_references
             || closure_digest.is_some_and(|expected| expected != fresh_closure)
         {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        if prepared_result != (root_id, transition_id, fresh_closure) {
             return Err(CoreError::PublicationConflict.into());
         }
         validate_full_create_golden(full_create_golden, root_id, transition_id, fresh_closure)?;
@@ -10582,7 +11910,7 @@ fn self_test(root: &Path) -> AnyResult<()> {
     )?;
     if !matches!(
         store.current_head(),
-        Err(error) if error.downcast_ref::<CoreError>() == Some(&CoreError::InvalidValidationReceipt)
+        Err(error) if error.downcast_ref::<CoreError>() == Some(&CoreError::InvalidRecord("visible_head"))
     ) {
         return Err("invalid receipt accepted".into());
     }
@@ -10719,37 +12047,51 @@ fn decimal_seconds_to_ns(value: &str) -> Option<u128> {
         .and_then(|value| value.checked_add(nanoseconds))
 }
 
-fn external_resource_metrics(stderr: &str) -> (Option<u128>, Option<u64>) {
-    let mut user_ns = None;
-    let mut sys_ns = None;
-    let mut rss_bytes = None;
+#[derive(Clone, Copy, Debug, Default)]
+struct ExternalResourceMetrics {
+    user_cpu_ns: Option<u128>,
+    system_cpu_ns: Option<u128>,
+    rss_bytes: Option<u64>,
+    peak_footprint_bytes: Option<u64>,
+    block_input_operations: Option<u64>,
+    block_output_operations: Option<u64>,
+}
+
+fn external_resource_metrics(stderr: &str) -> ExternalResourceMetrics {
+    let mut metrics = ExternalResourceMetrics::default();
     for line in stderr.lines() {
         let tokens: Vec<&str> = line.split_whitespace().collect();
         if let Some(index) = tokens.iter().position(|token| *token == "user") {
             if index > 0 {
-                user_ns = decimal_seconds_to_ns(tokens[index - 1]);
+                metrics.user_cpu_ns = decimal_seconds_to_ns(tokens[index - 1]);
             }
         }
         if let Some(index) = tokens.iter().position(|token| *token == "sys") {
             if index > 0 {
-                sys_ns = decimal_seconds_to_ns(tokens[index - 1]);
+                metrics.system_cpu_ns = decimal_seconds_to_ns(tokens[index - 1]);
             }
         }
+        let first_number = || tokens.iter().find_map(|token| token.parse::<u64>().ok());
         if line.contains("maximum resident set size") {
-            rss_bytes = tokens
-                .iter()
-                .rev()
-                .find_map(|token| token.parse::<u64>().ok());
+            metrics.rss_bytes = first_number();
+        } else if line.contains("peak memory footprint") {
+            metrics.peak_footprint_bytes = first_number();
+        } else if line.contains("block input operations") {
+            metrics.block_input_operations = first_number();
+        } else if line.contains("block output operations") {
+            metrics.block_output_operations = first_number();
         }
     }
-    (
-        user_ns.and_then(|user| sys_ns.and_then(|sys| user.checked_add(sys))),
-        rss_bytes,
-    )
+    metrics
 }
 
 fn add_external_resource_metrics(stdout: &str, stderr: &str) -> AnyResult<String> {
-    let (cpu_ns, rss_bytes) = external_resource_metrics(stderr);
+    let metrics = external_resource_metrics(stderr);
+    let cpu_ns = metrics.user_cpu_ns.and_then(|user| {
+        metrics
+            .system_cpu_ns
+            .and_then(|system| user.checked_add(system))
+    });
     let mut line = stdout.trim_end().to_string();
     JsonObject::parse(&line)?;
     if line.pop() != Some('}') {
@@ -10757,9 +12099,14 @@ fn add_external_resource_metrics(stdout: &str, stderr: &str) -> AnyResult<String
     }
     writeln!(
         &mut line,
-        ",\"cpu_ns\":{},\"rss_bytes\":{}}}",
+        ",\"user_cpu_ns\":{},\"system_cpu_ns\":{},\"cpu_ns\":{},\"rss_bytes\":{},\"peak_footprint_bytes\":{},\"block_input_operations\":{},\"block_output_operations\":{}}}",
+        metrics.user_cpu_ns.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
+        metrics.system_cpu_ns.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
         cpu_ns.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
-        rss_bytes.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
+        metrics.rss_bytes.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
+        metrics.peak_footprint_bytes.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
+        metrics.block_input_operations.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
+        metrics.block_output_operations.map_or_else(|| "\"Unavailable\"".to_string(), |value| value.to_string()),
     )
     .map_err(|_| CoreError::Io)?;
     Ok(line)
@@ -10777,29 +12124,20 @@ fn invoke_campaign_row(
     failures: &mut File,
     commands: &mut File,
     resources: &mut File,
-    executable_sha256: &str,
+    started: &mut File,
+    returned: &mut File,
+    benchmark_sha256: &str,
 ) -> AnyResult<()> {
     let executable = env::current_exe()?;
-    let preparation_args = vec![
-        "--prepare-row".to_string(),
-        root.to_str().ok_or("non-UTF8 campaign root")?.to_string(),
-        candidate.name.to_string(),
-        size.to_string(),
-        operation.to_string(),
-        iteration.to_string(),
-    ];
-    writeln!(commands, "{:?} {:?}", executable, preparation_args)?;
-    let preparation = std::process::Command::new(&executable)
-        .args(&preparation_args)
-        .output()?;
-    if !preparation.status.success() {
-        return Err(format!(
-            "row preparation failed {}: {}",
-            candidate.name,
-            String::from_utf8_lossy(&preparation.stderr)
-        )
-        .into());
-    }
+    let (database_sha256, authority_sha256, expectations_sha256) =
+        copy_row_start(root, candidate, size, operation, iteration)?;
+    let row_id = format!("block-{iteration}-{}-{size}-{operation}", candidate.name);
+    writeln!(
+        started,
+        "{{\"row_id\":\"{row_id}\",\"candidate\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"database_sha256\":\"{database_sha256}\",\"authority_sha256\":\"{authority_sha256}\",\"expectations_sha256\":\"{expectations_sha256}\"}}",
+        candidate.name,
+    )?;
+    started.sync_all()?;
     let mut command = if Path::new("/usr/bin/time").is_file() {
         let mut command = std::process::Command::new("/usr/bin/time");
         command.arg("-l").arg(&executable);
@@ -10817,15 +12155,51 @@ fn invoke_campaign_row(
         warmup.to_string(),
     ];
     command.args(&args);
-    command.env("WP4M_EXECUTABLE_SHA256", executable_sha256);
+    command.env("WP4M_EXECUTABLE_SHA256", benchmark_sha256);
+    command.env(
+        "WP4M_BASE_COPY_METHOD",
+        "physical-byte-copy-identical-database-authority-expectations",
+    );
+    command.env("WP4M_BASE_DATABASE_SHA256", &database_sha256);
+    command.env("WP4M_BASE_AUTHORITY_SHA256", &authority_sha256);
+    command.env("WP4M_BASE_EXPECTATIONS_SHA256", &expectations_sha256);
     writeln!(
         commands,
-        "WP4M_EXECUTABLE_SHA256={} {:?} {:?}",
-        executable_sha256,
+        "WP4M_EXECUTABLE_SHA256={} WP4M_BASE_COPY_METHOD=physical-byte-copy-identical-database-authority-expectations WP4M_BASE_DATABASE_SHA256={} WP4M_BASE_AUTHORITY_SHA256={} WP4M_BASE_EXPECTATIONS_SHA256={} {:?} {:?}",
+        benchmark_sha256,
+        database_sha256,
+        authority_sha256,
+        expectations_sha256,
         command.get_program(),
         command.get_args().collect::<Vec<_>>()
     )?;
+    commands.sync_all()?;
     let result = command.output()?;
+    let row_root = root.join("rows");
+    fs::create_dir_all(&row_root)?;
+    let stdout_path = row_root.join(format!("{row_id}.stdout"));
+    let stderr_path = row_root.join(format!("{row_id}.time.stderr"));
+    let mut row_stdout = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stdout_path)?;
+    row_stdout.write_all(&result.stdout)?;
+    row_stdout.sync_all()?;
+    let mut row_stderr = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stderr_path)?;
+    row_stderr.write_all(&result.stderr)?;
+    row_stderr.sync_all()?;
+    writeln!(
+        returned,
+        "{{\"row_id\":\"{row_id}\",\"success\":{},\"exit_code\":{},\"stdout_sha256\":\"{}\",\"stderr_sha256\":\"{}\"}}",
+        result.status.success(),
+        result.status.code().map_or(-1, |code| code),
+        executable_sha256(&stdout_path)?,
+        executable_sha256(&stderr_path)?,
+    )?;
+    returned.sync_all()?;
     if !result.status.success() {
         let stderr = String::from_utf8_lossy(&result.stderr).replace('\n', " ");
         writeln!(
@@ -10837,6 +12211,14 @@ fn invoke_campaign_row(
             iteration,
             stderr.replace('"', "'")
         )?;
+        failures.sync_all()?;
+        writeln!(
+            output,
+            "{{\"qualification\":false,\"purpose\":\"profile_selection\",\"status\":\"FAIL\",\"row_id\":\"{row_id}\",\"candidate\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"error\":\"child exit {}\"}}",
+            candidate.name,
+            result.status.code().map_or(-1, |code| code),
+        )?;
+        output.sync_all()?;
         return Err(format!("row failed {}: {stderr}", candidate.name).into());
     }
     let stdout = String::from_utf8_lossy(&result.stdout);
@@ -10850,7 +12232,20 @@ fn invoke_campaign_row(
     if !result.stderr.ends_with(b"\n") {
         writeln!(resources)?;
     }
-    output.write_all(add_external_resource_metrics(&stdout, &stderr)?.as_bytes())?;
+    resources.sync_all()?;
+    match add_external_resource_metrics(&stdout, &stderr) {
+        Ok(row) => output.write_all(row.as_bytes())?,
+        Err(error) => {
+            writeln!(
+                output,
+                "{{\"qualification\":false,\"purpose\":\"profile_selection\",\"status\":\"FAIL\",\"row_id\":\"{row_id}\",\"candidate\":\"{}\",\"size_bytes\":{size},\"operation\":\"{operation}\",\"iteration\":{iteration},\"warmup\":{warmup},\"error\":\"strict row parse failed\"}}",
+                candidate.name,
+            )?;
+            output.sync_all()?;
+            return Err(error);
+        }
+    }
+    output.sync_all()?;
     Ok(())
 }
 
@@ -10970,7 +12365,7 @@ fn write_campaign_summary(root: &Path, jsonl: &Path, invocations: usize) -> AnyR
         )
         .map_err(|_| CoreError::Io)?;
     }
-    let gate = if invocations != 144 || warmup != 24 || measured != 120 || failures != 0 {
+    let gate = if invocations != 216 || warmup != 36 || measured != 180 || failures != 0 {
         "FAIL"
     } else {
         "INCONCLUSIVE"
@@ -10985,10 +12380,13 @@ fn write_campaign_summary(root: &Path, jsonl: &Path, invocations: usize) -> AnyR
         },
     );
     let summary_path = root.join("wp4m-profile-selection-summary.json");
-    let mut summary = File::create(&summary_path)?;
+    let mut summary = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&summary_path)?;
     writeln!(
         summary,
-        "{{\"format\":2,\"campaign_scope\":\"100MiB-mini-plus-wide-directory\",\"invocations\":{invocations},\"warmup\":{warmup},\"measured\":{measured},\"row_failures\":{failures},\"protected_metrics_available\":{protected_metrics_available},\"internal_500ms_diagnostic\":{diagnostic_500ms},\"sql_sensitivity\":\"INCONCLUSIVE-no-low-SQL-control\",\"paired_c0_c1\":{{\"pairs\":{causal_pairs},\"c1_wins\":{causal_wins},\"effects\":[{paired_effects}]}},\"admissibility\":\"{gate}\",\"reason\":\"512MiB scaling and profile selection are outside M4.5\",\"candidate_status\":{{\"K64-F64\":\"INCONCLUSIVE-default-not-promoted\",\"K59-F101\":\"INCONCLUSIVE\",\"K256-F256\":\"INCONCLUSIVE\",\"DIR64K\":\"INCONCLUSIVE\",\"DIR256K\":\"INCONCLUSIVE-default-not-promoted\",\"DIR1M\":\"INCONCLUSIVE\"}},\"rows\":[{rows}]}}"
+        "{{\"format\":3,\"campaign_scope\":\"WP4-M-100-512-file-plus-wide-directory\",\"purpose\":\"profile_selection\",\"invocations\":{invocations},\"warmup\":{warmup},\"measured\":{measured},\"row_failures\":{failures},\"protected_metrics_available\":{protected_metrics_available},\"internal_500ms_diagnostic\":{diagnostic_500ms},\"sql_sensitivity\":\"PENDING-independent-counter-analysis\",\"legacy_qualification_mode_pairs\":{{\"pairs\":{causal_pairs},\"wins\":{causal_wins},\"effects\":[{paired_effects}]}},\"admissibility\":\"{gate}\",\"reason\":\"preliminary in-process grouping only; two independent raw-derived analyzers control disposition\",\"candidate_status\":{{\"K64-F64\":\"PENDING-default-not-promoted\",\"K59-F101\":\"PENDING\",\"K256-F256\":\"PENDING\",\"DIR64K\":\"PENDING\",\"DIR256K\":\"PENDING-default-not-promoted\",\"DIR1M\":\"PENDING\"}},\"rows\":[{rows}]}}"
     )?;
     summary.sync_all()?;
     Ok(())
@@ -11003,6 +12401,296 @@ mod tests {
 
     const COW_TEST_REFERENCES: u64 = 4_100;
     const DEEP_COW_TEST_REFERENCES: u64 = 64 * 64 * 64 + 1;
+
+    #[test]
+    fn fast_fixture_is_deterministic_bounded_and_non_overwriting() {
+        let root = test_path("fast-fixture-root");
+        fs::create_dir_all(&root).expect("fixture root");
+        prepare_fast_fixture(&root, SOURCE_1).expect("prepare 1-MiB fixture");
+        assert_eq!(source_label(SOURCE_1), "S1-1");
+        assert_eq!(source_label(SOURCE_10), "S1-10");
+        assert_eq!(source_label(SOURCE_100), "S1-100");
+        assert_eq!(fast_operation("write").expect("write"), "full");
+        assert_eq!(
+            fast_operation("materialize-fresh").expect("materialize"),
+            "materialize-fresh"
+        );
+        assert!(fast_operation("campaign").is_err());
+        assert!(require_fast_size(SOURCE_1).is_ok());
+        assert!(require_fast_size(SOURCE_10).is_ok());
+        assert!(require_fast_size(SOURCE_100).is_ok());
+        assert!(require_fast_size(SOURCE_512).is_err());
+        assert_eq!(
+            fs::metadata(source_path(&root, SOURCE_1))
+                .expect("fixture")
+                .len(),
+            SOURCE_1
+        );
+        let record =
+            fs::read_to_string(root.join("phase4-fast-fixture.json")).expect("fixture record");
+        assert!(record.contains("\"fixture\":\"S1-1\""));
+        assert!(record.contains("\"size_bytes\":1048576"));
+        assert!(prepare_fast_fixture(&root, SOURCE_1).is_err());
+        assert!(prepare_fast_fixture(&root, SOURCE_512).is_err());
+        fs::remove_dir_all(root).expect("fixture cleanup");
+    }
+
+    #[test]
+    fn fixed_radix_acceptance_restricts_sizes_and_operations() {
+        assert!(require_fixed_radix_acceptance_size(SOURCE_1).is_ok());
+        assert!(require_fixed_radix_acceptance_size(SOURCE_10).is_ok());
+        assert!(require_fixed_radix_acceptance_size(SOURCE_100).is_ok());
+        assert!(require_fixed_radix_acceptance_size(SOURCE_512).is_err());
+        assert!(require_fixed_radix_acceptance_size(SOURCE_100 + 1).is_err());
+        assert_eq!(
+            [
+                "write",
+                "edit-same",
+                "edit-plus1-early",
+                "edit-plus1-middle",
+            ]
+            .map(|operation| {
+                fixed_radix_acceptance_operation(SOURCE_100, operation).expect("operation")
+            }),
+            ["full", "same-middle", "plus1-early", "plus1-middle"]
+        );
+        for size in [SOURCE_1, SOURCE_10] {
+            assert_eq!(
+                fixed_radix_acceptance_operation(size, "write").expect("write"),
+                "full"
+            );
+            for operation in ["edit-same", "edit-plus1-early", "edit-plus1-middle"] {
+                assert!(fixed_radix_acceptance_operation(size, operation).is_err());
+            }
+        }
+        assert!(fixed_radix_acceptance_operation(SOURCE_512, "write").is_err());
+        assert!(fixed_radix_acceptance_operation(SOURCE_100, "edit-plus1").is_err());
+        assert!(fixed_radix_acceptance_operation(SOURCE_100, "dir-create").is_err());
+    }
+
+    #[test]
+    fn wp4m_profiles_have_exact_ids_topology_goldens_and_q() {
+        assert_eq!(
+            frozen_100_result(FILE_CANDIDATES[0], "same-middle")
+                .expect("amended M4.5 golden")
+                .expect("amended M4.5 result"),
+            (
+                AMENDED_M45_RESULT_ROOT.parse().expect("root"),
+                AMENDED_M45_RESULT_TRANSITION.parse().expect("transition"),
+                AMENDED_M45_RESULT_CLOSURE
+                    .parse::<ObjectId>()
+                    .expect("closure")
+                    .to_bytes(),
+            )
+        );
+        let file_expected = [
+            (
+                "cbf5709c59629c812a6ed3e9ea94a9226deab71547d2ab6c0fca596ccfe357e9",
+                (83_u64, 2_u64, 86_u64, 365_143_u64),
+                (425_u64, 7_u64, 433_u64, 1_876_448_u64),
+            ),
+            (
+                "4b25fe3cbea42238c15008a36aa1a54cd4ce4ccf83e645d6f1ddecb0592bfcd2",
+                (90, 0, 91, 365_481),
+                (461, 5, 467, 1_878_758),
+            ),
+            (
+                "a56e2cd87ac827e81a9c361f83ff962f1d1c51719530f8c9fe32466dda3bf135",
+                (21, 0, 22, 360_789),
+                (107, 0, 108, 1_854_341),
+            ),
+        ];
+        for (candidate, (profile, topology_100, topology_512)) in
+            FILE_CANDIDATES.into_iter().zip(file_expected)
+        {
+            assert_eq!(hex_bytes(&profile_id(candidate).expect("profile")), profile);
+            for (references, expected) in [
+                (RETAINED_CDC_100, topology_100),
+                (RETAINED_CDC_512, topology_512),
+            ] {
+                let leaves = references.div_ceil(candidate.k as u64);
+                let mut current = leaves;
+                let mut branches = 0_u64;
+                let mut mapping = 68_u64
+                    .checked_mul(references)
+                    .and_then(|value| value.checked_add(28 * leaves))
+                    .expect("leaf mapping bytes");
+                while current > candidate.f as u64 {
+                    let next = current.div_ceil(candidate.f as u64);
+                    mapping = mapping
+                        .checked_add(40 * current + 29 * next)
+                        .expect("branch mapping bytes");
+                    branches += next;
+                    current = next;
+                }
+                let objects = leaves + branches + 1;
+                let mapping = mapping
+                    .checked_add(49 + 40 * current)
+                    .expect("mapping bytes");
+                assert_eq!((leaves, branches, objects, mapping), expected);
+            }
+            let mut metrics = Metrics::default();
+            let (_, expected_q) =
+                ordinary_frontier_bytes(candidate, RETAINED_CDC_100).expect("ordinary frontier");
+            let builder = FileBuilder::new(candidate, RETAINED_CDC_100, &mut metrics)
+                .expect("charged builder");
+            assert_eq!(q_current(), expected_q as u64);
+            drop(builder);
+            assert_eq!(q_current(), 0);
+            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
+                assert!(frozen_100_result(candidate, operation)
+                    .expect("frozen result")
+                    .is_some());
+            }
+        }
+
+        let directory_expected = [
+            (
+                "cbf5709c59629c812a6ed3e9ea94a9226deab71547d2ab6c0fca596ccfe357e9",
+                897_usize,
+                112_usize,
+            ),
+            (
+                "fb990cfac5a203c1d3a5adeddc407db51e0314ead9da4e19a5147a7a9edb08e7",
+                224,
+                447,
+            ),
+            (
+                "01475837ef4aeca16b0d31f7b5fa49033aae420e23b598e9185de42d37d2a388",
+                3_590,
+                28,
+            ),
+        ];
+        for (candidate, (profile, entries_per_page, pages)) in
+            DIR_CANDIDATES.into_iter().zip(directory_expected)
+        {
+            assert_eq!(hex_bytes(&profile_id(candidate).expect("profile")), profile);
+            assert_eq!(
+                (candidate.directory_page - 13) / DIRECTORY_ENTRY_ENCODED_BYTES,
+                entries_per_page
+            );
+            assert_eq!(DIRECTORY_ENTRIES.div_ceil(entries_per_page), pages);
+            let mut metrics = Metrics::default();
+            let entries = greedy_directory_entries(
+                1,
+                DIRECTORY_ENTRIES,
+                ObjectId::for_bytes(b"child"),
+                candidate,
+                &mut metrics,
+            )
+            .expect("charged directory page");
+            assert_eq!(entries.len(), entries_per_page);
+            assert_eq!(
+                q_current(),
+                u64::try_from(entries_per_page * Q_DIRECTORY_ENTRY_BYTES).expect("q")
+            );
+            drop(entries);
+            assert_eq!(q_current(), 0);
+            for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
+                assert!(frozen_100_result(candidate, operation)
+                    .expect("frozen result")
+                    .is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn w_and_d_overflow_before_mutating_any_counter() {
+        let mut output = Metrics {
+            d_bytes: u64::MAX,
+            ..Metrics::default()
+        };
+        let before = output;
+        assert_eq!(
+            observe_stream_output(&mut output, 1),
+            Err(CoreError::LengthOverflow)
+        );
+        assert_eq!(output.payload_io_bytes, before.payload_io_bytes);
+        assert_eq!(output.w_bytes, before.w_bytes);
+        assert_eq!(output.d_bytes, before.d_bytes);
+
+        let mut authentication = Metrics {
+            w_bytes: u64::MAX,
+            ..Metrics::default()
+        };
+        let before = authentication;
+        assert_eq!(
+            observe_authenticated_object(&mut authentication, 1),
+            Err(CoreError::LengthOverflow)
+        );
+        assert_eq!(
+            authentication.objects_authenticated,
+            before.objects_authenticated
+        );
+        assert_eq!(
+            authentication.canonical_bytes_authenticated,
+            before.canonical_bytes_authenticated
+        );
+        assert_eq!(authentication.w_bytes, before.w_bytes);
+    }
+
+    #[test]
+    fn every_directory_profile_rejects_an_authenticated_wrong_child_role() {
+        for candidate in DIR_CANDIDATES {
+            let database = test_path(&format!("wrong-directory-child-{}", candidate.name));
+            let mut metrics = Metrics::default();
+            {
+                let mut store = Store::open(&database, candidate).expect("open");
+                store.begin(&mut metrics).expect("begin");
+                let wrong_child = put_mapping(
+                    &mut store,
+                    encode_charged_directory_metadata(7, &mut metrics).expect("wrong child"),
+                    &mut metrics,
+                )
+                .expect("put wrong child");
+                let entry_charge =
+                    charge_capacity(&mut metrics, Q_DIRECTORY_ENTRY_BYTES).expect("entry charge");
+                let entries = vec![DirectoryEntry::new(
+                    directory_name(1).expect("name"),
+                    ObjectReference::new(ObjectKind::Bytes, wrong_child),
+                )];
+                let (page, _) = page_object(&mut store, &entries, &mut metrics).expect("page");
+                let page_ref_bytes =
+                    std::mem::size_of::<dir_codec::DirectoryPageRef>() + DIRECTORY_NAME_BYTES;
+                let mut pages =
+                    ChargedVec::with_item_charge(1, page_ref_bytes, &mut metrics).expect("pages");
+                pages.push(dir_codec::DirectoryPageRef {
+                    count: 1,
+                    first_name: entries[0].name().as_bytes().to_vec(),
+                    object_id: page,
+                });
+                let metadata = put_mapping(
+                    &mut store,
+                    encode_charged_directory_metadata(0, &mut metrics).expect("metadata"),
+                    &mut metrics,
+                )
+                .expect("put metadata");
+                let index = put_mapping(
+                    &mut store,
+                    encode_charged_directory_index(1, &pages, &mut metrics).expect("index"),
+                    &mut metrics,
+                )
+                .expect("put index");
+                let wrapper = encode_charged_directory_wrapper(metadata, index, &mut metrics)
+                    .expect("wrapper");
+                let root = object_id_accounted(&wrapper, &mut metrics).expect("root id");
+                store.put(root, &wrapper, &mut metrics).expect("put root");
+                let error = verify_directory(&store, root, candidate, 1, 1, None, &mut metrics)
+                    .expect_err("wrong child role");
+                assert_eq!(
+                    error.downcast_ref::<CoreError>(),
+                    Some(&CoreError::WrongLogicalRole)
+                );
+                store.rollback(&mut metrics).expect("rollback");
+                drop(wrapper);
+                drop(pages);
+                drop(entries);
+                drop(entry_charge);
+            }
+            finish_q(&mut metrics).expect("terminal Q");
+            remove_sqlite_image(&database).expect("cleanup");
+        }
+    }
 
     #[test]
     fn live_capacity_sums_overlap_and_decharges_on_errors() {
@@ -11191,8 +12879,9 @@ mod tests {
             commit_publish_call_wall_ns: 7,
             commit_dispatch_to_return_wall_ns: 4,
             q_high_water: 97,
-            w_bytes: 101,
-            d_bytes: 202,
+            payload_io_bytes: 20,
+            w_bytes: 125,
+            d_bytes: 20,
             ..Metrics::default()
         };
         let mut invalid = metrics;
@@ -11239,7 +12928,8 @@ mod tests {
         )
         .expect("row JSON");
         let object = JsonObject::parse(&json).expect("structural row JSON");
-        assert_eq!(object.string("milestone"), Some("F1"));
+        assert_eq!(object.string("milestone"), Some("WP4-M"));
+        assert_eq!(object.string("purpose"), Some("profile_selection"));
         assert_eq!(
             object.u128("q_high_water"),
             Some(u128::try_from(json.len()).expect("JSON length"))
@@ -11282,7 +12972,7 @@ mod tests {
             measurement_status.string("phase_counters"),
             Some(STATUS_OBSERVED)
         );
-        assert_eq!(measurement_status.string("w_d"), Some("U_WD"));
+        assert_eq!(measurement_status.string("w_d"), Some(STATUS_OBSERVED));
         assert_eq!(measurement_status.string("query_plans"), Some("U_PLAN"));
         assert_eq!(object.u128("commit_dispatches"), Some(1));
         assert_eq!(object.u128("commit_returns"), Some(1));
@@ -11310,8 +13000,8 @@ mod tests {
             object.string("physical_authority_sidecar_allocated_bytes"),
             Some("Unavailable")
         );
-        assert_eq!(object.string("w_bytes"), Some("U_WD"));
-        assert_eq!(object.string("d_bytes"), Some("U_WD"));
+        assert_eq!(object.u128("w_bytes"), Some(125));
+        assert_eq!(object.u128("d_bytes"), Some(20));
         assert_eq!(object.u128("covered_equal_edges"), Some(127));
         assert_eq!(object.u128("new_or_different_edges"), Some(4));
         assert_eq!(
@@ -11440,6 +13130,16 @@ mod tests {
                     .expect("base closure")
                     .to_bytes(),
             )),
+            result: Some((
+                AMENDED_M45_RESULT_ROOT.parse().expect("result root"),
+                AMENDED_M45_RESULT_TRANSITION
+                    .parse()
+                    .expect("result transition"),
+                AMENDED_M45_RESULT_CLOSURE
+                    .parse::<ObjectId>()
+                    .expect("result closure")
+                    .to_bytes(),
+            )),
             edit_oracle: Some(PreparedEditOracle {
                 operation: "same-middle".to_string(),
                 offset: AMENDED_M45_EDIT_OFFSET,
@@ -11540,7 +13240,8 @@ mod tests {
         let mut metrics = Metrics::default();
         store.begin(&mut metrics).expect("begin base");
         let reference = make_reference(&mut store, b"x", &mut metrics).expect("reference");
-        let mut builder = FileBuilder::new(candidate);
+        let mut builder =
+            FileBuilder::new(candidate, COW_TEST_REFERENCES, &mut metrics).expect("base builder");
         for _ in 0..COW_TEST_REFERENCES {
             builder
                 .push_reference(&mut store, reference, &mut metrics)
@@ -11918,6 +13619,69 @@ mod tests {
         finish_q(&mut metrics).expect("terminal Q");
         drop(store);
         remove_sqlite_image(&database).expect("database cleanup");
+        fs::remove_file(source).expect("source cleanup");
+    }
+
+    #[test]
+    fn f2_construction_proof_and_fresh_verification_cover_every_file_profile() {
+        let source = test_path("all-profile-construction.source");
+        fill_source(&source, 256 * 1024, 0x11).expect("source");
+        for candidate in FILE_CANDIDATES {
+            let (expected_references, fingerprint, sequence, _, _) =
+                expected_file_observations(&source, "full", 256 * 1024, candidate)
+                    .expect("expectations");
+            let database = test_path(&format!("all-profile-{}.sqlite", candidate.name));
+            let mut metrics = Metrics::default();
+            let (root, transition) = {
+                let mut store = Store::open(&database, candidate).expect("store");
+                store.begin(&mut metrics).expect("begin");
+                let (root, transition, mut proof) = build_file_construction(
+                    &mut store,
+                    &source,
+                    candidate,
+                    expected_references,
+                    &mut metrics,
+                )
+                .expect("construction");
+                store
+                    .mark_construction_proof_issued(&proof)
+                    .expect("issue proof");
+                let qualification = proof.consume(&mut store, &mut metrics).expect("proof");
+                assert_eq!(qualification.references, expected_references);
+                assert_eq!(
+                    (qualification.root, qualification.transition),
+                    (root, transition)
+                );
+                store
+                    .publish(None, root, transition, &mut metrics)
+                    .expect("publish");
+                drop(proof);
+                (root, transition)
+            };
+            {
+                let store = Store::open(&database, candidate).expect("fresh reopen");
+                let transition_digest =
+                    verify_transition(&store, transition, None, root, None, &mut metrics)
+                        .expect("transition");
+                let (content_digest, references, total) = verify_file(
+                    &store,
+                    root,
+                    candidate,
+                    Some(&fingerprint),
+                    Some(&sequence),
+                    &mut metrics,
+                )
+                .expect("fresh file");
+                assert_ne!(
+                    combined_closure_digest(transition_digest, content_digest),
+                    [0; 32]
+                );
+                assert_eq!(references, expected_references);
+                assert_eq!(total, 256 * 1024);
+            }
+            finish_q(&mut metrics).expect("terminal Q");
+            remove_sqlite_image(&database).expect("cleanup");
+        }
         fs::remove_file(source).expect("source cleanup");
     }
 
@@ -13171,7 +14935,7 @@ mod tests {
             })
             .expect("small deterministic same-count fixture");
         let candidate = FILE_CANDIDATES[0];
-        prepare_row_database(&root, candidate, size, "same-middle", 0)
+        prepare_row_database(&root, &root, candidate, size, "same-middle", 0)
             .expect("untimed preparation");
         let database = row_database_path(&root, candidate, size, "same-middle", 0);
         let mut store = Store::open(&database, candidate).expect("prepared store");
@@ -14714,7 +16478,7 @@ mod tests {
                 let error = store.current_head().expect_err("receipt length must fail");
                 assert_eq!(
                     error.downcast_ref::<CoreError>(),
-                    Some(&CoreError::InvalidValidationReceipt)
+                    Some(&CoreError::InvalidRecord("visible_head"))
                 );
             }
 
@@ -14768,7 +16532,7 @@ mod tests {
             .expect("corrupt authority must fail");
         assert_eq!(
             error.downcast_ref::<CoreError>(),
-            Some(&CoreError::InvalidValidationReceipt)
+            Some(&CoreError::InvalidRecord("store_authority"))
         );
         fs::write(&authority, authority_key).expect("restore authority");
         remove_sqlite_image(&after_database).expect("after cleanup");
@@ -15215,41 +16979,113 @@ fn run_campaign(root: &Path) -> AnyResult<()> {
     let executable_sha256 = write_environment_record(root, &executable)?;
     prepare_sources(root)?;
     let jsonl = root.join("wp4m-profile-selection.jsonl");
-    let mut output = File::create(&jsonl)?;
-    let mut failures = File::create(root.join("wp4m-profile-selection-failures.jsonl"))?;
-    let mut commands = File::create(root.join("wp4m-profile-selection-commands.txt"))?;
-    let mut resources = File::create(root.join("wp4m-profile-selection-resources.stderr"))?;
-    let mut invocations = 0_usize;
-    for iteration in 0..6 {
-        let warmup = iteration == 0;
-        let mut candidates = FILE_CANDIDATES.to_vec();
-        let candidate_count = candidates.len();
-        candidates.rotate_left(iteration % candidate_count);
-        for candidate in candidates {
+    let planned_path = root.join("wp4m-profile-selection-planned.tsv");
+    let started_path = root.join("wp4m-profile-selection-started.jsonl");
+    let returned_path = root.join("wp4m-profile-selection-returned.jsonl");
+    let mut planned = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&planned_path)?;
+    writeln!(
+        planned,
+        "row_id\tblock\twarmup\tcandidate\tsize_bytes\toperation\tposition"
+    )?;
+    for (block, candidate_order) in CAMPAIGN_ORDER.iter().enumerate() {
+        let warmup = block == 0;
+        for size in [SOURCE_100, SOURCE_512] {
             for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
-                invoke_campaign_row(
-                    root,
-                    candidate,
-                    SOURCE_100,
-                    operation,
-                    iteration,
-                    warmup,
-                    &mut output,
-                    &mut failures,
-                    &mut commands,
-                    &mut resources,
-                    &executable_sha256,
-                )?;
-                invocations = invocations
-                    .checked_add(1)
-                    .ok_or(CoreError::LengthOverflow)?;
+                for (position, candidate_index) in candidate_order.iter().enumerate() {
+                    let candidate = FILE_CANDIDATES[*candidate_index];
+                    writeln!(
+                        planned,
+                        "block-{block}-{}-{size}-{operation}\t{block}\t{warmup}\t{}\t{size}\t{operation}\t{position}",
+                        candidate.name,
+                        candidate.name,
+                    )?;
+                }
             }
         }
-        let mut directories = DIR_CANDIDATES.to_vec();
-        let directory_count = directories.len();
-        directories.rotate_left(iteration % directory_count);
-        for candidate in directories {
-            for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
+        for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
+            for (position, candidate_index) in candidate_order.iter().enumerate() {
+                let candidate = DIR_CANDIDATES[*candidate_index];
+                writeln!(
+                    planned,
+                    "block-{block}-{}-{}-{operation}\t{block}\t{warmup}\t{}\t{}\t{operation}\t{position}",
+                    candidate.name,
+                    SOURCE_100,
+                    candidate.name,
+                    SOURCE_100,
+                )?;
+            }
+        }
+    }
+    planned.sync_all()?;
+    if fs::read_to_string(&planned_path)?.lines().skip(1).count() != 216 {
+        return Err("planned schedule is not exactly 216 rows".into());
+    }
+    prepare_campaign_templates(root)?;
+    if q_current() != 0 {
+        return Err(CoreError::LengthMismatch {
+            expected: 0,
+            actual: q_current(),
+        }
+        .into());
+    }
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&jsonl)?;
+    let mut failures = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("wp4m-profile-selection-failures.jsonl"))?;
+    let mut commands = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("wp4m-profile-selection-commands.txt"))?;
+    let mut resources = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("wp4m-profile-selection-resources.stderr"))?;
+    let mut started = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&started_path)?;
+    let mut returned = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&returned_path)?;
+    let mut invocations = 0_usize;
+    for (iteration, candidate_order) in CAMPAIGN_ORDER.iter().enumerate() {
+        let warmup = iteration == 0;
+        for size in [SOURCE_100, SOURCE_512] {
+            for operation in ["full", "same-middle", "plus1-early", "plus1-middle"] {
+                for candidate_index in candidate_order {
+                    let candidate = FILE_CANDIDATES[*candidate_index];
+                    invoke_campaign_row(
+                        root,
+                        candidate,
+                        size,
+                        operation,
+                        iteration,
+                        warmup,
+                        &mut output,
+                        &mut failures,
+                        &mut commands,
+                        &mut resources,
+                        &mut started,
+                        &mut returned,
+                        &executable_sha256,
+                    )?;
+                    invocations = invocations
+                        .checked_add(1)
+                        .ok_or(CoreError::LengthOverflow)?;
+                }
+            }
+        }
+        for operation in ["dir-create", "dir-lookup", "dir-replace", "dir-leading"] {
+            for candidate_index in candidate_order {
+                let candidate = DIR_CANDIDATES[*candidate_index];
                 invoke_campaign_row(
                     root,
                     candidate,
@@ -15261,6 +17097,8 @@ fn run_campaign(root: &Path) -> AnyResult<()> {
                     &mut failures,
                     &mut commands,
                     &mut resources,
+                    &mut started,
+                    &mut returned,
                     &executable_sha256,
                 )?;
                 invocations = invocations
@@ -15270,12 +17108,31 @@ fn run_campaign(root: &Path) -> AnyResult<()> {
         }
     }
     output.sync_all()?;
-    if invocations != 144 {
-        return Err(format!("campaign invocation count {invocations}, expected 144").into());
+    if invocations != 216 {
+        return Err(format!("campaign invocation count {invocations}, expected 216").into());
     }
     failures.sync_all()?;
     commands.sync_all()?;
     resources.sync_all()?;
+    started.sync_all()?;
+    returned.sync_all()?;
+    for (path, expected) in [
+        (&started_path, 216_usize),
+        (&returned_path, 216_usize),
+        (&jsonl, 216_usize),
+    ] {
+        let actual = fs::read_to_string(path)?
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count();
+        if actual != expected {
+            return Err(format!(
+                "custody row count {}: {actual}, expected {expected}",
+                path.display()
+            )
+            .into());
+        }
+    }
     write_campaign_summary(root, &jsonl, invocations)?;
     println!(
         "campaign COMPLETE invocations={invocations} jsonl={} summary={}",
@@ -15285,32 +17142,213 @@ fn run_campaign(root: &Path) -> AnyResult<()> {
     Ok(())
 }
 
+fn fast_operation(value: &str) -> AnyResult<&'static str> {
+    match value {
+        "write" => Ok("full"),
+        "edit-same" => Ok("same-middle"),
+        "edit-plus1" => Ok("plus1-middle"),
+        "materialize-warm" => Ok("materialize-warm"),
+        "materialize-fresh" => Ok("materialize-fresh"),
+        "read-range" => Ok("read-range"),
+        "reopen" => Ok("reopen"),
+        _ => Err("unknown fast operation".into()),
+    }
+}
+
+fn require_fast_size(size: u64) -> AnyResult<()> {
+    if matches!(size, SOURCE_1 | SOURCE_10 | SOURCE_100) {
+        Ok(())
+    } else {
+        Err("fast rows are limited to 1, 10, or 100 MiB".into())
+    }
+}
+
+fn fixed_radix_acceptance_operation(size: u64, value: &str) -> AnyResult<&'static str> {
+    require_fixed_radix_acceptance_size(size)?;
+    let operation = match value {
+        "write" => "full",
+        "edit-same" => "same-middle",
+        "edit-plus1-early" => "plus1-early",
+        "edit-plus1-middle" => "plus1-middle",
+        _ => return Err("fixed-radix acceptance operations are write, edit-same, edit-plus1-early, or edit-plus1-middle".into()),
+    };
+    if size != SOURCE_100 && operation != "full" {
+        return Err("fixed-radix acceptance edits are limited to 100 MiB".into());
+    }
+    Ok(operation)
+}
+
+fn require_fixed_radix_acceptance_size(size: u64) -> AnyResult<()> {
+    if matches!(size, SOURCE_1 | SOURCE_10 | SOURCE_100) {
+        Ok(())
+    } else {
+        Err("fixed-radix acceptance rows are limited to 1, 10, or 100 MiB".into())
+    }
+}
+
+fn require_archival_override() -> AnyResult<()> {
+    if env::var("LAYERFS_ALLOW_RETIRED_PROFILE_CAMPAIGN").as_deref() == Ok("1") {
+        Ok(())
+    } else {
+        Err("retired profile machinery requires an explicit archival override".into())
+    }
+}
+
 fn main() -> AnyResult<()> {
     let args: Vec<String> = env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("--self-test") => self_test(Path::new(args.get(2).ok_or("missing self-test root")?)),
-        Some("--prepare-fixtures") => {
+        Some("--prepare-fixtures") | Some("--campaign") => Err(
+            "the exhaustive WP4-M profile campaign is retired; use the bounded --fast-* lane"
+                .into(),
+        ),
+        Some("--retired-prepare-fixtures") => {
+            require_archival_override()?;
             prepare_retained_fixtures(Path::new(args.get(2).ok_or("missing fixture root")?))
         }
-        Some("--campaign") => run_campaign(Path::new(args.get(2).ok_or("missing campaign root")?)),
+        Some("--fast-fixture") => {
+            let root = Path::new(args.get(2).ok_or("missing fast fixture root")?);
+            let size = args.get(3).ok_or("missing fast fixture size")?.parse::<u64>()?;
+            prepare_fast_fixture(root, size)
+        }
+        Some("--fast-prepare") => {
+            let root = Path::new(args.get(2).ok_or("missing fast row root")?);
+            let size = args.get(3).ok_or("missing fast row size")?.parse::<u64>()?;
+            require_fast_size(size)?;
+            let operation = fast_operation(args.get(4).ok_or("missing fast operation")?)?;
+            let iteration = args.get(5).ok_or("missing iteration")?.parse::<usize>()?;
+            prepare_row_database(root, root, FILE_CANDIDATES[0], size, operation, iteration)
+        }
+        Some("--fast-row") => {
+            let root = Path::new(args.get(2).ok_or("missing fast row root")?);
+            let size = args.get(3).ok_or("missing fast row size")?.parse::<u64>()?;
+            require_fast_size(size)?;
+            let operation = fast_operation(args.get(4).ok_or("missing fast operation")?)?;
+            let iteration = args.get(5).ok_or("missing iteration")?.parse::<usize>()?;
+            let warmup = args.get(6).ok_or("missing warmup")?.parse::<bool>()?;
+            let validation = match args.get(7).map(String::as_str) {
+                Some("capture-only") => RowValidation::CaptureOnly,
+                Some("complete-roundtrip") => RowValidation::CompleteRoundTrip,
+                _ => return Err("invalid fast row validation scope".into()),
+            };
+            let output = run_row(
+                root,
+                FILE_CANDIDATES[0],
+                size,
+                operation,
+                iteration,
+                warmup,
+                validation,
+            )?;
+            println!("{output}");
+            drop(output);
+            if q_current() != 0 {
+                return Err(CoreError::LengthMismatch {
+                    expected: 0,
+                    actual: q_current(),
+                }
+                .into());
+            }
+            Ok(())
+        }
+        Some("--fixed-radix-acceptance-fixtures") => prepare_fixed_radix_acceptance_fixtures(
+            Path::new(args.get(2).ok_or("missing fixed-radix fixture root")?),
+        ),
+        Some("--fixed-radix-acceptance-prepare") => {
+            let root = Path::new(args.get(2).ok_or("missing fixed-radix row root")?);
+            let size = args
+                .get(3)
+                .ok_or("missing fixed-radix row size")?
+                .parse::<u64>()?;
+            require_fixed_radix_acceptance_size(size)?;
+            let operation = fixed_radix_acceptance_operation(
+                size,
+                args.get(4).ok_or("missing fixed-radix operation")?,
+            )?;
+            let iteration = args.get(5).ok_or("missing iteration")?.parse::<usize>()?;
+            prepare_row_database(root, root, FILE_CANDIDATES[0], size, operation, iteration)
+        }
+        Some("--fixed-radix-acceptance-row") => {
+            let root = Path::new(args.get(2).ok_or("missing fixed-radix row root")?);
+            let size = args
+                .get(3)
+                .ok_or("missing fixed-radix row size")?
+                .parse::<u64>()?;
+            require_fixed_radix_acceptance_size(size)?;
+            let operation = fixed_radix_acceptance_operation(
+                size,
+                args.get(4).ok_or("missing fixed-radix operation")?,
+            )?;
+            let iteration = args.get(5).ok_or("missing iteration")?.parse::<usize>()?;
+            let warmup = args.get(6).ok_or("missing warmup")?.parse::<bool>()?;
+            let validation = match args.get(7).map(String::as_str) {
+                Some("capture-only") => RowValidation::CaptureOnly,
+                Some("complete-roundtrip") if operation == "full" => {
+                    RowValidation::CompleteRoundTrip
+                }
+                _ => return Err("invalid fixed-radix row validation scope".into()),
+            };
+            let output = run_row(
+                root,
+                FILE_CANDIDATES[0],
+                size,
+                operation,
+                iteration,
+                warmup,
+                validation,
+            )?;
+            println!("{output}");
+            drop(output);
+            if q_current() != 0 {
+                return Err(CoreError::LengthMismatch {
+                    expected: 0,
+                    actual: q_current(),
+                }
+                .into());
+            }
+            Ok(())
+        }
+        Some("--retired-profile-campaign") => {
+            require_archival_override()?;
+            run_campaign(Path::new(args.get(2).ok_or("missing campaign root")?))
+        }
         Some("--prepare-row") => {
+            require_archival_override()?;
             let root = Path::new(args.get(2).ok_or("missing row root")?);
             let candidate = candidate_by_name(args.get(3).ok_or("missing candidate")?)?;
             let size = args.get(4).ok_or("missing size")?.parse::<u64>()?;
             let operation = args.get(5).ok_or("missing operation")?;
             let iteration = args.get(6).ok_or("missing iteration")?.parse::<usize>()?;
-            prepare_row_database(root, candidate, size, operation, iteration)
+            prepare_row_database(root, root, candidate, size, operation, iteration)
         }
         Some("--row") => {
+            require_archival_override()?;
             let root = Path::new(args.get(2).ok_or("missing row root")?);
             let candidate = candidate_by_name(args.get(3).ok_or("missing candidate")?)?;
             let size = args.get(4).ok_or("missing size")?.parse::<u64>()?;
             let operation = args.get(5).ok_or("missing operation")?;
             let iteration = args.get(6).ok_or("missing iteration")?.parse::<usize>()?;
             let warmup = args.get(7).ok_or("missing warmup")?.parse::<bool>()?;
-            println!("{}", run_row(root, candidate, size, operation, iteration, warmup)?);
+            let output = run_row(
+                root,
+                candidate,
+                size,
+                operation,
+                iteration,
+                warmup,
+                RowValidation::CompleteRoundTrip,
+            )?;
+            println!("{output}");
+            drop(output);
+            if q_current() != 0 {
+                return Err(CoreError::LengthMismatch {
+                    expected: 0,
+                    actual: q_current(),
+                }
+                .into());
+            }
             Ok(())
         }
-        _ => Err("usage: --self-test ROOT | --prepare-fixtures ROOT | --campaign ROOT | --prepare-row ROOT CANDIDATE SIZE OP ITERATION | --row ROOT CANDIDATE SIZE OP ITERATION WARMUP".into()),
+        _ => Err("usage: --self-test ROOT | --fast-fixture ROOT SIZE | --fast-prepare ROOT SIZE OPERATION ITERATION | --fast-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --fixed-radix-acceptance-fixtures ROOT | --fixed-radix-acceptance-prepare ROOT SIZE OPERATION ITERATION | --fixed-radix-acceptance-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip}".into()),
     }
 }
