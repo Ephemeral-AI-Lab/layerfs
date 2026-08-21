@@ -2359,7 +2359,7 @@ impl Store {
             return Err(CoreError::ProfileMismatch.into());
         }
         connection.execute_batch(
-            "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0;",
+            "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0; PRAGMA cache_spill=2000;",
         )?;
         let synchronous =
             connection.query_row("PRAGMA synchronous", [], |row| row.get::<_, i64>(0))?;
@@ -13143,6 +13143,60 @@ mod tests {
 
     const COW_TEST_REFERENCES: u64 = 4_100;
     const DEEP_COW_TEST_REFERENCES: u64 = 64 * 64 * 64 + 1;
+
+    #[test]
+    fn g1_writer_memory_runtime_policy_is_connection_local_and_format_preserving() {
+        let database = test_path("g1-writer-memory.sqlite");
+        let store = Store::open(&database, SELECTED_PROFILE).expect("candidate store");
+        let pragma = |name| {
+            store
+                .connection
+                .query_row(&format!("PRAGMA {name}"), [], |row| row.get::<_, i64>(0))
+                .expect("runtime pragma")
+        };
+        assert_eq!(pragma("cache_spill"), 2_000);
+        assert_eq!(pragma("cache_size"), 2_000);
+        assert_eq!(pragma("synchronous"), 2);
+        assert_eq!(pragma("temp_store"), 1);
+        assert_eq!(pragma("mmap_size"), 0);
+        assert_eq!(pragma("page_size"), 4_096);
+        assert_eq!(
+            store
+                .connection
+                .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
+                .expect("journal mode"),
+            "delete"
+        );
+        let (profile, schema): (Vec<u8>, i64) = store
+            .connection
+            .query_row(
+                "SELECT profile_id, schema_version FROM wp4m_meta WHERE id=1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("format profile");
+        assert_eq!(profile, profile_id());
+        assert_eq!(schema, 5);
+        drop(store);
+
+        let raw = Connection::open(&database).expect("raw reopen");
+        assert_eq!(
+            raw.query_row("PRAGMA cache_spill", [], |row| row.get::<_, i64>(0))
+                .expect("connection-local default"),
+            20_000
+        );
+        assert_eq!(
+            raw.query_row(
+                "SELECT profile_id, schema_version FROM wp4m_meta WHERE id=1",
+                [],
+                |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .expect("unchanged format profile"),
+            (profile_id().to_vec(), 5)
+        );
+        drop(raw);
+        remove_sqlite_image(&database).expect("cleanup");
+    }
 
     #[test]
     fn fast_fixture_is_deterministic_bounded_and_non_overwriting() {

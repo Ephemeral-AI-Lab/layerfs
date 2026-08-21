@@ -1,0 +1,27 @@
+kind	path_or_value	sha256_or_value	note
+parent_head	git	286eb7a456165f5417ff0dfcfb603aed07f2e074	G0 committed checkpoint
+profile_id	canonical-v2	94a03ba7b6c97b5ff37c0ec62ef1d801b9896494b45456bd3df23e2cb278d13b	unchanged profile
+fastcdc_source	crates/layerfs-core/src/cdc/mod.rs	bc0346eec113914943d046a4ab4742420acfff570d6b00115082c40bdf8e58b6	unchanged FastCDC v2 source
+control_source	git:286eb7a456165f5417ff0dfcfb603aed07f2e074:crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs	16e9beedd2fe49d6da65f89f53f488cffbfdcfc71f10477e854cd2d37d00e120	cache_spill default 20000
+candidate_source	crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs	157699e0cd4cb1e3b5ec631cefb7c967ff7433bdeeb10ee1336e70961b402ad2	retained cache_spill 2000 plus focused test
+candidate_diff	git diff --binary -- benchmark source	3e167cdcdc267ad18452f03960d6dd45a9ab1e137c0cc6b967722e65990e6a09	source-only G1 diff
+control_executable	target/phase4-fastcdc-contiguous-region-kernel-20260821-v2/operands-v1/phase4_create_edit_benchmark-fastcdc-contiguous-region-kernel-v2	454bc2f3deacd8581a3cc352c8b7495215cdc103a85580606246ea12bb25eba8	exact G0 control
+candidate_executable	target/phase4-g1-writer-memory-build-20260821-v1/release/phase4_create_edit_benchmark	42e3ddeb15df298c978b14639690e366fbb26ee55851524d42c6c3e9c0e8bd55	once-built retained candidate
+fixture	target/phase4-canonical-v2-complete-validation-20260821-v1/results-v1/work-v1/fixtures/S1-100.source	63b3695b8c117b5bc39885e0df0dcd0af1d49e575482bab16577d84b4f40eff4	104857600 bytes
+common_base_database	target/phase4-fastcdc-contiguous-region-kernel-20260821-v2/results-v1/durable-v2/work-v1/master-B/db-K64-F64-104857600-full-970001.sqlite	8657363e0f90d61bdb911c138a734b66c6adf4cd2dcd50c63c1ca1dae814e30	shared empty base
+common_base_authority	target/phase4-fastcdc-contiguous-region-kernel-20260821-v2/results-v1/durable-v2/work-v1/master-B/db-K64-F64-104857600-full-970001.sqlite.authority	7855ea6096359925f639b91c8d6b9708cfe0bc0df4a3ffd97a280a8e9a9ded48	shared authority
+common_base_expectations	target/phase4-fastcdc-contiguous-region-kernel-20260821-v2/results-v1/durable-v2/work-v1/master-B/db-K64-F64-104857600-full-970001.sqlite.expectations	a7489b01445e53aa8a0c5824059b8a6b04f92e15a3b6cf953fbb4c83d6b5e18a	shared expectations
+preregistration	implementation-detail/phase-4/experiments/g1-writer-memory/PROSPECTIVE-G1-WRITER-MEMORY-v1.md	d73b3c070ddf17635f1e9e5ed8a40296bf7c5a884a283ca955d274a29858c660	frozen before timing
+methodology	implementation-detail/phase-4/experiments/g1-writer-memory/METHODOLOGY-MANIFEST-v1.tsv	da9a54d938275fb1064ecc8fa511521951dd5b308c2dc784d9383a00059e2116	four payloads verified
+dry_run	implementation-detail/phase-4/experiments/g1-writer-memory/DRY-RUN-v1.json	40e0324e651f7c3dc2e78c939591691c6c799c16b29d0a378b4eb89aed4a50fe	zero measured rows; centers 6.5/6.5
+schedule	target/phase4-g1-writer-memory-cache-spill-20260821-v1/results-v1/G1-SCHEDULE-v1.tsv	c288ee4aaf8f8179dab0da0f7e1c4175b0b64815279d409b797e9f67e4748efb	10 invocations; 8 measured
+raw	target/phase4-g1-writer-memory-cache-spill-20260821-v1/results-v1/rows-v1/G1-RAW-v1.jsonl	3b4ca568ac3fbf3dd32fc1fb74f2bd3b14bad5aa3800e964cf47cbd847a58520	complete one-shot rows
+primary_analysis	target/phase4-g1-writer-memory-cache-spill-20260821-v1/results-v1/G1-ANALYSIS-v1.json	2c2a042930d7b97eba6115953201737e30282e26e2e9b0c983ad33ea0e636187	measured PASS
+independent_recomputation	target/phase4-g1-writer-memory-cache-spill-20260821-v1/results-v1/INDEPENDENT-RECOMPUTATION-v1.json	ddc289b7b612857204f288c16c7404b14fe362727af41398359a7c59ef3e1f9f	exact controlling agreement
+payload_manifest	target/phase4-g1-writer-memory-cache-spill-20260821-v1/results-v1/PAYLOAD-MANIFEST-v1.tsv	f02664ea4d82a73126584ed6197b4cea5bc3a21fc08a1562488a7c253dac2a3c	78 entries
+terminal	target/phase4-g1-writer-memory-cache-spill-20260821-v1/results-v1/TERMINAL-v1.json	54692f9a8d4445bb7c6e17738b0bbb781c8554aad8111d881aa3826d35fc2f07	PASS under 20 seconds
+terminal_verification	target/phase4-g1-writer-memory-cache-spill-20260821-v1/results-v1/TERMINAL-VERIFICATION-v1.txt	0c89f9913b09ffe1259419b532e70e8d124244e0a942d6f8db20d4cdaeca2b85	manifest verified
+static_closure	target/phase4-g1-writer-memory-static-20260821-v1/STATIC-CLOSURE-v1.json	8c512b39a04481174fb4e9729d5385284d63e9fd5eb10b8a56f144b400d47566	142 passed; 1 ignored
+static_manifest	target/phase4-g1-writer-memory-static-20260821-v1/STATIC-MANIFEST-v1.tsv	5f45a0be4123ee6f440dd8388ce8ba903b8036f8a824c5651ab2a9538f03245c	one static payload
+static_verification	target/phase4-g1-writer-memory-static-20260821-v1/STATIC-VERIFICATION-v1.txt	7d4b2e256e788a1907d887bb7af73189e76f09ee2bf898c229636bfc4dc38064	static manifest verified
+baseline_report	implementation-detail/phase-4/baseline/sqlite-writer-memory-cache-spill-2000-baseline-v1.md	75c1baff105c0de5557c4e7201ece4884d43dad6304e4e19c6a5fd26f9e812b6	versioned retained G1 baseline

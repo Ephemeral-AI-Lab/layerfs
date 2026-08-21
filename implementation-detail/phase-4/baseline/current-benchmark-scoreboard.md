@@ -1,17 +1,18 @@
 # Phase-4 current benchmark scoreboard
 
-Status: **Phase 4 active — FastCDC v2 retained**
+Status: **Phase 4 active — G1 writer-memory policy retained**
 
 Date: 2026-08-21
-Current executable: `454bc2f3deacd8581a3cc352c8b7495215cdc103a85580606246ea12bb25eba8`
+Current executable: `42e3ddeb15df298c978b14639690e366fbb26ee55851524d42c6c3e9c0e8bd55`
 Current profile: `94a03ba7b6c97b5ff37c0ec62ef1d801b9896494b45456bd3df23e2cb278d13b`
 
 ## Headline results
 
 | Metric | Current result | Status |
 |---|---:|---|
-| Durable 100-MiB full create | **332.028 ms / 301.180 MiB/s** | fresh FastCDC confirmation |
-| Writer peak RSS | **89.13 MiB** | too high; next screen |
+| Durable 100-MiB full create | **308.884 ms / 323.746 MiB/s** | fresh G1 retained policy |
+| Writer peak RSS | **12.48 MiB** | G1 PASS; 86.005% lower |
+| SQLite cache snapshot maximum | **8.35 MiB** | G1 PASS; 89.944% lower |
 | Same-open 100-MiB same-count edit | **6.961 ms** | last Canonical-v2 lifecycle evidence |
 | Same-open 100-MiB `+1` early / middle | **5.108 / 4.576 ms** | last Canonical-v2 lifecycle evidence |
 | One-byte early / middle / late | **6.410 / 6.415 / 6.725 ms** | last Canonical-v2 guards |
@@ -24,15 +25,15 @@ Current profile: `94a03ba7b6c97b5ff37c0ec62ef1d801b9896494b45456bd3df23e2cb278d1
 | Reopen / visible head | **2.088 ms** | retained |
 | Authenticated returned 1-MiB range | **2.279 ms / 438.749 MiB/s** | retained |
 
-Only the full-create row is freshly remeasured after FastCDC v2. Other rows
-remain the latest Canonical-v2 lifecycle authority until the compact matrix is
-refreshed.
+Only the full-create row is freshly remeasured after the G1 runtime policy.
+Other rows remain the latest Canonical-v2 lifecycle authority until the compact
+matrix is refreshed.
 
 ## Public `layerfs` comparison
 
 | Comparable metric | This implementation | Public README M3 | Interpretation |
 |---|---:|---:|---|
-| Durable/cold 100-MiB write | **301.180 MiB/s** | 60.0 MiB/s | different engine/host; ours faster in retained cells |
+| Durable/cold 100-MiB write | **323.746 MiB/s** | 60.0 MiB/s | different engine/host; ours faster in retained cells |
 | Full 100-MiB materialization | **295.180 MiB/s warm authenticated** | 108.5 MiB/s | ours performs full authenticated logical reconstruction |
 | First/cold-engine read | 272.958 MiB/s fresh-process | 259.6 MiB/s | neither proves cold OS/device state |
 | Trusted hot read | **Unavailable** | 2,921.5 MiB/s | public path uses whole-fixture cache trust |
@@ -78,9 +79,9 @@ acceptance cell may run without a later explicit authorization.
 
 | Grind phase | Scope | Time budget | Exit condition |
 |---|---|---:|---|
-| **G0 — freeze** | checkpoint FastCDC v2, CP-0010, scoreboard, exact control | no timing | clean retained baseline |
-| **G1 — writer memory** | one `cache_spill=2000` A/B screen; select or reject explicit policy | `<20 s` screen | memory policy closed |
-| **G2 — materialization research** | decompose SQLite/hash/output wall; freeze receipt and mutation authority | `<20 s` diagnostic + static tests | exactly one candidate selected |
+| **G0 — freeze — COMPLETE** | checkpoint FastCDC v2, CP-0010, scoreboard, exact control | no timing | clean retained baseline |
+| **G1 — writer memory — COMPLETE** | retained `cache_spill=2000`; 89.944% cache and 86.005% RSS reduction | `6.864 s` screen | memory policy closed |
+| **G2 — materialization research — NEXT** | decompose SQLite/hash/output wall; freeze receipt and mutation authority | `<20 s` diagnostic + static tests | exactly one candidate selected |
 | **G3 — incremental prototype** | no-op, same-size one-byte, 1-MiB replacement, invalid-receipt/fault fallback | `<20 s` screen | retain/revert same-size mechanism |
 | **G4 — materialization acceptance** | compact 1/10/100 matrix; native cold, trusted hot, incremental, fallbacks | `<=120 s` total | materialization baseline frozen |
 | **G5 — remaining core lanes** | reopen authority, count-change locality, optional sub-300-ms create work | separate one-variable screens | each lane closed or explicitly deferred |
@@ -110,14 +111,14 @@ prototype merely for missing a speculative single-digit-millisecond target.
 ## Current decision
 
 ```text
-RETAIN FastCDC v2
-CURRENT G0 — freeze/checkpoint
-NEXT G1 — writer-memory screen
-THEN G2 — materialization decomposition/authority
+RETAIN FastCDC v2 + SQLite cache_spill=2000
+COMPLETE G0 — freeze/checkpoint
+COMPLETE G1 — writer-memory policy
+NEXT G2 — materialization decomposition/authority
 THEN G3 — same-size incremental materialization
 DEFER create concurrency until a materially sub-300-ms target is selected
 KEEP count-change locality and reopen authority as separate lanes
 ```
 
 Detailed evidence and qualifications:
-[CP-0010](../test-checkpoint-report/cp-0010-dirty-72ed9fee8e6a-fastcdc-v2-phase4-grind.md).
+[CP-0011](../test-checkpoint-report/cp-0011-dirty-3e167cdcdc26-sqlite-writer-memory.md).

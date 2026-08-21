@@ -55,8 +55,16 @@ adjacent control versus 332.028 ms candidate for the durable 100-MiB
 capture/publication boundary, or 301.180 MiB/s; 4/4 pairs and both positions
 won with exact identities, work, durability, Q, storage, and residue. Serial
 safe-Rust exact-boundary CDC tuning is closed. Phase 4 remains active for the
-writer-memory policy, authenticated/cold/trusted-hot and incremental
-materialization, reopen authority, and count-change locality.
+authenticated/cold/trusted-hot and incremental materialization, reopen
+authority, and count-change locality.
+
+G1 SQLite writer memory is now **PASS / RETAINED**. The one-variable
+`cache_spill=2000` policy reduced the position-balanced cache snapshot from
+87,050,240 to 8,753,408 bytes and maximum RSS from 93,507,584 to 13,086,720
+bytes while improving durable total from 328.053 to 308.884 ms. All 4/4 pairs,
+both positions, exact semantics/work/durability/Q/storage, independent
+recomputation, static closure, and sealed-manifest gates passed. G0 and G1 are
+complete; G2 is next and was not started.
 
 - [Fast-lane amendment](wp4m/fixed-radix-fast-lane-amendment.md)
 - [Compact evidence contract](wp4m/fixed-radix-compact-evidence-contract.md)
@@ -76,8 +84,11 @@ materialization, reopen authority, and count-change locality.
 - [Canonical-v2 frozen baseline](baseline/canonical-v2-baseline-v1.md)
 - [Canonical-v2 baseline manifest](baseline/canonical-v2-baseline-v1-manifest.tsv)
 - [FastCDC v2 baseline](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1.md)
+- [SQLite writer-memory G1 baseline](baseline/sqlite-writer-memory-cache-spill-2000-baseline-v1.md)
+- [SQLite writer-memory G1 manifest](baseline/sqlite-writer-memory-cache-spill-2000-baseline-v1-manifest.tsv)
 - [Current benchmark scoreboard](baseline/current-benchmark-scoreboard.md)
 - [CP-0010 current grind checkpoint](test-checkpoint-report/cp-0010-dirty-72ed9fee8e6a-fastcdc-v2-phase4-grind.md)
+- [CP-0011 writer-memory checkpoint](test-checkpoint-report/cp-0011-dirty-3e167cdcdc26-sqlite-writer-memory.md)
 
 ## Core contracts
 

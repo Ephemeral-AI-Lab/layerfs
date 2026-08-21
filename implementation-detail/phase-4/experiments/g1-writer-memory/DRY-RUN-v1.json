@@ -1,0 +1,278 @@
+{
+  "actual_measured_rows": 0,
+  "benchmark_children_invoked": 0,
+  "ceiling_ns": 20000000000,
+  "database_copies_created": 0,
+  "hashes": {
+    "base_authority": "7855ea6096359925f639b91c8d6b9708cfe0bc0df4a3ffd97a280a8e9a9ded48",
+    "base_database": "8657363e0f90d61bdb911c138a734b66c6adf4cd2dcd50c63c1ca1dae814e30c",
+    "base_expectations": "a7489b01445e53aa8a0c5824059b8a6b04f92e15a3b6cf953fbb4c83d6b5e18a",
+    "candidate": "42e3ddeb15df298c978b14639690e366fbb26ee55851524d42c6c3e9c0e8bd55",
+    "cdc": "bc0346eec113914943d046a4ab4742420acfff570d6b00115082c40bdf8e58b6",
+    "control": "454bc2f3deacd8581a3cc352c8b7495215cdc103a85580606246ea12bb25eba8",
+    "control_source": "16e9beedd2fe49d6da65f89f53f488cffbfdcfc71f10477e854cd2d37d00e120",
+    "fixture": "63b3695b8c117b5bc39885e0df0dcd0af1d49e575482bab16577d84b4f40eff4",
+    "source": "157699e0cd4cb1e3b5ec631cefb7c967ff7433bdeeb10ee1336e70961b402ad2",
+    "source_diff": "3e167cdcdc267ad18452f03960d6dd45a9ab1e137c0cc6b967722e65990e6a09"
+  },
+  "lock_exists": false,
+  "mode": "dry-run",
+  "planned_invocations": 10,
+  "planned_measured_rows": 8,
+  "result_root_exists": false,
+  "runtime_preflight": {
+    "base_catalog_connection": {
+      "journal_mode": "delete",
+      "mmap_size": 0,
+      "page_size": 4096,
+      "synchronous": 2
+    },
+    "candidate": {
+      "cache_size": 2000,
+      "cache_spill": 2000,
+      "source_sha256": "157699e0cd4cb1e3b5ec631cefb7c967ff7433bdeeb10ee1336e70961b402ad2"
+    },
+    "control": {
+      "cache_size": 2000,
+      "cache_spill": 20000,
+      "source_sha256": "16e9beedd2fe49d6da65f89f53f488cffbfdcfc71f10477e854cd2d37d00e120"
+    },
+    "focused_test": "tests::g1_writer_memory_runtime_policy_is_connection_local_and_format_preserving PASS",
+    "format_profile": [
+      "94A03BA7B6C97B5FF37C0EC62EF1D801B9896494B45456BD3DF23E2CB278D13B",
+      5,
+      "delete",
+      2,
+      1,
+      0
+    ]
+  },
+  "schedule": [
+    {
+      "arm": "A",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981001",
+        "true",
+        "capture-only"
+      ],
+      "iteration": 981001,
+      "kind": "warmup",
+      "label": "01-warmup-p0-AB-pos1-A",
+      "order": "AB",
+      "pair": 0,
+      "position": 1,
+      "sequence": 1
+    },
+    {
+      "arm": "B",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981002",
+        "true",
+        "capture-only"
+      ],
+      "iteration": 981002,
+      "kind": "warmup",
+      "label": "02-warmup-p0-AB-pos2-B",
+      "order": "AB",
+      "pair": 0,
+      "position": 2,
+      "sequence": 2
+    },
+    {
+      "arm": "A",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981003",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981003,
+      "kind": "measured",
+      "label": "03-measured-p1-AB-pos1-A",
+      "order": "AB",
+      "pair": 1,
+      "position": 1,
+      "sequence": 3
+    },
+    {
+      "arm": "B",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981004",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981004,
+      "kind": "measured",
+      "label": "04-measured-p1-AB-pos2-B",
+      "order": "AB",
+      "pair": 1,
+      "position": 2,
+      "sequence": 4
+    },
+    {
+      "arm": "B",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981005",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981005,
+      "kind": "measured",
+      "label": "05-measured-p2-BA-pos1-B",
+      "order": "BA",
+      "pair": 2,
+      "position": 1,
+      "sequence": 5
+    },
+    {
+      "arm": "A",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981006",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981006,
+      "kind": "measured",
+      "label": "06-measured-p2-BA-pos2-A",
+      "order": "BA",
+      "pair": 2,
+      "position": 2,
+      "sequence": 6
+    },
+    {
+      "arm": "A",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981007",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981007,
+      "kind": "measured",
+      "label": "07-measured-p3-AB-pos1-A",
+      "order": "AB",
+      "pair": 3,
+      "position": 1,
+      "sequence": 7
+    },
+    {
+      "arm": "B",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981008",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981008,
+      "kind": "measured",
+      "label": "08-measured-p3-AB-pos2-B",
+      "order": "AB",
+      "pair": 3,
+      "position": 2,
+      "sequence": 8
+    },
+    {
+      "arm": "B",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981009",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981009,
+      "kind": "measured",
+      "label": "09-measured-p4-BA-pos1-B",
+      "order": "BA",
+      "pair": 4,
+      "position": 1,
+      "sequence": 9
+    },
+    {
+      "arm": "A",
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "{control|candidate}",
+        "--fast-row",
+        "{fresh-row-root}",
+        "104857600",
+        "write",
+        "981010",
+        "false",
+        "capture-only"
+      ],
+      "iteration": 981010,
+      "kind": "measured",
+      "label": "10-measured-p4-BA-pos2-A",
+      "order": "BA",
+      "pair": 4,
+      "position": 2,
+      "sequence": 10
+    }
+  ],
+  "schema": "phase4-g1-writer-memory-dry-run-v1",
+  "status": "PASS",
+  "temporal_centers": {
+    "A": 6.5,
+    "B": 6.5
+  }
+}
