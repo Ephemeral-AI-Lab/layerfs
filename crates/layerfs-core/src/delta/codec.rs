@@ -143,6 +143,9 @@ pub fn decode_transition(payload: &[u8]) -> CoreResult<DecodedTransition> {
             .map_err(|_| CoreError::UnexpectedEof)?,
     ))
     .map_err(|_| CoreError::LengthOverflow)?;
+    if page_count > MAX_CHILD_REFERENCES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
     if (entry_count == 0) != (page_count == 0) {
         return Err(CoreError::NonCanonicalPagePartition);
     }

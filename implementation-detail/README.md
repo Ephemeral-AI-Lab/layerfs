@@ -38,6 +38,17 @@ Current controlling status:
 - WP4-M: CP-0006 `PASS / COMPLETE`; its rows remain `promotion=false`.
 - WP4-P: `COMPLETE / PASS`; WP4 complete; WP5 eligible/pending; overall Phase 4
   not complete.
+- Post-promotion CP-0007: `PASS / RETAIN`; 100-MiB `+1` early/middle durable
+  publication is 7.868417/6.946583 ms with unchanged canonical identities and
+  honest suffix-linear scaling. WP4-P remains closed.
+- CP-0008 scale diagnostic: `PASS`; 500-MiB `+1` early/middle publication is
+  27.140916/15.102042 ms. K64/F64 remains retained under the current <=50-ms
+  suffix-linear policy, not under a hypothetical 8–10-ms scale-independent
+  SLA.
+- CP-0009 current product baseline: `PASS / BASELINE`; the exact control binary
+  covers durable write, same-count edit, warm/fresh logical materialization,
+  tiny and returned-1-MiB ranges, reopen, and CP-0008-linked count-change
+  guards in a 51-second package.
 - K64/F64 + DIR256K: one compatibility-promoted profile; DIR256K remains an
   unmeasured fallback; production profile ID is `b0ebb845...f4ba1`; final
   TSV/golden-test hashes are `6de8c752...a7330` / `727fe668...49701`.

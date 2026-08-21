@@ -282,7 +282,7 @@ fn provisional_id(data: &NodeData) -> NodeId {
             write_u64(&mut writer, content.length());
             write_u64(&mut writer, bounded_u64(content.chunks().len()));
             for chunk in content.chunks() {
-                writer.update(chunk.id().as_bytes());
+                writer.update(chunk.object_id().as_bytes());
                 write_u64(&mut writer, chunk.length());
             }
         }

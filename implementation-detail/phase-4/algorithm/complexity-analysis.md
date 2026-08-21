@@ -2201,3 +2201,252 @@ Phase 4:             not complete
 Evidence hashes are raw `b3596ff6...72e1`, Python `d080f0f8...4f5`, Ruby
 `86cd7018...7114`, executable `7e91b90f...dbb36`, and runner
 `965cc07f...40c25`.
+
+## 30. CP-0007 count-changing construction-proof analysis
+
+Status: **PASS / RETAIN; K64/F64 unchanged; WP4-P remains complete; WP5
+eligible**.
+
+CP-0006 exposed that the fixed-radix suffix reconstruction was not the
+432-ms bottleneck. At 100 MiB it required only about 2–3 ms. The complete
+post-construction closure replay required about 426–427 ms and authenticated
+approximately 105–106 MiB. CP-0007 replaces only that duplicate replay with a
+private transaction-local proof; canonical bytes, profile identity, mapping
+shape, suffix work, transaction count, and COMMIT count are unchanged.
+
+Let:
+
+```text
+N = old reference count
+p = insertion ordinal
+S = N - p, the rewritten suffix reference count
+K = 64 references per leaf
+F = 64 children per branch
+H = O(log_F(N / K))
+P = rewritten leaf + branch + root object count
+```
+
+The builder streams authenticated prior references and folds new-object put
+evidence while doing the existing suffix mutation:
+
+```text
+mutation + construction proof = O(S + P + H)
+proof consumption             = O(1) complete-head/receipt comparison
+resident LayerFS memory       = O(K + F*H + bounded mapping/SQL/proof buffers)
+serialized metadata added     = 0
+```
+
+Every old reference occurrence is covered once by the complete prior-head
+permit. The inserted chunk, rewritten leaves/branches/file root, namespace,
+delta page, and transition advance one contiguous transaction/open/authority/
+mutation-serial evidence chain. The proof is move-only and single-use.
+Successful COMMIT acknowledgement or exact requested-visible reconciliation
+can carry the resulting head authority to the next transaction on the same
+open Store. Rollback, mismatch, other reconciliation outcomes, reuse, and
+reopen invalidate it.
+
+The important asymptotic separation is:
+
+```text
+first edit after reopen:
+  Theta(complete reachable authenticated closure) authority establishment
+  + O(S + P + H) mutation
+
+later same-open count-changing edit with carried authority:
+  O(S + P + H) mutation
+  + O(1) proof consumption
+
+worst-case fixed-radix count-changing edit:
+  Theta(N), unchanged
+```
+
+The first-authority cost is separately timed and not hidden inside the durable
+edit-publication number. At 100 MiB it measured 239.660791 ms early and
+245.128417 ms middle. A direct carried-witness test observes zero canonical
+object authentication in the next transaction. A reopened Store has no such
+authority; persisted receipt bytes alone are insufficient.
+
+### 30.1 Measured result
+
+| Operation | CP-0006 | CP-0007 | Delta | Speedup |
+|---|---:|---:|---:|---:|
+| 100-MiB `+1` early | 432.939417 ms | 7.868417 ms | -98.182559% | 55.022x |
+| 100-MiB `+1` middle | 432.324667 ms | 6.946583 ms | -98.393202% | 62.236x |
+| same-count middle | 8.639167 ms | 8.503250 ms | -1.573265% | 1.016x |
+| 100-MiB full write | 603.327666 ms | 578.403166 ms | -4.131171% | 1.043x |
+
+The early/middle proof-consumption medians are 0.024500/0.043209 ms, versus
+426.203333/427.111875 ms for the old complete replay: 99.994252% and
+99.989884% reductions. The qualification phase authenticates zero objects and
+zero canonical payload bytes. Mapping/proof folding authenticates 179 objects/
+730,964 bytes early and 97 objects/371,804 bytes middle. Put evidence counts
+are exactly 90 and 49. Both rows consume one proof, one transaction, and one
+COMMIT.
+
+Logical Q rises from 50,631 to 55,375 bytes (+4,744 bytes), remains bounded,
+and returns to zero. The mapping/suffix identities remain exact:
+
+| Work | `+1` early | `+1` middle |
+|---|---:|---:|
+| prior references covered | 5,284 | 5,284 |
+| suffix references | 5,284 | 2,642 |
+| suffix raw bytes | 104,857,600 | 52,377,184 |
+| leaves / branches | 83 / 2 | 42 / 2 |
+| canonical mapping bytes | 365,495 | 185,915 |
+
+Two fresh 100-MiB edit round trips independently pass exact reopen, full
+scrub, reconstruction, ranges, roots, transitions, and closure. Their
+716–747-ms complete lifecycle is verification work, not edit-publication
+latency.
+
+### 30.2 Scale decision
+
+Both affected medians pass the preregistered <=50-ms required, <=25-ms strong,
+and <=15-ms stretch gates. Current product authority permits honest
+suffix-linear count-changing cost, so K64/F64 is retained and WP4-P is not
+reopened.
+
+This is not a scale-independent result. The formula-only 100-GiB middle case
+still rebuilds 2,705,409 reference occurrences, 42,273 leaves, 673 branches,
+42,947 mapping objects, and 186,891,342 canonical mapping bytes. No wall time
+is projected from those counts. If product policy requires near-8–10-ms
+count-changing edits at multi-GiB/100-GiB scale, work must stop before WP5 and
+a new canonical history-independent prolly-tree specification must replace
+fixed-radix ordinal mapping.
+
+Controlling compact evidence is CP-0007: raw `dca3af15...de083`, Python
+`8457ae6f...9b24`, Ruby `07bffd1a...6e7`, edit round trips
+`20754b6a...de0`, executable `145ca598...dfd4`, and compiled-source diff
+`88ffb0bd...3e9`.
+
+## 31. CP-0008 measured 1/10/100/500-MiB count-change curve
+
+Status: **PASS / DIAGNOSTIC; K64/F64 retained under current policy; no WP4-P
+reopen**.
+
+CP-0008 adds no mutation or format change. It admits exact diagnostic fixture
+sizes and measures one warmup plus three samples for `+1` early/middle at
+1/10/100/500 MiB. Two separate 500-MiB fresh roundtrips verify the endpoints.
+The accepted 34-row package completes in 89 seconds and deletes all transient
+fixture/database state.
+
+### 31.1 Wall curve
+
+| Size | Early publication | Middle publication | Early first-after-reopen | Middle first-after-reopen |
+|---:|---:|---:|---:|---:|
+| 1 MiB | 0.957833 ms | 1.080959 ms | 3.330791 ms | 3.437667 ms |
+| 10 MiB | 1.738709 ms | 1.393625 ms | 25.184418 ms | 24.515250 ms |
+| 100 MiB | 7.403083 ms | 5.715209 ms | 248.664584 ms | 247.129458 ms |
+| 500 MiB | 27.140916 ms | 15.102042 ms | 1,262.771917 ms | 1,228.564417 ms |
+
+Publication excludes the separately reported required prior-authority scrub;
+first-after-reopen is the row-wise sum. At 500 MiB, proof consumption remains
+0.051625/0.019667 ms early/middle. Mapping/proof fold is 15.158666/7.590083
+ms and COMMIT is 11.930625/7.335875 ms.
+
+### 31.2 Work curve
+
+| Size | Old refs | Suffix early / middle | Leaves early / middle | Branches early / middle | Mapping bytes early / middle |
+|---:|---:|---:|---:|---:|---:|
+| 1 MiB | 53 | 53 / 27 | 1 / 1 | 0 / 0 | 4,073 / 4,073 |
+| 10 MiB | 531 | 531 / 266 | 9 / 5 | 0 / 0 | 37,121 / 19,601 |
+| 100 MiB | 5,284 | 5,284 / 2,642 | 83 / 42 | 2 / 2 | 365,495 / 185,915 |
+| 500 MiB | 26,533 | 26,533 / 13,267 | 415 / 208 | 7 / 4 | 1,833,348 / 918,921 |
+
+The 100→500 ratios are decisive:
+
+```text
+                                      early     middle
+file-size ratio                       5.000x    5.000x
+suffix-reference ratio               5.021x    5.022x
+canonical mapping-byte ratio          5.016x    4.943x
+mapping-wall ratio                    4.410x    3.700x
+publication-wall ratio                3.666x    2.642x
+fresh-authority-wall ratio            5.144x    5.040x
+```
+
+Fixed COMMIT cost makes total publication grow less than the exact work over
+this interval, but references and mapping bytes scale almost exactly with file
+size. This is empirical confirmation of `O(suffix)`, worst-case `Theta(N)`,
+not a scale-independent algorithm.
+
+### 31.3 Resources and verification
+
+Every measured row consumes one proof, one transaction, and one COMMIT; reads
+one source byte; and authenticates zero objects/bytes during proof
+consumption. Q is 25,041/37,047/55,375/58,335 bytes at 1/10/100/500 MiB and
+returns to zero. Median RSS plateaus near 12.7 MiB at 100/500 MiB. Thus the
+work curve is not created by a source-sized resident structure.
+
+Both 500-MiB fresh roundtrips pass exact root/transition/closure, reopen, full
+scrub, reconstruction, and ranges. Their complete lifecycles are 3,540.673125
+ms early and 3,842.079833 ms middle; these are correctness checks rather than
+publication medians.
+
+### 31.4 Decision boundary
+
+The tested fixed-radix path remains below 50 ms through 500 MiB, so the
+current product's honest suffix-linear policy retains K64/F64. It no longer
+meets a hypothetical <=25-ms gate for 500-MiB early insertion, and neither
+500-MiB arm meets a near-8–10-ms scale-independent SLA. If that stricter SLA is
+the actual product requirement, stop before WP5 and specify a canonical
+history-independent prolly tree.
+
+A prolly tree would localize count-changing mapping mutation; it would not by
+itself remove the separate linear independent-authentication requirement after
+reopen.
+
+Evidence: raw `599a2dc8...1804`, analysis `d477fe0a...0a2c`, executable
+`b5ec2b2c...d8e68`, runner `96a95e13...90458`, analyzer
+`9c801d05...41a3`, and benchmark-source diff `4f1c97f8...af73`.
+
+## 32. CP-0009 current product-workflow control
+
+Status: **PASS / BASELINE; exact control for the next adjacent balanced A/B**.
+
+CP-0009 changes no persistence algorithm. It adds one bounded authenticated
+returned-1-MiB range and corrects baseline row vocabulary. One current release
+binary now controls all primary Phase-4 product/verification boundaries:
+
+| Boundary | 100-MiB median | Complexity interpretation |
+|---|---:|---|
+| durable full submit | 640.109209 ms | `Theta(source bytes + references)` |
+| same-open same-count edit | 9.737250 ms | changed CDC region + ancestor spine |
+| warm logical materialization | 425.800708 ms | `Theta(output bytes)` |
+| fresh-process logical materialization | 433.512791 ms | reopen + `Theta(output bytes)` |
+| tiny authenticated range suite | 0.770666 ms | routed affected pages/chunks |
+| authenticated returned 1-MiB range | 3.285167 ms | routing + `Theta(returned bytes)` |
+| reopen/head ready | 3.007750 ms | complete-head/receipt read; process launch excluded |
+
+Full submit decomposes into 504.215417-ms source/CDC/CAS/mapping/proof fold,
+0.038542-ms proof consumption, and 135.855250-ms publication/COMMIT. Exact
+work is 105,291,554 new canonical bytes and 365,262 mapping bytes. The current
+gap to 500 ms is 140.109 ms.
+
+The returned 1-MiB range authenticates 60 objects and 1,090,255 canonical
+bytes before exposing 1,048,576 bytes. Its range-only median is 3.171209 ms,
+or 315.337 MiB/s. Q is a fixed bounded 2,128,074 bytes because expected and
+actual 1-MiB buffers overlap; terminal Q is zero. This fills the earlier gap
+between tiny routing probes and full-file reconstruction without claiming
+cold physical storage.
+
+The baseline also makes measurement variance explicit. An earlier CP-0007
+interval measured 578.403-ms full submit, while the current isolated baseline
+is 640.109 ms with a 43.903-ms spread. Setup-induced writeback was directly
+observed in and removed from one rejected CP-0009 orchestration attempt, but
+absolute cross-campaign wall remains environment-sensitive. Therefore:
+
+```text
+standalone CP-0009 median = workload/control context
+candidate acceptance      = adjacent balanced A/B on the same campaign
+historical subtraction    = inadmissible
+```
+
+CP-0008 remains the affected-operation scale baseline for fixed-radix
+count-changing work. CP-0009 contributes 100-MiB early/middle structural
+guards of 7.374750/5.321541 ms same-open and 248.491541/244.305666 ms including
+first authority.
+
+Evidence: raw `988f6960...5224`, analysis `616bbb18...323c`, executable
+`9cda87ee...49d7`, runner `82931bfe...0c32`, analyzer `810ffe04...fd6`, source
+diff `b073a7e0...50f84`, and manifest `4a7748b7...a502d`.

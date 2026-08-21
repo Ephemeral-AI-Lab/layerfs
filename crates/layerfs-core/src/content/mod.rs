@@ -7,7 +7,7 @@ use std::time::Instant;
 use crate::cas::{InMemoryCas, PutOutcome};
 use crate::cdc::FastCdc;
 use crate::limits::MAX_CHILD_REFERENCES;
-use crate::{ChunkId, CoreError, CoreResult};
+use crate::{CoreError, CoreResult, ObjectId};
 
 pub mod persistence;
 
@@ -24,17 +24,17 @@ pub struct FullReplaceTiming {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChunkReference {
-    id: ChunkId,
+    object_id: ObjectId,
     length: u64,
 }
 
 impl ChunkReference {
-    pub const fn new(id: ChunkId, length: u64) -> Self {
-        Self { id, length }
+    pub const fn new(object_id: ObjectId, length: u64) -> Self {
+        Self { object_id, length }
     }
 
-    pub const fn id(self) -> ChunkId {
-        self.id
+    pub const fn object_id(self) -> ObjectId {
+        self.object_id
     }
 
     pub const fn length(self) -> u64 {
@@ -273,7 +273,7 @@ impl LogicalFile {
         Self::full_replace_with(reader, |bytes| cas.put_chunk(bytes))
     }
 
-    fn full_replace_with<R: Read, F: FnMut(&[u8]) -> CoreResult<(ChunkId, PutOutcome)>>(
+    fn full_replace_with<R: Read, F: FnMut(&[u8]) -> CoreResult<(ObjectId, PutOutcome)>>(
         reader: R,
         mut put_chunk: F,
     ) -> CoreResult<EditResult> {
@@ -295,7 +295,7 @@ impl LogicalFile {
         Self::full_replace_timed_with(reader, |bytes| cas.put_chunk(bytes))
     }
 
-    fn full_replace_timed_with<R: Read, F: FnMut(&[u8]) -> CoreResult<(ChunkId, PutOutcome)>>(
+    fn full_replace_timed_with<R: Read, F: FnMut(&[u8]) -> CoreResult<(ObjectId, PutOutcome)>>(
         reader: R,
         mut put_chunk: F,
     ) -> CoreResult<(EditResult, FullReplaceTiming)> {
@@ -466,7 +466,7 @@ fn scan_and_store_reader<R: Read>(
     scan_and_store_reader_with(reader, |bytes| cas.put_chunk(bytes))
 }
 
-fn scan_and_store_reader_with<R: Read, F: FnMut(&[u8]) -> CoreResult<(ChunkId, PutOutcome)>>(
+fn scan_and_store_reader_with<R: Read, F: FnMut(&[u8]) -> CoreResult<(ObjectId, PutOutcome)>>(
     reader: R,
     mut put_chunk: F,
 ) -> CoreResult<(Vec<ScannedChunk>, EditCounters)> {
@@ -609,13 +609,10 @@ fn add_counter(counter: &mut u64, amount: u64) -> CoreResult<()> {
 }
 
 fn validate_chunk(cas: &InMemoryCas, reference: ChunkReference) -> CoreResult<&[u8]> {
-    let bytes = cas.get(reference.id)?;
+    let bytes = cas.get(reference.object_id)?;
     let actual = u64::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
     if actual != reference.length {
-        return Err(CoreError::LengthMismatch {
-            expected: reference.length,
-            actual,
-        });
+        return Err(CoreError::ChunkLengthMismatch);
     }
     Ok(bytes)
 }
@@ -647,7 +644,7 @@ mod tests {
     use super::*;
     use crate::cas::InMemoryCas;
     use crate::cdc::FastCdc;
-    use crate::chunk_id;
+    use crate::ObjectId;
 
     fn cas_and_chunks() -> (InMemoryCas, Vec<ChunkReference>) {
         let mut cas = InMemoryCas::new();
@@ -721,20 +718,17 @@ mod tests {
     #[test]
     fn rejects_invalid_declared_lengths() {
         let (cas, references) = cas_and_chunks();
-        let invalid = vec![ChunkReference::new(references[0].id(), 3)];
+        let invalid = vec![ChunkReference::new(references[0].object_id(), 3)];
         assert_eq!(
             LogicalFile::from_chunks(&cas, invalid),
-            Err(CoreError::LengthMismatch {
-                expected: 3,
-                actual: 4,
-            })
+            Err(CoreError::ChunkLengthMismatch)
         );
     }
 
     #[test]
     fn rejects_missing_chunks() {
         let cas = InMemoryCas::new();
-        let missing = vec![ChunkReference::new(chunk_id(b"missing"), 7)];
+        let missing = vec![ChunkReference::new(ObjectId::for_bytes(b"missing"), 7)];
         assert_eq!(
             LogicalFile::from_chunks(&cas, missing),
             Err(CoreError::MissingObject)

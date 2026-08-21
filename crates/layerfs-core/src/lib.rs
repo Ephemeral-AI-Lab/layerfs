@@ -4,6 +4,7 @@
 
 pub const COMPONENT: &str = "layerfs-core";
 
+pub mod canonical_v2;
 pub mod cas;
 pub mod cdc;
 pub mod content;

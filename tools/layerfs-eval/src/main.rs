@@ -600,7 +600,7 @@ fn read_chunk_references(
             continue;
         }
         let chunk = cas
-            .get(reference.id())
+            .get(reference.object_id())
             .map_err(|error| format!("layout CAS read: {error}"))?;
         let actual = u64::try_from(chunk.len())
             .map_err(|_| "layout chunk length does not fit u64".to_owned())?;

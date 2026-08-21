@@ -2,3 +2,5 @@
 /eval/runs/
 /eval/datasets/
 .DS_Store
+__pycache__/
+*.py[cod]
