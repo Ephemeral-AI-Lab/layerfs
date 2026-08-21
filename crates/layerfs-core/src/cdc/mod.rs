@@ -61,7 +61,27 @@ struct Scanner {
     chunk: Vec<u8>,
     pending: Option<u8>,
     hash: u64,
-    next_even: usize,
+}
+
+#[inline(never)]
+fn scan_region(bytes: &[u8], mut hash: u64, shifted_mask: u64, mask: u64) -> (u64, Option<usize>) {
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        let first = bytes[cursor];
+        let second = bytes[cursor + 1];
+        hash = hash
+            .wrapping_shl(NORMALIZATION_SHIFT)
+            .wrapping_add(GEAR[usize::from(first)].wrapping_shl(1));
+        if hash & shifted_mask == 0 {
+            return (hash, Some(cursor));
+        }
+        hash = hash.wrapping_add(GEAR[usize::from(second)]);
+        if hash & mask == 0 {
+            return (hash, Some(cursor + 1));
+        }
+        cursor += 2;
+    }
+    (hash, None)
 }
 
 impl Scanner {
@@ -70,7 +90,6 @@ impl Scanner {
             chunk: Vec::with_capacity(MAXIMUM_CHUNK_BYTES),
             pending: None,
             hash: PROFILE_SEED,
-            next_even: MINIMUM_CHUNK_BYTES,
         }
     }
 
@@ -80,6 +99,12 @@ impl Scanner {
         on_chunk: &mut F,
         counters: &mut CdcCounters,
     ) -> CoreResult<()> {
+        if let Some(first) = self.pending.take() {
+            let second = bytes[0];
+            bytes = &bytes[1..];
+            self.process_pending_pair(first, second, on_chunk, counters)?;
+        }
+
         while !bytes.is_empty() {
             if self.chunk.len() < MINIMUM_CHUNK_BYTES {
                 let needed = MINIMUM_CHUNK_BYTES - self.chunk.len();
@@ -91,32 +116,70 @@ impl Scanner {
                 }
             }
 
-            let (first, from_pending) = match self.pending.take() {
-                Some(byte) => (byte, true),
-                None if bytes.len() >= 2 => (bytes[0], false),
-                None => {
-                    self.pending = Some(bytes[0]);
-                    return Ok(());
-                }
+            let mut position = self.chunk.len();
+            let mut hash = self.hash;
+            let available_pairs = bytes.len() / 2;
+            let small_pairs = if position < TARGET_CHUNK_BYTES {
+                ((TARGET_CHUNK_BYTES - position) / 2).min(available_pairs)
+            } else {
+                0
             };
-            if !from_pending {
-                bytes = &bytes[1..];
+            let small_end = small_pairs * 2;
+            let (next_hash, cut) =
+                scan_region(&bytes[..small_end], hash, SHIFTED_SMALL_MASK, SMALL_MASK);
+            hash = next_hash;
+            let mut cursor = small_end;
+
+            let cut = if let Some(end) = cut {
+                Some(end)
+            } else {
+                position += small_end;
+                let available_pairs = (bytes.len() - cursor) / 2;
+                let large_pairs = ((MAXIMUM_CHUNK_BYTES - position) / 2).min(available_pairs);
+                let large_end = cursor + large_pairs * 2;
+                let (next_hash, cut) = scan_region(
+                    &bytes[cursor..large_end],
+                    hash,
+                    SHIFTED_LARGE_MASK,
+                    LARGE_MASK,
+                );
+                hash = next_hash;
+                position += large_end - small_end;
+                let start = cursor;
+                cursor = large_end;
+                cut.map(|end| start + end)
+            };
+
+            self.hash = hash;
+            if let Some(end) = cut {
+                self.chunk.extend_from_slice(&bytes[..end]);
+                self.emit(on_chunk, counters)?;
+                bytes = &bytes[end..];
+                continue;
             }
-            let second = bytes[0];
-            bytes = &bytes[1..];
-            self.process_pair(first, second, on_chunk, counters)?;
+
+            self.chunk.extend_from_slice(&bytes[..cursor]);
+            bytes = &bytes[cursor..];
+            if position == MAXIMUM_CHUNK_BYTES {
+                self.emit(on_chunk, counters)?;
+                continue;
+            }
+            if let Some(&byte) = bytes.first() {
+                self.pending = Some(byte);
+            }
+            return Ok(());
         }
         Ok(())
     }
 
-    fn process_pair<F: FnMut(&[u8]) -> CoreResult<()>>(
+    fn process_pending_pair<F: FnMut(&[u8]) -> CoreResult<()>>(
         &mut self,
         first: u8,
         second: u8,
         on_chunk: &mut F,
         counters: &mut CdcCounters,
     ) -> CoreResult<()> {
-        let small = self.next_even < TARGET_CHUNK_BYTES;
+        let small = self.chunk.len() < TARGET_CHUNK_BYTES;
 
         self.hash = self
             .hash
@@ -140,7 +203,6 @@ impl Scanner {
                 self.chunk.push(second);
             } else {
                 self.chunk.extend_from_slice(&[first, second]);
-                self.next_even += 2;
                 if self.chunk.len() == MAXIMUM_CHUNK_BYTES {
                     self.emit(on_chunk, counters)?;
                 }
@@ -164,7 +226,6 @@ impl Scanner {
             .ok_or(CoreError::LengthOverflow)?;
         self.chunk.clear();
         self.hash = PROFILE_SEED;
-        self.next_even = MINIMUM_CHUNK_BYTES;
         Ok(())
     }
 
@@ -245,13 +306,21 @@ mod tests {
 
         let data = input(100_000);
         let expected = collect(Cursor::new(data.clone()));
-        let actual = collect(Fragmented {
-            data,
-            offset: 0,
-            sizes: &[1, 17, 4096, 3, 8192],
-            index: 0,
-        });
-        assert_eq!(actual, expected);
+        for sizes in [
+            &[1][..],
+            &[2][..],
+            &[MAXIMUM_CHUNK_BYTES - 1][..],
+            &[MAXIMUM_CHUNK_BYTES][..],
+            &[1, 17, 4096, 3, 8192][..],
+        ] {
+            let actual = collect(Fragmented {
+                data: data.clone(),
+                offset: 0,
+                sizes,
+                index: 0,
+            });
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
@@ -269,5 +338,28 @@ mod tests {
             assert_eq!(lengths.iter().sum::<usize>(), length);
             assert!(lengths.iter().all(|&chunk| chunk <= MAXIMUM_CHUNK_BYTES));
         }
+    }
+
+    #[test]
+    fn callback_failure_is_propagated_exactly() {
+        let mut callbacks = 0;
+        let error = FastCdc::new()
+            .scan(Cursor::new(input(100_000)), |_| {
+                callbacks += 1;
+                if callbacks == 2 {
+                    return Err(CoreError::PublicationConflict);
+                }
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(error, CoreError::PublicationConflict);
+        assert_eq!(callbacks, 2);
+    }
+
+    #[test]
+    fn scanner_buffer_capacity_is_fixed() {
+        let scanner = Scanner::new();
+        assert_eq!(scanner.chunk.capacity(), MAXIMUM_CHUNK_BYTES);
+        assert!(scanner.chunk.is_empty());
     }
 }

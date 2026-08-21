@@ -49,6 +49,15 @@ v1 control and rollback authority. Automatic nonempty v1-to-v2 migration is
 still unsupported, Phase 4 is not otherwise complete, and no later lane is
 started by this freeze.
 
+FastCDC contiguous-region kernel v2 is now **PASS / RETAINED** as the exact
+Canonical-v2 successor. Its independent confirmation measured 398.555 ms
+adjacent control versus 332.028 ms candidate for the durable 100-MiB
+capture/publication boundary, or 301.180 MiB/s; 4/4 pairs and both positions
+won with exact identities, work, durability, Q, storage, and residue. Serial
+safe-Rust exact-boundary CDC tuning is closed. Phase 4 remains active for the
+writer-memory policy, authenticated/cold/trusted-hot and incremental
+materialization, reopen authority, and count-change locality.
+
 - [Fast-lane amendment](wp4m/fixed-radix-fast-lane-amendment.md)
 - [Compact evidence contract](wp4m/fixed-radix-compact-evidence-contract.md)
 - [WP4-P promotion ledger](wp4p/promotion.md)
@@ -66,6 +75,9 @@ started by this freeze.
 - [Baseline index](baseline/index.md)
 - [Canonical-v2 frozen baseline](baseline/canonical-v2-baseline-v1.md)
 - [Canonical-v2 baseline manifest](baseline/canonical-v2-baseline-v1-manifest.tsv)
+- [FastCDC v2 baseline](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1.md)
+- [Current benchmark scoreboard](baseline/current-benchmark-scoreboard.md)
+- [CP-0010 current grind checkpoint](test-checkpoint-report/cp-0010-dirty-72ed9fee8e6a-fastcdc-v2-phase4-grind.md)
 
 ## Core contracts
 

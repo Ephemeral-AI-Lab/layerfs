@@ -22,6 +22,8 @@ CP-0009
   -> terminal H05/H05b/H05c findings preserved; H05 not promoted
   -> canonical-v2 shadow, publication repair, and complete validation PASS
   -> freeze exact fresh-store canonical-v2 baseline
+  -> exact-boundary FastCDC contiguous-region kernel v2 PASS
+  -> freeze exact v2 executable as the next Canonical-v2 control
   -> H09 edit-locality simulator and candidate as a separate lane
   -> materialization qualification and one-variable candidate as a separate lane
   -> residual SQLite/durability work
@@ -67,12 +69,24 @@ target. This complete-validation sample is 12.214 ms above it, so the baseline
 freeze is a correctness-backed relative win, not a claim that create work is
 finished.
 
+The exact-boundary FastCDC contiguous-region kernel v2 is now the next accepted
+control derived from Canonical-v2. Its CDC source/executable are
+`bc0346ee...58b6` / `454bc2f3...eba8`. The corrected CDC-only screen saved
+100.485990 ms with exact 5,284-boundary parity. The adjacent durable campaign
+measured 414.414979 ms control versus 339.748094 ms candidate, a 74.666885-ms
+or 18.017420% improvement; all four pairs and both execution positions won and
+all semantic, durability, Q, storage, CPU/RSS, custody, and static gates passed.
+The earlier cached-active-mask v1 candidate remains `NO-GO / REVERT`; only the
+contiguous-region kernel is promoted.
+
 Controlling documents:
 
 - [CP-0009 report](test-checkpoint-report/cp-0009-dirty-b073a7e04c7a-current-product-baseline.md)
 - [Current baseline manifest](baseline/current-baseline-v1-manifest.tsv)
 - [Canonical-v2 frozen baseline](baseline/canonical-v2-baseline-v1.md)
 - [Canonical-v2 baseline manifest](baseline/canonical-v2-baseline-v1-manifest.tsv)
+- [FastCDC contiguous-region v2 baseline](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1.md)
+- [FastCDC contiguous-region v2 manifest](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1-manifest.tsv)
 - [Optimization decision map](../../research/phase-4/decision-map.md)
 - [Hypothesis ledger](../../research/phase-4/foundations/hypothesis-ledger.md)
 - [Benchmark method](../../research/phase-4/foundations/benchmark-and-evidence.md)
@@ -182,15 +196,19 @@ rewrite retained history. Automatic migration remains unsupported.
 
 ### C3 — exact CDC/hash execution
 
-After identity work, measure the remaining FastCDC boundary loop. F4-A
-attributes 128.723024 ms to CDC-exclusive work, while F4-A2 showed only
-3.701583 ms of removable scanner materialization/carry. Therefore:
+**Terminal disposition: PASS / FROZEN.** The final safe-Rust exact-boundary
+candidate replaced per-pair scanner bookkeeping with a contiguous small/large
+region kernel while retaining the exact Gear recurrence, profile, 5,284
+boundaries, chunk bytes, identities, and durability behavior. The corrected
+CDC-only screen measured 144.272583 to 43.786594 ms, saving 100.485990 ms.
+The adjacent durable campaign measured 414.414979 to 339.748094 ms, saving
+74.666885 ms or 18.017420%; 4/4 pairs and both positions won.
 
-- do not pursue another buffer-copy abstraction;
-- test only an exact-boundary hot-loop mechanism with direct boundary and byte
-  counters;
-- treat a larger chunk profile as a versioned locality/dedup/range tradeoff;
-- keep worker or multicore execution as a separately authorized profile.
+The exact executable `454bc2f3...eba8` is the next control. Serial safe-Rust
+exact-boundary CDC tuning is closed; do not stack pending-only, read-size,
+unrolling, cached-mask, compiler-flag, or another CDC implementation onto this
+campaign. Larger chunk profiles and worker/multicore execution remain separate
+versioned tradeoffs rather than follow-ups to this retained kernel.
 
 ### C4 — SQLite physical profile
 
@@ -389,8 +407,9 @@ unattributable final rewrite.
 ```text
 DONE      H05/H05b/H05c: terminal no-go/closure; all evidence preserved
 DONE      canonical-v2: complete validation PASS; fresh-store baseline frozen
-CONTROL   canonical-v2 f3dd4c94...0280; CP-0009 retained as historical v1 control
-NEXT      choose one separate lane: exact CDC loop or H09 simulator
+DONE      exact CDC: contiguous-region kernel v2 PASS; cached-mask v1 remains NO-GO
+CONTROL   FastCDC v2 454bc2f3...eba8; canonical-v2 f3dd4c94...0280 retained historically
+NEXT      choose one separate lane: H09 simulator or other already-authorized lane
 PARALLEL  materialization/reopen work may remain read-only research when authorized
 LATER     SQLite physical profile and residual COMMIT/durability evidence
 ```
