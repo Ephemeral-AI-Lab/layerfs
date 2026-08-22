@@ -1,0 +1,236 @@
+{
+  "actual_rows": 0,
+  "base_proxy_plan": {
+    "authority_private_mode": "0600",
+    "authority_proxy_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/base-proxy/base.sqlite.authority",
+    "authority_sha256": "7855ea6096359925f639b91c8d6b9708cfe0bc0df4a3ffd97a280a8e9a9ded48",
+    "authority_source_mode": "0444",
+    "authority_source_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v1/results-v1/input-v1/base.sqlite.authority",
+    "database_copy_kind": "private-regular-byte-identical",
+    "database_private_mode": "0600",
+    "database_proxy_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/base-proxy/base.sqlite",
+    "database_sha256": "7db8d50de42b994546789cb67fc7a9b650e2e551dab118e15003e02106b19890",
+    "database_source_mode": "0444",
+    "database_source_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v1/results-v1/input-v1/base.sqlite",
+    "declared_cleanup": "rows-v5/work-v5",
+    "expectations_copy": false,
+    "prepare_source_contract": [
+      "database",
+      "authority"
+    ],
+    "transient_ceiling_bytes": 536870912
+  },
+  "benchmark_children_invoked": 0,
+  "campaign_ceiling_ns": 59000000000,
+  "child_ceiling_seconds": 15,
+  "database_copies_created": 0,
+  "executable_sources": {
+    "candidate": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v3/results-v3/operands-v3/phase4_create_edit_benchmark-instrumented",
+    "control": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v3/results-v3/operands-v3/phase4_create_edit_benchmark-control",
+    "copy_mode": "0500",
+    "source_mode": "0444"
+  },
+  "execute_authorization_required": "parent-authorized-exactly-one-fresh-same-middle-v5-ba",
+  "full_v1_rows_rerun": 0,
+  "invocation_plan": [
+    {
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/operands-v5/phase4_create_edit_benchmark-instrumented",
+        "--fast-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/01-measured-same-middle-pos1-B",
+        "104857600",
+        "edit-same",
+        "983001"
+      ],
+      "kind": "prepare",
+      "label": "prepare-01-measured-same-middle-pos1-B"
+    },
+    {
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/operands-v5/phase4_create_edit_benchmark-instrumented",
+        "--fast-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/02-measured-same-middle-pos2-A",
+        "104857600",
+        "edit-same",
+        "983002"
+      ],
+      "kind": "prepare",
+      "label": "prepare-02-measured-same-middle-pos2-A"
+    },
+    {
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/operands-v5/phase4_create_edit_benchmark-instrumented",
+        "--fast-row",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/01-measured-same-middle-pos1-B",
+        "104857600",
+        "edit-same",
+        "983001",
+        "false",
+        "capture-only"
+      ],
+      "kind": "row",
+      "label": "01-measured-same-middle-pos1-B"
+    },
+    {
+      "command": [
+        "/usr/bin/time",
+        "-l",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/operands-v5/phase4_create_edit_benchmark-control",
+        "--fast-row",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/02-measured-same-middle-pos2-A",
+        "104857600",
+        "edit-same",
+        "983002",
+        "false",
+        "capture-only"
+      ],
+      "kind": "row",
+      "label": "02-measured-same-middle-pos2-A"
+    },
+    {
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/implementation-detail/phase-4/experiments/g2-materialization-decomposition/v5/analyze_g2_v5.py",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5"
+      ],
+      "kind": "analyzer",
+      "label": "primary-analysis"
+    },
+    {
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/implementation-detail/phase-4/experiments/g2-materialization-decomposition/v5/recompute_g2_v5.py",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5"
+      ],
+      "kind": "analyzer",
+      "label": "independent-recomputation"
+    }
+  ],
+  "planned_analyzer_children": 2,
+  "planned_benchmark_children": 4,
+  "planned_distinct_row_copies": 2,
+  "planned_executable_snapshots": 2,
+  "planned_expectations_copies": 0,
+  "planned_invocations": 6,
+  "planned_measured_rows": 2,
+  "planned_order": "BA",
+  "planned_private_authority_copies": 1,
+  "planned_v1_payload_reverification": {
+    "entries": 178,
+    "mismatches": 0
+  },
+  "preflight": {
+    "base_proxy_plan_verified": {
+      "authority_private_mode": "0600",
+      "authority_proxy_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/base-proxy/base.sqlite.authority",
+      "authority_sha256": "7855ea6096359925f639b91c8d6b9708cfe0bc0df4a3ffd97a280a8e9a9ded48",
+      "authority_source_mode": "0444",
+      "authority_source_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v1/results-v1/input-v1/base.sqlite.authority",
+      "database_copy_kind": "private-regular-byte-identical",
+      "database_private_mode": "0600",
+      "database_proxy_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v5/results-v5/rows-v5/work-v5/base-proxy/base.sqlite",
+      "database_sha256": "7db8d50de42b994546789cb67fc7a9b650e2e551dab118e15003e02106b19890",
+      "database_source_mode": "0444",
+      "database_source_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/phase4-g2-materialization-decomposition-20260822-v1/results-v1/input-v1/base.sqlite",
+      "declared_cleanup": "rows-v5/work-v5",
+      "expectations_copy": false,
+      "expectations_not_required_by_prepare": true,
+      "prepare_source_contract": [
+        "database",
+        "authority"
+      ],
+      "source_authority_exists": true,
+      "source_database_exists": true,
+      "transient_ceiling_bytes": 536870912
+    },
+    "branch": "codex/empty-worktree",
+    "fastcdc_source_sha256": "bc0346eec113914943d046a4ab4742420acfff570d6b00115082c40bdf8e58b6",
+    "head": "d79f0e0e2582d1bc491410224fec2b6cef7482e9",
+    "methodology_manifest_sha256": "bd1689dd26102f4bb67081141583cfb08d6e246f8aa5e3dcc541a34f653e8811",
+    "retained_g1_source_sha256": "157699e0cd4cb1e3b5ec631cefb7c967ff7433bdeeb10ee1336e70961b402ad2",
+    "sealed_v1_payload": {
+      "actual_nodes": 181,
+      "entries": 178,
+      "expected_nodes": 181,
+      "manifest_sha256": "28c1b86a3fd3715785617da84195e5ed2cbd5a880dcc883f57f8e51d5edd2d13",
+      "mismatches": 0,
+      "nonwritable_subtree": true,
+      "symlinks_internal": true
+    },
+    "sealed_v1_raw_sha256": "6f7124cc8d4fdd248b89770da5576f2546f105304e3d486ddb2f9c7ce5352af2",
+    "sealed_v3_history": {
+      "actual_nodes": 22,
+      "expected_nodes": 22,
+      "failure": "ValidationAuthorityUnavailable",
+      "fresh_rows": 0,
+      "lock_absent": true,
+      "payload_entries": 19,
+      "payload_manifest_sha256": "59e0bbb6d44da9ba02f8c9536a1b55fedfc48ed342a6068087bbd6aaf509a4c3",
+      "payload_mismatches": 0,
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "REVISE",
+      "subtree_nonwritable": true,
+      "terminal_sha256": "8befdf04037868e0bd2934dccb9e7d3be69b4dad38ba1059d41ea4a375e25f2a",
+      "terminal_verification_sha256": "85554b79ae15b5f72ccc2d11a84222e7d5aa34a2ce41d2088cc30034535809b3"
+    },
+    "v1_instrumented_source_bytes": "not-retained-not-verified",
+    "v1_lock_absent": true,
+    "v1_root_read_only": true,
+    "v1_source_diff_bytes": "not-retained-not-verified",
+    "v4_rejected_preexec": {
+      "actual_rows": 0,
+      "benchmark_children_invoked": 0,
+      "classification": "REJECTED_PRE_EXEC_NOT_A_CAMPAIGN",
+      "dry_run_sha256": "6f12dfb18f1c68d3b22b79af5eb409b7ba188b103db9cd7861a4a8de513b4635",
+      "independent_sha256": "02a0da07e81a09a7de929eda531e005924266cf4905b9a9ece140f9cfd435b29",
+      "lock_absent": true,
+      "manifest_sha256": "2101fa07cf66c17ab09261f02c51a8e187838d08f1deefe4ba9913f6de7238b1",
+      "preregistration_sha256": "31cd21ebc56d0d8ee18c1b1f9ca8813a87dd51e7e0cf59c737a3c91acfd2a3f3",
+      "primary_sha256": "7b427aad341c250c4ef649fa1bcbe13889625758525205d9c3a08ff61311a547",
+      "reason": "database proxy symlink resolves sealed 0444; fs::copy preserves permissions before Store::open",
+      "result_root_absent": true,
+      "runner_sha256": "eb307f775d4aa6d0e1751e79b4838491956afee6a2d88a7fafc6b2dc01698450"
+    }
+  },
+  "product_source_changes": 0,
+  "retained_evidence_ceiling_bytes": 10485760,
+  "schedule": [
+    {
+      "arm": "B",
+      "cli_operation": "edit-same",
+      "iteration": 983001,
+      "kind": "measured",
+      "label": "01-measured-same-middle-pos1-B",
+      "operation": "same-middle",
+      "order": "BA",
+      "position": 1,
+      "sequence": 1,
+      "validation": "capture-only",
+      "warmup": false,
+      "workload": "v5-guard"
+    },
+    {
+      "arm": "A",
+      "cli_operation": "edit-same",
+      "iteration": 983002,
+      "kind": "measured",
+      "label": "02-measured-same-middle-pos2-A",
+      "operation": "same-middle",
+      "order": "BA",
+      "position": 2,
+      "sequence": 2,
+      "validation": "capture-only",
+      "warmup": false,
+      "workload": "v5-guard"
+    }
+  ],
+  "schema": "phase4-g2-protocol-closure-dry-run-v5",
+  "sealed_fixture_and_base_referenced_read_only": true,
+  "status": "PASS",
+  "transient_paths_deleted_before_seal": [
+    "results-v5/rows-v5/work-v5"
+  ],
+  "transient_peak_ceiling_bytes": 536870912
+}

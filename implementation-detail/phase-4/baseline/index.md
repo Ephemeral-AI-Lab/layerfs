@@ -3,6 +3,10 @@
 Current benchmark scoreboard:
 [Phase-4 current benchmark scoreboard](current-benchmark-scoreboard.md).
 
+Current sealed G3 mechanism baseline (`G3 PASS / G4 READY — v13 STATICALLY
+CLOSED AND TERMINALLY SEALED`; G4 planning-only and unstarted):
+[G3 incremental materialization baseline v1](g3-incremental-materialization-baseline-v1.md).
+
 Current accepted optimization baseline:
 [SQLite writer-memory `cache_spill=2000`](sqlite-writer-memory-cache-spill-2000-baseline-v1.md).
 

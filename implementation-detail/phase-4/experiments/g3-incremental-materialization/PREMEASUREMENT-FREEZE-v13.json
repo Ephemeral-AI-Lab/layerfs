@@ -1,0 +1,24 @@
+{
+  "dry_run_sha256": "f20a3a562c6c83afed5228568abd681f06e2369b7c0b3883b5b10fa3bec17ca4",
+  "execute_environment_sha256_name": "G3_V13_FREEZE_SHA256",
+  "lock_absent": true,
+  "methodology_set_sha256": "c6d04dd87b0cfc3794533e475be72e1564a87d142816c0360a6126179e0b6f5a",
+  "result_root_absent": true,
+  "schema": "phase4-g3-v13-premeasurement-freeze-v1",
+  "self_checks": {
+    "analyzer_mutations_rejected_each": 30,
+    "finalizer_row_custody_mutations_rejected": 4,
+    "focused_test_names_frozen": 15,
+    "runner_anchor_source_method_dry_mutations_rejected": 4,
+    "status": "PASS"
+  },
+  "source_set_sha256": "3a0330fc12cdc9b05b949a3f3f2b39f47e8d41d41234fffeedaa0ec65449058d",
+  "status": "PASS",
+  "zero_row_dry_run": {
+    "actual_rows": 0,
+    "analyzer_children_invoked": 0,
+    "benchmark_children_invoked": 0,
+    "build_children_invoked": 0,
+    "cargo_metadata_children_invoked": 1
+  }
+}

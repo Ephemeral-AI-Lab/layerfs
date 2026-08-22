@@ -1,0 +1,198 @@
+{
+  "actual_rows": 0,
+  "analyzer_children_invoked": 0,
+  "benchmark_children_invoked": 0,
+  "broad_deletion": false,
+  "build_children_invoked": 0,
+  "build_plan": {
+    "before_binary_freeze": true,
+    "child_ceiling_seconds": 30,
+    "command": [
+      "cargo",
+      "build",
+      "--release",
+      "-p",
+      "layerfs-engine",
+      "--bin",
+      "phase4_create_edit_benchmark",
+      "--offline"
+    ],
+    "inside_global_timer": true,
+    "planned_invocations": 1
+  },
+  "declared_cleanup_root": "results-v4/work-v4",
+  "execute_environment_required": {
+    "G3_V4_EXECUTE": "authorized-g3-v4-once"
+  },
+  "execute_flag_required": "--execute",
+  "global_ceiling_ns": 59000000000,
+  "lock_absent": true,
+  "lock_created": false,
+  "method_names": [
+    "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v4.md",
+    "COUNTER-DICTIONARY-v4.md",
+    "run_g3_v4.py",
+    "analyze_g3_v4.py",
+    "recompute_g3_v4.py",
+    "finalize_g3_v4.py"
+  ],
+  "methodology_at_dry_run": [
+    {
+      "path": "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v4.md",
+      "sha256": "c1046463d0ae074e9f16c03559cab3725d6e3320783ee1ea72b50f77e205f210",
+      "size_bytes": 6226
+    },
+    {
+      "path": "COUNTER-DICTIONARY-v4.md",
+      "sha256": "7009271a5c42e00692231c899959260cb03ede23cc2e5e4d3c9f00dd4c490581",
+      "size_bytes": 8044
+    },
+    {
+      "path": "run_g3_v4.py",
+      "sha256": "aa49e993c9d2c97e13a321ec524121e29cb98921a11413eea3310c9d0c8023e9",
+      "size_bytes": 30847
+    },
+    {
+      "path": "analyze_g3_v4.py",
+      "sha256": "c243bf27b8ffed04c31b908a40d30c9eac06a6205a25b8e35c3e1f6da1999342",
+      "size_bytes": 32350
+    },
+    {
+      "path": "recompute_g3_v4.py",
+      "sha256": "b624720874c039294728cb67c53a523e0ac14cc94e28f7144a7cc57a2f28209b",
+      "size_bytes": 31559
+    },
+    {
+      "path": "finalize_g3_v4.py",
+      "sha256": "6575f24a368c389c940c7aa362c7aa9705c0c6d662618aed979a270eb99783db",
+      "size_bytes": 26787
+    }
+  ],
+  "methodology_set_sha256": "fd6e79dbd44804b3328f6c9358c4fb5f0b8ef9e9beda4e8e6d388de769a278e2",
+  "operation_sum_ceiling_ns": 20000000000,
+  "per_operation_ceiling_ns": 5000000000,
+  "planned_measured_rows": 9,
+  "planned_row_reruns": 0,
+  "result_root_absent": true,
+  "result_root_created": false,
+  "row_cleanup_plan": {
+    "artifact": "results-v4/ROW-CLEANUP-v4.jsonl",
+    "enumeration_followed_symlinks": false,
+    "peak_equation": "max_individual_pre_delete_row_not_cumulative_sum",
+    "records": 9,
+    "retire_exact_row_before_next": true
+  },
+  "schedule": [
+    {
+      "child_ceiling_seconds": 5,
+      "label": "01-qualified-noop",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-noop",
+      "sequence": 1,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 15,
+      "label": "02-qualified-one-byte",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-byte",
+      "sequence": 2,
+      "size_bytes": 104857600
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "03-qualified-one-mib",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-mib",
+      "sequence": 3,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "04-invalid-authority",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "invalid-authority",
+      "sequence": 4,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "05-external-mutation",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "external-mutation",
+      "sequence": 5,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "06-symlink-substitution",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "symlink-substitution",
+      "sequence": 6,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "07-count-change",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "count-change",
+      "sequence": 7,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "08-before-publication-fault",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "before-publication-fault",
+      "sequence": 8,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "09-lost-ack",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "lost-ack",
+      "sequence": 9,
+      "size_bytes": 1048576
+    }
+  ],
+  "schema": "phase4-g3-v4-dry-run-v1",
+  "source_at_dry_run": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "70c7f1079b6dcff927932d6e0072e5cd169cd2f49ea51c72f7f108d950adb8d8",
+      "size_bytes": 5199,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/Cargo.toml",
+      "sha256": "c08efcca5cd604ffd3aa03dabcf076666292cd309095c5e2b98b7226f32a5865",
+      "size_bytes": 424,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+      "sha256": "c78738ab213c7438544abdf2a37131652813873e30077469d578624f86ce3cdb",
+      "size_bytes": 748411,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "sha256": "5ecc718a3e0595b79910d1bc12353318dd6d55ffff2d2c856118a7cfc14691e8",
+      "size_bytes": 89778,
+      "source_mode": "0644"
+    }
+  ],
+  "source_hashes_frozen_before_build": true,
+  "source_paths": [
+    "Cargo.lock",
+    "crates/layerfs-engine/Cargo.toml",
+    "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+    "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs"
+  ],
+  "source_set_sha256": "70ef2606389813ebd980bf2e5fe9f4585333717fd7dabf21fb69cb4e4c140c9f",
+  "source_set_sha256_frozen_before_build": true,
+  "static_closure_and_finalizer_after_campaign": true,
+  "status": "PASS",
+  "transient_storage_ceiling_bytes": 536870912
+}

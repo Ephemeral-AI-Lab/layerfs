@@ -63,8 +63,20 @@ G1 SQLite writer memory is now **PASS / RETAINED**. The one-variable
 87,050,240 to 8,753,408 bytes and maximum RSS from 93,507,584 to 13,086,720
 bytes while improving durable total from 328.053 to 308.884 ms. All 4/4 pairs,
 both positions, exact semantics/work/durability/Q/storage, independent
-recomputation, static closure, and sealed-manifest gates passed. G0 and G1 are
-complete; G2 is next and was not started.
+recomputation, static closure, and sealed-manifest gates passed.
+
+G0–G3 are now complete. G2 closed
+`PASS / INSUFFICIENT_EVIDENCE FOR A CONSTANT-FACTOR CANDIDATE`; G3 retained a
+benchmark-private macOS/APFS protected-seed clone/patch mechanism with complete
+authenticated fallback. The controlling status is **G3 PASS / G4 READY — v13
+STATICALLY CLOSED AND TERMINALLY SEALED**. Its once-only 100-MiB one-byte row
+was 3.414166 ms, but that is a mechanism screen, not a median, cold-I/O result,
+production acceptance, or G4 acceptance result. G4 is planning-only and
+UNSTARTED; Phase 4 remains incomplete, G5/G6 remain pending, and platform or
+product integration is not accepted. The operation-local authority persists
+no replayable destination receipt and makes no malicious same-UID guarantee.
+Physical I/O, OS cache residency, and stable-media completion remain
+Unavailable.
 
 - [Fast-lane amendment](wp4m/fixed-radix-fast-lane-amendment.md)
 - [Compact evidence contract](wp4m/fixed-radix-compact-evidence-contract.md)
@@ -86,6 +98,10 @@ complete; G2 is next and was not started.
 - [FastCDC v2 baseline](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1.md)
 - [SQLite writer-memory G1 baseline](baseline/sqlite-writer-memory-cache-spill-2000-baseline-v1.md)
 - [SQLite writer-memory G1 manifest](baseline/sqlite-writer-memory-cache-spill-2000-baseline-v1-manifest.tsv)
+- [G3 incremental materialization report](experiments/g3-incremental-materialization/G3-REPORT.md)
+- [G3 sealed v13 baseline](baseline/g3-incremental-materialization-baseline-v1.md)
+- [G3 v13 terminal](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/TERMINAL-v13.json)
+- [G3 v13 terminal verification](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/TERMINAL-VERIFICATION-v13.txt)
 - [Current benchmark scoreboard](baseline/current-benchmark-scoreboard.md)
 - [CP-0010 current grind checkpoint](test-checkpoint-report/cp-0010-dirty-72ed9fee8e6a-fastcdc-v2-phase4-grind.md)
 - [CP-0011 writer-memory checkpoint](test-checkpoint-report/cp-0011-dirty-3e167cdcdc26-sqlite-writer-memory.md)

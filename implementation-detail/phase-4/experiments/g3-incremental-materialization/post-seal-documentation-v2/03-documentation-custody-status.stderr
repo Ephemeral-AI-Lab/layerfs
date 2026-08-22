@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "<string>", line 21, in <module>
+    need(h(p)==expected[name],name+':sha256'); need((p.stat().st_mode&0o7777)==0o644,name+':mode-0644'); need(data.endswith(b'\n'),name+':final-newline'); need(b'\r' not in data,name+':no-cr'); need(all(line==line.rstrip(' \t') for line in text.splitlines()),name+':no-trailing-whitespace')
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 15, in need
+    if not condition: raise RuntimeError('failed check: '+label)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: failed check: implementation-detail/phase-4/baseline/g3-incremental-materialization-baseline-v1.md:sha256

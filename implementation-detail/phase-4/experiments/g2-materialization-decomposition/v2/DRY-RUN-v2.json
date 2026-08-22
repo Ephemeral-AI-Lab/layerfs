@@ -1,0 +1,72 @@
+{
+  "actual_rows": 0,
+  "benchmark_children_invoked": 0,
+  "campaign_ceiling_ns": 59000000000,
+  "child_ceiling_seconds": 15,
+  "database_copies_created": 0,
+  "execute_authorization_required": "parent-authorized-exactly-one-fresh-same-middle-ba",
+  "full_v1_rows_rerun": 0,
+  "planned_executable_snapshots": 2,
+  "planned_invocations": 2,
+  "planned_measured_rows": 2,
+  "planned_order": "BA",
+  "planned_v1_payload_reverification": {
+    "entries": 178,
+    "mismatches": 0
+  },
+  "preflight": {
+    "branch": "codex/empty-worktree",
+    "fastcdc_source_sha256": "bc0346eec113914943d046a4ab4742420acfff570d6b00115082c40bdf8e58b6",
+    "head": "d79f0e0e2582d1bc491410224fec2b6cef7482e9",
+    "methodology_manifest_sha256": "1dc0b553659882e757faa0eed82db0b60b29eaec532a83d0c339b9d83f404ac4",
+    "retained_g1_source_sha256": "157699e0cd4cb1e3b5ec631cefb7c967ff7433bdeeb10ee1336e70961b402ad2",
+    "sealed_v1_payload": {
+      "entries": 178,
+      "manifest_sha256": "28c1b86a3fd3715785617da84195e5ed2cbd5a880dcc883f57f8e51d5edd2d13",
+      "mismatches": 0
+    },
+    "sealed_v1_raw_sha256": "6f7124cc8d4fdd248b89770da5576f2546f105304e3d486ddb2f9c7ce5352af2",
+    "v1_instrumented_source_bytes": "not-retained-not-verified",
+    "v1_lock_absent": true,
+    "v1_root_read_only": true,
+    "v1_source_diff_bytes": "not-retained-not-verified"
+  },
+  "product_source_changes": 0,
+  "retained_evidence_ceiling_bytes": 10485760,
+  "schedule": [
+    {
+      "arm": "B",
+      "cli_operation": "edit-same",
+      "iteration": 983001,
+      "kind": "measured",
+      "label": "01-measured-same-middle-pos1-B",
+      "operation": "same-middle",
+      "order": "BA",
+      "position": 1,
+      "sequence": 1,
+      "validation": "capture-only",
+      "warmup": false,
+      "workload": "v2-guard"
+    },
+    {
+      "arm": "A",
+      "cli_operation": "edit-same",
+      "iteration": 983002,
+      "kind": "measured",
+      "label": "02-measured-same-middle-pos2-A",
+      "operation": "same-middle",
+      "order": "BA",
+      "position": 2,
+      "sequence": 2,
+      "validation": "capture-only",
+      "warmup": false,
+      "workload": "v2-guard"
+    }
+  ],
+  "schema": "phase4-g2-protocol-closure-dry-run-v2",
+  "status": "PASS",
+  "transient_paths_deleted_before_seal": [
+    "results-v2/input-v2",
+    "results-v2/rows-v2/work-v2"
+  ]
+}

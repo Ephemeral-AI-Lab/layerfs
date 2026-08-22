@@ -1,434 +1,441 @@
 # 2026-08-21 Phase 4 full grind roadmap
 
-Status: execution roadmap after CP-0009. This document organizes the remaining
-Phase 4 optimization work; it does not itself authorize a candidate, format
-change, benchmark campaign, promotion, WP5 work, or a Phase 4 completion claim.
+Status: **G3 PASS / G4 READY — v13 STATICALLY CLOSED AND TERMINALLY SEALED**
 
-## Executive decision
+G4 is planning-only and UNSTARTED. Phase 4 remains incomplete; G5 and G6 are
+pending, and no production or platform integration is accepted.
 
-Phase 4 has four independent product-performance lanes:
+This is the current execution roadmap for the remainder of Phase 4. It starts
+from the retained G1 checkpoint and supersedes older ordering in research
+notes that still identifies CP-0009, Canonical-v2, or FastCDC work as next.
+Historical reports remain evidence, not the current control.
 
-1. durable full create;
-2. same-open edits, especially count-changing edits;
-3. first authenticated operation after reopen;
-4. first-time and repeated materialization.
+The roadmap organizes work; it does not itself promote an experiment, change
+a profile or format, authorize 500-MiB work, start WP5, or declare Phase 4
+complete.
 
-They must not be bundled into one implementation or one performance claim.
-Research may proceed in parallel, but measured candidates advance serially
-against the latest accepted control:
-
-```text
-CP-0009
-  -> terminal H05/H05b/H05c findings preserved; H05 not promoted
-  -> canonical-v2 shadow, publication repair, and complete validation PASS
-  -> freeze exact fresh-store canonical-v2 baseline
-  -> exact-boundary FastCDC contiguous-region kernel v2 PASS
-  -> freeze exact v2 executable as the next Canonical-v2 control
-  -> H09 edit-locality simulator and candidate as a separate lane
-  -> materialization qualification and one-variable candidate as a separate lane
-  -> residual SQLite/durability work
-```
-
-Reopen authority remains a separate product/security decision. It does not
-block canonical-v2 research, H09 simulation, or honest materialization
-measurement.
-
-## Controlling baseline
-
-CP-0009 is the exact historical v1 comparison control:
+## 1. Current position
 
 ```text
-HEAD                              febc20f046bba84ccdce1256363d77799eabf2db
-control source diff               b073a7e04c7a7a2b17671f80c42aee598cc5d8039e4ba83d63b7cac89d150f84
-release executable                9cda87ee7fd92784281a6ec7ee3045eb661681d8b7b930dd36546119ae4749d7
-durable 100-MiB submit            640.109209 ms
-construction / mapping            504.215417 ms
-proof consumption                   0.038542 ms
-COMMIT                             135.855250 ms
-same-open same-count edit            9.737250 ms
-authority before that edit         245.330416 ms
-warm logical materialization       425.800708 ms
-fresh logical materialization      433.512791 ms
-authenticated returned 1-MiB range   3.171209 ms / 315.337 MiB/s
-reopen / visible head                3.007750 ms
+G0  FastCDC-v2 checkpoint              COMPLETE  286eb7a
+G1  SQLite writer-memory policy        COMPLETE  d79f0e0
+G2  materialization decomposition      COMPLETE
+G3  incremental prototype              PASS      sealed v13
+G4  materialization acceptance         READY     planning only; UNSTARTED
+G5  remaining core lanes               PENDING
+G6  Phase-4 closure                     PENDING
 ```
 
-The materialization cache state is `warm-or-unknown`, and phase-local CPU is
-unavailable. Future candidate claims require adjacent balanced A/B against the
-exact current control; historical subtraction is not evidence.
+The accepted runtime is Canonical-v2 plus the exact-boundary FastCDC
+contiguous-region kernel and `PRAGMA cache_spill=2000`.
 
-Canonical-v2 is now the accepted fresh-store optimization baseline. Its exact
-source/executable/profile are `16e9beed...e120` / `f3dd4c94...0280` /
-`94a03ba7...d13b`. The complete campaign measured 667.652021 ms CP-0009
-versus 512.214000 ms v2, or 23.281293% faster. Both adjacent pairs won and all
-29 lifecycle/semantic rows passed. CP-0009 remains the v1 rollback authority;
-automatic nonempty v1-to-v2 migration remains deferred.
+| Current 100-MiB operation | Retained result | Qualification |
+|---|---:|---|
+| Durable fresh create | **308.884 ms / 323.746 MiB/s** | freshly measured after G1 |
+| Writer maximum RSS | **12.48 MiB** | G1; 86.005% below its control |
+| SQLite cache snapshot maximum | **8.35 MiB** | G1; 89.944% below its control |
+| Same-open same-count edit | **6.961 ms** | latest Canonical-v2 lifecycle evidence |
+| Same-open `+1` early / middle | **5.108 / 4.576 ms** | latest Canonical-v2 lifecycle evidence |
+| One-byte early / middle / late | **6.410 / 6.415 / 6.725 ms** | latest Canonical-v2 guards |
+| Warm authenticated reconstruction | **338.776 ms / 295.180 MiB/s** | complete reauthentication; not incremental |
+| Fresh-process reconstruction | **366.357 ms / 272.958 MiB/s** | OS cache warm-or-unknown |
+| Reopen / visible head | **2.088 ms** | retained |
+| First edit after reopen | **154.019 ms** | full authority work remains |
+| Authenticated returned 1-MiB range | **2.279 ms / 438.749 MiB/s** | retained |
+| Proven cold native materialization | **Unavailable** | unqualified path/benchmark |
+| Trusted hot read | **Unavailable** | trusted authority/cache path absent |
+| 100-MiB one-byte incremental materialization | **3.414166 ms** | single G3 kill-screen row; G4 acceptance pending |
 
-The below-500-ms / above-200-MiB/s create milestone remains an intermediate
-target. This complete-validation sample is 12.214 ms above it, so the baseline
-freeze is a correctness-backed relative win, not a claim that create work is
-finished.
-
-The exact-boundary FastCDC contiguous-region kernel v2 is now the next accepted
-control derived from Canonical-v2. Its CDC source/executable are
-`bc0346ee...58b6` / `454bc2f3...eba8`. The corrected CDC-only screen saved
-100.485990 ms with exact 5,284-boundary parity. The adjacent durable campaign
-measured 414.414979 ms control versus 339.748094 ms candidate, a 74.666885-ms
-or 18.017420% improvement; all four pairs and both execution positions won and
-all semantic, durability, Q, storage, CPU/RSS, custody, and static gates passed.
-The earlier cached-active-mask v1 candidate remains `NO-GO / REVERT`; only the
-contiguous-region kernel is promoted.
+Only durable full create was freshly remeasured after G1. The incremental row
+is the once-only G3 mechanism screen, not a median or acceptance baseline.
+Other cells remain the latest retained Canonical-v2 authority until G4
+refreshes the compact matrix. Historical CP-0008 500-MiB results remain scale
+evidence; no new 500-MiB execution is authorized.
 
 Controlling documents:
 
-- [CP-0009 report](test-checkpoint-report/cp-0009-dirty-b073a7e04c7a-current-product-baseline.md)
-- [Current baseline manifest](baseline/current-baseline-v1-manifest.tsv)
-- [Canonical-v2 frozen baseline](baseline/canonical-v2-baseline-v1.md)
-- [Canonical-v2 baseline manifest](baseline/canonical-v2-baseline-v1-manifest.tsv)
-- [FastCDC contiguous-region v2 baseline](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1.md)
-- [FastCDC contiguous-region v2 manifest](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1-manifest.tsv)
-- [Optimization decision map](../../research/phase-4/decision-map.md)
-- [Hypothesis ledger](../../research/phase-4/foundations/hypothesis-ledger.md)
-- [Benchmark method](../../research/phase-4/foundations/benchmark-and-evidence.md)
-- [Invariant matrix](../../research/phase-4/foundations/invariant-matrix.md)
+- [current benchmark scoreboard](baseline/current-benchmark-scoreboard.md)
+- [G3 incremental materialization report](experiments/g3-incremental-materialization/G3-REPORT.md)
+- [G3 campaign baseline](baseline/g3-incremental-materialization-baseline-v1.md)
+- [G1 writer-memory baseline](baseline/sqlite-writer-memory-cache-spill-2000-baseline-v1.md)
+- [Canonical-v2 baseline](baseline/canonical-v2-baseline-v1.md)
+- [FastCDC-v2 baseline](baseline/fastcdc-contiguous-region-kernel-v2-baseline-v1.md)
+- [CP-0008 count-change scale diagnostic](test-checkpoint-report/cp-0008-dirty-4f1c97f81f7c-count-change-scale.md)
+- [optimization decision map](../../research/phase-4/decision-map.md)
+- [invariant matrix](../../research/phase-4/foundations/invariant-matrix.md)
+- [benchmark method](../../research/phase-4/foundations/benchmark-and-evidence.md)
 
-## Permanent constraints
-
-Every retained candidate must preserve the applicable contracts:
-
-- exact CAS, CDC, COW, root, transition, delta, and object identities unless a
-  separately authorized versioned profile explicitly changes them;
-- exact errors and failure precedence;
-- authenticated incumbents and no authority laundering;
-- bounded owned memory with exact capacity accounting and terminal `Q=0`;
-- one writer transaction, one publication COMMIT, and atomic visible-head
-  publication;
-- caller-thread execution unless a separately authorized execution profile
-  changes that contract;
-- rollback-journal `DELETE`, `synchronous=FULL`, `temp_store=FILE`, and
-  `mmap_size=0` for the current SQLite profile;
-- fresh reconciliation for ambiguous COMMIT outcomes;
-- no inference of physical I/O, sync, cold-cache state, or CPU attribution
-  from wall time or logical byte counts.
-
-## Lane 1 — durable full create
-
-### Goal
-
-Reduce the 640.109-ms durable 100-MiB create, first by attacking the
-504.215-ms construction path and only later the residual 135.855-ms COMMIT
-path. The work order is canonical identity and hashing, CDC execution, then
-SQLite physical behavior.
-
-### C1 — H05 canonical-occurrence witness
-
-H05 is the immediate create optimization. Its benchmark-private candidate is
-already implemented, validated, built once, hash-frozen, and preregistered.
-Its frozen private screen is now terminal `H05 MEASURED NO-GO` /
-`REVERT / H05 LOCAL NO-GO`. The candidate won 3/3 measured pairs with a
-16.655343% paired median durable improvement, but all four pairs missed the
-prospectively frozen exact allocated-storage equality gate. No full H05
-campaign or integration is eligible. CP-0009 remains the accepted create
-control.
-
-It replaces one private full-source construction digest:
+## 2. Execution order
 
 ```text
-control input:    104,857,600 source bytes
-candidate input:  repeated(u32be(raw_length) || canonical_object_id)
-candidate bytes:  5,284 * 36 = 190,224
-net reduction:    104,667,376 hash-input bytes
+G1 retained control
+  -> G2 decompose materialization and select exactly one mechanism
+  -> G3 implement and kill-screen the smallest incremental mechanism
+  -> G4 qualify materialization across the compact 1/10/100-MiB matrix
+  -> G5 close reopen, edit locality, concurrency, and residual SQLite lanes
+  -> G6 freeze the final scoreboard, evidence, limitations, and WP5 handoff
 ```
 
-It retains the external source fingerprint, current v1 raw-ID sequence,
-current durable bytes, roots, schema, profile, transaction, COMMIT, and
-durability behavior. The hash-input reduction is a direct-counter prediction,
-not speed evidence, and it does not remove the source scan required by CDC.
+| Stage | Scope | Fast-iteration budget | Exit condition |
+|---|---|---:|---|
+| **G2 — materialization research** | Decompose SQLite read, authentication/hash, output, filesystem, receipt, and mutation-authority work | `<20 s` diagnostic plus static analysis | exactly one candidate selected, or `INSUFFICIENT_EVIDENCE` |
+| **G3 — incremental prototype** | Receipt-valid no-op, same-size one-byte update, 1-MiB replacement, invalid-receipt/fault fallback | `<20 s` mechanism screen | retain or revert one same-size mechanism |
+| **G4 — materialization acceptance** | Compact 1/10/100 matrix for authenticated reconstruction, native/cold qualification, trusted hot, incremental, and fallbacks | `<=120 s` measured campaign total | materialization baseline frozen |
+| **G5 — remaining core lanes** | Reopen authority, count-change locality, concurrency/endurance, optional physical-profile/create work | separate one-variable screens | every lane accepted, retained, or explicitly deferred |
+| **G6 — closure** | Final matrix, tests, manifests, limitations, decision ledger, and WP5 handoff | no new candidate | Phase 4 PASS or exact blocker list |
 
-Completed screen:
+Research may proceed in parallel. Builds, source changes, and measured
+campaigns advance serially from the latest accepted control. A stage groups
+decisions; it does not authorize stacking them into one implementation.
 
-1. 7/7 protected candidate smoke rows passed;
-2. one uncounted `AB` warmup and measured `AB / BA / AB` pairs completed in
-   83 seconds;
-3. exact semantics/resources and counters passed except allocated-storage
-   equality;
-4. the negative evidence is preserved under
-   `target/phase4-h05-canonical-witness-screen-20260821-v1/screen-results-v7`;
-5. no full campaign was run.
+## 3. G2 — materialization decomposition and authority
 
-Had the H05 screen passed, it would have authorized only a full adjacent
-balanced campaign, not integration or a new baseline. The actual terminal
-result authorizes neither.
+### Objective
 
-See [H05 preregistration](experiments/h05-canonical-witness/preregistration.md).
-
-### C2 — compact canonical-v2
-
-**Terminal disposition: PASS / FROZEN.** Native-v2 completed the full static
-and 29-row lifecycle validation. It retains 5,284 CDC occurrences, 5,372
-created objects, 5,381 SQL calls, 10,748 BLOB writes, one transaction, one
-COMMIT, and terminal Q zero while reducing mapping bytes from 365,262 to
-196,174. The balanced durable-create result is 667.652021 to 512.214000 ms
-(23.281293%). Canonical-v2 is closed as the baseline; further work must be a
-separate candidate derived from it.
-
-H05 has supplied local cost evidence for the mandatory ordered canonical
-commitment, though its exact candidate is terminally rejected. Investigate a
-versioned occurrence representation:
+Separate the currently conflated operation:
 
 ```text
-v1: raw_id[32] + length[4] + canonical_id[32] = 68 bytes
-v2: length[4] + canonical_id[32]               = 36 bytes
+open/head
+  + SQLite/CAS reads
+  + canonical authentication and hashing
+  + mapping traversal
+  + reconstructed-output copies
+  + native destination writes and metadata
+  + destination authority/publication
+  = materialization lifecycle
 ```
 
-Exact retained-fixture gross effects before topology changes:
+Existing 338.776/366.357-ms rows reconstruct every byte through an
+authenticated logical sink. They are neither incremental materialization nor
+proof of a cold native checkout.
 
-```text
-5,284 references * 32 bytes       = 169,088 fewer mapping bytes
-mapping bytes                     = 365,262 -> 196,174
-full K64 leaf                     = 4,380 -> 2,332 bytes
-raw ChunkId hashing interval      = 95.185147 ms gross removable budget
-```
+### Required distinctions
 
-The accepted profile changed authority, rejoin, receipt, mapping, and
-transition semantics prospectively. It did not create a bridge format or
-rewrite retained history. Automatic migration remains unsupported.
+- empty destination versus authenticated existing destination;
+- first-ever versus repeated materialization;
+- logical reconstruction versus native output;
+- cold, warm, reopened, and warm-or-unknown cache states;
+- authenticated SQLite/CAS bytes read versus destination bytes written;
+- receipt validation versus byte-level destination authority;
+- no-op, changed-range, and full-fallback work;
+- logical, apparent, and allocated storage observations.
 
-### C3 — exact CDC/hash execution
+Unsupported physical I/O, cache, sync, or CPU attribution remains
+`Unavailable` with a reason. RSS, Q, logical length, allocation, and wall time
+must not substitute for physical I/O.
 
-**Terminal disposition: PASS / FROZEN.** The final safe-Rust exact-boundary
-candidate replaced per-pair scanner bookkeeping with a contiguous small/large
-region kernel while retaining the exact Gear recurrence, profile, 5,284
-boundaries, chunk bytes, identities, and durability behavior. The corrected
-CDC-only screen measured 144.272583 to 43.786594 ms, saving 100.485990 ms.
-The adjacent durable campaign measured 414.414979 to 339.748094 ms, saving
-74.666885 ms or 18.017420%; 4/4 pairs and both positions won.
+### Candidate-selection rule
 
-The exact executable `454bc2f3...eba8` is the next control. Serial safe-Rust
-exact-boundary CDC tuning is closed; do not stack pending-only, read-size,
-unrolling, cached-mask, compiler-flag, or another CDC implementation onto this
-campaign. Larger chunk profiles and worker/multicore execution remain separate
-versioned tradeoffs rather than follow-ups to this retained kernel.
+G2 launches no broad implementation. It ranks concrete mechanisms by measured
+removable wall, correctness authority, memory/storage/concurrency effects, and
+the fastest falsifying screen, then selects exactly one:
 
-### C4 — SQLite physical profile
+1. destination-authority-gated no-op and changed-range materialization;
+2. one-pass authenticated streaming if duplicate reads are directly measured;
+3. a verified same-volume native seed/clone path with exact fallback;
+4. a read-side SQLite/page-profile mechanism only if decomposition attributes
+   enough wall to it.
 
-Only after canonical and CDC work, compare fresh 4-KiB, 8-KiB, and 16-KiB
-database profiles with byte-fixed cache settings. Protect create, same-count
-and count-changing edits, scrub, reconstruction, returned ranges, Q, RSS,
-storage, and residue.
+Foreground compression, Git-style delta packing, and a second durable carrier
+remain rejected defaults. Their prior measured cost/storage evidence does not
+justify reopening them.
 
-The current profile reports approximately one final database image of dirty
-page bytes. Larger pages may reduce page events and overflow/B-tree work, but
-they cannot be assumed to reduce physical bytes or wall time.
+### G2 closure — 2026-08-22
 
-### C5 — residual COMMIT and durability
+G2 closed `PASS / INSUFFICIENT_EVIDENCE FOR A CONSTANT-FACTOR CANDIDATE`.
+The accepted decomposition retained the existing implementation and selected
+destination-authority-gated incremental materialization for G3; it did not
+promote a read-side micro-optimization.
 
-Optimize only evidenced work before the same durability barrier. Do not weaken
-`synchronous=FULL`, remove the publication COMMIT, add a second transaction,
-or infer sync behavior from wall time. If canonical, CDC, and page-profile
-work leave no safe removable budget, retain the current durability design.
+| Decomposed 100-MiB materialization family | Median wall | Directly removable under current authority? |
+|---|---:|:---:|
+| Canonical authentication | **94.817 ms** | No |
+| Closure commitment | **88.483 ms** | No |
+| Source/output fingerprint | **87.890 ms** | No |
+| SQLite BLOB acquisition | **59.404 ms** | No |
+| Secondary byte decode | **0.141 ms** | Yes, but immaterial |
 
-## Lane 2 — same-open edit scaling
+The instrumented decomposition added **1.067%** balanced overhead
+(328.897 ms control versus 332.405 ms instrumented). The fresh complementary
+BA semantic pair matched exactly on root, transition, database, work, storage,
+one transaction/COMMIT, and terminal Q=0. It was not used for a timing claim.
+The sealed v5 closure has 33/33 manifested payload entries, zero mismatches,
+and completed within its 59-second protocol ceiling. Historical v1/v3 remain
+`REVISE`; v4 remains rejected before execution.
 
-### Current evidence
+Post-G2 static closure passed:
 
-Same-count edits are already strong and must be protected:
+- `cargo test --workspace --offline --all-targets`: **142 passed, 1 ignored, 0 failed**;
+- `cargo clippy --workspace --offline --all-targets -- -D warnings`: **PASS**;
+- `cargo fmt --all -- --check`: **PASS**;
+- `git diff --check`: **PASS**.
 
-```text
-100-MiB same-open same-count edit  9.737250 ms
-```
+G3 is therefore eligible. The G3 experiment must target avoided full-file work
+for a receipt-valid no-op and same-size changed ranges while preserving the
+complete authenticated fallback.
 
-CP-0008 exposes the count-changing suffix slope:
+Evidence: [G2 post-PASS static closure](experiments/g2-materialization-decomposition/G2-POST-PASS-STATIC-CLOSURE-20260822.md).
 
-```text
-500-MiB early +1 edit              27.140916 ms
-500-MiB middle +1 edit             15.102042 ms
-100 -> 500 MiB suffix/mapping work approximately 5x
-```
+## 4. G3 — same-size incremental prototype
 
-The fixed-radix representation passes the historical `<50 ms through 500
-MiB` policy. The stronger product objective is now practically size-insensitive
-same-open local edits across 1, 10, 100, and 500 MiB.
+G3 completed its mechanism screen with **v13 TERMINAL PASS**. Attempt A was a
+static NO-GO because ordinary destination metadata, receipts, and event hints
+cannot prove current user-editable bytes without full authentication. The
+retained Attempt B is a benchmark-private, same-open protected native seed:
+clone the bound seed, authenticate and patch only proven changed ranges, then
+sync and atomically publish. Invalid authority, destination mutation, count
+change, missing qualification, or clone failure uses complete authenticated
+fallback with zero permit consumption. Symlink/wrong-kind has typed preflight
+precedence; publication ambiguity is reconciled to exactly target/new or
+prior/old.
 
-### E1 — H09 history-independent prolly simulator
+| v13 row | Retained observation | Operation ns | Result |
+|---|---|---:|---|
+| 10-MiB receipt-valid no-op | one clone; zero payload/canonical-auth/reconstruction/patch/fallback | 993791 | exact new output |
+| 100-MiB one-byte update | 22551 canonical-authenticated B; one-byte patch; no full reconstruction | 3414166 | exact new output |
+| 10-MiB one-MiB update | 1086013 canonical-authenticated B; 1048576-byte patch; no full reconstruction | 2926167 | exact new output |
+| 1-MiB invalid authority | 0/1 authority success/failure; 1048576-byte complete fallback | 3684250 | exact new output |
+| 1-MiB external mutation | 1048576-byte complete fallback | 4360042 | exact new output |
+| 1-MiB symlink substitution | typed preflight; zero authority/seed-authority, permit, SQL/BLOB/canonical-auth/reconstruction, clone/copy/patch/fallback, temp/sync/rename/reconciliation counters; verification 1048576 B | 7666 | exact old output |
+| 1-MiB count change | 1048577-byte complete fallback | 3837542 | exact new output |
+| 1-MiB before-publication fault | one-byte patch attempt; no rename; temp removed | 602166 | exact old output |
+| 1-MiB lost acknowledgement | target reconciliation compared 1048576 destination/source B; Q 56849/0 charges the fixed comparison buffer | 3123083 | exact new output |
 
-Before changing the durable mapping format, simulate the exact CP-0008 edit
-sequences over 1/10/100/500-MiB mappings. A qualifying design combines:
+Campaign wall was **17,722,050,000 ns** and the operation sum was
+**22,948,873 ns**. All rows were byte/mode exact with terminal Q zero and zero
+temp/seed residue. Maximum isolated allocation was **440,541,184 bytes** under
+512 MiB; **552,169,472 bytes** is the descriptive sum across independently
+retired row roots, not simultaneous usage. Primary and independent analysis
+agreed on normalized ledger
+`19a3fd5ab1d5fb4dc00ffe396de1d118bfc38706d85c4009a974033d0a4010a1`.
 
-- subtree byte lengths for direct offset lookup;
-- bounded local CDC rejoin;
-- content-defined mapping-node boundaries with hard minimum and maximum sizes;
-- persistent COW reconstruction of only affected nodes and paths;
-- no global ordinal or absolute-position field that relabels the suffix;
-- deterministic, history-independent roots for identical final content.
+Versions v1, v2, v4, v5, v6, v7, and v9 were zero-row pre-execution revisions.
+v3 retained six passing rows but revised its cumulative-storage protocol. v8
+retained nine passing rows and cleanup but revised copied-analyzer repository
+derivation. v10 retained nine passing rows and both analyzer results, then
+failed workspace static closure because Cargo auto-discovered the G3 module as
+a standalone binary; it was not sealed. v11 repaired that manifest and sealed,
+but independent post-seal review classified it historical REVISE because its
+Q accounting, cleanup ownership, first-error precedence, and canonical
+changed-range proof were incomplete. v12 repaired those four product defects
+but was frozen as a zero-row PREEXEC REVISE for five evidence-protocol gaps.
+v13 retained the repaired source, closed only those five protocol gaps, and
+reran all nine rows without reuse.
 
-Advance to a benchmark-private candidate only if the simulator shows:
+G3 remains benchmark-private, non-production, macOS/APFS-native, and limited to
+operation-local same-open/process-lifetime custody with no persistent replayable
+destination receipt or malicious same-UID guarantee. Physical I/O, OS cache
+residency, and device stable-media completion remain unavailable. Static
+closure passed 157 workspace tests with 1 ignored and 0 failed; 15 focused G3
+tests, clippy, rustfmt, diff check, and custody review also passed. The 67-entry
+manifest and terminal verification seal v13 as G3 PASS.
 
-- at least 95% fewer rewritten mapping bytes for early and middle
-  count-changing edits;
-- direct affected-work counters that remain approximately flat across file
-  sizes apart from shallow-tree `O(log N)` growth;
-- hard node-size bounds and deterministic roots;
-- no more than 5% full-build or same-count regression.
+Sealed evidence: [campaign](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/CAMPAIGN-v13.json),
+[static closure](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/STATIC-CLOSURE-v13.json),
+[payload manifest](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/PAYLOAD-MANIFEST-v13.tsv),
+[terminal](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/TERMINAL-v13.json), and
+[terminal verification](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/TERMINAL-VERIFICATION-v13.txt).
 
-The aspirational result is approximately 10–15 ms for equivalent same-open
-count-changing edits from 10 through 500 MiB. This is a target, not existing
-evidence. H09 does not optimize full create and must not regress it.
+Evidence: [G3 report](experiments/g3-incremental-materialization/G3-REPORT.md)
+and [G3 campaign baseline](baseline/g3-incremental-materialization-baseline-v1.md).
 
-## Lane 3 — reopen authority
+## 5. G4 — materialization acceptance
 
-### Separate the operations
+G4 is **READY** for planning because G3 is sealed PASS, but G4 is **UNSTARTED**.
+Integration remains conditional on a later G4 acceptance result. Use 1/10-MiB
+smokes and 100-MiB primary rows; the entire measured campaign, not each
+subcampaign, is capped at 120 seconds.
 
-Opening the database and reading the visible head is already fast:
+| Operation | 1 MiB | 10 MiB | 100 MiB | Primary evidence |
+|---|:---:|:---:|:---:|---|
+| Authenticated logical reconstruction | smoke | smoke | primary | SQL/BLOB/hash/output wall |
+| Fresh-process reconstruction | smoke | smoke | primary | reopen plus reconstruction |
+| Proven cold native materialization | smoke | smoke | primary | native read/write/publication wall |
+| Trusted hot full read | smoke | smoke | primary | authority and avoided bytes/cache budget |
+| Receipt-valid no-op | smoke | smoke | primary | zero payload writes |
+| One-byte same-size incremental update | smoke | smoke | primary | changed ranges and bytes |
+| Same-size 1-MiB replacement | smoke | smoke | primary | changed-byte scaling |
+| Count-changing update | smoke | smoke | primary | honest suffix/allocation or fallback |
+| Invalid receipt/external mutation | focused | focused | primary | exact complete fallback |
+| Destination faults | focused | focused | primary | atomicity, reconciliation, cleanup |
 
-```text
-reopen / visible head               3.007750 ms
-```
+Phase 4 qualifies the engine boundary, authority, and benchmark behavior.
+A mechanism later accepted by G4 may be considered for OS/application
+integration; neither G3 nor G4 itself authorizes broad projection, FUSE/VFS,
+SDK, or product integration.
 
-The expensive operation is the first authenticated mutation after reopen:
+## 6. G5 — remaining core lanes
 
-```text
-500-MiB first-after-reopen          1.228564–1.262772 s
-```
+G5 contains independent decisions. Their research can overlap, but each
+implementation and measured campaign remains one-variable and serial.
 
-This is dominated by full closure authority, not count-changing mapping.
-Neither H05 nor H09 materially removes it.
+### G5-A — reopen authority
 
-### R1 — explicit authority decision
+Current open/head lookup is already 2.088 ms. The unresolved cost is the first
+edit after reopen: 154.019 ms versus approximately 6.4 ms same-open. Full
+closure authority, not head lookup or edit construction, dominates.
 
-Choose one terminal policy before implementation:
+Choose one terminal disposition:
 
 1. retain the secure `Theta(stored closure)` scrub after an untrusted reopen;
    or
-2. authorize a trusted authority boundary with a non-replayable store
-   generation, mutation mediation, cross-process writer fencing,
-   rollback/downgrade protection, and crash/ambiguous-outcome reconciliation.
+2. accept a fast path only with a non-replayable store generation, mutation
+   mediation, writer fencing, rollback/downgrade protection, and exact crash/
+   ambiguous-outcome reconciliation.
 
-A receipt, inode, size, mtime, sidecar, or database-local generation cannot
-alone prove freshness because it can be rolled back with the database. The
-current read-only research disposition is `RETAIN_FULL_REOPEN_SCRUB`; no fast
-implementation is authorized without a stronger trust primitive.
+Do not use a replayable receipt or ordinary file metadata as proof of fresh
+cross-process authority. If no adequate external trust primitive exists,
+retaining the scrub is a valid Phase-4 closure decision.
 
-See the [reopen-authority report](../../research/phase-4/after-cp-0009/reopen-authority/report.md).
+### G5-B — count-changing edit locality
 
-## Lane 4 — materialization
+Count-changing edits insert or remove CDC references. Current fixed-radix
+mapping remains correct and fast in absolute terms, but rewrites the suffix:
 
-### Separate the workloads
+| Evidence | Early `+1` | Middle `+1` |
+|---|---:|---:|
+| Current 100-MiB Canonical-v2 guard | **5.108 ms** | **4.576 ms** |
+| Historical 500-MiB CP-0008 | **27.141 ms** | **15.102 ms** |
 
-1. First-ever materialization to an empty destination is `Omega(file size)`:
-   every output byte must be produced.
-2. Repeated materialization to an authenticated existing destination may be
-   changed-byte proportional through an authenticated parent-to-child delta.
-3. Repeated same-volume materialization to a new destination may benefit from
-   a verified native seed and APFS clone, but that is platform-specific and
-   does not replace the no-seed path.
+CP-0008 directly observed approximately 5x suffix/mapping work from 100 to
+500 MiB. The lane therefore remains algorithmically open even though the
+retained `<50 ms through 500 MiB` policy passed.
 
-The existing 425.801/433.513-ms warm/fresh values use a logical reconstruction
-sink with `warm-or-unknown` cache state. They are not native cold-output
-evidence.
+Before a durable mapping change, decide the product SLA. Run an H09/prolly
+simulator only if the requirement is near-size-independent count-changing
+latency at multi-GiB scale. Advance beyond simulation only if it demonstrates
+deterministic, history-independent roots, bounded node sizes, direct offset
+lookup, approximately flat affected work, and no material create/same-count
+regression. A mapping change must not be justified by asymptotics alone.
 
-### M1 — qualify cold and hot materialization
+### G5-C — concurrency and endurance
 
-Before implementing an optimization, build one evidence boundary that
-separates:
+G1 reduced per-writer RSS from approximately 89 MiB to 12.48 MiB, but earlier
+cache spilling may acquire SQLite's exclusive lock sooner. Single-operation
+memory and latency do not prove concurrent behavior.
 
-- cold versus warm source-cache state where the platform can support the
-  distinction;
-- empty destination versus authenticated existing destination;
-- logical reconstructed bytes;
-- authenticated SQLite/CAS bytes read;
-- destination bytes written;
-- logical, apparent, and allocated endpoint bytes;
-- first materialization versus delta/incremental materialization.
+| Workload | Required observation |
+|---|---|
+| Reader during one writer | reader blocking/tail latency and writer wall |
+| Multiple readers | aggregate throughput, tail latency, bounded memory |
+| Two same-store writers | deterministic serialization and bounded waiting |
+| Independent stores | CPU scaling, aggregate RSS/Q, no global bottleneck |
+| 10/100/1,000 revisions | memory, storage, mapping depth, and latency plateau |
+| Failure/cancellation under load | rollback, cleanup, one COMMIT per accepted mutation |
 
-Every unsupported observation must be marked unavailable with its reason. Do
-not use wall time, RSS, logical length, or allocation as a physical-I/O proxy.
+Any future pipeline keeps SQLite on one ordered writer connection, uses hard
+bounds, preserves deterministic evidence/error order, and proves cancellation
+and rollback. Do not add workers merely to chase a small full-create win.
 
-### M2 — select one measured mechanism
+### G5-D — residual SQLite/create optimization
 
-Rank only after M1 exposes the removable budget:
+The retained create result already exceeds the original 300-MiB/s goal. A
+new create candidate requires a material objective and a directly measurable
+budget.
 
-1. one-pass authenticated bounded streaming if duplicated reads are measured;
-2. authenticated parent-to-child delta application for a proven destination;
-3. verified APFS native seeds for repeated same-volume output;
-4. canonical-v2 read-side simplification if C2 establishes its authority.
+Evaluate one variable at a time:
 
-Foreground compression and Git-style delta packing remain rejected for the
-retained fixture: adaptive zstd saved only about 4.32% while the exploratory
-per-object encode screen cost about 147.8 ms.
+1. one intermediate spill threshold if it can recover mapping wall while
+   retaining a prospectively bounded low RSS;
+2. a fresh 16-KiB page profile if it reduces page/spill events and protects
+   edit, materialization, range, storage, and migration behavior;
+3. bounded ordered CDC/hash/SQLite overlap only when a materially sub-300-ms
+   target justifies a new execution profile;
+4. retain the current `308.884 ms / 323.746 MiB/s` control when no candidate
+   has sufficient cross-operation upside.
 
-## Fast research-to-evidence loop
+Never restore the old approximately 89-MiB writer peak, duplicate the full
+payload, add an unbounded cache, weaken `FULL + DELETE`, add a second durable
+publication boundary, or call pager bytes physical I/O.
 
-Every candidate follows the same cadence:
+### G5-E — operation-shape qualification
+
+The accepted final control must cover the important shapes that are not
+necessary in every speculative performance screen:
+
+- empty, tiny, CDC minimum/target/maximum, and EOF boundaries;
+- append, truncate, insertion, deletion, replacement, and scattered edits;
+- identical rewrite, existing-chunk CAS reuse, and cross-file deduplication;
+- damaged object, mapping, receipt, authority, and visible head;
+- before-COMMIT and ambiguous/lost-ack outcomes;
+- repeated history and same-store contention;
+- explicit cold, warm, reopened, and warm-or-unknown evidence labels.
+
+Cheap correctness tests run early. Expensive performance/endurance cells run
+only after a candidate demonstrates its primary mechanism.
+
+## 7. G6 — final Phase-4 closure
+
+G6 introduces no new optimization. It freezes the surviving implementation
+and closes every lane with `ACCEPT`, `RETAIN_CURRENT`, or an explicit blocker.
+
+Required deliverables:
+
+1. refresh the simple 1/10/100-MiB scoreboard from one exact accepted control;
+2. run focused boundary, corruption, fault, resource, and concurrency tests;
+3. run the full workspace tests, clippy with warnings denied, and rustfmt;
+4. freeze source, diff, executable, profile, fixture, command, environment,
+   raw-row, analysis, and manifest hashes;
+5. independently recompute the controlling statistics and timer equations;
+6. report exact Q/RSS/memory bounds and logical/apparent/allocated storage;
+7. label unavailable physical I/O, sync, cache, cold-state, and CPU evidence;
+8. record every accepted, rejected, retained, and deferred research direction;
+9. produce a clean checkpoint and the WP5 handoff without starting WP5.
+
+Phase 4 closes only when every lane has a terminal evidence-backed decision:
+
+| Lane | Required terminal disposition |
+|---|---|
+| Durable full create | accepted optimized control or retain-current decision |
+| Same-open edits | size-scaling goal met or suffix-linear limit explicitly accepted |
+| Reopen authority | trusted fast path accepted or secure full scrub retained |
+| Materialization/read | cold/hot/first/repeated behavior measured; candidate accepted or fallback retained |
+| Concurrency/resources | lock, aggregate memory, storage, history, and failure behavior qualified |
+| SQLite durability | physical profile accepted or current profile retained |
+| Global correctness | identities, errors, authority, Q, durability, storage, reconciliation, and custody pass |
+
+## 8. Permanent execution rules
+
+Every retained candidate preserves the applicable contracts:
+
+- exact CAS, CDC, COW, canonical object, root, transition, delta, and receipt
+  identities unless a separately authorized versioned profile changes them;
+- exact errors and failure precedence;
+- authenticated incumbents and no authority laundering;
+- bounded owned memory, exact Q accounting, and terminal `Q=0`;
+- one SQLite writer transaction, one publication COMMIT, and atomic visible
+  head publication;
+- rollback-journal `DELETE`, `synchronous=FULL`, `temp_store=FILE`, and
+  `mmap_size=0` for the current profile;
+- fresh independent reconciliation for ambiguous COMMIT outcomes;
+- low extra storage with no duplicate full payload or unbounded history/cache;
+- explicit concurrent-load and aggregate-memory qualification;
+- no inference of physical I/O, sync, cold-cache state, or phase-local CPU
+  from wall time, RSS, allocation, Q, or logical byte counts.
+
+Every candidate uses the same cadence:
 
 ```text
 measured removable budget and authority analysis
   -> prospective one-variable preregistration
-  -> <=120-second kill screen
-  -> REVERT or RETAIN-FOR-FULL-CAMPAIGN
-  -> complete adjacent balanced A/B
-  -> independent recomputation and final read-only audit
-  -> new accepted checkpoint or terminal revert
+  -> <20-second mechanism/parity screen
+  -> immediate REVERT or retain for short A/B
+  -> <=120-second total adjacent balanced campaign
+  -> focused then full static closure only after a measured signal
+  -> independent recomputation and read-only audit
+  -> checkpoint accepted control or terminal negative evidence
 ```
 
-Rules:
+No measured row may be selectively removed or rerun. Research and simulation
+may run in parallel, but timed campaigns require a quiet host and advance
+serially. No 500-MiB execution occurs without new explicit authorization.
 
-- never reinterpret a failed screen as a pass;
-- never selectively rerun or remove measured rows;
-- never compare a candidate only to a historical standalone median;
-- promote at most one variable at a time;
-- rebuild the next candidate from the latest accepted control;
-- pause CPU-, memory-, filesystem-, and disk-intensive parallel work during
-  timed rows;
-- preserve rejected evidence and document why the mechanism failed.
+## 9. After Phase 4
 
-## Parallel work policy
+WP5 starts only after G6 freezes every disposition and the handoff. Phase 4
+owns the optimized and qualified CAS + CDC + COW + canonical identity + SQLite
+core. WP5 and later application/OS phases integrate that core into higher-level
+APIs, workflows, projection/materialization surfaces, and product behavior.
 
-Read-only research and non-measured simulation can proceed in parallel across
-create, edit, reopen authority, and materialization. Candidate builds,
-filesystem preparation, and timed campaigns must be coordinated so they do
-not contaminate one another or the benchmark host.
-
-Implementation remains sequential at promotion boundaries:
-
-```text
-candidate
-  -> evidence
-  -> retain/revert
-  -> freeze next control
-  -> next candidate
-```
-
-This preserves fast iteration without batching speculative ideas into a large,
-unattributable final rewrite.
-
-## Immediate queue
-
-```text
-DONE      H05/H05b/H05c: terminal no-go/closure; all evidence preserved
-DONE      canonical-v2: complete validation PASS; fresh-store baseline frozen
-DONE      exact CDC: contiguous-region kernel v2 PASS; cached-mask v1 remains NO-GO
-CONTROL   FastCDC v2 454bc2f3...eba8; canonical-v2 f3dd4c94...0280 retained historically
-NEXT      choose one separate lane: H09 simulator or other already-authorized lane
-PARALLEL  materialization/reopen work may remain read-only research when authorized
-LATER     SQLite physical profile and residual COMMIT/durability evidence
-```
-
-Do not run parallel load during any future timed candidate rows.
-
-## Phase 4 completion conditions
-
-Phase 4 closes only when every lane has an explicit evidence-backed terminal
-disposition:
-
-| Lane | Required disposition |
-|---|---|
-| Durable full create | Accepted optimized control or evidence-backed retain-current decision |
-| Same-open edits | Size-scaling goal met, or its remaining suffix-linear limit explicitly accepted |
-| Reopen authority | Trusted fast path accepted, or secure full scrub explicitly retained |
-| Materialization | Cold/hot and first/repeated behavior measured; one candidate accepted or current path retained |
-| SQLite durability | Physical profile accepted or current profile retained from complete evidence |
-| Global correctness | Identities, errors, authority, Q, durability, storage, reconciliation, and custody all pass |
-
-WP5 begins only after those Phase 4 dispositions are closed and the Phase 4
-handoff is frozen. None of this roadmap starts WP5.
+This roadmap does not start WP5 or claim that application-level integration is
+already complete.

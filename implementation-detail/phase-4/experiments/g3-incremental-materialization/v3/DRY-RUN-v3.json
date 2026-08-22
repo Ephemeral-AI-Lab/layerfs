@@ -1,0 +1,191 @@
+{
+  "actual_rows": 0,
+  "analyzer_children_invoked": 0,
+  "benchmark_children_invoked": 0,
+  "broad_deletion": false,
+  "build_children_invoked": 0,
+  "build_plan": {
+    "before_binary_freeze": true,
+    "child_ceiling_seconds": 30,
+    "command": [
+      "cargo",
+      "build",
+      "--release",
+      "-p",
+      "layerfs-engine",
+      "--bin",
+      "phase4_create_edit_benchmark",
+      "--offline"
+    ],
+    "inside_global_timer": true,
+    "planned_invocations": 1
+  },
+  "declared_cleanup_root": "results-v3/work-v3",
+  "execute_environment_required": {
+    "G3_V3_EXECUTE": "authorized-g3-v3-once"
+  },
+  "execute_flag_required": "--execute",
+  "global_ceiling_ns": 59000000000,
+  "lock_absent": true,
+  "lock_created": false,
+  "method_names": [
+    "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v3.md",
+    "COUNTER-DICTIONARY-v3.md",
+    "run_g3_v3.py",
+    "analyze_g3_v3.py",
+    "recompute_g3_v3.py",
+    "finalize_g3_v3.py"
+  ],
+  "methodology_at_dry_run": [
+    {
+      "path": "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v3.md",
+      "sha256": "1f80b66a5e15fe786ec095ada5eb408f815c3a4893887957ca7c46dbd5326207",
+      "size_bytes": 5279
+    },
+    {
+      "path": "COUNTER-DICTIONARY-v3.md",
+      "sha256": "d81283cab6bd9e7c0ed5a7354078e593a484210dfedfb5a2b8b4299b24b8635a",
+      "size_bytes": 7395
+    },
+    {
+      "path": "run_g3_v3.py",
+      "sha256": "f05a809826a8ccf375bd82f387af816bdb0d5bc6bc5d7e5e0c205c0e023158cf",
+      "size_bytes": 27688
+    },
+    {
+      "path": "analyze_g3_v3.py",
+      "sha256": "3f5216b1a50feddc9979351619d409f6befee06b8a1e2ac54c7a993865acbb2e",
+      "size_bytes": 26648
+    },
+    {
+      "path": "recompute_g3_v3.py",
+      "sha256": "0c0f0c7abde25e80f8c6da6c9f1a50daf3b96d12a504976c9d85d810723ec58f",
+      "size_bytes": 26146
+    },
+    {
+      "path": "finalize_g3_v3.py",
+      "sha256": "bea4c2ba608cfbd23c7ee6be11b30479e5b0d90b1c48cf19c187be159acc35cb",
+      "size_bytes": 21001
+    }
+  ],
+  "methodology_set_sha256": "afe661ac6b5ef2019f445fd9ea563d7c4fb1908bb1075380e61987522ffc7851",
+  "operation_sum_ceiling_ns": 20000000000,
+  "per_operation_ceiling_ns": 5000000000,
+  "planned_measured_rows": 9,
+  "planned_row_reruns": 0,
+  "result_root_absent": true,
+  "result_root_created": false,
+  "schedule": [
+    {
+      "child_ceiling_seconds": 5,
+      "label": "01-qualified-noop",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-noop",
+      "sequence": 1,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 15,
+      "label": "02-qualified-one-byte",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-byte",
+      "sequence": 2,
+      "size_bytes": 104857600
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "03-qualified-one-mib",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-mib",
+      "sequence": 3,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "04-invalid-authority",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "invalid-authority",
+      "sequence": 4,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "05-external-mutation",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "external-mutation",
+      "sequence": 5,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "06-symlink-substitution",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "symlink-substitution",
+      "sequence": 6,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "07-count-change",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "count-change",
+      "sequence": 7,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "08-before-publication-fault",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "before-publication-fault",
+      "sequence": 8,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "09-lost-ack",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "lost-ack",
+      "sequence": 9,
+      "size_bytes": 1048576
+    }
+  ],
+  "schema": "phase4-g3-v3-dry-run-v1",
+  "source_at_dry_run": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "70c7f1079b6dcff927932d6e0072e5cd169cd2f49ea51c72f7f108d950adb8d8",
+      "size_bytes": 5199,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/Cargo.toml",
+      "sha256": "c08efcca5cd604ffd3aa03dabcf076666292cd309095c5e2b98b7226f32a5865",
+      "size_bytes": 424,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+      "sha256": "c78738ab213c7438544abdf2a37131652813873e30077469d578624f86ce3cdb",
+      "size_bytes": 748411,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "sha256": "5ecc718a3e0595b79910d1bc12353318dd6d55ffff2d2c856118a7cfc14691e8",
+      "size_bytes": 89778,
+      "source_mode": "0644"
+    }
+  ],
+  "source_hashes_frozen_before_build": true,
+  "source_paths": [
+    "Cargo.lock",
+    "crates/layerfs-engine/Cargo.toml",
+    "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+    "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs"
+  ],
+  "source_set_sha256": "70ef2606389813ebd980bf2e5fe9f4585333717fd7dabf21fb69cb4e4c140c9f",
+  "source_set_sha256_frozen_before_build": true,
+  "static_closure_and_finalizer_after_campaign": true,
+  "status": "PASS",
+  "transient_storage_ceiling_bytes": 536870912
+}

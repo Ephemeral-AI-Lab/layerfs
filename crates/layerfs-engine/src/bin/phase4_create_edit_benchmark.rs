@@ -3,6 +3,9 @@
 //! The private SQLite schema is fixed to K64/F64 + DIR256K and never opens the
 //! production v1 engine.
 
+#[cfg(target_os = "macos")]
+mod phase4_g3_materialization;
+
 use std::cell::Cell;
 #[cfg(test)]
 use std::collections::BTreeMap;
@@ -18756,6 +18759,17 @@ fn main() -> AnyResult<()> {
             Ok(())
         }
         Some("--self-test") => self_test(Path::new(args.get(2).ok_or("missing self-test root")?)),
+        #[cfg(target_os = "macos")]
+        Some("--g3-row") => {
+            let root = Path::new(args.get(2).ok_or("missing G3 row root")?);
+            let size = args.get(3).ok_or("missing G3 row size")?.parse::<u64>()?;
+            let scenario = args.get(4).ok_or("missing G3 row scenario")?;
+            println!(
+                "{}",
+                phase4_g3_materialization::run_g3_row(root, size, scenario)?
+            );
+            Ok(())
+        }
         Some("--fast-fixture") => {
             let root = Path::new(args.get(2).ok_or("missing fast fixture root")?);
             let size = args.get(3).ok_or("missing fast fixture size")?.parse::<u64>()?;
@@ -18905,6 +18919,6 @@ fn main() -> AnyResult<()> {
             }
             Ok(())
         }
-        _ => Err("usage: --blake3-file PATH | --self-test ROOT | --fast-fixture ROOT SIZE | --fast-prepare ROOT SIZE OPERATION ITERATION | --fast-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --fixed-radix-acceptance-fixtures ROOT | --fixed-radix-acceptance-prepare ROOT SIZE OPERATION ITERATION | --fixed-radix-acceptance-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --count-change-scale-fixture ROOT SIZE | --count-change-scale-prepare ROOT SIZE OPERATION ITERATION | --count-change-scale-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip}".into()),
+        _ => Err("usage: --blake3-file PATH | --self-test ROOT | --g3-row ROOT SIZE SCENARIO | --fast-fixture ROOT SIZE | --fast-prepare ROOT SIZE OPERATION ITERATION | --fast-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --fixed-radix-acceptance-fixtures ROOT | --fixed-radix-acceptance-prepare ROOT SIZE OPERATION ITERATION | --fixed-radix-acceptance-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --count-change-scale-fixture ROOT SIZE | --count-change-scale-prepare ROOT SIZE OPERATION ITERATION | --count-change-scale-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip}".into()),
     }
 }

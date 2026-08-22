@@ -1,0 +1,21 @@
+{
+  "active_docs_set_sha256": null,
+  "artifact_outside_sealed_payload": true,
+  "broken_links": [],
+  "closure_sha256": "2576ae384aadcc8d66cc9c88939c7c358dec78a7e1d2bbd3efac57e8010f99f0",
+  "commands_passed": 2,
+  "commands_total": 3,
+  "date": "2026-08-22",
+  "docs_set_sha256": null,
+  "links_checked": 48,
+  "payload_manifest_sha256": "2950a6698983718e8c386a782b975e1ef807fa7a9ecf95cd59396d2473f3b27e",
+  "prior_attempts_preserved": null,
+  "schema": "phase4-g3-post-seal-documentation-verification-v3",
+  "sealed_payload_unchanged": false,
+  "sealed_root_fingerprint_sha256": null,
+  "stage": null,
+  "static_closure_sha256": "6de469522152ee2adf48c05e563fbf75d52cdbc312f4bc898e3d834e8b17c2ee",
+  "status": "REVISE",
+  "terminal_sha256": "222bdc2abef4cd1435c6baec82a35bf05756e1aa385b10ae206bd27f9c6c351a",
+  "terminal_verification_sha256": "995084a7ae284b940b951d9c67680d61d3ee56b350cac55df546dfcd883f99a8"
+}

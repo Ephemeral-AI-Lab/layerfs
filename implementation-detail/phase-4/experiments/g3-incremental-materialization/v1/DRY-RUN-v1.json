@@ -1,0 +1,135 @@
+{
+  "actual_rows": 0,
+  "analyzer_children_invoked": 0,
+  "benchmark_children_invoked": 0,
+  "broad_deletion": false,
+  "declared_cleanup_root": "results-v1/work-v1",
+  "executable_hash_frozen_at_execute": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/release/phase4_create_edit_benchmark",
+  "execute_environment_required": {
+    "G3_V1_EXECUTE": "authorized-g3-v1-once"
+  },
+  "execute_flag_required": "--execute",
+  "global_ceiling_ns": 59000000000,
+  "lock_absent": true,
+  "lock_created": false,
+  "method_hashes_frozen_at_execute": [
+    "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v1.md",
+    "COUNTER-DICTIONARY-v1.md",
+    "run_g3_v1.py",
+    "analyze_g3_v1.py",
+    "recompute_g3_v1.py"
+  ],
+  "methodology_at_dry_run": [
+    {
+      "path": "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v1.md",
+      "sha256": "2b49c77aa07eeaebc1e5889f4a648772241426194f1e20bdbe53a468b8969d81",
+      "size_bytes": 8153
+    },
+    {
+      "path": "COUNTER-DICTIONARY-v1.md",
+      "sha256": "2d388bc8ce65be8f0c9e877311368bdb86cc966479fd7332626a1dd9eb8412c8",
+      "size_bytes": 11798
+    },
+    {
+      "path": "run_g3_v1.py",
+      "sha256": "64543344f475f2df686f1da1169f67157df095053d388fc137595652c8cfd4b1",
+      "size_bytes": 23153
+    },
+    {
+      "path": "analyze_g3_v1.py",
+      "sha256": "58af2e737dcb198e7d7515d6a3755cd8b2db0c623bdac48c98fa9a9cb80353d2",
+      "size_bytes": 23016
+    },
+    {
+      "path": "recompute_g3_v1.py",
+      "sha256": "79cf4284bee92d11debc6580c2c2a6204ea1c0617f1f16687fbb4d49ad4780c3",
+      "size_bytes": 21428
+    }
+  ],
+  "operation_sum_ceiling_ns": 20000000000,
+  "per_operation_ceiling_ns": 5000000000,
+  "planned_analyzer_self_checks": 2,
+  "planned_analyzers": 2,
+  "planned_measured_rows": 9,
+  "planned_row_reruns": 0,
+  "result_root_absent": true,
+  "result_root_created": false,
+  "schedule": [
+    {
+      "child_ceiling_seconds": 5,
+      "label": "01-qualified-noop",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-noop",
+      "sequence": 1,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 15,
+      "label": "02-qualified-one-byte",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-byte",
+      "sequence": 2,
+      "size_bytes": 104857600
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "03-qualified-one-mib",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-mib",
+      "sequence": 3,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "04-invalid-authority",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "invalid-authority",
+      "sequence": 4,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "05-external-mutation",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "external-mutation",
+      "sequence": 5,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "06-symlink-substitution",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "symlink-substitution",
+      "sequence": 6,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "07-count-change",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "count-change",
+      "sequence": 7,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "08-before-publication-fault",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "before-publication-fault",
+      "sequence": 8,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "09-lost-ack",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "lost-ack",
+      "sequence": 9,
+      "size_bytes": 1048576
+    }
+  ],
+  "schema": "phase4-g3-v1-dry-run-v1",
+  "source_hash_frozen_at_execute": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+  "status": "PASS",
+  "transient_storage_ceiling_bytes": 536870912
+}

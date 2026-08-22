@@ -1,6 +1,15 @@
 # Phase 4 optimization decision map
 
-Status: current research direction after CP-0009. This roadmap does not itself
+> **Historical routing map — not current control.** This document records the
+> research direction after CP-0009. It is superseded by the
+> [Phase-4 full grind roadmap](../../implementation-detail/phase-4/2026-08-21-phase-4-full-grind.md)
+> and the sealed
+> [G3-v13 report](../../implementation-detail/phase-4/experiments/g3-incremental-materialization/G3-REPORT.md).
+> Current status is **G3 PASS / G4 READY — v13 STATICALLY CLOSED AND
+> TERMINALLY SEALED**; G4 remains planning-only and UNSTARTED, Phase 4 remains
+> incomplete, and G5/G6 remain pending.
+
+Historical status: research direction after CP-0009. This roadmap does not itself
 authorize a format, implementation, migration, or benchmark campaign. WP4-P is
 complete and remains closed; K64/F64 + DIR256K is the current product profile.
 

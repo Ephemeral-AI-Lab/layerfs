@@ -1,0 +1,51 @@
+{
+  "artifact_outside_sealed_payload": true,
+  "canonical_pass_output_absent": true,
+  "closure_sha256": "5a20c669cba588de9dc08343fdc3432441cb6c8765c81e70a9d9179399165dd8",
+  "closure_status": "REVISE",
+  "command_streams": {
+    "01_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "01_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "02_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "02_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03_stderr_sha256": "49f431eb4f9e5df42411dc42fd47421ba3de6c88774ee7da80e342464392be9a",
+    "03_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "04_stderr_sha256": "767f6aea94e517d0d0734840e29aade254d42cdc0916f8300ba8fa38ece9345f",
+    "04_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "commands": [
+    {
+      "exit_code": 0,
+      "label": "rustfmt-check",
+      "sequence": 1
+    },
+    {
+      "exit_code": 0,
+      "label": "documentation-diff-check",
+      "sequence": 2
+    },
+    {
+      "exit_code": 1,
+      "failure_label": "no-persistent-receipt",
+      "label": "documentation-custody-status",
+      "sequence": 3
+    },
+    {
+      "exit_code": 1,
+      "failure_label": "closure-status",
+      "label": "independent-verification",
+      "sequence": 4
+    }
+  ],
+  "date": "2026-08-22",
+  "docs_set_sha256": "3f49fa41a8383673efa03abc01c9f73c8c2d8797450e66970a00538772cbce81",
+  "failure_class": "documentation-verifier-newline-normalization-defect",
+  "failure_detail": "The custody verifier searched for an exact limitation phrase without normalizing a Markdown line break between replayable and destination. It failed before emitting canonical PASS output. The independent verifier then correctly rejected the REVISE closure.",
+  "no_rerun": true,
+  "pre_post_docs_equal": true,
+  "pre_post_git_status_equal": true,
+  "schema": "phase4-g3-post-v13-documentation-verification-v1",
+  "sealed_payload_unchanged": true,
+  "sealed_root_fingerprint_sha256": "3d51e6daa98be2a76265bfda7d56fe75dae7839b01e8942c423c18ca290f9759",
+  "status": "REVISE"
+}

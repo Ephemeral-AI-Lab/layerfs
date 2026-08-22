@@ -1,0 +1,232 @@
+{
+  "actual_rows": 0,
+  "analyzer_children_invoked": 0,
+  "benchmark_children_invoked": 0,
+  "broad_deletion": false,
+  "build_children_invoked": 0,
+  "build_plan": {
+    "before_binary_freeze": true,
+    "child_ceiling_seconds": 30,
+    "command": [
+      "cargo",
+      "build",
+      "--release",
+      "-p",
+      "layerfs-engine",
+      "--bin",
+      "phase4_create_edit_benchmark",
+      "--offline"
+    ],
+    "inside_global_timer": true,
+    "planned_invocations": 1
+  },
+  "cargo_metadata_children_invoked": 1,
+  "cargo_metadata_preflight": {
+    "bin_count": 1,
+    "bin_name": "phase4_create_edit_benchmark",
+    "bin_path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+    "command": [
+      "cargo",
+      "metadata",
+      "--offline",
+      "--no-deps",
+      "--format-version",
+      "1"
+    ],
+    "module_is_target": false,
+    "module_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+    "package": "layerfs-engine",
+    "status": "PASS"
+  },
+  "declared_cleanup_root": "results-v12/work-v12",
+  "execute_environment_required": {
+    "G3_V12_EXECUTE": "authorized-g3-v12-once"
+  },
+  "execute_flag_required": "--execute",
+  "global_ceiling_ns": 59000000000,
+  "lock_absent": true,
+  "lock_created": false,
+  "method_names": [
+    "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v12.md",
+    "COUNTER-DICTIONARY-v12.md",
+    "run_g3_v12.py",
+    "analyze_g3_v12.py",
+    "recompute_g3_v12.py",
+    "finalize_g3_v12.py"
+  ],
+  "methodology_at_dry_run": [
+    {
+      "path": "PROSPECTIVE-G3-INCREMENTAL-MATERIALIZATION-v12.md",
+      "sha256": "39a081a185aa4560e60f5d6a862c47e0f13d9ac2d67ac769f6676a1238f8ecf8",
+      "size_bytes": 14985
+    },
+    {
+      "path": "COUNTER-DICTIONARY-v12.md",
+      "sha256": "ae02f03113aee72686cacbc6535fd933d3e01d1632a647ab9acffa6303f16cb6",
+      "size_bytes": 11961
+    },
+    {
+      "path": "run_g3_v12.py",
+      "sha256": "173927974edfdad4aad6c7b9f13235f42d07ad53945a804d51b513c1dada51e5",
+      "size_bytes": 42676
+    },
+    {
+      "path": "analyze_g3_v12.py",
+      "sha256": "46c90041f462105aea1d03de112d695b0dd99aa2a94eac5bf49a7df1cd83ba3b",
+      "size_bytes": 39548
+    },
+    {
+      "path": "recompute_g3_v12.py",
+      "sha256": "1922bdb89df0867f621ba0af183c774fec017e300ff3dad98d6d02e378c9eddb",
+      "size_bytes": 39093
+    },
+    {
+      "path": "finalize_g3_v12.py",
+      "sha256": "d5f66aac0acb5c17dea21983abd749fe6854aaf237bd48c943c5bd1fae036671",
+      "size_bytes": 30960
+    }
+  ],
+  "methodology_set_sha256": "7d2d51ddbf6e90875c65a1ae940d251397fa688dd40e3c9ca309e386c1c87ff3",
+  "operation_sum_ceiling_ns": 20000000000,
+  "per_operation_ceiling_ns": 5000000000,
+  "planned_measured_rows": 9,
+  "planned_row_reruns": 0,
+  "result_root_absent": true,
+  "result_root_created": false,
+  "row_cleanup_plan": {
+    "artifact": "results-v12/ROW-CLEANUP-v12.jsonl",
+    "deletion_method": "descriptor-relative-openat-fstatat-unlinkat-rmdir-no-follow-exact-inventory-v1",
+    "durable_append_flush_fsync": true,
+    "enumeration_followed_symlinks": false,
+    "events_per_row": [
+      "PREPARE",
+      "COMPLETE"
+    ],
+    "parent_directory_fsynced_before_first_prepare": true,
+    "peak_equation": "max_individual_PREPARE_pre_delete_row_not_cumulative_sum",
+    "records": 18,
+    "retire_exact_row_before_next": true,
+    "row_fd_retained_prepare_through_delete": true
+  },
+  "row_evidence_durability": {
+    "all_before_prepare": true,
+    "chronology": "append_flush_file-fsync_parent-fsync-on-create",
+    "failure": "exclusive-create_flush_file-fsync_parent-fsync",
+    "raw_entry": "append_flush_file-fsync",
+    "raw_file_precreated_file_and_parent_fsynced": true,
+    "stdout_stderr": "flush_file-fsync_parent-fsync"
+  },
+  "schedule": [
+    {
+      "child_ceiling_seconds": 5,
+      "label": "01-qualified-noop",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-noop",
+      "sequence": 1,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 15,
+      "label": "02-qualified-one-byte",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-byte",
+      "sequence": 2,
+      "size_bytes": 104857600
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "03-qualified-one-mib",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "qualified-one-mib",
+      "sequence": 3,
+      "size_bytes": 10485760
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "04-invalid-authority",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "invalid-authority",
+      "sequence": 4,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "05-external-mutation",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "external-mutation",
+      "sequence": 5,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "06-symlink-substitution",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "symlink-substitution",
+      "sequence": 6,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "07-count-change",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "count-change",
+      "sequence": 7,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "08-before-publication-fault",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "before-publication-fault",
+      "sequence": 8,
+      "size_bytes": 1048576
+    },
+    {
+      "child_ceiling_seconds": 5,
+      "label": "09-lost-ack",
+      "operation_ceiling_ns": 5000000000,
+      "scenario": "lost-ack",
+      "sequence": 9,
+      "size_bytes": 1048576
+    }
+  ],
+  "schema": "phase4-g3-v12-dry-run-v1",
+  "source_at_dry_run": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "70c7f1079b6dcff927932d6e0072e5cd169cd2f49ea51c72f7f108d950adb8d8",
+      "size_bytes": 5199,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/Cargo.toml",
+      "sha256": "35fd9c667575fdb3dd6ae720c4c43e6c654a9fd47da8b5dadc9f7672bd04498d",
+      "size_bytes": 537,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+      "sha256": "c78738ab213c7438544abdf2a37131652813873e30077469d578624f86ce3cdb",
+      "size_bytes": 748411,
+      "source_mode": "0644"
+    },
+    {
+      "path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "sha256": "f9ffe7058761c60e7d81c5da18ed3d7a9afdb5344f41b9a97dcb8c2b8a51f032",
+      "size_bytes": 107144,
+      "source_mode": "0644"
+    }
+  ],
+  "source_hashes_frozen_before_build": true,
+  "source_paths": [
+    "Cargo.lock",
+    "crates/layerfs-engine/Cargo.toml",
+    "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+    "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs"
+  ],
+  "source_set_sha256": "3a0330fc12cdc9b05b949a3f3f2b39f47e8d41d41234fffeedaa0ec65449058d",
+  "source_set_sha256_frozen_before_build": true,
+  "static_closure_and_finalizer_after_campaign": true,
+  "status": "PASS",
+  "transient_storage_ceiling_bytes": 536870912
+}

@@ -1,8 +1,9 @@
 # Phase-4 current benchmark scoreboard
 
-Status: **Phase 4 active — G1 writer-memory policy retained**
+Status: **Phase 4 active — G0–G3 complete; G3 PASS / G4 READY — v13
+STATICALLY CLOSED AND TERMINALLY SEALED; G4 planning-only and UNSTARTED**
 
-Date: 2026-08-21
+Date: 2026-08-22
 Current executable: `42e3ddeb15df298c978b14639690e366fbb26ee55851524d42c6c3e9c0e8bd55`
 Current profile: `94a03ba7b6c97b5ff37c0ec62ef1d801b9896494b45456bd3df23e2cb278d13b`
 
@@ -20,14 +21,19 @@ Current profile: `94a03ba7b6c97b5ff37c0ec62ef1d801b9896494b45456bd3df23e2cb278d1
 | Fresh-process authenticated reconstruction | **366.357 ms / 272.958 MiB/s** | OS cache warm-or-unknown |
 | Proven cold native materialization | **Unavailable** | benchmark missing |
 | Trusted hot read | **Unavailable** | implementation missing |
-| Incremental materialization | **Unavailable** | next materialization candidate |
+| 100-MiB one-byte incremental materialization | **3.414166 ms** | once-only v13 mechanism screen; not a median or acceptance result |
 | First edit after reopen | **154.019 ms** | authority work remains |
 | Reopen / visible head | **2.088 ms** | retained |
 | Authenticated returned 1-MiB range | **2.279 ms / 438.749 MiB/s** | retained |
 
 Only the full-create row is freshly remeasured after the G1 runtime policy.
-Other rows remain the latest Canonical-v2 lifecycle authority until the compact
-matrix is refreshed.
+The incremental row is the once-only, benchmark-private G3-v13 mechanism
+screen, not a median, proven cold-I/O result, production integration, or G4
+acceptance baseline. Other rows remain the latest Canonical-v2 lifecycle
+authority until the compact matrix is refreshed. The v13 mechanism executable
+is `535bfa178a8a569ea43d9f1d23808775c2349a29f9cdacddae508391a6e5e61e`;
+its [sealed terminal](../../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/TERMINAL-v13.json)
+is separate from the accepted product executable above.
 
 ## Public `layerfs` comparison
 
@@ -81,9 +87,9 @@ acceptance cell may run without a later explicit authorization.
 |---|---|---:|---|
 | **G0 — freeze — COMPLETE** | checkpoint FastCDC v2, CP-0010, scoreboard, exact control | no timing | clean retained baseline |
 | **G1 — writer memory — COMPLETE** | retained `cache_spill=2000`; 89.944% cache and 86.005% RSS reduction | `6.864 s` screen | memory policy closed |
-| **G2 — materialization research — NEXT** | decompose SQLite/hash/output wall; freeze receipt and mutation authority | `<20 s` diagnostic + static tests | exactly one candidate selected |
-| **G3 — incremental prototype** | no-op, same-size one-byte, 1-MiB replacement, invalid-receipt/fault fallback | `<20 s` screen | retain/revert same-size mechanism |
-| **G4 — materialization acceptance** | compact 1/10/100 matrix; native cold, trusted hot, incremental, fallbacks | `<=120 s` total | materialization baseline frozen |
+| **G2 — materialization research — COMPLETE** | decomposition selected destination-authority-gated incremental materialization | `<20 s` diagnostic + static tests | selected one G3 mechanism |
+| **G3 — incremental prototype — COMPLETE** | protected seed/clone/patch, exact fallback, faults, authority and evidence closure | `<20 s` operation-sum screen | v13 statically closed and terminally sealed |
+| **G4 — materialization acceptance — READY / UNSTARTED** | compact 1/10/100 matrix; native cold, trusted hot, incremental, fallbacks | `<=120 s` total | materialization baseline frozen |
 | **G5 — remaining core lanes** | reopen authority, count-change locality, optional sub-300-ms create work | separate one-variable screens | each lane closed or explicitly deferred |
 | **G6 — Phase-4 closure** | final scoreboard, manifests, limitations, WP5 handoff | no new candidate | Phase 4 PASS or explicit blockers |
 
@@ -114,8 +120,9 @@ prototype merely for missing a speculative single-digit-millisecond target.
 RETAIN FastCDC v2 + SQLite cache_spill=2000
 COMPLETE G0 — freeze/checkpoint
 COMPLETE G1 — writer-memory policy
-NEXT G2 — materialization decomposition/authority
-THEN G3 — same-size incremental materialization
+COMPLETE G2 — materialization decomposition/authority
+COMPLETE G3 — v13 protected-seed incremental mechanism
+READY G4 — planning only; measured execution UNSTARTED
 DEFER create concurrency until a materially sub-300-ms target is selected
 KEEP count-change locality and reopen authority as separate lanes
 ```
