@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
@@ -10,6 +10,7 @@ use std::time::Instant;
 use super::*;
 
 const DESTINATION_NAME: &str = "materialized.bin";
+const DESTINATION_C_NAME: &CStr = c"materialized.bin";
 const MODE: u32 = 0o644;
 const RECONCILIATION_COMPARISON_BYTES: usize = layerfs_core::cdc::MAXIMUM_CHUNK_BYTES;
 const AUTHORITY_BINDINGS: &str = "[\"store_instance\",\"validation_authority\",\"profile\",\"integrity_epoch\",\"generation\",\"receipt_transition\",\"parent_root\",\"target_root\",\"destination_identity\",\"open_serial\",\"mutation_serial\",\"publication_serial\",\"operation\",\"nonce\",\"seed_identity\"]";
@@ -499,6 +500,10 @@ fn fstat_file(file: &File) -> std::io::Result<(NativeIdentity, StorageBytes)> {
 
 fn stat_at(directory: &File, name: &str) -> std::io::Result<Option<NativeIdentity>> {
     let name = CString::new(name).map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    stat_c_at(directory, &name)
+}
+
+fn stat_c_at(directory: &File, name: &CStr) -> std::io::Result<Option<NativeIdentity>> {
     let mut value = std::mem::MaybeUninit::<libc::stat>::uninit();
     // SAFETY: the directory descriptor and NUL-terminated name are live; output is writable.
     let result = unsafe {
@@ -620,21 +625,104 @@ fn rename_at(directory: &File, from: &str, to: &str) -> std::io::Result<()> {
     }
 }
 
+fn rename_exclusive_at(directory: &File, from: &str, to: &str) -> std::io::Result<()> {
+    const RENAME_EXCL: libc::c_uint = 0x4;
+    const RENAME_NOFOLLOW_ANY: libc::c_uint = 0x10;
+    let from = CString::new(from).map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let to = CString::new(to).map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    // SAFETY: both names are NUL-terminated basenames relative to the same live directory fd.
+    let result = unsafe {
+        libc::renameatx_np(
+            directory.as_raw_fd(),
+            from.as_ptr(),
+            directory.as_raw_fd(),
+            to.as_ptr(),
+            RENAME_EXCL | RENAME_NOFOLLOW_ANY,
+        )
+    };
+    if result == -1 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 struct TempName {
     directory: File,
+    authority: ManagedCleanupAuthority,
     name: String,
+    identity: Option<(u64, u64)>,
+    owned_descriptor: Option<File>,
     active: bool,
 }
 
+#[derive(Clone, Copy)]
+struct ManagedCleanupAuthority {
+    directory: NativeIdentity,
+}
+
+impl ManagedCleanupAuthority {
+    fn new(directory: &File) -> AnyResult<Self> {
+        let identity = fstat_file(directory)?.0;
+        if !identity.is_directory() {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        Ok(Self {
+            directory: identity,
+        })
+    }
+
+    fn validate(self, directory: &File) -> AnyResult<()> {
+        let current = fstat_file(directory)?.0;
+        if !current.is_directory()
+            || current.device != self.directory.device
+            || current.inode != self.directory.inode
+        {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        Ok(())
+    }
+}
+
 impl TempName {
+    fn remove_owned_name(&mut self) -> AnyResult<bool> {
+        if !self.active {
+            return Ok(false);
+        }
+        self.authority.validate(&self.directory)?;
+        let expected = self.identity.or_else(|| {
+            self.owned_descriptor
+                .as_ref()
+                .and_then(|file| fstat_file(file).ok())
+                .map(|(native, _)| (native.device, native.inode))
+        });
+        let Some((device, inode)) = expected else {
+            self.active = false;
+            return Err(CoreError::AmbiguousDurability.into());
+        };
+        match stat_at(&self.directory, &self.name)? {
+            None => {
+                self.active = false;
+                return Ok(false);
+            }
+            Some(current) if current.device == device && current.inode == inode => {}
+            Some(_) => {
+                self.active = false;
+                return Err(CoreError::AmbiguousDurability.into());
+            }
+        }
+        let removed = unlink_at(&self.directory, &self.name)?;
+        self.active = false;
+        Ok(removed)
+    }
+
     fn remove(&mut self, counters: &mut Counters) -> AnyResult<()> {
-        if self.active && unlink_at(&self.directory, &self.name)? {
+        if self.remove_owned_name()? {
             counters.temp_files_removed = counters
                 .temp_files_removed
                 .checked_add(1)
                 .ok_or(CoreError::LengthOverflow)?;
         }
-        self.active = false;
         Ok(())
     }
 
@@ -645,13 +733,35 @@ impl TempName {
         }
         self.remove(counters)
     }
+
+    #[cfg(test)]
+    fn remove_with_substitution_after_validation(
+        &mut self,
+        counters: &mut Counters,
+        retained: &str,
+    ) -> AnyResult<()> {
+        self.authority.validate(&self.directory)?;
+        let expected = self.identity.ok_or(CoreError::AmbiguousDurability)?;
+        let current =
+            stat_at(&self.directory, &self.name)?.ok_or(CoreError::AmbiguousDurability)?;
+        if (current.device, current.inode) != expected {
+            return Err(CoreError::AmbiguousDurability.into());
+        }
+        rename_at(&self.directory, &self.name, retained)?;
+        let mut substitute = openat_file(
+            &self.directory,
+            &self.name,
+            libc::O_WRONLY | libc::O_CLOEXEC | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW,
+            0o600,
+        )?;
+        substitute.write_all(b"substitute")?;
+        self.remove(counters)
+    }
 }
 
 impl Drop for TempName {
     fn drop(&mut self) {
-        if self.active {
-            let _ = unlink_at(&self.directory, &self.name);
-        }
+        let _ = self.remove_owned_name();
     }
 }
 
@@ -659,7 +769,10 @@ fn create_temp(directory: &File, counters: &mut Counters) -> AnyResult<(File, Te
     let name = random_name(".g3-tmp-")?;
     let mut temp = TempName {
         directory: directory.try_clone()?,
+        authority: ManagedCleanupAuthority::new(directory)?,
         name: name.clone(),
+        identity: None,
+        owned_descriptor: None,
         active: false,
     };
     let file = openat_file(
@@ -668,7 +781,20 @@ fn create_temp(directory: &File, counters: &mut Counters) -> AnyResult<(File, Te
         libc::O_RDWR | libc::O_CLOEXEC | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW,
         0o600,
     )?;
+    temp.owned_descriptor = Some(file);
     temp.active = true;
+    let native = fstat_file(
+        temp.owned_descriptor
+            .as_ref()
+            .ok_or(CoreError::ValidationAuthorityUnavailable)?,
+    )?
+    .0;
+    temp.identity = Some((native.device, native.inode));
+    let file = temp
+        .owned_descriptor
+        .as_ref()
+        .ok_or(CoreError::ValidationAuthorityUnavailable)?
+        .try_clone()?;
     counters.temp_files_created = counters
         .temp_files_created
         .checked_add(1)
@@ -676,50 +802,108 @@ fn create_temp(directory: &File, counters: &mut Counters) -> AnyResult<(File, Te
     Ok((file, temp))
 }
 
+#[derive(Debug)]
+struct CloneCleanupUnresolved {
+    first: FailureCause,
+}
+
+impl std::fmt::Display for CloneCleanupUnresolved {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "clone cleanup unresolved after {:?}", self.first)
+    }
+}
+
+impl std::error::Error for CloneCleanupUnresolved {}
+
 fn clone_temp(
     seed: &VerifiedSeed,
     directory: &File,
     counters: &mut Counters,
     fail_reopen: bool,
+    fail_open: bool,
+    fail_stat: bool,
 ) -> AnyResult<Option<(File, TempName)>> {
     let name = random_name(".g3-tmp-")?;
     let mut temp = TempName {
         directory: directory.try_clone()?,
+        authority: ManagedCleanupAuthority::new(directory)?,
         name: name.clone(),
+        identity: None,
+        owned_descriptor: None,
         active: false,
     };
     counters.clone_calls = counters
         .clone_calls
         .checked_add(1)
         .ok_or(CoreError::LengthOverflow)?;
+    let next_temp_files_created = counters
+        .temp_files_created
+        .checked_add(1)
+        .ok_or(CoreError::LengthOverflow)?;
     match fclone_unlinked(&seed.file, directory, std::ffi::OsStr::new(&name)) {
         Ok(()) => {
             temp.active = true;
-            counters.temp_files_created = counters
-                .temp_files_created
-                .checked_add(1)
-                .ok_or(CoreError::LengthOverflow)?;
-            let reopened = (|| -> AnyResult<File> {
-                if fail_reopen {
-                    return Err(CoreError::ValidationAuthorityUnavailable.into());
-                }
-                let entry =
-                    stat_at(directory, &name)?.ok_or(CoreError::ValidationAuthorityUnavailable)?;
-                let file = openat_file(
+            let opened = if fail_open {
+                Err(std::io::Error::from_raw_os_error(libc::EIO))
+            } else {
+                openat_file(
                     directory,
                     &name,
                     libc::O_RDWR | libc::O_CLOEXEC | libc::O_NOFOLLOW,
                     0,
-                )?;
-                let descriptor = fstat_file(&file)?.0;
-                if !entry.is_regular()
+                )
+            };
+            let file = match opened {
+                Ok(file) => file,
+                Err(error) => {
+                    temp.active = false;
+                    return Err(CloneCleanupUnresolved {
+                        first: failure_cause(&error),
+                    }
+                    .into());
+                }
+            };
+            temp.owned_descriptor = Some(file);
+            let stated = if fail_stat {
+                Err(std::io::Error::from_raw_os_error(libc::EIO))
+            } else {
+                fstat_file(
+                    temp.owned_descriptor
+                        .as_ref()
+                        .ok_or(CoreError::ValidationAuthorityUnavailable)?,
+                )
+                .map(|value| value.0)
+            };
+            let descriptor = match stated {
+                Ok(descriptor) => descriptor,
+                Err(error) => {
+                    temp.active = false;
+                    return Err(CloneCleanupUnresolved {
+                        first: failure_cause(&error),
+                    }
+                    .into());
+                }
+            };
+            temp.identity = Some((descriptor.device, descriptor.inode));
+            let native =
+                stat_at(directory, &name)?.ok_or(CoreError::ValidationAuthorityUnavailable)?;
+            counters.temp_files_created = next_temp_files_created;
+            let reopened = (|| -> AnyResult<File> {
+                if fail_reopen {
+                    return Err(CoreError::ValidationAuthorityUnavailable.into());
+                }
+                if !native.is_regular()
                     || !descriptor.is_regular()
-                    || entry.device != descriptor.device
-                    || entry.inode != descriptor.inode
+                    || native.device != descriptor.device
+                    || native.inode != descriptor.inode
                 {
                     return Err(CoreError::ValidationAuthorityUnavailable.into());
                 }
-                Ok(file)
+                Ok(temp
+                    .owned_descriptor
+                    .as_ref()
+                    .ok_or(CoreError::ValidationAuthorityUnavailable)?
+                    .try_clone()?)
             })();
             match reopened {
                 Ok(file) => {
@@ -853,6 +1037,10 @@ struct CanonicalRangeProof {
 #[derive(Default)]
 struct FaultInjection {
     clone_reopen_failure: bool,
+    #[cfg(test)]
+    clone_open_failure: bool,
+    #[cfg(test)]
+    clone_stat_failure: bool,
     #[cfg(test)]
     cleanup_failure: bool,
     directory_sync_failure: bool,
@@ -1031,10 +1219,22 @@ fn verify_exact_patch_relation_files(
                 .min(u64::try_from(parent_buffer.len()).map_err(|_| CoreError::LengthOverflow)?),
         )
         .map_err(|_| CoreError::LengthOverflow)?;
-        let parent_read = usize::try_from(parent_length.saturating_sub(offset))
+        #[allow(clippy::implicit_saturating_sub)]
+        let parent_remaining = if offset < parent_length {
+            parent_length - offset
+        } else {
+            0
+        };
+        #[allow(clippy::implicit_saturating_sub)]
+        let target_remaining = if offset < target_length {
+            target_length - offset
+        } else {
+            0
+        };
+        let parent_read = usize::try_from(parent_remaining)
             .map_err(|_| CoreError::LengthOverflow)?
             .min(take);
-        let target_read = usize::try_from(target_length.saturating_sub(offset))
+        let target_read = usize::try_from(target_remaining)
             .map_err(|_| CoreError::LengthOverflow)?
             .min(take);
         parent.read_exact(&mut parent_buffer[..parent_read])?;
@@ -1311,16 +1511,33 @@ fn create_verified_seed(
     let name = random_name(".g3-seed-")?;
     let mut cleanup = TempName {
         directory: directory.try_clone()?,
+        authority: ManagedCleanupAuthority::new(directory)?,
         name: name.clone(),
+        identity: None,
+        owned_descriptor: None,
         active: false,
     };
-    let mut output = openat_file(
+    let output = openat_file(
         directory,
         &name,
         libc::O_WRONLY | libc::O_CLOEXEC | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW,
         0o600,
     )?;
+    cleanup.owned_descriptor = Some(output);
     cleanup.active = true;
+    let native = fstat_file(
+        cleanup
+            .owned_descriptor
+            .as_ref()
+            .ok_or(CoreError::ValidationAuthorityUnavailable)?,
+    )?
+    .0;
+    cleanup.identity = Some((native.device, native.inode));
+    let mut output = cleanup
+        .owned_descriptor
+        .as_ref()
+        .ok_or(CoreError::ValidationAuthorityUnavailable)?
+        .try_clone()?;
     #[cfg(test)]
     if fail_after_create {
         return Err(std::io::Error::from_raw_os_error(libc::EIO).into());
@@ -1347,6 +1564,7 @@ fn create_verified_seed(
     verifier.seek(SeekFrom::Start(0))?;
     let mut hasher = blake3::Hasher::new();
     let mut verified_length = 0_u64;
+    let _readback_charge = charge_capacity(metrics, 1024 * 1024)?;
     let mut buffer = [0_u8; 1024 * 1024];
     loop {
         let read = verifier.read(&mut buffer)?;
@@ -1466,6 +1684,7 @@ fn prepare(root: &Path, size: u64, scenario: Scenario) -> AnyResult<Prepared> {
             directory_path.display()
         )
     })?;
+    fs::set_permissions(&directory_path, fs::Permissions::from_mode(0o700))?;
     let parent_path = directory_path.join("parent.source");
     let target_path = directory_path.join("target.source");
     write_fixture(&parent_path, size)?;
@@ -1639,11 +1858,17 @@ fn validate_permit(
         .checked_add(1)
         .ok_or(CoreError::LengthOverflow)?;
     let Some(permit) = prepared.permit.as_mut() else {
-        counters.authority_validation_failures += 1;
+        counters.authority_validation_failures = counters
+            .authority_validation_failures
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         return Ok(false);
     };
     if permit.consumed {
-        counters.authority_validation_failures += 1;
+        counters.authority_validation_failures = counters
+            .authority_validation_failures
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         return Ok(false);
     }
     let head = prepared
@@ -1659,11 +1884,17 @@ fn validate_permit(
         .checked_add(8 + 32 + 32 + 216)
         .ok_or(CoreError::LengthOverflow)?;
     let Some(seed) = prepared.seed.as_ref() else {
-        counters.authority_validation_failures += 1;
+        counters.authority_validation_failures = counters
+            .authority_validation_failures
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         return Ok(false);
     };
     let Ok((seed_native, _)) = fstat_file(&seed.file) else {
-        counters.authority_validation_failures += 1;
+        counters.authority_validation_failures = counters
+            .authority_validation_failures
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         return Ok(false);
     };
     counters.seed_authority_reads = counters
@@ -1675,7 +1906,10 @@ fn validate_permit(
         .checked_add(u64::try_from(std::mem::size_of::<libc::stat>())?)
         .ok_or(CoreError::LengthOverflow)?;
     let Some(key) = prepared.permit_key.as_ref() else {
-        counters.authority_validation_failures += 1;
+        counters.authority_validation_failures = counters
+            .authority_validation_failures
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         return Ok(false);
     };
     let directory_native = fstat_file(&prepared.directory).ok().map(|value| value.0);
@@ -1727,9 +1961,15 @@ fn validate_permit(
         && permit.binding.seed.references == seed.identity.references
         && permit.binding.seed.digest == seed.identity.digest;
     if valid {
-        counters.authority_validation_successes += 1;
+        counters.authority_validation_successes = counters
+            .authority_validation_successes
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
     } else {
-        counters.authority_validation_failures += 1;
+        counters.authority_validation_failures = counters
+            .authority_validation_failures
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
     }
     counters.q_high_water = counters.q_high_water.max(metrics.q_high_water);
     Ok(valid)
@@ -1949,6 +2189,7 @@ struct OperationResult {
     reconciliation: &'static str,
     old_or_new: &'static str,
     temp_storage: StorageBytes,
+    max_single_buffer_bytes: u64,
 }
 
 fn run_operation(prepared: &mut Prepared) -> AnyResult<OperationResult> {
@@ -1960,7 +2201,7 @@ fn run_operation(prepared: &mut Prepared) -> AnyResult<OperationResult> {
     };
     let mut timers = Timers::default();
     let preflight_started = Instant::now();
-    let destination = stat_at(&prepared.directory, DESTINATION_NAME)?;
+    let destination = stat_c_at(&prepared.directory, DESTINATION_C_NAME)?;
     if destination.is_some_and(NativeIdentity::is_symlink) {
         timers.preflight = preflight_started.elapsed().as_nanos();
         return Ok(OperationResult {
@@ -1974,6 +2215,7 @@ fn run_operation(prepared: &mut Prepared) -> AnyResult<OperationResult> {
             reconciliation: "not-needed",
             old_or_new: "old",
             temp_storage: StorageBytes::default(),
+            max_single_buffer_bytes: 0,
         });
     }
     if destination.is_some_and(|identity| !identity.is_regular()) {
@@ -1989,6 +2231,7 @@ fn run_operation(prepared: &mut Prepared) -> AnyResult<OperationResult> {
             reconciliation: "not-needed",
             old_or_new: "old",
             temp_storage: StorageBytes::default(),
+            max_single_buffer_bytes: 0,
         });
     }
     timers.preflight = preflight_started.elapsed().as_nanos();
@@ -2033,6 +2276,14 @@ fn run_operation(prepared: &mut Prepared) -> AnyResult<OperationResult> {
     let mut payload_metrics = Metrics::default();
     let mut candidate = if qualified {
         let fail_reopen = std::mem::take(&mut prepared.fault.clone_reopen_failure);
+        #[cfg(test)]
+        let fail_open = std::mem::take(&mut prepared.fault.clone_open_failure);
+        #[cfg(not(test))]
+        let fail_open = false;
+        #[cfg(test)]
+        let fail_stat = std::mem::take(&mut prepared.fault.clone_stat_failure);
+        #[cfg(not(test))]
+        let fail_stat = false;
         clone_temp(
             prepared
                 .seed
@@ -2041,6 +2292,8 @@ fn run_operation(prepared: &mut Prepared) -> AnyResult<OperationResult> {
             &prepared.directory,
             &mut counters,
             fail_reopen,
+            fail_open,
+            fail_stat,
         )?
     } else {
         None
@@ -2247,6 +2500,7 @@ fn run_operation(prepared: &mut Prepared) -> AnyResult<OperationResult> {
         reconciliation,
         old_or_new,
         temp_storage,
+        max_single_buffer_bytes: SOURCE_1,
     })
 }
 
@@ -2308,7 +2562,8 @@ fn render_row(
             "\"data_sync_calls\":{},\"metadata_sync_calls\":{},\"rename_calls\":{},\"directory_sync_calls\":{},\"reconciliation_calls\":{},",
             "\"reconciliation_sql_queries\":{},\"reconciliation_sql_rows\":{},\"reconciliation_blob_reads\":{},",
             "\"reconciliation_canonical_bytes_authenticated\":{},\"reconciliation_source_bytes_compared\":{},\"reconciliation_q_high_water\":{},",
-            "\"reconciliation_outcome\":\"{}\",\"q_high_water\":{},\"q_terminal\":0,",
+            "\"reconciliation_outcome\":\"{}\",\"q_high_water\":{},\"q_terminal\":0,\"max_buffer_bytes\":1048576,",
+            "\"max_single_buffer_bytes\":{},\"buffer_evidence_complete\":true,\"full_file_buffer_bytes\":0,",
             "\"temp_logical_bytes\":{},\"temp_apparent_bytes\":{},\"temp_allocated_bytes\":{},",
             "\"seed_logical_bytes\":{},\"seed_apparent_bytes\":{},\"seed_allocated_bytes\":{},",
             "\"output_length\":{},\"output_mode\":{},\"output_digest\":\"{}\",\"expected_output_digest\":\"{}\",",
@@ -2381,6 +2636,7 @@ fn render_row(
         counters.reconciliation_q_high_water,
         result.reconciliation,
         counters.q_high_water,
+        result.max_single_buffer_bytes,
         result.temp_storage.logical,
         result.temp_storage.apparent,
         result.temp_storage.allocated,
@@ -2451,6 +2707,1044 @@ pub(super) fn run_g3_row(root: &Path, size: u64, scenario: &str) -> AnyResult<St
         temp_residue_count,
         seed_residue_count,
     )
+}
+
+fn g4_fixture_directory(root: &Path) -> PathBuf {
+    root.join("g3-qualified-noop")
+}
+
+pub(super) fn prepare_g4_fixture(root: &Path, size: u64) -> AnyResult<String> {
+    let seed = match size {
+        SOURCE_1 => 0x41,
+        SOURCE_10 => 0x4a,
+        SOURCE_100 => 0x51,
+        _ => return Err("G4 fixtures are limited to 1, 10, or 100 MiB".into()),
+    };
+    fs::create_dir_all(root)?;
+    let directory = g4_fixture_directory(root);
+    fs::create_dir(&directory).map_err(|error| {
+        format!(
+            "refusing to reuse G4 fixture directory {}: {error}",
+            directory.display()
+        )
+    })?;
+    let source = directory.join("target.source");
+    fill_source(&source, size, seed)?;
+    let (_, digest, _) = hash_file(&source)?;
+    let mut metrics = Metrics::default();
+    let mut store = Store::open(&directory.join("store.sqlite"), SELECTED_PROFILE)?;
+    let roots = build_and_publish_parent(&mut store, &source, &mut metrics)?;
+    if roots.length != size || roots.references != source_cdc_sequence(&source)?.0 {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    finish_q(&mut metrics)?;
+    drop(store);
+    Ok(format!(
+        "{{\"status\":\"PASS\",\"schema\":\"phase4-g4-fixture-v1\",\"size_bytes\":{size},\"directory\":\"{}\",\"root\":\"{}\",\"file_root\":\"{}\",\"references\":{},\"output_digest\":\"{}\"}}",
+        directory.display(),
+        roots.namespace,
+        roots.file,
+        roots.references,
+        hex_bytes(&digest),
+    ))
+}
+
+#[derive(Clone, Copy)]
+struct G4Usage {
+    user_us: i128,
+    system_us: i128,
+    voluntary_switches: i128,
+    involuntary_switches: i128,
+}
+
+fn g4_usage() -> AnyResult<G4Usage> {
+    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+    // SAFETY: `usage` points to writable storage for one `rusage` value.
+    if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } == -1 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    // SAFETY: successful `getrusage` initialized the value.
+    let usage = unsafe { usage.assume_init() };
+    Ok(G4Usage {
+        user_us: i128::from(usage.ru_utime.tv_sec) * 1_000_000 + i128::from(usage.ru_utime.tv_usec),
+        system_us: i128::from(usage.ru_stime.tv_sec) * 1_000_000
+            + i128::from(usage.ru_stime.tv_usec),
+        voluntary_switches: i128::from(usage.ru_nvcsw),
+        involuntary_switches: i128::from(usage.ru_nivcsw),
+    })
+}
+
+fn g4_usage_delta(after: G4Usage, before: G4Usage) -> AnyResult<G4Usage> {
+    let subtract = |after: i128, before: i128| {
+        after
+            .checked_sub(before)
+            .filter(|value| *value >= 0)
+            .ok_or(CoreError::LengthOverflow)
+    };
+    Ok(G4Usage {
+        user_us: subtract(after.user_us, before.user_us)?,
+        system_us: subtract(after.system_us, before.system_us)?,
+        voluntary_switches: subtract(after.voluntary_switches, before.voluntary_switches)?,
+        involuntary_switches: subtract(after.involuntary_switches, before.involuntary_switches)?,
+    })
+}
+
+fn g4_roots(store: &Store, root: ObjectId, metrics: &mut Metrics) -> AnyResult<Roots> {
+    let file = resolve_namespace_file_root(store, root, metrics)?;
+    let bytes = store.get_bytes(file, metrics)?;
+    let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
+    let _children_charge = charge_decoded_file_children(payload, true, metrics)?;
+    let (_, length, references, level, children) = file_codec::parse_file_root(payload)?;
+    if level != file_codec::expected_file_level(references)? {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    if references == 0 {
+        if length != 0 || level != 0 || !children.is_empty() {
+            return Err(CoreError::NonCanonicalPagePartition.into());
+        }
+    } else {
+        file_codec::validate_file_children(&children, true)?;
+    }
+    Ok(Roots {
+        namespace: root,
+        file,
+        length,
+        references,
+    })
+}
+
+fn g4_hash_path(path: &Path, metrics: &mut Metrics) -> AnyResult<(u64, [u8; 32], u32)> {
+    let mut file = File::open(path)?;
+    let mode = file.metadata()?.permissions().mode() & 0o7777;
+    let _buffer_charge = charge_capacity(metrics, 1024 * 1024)?;
+    let mut buffer = [0_u8; 1024 * 1024];
+    let mut hasher = blake3::Hasher::new();
+    let mut length = 0_u64;
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+        length = length
+            .checked_add(u64::try_from(read).map_err(|_| CoreError::LengthOverflow)?)
+            .ok_or(CoreError::LengthOverflow)?;
+    }
+    Ok((length, *hasher.finalize().as_bytes(), mode))
+}
+
+#[derive(Default)]
+struct G4WriterCounters {
+    calls: u64,
+    bytes: u64,
+    short_writes: u64,
+    errors: u64,
+}
+
+struct G4Writer<'a> {
+    file: &'a mut File,
+    counters: &'a mut G4WriterCounters,
+}
+
+impl Write for G4Writer<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.counters.calls = self
+            .counters
+            .calls
+            .checked_add(1)
+            .ok_or_else(|| std::io::Error::from_raw_os_error(libc::EOVERFLOW))?;
+        match self.file.write(bytes) {
+            Ok(written) => {
+                self.counters.bytes = self
+                    .counters
+                    .bytes
+                    .checked_add(
+                        u64::try_from(written)
+                            .map_err(|_| std::io::Error::from_raw_os_error(libc::EOVERFLOW))?,
+                    )
+                    .ok_or_else(|| std::io::Error::from_raw_os_error(libc::EOVERFLOW))?;
+                if written != bytes.len() {
+                    self.counters.short_writes = self
+                        .counters
+                        .short_writes
+                        .checked_add(1)
+                        .ok_or_else(|| std::io::Error::from_raw_os_error(libc::EOVERFLOW))?;
+                }
+                Ok(written)
+            }
+            Err(error) => {
+                self.counters.errors = self
+                    .counters
+                    .errors
+                    .checked_add(1)
+                    .ok_or_else(|| std::io::Error::from_raw_os_error(libc::EOVERFLOW))?;
+                Err(error)
+            }
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
+}
+
+#[derive(Clone, Copy)]
+enum G4NativeAlgorithm {
+    ScalarControl,
+    BatchedCandidate,
+}
+
+struct G4NativeResult {
+    reconstructed: ReconstructedFile,
+    wall_ns: u128,
+    usage: G4Usage,
+    writer: G4WriterCounters,
+    metrics: Metrics,
+    verification_ns: u128,
+    cleanup_ns: u128,
+    publication_status: &'static str,
+    reconciliation_outcome: &'static str,
+    diagnostic: Option<FailureProvenance>,
+    temp_files_created: u64,
+    temp_files_removed: u64,
+    data_sync_calls: u64,
+    metadata_operations: u64,
+    metadata_sync_calls: u64,
+    rename_calls: u64,
+    directory_sync_calls: u64,
+    reconciliation_calls: u64,
+    max_single_buffer_bytes: u64,
+}
+
+#[derive(Default)]
+struct G4NativeFault {
+    #[cfg(test)]
+    directory_sync_lost_ack: bool,
+    #[cfg(test)]
+    directory_sync_retry_failure: bool,
+    #[cfg(test)]
+    post_publish_substitution: bool,
+    #[cfg(test)]
+    verification_failure: bool,
+}
+
+#[derive(Debug)]
+struct G4NativePublicationFailure(FailureProvenance);
+
+impl std::fmt::Display for G4NativePublicationFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "G4 native publication failed: {:?}",
+            self.0.dominant
+        )
+    }
+}
+
+impl std::error::Error for G4NativePublicationFailure {}
+
+fn g4_hash_descriptor(
+    file: &File,
+    expected: NativeIdentity,
+    metrics: &mut Metrics,
+) -> AnyResult<(u64, [u8; 32], u32)> {
+    let before = fstat_file(file)?.0;
+    if !before.is_regular()
+        || before.device != expected.device
+        || before.inode != expected.inode
+        || before.length != expected.length
+        || u32::from(before.mode & 0o7777) != MODE
+    {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    let _buffer_charge = charge_capacity(metrics, 1024 * 1024)?;
+    let mut buffer = [0_u8; 1024 * 1024];
+    let mut hasher = blake3::Hasher::new();
+    let mut offset = 0_u64;
+    while offset < before.length {
+        let take = usize::try_from(
+            before
+                .length
+                .checked_sub(offset)
+                .ok_or(CoreError::LengthOverflow)?
+                .min(u64::try_from(buffer.len()).map_err(|_| CoreError::LengthOverflow)?),
+        )
+        .map_err(|_| CoreError::LengthOverflow)?;
+        let file_offset = libc::off_t::try_from(offset).map_err(|_| CoreError::LengthOverflow)?;
+        // SAFETY: the retained descriptor is live and the bounded buffer is writable.
+        let read = unsafe {
+            libc::pread(
+                file.as_raw_fd(),
+                buffer.as_mut_ptr().cast(),
+                take,
+                file_offset,
+            )
+        };
+        if read <= 0 {
+            return Err(if read == 0 {
+                CoreError::LengthMismatch {
+                    expected: before.length,
+                    actual: offset,
+                }
+                .into()
+            } else {
+                std::io::Error::last_os_error().into()
+            });
+        }
+        let read = usize::try_from(read).map_err(|_| CoreError::LengthOverflow)?;
+        hasher.update(&buffer[..read]);
+        offset = offset
+            .checked_add(u64::try_from(read).map_err(|_| CoreError::LengthOverflow)?)
+            .ok_or(CoreError::LengthOverflow)?;
+    }
+    let after = fstat_file(file)?.0;
+    if after != before {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    Ok((offset, *hasher.finalize().as_bytes(), MODE))
+}
+
+fn g4_reconcile_absent(
+    directory: &File,
+    file: &File,
+    owned: NativeIdentity,
+    expected_length: u64,
+    expected_digest: [u8; 32],
+    counters: &mut Counters,
+) -> AnyResult<Reconciliation> {
+    counters.reconciliation_calls = counters
+        .reconciliation_calls
+        .checked_add(1)
+        .ok_or(CoreError::LengthOverflow)?;
+    let Some(named) = stat_at(directory, DESTINATION_NAME)? else {
+        return Ok(Reconciliation::PriorVisible);
+    };
+    if !named.is_regular()
+        || named.device != owned.device
+        || named.inode != owned.inode
+        || named.length != expected_length
+        || u32::from(named.mode & 0o7777) != MODE
+    {
+        return Ok(Reconciliation::DifferentHead);
+    }
+    let mut metrics = Metrics::default();
+    let (length, digest, mode) = g4_hash_descriptor(file, owned, &mut metrics)?;
+    finish_q(&mut metrics)?;
+    if length == expected_length && digest == expected_digest && mode == MODE {
+        Ok(Reconciliation::RequestedVisible)
+    } else {
+        Ok(Reconciliation::DifferentHead)
+    }
+}
+
+fn g4_cleanup_owned_name(
+    temp: &mut TempName,
+    directory: &File,
+    counters: &mut Counters,
+) -> AnyResult<()> {
+    temp.remove(counters)?;
+    sync_fd(directory)?;
+    counters.directory_sync_calls = counters
+        .directory_sync_calls
+        .checked_add(1)
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn g4_materialize(
+    store: &mut Store,
+    head: &VisibleHead,
+    roots: Roots,
+    expected_digest: [u8; 32],
+    expected_sequence: [u8; 32],
+    output_root: &Path,
+    algorithm: G4NativeAlgorithm,
+    _fault: G4NativeFault,
+) -> AnyResult<G4NativeResult> {
+    fs::create_dir(output_root)?;
+    fs::set_permissions(output_root, fs::Permissions::from_mode(0o700))?;
+    let directory = open_dir(output_root)?;
+    if stat_at(&directory, DESTINATION_NAME)?.is_some() {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    let mut native_counters = Counters::default();
+    let (mut file, mut temp) = create_temp(&directory, &mut native_counters)?;
+    let start_usage = g4_usage()?;
+    let start = Instant::now();
+    let mut metrics = Metrics::default();
+    let mut writer_counters = G4WriterCounters::default();
+    let mut publication_status = "committed";
+    let mut reconciliation_outcome = "not-needed";
+    let mut diagnostic = None;
+    let operation = (|| -> AnyResult<ReconstructedFile> {
+        let reconstructed = {
+            let mut writer = G4Writer {
+                file: &mut file,
+                counters: &mut writer_counters,
+            };
+            match algorithm {
+                G4NativeAlgorithm::ScalarControl => {
+                    let (length, references, output_digest) =
+                        stream_root(store, roots.namespace, &mut writer, &mut metrics)?;
+                    ReconstructedFile {
+                        content_closure: None,
+                        output_digest,
+                        occurrence_digest: [0_u8; 32],
+                        references,
+                        length,
+                        evidence: ReconstructionEvidence::default(),
+                    }
+                }
+                G4NativeAlgorithm::BatchedCandidate => {
+                    let mut emit = |raw: &[u8]| -> AnyResult<()> {
+                        writer.write_all(raw)?;
+                        Ok(())
+                    };
+                    reconstruct_file_to(
+                        store,
+                        roots.namespace,
+                        Some(&hex_bytes(&expected_digest)),
+                        Some(&hex_bytes(&expected_sequence)),
+                        true,
+                        false,
+                        &mut metrics,
+                        &mut emit,
+                    )?
+                }
+            }
+        };
+        if reconstructed.length != roots.length
+            || reconstructed.references != roots.references
+            || reconstructed.output_digest != expected_digest
+            || (matches!(algorithm, G4NativeAlgorithm::BatchedCandidate)
+                && reconstructed.occurrence_digest != expected_sequence)
+            || store.current_head()?.as_ref() != Some(head)
+        {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        sync_fd(&file)?;
+        native_counters.data_sync_calls = native_counters
+            .data_sync_calls
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        chmod_fd(&file, MODE)?;
+        native_counters.metadata_operations = native_counters
+            .metadata_operations
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        sync_fd(&file)?;
+        native_counters.metadata_sync_calls = native_counters
+            .metadata_sync_calls
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        let descriptor = fstat_file(&file)?.0;
+        let named =
+            stat_at(&directory, &temp.name)?.ok_or(CoreError::ValidationAuthorityUnavailable)?;
+        if !descriptor.is_regular()
+            || !named.is_regular()
+            || descriptor.device != named.device
+            || descriptor.inode != named.inode
+            || descriptor.length != reconstructed.length
+            || u32::from(descriptor.mode & 0o7777) != MODE
+        {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        native_counters.rename_calls = native_counters
+            .rename_calls
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        let rename = rename_exclusive_at(&directory, &temp.name, DESTINATION_NAME);
+        if rename.is_ok() {
+            temp.name = DESTINATION_NAME.to_string();
+        }
+        let mut first = rename.err();
+        #[cfg(test)]
+        if first.is_none() && _fault.post_publish_substitution {
+            rename_at(&directory, DESTINATION_NAME, ".g4-fault-retained")?;
+            std::os::unix::fs::symlink(".g4-fault-retained", output_root.join(DESTINATION_NAME))?;
+            first = Some(std::io::Error::from_raw_os_error(libc::ESTALE));
+        }
+        if first.is_none() {
+            native_counters.directory_sync_calls = native_counters
+                .directory_sync_calls
+                .checked_add(1)
+                .ok_or(CoreError::LengthOverflow)?;
+            let directory_sync = sync_fd(&directory);
+            #[cfg(test)]
+            let directory_sync = if directory_sync.is_ok() && _fault.directory_sync_lost_ack {
+                Err(std::io::Error::from_raw_os_error(libc::EIO))
+            } else {
+                directory_sync
+            };
+            first = directory_sync.err();
+        }
+        if let Some(first) = first {
+            let first = if first.raw_os_error() == Some(libc::EEXIST) {
+                FailureCause::Core(CoreError::PublicationConflict)
+            } else {
+                failure_cause(&first)
+            };
+            let (reconciliation, reconciliation_error) = match g4_reconcile_absent(
+                &directory,
+                &file,
+                descriptor,
+                reconstructed.length,
+                reconstructed.output_digest,
+                &mut native_counters,
+            ) {
+                Ok(value) => (value, None),
+                Err(error) => (
+                    Reconciliation::Ambiguous,
+                    Some(failure_cause(error.as_ref())),
+                ),
+            };
+            reconciliation_outcome = match reconciliation {
+                Reconciliation::RequestedVisible => "requested-visible",
+                Reconciliation::PriorVisible => "prior-absent",
+                Reconciliation::DifferentHead => "different",
+                Reconciliation::Ambiguous | Reconciliation::NotAttempted => "unresolved",
+            };
+            if reconciliation == Reconciliation::RequestedVisible {
+                native_counters.directory_sync_calls = native_counters
+                    .directory_sync_calls
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+                let retry = sync_fd(&directory);
+                #[cfg(test)]
+                let retry = if retry.is_ok() && _fault.directory_sync_retry_failure {
+                    Err(std::io::Error::from_raw_os_error(libc::EIO))
+                } else {
+                    retry
+                };
+                if let Err(error) = retry {
+                    return Err(G4NativePublicationFailure(failure_provenance(
+                        Some(first),
+                        None,
+                        Reconciliation::Ambiguous,
+                        Some(failure_cause(&error)),
+                    ))
+                    .into());
+                }
+                temp.name = DESTINATION_NAME.to_string();
+                publication_status = "requested-visible";
+                diagnostic = Some(failure_provenance(
+                    Some(first),
+                    None,
+                    reconciliation,
+                    reconciliation_error,
+                ));
+            } else {
+                return Err(G4NativePublicationFailure(failure_provenance(
+                    Some(first),
+                    None,
+                    reconciliation,
+                    reconciliation_error,
+                ))
+                .into());
+            }
+        }
+        Ok(reconstructed)
+    })();
+    let wall_ns = start.elapsed().as_nanos();
+    let usage = g4_usage_delta(g4_usage()?, start_usage)?;
+    let reconstructed = match operation {
+        Ok(value) => value,
+        Err(first) => {
+            let existing = first
+                .downcast_ref::<G4NativePublicationFailure>()
+                .map(|failure| failure.0);
+            let first_cause = existing
+                .and_then(|failure| failure.first)
+                .unwrap_or_else(|| failure_cause(first.as_ref()));
+            let existing_cleanup = existing.and_then(|failure| failure.cleanup_first);
+            let q_failure = finish_q(&mut metrics).err().map(FailureCause::Core);
+            let cleanup_failure =
+                g4_cleanup_owned_name(&mut temp, &directory, &mut native_counters)
+                    .err()
+                    .map(|error| failure_cause(error.as_ref()));
+            let cleanup_first = existing_cleanup.or(q_failure).or(cleanup_failure);
+            return Err(G4NativePublicationFailure(failure_provenance(
+                Some(first_cause),
+                cleanup_first,
+                existing.map_or(Reconciliation::NotAttempted, |failure| {
+                    failure.reconciliation
+                }),
+                existing.and_then(|failure| failure.reconciliation_error),
+            ))
+            .into());
+        }
+    };
+    let verification_start = Instant::now();
+    let mut verification_metrics = Metrics::default();
+    let verification = (|| -> AnyResult<()> {
+        #[cfg(test)]
+        if _fault.verification_failure {
+            return Err(CoreError::IdentityMismatch.into());
+        }
+        let descriptor = fstat_file(&file)?.0;
+        let (verified_length, verified_digest, verified_mode) =
+            g4_hash_descriptor(&file, descriptor, &mut verification_metrics)?;
+        if verified_length != reconstructed.length
+            || verified_digest != reconstructed.output_digest
+            || verified_mode != MODE
+        {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        Ok(())
+    })();
+    let verification_failure = verification
+        .err()
+        .map(|error| failure_cause(error.as_ref()));
+    let verification_q_failure = finish_q(&mut verification_metrics)
+        .err()
+        .map(FailureCause::Core);
+    let verification_ns = verification_start.elapsed().as_nanos();
+    if let Some(first) = verification_failure.or(verification_q_failure) {
+        let q_failure = finish_q(&mut metrics).err().map(FailureCause::Core);
+        let cleanup_failure = g4_cleanup_owned_name(&mut temp, &directory, &mut native_counters)
+            .err()
+            .map(|error| failure_cause(error.as_ref()));
+        let cleanup_first = if verification_failure.is_some() {
+            verification_q_failure
+        } else {
+            None
+        }
+        .or(q_failure)
+        .or(cleanup_failure);
+        return Err(G4NativePublicationFailure(failure_provenance(
+            Some(first),
+            cleanup_first,
+            Reconciliation::NotAttempted,
+            None,
+        ))
+        .into());
+    }
+    let q_failure = finish_q(&mut metrics).err().map(FailureCause::Core);
+    let cleanup_start = Instant::now();
+    let cleanup_failure = g4_cleanup_owned_name(&mut temp, &directory, &mut native_counters)
+        .err()
+        .map(|error| failure_cause(error.as_ref()));
+    let residue_failure = if cleanup_failure.is_none() {
+        match stat_at(&directory, DESTINATION_NAME) {
+            Ok(Some(_)) => Some(FailureCause::Core(CoreError::PublicationConflict)),
+            Ok(None) => None,
+            Err(error) => Some(failure_cause(&error)),
+        }
+    } else {
+        None
+    };
+    let cleanup_ns = cleanup_start.elapsed().as_nanos();
+    if let Some(first) = q_failure.or(cleanup_failure).or(residue_failure) {
+        let cleanup_first = if q_failure.is_some() {
+            cleanup_failure.or(residue_failure)
+        } else if cleanup_failure.is_some() {
+            residue_failure
+        } else {
+            None
+        };
+        return Err(G4NativePublicationFailure(failure_provenance(
+            Some(first),
+            cleanup_first,
+            Reconciliation::NotAttempted,
+            None,
+        ))
+        .into());
+    }
+    Ok(G4NativeResult {
+        reconstructed,
+        wall_ns,
+        usage,
+        writer: writer_counters,
+        metrics,
+        verification_ns,
+        cleanup_ns,
+        publication_status,
+        reconciliation_outcome,
+        diagnostic,
+        temp_files_created: native_counters.temp_files_created,
+        temp_files_removed: native_counters.temp_files_removed,
+        data_sync_calls: native_counters.data_sync_calls,
+        metadata_operations: native_counters.metadata_operations,
+        metadata_sync_calls: native_counters.metadata_sync_calls,
+        rename_calls: native_counters.rename_calls,
+        directory_sync_calls: native_counters.directory_sync_calls,
+        reconciliation_calls: native_counters.reconciliation_calls,
+        max_single_buffer_bytes: SOURCE_1,
+    })
+}
+
+#[allow(clippy::type_complexity)]
+fn g4_seed_read(
+    seed: &VerifiedSeed,
+    digest: bool,
+    metrics: &mut Metrics,
+) -> AnyResult<(u128, G4Usage, u64, u64, Option<[u8; 32]>)> {
+    let _buffer_charge = charge_capacity(metrics, 1024 * 1024)?;
+    let mut buffer = [0_u8; 1024 * 1024];
+    let start_usage = g4_usage()?;
+    let start = Instant::now();
+    let mut offset = 0_u64;
+    let mut calls = 0_u64;
+    let mut hasher = digest.then(blake3::Hasher::new);
+    while offset < seed.identity.length {
+        let take = usize::try_from(
+            seed.identity
+                .length
+                .checked_sub(offset)
+                .ok_or(CoreError::LengthOverflow)?
+                .min(u64::try_from(buffer.len()).map_err(|_| CoreError::LengthOverflow)?),
+        )
+        .map_err(|_| CoreError::LengthOverflow)?;
+        let file_offset = libc::off_t::try_from(offset).map_err(|_| CoreError::LengthOverflow)?;
+        // SAFETY: the descriptor is live and the bounded buffer is writable for `take` bytes.
+        let read = unsafe {
+            libc::pread(
+                seed.file.as_raw_fd(),
+                buffer.as_mut_ptr().cast(),
+                take,
+                file_offset,
+            )
+        };
+        calls = calls.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+        if read <= 0 {
+            return Err(if read == 0 {
+                CoreError::LengthMismatch {
+                    expected: seed.identity.length,
+                    actual: offset,
+                }
+                .into()
+            } else {
+                std::io::Error::last_os_error().into()
+            });
+        }
+        let read = usize::try_from(read).map_err(|_| CoreError::LengthOverflow)?;
+        if let Some(hasher) = hasher.as_mut() {
+            hasher.update(&buffer[..read]);
+        }
+        offset = offset
+            .checked_add(u64::try_from(read).map_err(|_| CoreError::LengthOverflow)?)
+            .ok_or(CoreError::LengthOverflow)?;
+    }
+    let wall_ns = start.elapsed().as_nanos();
+    let usage = g4_usage_delta(g4_usage()?, start_usage)?;
+    Ok((
+        wall_ns,
+        usage,
+        calls,
+        offset,
+        hasher.map(|hasher| *hasher.finalize().as_bytes()),
+    ))
+}
+
+fn g4_buffer_evidence(mut row: String, max_single_buffer_bytes: u64) -> AnyResult<String> {
+    if row.pop() != Some('}') {
+        return Err(CoreError::InvalidRecord("G4 row").into());
+    }
+    row.push_str(&format!(
+        ",\"max_single_buffer_bytes\":{max_single_buffer_bytes},\"buffer_evidence_complete\":true,\"full_file_buffer_bytes\":0}}"
+    ));
+    Ok(row)
+}
+
+pub(super) fn run_g4_row(
+    root: &Path,
+    size: u64,
+    mode: &str,
+    output_root: &Path,
+) -> AnyResult<String> {
+    let directory = g4_fixture_directory(root);
+    let source = directory.join("target.source");
+    let database = directory.join("store.sqlite");
+    if !source.is_file() || !database.is_file() || !authority_path(&database).is_file() {
+        return Err("G4 fixture is missing or incomplete".into());
+    }
+    let preflight_start = Instant::now();
+    let mut preflight_metrics = Metrics::default();
+    let (source_length, source_digest, _) = g4_hash_path(&source, &mut preflight_metrics)?;
+    let (source_references, source_sequence) = source_cdc_sequence(&source)?;
+    let source_sequence_digest = source_sequence.parse::<ObjectId>()?.to_bytes();
+    if source_length != size {
+        return Err(CoreError::LengthMismatch {
+            expected: size,
+            actual: source_length,
+        }
+        .into());
+    }
+    finish_q(&mut preflight_metrics)?;
+    let preflight_ns = preflight_start.elapsed().as_nanos();
+    let mut metrics = Metrics::default();
+    let mut store = Store::open(&database, SELECTED_PROFILE)?;
+    let g4_cache_size_pages = if matches!(
+        mode,
+        "r1-closure-on" | "r1-closure-off" | "r1-fresh" | "m0-candidate"
+    ) {
+        // ponytail: G4's synchronous read/materialization processes need deterministic
+        // RSS headroom; revisit only with a newly qualified shared read-cache profile.
+        store
+            .connection
+            .pragma_update(None, "cache_size", 1_500_i64)?;
+        1_500
+    } else {
+        2_000
+    };
+    let observed_cache_size = store
+        .connection
+        .query_row("PRAGMA cache_size", [], |row| row.get::<_, i64>(0))?;
+    if observed_cache_size != g4_cache_size_pages {
+        return Err(CoreError::ProfileMismatch.into());
+    }
+    let head = store
+        .current_head()?
+        .ok_or(CoreError::InvalidValidationReceipt)?;
+    let roots = g4_roots(&store, head.1, &mut metrics)?;
+    if roots.length != size || roots.references != source_references {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    finish_q(&mut metrics)?;
+
+    if mode == "seed-read" {
+        fs::create_dir(output_root)?;
+        fs::set_permissions(output_root, fs::Permissions::from_mode(0o700))?;
+        let output_directory = open_dir(output_root)?;
+        let mut seed_metrics = Metrics::default();
+        let seed_start = Instant::now();
+        let seed = create_verified_seed(
+            &mut store,
+            roots,
+            &output_directory,
+            source_digest,
+            &mut seed_metrics,
+            #[cfg(test)]
+            false,
+        )?;
+        let seed_fill_ns = seed_start.elapsed().as_nanos();
+        let identity_before = fstat_file(&seed.file)?.0;
+        let (read_ns, read_usage, read_calls, read_bytes, _) =
+            g4_seed_read(&seed, false, &mut seed_metrics)?;
+        let (digest_ns, digest_usage, digest_calls, digest_bytes, digest) =
+            g4_seed_read(&seed, true, &mut seed_metrics)?;
+        let identity_after = fstat_file(&seed.file)?.0;
+        if identity_before != identity_after
+            || digest != Some(source_digest)
+            || read_bytes != size
+            || digest_bytes != size
+        {
+            return Err(CoreError::IdentityMismatch.into());
+        }
+        finish_q(&mut seed_metrics)?;
+        return g4_buffer_evidence(format!(
+            "{{\"status\":\"PASS\",\"schema\":\"phase4-g4-row-v1\",\"mode\":\"seed-read\",\"cache_class\":\"same-open-protected-seed-warm-or-unknown\",\"sqlite_cache_size_pages\":{g4_cache_size_pages},\"size_bytes\":{size},\"preflight_wall_ns\":{preflight_ns},\"seed_fill_reconstruction_native_sync_readback_wall_ns\":{seed_fill_ns},\"qualified_no_digest_wall_ns\":{read_ns},\"qualified_digest_wall_ns\":{digest_ns},\"read_calls\":{read_calls},\"digest_read_calls\":{digest_calls},\"read_bytes\":{read_bytes},\"digest_read_bytes\":{digest_bytes},\"digest\":\"{}\",\"identity_stable\":true,\"buffer_bytes\":1048576,\"max_buffer_bytes\":1048576,\"q_high_water\":{},\"q_current\":{},\"operation_user_us\":{},\"operation_system_us\":{},\"operation_voluntary_switches\":{},\"operation_involuntary_switches\":{},\"digest_user_us\":{},\"digest_system_us\":{},\"seed_links\":{},\"seed_mode\":{}}}",
+            hex_bytes(&source_digest),
+            seed_metrics.q_high_water,
+            seed_metrics.q_current,
+            read_usage.user_us,
+            read_usage.system_us,
+            read_usage.voluntary_switches,
+            read_usage.involuntary_switches,
+            digest_usage.user_us,
+            digest_usage.system_us,
+            seed.identity.native.links,
+            seed.identity.native.mode & 0o7777,
+        ), SOURCE_1);
+    }
+
+    if mode == "m0-control" || mode == "m0-candidate" {
+        let algorithm = if mode == "m0-control" {
+            G4NativeAlgorithm::ScalarControl
+        } else {
+            G4NativeAlgorithm::BatchedCandidate
+        };
+        let result = g4_materialize(
+            &mut store,
+            &head,
+            roots,
+            source_digest,
+            source_sequence_digest,
+            output_root,
+            algorithm,
+            G4NativeFault::default(),
+        )?;
+        let occurrence = if mode == "m0-control" {
+            "null".to_string()
+        } else {
+            format!("\"{}\"", hex_bytes(&result.reconstructed.occurrence_digest))
+        };
+        let diagnostic = result
+            .diagnostic
+            .map_or_else(|| "null".to_string(), |value| format!("\"{value:?}\""));
+        let temp_residue_count = count_residue(output_root, ".g3-tmp-")?;
+        let final_residue_count =
+            u64::from(stat_at(&open_dir(output_root)?, DESTINATION_NAME)?.is_some());
+        if temp_residue_count != 0 || final_residue_count != 0 {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        let mapping_singleton_queries = result
+            .metrics
+            .sql_query_calls
+            .checked_sub(result.metrics.leaf_batch_queries)
+            .ok_or(CoreError::LengthOverflow)?;
+        let mapping_rows_returned = result
+            .metrics
+            .sql_rows_returned
+            .checked_sub(result.metrics.borrowed_row_blob_reads)
+            .ok_or(CoreError::LengthOverflow)?;
+        return g4_buffer_evidence(format!(
+            "{{\"status\":\"PASS\",\"schema\":\"phase4-g4-row-v1\",\"mode\":\"{mode}\",\"control_label\":\"{}\",\"sqlite_cache_size_pages\":{g4_cache_size_pages},\"size_bytes\":{size},\"max_buffer_bytes\":1048576,\"preflight_wall_ns\":{preflight_ns},\"operation_wall_ns\":{},\"post_operation_exact_verification_wall_ns\":{},\"cleanup_wall_ns\":{},\"root\":\"{}\",\"output_digest\":\"{}\",\"occurrence_digest\":{occurrence},\"content_closure\":null,\"content_closure_status\":\"{}\",\"references\":{},\"total_sql_query_calls\":{},\"total_sql_rows_returned\":{},\"mapping_singleton_query_calls\":{},\"mapping_rows_returned\":{},\"chunk_scalar_query_calls\":{},\"chunk_batch_query_calls\":{},\"chunk_rows_returned\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"borrowed_chunk_blob_reads\":{},\"borrowed_chunk_blob_bytes\":{},\"authenticated_objects\":{},\"canonical_bytes_authenticated\":{},\"output_digest_hashes\":{},\"output_digest_bytes_hashed\":{},\"occurrence_fold_entries\":{},\"occurrence_fold_bytes\":{},\"closure_fold_updates\":{},\"closure_fold_canonical_bytes\":{},\"sink_emit_calls\":{},\"sink_emit_bytes\":{},\"native_write_calls\":{},\"native_write_bytes\":{},\"native_short_writes\":{},\"native_write_errors\":{},\"data_sync_calls\":{},\"metadata_operations\":{},\"metadata_sync_calls\":{},\"rename_calls\":{},\"directory_sync_calls\":{},\"reconciliation_calls\":{},\"reconciliation_outcome\":\"{}\",\"publication_status\":\"{}\",\"publication_diagnostic\":{diagnostic},\"temp_files_created\":{},\"temp_files_removed\":{},\"temp_residue_count\":{temp_residue_count},\"final_residue_count\":{final_residue_count},\"q_high_water\":{},\"q_current\":{},\"operation_user_us\":{},\"operation_system_us\":{},\"operation_voluntary_switches\":{},\"operation_involuntary_switches\":{}}}",
+            if mode == "m0-control" { "g3-fallback-algorithm-control" } else { "batched-authenticated-native-writer" },
+            result.wall_ns,
+            result.verification_ns,
+            result.cleanup_ns,
+            roots.namespace,
+            hex_bytes(&result.reconstructed.output_digest),
+            if mode == "m0-control" { "not-computed-diagnostic-control" } else { "derived-not-computed" },
+            result.reconstructed.references,
+            result.metrics.sql_query_calls,
+            result.metrics.sql_rows_returned,
+            mapping_singleton_queries,
+            mapping_rows_returned,
+            if mode == "m0-control" { result.metrics.borrowed_row_blob_reads } else { 0 },
+            result.metrics.leaf_batch_queries,
+            result.metrics.borrowed_row_blob_reads,
+            result.metrics.leaf_batch_references,
+            result.metrics.leaf_batch_references_max,
+            result.metrics.borrowed_row_blob_reads,
+            result.metrics.borrowed_row_blob_bytes,
+            result.metrics.objects_authenticated,
+            result.metrics.canonical_bytes_authenticated,
+            if mode == "m0-control" { 1 } else { result.reconstructed.evidence.output_digest_hashes },
+            if mode == "m0-control" { result.reconstructed.length } else { result.reconstructed.evidence.output_digest_bytes_hashed },
+            result.reconstructed.evidence.occurrence_fold_entries,
+            result.reconstructed.evidence.occurrence_fold_bytes,
+            result.reconstructed.evidence.closure_fold_updates,
+            result.reconstructed.evidence.closure_fold_canonical_bytes,
+            result.reconstructed.evidence.sink_write_calls,
+            result.reconstructed.evidence.sink_write_bytes,
+            result.writer.calls,
+            result.writer.bytes,
+            result.writer.short_writes,
+            result.writer.errors,
+            result.data_sync_calls,
+            result.metadata_operations,
+            result.metadata_sync_calls,
+            result.rename_calls,
+            result.directory_sync_calls,
+            result.reconciliation_calls,
+            result.reconciliation_outcome,
+            result.publication_status,
+            result.temp_files_created,
+            result.temp_files_removed,
+            result.metrics.q_high_water,
+            result.metrics.q_current,
+            result.usage.user_us,
+            result.usage.system_us,
+            result.usage.voluntary_switches,
+            result.usage.involuntary_switches,
+        ), result.max_single_buffer_bytes);
+    }
+
+    let (compute_closure, warm, label) = match mode {
+        "r0-control" => (true, true, "current-complete-authenticated-reconstruction"),
+        "r1-closure-on" => (true, true, "g4-attribution-control"),
+        "r1-closure-off" => (false, true, "g4-candidate"),
+        "r1-fresh" => (false, false, "g4-candidate"),
+        _ => return Err(format!("unknown G4 row mode {mode}").into()),
+    };
+    let mut primer_ns = 0_u128;
+    let mut primer_metrics = Metrics::default();
+    if warm {
+        let mut emit = |_raw: &[u8]| Ok(());
+        let primer_start = Instant::now();
+        let _primer_evidence = reconstruct_file_to(
+            &store,
+            roots.namespace,
+            Some(&hex_bytes(&source_digest)),
+            Some(&source_sequence),
+            true,
+            true,
+            &mut primer_metrics,
+            &mut emit,
+        )?
+        .evidence;
+        primer_ns = primer_start.elapsed().as_nanos();
+        finish_q(&mut primer_metrics)?;
+    }
+    let mut operation_metrics = Metrics::default();
+    let mut emit = |_raw: &[u8]| Ok(());
+    let start_usage = g4_usage()?;
+    let start = Instant::now();
+    let reconstructed = reconstruct_file_to(
+        &store,
+        roots.namespace,
+        Some(&hex_bytes(&source_digest)),
+        Some(&source_sequence),
+        true,
+        compute_closure,
+        &mut operation_metrics,
+        &mut emit,
+    )?;
+    let operation_ns = start.elapsed().as_nanos();
+    let usage = g4_usage_delta(g4_usage()?, start_usage)?;
+    if reconstructed.length != size
+        || reconstructed.references != source_references
+        || reconstructed.output_digest != source_digest
+        || reconstructed.occurrence_digest != source_sequence_digest
+        || store.current_head()?.as_ref() != Some(&head)
+    {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    finish_q(&mut operation_metrics)?;
+    let closure = reconstructed
+        .content_closure
+        .map(|digest| format!("\"{}\"", hex_bytes(&digest)))
+        .unwrap_or_else(|| "null".to_string());
+    let mapping_singleton_queries = operation_metrics
+        .sql_query_calls
+        .checked_sub(operation_metrics.leaf_batch_queries)
+        .ok_or(CoreError::LengthOverflow)?;
+    let mapping_rows_returned = operation_metrics
+        .sql_rows_returned
+        .checked_sub(operation_metrics.borrowed_row_blob_reads)
+        .ok_or(CoreError::LengthOverflow)?;
+    g4_buffer_evidence(format!(
+        "{{\"status\":\"PASS\",\"schema\":\"phase4-g4-row-v1\",\"mode\":\"{mode}\",\"label\":\"{label}\",\"sqlite_cache_size_pages\":{g4_cache_size_pages},\"size_bytes\":{size},\"max_buffer_bytes\":1048576,\"cache_class\":\"{}\",\"preflight_wall_ns\":{preflight_ns},\"primer_wall_ns\":{primer_ns},\"operation_wall_ns\":{operation_ns},\"root\":\"{}\",\"output_digest\":\"{}\",\"occurrence_digest\":\"{}\",\"content_closure\":{closure},\"content_closure_status\":\"{}\",\"references\":{},\"total_sql_query_calls\":{},\"total_sql_rows_returned\":{},\"mapping_singleton_query_calls\":{},\"mapping_rows_returned\":{},\"chunk_scalar_query_calls\":0,\"chunk_batch_query_calls\":{},\"chunk_rows_returned\":{},\"leaf_batch_references\":{},\"leaf_batch_references_max\":{},\"borrowed_chunk_blob_reads\":{},\"borrowed_chunk_blob_bytes\":{},\"all_row_blob_reads\":{},\"authenticated_objects\":{},\"canonical_bytes_authenticated\":{},\"output_digest_hashes\":{},\"output_digest_bytes_hashed\":{},\"occurrence_fold_entries\":{},\"occurrence_fold_bytes\":{},\"closure_fold_enabled\":{},\"closure_fold_updates\":{},\"closure_fold_canonical_bytes\":{},\"sink_write_calls\":0,\"sink_write_bytes\":0,\"sink_short_writes\":0,\"sink_errors\":{},\"primer_sql_query_calls\":{},\"primer_authenticated_objects\":{},\"primer_q_high_water\":{},\"q_high_water\":{},\"q_current\":{},\"operation_user_us\":{},\"operation_system_us\":{},\"operation_voluntary_switches\":{},\"operation_involuntary_switches\":{}}}",
+        if warm { "warm-or-unknown-after-explicit-primer" } else { "fresh-process-warm-or-unknown" },
+        roots.namespace,
+        hex_bytes(&reconstructed.output_digest),
+        hex_bytes(&reconstructed.occurrence_digest),
+        if compute_closure { "computed" } else { "derived-not-computed" },
+        reconstructed.references,
+        operation_metrics.sql_query_calls,
+        operation_metrics.sql_rows_returned,
+        mapping_singleton_queries,
+        mapping_rows_returned,
+        operation_metrics.leaf_batch_queries,
+        operation_metrics.borrowed_row_blob_reads,
+        operation_metrics.leaf_batch_references,
+        operation_metrics.leaf_batch_references_max,
+        operation_metrics.borrowed_row_blob_reads,
+        operation_metrics.borrowed_row_blob_bytes,
+        operation_metrics.row_blob_reads,
+        operation_metrics.objects_authenticated,
+        operation_metrics.canonical_bytes_authenticated,
+        reconstructed.evidence.output_digest_hashes,
+        reconstructed.evidence.output_digest_bytes_hashed,
+        reconstructed.evidence.occurrence_fold_entries,
+        reconstructed.evidence.occurrence_fold_bytes,
+        compute_closure,
+        reconstructed.evidence.closure_fold_updates,
+        reconstructed.evidence.closure_fold_canonical_bytes,
+        reconstructed.evidence.sink_errors,
+        primer_metrics.sql_query_calls,
+        primer_metrics.objects_authenticated,
+        primer_metrics.q_high_water,
+        operation_metrics.q_high_water,
+        operation_metrics.q_current,
+        usage.user_us,
+        usage.system_us,
+        usage.voluntary_switches,
+        usage.involuntary_switches,
+    ), SOURCE_1)
 }
 
 #[cfg(test)]
@@ -2608,6 +3902,7 @@ mod tests {
         assert_eq!(result.route, "typed-rejection");
         assert_eq!(result.error, Some("NativeDestinationSymlink"));
         assert_eq!(result.counters.authority_validations, 0);
+        assert_eq!(result.max_single_buffer_bytes, 0);
         fs::remove_dir_all(root).expect("cleanup");
     }
 
@@ -2766,11 +4061,48 @@ mod tests {
             count_residue(&prepared.directory_path, ".g3-tmp-").expect("residue"),
             0
         );
+        assert_eq!(
+            count_residue(&prepared.directory_path, ".g3-quarantine-").expect("quarantine residue"),
+            0
+        );
         let mut counters = Counters::default();
         consume_permit(&mut prepared, &mut counters).expect("first consumption");
         assert!(consume_permit(&mut prepared, &mut counters).is_err());
         assert_eq!(counters.permit_consumptions, 1);
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn post_fclone_open_and_stat_failures_are_typed_unresolved() {
+        for fault in ["open", "stat"] {
+            let root = test_root(&format!("clone-{fault}-unresolved"));
+            let mut prepared =
+                prepare(&root, 128 * 1024, Scenario::QualifiedOneByte).expect("prepare row");
+            if fault == "open" {
+                prepared.fault.clone_open_failure = true;
+            } else {
+                prepared.fault.clone_stat_failure = true;
+            }
+            let error = match run_operation(&mut prepared) {
+                Ok(_) => panic!("binding fault must not fallback"),
+                Err(error) => error,
+            };
+            let unresolved = error
+                .downcast_ref::<CloneCleanupUnresolved>()
+                .expect("typed unresolved clone cleanup");
+            assert_eq!(unresolved.first, FailureCause::Core(CoreError::Io));
+            assert_eq!(
+                count_residue(&prepared.directory_path, ".g3-tmp-")
+                    .expect("unresolved clone residue"),
+                1
+            );
+            assert_eq!(
+                count_residue(&prepared.directory_path, ".g3-quarantine-")
+                    .expect("no quarantine mutation"),
+                0
+            );
+            fs::remove_dir_all(root).expect("cleanup unresolved row");
+        }
     }
 
     #[test]
@@ -2941,5 +4273,291 @@ mod tests {
             0
         );
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g4_temp_cleanup_is_inode_bound_and_first_publish_is_exclusive() {
+        let root = test_root("g4-native-races");
+        fs::create_dir(&root).expect("create root");
+        let directory = open_dir(&root).expect("open root");
+        let mut counters = Counters::default();
+        let (file, mut temp) = create_temp(&directory, &mut counters).expect("create temp");
+        let original_name = temp.name.clone();
+        drop(file);
+        fs::rename(root.join(&original_name), root.join("retained-original"))
+            .expect("move original");
+        File::create(root.join(&original_name)).expect("substitute name");
+        let error = temp
+            .remove(&mut counters)
+            .expect_err("must not unlink substitute");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::AmbiguousDurability)
+        );
+        assert!(root.join(&original_name).is_file());
+        assert_eq!(
+            count_residue(&root, ".g3-quarantine-").expect("quarantine residue"),
+            0
+        );
+        fs::remove_file(root.join(&original_name)).expect("remove substitute");
+        fs::remove_file(root.join("retained-original")).expect("remove original");
+
+        let (_, mut raced) = create_temp(&directory, &mut counters).expect("raced temp");
+        let raced_name = raced.name.clone();
+        let error = raced
+            .remove_with_substitution_after_validation(&mut counters, "retained-raced")
+            .expect_err("substitution after validation must remain unresolved");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::AmbiguousDurability)
+        );
+        assert_eq!(
+            fs::read(root.join(&raced_name)).expect("substitute survives"),
+            b"substitute"
+        );
+        assert!(root.join("retained-raced").is_file());
+        fs::remove_file(root.join(&raced_name)).expect("remove raced substitute");
+        fs::remove_file(root.join("retained-raced")).expect("remove raced original");
+
+        for (index, kind) in ["file", "symlink", "directory"].into_iter().enumerate() {
+            let case = root.join(format!("case-{index}"));
+            fs::create_dir(&case).expect("create case");
+            let case_directory = open_dir(&case).expect("open case");
+            let mut case_counters = Counters::default();
+            let (_, mut candidate) =
+                create_temp(&case_directory, &mut case_counters).expect("candidate temp");
+            match kind {
+                "file" => {
+                    File::create(case.join(DESTINATION_NAME)).expect("target file");
+                }
+                "symlink" => {
+                    std::os::unix::fs::symlink("missing", case.join(DESTINATION_NAME))
+                        .expect("target symlink");
+                }
+                "directory" => {
+                    fs::create_dir(case.join(DESTINATION_NAME)).expect("target directory");
+                }
+                _ => unreachable!(),
+            }
+            assert!(
+                rename_exclusive_at(&case_directory, &candidate.name, DESTINATION_NAME).is_err()
+            );
+            assert!(stat_at(&case_directory, &candidate.name)
+                .expect("candidate stat")
+                .is_some());
+            candidate
+                .remove(&mut case_counters)
+                .expect("candidate cleanup");
+            match kind {
+                "file" | "symlink" => {
+                    fs::remove_file(case.join(DESTINATION_NAME)).expect("target cleanup")
+                }
+                "directory" => fs::remove_dir(case.join(DESTINATION_NAME)).expect("target cleanup"),
+                _ => unreachable!(),
+            }
+            drop(case_directory);
+            fs::remove_dir(case).expect("case cleanup");
+        }
+        drop(directory);
+        fs::remove_dir(root).expect("root cleanup");
+    }
+
+    #[test]
+    fn g4_rows_share_proofs_and_candidate_publishes_batched_bytes() {
+        let root = test_root("g4-integrated");
+        let fixture = prepare_g4_fixture(&root, SOURCE_1).expect("fixture");
+        assert!(fixture.contains("\"status\":\"PASS\""));
+        let closure_on =
+            run_g4_row(&root, SOURCE_1, "r1-closure-on", &root.join("unused")).expect("closure on");
+        let closure_off = run_g4_row(&root, SOURCE_1, "r1-closure-off", &root.join("unused"))
+            .expect("closure off");
+        assert!(closure_on.contains("\"content_closure_status\":\"computed\""));
+        assert!(closure_on.contains("\"closure_fold_enabled\":true"));
+        assert!(closure_off.contains("\"content_closure\":null"));
+        assert!(closure_off.contains("\"closure_fold_enabled\":false"));
+        assert!(closure_off.contains("\"closure_fold_updates\":0"));
+        let candidate = run_g4_row(
+            &root,
+            SOURCE_1,
+            "m0-candidate",
+            &root.join("candidate-output"),
+        )
+        .expect("candidate materialization");
+        assert!(candidate.contains("\"status\":\"PASS\""));
+        assert!(candidate.contains("\"chunk_scalar_query_calls\":0"));
+        assert!(candidate.contains("\"publication_status\":\"committed\""));
+        assert!(candidate.contains("\"temp_residue_count\":0"));
+        assert!(candidate.contains("\"final_residue_count\":0"));
+        fs::remove_dir(root.join("candidate-output")).expect("output cleanup");
+        fs::remove_dir_all(root).expect("fixture cleanup");
+    }
+
+    #[test]
+    fn g4_first_publish_reconciles_lost_ack_and_never_unlinks_a_substitute() {
+        let root = test_root("g4-first-publish-faults");
+        prepare_g4_fixture(&root, SOURCE_1).expect("fixture");
+        let directory = g4_fixture_directory(&root);
+        let source = directory.join("target.source");
+        let mut store =
+            Store::open(&directory.join("store.sqlite"), SELECTED_PROFILE).expect("open fixture");
+        let head = store.current_head().expect("head").expect("visible head");
+        let mut root_metrics = Metrics::default();
+        let roots = g4_roots(&store, head.1, &mut root_metrics).expect("roots");
+        finish_q(&mut root_metrics).expect("root Q");
+        let (_, digest, _) = hash_file(&source).expect("source digest");
+        let sequence = source_cdc_sequence(&source)
+            .expect("source sequence")
+            .1
+            .parse::<ObjectId>()
+            .expect("sequence digest")
+            .to_bytes();
+
+        let lost_ack_root = root.join("lost-ack-output");
+        let lost_ack = g4_materialize(
+            &mut store,
+            &head,
+            roots,
+            digest,
+            sequence,
+            &lost_ack_root,
+            G4NativeAlgorithm::BatchedCandidate,
+            G4NativeFault {
+                directory_sync_lost_ack: true,
+                ..G4NativeFault::default()
+            },
+        )
+        .expect("lost acknowledgement reconciliation");
+        assert_eq!(lost_ack.publication_status, "requested-visible");
+        assert_eq!(lost_ack.reconciliation_outcome, "requested-visible");
+        assert_eq!(lost_ack.reconciliation_calls, 1);
+        assert_eq!(lost_ack.directory_sync_calls, 3);
+        assert_eq!(
+            lost_ack.diagnostic.expect("lost ack diagnostic").first,
+            Some(FailureCause::Core(CoreError::Io))
+        );
+        assert_eq!(lost_ack.temp_files_created, 1);
+        assert_eq!(lost_ack.temp_files_removed, 1);
+        assert!(stat_at(
+            &open_dir(&lost_ack_root).expect("lost ack directory"),
+            DESTINATION_NAME
+        )
+        .expect("lost ack final stat")
+        .is_none());
+        fs::remove_dir(&lost_ack_root).expect("lost ack output cleanup");
+
+        let retry_failure_root = root.join("retry-failure-output");
+        let retry_failure = match g4_materialize(
+            &mut store,
+            &head,
+            roots,
+            digest,
+            sequence,
+            &retry_failure_root,
+            G4NativeAlgorithm::BatchedCandidate,
+            G4NativeFault {
+                directory_sync_lost_ack: true,
+                directory_sync_retry_failure: true,
+                ..G4NativeFault::default()
+            },
+        ) {
+            Ok(_) => panic!("requested-visible retry must be acknowledged"),
+            Err(error) => error,
+        };
+        let failure = retry_failure
+            .downcast_ref::<G4NativePublicationFailure>()
+            .expect("typed retry failure");
+        assert_eq!(failure.0.first, Some(FailureCause::Core(CoreError::Io)));
+        assert_eq!(failure.0.reconciliation, Reconciliation::Ambiguous);
+        assert_eq!(
+            failure.0.reconciliation_error,
+            Some(FailureCause::Core(CoreError::Io))
+        );
+        assert_eq!(
+            failure.0.dominant,
+            Some(FailureCause::Core(CoreError::AmbiguousDurability))
+        );
+        assert!(stat_at(
+            &open_dir(&retry_failure_root).expect("retry failure directory"),
+            DESTINATION_NAME,
+        )
+        .expect("retry failure final stat")
+        .is_none());
+        assert_eq!(
+            count_residue(&retry_failure_root, ".g3-tmp-").expect("retry failure residue"),
+            0
+        );
+        fs::remove_dir(&retry_failure_root).expect("retry failure output cleanup");
+
+        let verification_root = root.join("verification-output");
+        let verification = match g4_materialize(
+            &mut store,
+            &head,
+            roots,
+            digest,
+            sequence,
+            &verification_root,
+            G4NativeAlgorithm::BatchedCandidate,
+            G4NativeFault {
+                verification_failure: true,
+                ..G4NativeFault::default()
+            },
+        ) {
+            Ok(_) => panic!("verification failure must preserve cleanup provenance"),
+            Err(error) => error,
+        };
+        let failure = verification
+            .downcast_ref::<G4NativePublicationFailure>()
+            .expect("typed G4 publication failure");
+        assert_eq!(
+            failure.0.first,
+            Some(FailureCause::Core(CoreError::IdentityMismatch))
+        );
+        assert!(stat_at(
+            &open_dir(&verification_root).expect("verification directory"),
+            DESTINATION_NAME,
+        )
+        .expect("verification final stat")
+        .is_none());
+        assert_eq!(
+            count_residue(&verification_root, ".g3-tmp-").expect("verification residue"),
+            0
+        );
+        fs::remove_dir(&verification_root).expect("verification output cleanup");
+
+        let substitution_root = root.join("substitution-output");
+        let substitution = match g4_materialize(
+            &mut store,
+            &head,
+            roots,
+            digest,
+            sequence,
+            &substitution_root,
+            G4NativeAlgorithm::BatchedCandidate,
+            G4NativeFault {
+                post_publish_substitution: true,
+                ..G4NativeFault::default()
+            },
+        ) {
+            Ok(_) => panic!("post-publication substitution must reject"),
+            Err(error) => error,
+        };
+        let failure = substitution
+            .downcast_ref::<G4NativePublicationFailure>()
+            .expect("typed substitution failure");
+        assert_eq!(failure.0.reconciliation, Reconciliation::DifferentHead);
+        assert!(
+            fs::symlink_metadata(substitution_root.join(DESTINATION_NAME))
+                .expect("substitute survives")
+                .file_type()
+                .is_symlink()
+        );
+        assert!(substitution_root.join(".g4-fault-retained").is_file());
+        fs::remove_file(substitution_root.join(DESTINATION_NAME)).expect("remove substitute");
+        fs::remove_file(substitution_root.join(".g4-fault-retained"))
+            .expect("remove retained target");
+        fs::remove_dir(&substitution_root).expect("substitution output cleanup");
+
+        drop(store);
+        fs::remove_dir_all(root).expect("fixture cleanup");
     }
 }

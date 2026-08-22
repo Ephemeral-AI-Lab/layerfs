@@ -65,18 +65,35 @@ bytes while improving durable total from 328.053 to 308.884 ms. All 4/4 pairs,
 both positions, exact semantics/work/durability/Q/storage, independent
 recomputation, static closure, and sealed-manifest gates passed.
 
-G0–G3 are now complete. G2 closed
+G0–G3 are complete. G2 closed
 `PASS / INSUFFICIENT_EVIDENCE FOR A CONSTANT-FACTOR CANDIDATE`; G3 retained a
 benchmark-private macOS/APFS protected-seed clone/patch mechanism with complete
-authenticated fallback. The controlling status is **G3 PASS / G4 READY — v13
-STATICALLY CLOSED AND TERMINALLY SEALED**. Its once-only 100-MiB one-byte row
-was 3.414166 ms, but that is a mechanism screen, not a median, cold-I/O result,
-production acceptance, or G4 acceptance result. G4 is planning-only and
-UNSTARTED; Phase 4 remains incomplete, G5/G6 remain pending, and platform or
-product integration is not accepted. The operation-local authority persists
-no replayable destination receipt and makes no malicious same-UID guarantee.
-Physical I/O, OS cache residency, and stable-media completion remain
-Unavailable.
+authenticated fallback. The controlling status is now **G4 STAGE TERMINAL
+PASS under the user-approved 1-ms absolute-regression materiality rule; v12
+remains SEALED TERMINAL REVISE under its frozen relative-only contract**. V12 passed source/static closure
+(166 passed, 1 ignored, 0 failed),
+resource and direct <=1-MiB buffer evidence, native durability, exact work,
+residue, custody, and independent-ledger agreement, but failed the unchanged
+<=5% adjacent gate at seq17 (100-MiB clone no-op, +8.535%), seq20 (1-MiB
+count change, +6.800%), and seq26 (1-MiB before-publication fault, +14.360%).
+It is sealed and must not be reanalyzed or rerun. Those old-gate failures have
+absolute mean deltas of only +0.226229 ms, +0.285522 ms, and +0.099604 ms,
+below the user-approved 1.000-ms materiality floor; every hard absolute cap
+and mandatory semantic/work/Q/cleanup/durability/resource/custody gate passes.
+The old <=5% gate is not claimed to have passed. The controlling stage decision
+requires both a >5% ratio and at least 1.000 ms absolute regression for product
+materiality; none of the three rows meets the absolute condition. Three fresh
+independent read-only audit lanes passed with no source/evidence P0/P1.
+
+Phase 4 therefore remains incomplete and no platform or production integration
+is accepted. G4 is closed; this task stops before and authorizes no G5
+implementation or measurement.
+Concurrent premature `research/phase-4/g5-round-0` planning is foreign to and
+excluded from G4 custody; its presence is not evidence that G5 has been
+accepted or started under this roadmap. The native mechanism remains
+benchmark-private and operation-local, persists no replayable destination
+receipt, and makes no malicious same-UID guarantee. Physical I/O, OS cache
+residency, and stable-media completion remain Unavailable.
 
 - [Fast-lane amendment](wp4m/fixed-radix-fast-lane-amendment.md)
 - [Compact evidence contract](wp4m/fixed-radix-compact-evidence-contract.md)
@@ -102,6 +119,12 @@ Unavailable.
 - [G3 sealed v13 baseline](baseline/g3-incremental-materialization-baseline-v1.md)
 - [G3 v13 terminal](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/TERMINAL-v13.json)
 - [G3 v13 terminal verification](../../target/phase4-g3-incremental-materialization-20260822-v13/results-v13/TERMINAL-VERIFICATION-v13.txt)
+- [G4 v12 measured terminal](../../target/phase4-g4-materialization-acceptance-20260822-v12/results-v12/MEASURED-TERMINAL-v1.json)
+- [G4 v12 terminal verification](../../target/phase4-g4-materialization-acceptance-20260822-v12/results-v12/MEASURED-TERMINAL-VERIFICATION-v1.json)
+- [Controlling G4 stage terminal PASS](experiments/g4-materialization-acceptance/G4-STAGE-TERMINAL-v1.json)
+- [G4 user-approved micro-variance decision](experiments/g4-materialization-acceptance/USER-APPROVED-MICRO-VARIANCE-DECISION-v1.md)
+- [G4 accepted baseline](baseline/g4-materialization-acceptance-baseline-v1.md)
+- [G4 report](experiments/g4-materialization-acceptance/G4-REPORT.md)
 - [Current benchmark scoreboard](baseline/current-benchmark-scoreboard.md)
 - [CP-0010 current grind checkpoint](test-checkpoint-report/cp-0010-dirty-72ed9fee8e6a-fastcdc-v2-phase4-grind.md)
 - [CP-0011 writer-memory checkpoint](test-checkpoint-report/cp-0011-dirty-3e167cdcdc26-sqlite-writer-memory.md)

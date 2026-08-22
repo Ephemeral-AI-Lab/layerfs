@@ -1,0 +1,31 @@
+{
+  "schema": "phase4-g4-protocol-closure-dry-run-v12",
+  "status": "PASS",
+  "actual_rows": 0,
+  "benchmark_children_invoked": 0,
+  "database_copies_created": 0,
+  "result_root_absent": true,
+  "benchmark_lock_absent": true,
+  "preregistration_complete": true,
+  "preregistration_sha256": "97586f2946415be203f1f4b396554c0d214fbf8fef73f6df2fe5d27512f79c83",
+  "static_closure_sha256": "c63801f5b7da5206f621e66592782aedf5a402e4b8260549df93b24cfdce5f92",
+  "schedule_assertion_source_sha256": "faaa41be06bf9a7d339785fbc27dd50933bd88583a81314c7c333185bf6dee33",
+  "frozen_v1_schedule_sha256": "556183797ec3116a15920494ac9f788ec1da231bd17a23cb9cd6ab081f55ced3",
+  "schedule_sequences": [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30
+  ],
+  "logical_records": 30,
+  "logical_arm_envelopes": 50,
+  "adjacent_estimator_routes": 13,
+  "additional_measured_payloads": 26,
+  "total_measured_payload_observations": 76,
+  "measured_child_commands_recorded": 76,
+  "balanced_orders": ["CPPC", "PCCP"],
+  "bucket_limits_ns": [1000000000, 75000000000, 38000000000, 1000000000, 1000000000, 1000000000, 3000000000],
+  "bucket_partition_sum_ns": 120000000000,
+  "prior_evidence_reused": false,
+  "cleanup_and_lock_model": "benchmark-private mode-0700/no malicious same-UID actor; no categorical race-free claim",
+  "g5_scope": "concurrent premature foreign work; excluded from G4 custody and untouched"
+}

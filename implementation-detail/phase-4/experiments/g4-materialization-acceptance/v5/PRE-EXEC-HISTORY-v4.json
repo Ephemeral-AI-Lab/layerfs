@@ -1,0 +1,10 @@
+{
+  "benchmark_children_invoked": 0,
+  "classification": "REJECTED_PRE_EXEC_NOT_A_CAMPAIGN",
+  "measured_rows": 0,
+  "reason": "final benchmark audit found the one-observation 5% G3 estimator underidentified and the declared wall sub-budgets unenforced; v4 was rejected before its result root or lock attempt",
+  "result_root_absent": true,
+  "schema": "phase4-g4-v4-history-v1",
+  "status": "REVISE",
+  "v4_methodology_manifest_sha256": "41aa47c22e39a797a0b34abe2f4b463296174e8e8778a0e9a5d1647690953311"
+}

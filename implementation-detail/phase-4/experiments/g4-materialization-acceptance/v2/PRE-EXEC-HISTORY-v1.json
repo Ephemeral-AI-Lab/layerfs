@@ -1,0 +1,15 @@
+{
+  "benchmark_children_invoked": 0,
+  "classification": "REJECTED_PRE_EXEC_NOT_A_CAMPAIGN",
+  "command": "python3 implementation-detail/phase-4/experiments/g4-materialization-acceptance/v1/run_g4_v1.py",
+  "failed_check": "sealed G3-v13 operand SHA-256 custody",
+  "global_lock_absent_after_rejection": true,
+  "incorrect_preregistered_hash": "535bfa17c01ac227024587d131b44d1decbdd07058e108455952fbe46fa4061e",
+  "measured_rows": 0,
+  "reason": "abbreviated handoff notation was expanded incorrectly; the sealed operand and its OPERAND-CUSTODY-v13.json agree on the authoritative hash",
+  "result_root_absent_after_rejection": true,
+  "schema": "phase4-g4-pre-exec-history-v1",
+  "sealed_operand_custody_manifest_sha256": "58b652948950ed27e7ceb57c5b156705932e44e9d89724c63e8687f84b782d58",
+  "status": "REVISE",
+  "v1_methodology_manifest_sha256": "d6675db6cd340b12453f1719d55f183d3ef5f2b56cc07b9cac4c4f7b75b3c517"
+}

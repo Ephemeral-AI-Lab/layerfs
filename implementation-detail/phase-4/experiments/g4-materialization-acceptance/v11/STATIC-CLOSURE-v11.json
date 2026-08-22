@@ -1,0 +1,41 @@
+{
+  "schema": "phase4-g4-v11-static-closure",
+  "status": "PASS",
+  "branch": "codex/empty-worktree",
+  "head": "5c342f0ae24ecc69f2bfc03da1c05d1074fe956a",
+  "candidate_sha256": "789f53068793b8aeea0d03924b1dd985cc6a0d4706c98188f2034b216ca3adcb",
+  "source_sha256": {
+    "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs": "10aa474bf5fe5130fde73703444f5082bfa4a41a3c82dd0d84a025bedd9485a2",
+    "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs": "326cf27c61915501611d5a1876392ee8b93c10038adeae3d8986c13cfc314f71",
+    "crates/layerfs-core/src/canonical_v2.rs": "8fe11085d8b27b1f2a833665b4afd11f6370f3e94821f5022d67ae14cac071dc",
+    "Cargo.lock": "70c7f1079b6dcff927932d6e0072e5cd169cd2f49ea51c72f7f108d950adb8d8"
+  },
+  "focused": {
+    "fragmented_rejoin_tests": "4 passed",
+    "canonical_range_typed_regression": "1 passed",
+    "g4_publication_and_closure_tests": "4 passed",
+    "post_fclone_unresolved_test": "1 passed",
+    "lock_failure_attestation_test": "PASS",
+    "lock_release_attestation_test": "PASS",
+    "authenticated_76_child_analyzer_probe": "PASS",
+    "analyzer_probe_normalized_ledger_sha256": "6bcaf4c30a1701473418147e7a9ebeba7e9606233cd9dc9118c929f8283f0a19"
+  },
+  "full": {
+    "cargo_test_workspace_all_targets": "166 passed, 1 ignored, 0 failed",
+    "cargo_clippy_workspace_all_targets_deny_warnings": "PASS",
+    "cargo_fmt_check": "PASS",
+    "git_diff_check": "PASS",
+    "release_build": "PASS",
+    "python_compile": "PASS"
+  },
+  "audits": {
+    "final_source_audit": "PASS",
+    "final_evidence_audit": "PASS"
+  },
+  "pre_execution": {
+    "v11_result_root_absent": true,
+    "benchmark_lock_absent": true,
+    "benchmark_children_executed_by_dry_run": 0
+  },
+  "g5_scope": "concurrent premature foreign work; excluded from G4 custody and untouched"
+}

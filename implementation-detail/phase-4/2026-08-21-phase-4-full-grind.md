@@ -1,9 +1,24 @@
 # 2026-08-21 Phase 4 full grind roadmap
 
-Status: **G3 PASS / G4 READY — v13 STATICALLY CLOSED AND TERMINALLY SEALED**
+Status: **G4 STAGE TERMINAL PASS under the user-approved 1-ms absolute-regression materiality rule; v12 remains SEALED TERMINAL REVISE under its frozen relative-only contract**
 
-G4 is planning-only and UNSTARTED. Phase 4 remains incomplete; G5 and G6 are
-pending, and no production or platform integration is accepted.
+V12 is sealed and must not be reanalyzed or rerun. It passed source/static
+closure (166 passed, 1 ignored, 0 failed), exact work, direct <=1-MiB buffer
+evidence, resources, native durability, residue, custody, and independent
+ledger agreement. The unchanged <=5% adjacent gate failed only at seq17
+(100-MiB clone no-op, +8.535%), seq20 (1-MiB count change, +6.800%), and seq26
+(1-MiB before-publication fault, +14.360%). The old gate did not pass. Their
+absolute mean deltas are only +0.226229 ms, +0.285522 ms, and +0.099604 ms,
+below the controlling 1.000-ms absolute-regression threshold, while all hard
+absolute and mandatory semantic/resource/evidence gates pass. Three fresh
+independent read-only audit lanes reconciled to PASS with no source/evidence
+P0/P1. G4 has a separate stage-level terminal PASS. Phase 4 remains incomplete
+and no production or platform integration is accepted.
+
+This task stops before and authorizes no G5 implementation or measurement.
+Concurrent
+premature `research/phase-4/g5-round-0` planning is foreign to and excluded
+from G4 custody; its presence does not make it an accepted roadmap start.
 
 This is the current execution roadmap for the remainder of Phase 4. It starts
 from the retained G1 checkpoint and supersedes older ordering in research
@@ -21,8 +36,8 @@ G0  FastCDC-v2 checkpoint              COMPLETE  286eb7a
 G1  SQLite writer-memory policy        COMPLETE  d79f0e0
 G2  materialization decomposition      COMPLETE
 G3  incremental prototype              PASS      sealed v13
-G4  materialization acceptance         READY     planning only; UNSTARTED
-G5  remaining core lanes               PENDING
+G4  materialization acceptance         PASS      stage terminal; v12 remains REVISE
+G5  remaining core lanes               PENDING   no implementation/measurement in this task
 G6  Phase-4 closure                     PENDING
 ```
 
@@ -31,26 +46,27 @@ contiguous-region kernel and `PRAGMA cache_spill=2000`.
 
 | Current 100-MiB operation | Retained result | Qualification |
 |---|---:|---|
-| Durable fresh create | **308.884 ms / 323.746 MiB/s** | freshly measured after G1 |
+| Durable fresh create | **279.463 ms / 357.829 MiB/s** | accepted G4-v12 evidence |
 | Writer maximum RSS | **12.48 MiB** | G1; 86.005% below its control |
 | SQLite cache snapshot maximum | **8.35 MiB** | G1; 89.944% below its control |
-| Same-open same-count edit | **6.961 ms** | latest Canonical-v2 lifecycle evidence |
+| Same-open same-count edit | **8.043 ms** | accepted G4-v12 evidence |
 | Same-open `+1` early / middle | **5.108 / 4.576 ms** | latest Canonical-v2 lifecycle evidence |
 | One-byte early / middle / late | **6.410 / 6.415 / 6.725 ms** | latest Canonical-v2 guards |
-| Warm authenticated reconstruction | **338.776 ms / 295.180 MiB/s** | complete reauthentication; not incremental |
-| Fresh-process reconstruction | **366.357 ms / 272.958 MiB/s** | OS cache warm-or-unknown |
-| Reopen / visible head | **2.088 ms** | retained |
+| Warm authenticated reconstruction | **237.214 ms / 421.560 MiB/s** | accepted G4-v12 evidence |
+| Fresh-process reconstruction | **237.381 ms / 421.263 MiB/s** | accepted G4-v12 evidence; OS cache warm-or-unknown |
+| Reopen / visible head | **3.583 ms** | accepted G4-v12 evidence |
 | First edit after reopen | **154.019 ms** | full authority work remains |
-| Authenticated returned 1-MiB range | **2.279 ms / 438.749 MiB/s** | retained |
-| Proven cold native materialization | **Unavailable** | unqualified path/benchmark |
-| Trusted hot read | **Unavailable** | trusted authority/cache path absent |
-| 100-MiB one-byte incremental materialization | **3.414166 ms** | single G3 kill-screen row; G4 acceptance pending |
+| Authenticated returned 1-MiB range | **2.046 ms / 488.823 MiB/s** | accepted G4-v12 evidence |
+| First/full native materialization, warm source | **307.652 ms / 325.042 MiB/s** | accepted G4-v12 durability evidence |
+| Same-open protected-seed full read | **10.058 ms / 9,942.582 MiB/s** | accepted byte-delivery evidence; digest separate |
+| 100-MiB one-byte incremental materialization | **4.104 ms** | accepted G4-v12 evidence |
 
-Only durable full create was freshly remeasured after G1. The incremental row
-is the once-only G3 mechanism screen, not a median or acceptance baseline.
-Other cells remain the latest retained Canonical-v2 authority until G4
-refreshes the compact matrix. Historical CP-0008 500-MiB results remain scale
-evidence; no new 500-MiB execution is authorized.
+The rows explicitly qualified above are accepted G4-v12 observations under the
+separate stage-level terminal decision. Cells not measured by G4 remain the
+latest retained Canonical-v2 authority. V12 evidence remains sealed REVISE;
+the separate G4 stage decision promotes the qualified benchmark-private
+baseline without relabeling the v12 old-gate result. Historical CP-0008
+500-MiB results remain scale evidence; no new 500-MiB execution is authorized.
 
 Controlling documents:
 
@@ -105,9 +121,10 @@ open/head
   = materialization lifecycle
 ```
 
-Existing 338.776/366.357-ms rows reconstruct every byte through an
-authenticated logical sink. They are neither incremental materialization nor
-proof of a cold native checkout.
+The historical pre-G4 338.776/366.357-ms rows reconstructed every byte through
+an authenticated logical sink. They were neither incremental materialization
+nor proof of a cold native checkout; the current accepted G4 rows are
+237.214/237.381 ms.
 
 ### Required distinctions
 
@@ -241,10 +258,19 @@ and [G3 campaign baseline](baseline/g3-incremental-materialization-baseline-v1.m
 
 ## 5. G4 — materialization acceptance
 
-G4 is **READY** for planning because G3 is sealed PASS, but G4 is **UNSTARTED**.
-Integration remains conditional on a later G4 acceptance result. Use 1/10-MiB
-smokes and 100-MiB primary rows; the entire measured campaign, not each
-subcampaign, is capped at 120 seconds.
+G4 v12 is **SEALED / TERMINAL REVISE** under the original relative-only
+contract. Its complete <=120-second campaign
+retained 30 records, 50 logical arms, and 76 measured child observations. It
+passed source/static/resource/direct-buffer/durability/exact-work/residue/
+custody gates and both analyzers produced the same normalized ledger. It failed
+only the original adjacent <=5% equation at seq17 (+8.535%), seq20 (+6.800%),
+and seq26 (+14.360%). V12 must not be reanalyzed or rerun, and the original
+gate is not reported as passing. The later
+controlling [G4 stage terminal](experiments/g4-materialization-acceptance/G4-STAGE-TERMINAL-v1.json)
+classifies the three +0.226229/+0.285522/+0.099604-ms regressions as
+non-material because product materiality requires both a >5% ratio and at
+least 1.000 ms absolute regression. G4 is closed with a stage-level terminal
+PASS, while the v12 old gate remains failed.
 
 | Operation | 1 MiB | 10 MiB | 100 MiB | Primary evidence |
 |---|:---:|:---:|:---:|---|
@@ -260,18 +286,20 @@ subcampaign, is capped at 120 seconds.
 | Destination faults | focused | focused | primary | atomicity, reconciliation, cleanup |
 
 Phase 4 qualifies the engine boundary, authority, and benchmark behavior.
-A mechanism later accepted by G4 may be considered for OS/application
-integration; neither G3 nor G4 itself authorizes broad projection, FUSE/VFS,
-SDK, or product integration.
+The current operation-local macOS/APFS implementation is benchmark-private;
+v12 does not authorize broad projection, FUSE/VFS, SDK, OS/application, or
+product integration.
 
 ## 6. G5 — remaining core lanes
 
-G5 contains independent decisions. Their research can overlap, but each
-implementation and measured campaign remains one-variable and serial.
+This task stops before and authorizes no G5 implementation or measurement.
+The lane descriptions below remain roadmap material only.
+Concurrent premature `research/phase-4/g5-round-0` planning is foreign to and
+excluded from G4 custody; it must not be treated as an accepted G5 start.
 
 ### G5-A — reopen authority
 
-Current open/head lookup is already 2.088 ms. The unresolved cost is the first
+Current open/head lookup is already 3.583 ms. The unresolved cost is the first
 edit after reopen: 154.019 ms versus approximately 6.4 ms same-open. Full
 closure authority, not head lookup or edit construction, dominates.
 
@@ -341,7 +369,7 @@ Evaluate one variable at a time:
    edit, materialization, range, storage, and migration behavior;
 3. bounded ordered CDC/hash/SQLite overlap only when a materially sub-300-ms
    target justifies a new execution profile;
-4. retain the current `308.884 ms / 323.746 MiB/s` control when no candidate
+4. retain the current `279.463 ms / 357.829 MiB/s` control when no candidate
    has sufficient cross-operation upside.
 
 Never restore the old approximately 89-MiB writer peak, duplicate the full

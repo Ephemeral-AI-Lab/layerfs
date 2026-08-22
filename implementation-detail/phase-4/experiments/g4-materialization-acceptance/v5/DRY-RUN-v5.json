@@ -1,0 +1,24 @@
+{
+  "actual_rows": 0,
+  "benchmark_children_invoked": 0,
+  "database_copies_created": 0,
+  "expected": {
+    "cold_administrative_records": 2,
+    "matrix_record_count": 30,
+    "r01_arm_observations": 9,
+    "row_replacement_or_rerun_count": 0,
+    "seed_full_read_timed_passes": 4,
+    "total_arm_observations": 50
+  },
+  "frozen_v1_schedule_sha256": "556183797ec3116a15920494ac9f788ec1da231bd17a23cb9cd6ab081f55ced3",
+  "preregistration_complete": true,
+  "result_root_absent": true,
+  "schedule_assertion_source_sha256": "35c9bd85286302098ca767b430b282e6a85a5f7704af9ab70f1e849fbec7fbdd",
+  "schedule_sequences": [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30
+  ],
+  "schema": "phase4-g4-protocol-closure-dry-run-v5",
+  "status": "PASS"
+}

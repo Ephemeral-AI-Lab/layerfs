@@ -1,11 +1,11 @@
 # Phase 4 algorithm-complexity analysis
 
-Status: WP4-P COMPLETE / PASS; WP4 complete; WP5 eligible/pending; Phase 4 not complete
+Status: WP4-P COMPLETE / PASS; G4 STAGE TERMINAL PASS under the user-approved 1-ms absolute-regression materiality rule; v12 remains TERMINAL REVISE; Phase 4 incomplete; stop before G5
 
 Date: 2026-08-17
 
 Scope: CAS + CDC + COW + canonical persistence, SQLite integration, reads,
-writes, reconstruction, and future native materialization
+writes, reconstruction, and benchmark-private native materialization
 
 ## 1. Purpose and authority
 
@@ -117,8 +117,8 @@ physical I/O, not the asymptotic class.
 | Fast unchanged reopen | `O(1)` fixed head/receipt/root work, then lazy access | bounded fixed state | none | Improved from full-closure replay |
 | Fresh full closure scrub | `Theta(A + V)` | bounded object/spool/active stack | none | Intentionally not reduced |
 | Full streamed reconstruction | `Theta(A + S + N)` | bounded object/spool/output windows | none | Same necessary time, bounded memory |
-| Clean native materialization | `Theta(A + S + J)` | bounded traversal/output plus native operation state | `Theta(S + J)` destination | Future work; payload write lower bound remains |
-| Incremental native materialization | target `O(changed paths + changed bytes + changed mapping paths)` | bounded per changed path/file | proportional to destination changes | Enabled by roots/deltas; not implemented by WP4 |
+| Clean native materialization | `Theta(A + S + J)` | bounded traversal/output plus native operation state | `Theta(S + J)` destination | Benchmark-private implementation exists; payload write lower bound remains; no production acceptance |
+| Incremental native materialization | `O(changed paths + changed bytes + changed mapping paths + bounded rejoin window)` when authority and rejoin hold; otherwise complete fallback | <=1-MiB owned segments plus bounded native state | proportional to destination changes | Accepted benchmark-private operation-local G4 baseline by user exception; v12 old gate remains REVISE; not production integration |
 | Directory create/encode | `Theta(total encoded entry bytes)` | `O(B_d + index builder/spool)` | `Theta(total encoded entry bytes)` | Bounded pages prevent giant resident object |
 | Directory same-size child replacement | `O(sum_i(page_i + index_i + wrapper_i))` over `d` ancestors | `O(B_d + index window)` | one page, index, and wrapper per ancestor | Large constant reduction; current core clone may remain `O(E)` |
 | Directory leading count-changing insert | `O(E)` worst-case greedy suffix repack | bounded page/index windows | `O(E)` mapping history in worst case | Known fixed-partition weakness |
@@ -787,14 +787,18 @@ destination bytes = Theta(total payload bytes + native metadata)
 ```
 
 Writing a new `S`-byte native file has an unavoidable `Omega(S)` destination
-write lower bound. WP4 does not implement native materialization, APFS clone or
-reflink behavior, atomic destination publication, or its benchmark. Streamed
-reconstruction is a prerequisite, not proof of native materialization speed.
+write lower bound. A benchmark-private macOS/APFS clone/patch/publication path
+and benchmark now exist. G4 accepts that exact benchmark-private boundary by
+explicit user exception while v12 remains REVISE under its old gate; it
+accepts neither production engine integration nor a general
+native-materialization claim.
+Streamed reconstruction remains a prerequisite, not proof of native
+materialization speed outside the frozen benchmark boundary.
 
 ### 14.4 Incremental native materialization
 
 If the destination is proven to correspond exactly to the authenticated parent
-root, the future target is:
+root, the benchmark-private implementation targets:
 
 ```text
 T_native_incremental = O(changed paths
@@ -803,9 +807,10 @@ T_native_incremental = O(changed paths
                          + required native durability work)
 ```
 
-Unchanged paths should require no payload rewrite. This requires a later
-materialization authority/custody design; a delta alone does not prove that an
-arbitrary native destination still matches its parent root.
+Unchanged paths require no payload rewrite only inside its operation-local
+authority. There is no replayable persistent destination receipt, malicious
+same-UID guarantee, or accepted production custody design; a delta alone does
+not prove that an arbitrary native destination still matches its parent root.
 
 ### 14.5 Destination verification
 
@@ -949,8 +954,9 @@ live mapping disk space      = Theta(S_u + N)
 - Full reconstruction can suffer small-object/query amplification without
   batching and sequential leaf traversal.
 - No GC means unreachable immutable COW history consumes durable space.
-- Native materialization and incremental destination authority are later
-  phases, not WP4 results.
+- Native materialization and incremental destination authority exist only as a
+  benchmark-private G4 implementation accepted by explicit user exception;
+  v12 remains REVISE and no production result is granted.
 
 ## 19. Measurement obligations — superseded historical campaign contract
 
@@ -986,10 +992,12 @@ this exhaustive obligation with the exact 27-row CP-0006 compact contract:
 analyzers, and a 120-second configured ceiling. The 100-GiB calculation remains
 formula-only; it is not a runtime or latency projection.
 
-Native APFS materialization requires a later distinct benchmark that includes
-destination namespace creation, payload writes, metadata application,
-durability/publication, and explicitly timed destination verification. CAS
-reconstruction must not be relabeled as native materialization.
+G4 v12 supplied a distinct benchmark-private APFS materialization path covering
+destination writes, durability/publication, verification, residue, and custody.
+Its terminal REVISE result remains preserved; the later user exception accepts
+only the frozen benchmark-private baseline and grants no production
+integration. CAS reconstruction must still not be relabeled as native
+materialization.
 
 ## 20. Decision summary
 
@@ -2450,3 +2458,52 @@ first authority.
 Evidence: raw `988f6960...5224`, analysis `616bbb18...323c`, executable
 `9cda87ee...49d7`, runner `82931bfe...0c32`, analyzer `810ffe04...fd6`, source
 diff `b073a7e0...50f84`, and manifest `4a7748b7...a502d`.
+
+## 33. G4 v12 bounded rejoin and native-materialization disposition
+
+Status: **G4 STAGE TERMINAL PASS under the user-approved 1-ms absolute-regression materiality rule; v12 remains TERMINAL REVISE; no production integration; Phase 4 incomplete**.
+
+The G4 implementation keeps evidence operation-local so unaffected protected
+routes do not initialize or update G4-only counters. Edited-file CDC preserves
+the full authority window through `edit_end + 1 MiB`; it streams the old
+prefix, replacement, and old suffix as <=1-MiB owned segments rather than
+shrinking the search. The segment-vector capacity is derived with checked
+arithmetic from the requested range, including sliced-boundary slack, rather
+than from the file-wide reference ceiling. Failure to prove an exact rejoin
+uses the exact complete fallback.
+
+Consequently the successful incremental shape is:
+
+```text
+T_rejoin = O(changed bytes + bytes through edit_end + 1 MiB search)
+M_rejoin = O(requested-range segment capacity + <=1-MiB owned segment)
+fallback = Theta(S + N) complete authenticated reconstruction
+```
+
+Exact 1-MiB replacement, boundary, complete-fallback, checked Q/counter, and
+full-window identity tests pass. Campaign-wide direct buffer evidence reports a
+maximum single owned buffer of 1,048,576 bytes. The native publication path
+also passes lost-directory-sync-ack reconciliation and durability accounting.
+Cleanup is qualified only for the benchmark-private mode-0700/no-malicious-
+same-UID model: identity-check-then-unlink is not categorical protection
+against a same-UID substitution after the final check, and post-clone identity
+acquisition failure can return typed unresolved cleanup with residue.
+
+V12 passed source/static closure (166 passed, 1 ignored, 0 failed), resources,
+direct buffer/Q evidence, durability, exact work, custody, residue, and
+independent normalized-ledger agreement. It failed only the frozen <=5%
+adjacent equation at seq17 (100-MiB clone no-op, +8.535%), seq20 (1-MiB count
+change, +6.800%), and seq26 (1-MiB before-publication fault, +14.360%). The
+sealed campaign is therefore G4 REVISE under its original frozen contract and,
+by itself, promotes no materialization baseline. Its old gate is not relabeled
+as passing.
+The controlling post-seal decision keeps all hard absolute and
+semantic/work/Q/cleanup/durability/resource/custody gates mandatory while
+classifying a regression as material only when both the ratio exceeds 1.05 and
+the candidate-minus-control mean is at least 1.000 ms. The three v12 deltas are
+below that absolute threshold. Three fresh read-only audit lanes found no
+source/evidence P0/P1, so the benchmark-private G4 baseline receives a separate
+stage-level terminal PASS. This does not authorize production integration or
+any G5 implementation or measurement in this task. Concurrent premature
+`research/phase-4/g5-round-0` planning is foreign to and excluded from G4
+custody; it is not evidence of an accepted G5 start.

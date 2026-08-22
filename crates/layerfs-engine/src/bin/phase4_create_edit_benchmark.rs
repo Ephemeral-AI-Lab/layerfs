@@ -566,6 +566,26 @@ struct Metrics {
     d_bytes: u64,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ReconstructionEvidence {
+    closure_fold_updates: u64,
+    closure_fold_canonical_bytes: u64,
+    occurrence_fold_entries: u64,
+    occurrence_fold_bytes: u64,
+    output_digest_hashes: u64,
+    output_digest_bytes_hashed: u64,
+    sink_write_calls: u64,
+    sink_write_bytes: u64,
+    sink_errors: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct RejoinBufferEvidence {
+    old_window_segment_max_bytes: u64,
+    scan_input_segment_max_bytes: u64,
+    max_single_buffer_bytes: u64,
+}
+
 #[derive(Clone, Debug, Default)]
 struct PhaseTimes {
     same_open_authority_establishment_ns: u128,
@@ -2169,6 +2189,21 @@ fn observe_closure(
     Ok(())
 }
 
+fn observe_optional_closure(
+    hasher: &mut Option<Hasher>,
+    role: &[u8],
+    id: ObjectId,
+    canonical: &[u8],
+    evidence: &mut ReconstructionEvidence,
+) -> CoreResult<()> {
+    let Some(hasher) = hasher else {
+        return Ok(());
+    };
+    observe_closure(hasher, role, id, canonical)?;
+    add(&mut evidence.closure_fold_updates, 1)?;
+    add_len(&mut evidence.closure_fold_canonical_bytes, canonical.len())
+}
+
 fn combined_closure_digest(transition: [u8; 32], content: [u8; 32]) -> [u8; 32] {
     let mut hasher = Hasher::new();
     hasher.update(b"layerfs/wp4m/ordered-closure/v1\0");
@@ -2217,8 +2252,16 @@ fn os_random<const N: usize>() -> CoreResult<[u8; N]> {
 }
 
 fn read_authority(path: &Path) -> AnyResult<[u8; 32]> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|_| CoreError::ValidationAuthorityUnavailable)?;
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW);
+    let mut file = options
+        .open(path)
+        .map_err(|_| CoreError::ValidationAuthorityUnavailable)?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| CoreError::ValidationAuthorityUnavailable)?;
     if !metadata.file_type().is_file() || metadata.len() != 32 {
         return Err(CoreError::ValidationAuthorityUnavailable.into());
     }
@@ -2226,10 +2269,10 @@ fn read_authority(path: &Path) -> AnyResult<[u8; 32]> {
     if metadata.permissions().mode() & 0o777 != 0o600 {
         return Err(CoreError::ValidationAuthorityUnavailable.into());
     }
-    fs::read(path)
-        .map_err(|_| CoreError::ValidationAuthorityUnavailable)?
-        .try_into()
-        .map_err(|_| CoreError::ValidationAuthorityUnavailable.into())
+    let mut key = [0_u8; 32];
+    file.read_exact(&mut key)
+        .map_err(|_| CoreError::ValidationAuthorityUnavailable)?;
+    Ok(key)
 }
 
 fn create_authority(path: &Path) -> AnyResult<[u8; 32]> {
@@ -6309,14 +6352,18 @@ fn rejoin_chunk_capacity(bytes: usize) -> CoreResult<usize> {
         .ok_or(CoreError::LengthOverflow)
 }
 
-fn scan_rejoin_chunks(bytes: &[u8], metrics: &mut Metrics) -> AnyResult<ChargedVec<RejoinChunk>> {
+fn scan_rejoin_chunks(
+    reader: impl Read,
+    length: usize,
+    metrics: &mut Metrics,
+) -> AnyResult<ChargedVec<RejoinChunk>> {
     let mut chunks = ChargedVec::with_item_charge(
-        rejoin_chunk_capacity(bytes.len())?,
+        rejoin_chunk_capacity(length)?,
         Q_FILE_REFERENCE_BYTES,
         metrics,
     )?;
     let mut start = 0_u64;
-    FastCdc::new().scan(bytes, |chunk| {
+    FastCdc::new().scan(reader, |chunk| {
         let raw_length = u32::try_from(chunk.len()).map_err(|_| CoreError::LengthOverflow)?;
         let canonical = encode_charged_bytes_object(chunk, metrics)?;
         let object_id = object_id_accounted(&canonical, metrics)?;
@@ -6452,7 +6499,16 @@ fn bounded_rejoin_references(
     edit_point: EditPoint,
     replacement: &[u8],
     metrics: &mut Metrics,
-) -> AnyResult<(u64, u64, ChargedVec<file_codec::FileReference>)> {
+) -> AnyResult<(
+    u64,
+    u64,
+    ChargedVec<file_codec::FileReference>,
+    RejoinBufferEvidence,
+)> {
+    let mut buffer_evidence = RejoinBufferEvidence {
+        max_single_buffer_bytes: SOURCE_1,
+        ..RejoinBufferEvidence::default()
+    };
     let (total, references) = {
         let root_bytes = store.get_bytes(file_root, metrics)?;
         let payload = file_codec::decode_mapping(&root_bytes, file_codec::FILE_ROOT_TAG)?;
@@ -6492,6 +6548,11 @@ fn bounded_rejoin_references(
         }
         .into());
     }
+    if u64::try_from(replacement.len()).map_err(|_| CoreError::LengthOverflow)?
+        > layerfs_core::MAX_REJOIN_WINDOW_BYTES
+    {
+        return Err(CoreError::AllocationBudgetExceeded.into());
+    }
     let range_end = edit_point
         .byte_offset
         .checked_add(removed_length)
@@ -6499,49 +6560,34 @@ fn bounded_rejoin_references(
         .ok_or(CoreError::LengthOverflow)?
         .min(total);
     metrics.q_cdc_base_live_bytes = q_current();
-    let old_bytes = read_file_range(store, file_root, candidate, scan_start..range_end, metrics)?;
-    metrics.q_cdc_old_window_bytes =
-        u64::try_from(old_bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
+    let old_segments = read_file_range_segments(store, file_root, scan_start..range_end, metrics)?;
+    metrics.q_cdc_old_window_bytes = q_current()
+        .checked_sub(metrics.q_cdc_base_live_bytes)
+        .ok_or(CoreError::LengthOverflow)?;
+    buffer_evidence.old_window_segment_max_bytes =
+        u64::try_from(old_segments.max_segment).map_err(|_| CoreError::LengthOverflow)?;
     let prefix_length =
         usize::try_from(predecessor_length).map_err(|_| CoreError::LengthOverflow)?;
     let replaced_end = prefix_length
         .checked_add(edit_point.replacement_length)
         .ok_or(CoreError::LengthOverflow)?;
-    if old_bytes.len() < replaced_end {
+    if old_segments.length < replaced_end {
         return Err(CoreError::UnexpectedEof.into());
     }
-    let old_chunk_slots_bytes = rejoin_chunk_capacity(old_bytes.len())?
-        .checked_mul(Q_FILE_REFERENCE_BYTES)
+    let old_chunks_before = q_current();
+    let old_chunks = scan_rejoin_chunks(
+        old_segments.reader(0, old_segments.length)?,
+        old_segments.length,
+        metrics,
+    )?;
+    metrics.q_cdc_old_chunk_slots_bytes = q_current()
+        .checked_sub(old_chunks_before)
         .ok_or(CoreError::LengthOverflow)?;
-    metrics.q_cdc_old_chunk_slots_bytes =
-        u64::try_from(old_chunk_slots_bytes).map_err(|_| CoreError::LengthOverflow)?;
-    let old_chunks = scan_rejoin_chunks(&old_bytes, metrics)?;
     if old_chunks.first().map(|chunk| chunk.raw_length) != Some(predecessor.raw_length)
         || old_chunks.get(1).map(|chunk| chunk.raw_length) != Some(target.raw_length)
     {
         return Err(CoreError::NonCanonicalPagePartition.into());
     }
-    let mut scan_input = ChargedVec::with_capacity(old_bytes.len(), metrics)?;
-    scan_input.extend_from_slice(&old_bytes[..prefix_length]);
-    scan_input.extend_from_slice(replacement);
-    scan_input.extend_from_slice(&old_bytes[replaced_end..]);
-    metrics.q_cdc_scan_input_bytes =
-        u64::try_from(scan_input.len()).map_err(|_| CoreError::LengthOverflow)?;
-    metrics.q_cdc_overlap_current = q_current();
-    let expected_overlap = metrics
-        .q_cdc_base_live_bytes
-        .checked_add(metrics.q_cdc_old_window_bytes)
-        .and_then(|value| value.checked_add(metrics.q_cdc_old_chunk_slots_bytes))
-        .and_then(|value| value.checked_add(metrics.q_cdc_scan_input_bytes))
-        .ok_or(CoreError::LengthOverflow)?;
-    if metrics.q_cdc_overlap_current != expected_overlap {
-        return Err(CoreError::LengthMismatch {
-            expected: expected_overlap,
-            actual: metrics.q_cdc_overlap_current,
-        }
-        .into());
-    }
-    drop(old_bytes);
     add_len(&mut metrics.source_bytes_read, replacement.len())?;
     observe_payload_input(metrics, replacement.len())?;
     let old_suffix_start = predecessor_length
@@ -6550,22 +6596,36 @@ fn bounded_rejoin_references(
     let changed_prefix = predecessor_length
         .checked_add(removed_length)
         .ok_or(CoreError::LengthOverflow)?;
+    let scan_length = prefix_length
+        .checked_add(replacement.len())
+        .and_then(|value| value.checked_add(old_segments.length.checked_sub(replaced_end)?))
+        .ok_or(CoreError::LengthOverflow)?;
+    let scan_input_before = q_current();
     let mut scanned = ChargedVec::with_item_charge(
-        rejoin_chunk_capacity(scan_input.len())?,
+        rejoin_chunk_capacity(scan_length)?,
         Q_FILE_REFERENCE_BYTES,
         metrics,
     )?;
+    let mut scanned_bytes =
+        ChargedVec::with_capacity(rejoin_chunk_capacity(scan_length)?, metrics)?;
     let mut scanned_end = 0_u64;
     let mut rejoin = None;
-    let scan_result = FastCdc::new().scan(scan_input.as_slice(), |chunk| {
+    let input = old_segments
+        .reader(0, prefix_length)?
+        .chain(std::io::Cursor::new(replacement))
+        .chain(old_segments.reader(replaced_end, old_segments.length)?);
+    let scan_result = FastCdc::new().scan(input, |chunk| {
         let raw_length = u32::try_from(chunk.len()).map_err(|_| CoreError::LengthOverflow)?;
         let canonical = encode_charged_bytes_object(chunk, metrics)?;
         let object_id = object_id_accounted(&canonical, metrics)?;
+        let mut raw = ChargedVec::with_capacity(chunk.len(), metrics)?;
+        raw.extend_from_slice(chunk);
         scanned.push(RejoinChunk {
             start: scanned_end,
             object_id,
             raw_length,
         });
+        scanned_bytes.push(raw);
         scanned_end = scanned_end
             .checked_add(u64::from(raw_length))
             .ok_or(CoreError::LengthOverflow)?;
@@ -6583,6 +6643,32 @@ fn bounded_rejoin_references(
             rejoin = find_exact_rejoin(&old_chunks, &scanned, old_suffix_start, changed_prefix);
         }
         Err(error) => return Err(error.into()),
+    }
+    metrics.q_cdc_scan_input_bytes = q_current()
+        .checked_sub(scan_input_before)
+        .ok_or(CoreError::LengthOverflow)?;
+    buffer_evidence.scan_input_segment_max_bytes = u64::try_from(
+        scanned_bytes
+            .iter()
+            .map(|bytes| bytes.len())
+            .max()
+            .unwrap_or(0)
+            .max(replacement.len()),
+    )
+    .map_err(|_| CoreError::LengthOverflow)?;
+    metrics.q_cdc_overlap_current = q_current();
+    let expected_overlap = metrics
+        .q_cdc_base_live_bytes
+        .checked_add(metrics.q_cdc_old_window_bytes)
+        .and_then(|value| value.checked_add(metrics.q_cdc_old_chunk_slots_bytes))
+        .and_then(|value| value.checked_add(metrics.q_cdc_scan_input_bytes))
+        .ok_or(CoreError::LengthOverflow)?;
+    if metrics.q_cdc_overlap_current != expected_overlap {
+        return Err(CoreError::LengthMismatch {
+            expected: expected_overlap,
+            actual: metrics.q_cdc_overlap_current,
+        }
+        .into());
     }
     add(&mut metrics.source_cdc_bytes_read, scanned_end)?;
     add(&mut metrics.canonical_stage_source_bytes_read, scanned_end)?;
@@ -6609,16 +6695,12 @@ fn bounded_rejoin_references(
         .checked_sub(rejoin_offset)
         .ok_or(CoreError::LengthOverflow)?;
     metrics.suffix_objects = metrics.suffix_references;
+    drop(old_segments);
     drop(old_chunks);
     let mut replacements =
         ChargedVec::with_item_charge(new_count, Q_FILE_REFERENCE_BYTES, metrics)?;
     let mut admission = ConstructionScopeProof::new(store, metrics)?;
-    for chunk in scanned.iter().take(new_count) {
-        let start = usize::try_from(chunk.start).map_err(|_| CoreError::LengthOverflow)?;
-        let end = start
-            .checked_add(usize::try_from(chunk.raw_length).map_err(|_| CoreError::LengthOverflow)?)
-            .ok_or(CoreError::LengthOverflow)?;
-        let bytes = scan_input.get(start..end).ok_or(CoreError::UnexpectedEof)?;
+    for (chunk, bytes) in scanned.iter().zip(scanned_bytes.iter()).take(new_count) {
         let occurrence = store.admit_known_occurrence(
             file_codec::FileReference {
                 raw_length: chunk.raw_length,
@@ -6634,6 +6716,7 @@ fn bounded_rejoin_references(
         replacement_start,
         u64::try_from(old_count).map_err(|_| CoreError::LengthOverflow)?,
         replacements,
+        buffer_evidence,
     ))
 }
 
@@ -8019,7 +8102,7 @@ fn edit_file_same_middle_cdc(
     replacement: &[u8],
     transaction_started: bool,
     metrics: &mut Metrics,
-) -> AnyResult<(ObjectId, ObjectId)> {
+) -> AnyResult<(ObjectId, ObjectId, RejoinBufferEvidence)> {
     if transaction_started {
         if store.active_transaction.is_none() {
             return Err(CoreError::ValidationAuthorityUnavailable.into());
@@ -8031,7 +8114,7 @@ fn edit_file_same_middle_cdc(
         .current_head_accounted(metrics)?
         .ok_or(CoreError::MissingObject)?;
     let file_parent = resolve_namespace_file_root(store, parent, metrics)?;
-    let (replacement_start, old_count, replacements) = bounded_rejoin_references(
+    let (replacement_start, old_count, replacements, buffer_evidence) = bounded_rejoin_references(
         store,
         file_parent,
         candidate,
@@ -8073,7 +8156,7 @@ fn edit_file_same_middle_cdc(
         std::slice::from_ref(&operation),
         metrics,
     )?;
-    Ok((root, transition))
+    Ok((root, transition, buffer_evidence))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -8235,7 +8318,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn stream_file(
+fn stream_file<F>(
     store: &Store,
     id: ObjectId,
     level: u8,
@@ -8243,12 +8326,17 @@ fn stream_file(
     batch_leaf_reads: bool,
     active: &mut Vec<ObjectId>,
     hasher: &mut Hasher,
-    closure_hasher: &mut Hasher,
+    closure_hasher: &mut Option<Hasher>,
     sequence_hasher: &mut Hasher,
     length: &mut u64,
     reference_count: &mut u64,
+    evidence: &mut ReconstructionEvidence,
     metrics: &mut Metrics,
-) -> AnyResult<()> {
+    emit: &mut F,
+) -> AnyResult<()>
+where
+    F: FnMut(&[u8]) -> AnyResult<()>,
+{
     if usize::from(level) > MAX_DEPTH {
         return Err(CoreError::MappingDepthExceeded.into());
     }
@@ -8257,7 +8345,7 @@ fn stream_file(
     }
     active.push(id);
     let bytes = store.get_bytes(id, metrics)?;
-    observe_closure(closure_hasher, b"file-mapping", id, &bytes)?;
+    observe_optional_closure(closure_hasher, b"file-mapping", id, &bytes, evidence)?;
     add(&mut metrics.closure_occurrences, 1)?;
     let payload = match level {
         0 => file_codec::decode_mapping(&bytes, file_codec::FILE_LEAF_TAG)?,
@@ -8277,12 +8365,15 @@ fn stream_file(
          -> AnyResult<()> {
             sequence_hasher.update(&reference.raw_length.to_be_bytes());
             sequence_hasher.update(reference.object_id.as_bytes());
+            add(&mut evidence.occurrence_fold_entries, 1)?;
+            add(&mut evidence.occurrence_fold_bytes, 36)?;
             add(&mut metrics.closure_occurrences, 1)?;
-            observe_closure(
+            observe_optional_closure(
                 closure_hasher,
                 b"file-chunk",
                 reference.object_id,
                 canonical,
+                evidence,
             )?;
             let raw = layerfs_core::decode_bytes_object(canonical)?;
             if u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?
@@ -8293,7 +8384,14 @@ fn stream_file(
             if batch_leaf_reads {
                 observe_stream_output(metrics, raw.len())?;
             }
+            if let Err(error) = emit(raw) {
+                add(&mut evidence.sink_errors, 1)?;
+                return Err(error);
+            }
+            add(&mut evidence.sink_write_calls, 1)?;
+            add_len(&mut evidence.sink_write_bytes, raw.len())?;
             hasher.update(raw);
+            add_len(&mut evidence.output_digest_bytes_hashed, raw.len())?;
             *length = length
                 .checked_add(u64::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?)
                 .ok_or(CoreError::LengthOverflow)?;
@@ -8336,7 +8434,9 @@ fn stream_file(
             sequence_hasher,
             length,
             reference_count,
+            evidence,
             metrics,
+            emit,
         )?;
         let child_length = (*length)
             .checked_sub(child_length_before)
@@ -8434,7 +8534,10 @@ fn read_file_range(
             index + 1 == child_count,
             child_start,
             &range,
-            &mut output,
+            &mut |bytes, _metrics| {
+                output.extend_from_slice(bytes);
+                Ok(())
+            },
             &mut active,
             metrics,
         )?;
@@ -8442,18 +8545,186 @@ fn read_file_range(
     Ok(output)
 }
 
+struct RangeSegments {
+    values: ChargedVec<ChargedVec<u8>>,
+    length: usize,
+    max_segment: usize,
+}
+
+impl RangeSegments {
+    fn reader(&self, start: usize, end: usize) -> AnyResult<RangeSegmentsReader<'_>> {
+        if start > end || end > self.length {
+            return Err(CoreError::InvalidRange {
+                start: u64::try_from(start).map_err(|_| CoreError::LengthOverflow)?,
+                end: u64::try_from(end).map_err(|_| CoreError::LengthOverflow)?,
+                length: u64::try_from(self.length).map_err(|_| CoreError::LengthOverflow)?,
+            }
+            .into());
+        }
+        let mut skipped = start;
+        let mut segment = 0;
+        while segment < self.values.len() && skipped >= self.values[segment].len() {
+            skipped -= self.values[segment].len();
+            segment += 1;
+        }
+        Ok(RangeSegmentsReader {
+            values: &self.values,
+            segment,
+            offset: skipped,
+            remaining: end - start,
+        })
+    }
+}
+
+struct RangeSegmentsReader<'a> {
+    values: &'a [ChargedVec<u8>],
+    segment: usize,
+    offset: usize,
+    remaining: usize,
+}
+
+impl Read for RangeSegmentsReader<'_> {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        if self.remaining == 0 || output.is_empty() {
+            return Ok(0);
+        }
+        let mut written = 0;
+        while written < output.len() && self.remaining > 0 {
+            let Some(segment) = self.values.get(self.segment) else {
+                return Err(std::io::Error::from_raw_os_error(libc::EIO));
+            };
+            let available = segment
+                .len()
+                .checked_sub(self.offset)
+                .ok_or_else(|| std::io::Error::from_raw_os_error(libc::EIO))?;
+            if available == 0 {
+                self.segment += 1;
+                self.offset = 0;
+                continue;
+            }
+            let take = available.min(output.len() - written).min(self.remaining);
+            output[written..written + take]
+                .copy_from_slice(&segment[self.offset..self.offset + take]);
+            written += take;
+            self.offset += take;
+            self.remaining -= take;
+        }
+        Ok(written)
+    }
+}
+
+fn read_file_range_segments(
+    store: &Store,
+    root: ObjectId,
+    range: std::ops::Range<u64>,
+    metrics: &mut Metrics,
+) -> AnyResult<RangeSegments> {
+    if range.start > range.end {
+        return Err(CoreError::InvalidRange {
+            start: range.start,
+            end: range.end,
+            length: 0,
+        }
+        .into());
+    }
+    let bytes = store.get_bytes(root, metrics)?;
+    add(&mut metrics.closure_occurrences, 1)?;
+    let payload = file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
+    let _children_charge = charge_decoded_file_children(payload, true, metrics)?;
+    let (_, total, references, level, children) = file_codec::parse_file_root(payload)?;
+    if level != file_codec::expected_file_level(references)? {
+        return Err(CoreError::NonCanonicalPagePartition.into());
+    }
+    if references == 0 {
+        if total != 0 || level != 0 || !children.is_empty() {
+            return Err(CoreError::NonCanonicalPagePartition.into());
+        }
+    } else {
+        file_codec::validate_file_children(&children, true)?;
+    }
+    if range.end > total {
+        return Err(CoreError::InvalidRange {
+            start: range.start,
+            end: range.end,
+            length: total,
+        }
+        .into());
+    }
+    let requested = usize::try_from(
+        range
+            .end
+            .checked_sub(range.start)
+            .ok_or(CoreError::LengthOverflow)?,
+    )
+    .map_err(|_| CoreError::LengthOverflow)?;
+    let capacity = rejoin_chunk_capacity(requested)?;
+    let mut segments = ChargedVec::with_capacity(capacity, metrics)?;
+    let mut length = 0_usize;
+    let mut max_segment = 0_usize;
+    let mut previous = 0_u64;
+    let child_count = children.len();
+    let active_capacity = usize::from(level)
+        .checked_add(2)
+        .ok_or(CoreError::LengthOverflow)?;
+    let _active_charge = charge_dfs_frames(active_capacity, metrics)?;
+    let mut active = Vec::with_capacity(active_capacity);
+    active.push(root);
+    for (index, child) in children.into_iter().enumerate() {
+        let child_start = previous;
+        previous = child.cumulative_end;
+        if child.cumulative_end <= range.start || child_start >= range.end {
+            continue;
+        }
+        route_file_range(
+            store,
+            child.object_id,
+            level,
+            index + 1 == child_count,
+            child_start,
+            &range,
+            &mut |bytes, metrics| {
+                let mut segment = ChargedVec::with_capacity(bytes.len(), metrics)?;
+                segment.extend_from_slice(bytes);
+                length = length
+                    .checked_add(bytes.len())
+                    .ok_or(CoreError::LengthOverflow)?;
+                max_segment = max_segment.max(bytes.len());
+                segments.push(segment);
+                Ok(())
+            },
+            &mut active,
+            metrics,
+        )?;
+    }
+    if length != requested {
+        return Err(CoreError::LengthMismatch {
+            expected: u64::try_from(requested).map_err(|_| CoreError::LengthOverflow)?,
+            actual: u64::try_from(length).map_err(|_| CoreError::LengthOverflow)?,
+        }
+        .into());
+    }
+    Ok(RangeSegments {
+        values: segments,
+        length,
+        max_segment,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
-fn route_file_range(
+fn route_file_range<F>(
     store: &Store,
     id: ObjectId,
     level: u8,
     final_node: bool,
     node_start: u64,
     range: &std::ops::Range<u64>,
-    output: &mut Vec<u8>,
+    emit: &mut F,
     active: &mut Vec<ObjectId>,
     metrics: &mut Metrics,
-) -> AnyResult<()> {
+) -> AnyResult<()>
+where
+    F: FnMut(&[u8], &mut Metrics) -> AnyResult<()>,
+{
     if usize::from(level) > MAX_DEPTH {
         return Err(CoreError::MappingDepthExceeded.into());
     }
@@ -8490,7 +8761,7 @@ fn route_file_range(
                         .map_err(|_| CoreError::LengthOverflow)?;
                     let delivered = finish.checked_sub(start).ok_or(CoreError::LengthOverflow)?;
                     observe_stream_output(metrics, delivered)?;
-                    output.extend_from_slice(&raw[start..finish]);
+                    emit(&raw[start..finish], metrics)?;
                     Ok(())
                 })?;
             }
@@ -8526,7 +8797,7 @@ fn route_file_range(
                 final_node && index + 1 == child_count,
                 child_start,
                 range,
-                output,
+                emit,
                 active,
                 metrics,
             )?;
@@ -9064,13 +9335,57 @@ fn verify_file_inner(
     batch_leaf_reads: bool,
     metrics: &mut Metrics,
 ) -> AnyResult<([u8; 32], u64, u64)> {
-    let mut closure_hasher = Hasher::new();
+    let mut emit = |_raw: &[u8]| Ok(());
+    let result = reconstruct_file_to(
+        store,
+        root,
+        expected_fingerprint,
+        expected_sequence,
+        batch_leaf_reads,
+        true,
+        metrics,
+        &mut emit,
+    )?;
+    Ok((
+        result.content_closure.ok_or(CoreError::Io)?,
+        result.references,
+        result.length,
+    ))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ReconstructedFile {
+    content_closure: Option<[u8; 32]>,
+    output_digest: [u8; 32],
+    occurrence_digest: [u8; 32],
+    references: u64,
+    length: u64,
+    evidence: ReconstructionEvidence,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn reconstruct_file_to<F>(
+    store: &Store,
+    root: ObjectId,
+    expected_fingerprint: Option<&str>,
+    expected_sequence: Option<&str>,
+    batch_leaf_reads: bool,
+    compute_closure: bool,
+    metrics: &mut Metrics,
+    emit: &mut F,
+) -> AnyResult<ReconstructedFile>
+where
+    F: FnMut(&[u8]) -> AnyResult<()>,
+{
+    let mut closure_hasher = compute_closure.then(Hasher::new);
+    let mut evidence = ReconstructionEvidence::default();
     let (_namespace_charge, namespace, namespace_bytes) = store.get(root, metrics)?;
-    observe_closure(
+    observe_optional_closure(
         &mut closure_hasher,
         b"namespace-root",
         root,
         &namespace_bytes,
+        &mut evidence,
     )?;
     let Object::Directory(entries) = namespace else {
         return Err(CoreError::WrongLogicalRole.into());
@@ -9085,7 +9400,13 @@ fn verify_file_inner(
     }
     let file_root = entries[0].reference().id();
     let root_bytes = store.get_bytes(file_root, metrics)?;
-    observe_closure(&mut closure_hasher, b"file-root", file_root, &root_bytes)?;
+    observe_optional_closure(
+        &mut closure_hasher,
+        b"file-root",
+        file_root,
+        &root_bytes,
+        &mut evidence,
+    )?;
     let payload = file_codec::decode_mapping(&root_bytes, file_codec::FILE_ROOT_TAG)?;
     observe_tree_node_reconstruction(metrics)?;
     let _root_children_charge = charge_decoded_file_children(payload, true, metrics)?;
@@ -9131,7 +9452,9 @@ fn verify_file_inner(
             &mut sequence_hasher,
             &mut length,
             &mut reference_count,
+            &mut evidence,
             metrics,
+            emit,
         )?;
         let child_length = length
             .checked_sub(child_length_before)
@@ -9151,8 +9474,11 @@ fn verify_file_inner(
         }
         previous_end = child.cumulative_end;
     }
-    let reconstructed_fingerprint = hasher.finalize().to_hex().to_string();
-    let reconstructed_sequence = sequence_hasher.finalize().to_hex().to_string();
+    let output_digest = *hasher.finalize().as_bytes();
+    add(&mut evidence.output_digest_hashes, 1)?;
+    let occurrence_digest = *sequence_hasher.finalize().as_bytes();
+    let reconstructed_fingerprint = hex_bytes(&output_digest);
+    let reconstructed_sequence = hex_bytes(&occurrence_digest);
     file_codec::validate_file_root_summary(
         expected_length,
         expected_references,
@@ -9170,11 +9496,14 @@ fn verify_file_inner(
         }
         .into());
     }
-    Ok((
-        *closure_hasher.finalize().as_bytes(),
-        reference_count,
+    Ok(ReconstructedFile {
+        content_closure: closure_hasher.map(|hasher| *hasher.finalize().as_bytes()),
+        output_digest,
+        occurrence_digest,
+        references: reference_count,
         length,
-    ))
+        evidence,
+    })
 }
 
 fn scrub_file(
@@ -11069,6 +11398,7 @@ fn row_json(
     actual_references: u64,
     edit_point: Option<EditPoint>,
     edit_oracle: Option<&PreparedEditOracle>,
+    rejoin_buffer_evidence: RejoinBufferEvidence,
     closure_digest: [u8; 32],
     metrics: Metrics,
     physical_before: PhysicalSnapshot,
@@ -11525,9 +11855,12 @@ fn row_json(
                 compact_writer.0.remove_last_object_brace()?;
                 write!(
                     &mut compact_writer,
-                    ",\"edit_reference_count_before\":{edit_reference_count_before},\"edit_reference_count_after\":{edit_reference_count_after},\"edit_count_classification\":\"{edit_count_classification}\",\"edit_offset\":{edit_offset},\"edit_removed_hex\":{edit_removed},\"edit_inserted_hex\":{edit_inserted},\"rejoin_scan_bytes\":{},\"q_cdc_old_chunk_slots_bytes\":{},\"measurement_status_schema\":\"{F1_STATUS_SCHEMA}\",\"instrumentation\":{{\"c\":\"{STATUS_OBSERVED}\",\"sql\":[{},{},{},{},{},{},{measurement_sql_queries},{measurement_sql_rows}],\"status\":[{},{},{},{},{measurement_status_calls},{measurement_status_errors}]}}}}",
+                    ",\"edit_reference_count_before\":{edit_reference_count_before},\"edit_reference_count_after\":{edit_reference_count_after},\"edit_count_classification\":\"{edit_count_classification}\",\"edit_offset\":{edit_offset},\"edit_removed_hex\":{edit_removed},\"edit_inserted_hex\":{edit_inserted},\"rejoin_scan_bytes\":{},\"q_cdc_old_chunk_slots_bytes\":{},\"q_cdc_old_window_segment_max_bytes\":{},\"q_cdc_scan_input_segment_max_bytes\":{},\"max_single_buffer_bytes\":{},\"buffer_evidence_complete\":true,\"full_file_buffer_bytes\":0,\"measurement_status_schema\":\"{F1_STATUS_SCHEMA}\",\"instrumentation\":{{\"c\":\"{STATUS_OBSERVED}\",\"sql\":[{},{},{},{},{},{},{measurement_sql_queries},{measurement_sql_rows}],\"status\":[{},{},{},{},{measurement_status_calls},{measurement_status_errors}]}}}}",
                     metrics.source_cdc_bytes_read,
                     metrics.q_cdc_old_chunk_slots_bytes,
+                    rejoin_buffer_evidence.old_window_segment_max_bytes,
+                    rejoin_buffer_evidence.scan_input_segment_max_bytes,
+                    rejoin_buffer_evidence.max_single_buffer_bytes.max(SOURCE_1),
                     physical_before.measurement_sql_queries,
                     physical_before.measurement_sql_rows,
                     metrics.measurement_sql_queries,
@@ -11620,6 +11953,7 @@ struct CaptureOutcome {
     // Full-create closure is deliberately unavailable until fresh root-first verification.
     closure_digest: Option<[u8; 32]>,
     actual_references: u64,
+    rejoin_buffer_evidence: RejoinBufferEvidence,
     phases: PhaseTimes,
     capture_ns: u128,
     durable_capture_start: Instant,
@@ -11719,7 +12053,7 @@ fn capture_same_middle(
         if prior_head.1 != base_root || prior_head.2 != base_transition {
             return Err(CoreError::PublicationConflict.into());
         }
-        let (root_id, transition_id) =
+        let (root_id, transition_id, rejoin_buffer_evidence) =
             edit_file_same_middle_cdc(store, candidate, edit_point, replacement, true, metrics)?;
         let mapping_end = Instant::now();
         let mapping_metrics_ended = *metrics;
@@ -11790,6 +12124,7 @@ fn capture_same_middle(
             expected_operations_charge: Some(expected_operations_charge),
             closure_digest: Some(expected.closure),
             actual_references: references,
+            rejoin_buffer_evidence,
             phases: PhaseTimes {
                 same_open_authority_establishment_ns: authority_ns,
                 canonical_cas_mapping_stage_ns: mapping_end
@@ -11897,6 +12232,7 @@ fn capture_count_change(
             expected_operations_charge: Some(expected_operations_charge),
             closure_digest: Some(expected.2),
             actual_references: qualification.references,
+            rejoin_buffer_evidence: RejoinBufferEvidence::default(),
             phases: PhaseTimes {
                 same_open_authority_establishment_ns: authority_ns,
                 canonical_cas_mapping_stage_ns: mapping_end
@@ -11982,6 +12318,7 @@ fn capture_full_create(
             expected_operations_charge: None,
             closure_digest: None,
             actual_references: qualification.references,
+            rejoin_buffer_evidence: RejoinBufferEvidence::default(),
             phases: PhaseTimes {
                 canonical_cas_mapping_stage_ns: mapping_end
                     .duration_since(durable_capture_start)
@@ -12279,6 +12616,7 @@ fn run_row(
             actual_references,
             None,
             None,
+            RejoinBufferEvidence::default(),
             base_closure,
             metrics,
             physical_before,
@@ -12413,6 +12751,7 @@ fn run_row(
             0,
             None,
             None,
+            RejoinBufferEvidence::default(),
             closure_digest,
             metrics,
             physical_before,
@@ -12603,6 +12942,7 @@ fn run_row(
             expected_operations_charge: _expected_operations_charge,
             closure_digest: Some(closure_digest),
             actual_references,
+            rejoin_buffer_evidence: RejoinBufferEvidence::default(),
             phases,
             capture_ns,
             durable_capture_start,
@@ -12626,6 +12966,7 @@ fn run_row(
         expected_operations_charge: _expected_operations_charge,
         closure_digest,
         actual_references,
+        rejoin_buffer_evidence,
         phases: capture_phases,
         capture_ns,
         durable_capture_start,
@@ -12726,6 +13067,7 @@ fn run_row(
             actual_references,
             edit_point,
             edit_oracle.as_ref(),
+            rejoin_buffer_evidence,
             prepared_result.2,
             metrics,
             physical_before,
@@ -12933,6 +13275,7 @@ fn run_row(
             fresh_references,
             edit_point,
             edit_oracle.as_ref(),
+            rejoin_buffer_evidence,
             fresh_closure,
             metrics,
             physical_before,
@@ -13651,6 +13994,7 @@ mod tests {
             RETAINED_CDC_100,
             None,
             None,
+            RejoinBufferEvidence::default(),
             [0_u8; 32],
             metrics,
             PhysicalSnapshot::default(),
@@ -16054,7 +16398,19 @@ mod tests {
                 + measured.q_cdc_old_chunk_slots_bytes
                 + measured.q_cdc_scan_input_bytes
         );
-        assert_eq!(measured.q_high_water, measured.q_cdc_overlap_current);
+        assert!(measured.q_high_water >= measured.q_cdc_overlap_current);
+        assert!(
+            capture.rejoin_buffer_evidence.old_window_segment_max_bytes
+                <= layerfs_core::MAX_REJOIN_WINDOW_BYTES
+        );
+        assert!(
+            capture.rejoin_buffer_evidence.scan_input_segment_max_bytes
+                <= layerfs_core::MAX_REJOIN_WINDOW_BYTES
+        );
+        assert!(
+            capture.rejoin_buffer_evidence.max_single_buffer_bytes
+                <= layerfs_core::MAX_REJOIN_WINDOW_BYTES
+        );
         assert!(
             measured.q_high_water
                 > u64::try_from(prepared_capacity).expect("prepared capacity in u64")
@@ -16072,6 +16428,286 @@ mod tests {
         drop(store);
         remove_sqlite_image(&database).expect("database cleanup");
         fs::remove_dir(root).expect("root cleanup");
+    }
+
+    #[test]
+    fn fragmented_rejoin_preserves_full_window_for_exact_one_mib_replacement() {
+        let source = test_path("fragmented-rejoin-one-mib.source");
+        let size = 4 * SOURCE_1;
+        fill_source(&source, size, 0x41).expect("source");
+        let mut starts = Vec::new();
+        let mut offset = 0_u64;
+        FastCdc::new()
+            .scan(File::open(&source).expect("open source"), |chunk| {
+                starts.push(offset);
+                offset = offset
+                    .checked_add(u64::try_from(chunk.len()).map_err(|_| CoreError::LengthOverflow)?)
+                    .ok_or(CoreError::LengthOverflow)?;
+                Ok(())
+            })
+            .expect("source CDC");
+        let (position, byte_offset) = starts
+            .iter()
+            .copied()
+            .enumerate()
+            .find(|(index, start)| {
+                *index > 0
+                    && *start >= SOURCE_1
+                    && start
+                        .checked_add(SOURCE_1)
+                        .and_then(|end| end.checked_add(layerfs_core::MAX_REJOIN_WINDOW_BYTES))
+                        .is_some_and(|end| end < size)
+            })
+            .expect("interior one-MiB replacement boundary");
+        let point = EditPoint {
+            reference_count: u64::try_from(starts.len()).expect("reference count"),
+            position: u64::try_from(position).expect("position"),
+            byte_offset,
+            replacement_length: usize::try_from(SOURCE_1).expect("replacement length"),
+        };
+        let removed = read_source_segment(&source, point.byte_offset, point.replacement_length)
+            .expect("removed");
+        let replacement = same_middle_replacement(&removed);
+        let database = test_path("fragmented-rejoin-one-mib.sqlite");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("store");
+        let mut base_metrics = Metrics::default();
+        let (root, transition) =
+            build_file(&mut store, &source, SELECTED_PROFILE, &mut base_metrics).expect("base");
+        store
+            .publish(None, root, transition, &mut base_metrics)
+            .expect("publish base");
+        finish_q(&mut base_metrics).expect("base Q");
+        let mut metrics = Metrics::default();
+        let file_root = resolve_namespace_file_root(&store, root, &mut metrics).expect("file root");
+        store.begin(&mut metrics).expect("begin");
+        let (replacement_start, old_count, replacements, buffer_evidence) =
+            bounded_rejoin_references(
+                &mut store,
+                file_root,
+                SELECTED_PROFILE,
+                point,
+                &replacement,
+                &mut metrics,
+            )
+            .expect("fragmented exact rejoin");
+        assert!(old_count > 1);
+        assert!(!replacements.is_empty());
+        assert!(metrics.q_cdc_old_window_bytes > layerfs_core::MAX_REJOIN_WINDOW_BYTES);
+        assert!(
+            buffer_evidence.old_window_segment_max_bytes
+                <= u64::try_from(layerfs_core::cdc::MAXIMUM_CHUNK_BYTES).expect("chunk maximum")
+        );
+        assert!(
+            buffer_evidence.scan_input_segment_max_bytes <= layerfs_core::MAX_REJOIN_WINDOW_BYTES
+        );
+        assert!(buffer_evidence.max_single_buffer_bytes <= layerfs_core::MAX_REJOIN_WINDOW_BYTES);
+        let actual_file = if old_count
+            == u64::try_from(replacements.len()).expect("replacement reference count")
+        {
+            rewrite_same_root_by_ordinal(
+                &mut store,
+                file_root,
+                SELECTED_PROFILE,
+                replacement_start,
+                &replacements,
+                &mut metrics,
+            )
+            .expect("rewrite actual file")
+        } else {
+            rebuild_spliced_root(
+                &mut store,
+                file_root,
+                SELECTED_PROFILE,
+                replacement_start,
+                old_count,
+                &replacements,
+                &mut metrics,
+            )
+            .expect("rebuild actual file")
+        };
+        drop(replacements);
+        store.rollback(&mut metrics).expect("rollback");
+        finish_q(&mut metrics).expect("terminal Q");
+        drop(store);
+        remove_sqlite_image(&database).expect("database cleanup");
+
+        let expected_source = test_path("fragmented-rejoin-one-mib.expected");
+        fs::copy(&source, &expected_source).expect("copy expected source");
+        let mut expected_file = OpenOptions::new()
+            .write(true)
+            .open(&expected_source)
+            .expect("open expected source");
+        expected_file
+            .seek(SeekFrom::Start(point.byte_offset))
+            .expect("seek expected edit");
+        expected_file
+            .write_all(&replacement)
+            .expect("write expected edit");
+        expected_file.sync_all().expect("sync expected edit");
+        drop(expected_file);
+        let expected_database = test_path("fragmented-rejoin-one-mib-expected.sqlite");
+        let mut expected_store =
+            Store::open(&expected_database, SELECTED_PROFILE).expect("expected store");
+        let mut expected_metrics = Metrics::default();
+        let (expected_root, _) = build_file(
+            &mut expected_store,
+            &expected_source,
+            SELECTED_PROFILE,
+            &mut expected_metrics,
+        )
+        .expect("expected full rebuild");
+        let expected_file_root =
+            resolve_namespace_file_root(&expected_store, expected_root, &mut expected_metrics)
+                .expect("expected file root");
+        assert_eq!(actual_file, expected_file_root);
+        expected_store
+            .rollback(&mut expected_metrics)
+            .expect("expected rollback");
+        finish_q(&mut expected_metrics).expect("expected Q");
+        drop(expected_store);
+        remove_sqlite_image(&expected_database).expect("expected database cleanup");
+        fs::remove_file(expected_source).expect("expected source cleanup");
+        fs::remove_file(source).expect("source cleanup");
+    }
+
+    #[test]
+    fn fragmented_range_reader_honors_exact_boundaries() {
+        let mut metrics = Metrics::default();
+        let limit = usize::try_from(layerfs_core::MAX_REJOIN_WINDOW_BYTES).expect("limit");
+        let first = vec![b'a'; limit];
+        let second = vec![b'b'; 2];
+        let mut values = ChargedVec::with_capacity(2, &mut metrics).expect("segments");
+        for bytes in [first.as_slice(), second.as_slice()] {
+            let mut segment =
+                ChargedVec::with_capacity(bytes.len(), &mut metrics).expect("segment");
+            segment.extend_from_slice(bytes);
+            values.push(segment);
+        }
+        let segments = RangeSegments {
+            values,
+            length: limit + 2,
+            max_segment: limit,
+        };
+        let mut output = Vec::new();
+        segments
+            .reader(limit - 1, limit + 2)
+            .expect("reader")
+            .read_to_end(&mut output)
+            .expect("read");
+        assert_eq!(output, [b'a', b'b', b'b']);
+        assert_eq!(
+            segments
+                .reader(limit + 2, limit + 2)
+                .expect("EOF reader")
+                .read(&mut [0; 1])
+                .expect("EOF"),
+            0
+        );
+        assert!(segments.reader(limit + 1, limit + 3).is_err());
+        drop(segments);
+        finish_q(&mut metrics).expect("terminal Q");
+    }
+
+    #[test]
+    fn fragmented_range_segment_slots_are_range_local_at_the_reference_ceiling() {
+        let requested = usize::try_from(layerfs_core::MAX_REJOIN_WINDOW_BYTES)
+            .expect("window")
+            .checked_mul(3)
+            .expect("maximum predecessor, replacement, and suffix window");
+        let capacity = rejoin_chunk_capacity(requested).expect("range-local capacity");
+        assert_eq!(
+            capacity,
+            requested / layerfs_core::cdc::MINIMUM_CHUNK_BYTES + 2
+        );
+        assert!(capacity < layerfs_core::limits::MAX_CHILD_REFERENCES);
+        assert!(
+            capacity * std::mem::size_of::<ChargedVec<u8>>()
+                <= usize::try_from(layerfs_core::MAX_REJOIN_WINDOW_BYTES).expect("buffer limit")
+        );
+    }
+
+    #[test]
+    fn fragmented_rejoin_eof_uses_typed_complete_fallback_signal() {
+        let source = test_path("fragmented-rejoin-eof.source");
+        fill_source(&source, 4 * SOURCE_1, 0x41).expect("source");
+        let mut starts = Vec::new();
+        let mut offset = 0_u64;
+        FastCdc::new()
+            .scan(File::open(&source).expect("open source"), |chunk| {
+                starts.push(offset);
+                offset = offset
+                    .checked_add(u64::try_from(chunk.len()).map_err(|_| CoreError::LengthOverflow)?)
+                    .ok_or(CoreError::LengthOverflow)?;
+                Ok(())
+            })
+            .expect("initial CDC");
+        let (position, byte_offset) = starts
+            .iter()
+            .copied()
+            .enumerate()
+            .find(|(index, start)| *index > 0 && *start >= SOURCE_1)
+            .expect("EOF replacement boundary");
+        let predecessor_length = byte_offset
+            .checked_sub(starts[position - 1])
+            .expect("predecessor length");
+        let final_length = byte_offset.checked_add(SOURCE_1).expect("final length");
+        OpenOptions::new()
+            .write(true)
+            .open(&source)
+            .expect("open truncate source")
+            .set_len(final_length)
+            .expect("truncate source");
+        let mut reference_count = 0_u64;
+        FastCdc::new()
+            .scan(File::open(&source).expect("open truncated source"), |_| {
+                reference_count = reference_count
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+                Ok(())
+            })
+            .expect("truncated CDC");
+        let point = EditPoint {
+            reference_count,
+            position: u64::try_from(position).expect("position"),
+            byte_offset,
+            replacement_length: usize::try_from(SOURCE_1).expect("replacement length"),
+        };
+        let removed = read_source_segment(&source, byte_offset, point.replacement_length)
+            .expect("removed EOF bytes");
+        let replacement = same_middle_replacement(&removed);
+        let database = test_path("fragmented-rejoin-eof.sqlite");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("store");
+        let mut base_metrics = Metrics::default();
+        let (root, transition) =
+            build_file(&mut store, &source, SELECTED_PROFILE, &mut base_metrics).expect("base");
+        store
+            .publish(None, root, transition, &mut base_metrics)
+            .expect("publish base");
+        finish_q(&mut base_metrics).expect("base Q");
+        let mut metrics = Metrics::default();
+        let file_root = resolve_namespace_file_root(&store, root, &mut metrics).expect("file root");
+        store.begin(&mut metrics).expect("begin");
+        let error = bounded_rejoin_references(
+            &mut store,
+            file_root,
+            SELECTED_PROFILE,
+            point,
+            &replacement,
+            &mut metrics,
+        )
+        .expect_err("EOF requires complete fallback");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::BoundedResynchronization {
+                scanned: predecessor_length + SOURCE_1,
+                limit: layerfs_core::MAX_REJOIN_WINDOW_BYTES,
+            })
+        );
+        store.rollback(&mut metrics).expect("rollback");
+        finish_q(&mut metrics).expect("terminal Q");
+        drop(store);
+        remove_sqlite_image(&database).expect("database cleanup");
+        fs::remove_file(source).expect("source cleanup");
     }
 
     #[test]
@@ -18279,6 +18915,23 @@ mod tests {
         );
         assert!(!authority.exists());
 
+        let authority_target = authority.with_extension("authority-target");
+        fs::write(&authority_target, &authority_before).expect("authority symlink target");
+        fs::set_permissions(&authority_target, fs::Permissions::from_mode(0o600))
+            .expect("authority target mode");
+        std::os::unix::fs::symlink(&authority_target, &authority)
+            .expect("authority symlink fixture");
+        let error = match Store::open(&database, SELECTED_PROFILE) {
+            Err(error) => error,
+            Ok(_) => panic!("authority symlink must fail no-follow"),
+        };
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::ValidationAuthorityUnavailable)
+        );
+        fs::remove_file(&authority).expect("authority symlink cleanup");
+        fs::remove_file(authority_target).expect("authority target cleanup");
+
         remove_sqlite_image(&database).expect("first store cleanup");
         let second = test_path("profile-random-second.sqlite");
         let second_store = Store::open(&second, SELECTED_PROFILE).expect("second store");
@@ -18532,6 +19185,14 @@ mod tests {
             );
             assert!(metrics.source_cdc_bytes_read > 0);
             assert!(
+                outcome.rejoin_buffer_evidence.old_window_segment_max_bytes
+                    <= layerfs_core::MAX_REJOIN_WINDOW_BYTES
+            );
+            assert!(
+                outcome.rejoin_buffer_evidence.scan_input_segment_max_bytes
+                    <= layerfs_core::MAX_REJOIN_WINDOW_BYTES
+            );
+            assert!(
                 metrics.source_cdc_bytes_read
                     <= layerfs_core::MAX_REJOIN_WINDOW_BYTES
                         + layerfs_core::cdc::MAXIMUM_CHUNK_BYTES as u64
@@ -18678,6 +19339,216 @@ mod tests {
         drop(store);
         remove_sqlite_image(&database).expect("cleanup");
     }
+
+    #[test]
+    fn g4_closure_toggle_preserves_authenticated_output_and_sink_failure_decharges_q() {
+        let source = test_path("g4-closure-toggle.source");
+        fill_source(&source, 256 * 1024, 0x41).expect("source");
+        let (references, fingerprint, sequence, _, _, _) =
+            expected_file_observations(&source, "full", 256 * 1024, SELECTED_PROFILE)
+                .expect("observations");
+        let database = test_path("g4-closure-toggle.sqlite");
+        let mut store = Store::open(&database, SELECTED_PROFILE).expect("store");
+        let mut build_metrics = Metrics::default();
+        let (root, _) = build_file(&mut store, &source, SELECTED_PROFILE, &mut build_metrics)
+            .expect("build file");
+
+        let mut closure_metrics = Metrics::default();
+        let mut closure_sink = |_raw: &[u8]| Ok(());
+        let closure = reconstruct_file_to(
+            &store,
+            root,
+            Some(&fingerprint),
+            Some(&sequence),
+            true,
+            true,
+            &mut closure_metrics,
+            &mut closure_sink,
+        )
+        .expect("closure-on reconstruction");
+        finish_q(&mut closure_metrics).expect("closure-on Q");
+
+        let mut derived_metrics = Metrics::default();
+        let mut derived_sink = |_raw: &[u8]| Ok(());
+        let derived = reconstruct_file_to(
+            &store,
+            root,
+            Some(&fingerprint),
+            Some(&sequence),
+            true,
+            false,
+            &mut derived_metrics,
+            &mut derived_sink,
+        )
+        .expect("closure-off reconstruction");
+        finish_q(&mut derived_metrics).expect("closure-off Q");
+
+        assert!(closure.content_closure.is_some());
+        assert_eq!(derived.content_closure, None);
+        assert_eq!(closure.output_digest, derived.output_digest);
+        assert_eq!(closure.occurrence_digest, derived.occurrence_digest);
+        assert_eq!(closure.references, references);
+        assert_eq!(closure.references, derived.references);
+        assert_eq!(closure.length, derived.length);
+        assert!(closure.evidence.closure_fold_updates > 0);
+        assert!(closure.evidence.closure_fold_canonical_bytes > 0);
+        assert_eq!(derived.evidence.closure_fold_updates, 0);
+        assert_eq!(derived.evidence.closure_fold_canonical_bytes, 0);
+        assert_eq!(
+            closure_metrics.sql_query_calls,
+            derived_metrics.sql_query_calls
+        );
+        assert_eq!(
+            closure_metrics.sql_rows_returned,
+            derived_metrics.sql_rows_returned
+        );
+        assert_eq!(
+            closure_metrics.objects_authenticated,
+            derived_metrics.objects_authenticated
+        );
+        assert_eq!(
+            closure_metrics.canonical_bytes_authenticated,
+            derived_metrics.canonical_bytes_authenticated
+        );
+        assert_eq!(closure.evidence.output_digest_hashes, 1);
+        assert_eq!(closure.evidence.output_digest_bytes_hashed, 256 * 1024);
+        assert_eq!(closure.evidence.occurrence_fold_entries, references);
+        assert_eq!(closure.evidence.occurrence_fold_bytes, references * 36);
+
+        let mut failure_metrics = Metrics::default();
+        let mut failed = false;
+        let mut failing_sink = |_raw: &[u8]| -> AnyResult<()> {
+            if failed {
+                Ok(())
+            } else {
+                failed = true;
+                Err(std::io::Error::from_raw_os_error(libc::EIO).into())
+            }
+        };
+        let error = reconstruct_file_to(
+            &store,
+            root,
+            Some(&fingerprint),
+            Some(&sequence),
+            true,
+            false,
+            &mut failure_metrics,
+            &mut failing_sink,
+        )
+        .expect_err("sink failure must abort");
+        assert_eq!(
+            error
+                .downcast_ref::<std::io::Error>()
+                .and_then(std::io::Error::raw_os_error),
+            Some(libc::EIO)
+        );
+        assert!(failed);
+        finish_q(&mut failure_metrics).expect("failure Q");
+
+        let mut malformed_setup = Metrics::default();
+        let valid_file = resolve_namespace_file_root(&store, root, &mut malformed_setup)
+            .expect("valid file root");
+        let root_bytes = store
+            .get_bytes(valid_file, &mut malformed_setup)
+            .expect("valid root bytes");
+        let root_payload = file_codec::decode_mapping(&root_bytes, file_codec::FILE_ROOT_TAG)
+            .expect("valid root mapping");
+        let (mode, total, root_references, level, mut children) =
+            file_codec::parse_file_root(root_payload).expect("valid root body");
+        drop(root_bytes);
+        let malformed_end = total.checked_sub(1).expect("nonempty fixture");
+        children.last_mut().expect("root child").cumulative_end = malformed_end;
+        let mut body = Vec::new();
+        body.extend_from_slice(&mode.to_be_bytes());
+        body.extend_from_slice(&total.to_be_bytes());
+        body.extend_from_slice(&root_references.to_be_bytes());
+        body.push(level);
+        body.extend_from_slice(
+            &u32::try_from(children.len())
+                .expect("root child count")
+                .to_be_bytes(),
+        );
+        for child in children {
+            child.encode(&mut body);
+        }
+        let (malformed_file, malformed_bytes) = canonical_bytes(
+            file_codec::mapping_bytes(file_codec::FILE_ROOT_TAG, &body)
+                .expect("malformed root envelope"),
+        )
+        .expect("authenticated malformed root");
+        store
+            .put(malformed_file, &malformed_bytes, &mut malformed_setup)
+            .expect("put authenticated malformed root");
+        let malformed_root = namespace_file_root(&mut store, malformed_file, &mut malformed_setup)
+            .expect("malformed namespace");
+        finish_q(&mut malformed_setup).expect("malformed setup Q");
+        for compute_closure in [true, false] {
+            let mut malformed_metrics = Metrics::default();
+            let mut sink = |_raw: &[u8]| Ok(());
+            let error = reconstruct_file_to(
+                &store,
+                malformed_root,
+                None,
+                None,
+                true,
+                compute_closure,
+                &mut malformed_metrics,
+                &mut sink,
+            )
+            .expect_err("authenticated malformed mapping must reject");
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::LengthMismatch {
+                    expected: total,
+                    actual: malformed_end,
+                })
+            );
+            finish_q(&mut malformed_metrics).expect("authenticated malformed Q");
+        }
+
+        let corrupt_id: Vec<u8> = store
+            .connection
+            .query_row(
+                "SELECT object_id FROM wp4m_objects ORDER BY length(canonical_bytes) DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("corrupt target id");
+        store
+            .connection
+            .execute(
+                "UPDATE wp4m_objects SET canonical_bytes = zeroblob(length(canonical_bytes))
+                 WHERE object_id = ?1",
+                params![corrupt_id],
+            )
+            .expect("inject malformed canonical bytes");
+        for compute_closure in [true, false] {
+            let mut malformed_metrics = Metrics::default();
+            let mut sink = |_raw: &[u8]| Ok(());
+            let error = reconstruct_file_to(
+                &store,
+                root,
+                Some(&fingerprint),
+                Some(&sequence),
+                true,
+                compute_closure,
+                &mut malformed_metrics,
+                &mut sink,
+            )
+            .expect_err("identity-invalid canonical bytes must precede grammar");
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::IdentityMismatch)
+            );
+            finish_q(&mut malformed_metrics).expect("malformed Q");
+        }
+
+        store.rollback(&mut build_metrics).expect("rollback");
+        finish_q(&mut build_metrics).expect("build Q");
+        drop(store);
+        fs::remove_file(source).expect("source cleanup");
+        remove_sqlite_image(&database).expect("database cleanup");
+    }
 }
 
 fn fast_operation(value: &str) -> AnyResult<&'static str> {
@@ -18767,6 +19638,28 @@ fn main() -> AnyResult<()> {
             println!(
                 "{}",
                 phase4_g3_materialization::run_g3_row(root, size, scenario)?
+            );
+            Ok(())
+        }
+        #[cfg(target_os = "macos")]
+        Some("--g4-prepare") => {
+            let root = Path::new(args.get(2).ok_or("missing G4 fixture root")?);
+            let size = args.get(3).ok_or("missing G4 fixture size")?.parse::<u64>()?;
+            println!(
+                "{}",
+                phase4_g3_materialization::prepare_g4_fixture(root, size)?
+            );
+            Ok(())
+        }
+        #[cfg(target_os = "macos")]
+        Some("--g4-row") => {
+            let root = Path::new(args.get(2).ok_or("missing G4 fixture root")?);
+            let size = args.get(3).ok_or("missing G4 row size")?.parse::<u64>()?;
+            let mode = args.get(4).ok_or("missing G4 row mode")?;
+            let output = Path::new(args.get(5).ok_or("missing G4 output root")?);
+            println!(
+                "{}",
+                phase4_g3_materialization::run_g4_row(root, size, mode, output)?
             );
             Ok(())
         }
@@ -18919,6 +19812,6 @@ fn main() -> AnyResult<()> {
             }
             Ok(())
         }
-        _ => Err("usage: --blake3-file PATH | --self-test ROOT | --g3-row ROOT SIZE SCENARIO | --fast-fixture ROOT SIZE | --fast-prepare ROOT SIZE OPERATION ITERATION | --fast-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --fixed-radix-acceptance-fixtures ROOT | --fixed-radix-acceptance-prepare ROOT SIZE OPERATION ITERATION | --fixed-radix-acceptance-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --count-change-scale-fixture ROOT SIZE | --count-change-scale-prepare ROOT SIZE OPERATION ITERATION | --count-change-scale-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip}".into()),
+        _ => Err("usage: --blake3-file PATH | --self-test ROOT | --g3-row ROOT SIZE SCENARIO | --g4-prepare ROOT SIZE | --g4-row ROOT SIZE MODE OUTPUT_ROOT | --fast-fixture ROOT SIZE | --fast-prepare ROOT SIZE OPERATION ITERATION | --fast-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --fixed-radix-acceptance-fixtures ROOT | --fixed-radix-acceptance-prepare ROOT SIZE OPERATION ITERATION | --fixed-radix-acceptance-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip} | --count-change-scale-fixture ROOT SIZE | --count-change-scale-prepare ROOT SIZE OPERATION ITERATION | --count-change-scale-row ROOT SIZE OPERATION ITERATION WARMUP {capture-only|complete-roundtrip}".into()),
     }
 }

@@ -1,0 +1,36 @@
+{
+  "schema": "phase4-g4-pre-execution-history-v11",
+  "campaign": "v11",
+  "classification": "PRE_EXECUTION_ONLY",
+  "prior_campaigns": {
+    "v9": {
+      "measured_terminal_status": "PASS",
+      "protocol_disposition": "MEASURED_PROTOCOL_REVISE",
+      "reason": "post-outcome protected-gate loosening made the measured PASS inadmissible",
+      "terminal_sha256": "3a0454e6b0086911bc7bea70fb1e81bfdbaa3abf545d5fc20bccd34a7ef7f5c9",
+      "terminal_verification_sha256": "7d92b08b46b96ec569f066fb13264ba8a01326ba1ec986281b9ff6e8beb37d14"
+    },
+    "v10": {
+      "classification": "PRE_EXEC_REVISE_ABORTED_INVALID_EXECUTION",
+      "exit_code": 130,
+      "g4_records_observed": 22,
+      "arm_records_observed": 34,
+      "terminal_present": false,
+      "methodology_manifest_sha256": "ef1095b15e89a0bd81616373582666db2bfed7a338ff90dfa26d3842feb90f72",
+      "abort_record_sha256": "a8d572c853cd236cc39d1ca97abaef4d9f056c739a3988c6e6a44b83a7d30dc9"
+    }
+  },
+  "v11_reuse": {
+    "reused_rows": 0,
+    "reused_arms": 0,
+    "reused_child_payloads": 0,
+    "rerun_v9": false,
+    "rerun_v10": false
+  },
+  "scope_boundary": {
+    "g5_round_0_tree": "concurrent premature foreign work",
+    "included_in_g4_custody": false,
+    "edited_by_g4": false,
+    "g5_activity_authorized": false
+  }
+}
