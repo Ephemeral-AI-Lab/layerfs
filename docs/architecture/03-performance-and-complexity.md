@@ -5,6 +5,18 @@
 > **Invariant**. `Projected` values require exact-source implementation evidence
 > before becoming product claims.
 
+> **AppleWorkspaceV1 handoff override (2026-08-24):** earlier B+ planning rows
+> below used an obsolete `169` maximum / `118` nominal / 48-byte leaf-entry
+> model. They are not implementation authority. The selected profile is
+> `64..=128`, 40-byte extents, 48-byte children, 44-byte node fixed bytes and a
+> mode-free 106-byte `FileStateV3`; see
+> [`poc/10-handoff-freeze.md`](../../poc/10-handoff-freeze.md). Selected derived
+> mapping totals are: 1 MiB `2,270 B`, 10 MiB `21,850 B`, 100 MiB `215,374 B`,
+> and 500 MiB `1,080,790 B`. At 100 MiB, ordinary/single-leaf-split file-mapping
+> rewrites are `7,330/7,462 B`. Any older `258,736 B`, `7,952 B`, `13,680 B`, or
+> derived history/visibility factor below is superseded and must not be copied
+> into implementation gates.
+
 ## 1. Parameter model
 
 | Symbol | Meaning |
