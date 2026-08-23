@@ -1,0 +1,305 @@
+{
+  "schema": "layerfs-g5-projection-v3-final-release-source-execution-v3",
+  "status": "PASS",
+  "working_directory": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "source": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+    "bytes": 382874,
+    "sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4"
+  },
+  "executable": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/release/phase4_create_edit_benchmark",
+    "bytes": 1893008,
+    "sha256": "59e766c9ee6917135941421338d8c72f8dcd97227d33b6cfb68f176f2f0d85ad"
+  },
+  "fixture_method": {
+    "sizes_decimal_bytes": {
+      "self-check": 250000,
+      "screen-count": 250000,
+      "screen": 250000,
+      "gate": 250000
+    },
+    "populations_unchanged": {
+      "self-check": {
+        "exact": 1,
+        "latest": 0
+      },
+      "screen-count": {
+        "exact": 1,
+        "latest": 1
+      },
+      "screen": {
+        "exact": 2,
+        "latest": 2
+      },
+      "gate": {
+        "exact": 64,
+        "latest": 100
+      }
+    },
+    "all_files_max_bytes": 100000000,
+    "all_files_within_max": true,
+    "same_chain_sources_terminal": 0
+  },
+  "focused_execution": {
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "layerfs-engine",
+      "--bin",
+      "phase4_create_edit_benchmark",
+      "projection_",
+      "--",
+      "--nocapture"
+    ],
+    "command_sha256": "6d9b865882d56b78cbbac2cfa3eb8aed22b9398db5b93149a53ea145d5ca4df3",
+    "returncode": 0,
+    "return_sha256": "af3a5483097caad779582ac4b57aefe6aa53ff59c1e369ba0c2fcd41180007d8",
+    "stdout": {
+      "path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/raw-final2/focused-bcc5.stdout.log",
+      "bytes": 2964,
+      "sha256": "2e26e09ee1ce279dedb44e6fc3dc659d0625e6009da9d6a75327020211da96a2"
+    },
+    "stderr": {
+      "path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/raw-final2/focused-bcc5.stderr.log",
+      "bytes": 202,
+      "sha256": "3063fceece8aad13cbe835882f5581fd7d9ba00718de3ac4180fdfa2f936cb70"
+    },
+    "return_file": {
+      "path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/raw-final2/focused-bcc5.returncode",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "result": {
+      "passed": 26,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 98,
+      "wall_seconds": 17.57
+    },
+    "four_mode_preparation_elapsed_ns": null,
+    "preferred_preparation_limit_ns": 20000000000,
+    "hard_preparation_limit_ns": 60000000000,
+    "preferred_preparation_limit_pass": null,
+    "hard_preparation_limit_pass": null,
+    "capture_elapsed_ns": 17661934667
+  },
+  "preserved_no_go": {
+    "sizes_decimal_bytes": {
+      "self-check": 1000000,
+      "screen-count": 2000000,
+      "screen": 4000000,
+      "gate": 4000000
+    },
+    "elapsed_ns": 240386892251,
+    "returncode": 101,
+    "return_sha256": "dc6987dc61cf1f73df923a08226980764248de23fd96c353f2fd1b8b40a4c141",
+    "stdout": {
+      "path": "/private/tmp/layerfs-g5-projection-v3-size-final.mlhW6n/focused.stdout.log",
+      "bytes": 3262,
+      "sha256": "432f4fdce3830986312f4a576408a644816e65c69a3a3be317e53d2a046d5af7"
+    },
+    "stderr": {
+      "path": "/private/tmp/layerfs-g5-projection-v3-size-final.mlhW6n/focused.stderr.log",
+      "bytes": 735,
+      "sha256": "8e3bded24562fb530730396faca69b3a0694f834d7ffa3d4e0b0c2a5bbaf9777"
+    },
+    "return_file": {
+      "path": "/private/tmp/layerfs-g5-projection-v3-size-final.mlhW6n/focused.returncode",
+      "bytes": 4,
+      "sha256": "39b8dc3fc8b44765c8e6f1adee04c5b465e555ab791cc42d0d9e810d5b64297c"
+    },
+    "disposition": "NO-GO-PRESERVED"
+  },
+  "superseded_one_megabyte_attempt": "InterruptedOnProspectiveSupersessionNoResult",
+  "format_check": "PASS",
+  "diff_check": "PASS",
+  "cases": [
+    {
+      "case": "cancel-private-successor",
+      "required_observation": "observed cancellation/status/work/temp/descriptor/Q counters and retained prior projection",
+      "tests": [
+        "g5_projection_cancel_private_successor_removes_temp_and_records_cancellation@phase4_g3_materialization.rs:8280"
+      ],
+      "typed_outcome": "ProjectionServiceError::Cancelled/ProjectionFaultOutcome::Cancelled",
+      "counter_claims": [
+        "prior retained",
+        "temp 1/1",
+        "private cancellation 1",
+        "data sync 0",
+        "rename 0",
+        "cancelled/failed/stale 1/0/0",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "shutdown-inflight",
+      "required_observation": "observed started/completed/cancelled/failed/stale/published counters and terminal drain",
+      "tests": [
+        "g5_projection_shutdown_inflight_drains_real_worker_loop@phase4_g3_materialization.rs:8339"
+      ],
+      "typed_outcome": "SuccessfulShutdownDrainPublished",
+      "counter_claims": [
+        "submitted/started/published 1/1/1",
+        "cancelled/failed/stale 0/0/0",
+        "terminal pending/in-flight 0/0",
+        "target installed",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "restart-owned-temp",
+      "required_observation": "observed discovered/removed/retained temp entries and exact canonical/projected roots",
+      "tests": [
+        "g5_projection_restart_discovers_and_removes_only_owned_temps@phase4_g3_materialization.rs:8449",
+        "g5_projection_restart_substitution_after_authentication_retains_replacement@phase4_g3_materialization.rs:8503"
+      ],
+      "typed_outcome": "SuccessfulAuthenticatedCleanupOrRetainedSubstitution",
+      "counter_claims": [
+        "discovered/removed/retained 2/1/1",
+        "exact target",
+        "replacement survives",
+        "authenticated original survives retained",
+        "no wrong inode removed",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "stale-worker-token",
+      "required_observation": "observed stale completion and proof that no newer target was overwritten",
+      "tests": [
+        "g5_projection_stale_parent_fails_before_native_work@phase4_g3_materialization.rs:8091"
+      ],
+      "typed_outcome": "ProjectionServiceError::ParentChainMismatch/ProjectionFaultOutcome::Stale",
+      "counter_claims": [
+        "active retained",
+        "rename 0",
+        "stale/failed 1/0",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "before-sync",
+      "required_observation": "observed old projection retained, successor removed, no publication",
+      "tests": [
+        "g5_projection_before_sync_and_before_rename_fail_with_prior_active@phase4_g3_materialization.rs:8566#BeforeSync"
+      ],
+      "typed_outcome": "EIO/IoError",
+      "counter_claims": [
+        "prior retained",
+        "temp 1/1",
+        "data/metadata sync 0/0",
+        "rename 0",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "before-rename",
+      "required_observation": "observed old projection retained, successor cleanup and directory state",
+      "tests": [
+        "g5_projection_before_sync_and_before_rename_fail_with_prior_active@phase4_g3_materialization.rs:8566#BeforeRename"
+      ],
+      "typed_outcome": "EIO/IoError",
+      "counter_claims": [
+        "prior retained",
+        "temp 1/1",
+        "data/metadata sync 1/1",
+        "rename 0",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "seed-substitution",
+      "required_observation": "observed identity/kind/root rejection before patch or publication",
+      "tests": [
+        "g5_projection_in_place_untouched_seed_mutation_fails_before_private_work@phase4_g3_materialization.rs:8661",
+        "g5_projection_edge_token_rejects_mutation_replay_and_cross_stream_use@phase4_g3_materialization.rs:7690"
+      ],
+      "typed_outcome": "CoreError::IdentityMismatch/ProjectionFaultOutcome::IdentityMismatch",
+      "counter_claims": [
+        "same inode/length mutation rejected",
+        "seed rejection 1",
+        "clone/temp/rename 0/0/0",
+        "token replay/root/digest/range/transition/cross-stream rejected",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "missing-seed",
+      "required_observation": "observed full fallback route and exact final root",
+      "tests": [
+        "g5_projection_missing_seed_streams_verified_fallback_to_exact_target@phase4_g3_materialization.rs:8602"
+      ],
+      "typed_outcome": "SuccessfulVerifiedFullFallback",
+      "counter_claims": [
+        "exact target identity",
+        "missing fallback 1",
+        "full fallback 1",
+        "clone 0",
+        "rotation 1",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "wrong-kind-or-symlink",
+      "required_observation": "observed no-follow typed rejection and observed publication counter demonstrating pre-publication failure",
+      "tests": [
+        "g5_projection_symlink_seed_is_rejected_before_private_work@phase4_g3_materialization.rs:8628"
+      ],
+      "typed_outcome": "CoreError::WrongLogicalRole/ProjectionFaultOutcome::WrongLogicalRole",
+      "counter_claims": [
+        "prior retained",
+        "seed rejection 1",
+        "temp/rename 0/0",
+        "Q/residue 0/0"
+      ]
+    },
+    {
+      "case": "foreground-contention",
+      "required_observation": "observed reader state, SQLite result codes, writer transaction/COMMIT and interval overlap",
+      "tests": [
+        "g5_projection_rotates_the_active_visible_seed@phase4_g3_materialization.rs:8976",
+        "projection_reader_is_query_only_and_rejects_writes@phase4_create_edit_benchmark.rs:14393"
+      ],
+      "typed_outcome": "SuccessfulContendedFallbackWithForegroundOneCommit",
+      "counter_claims": [
+        "query_only 1/write rejected",
+        "submitted/coalesced/published 6/1/5",
+        "projection tx/commit 0/0",
+        "foreground tx/commit 1/1",
+        "Busy/Locked 0/0",
+        "broad intervals overlap",
+        "unrelated t3-t4 COMMIT NotClaimed",
+        "Q 0/drained"
+      ]
+    }
+  ],
+  "excluded_campaign_cases": [
+    "clone-failure",
+    "after-rename-lost-ack"
+  ],
+  "campaign_prepare_freeze_actions": 0,
+  "route_authority": {
+    "size_bytes": 250000,
+    "route_class": "CompositePredeclaredExactCloneSparsePatchAndFullFallback",
+    "size_constant_locator": "phase4_g3_materialization.rs:3758",
+    "route_constant_locator": "phase4_g3_materialization.rs:3759",
+    "mode_binding_locator": "phase4_g3_materialization.rs:6420",
+    "run_rejection_locator": "phase4_g3_materialization.rs:6604",
+    "json_field_locator": "phase4_g3_materialization.rs:7277",
+    "parsed_receipt_test_locators": [
+      "g5_projection_rotates_the_active_visible_seed@phase4_g3_materialization.rs:8976",
+      "g5_projection_release_fault_selector_emits_receipt@phase4_g3_materialization.rs:8998"
+    ]
+  },
+  "predecessor_preparation_evidence": {
+    "source_sha256": "d5c9f8023498c040b9ec103fe4d7e179d5d62c0b84e51eb82fd77631f75a8992",
+    "receipt_sha256": "378072bc378f4df29312eba2f7cc067cff456d858a5142483c9b2cddd9699a9a",
+    "four_mode_elapsed_ns": 18096478083,
+    "isolated_elapsed_ns": 17337345583,
+    "classification": "MethodPreparationEvidenceNotFinalSourceAuthority"
+  },
+  "campaign_or_freeze_actions": 0
+}

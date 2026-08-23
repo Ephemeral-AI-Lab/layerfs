@@ -1,0 +1,35 @@
+{
+  "schema": "phase4-g5-h11-static-closure-v3",
+  "status": "REVISE",
+  "disposition": "H11_V3_STATIC_REVISE",
+  "screen_result": "target/phase4-g5-foundation-h11-20260823-v3-screen",
+  "screen_terminal_sha256": "0ca678125ae475bb8ed8cbad977a62ec5f7e854108cc39c09bb06ffe7756b96f",
+  "screen_terminal_verification_sha256": "961c74df259daed7de8efd4b4573f0bd007af03996ec8f9da9c9f44614d86e8d",
+  "screen_final_artifact_hashes_sha256": "4a6d7e42d0fa5722331ccfd08354f43eb102e4cf7869bd44f6fd7891d170a3ff",
+  "screen_final_readonly_verification_sha256": "9d8469642668feef382c03d33951f0351d07bbd9f3ba2ce2ed938a6c7d1b220c",
+  "source_freeze_sha256": "d1b67a83de1e735ed921d60377d9fd5e1a42f52db6ea9a5bbc9d3cb480b298c1",
+  "workspace_tests": {
+    "status": "PASS",
+    "passed": 166,
+    "ignored": 1,
+    "failed": 0
+  },
+  "clippy": {
+    "status": "REVISE",
+    "command": "cargo clippy --workspace --all-targets -- -D warnings",
+    "blocker": "dead_code: Store::open_measured_with_phases is used by the separately compiled H11 include, but unused in the ordinary phase4_create_edit_benchmark binary"
+  },
+  "h11_clippy": {
+    "status": "REVISE",
+    "command": "cargo clippy --manifest-path implementation-detail/phase-4/experiments/g5-foundation-h11/v3/h11-benchmark/Cargo.toml --all-targets -- -D warnings",
+    "blockers": [
+      "too_many_arguments on retained h11_observe_revision",
+      "items_after_test_module because h11_g3.rs is appended after the retained G3 test module"
+    ]
+  },
+  "format_and_diff": {
+    "status": "NOT_REACHED_IN_COMBINED_COMMAND_AFTER_CLIPPY_FAILURE"
+  },
+  "measured_gate_started": false,
+  "preserved_repair_rule": "repair source in v4; do not relabel or rerun v3"
+}

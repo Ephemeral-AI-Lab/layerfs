@@ -1,0 +1,22 @@
+{
+  "schema": "phase4-g5-1-limitations-v24",
+  "status": "FROZEN_PROSPECTIVE",
+  "gate_arm_observations": 200,
+  "complete_roundtrip_checkpoints": 56,
+  "screen_limit_ns": 20000000000,
+  "gate_limit_ns": 150000000000,
+  "rss_limit_bytes_per_product_child": 20971520,
+  "trusted_paired_p50_improvement_basis_points_minimum": 9000,
+  "first_edit_trusted_p95_ns_maximum": 25000000,
+  "absolute_trusted_p50_gate": "NotClaimed",
+  "plus1_15ms": "LaterH09StructuralTargetNotG5_1Acceptance",
+  "canonical_format": "exact frozen G4 fixed-radix retained",
+  "mapping_leaf_batching": "removed as ineffective",
+  "verified_scrub": "borrowed per-object identity-authenticating traversal",
+  "input_reuse": true,
+  "row_or_timing_reuse": false,
+  "product_release_reuse": false,
+  "rollback_freshness": "NotProtected",
+  "g5_2": "closed",
+  "g6": "closed"
+}

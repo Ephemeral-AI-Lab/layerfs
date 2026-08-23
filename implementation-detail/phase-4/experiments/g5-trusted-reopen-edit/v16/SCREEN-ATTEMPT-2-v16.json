@@ -1,0 +1,31 @@
+{
+  "schema": "phase4-g5-1-screen-attempt-v16",
+  "attempt": 2,
+  "status": "READY",
+  "classification": "AppendOnlyMechanicalAnalyzerRepair",
+  "product_binary_sha256": "479ff27ca30a562b0de0b27710739867d5d844c508f6a18138100dd2132435ad",
+  "product_source_changed": false,
+  "schedule_changed": false,
+  "thresholds_changed": false,
+  "attempt_1": {
+    "result_root": "target/phase4-g5-trusted-reopen-edit-20260823-v16-screen",
+    "elapsed_ns": 12121869666,
+    "rows": 8,
+    "failed_sha256": "9ec3ad06a54214f77e0834973a1a349ad15a3471060a98317bcd04d1b95cf1f5",
+    "primary_sha256": "49427db9d25c5dfec8a0d1f123b09dd9f42080b084db2720ae4bc88d33e976ae",
+    "independent_sha256": "a0d7b5184a5f7b18d22b437cd45f5255175b742565b6a84a862e79723404060b",
+    "lock_release_sha256": "ec5b7c10bbc4dc1d6f5012b4d433a97826484884d71178f9802e1844561d4dd6",
+    "lock_attestation_sha256": "70aa279d1f252a0d19b391faa7a80d5eb119eb3eb5282359f07dd3f20fa61b4f"
+  },
+  "attempt_2": {
+    "result_root": "target/phase4-g5-trusted-reopen-edit-20260823-v16-screen-attempt-2",
+    "runner_sha256": "d9461502f40345bae07c4ce50ba159e7a617245dd0c9bf6a2f83c90ec60d4981",
+    "primary_sha256": "687999439b476aafb7cbead09a44d86f435c329cb22527ff9a45fb69aeb291a6",
+    "independent_sha256": "d060a07ad90b31a0acdca1dccadec91f059c1eec1f9a66fecad8a104fbe61099",
+    "self_checks": "PASS"
+  },
+  "repairs": [
+    "require corrected lifecycle decomposition only from v16 G5 rows; retain positive CompleteRoundTrip evidence for immutable G4",
+    "require S07 product base_copy_method regenerated-isolated-database while retaining the distinct environment custody label"
+  ]
+}

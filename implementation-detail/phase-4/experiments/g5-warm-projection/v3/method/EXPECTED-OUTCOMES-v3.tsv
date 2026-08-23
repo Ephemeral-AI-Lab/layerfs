@@ -1,0 +1,37 @@
+metric	expectation	classification
+product_processes	5	hard
+hard_gated_product_reports	5	hard
+primary_decision_report	phase-specific 250000-byte screen|gate population; every normal/fault report independently hard-gated	hard
+product_size_bytes	250000 for every normal and fault report	hard
+route_class	CompositePredeclaredExactCloneSparsePatchAndFullFallback for every normal and fault report	hard
+worker_count	1	hard
+max_in_flight	<=1	hard
+max_pending	<=1	hard
+sqlite_write_calls	0	hard
+sqlite_transactions	0	hard
+sqlite_commits	0	hard
+sqlite_busy_errors	0	hard
+sqlite_locked_errors	0	hard
+foreground_transactions	1 per report	hard
+foreground_commits	1 per report	hard
+foreground_worker_intervals	overlap	hard
+worker_reader_connection	barrier [autocommit,scope_live]=[1,1]; COMMIT [autocommit,scope_live]=[1,0]	hard
+end_to_end_t0_t4_scope	t0<=t1<=t2<=t3<=t4; no claim foreground COMMIT occurs within t3-to-t4	hard
+max_buffer_bytes	<=1048576	hard
+combined_peak_rss_bytes	<=33554432	hard
+exact_projection_service_p50_ns	<=5000000	hard
+exact_projection_service_p95_ns	<=8000000	hard
+sparse_projection_service_p50_ns	<=6000000	hard
+sparse_projection_service_p95_ns	<=10000000	hard
+terminal_owned_resources	0	hard
+cache_state	WarmUnknownPreparedFixtureAPFSClone	claim-boundary
+primary_independent_agreement	exact	hard
+lossless_process_evidence	command,clone,stdout,stderr,return,RSS,parsed receipt fsynced before evaluation	hard
+input_sealing	files0444/directories0555; reopened/rehashed before freeze and each clone; private clone patched writable after inventory	hard
+policy_route_orthogonality	fixed requested populations independently gated from executed route classes	hard
+terminal_wall_scope	cleanup + preliminary analyzer pair + lock release receipt	hard
+process_evidence_rehash	PROCESS-EVIDENCE and every nested artifact reopened and SHA-256 verified	hard
+terminal_lock_file_custody	actual terminal and descriptor/inode/token release receipt independently rebound	hard
+policy_route_latency	separate observed policy and execution-route latency tables	hard
+fault_receipts	observed complete release/fault/cancel/restart/stale/clone/sync/rename/lost-ACK/seed/contention classes	hard
+end_to_end_t0_t4	one observed edit/canonical-ACK/enqueue/worker/native-ACK chain per product report	hard

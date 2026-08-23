@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Interactive LayerFS data-structure lab for CAS, CDC, K64/F64, CD32-64, and byte-measured B+ ropes.">
+  <title>Data structures · LayerFS Architecture Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="architecture.css">
+  <script src="architecture.js" defer></script>
+</head>
+<body class="app-shell" data-page="data-structures">
+  <!-- Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 -->
+  <a class="skip-link" href="#main">Skip to lesson</a>
+  <header class="site-header">
+    <a class="wordmark" href="index.html" aria-label="LayerFS Architecture Lab home">
+      <span class="wordmark-mark" aria-hidden="true">LFS</span>
+      <span>Architecture Lab</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary curriculum">
+      <a href="index.html" data-page="index">Overview</a><a href="identities.html" data-page="identities">Identities</a><a href="cas.html" data-page="cas">CAS</a><a href="cdc.html" data-page="cdc">CDC</a><a href="data-structures.html" data-page="data-structures" aria-current="page">Data structures</a><a href="k64-f64.html" data-page="k64-f64">K64/F64</a><a href="cd32-64.html" data-page="cd32-64">CD32-64</a><a href="bplus-rope.html" data-page="bplus-rope">B+ rope</a><a href="operations.html" data-page="operations">Operations</a><a href="performance.html" data-page="performance">Performance</a><a href="vfs-recovery.html" data-page="vfs-recovery">VFS &amp; recovery</a>
+    </nav>
+    <button class="command-trigger" type="button" data-command-open aria-label="Open lesson navigator">⌘ K</button>
+  </header>
+
+  <nav class="mobile-nav" aria-label="Mobile curriculum"><a class="wordmark" href="index.html"><span class="wordmark-mark" aria-hidden="true">LFS</span><span>Architecture Lab</span></a><div class="mobile-nav-actions"><button class="icon-button" type="button" data-nav-toggle aria-expanded="false">Curriculum</button><button class="icon-button" type="button" data-command-open aria-label="Open lesson navigator">⌘K</button></div></nav><div class="mobile-nav-drawer" data-mobile-panel hidden><nav class="site-nav"><a href="index.html">Overview</a><a href="identities.html">Identities</a><a href="cas.html">CAS</a><a href="cdc.html">CDC</a><a href="data-structures.html" aria-current="page">Data structures</a><a href="k64-f64.html">K64/F64</a><a href="cd32-64.html">CD32-64</a><a href="bplus-rope.html">B+ rope</a><a href="operations.html">Operations</a><a href="performance.html">Performance</a><a href="vfs-recovery.html">VFS &amp; recovery</a></nav></div>
+
+  <main id="main" class="lesson">
+    <header class="lesson-header">
+      <div>
+        <p class="eyebrow">Lesson 02 · structural workbench</p>
+        <h1>Compare the structures that make files editable</h1>
+        <p>Mutate one byte, move one boundary, or splice one extent. The lab shows which identities change, which objects survive, and how much mapping structure each design carries.</p>
+      </div>
+      <dl class="metric-grid" aria-label="Retained 100 MiB fixture">
+        <div class="metric"><dt>Payload extents</dt><dd>5,284</dd><span class="evidence observed">Observed</span></div>
+        <div class="metric"><dt>Mean chunk</dt><dd>19,844.36 B</dd><span class="evidence derived">Derived</span></div>
+        <div class="metric"><dt>Current mapping</dt><dd>196,055 B</dd><span class="evidence observed">Observed</span></div>
+        <div class="metric"><dt>Target mapping</dt><dd>258,736 B</dd><span class="evidence projected">Projected</span></div>
+      </dl>
+    </header>
+
+    <section class="panel curriculum-grid">
+      <div class="panel-title row-title"><div><span>Comparison hub</span><h2>Open a focused structure lesson</h2></div><p>This page compares structures. Dedicated lessons carry the exact codecs, step traces, failures, and sources.</p></div>
+      <div class="topic-grid">
+        <a class="topic-card" href="cas.html"><span>Immutable admission</span><strong>CAS</strong><small>canonical bytes · identity · dedup · incumbent equality</small></a>
+        <a class="topic-card" href="cdc.html"><span>Payload segmentation</span><strong>CDC</strong><small>8/16/32 KiB · rolling fingerprint · bounded rejoin</small></a>
+        <a class="topic-card" href="k64-f64.html"><span>Current mapping</span><strong>K64/F64</strong><small>exact bytes · range routing · suffix repack</small></a>
+        <a class="topic-card" href="cd32-64.html"><span>G6 research arm</span><strong>CD32–64</strong><small>marker grouping · local route · hard fallback</small></a>
+        <a class="topic-card" href="bplus-rope.html"><span>Target operational tree</span><strong>B+ rope</strong><small>byte measures · extent slices · hard-local path copy</small></a>
+      </div>
+    </section>
+
+    <section class="control-strip" aria-label="Structure controls">
+      <label>Structure
+        <select id="structure-select">
+          <option value="cas">CAS object</option>
+          <option value="cdc">CDC boundaries</option>
+          <option value="k64">Current K64/F64</option>
+          <option value="cd32">G6 CD32–64</option>
+          <option value="bplus">Measured B+ rope</option>
+        </select>
+      </label>
+      <label>File size
+        <select id="size-select">
+          <option value="1">1 MiB</option>
+          <option value="10">10 MiB</option>
+          <option value="100" selected>100 MiB</option>
+          <option value="500">500 MiB</option>
+        </select>
+      </label>
+      <label>G6 marker stream
+        <select id="marker-select">
+          <option value="normal">Normal mix</option>
+          <option value="all">All marker</option>
+          <option value="none">All non-marker</option>
+          <option value="repeat">Repeated ObjectId</option>
+        </select>
+      </label>
+      <button type="button" id="run-structure">Run selected demonstration</button>
+    </section>
+
+    <section class="lab-grid" aria-label="Interactive structure lesson">
+      <aside class="panel lesson-index">
+        <h2 class="panel-title">Data structures</h2>
+        <ol class="stepper" id="structure-stepper">
+          <li><button type="button" data-structure="cas" aria-current="step"><span>01</span> CAS object</button></li>
+          <li><button type="button" data-structure="cdc"><span>02</span> CDC rejoin</button></li>
+          <li><button type="button" data-structure="k64"><span>03</span> K64/F64</button></li>
+          <li><button type="button" data-structure="cd32"><span>04</span> CD32–64</button></li>
+          <li><button type="button" data-structure="bplus"><span>05</span> B+ rope</button></li>
+        </ol>
+        <div class="legend compact" aria-label="Object state legend">
+          <span><i class="swatch shared"></i>shared</span>
+          <span><i class="swatch changed"></i>new/changed</span>
+          <span><i class="swatch history"></i>history-live</span>
+          <span><i class="swatch unreachable"></i>unreachable</span>
+        </div>
+      </aside>
+
+      <article class="panel structure-stage" aria-live="polite">
+        <div class="panel-title row-title">
+          <div>
+            <span id="stage-kicker">CAS · immutable admission</span>
+            <h2 id="stage-title">Canonical bytes determine identity</h2>
+          </div>
+          <span class="evidence invariant" id="stage-evidence">Invariant</span>
+        </div>
+
+        <section class="structure-demo is-active" data-demo="cas">
+          <div class="object-flow" aria-label="CAS canonical object flow">
+            <div class="node changed"><b>Logical payload</b><code id="cas-payload">layerfs</code><small>7 UTF-8 bytes</small></div>
+            <span class="edge" aria-hidden="true">→ canonical encode →</span>
+            <div class="node"><b>Canonical object</b><code>LFSO · 01 · 0000000B · 00000007 · payload</code><small>9 B envelope + 4 B value length + N</small></div>
+            <span class="edge" aria-hidden="true">→ BLAKE3 →</span>
+            <div class="node shared"><b>PayloadObjectId</b><code id="cas-hash">f0e7…49a1</code><small>illustrative digest prefix; browser demo is not a BLAKE3 implementation</small></div>
+          </div>
+          <div class="control-strip compact-controls">
+            <label>Payload bytes <input id="cas-input" value="layerfs" maxlength="48" spellcheck="false"></label>
+            <button id="cas-mutate" type="button">Mutate one byte</button>
+            <button id="cas-duplicate" type="button">Put duplicate</button>
+            <button id="cas-corrupt" type="button">Corrupt after hash</button>
+          </div>
+          <div class="comparison" id="cas-result">
+            <div><span>Admission</span><strong>new immutable object</strong></div>
+            <div><span>Identity check</span><strong>hash(canonical bytes) = claimed ID</strong></div>
+            <div><span>Incumbent rule</span><strong>same ID requires byte equality</strong></div>
+          </div>
+          <pre class="algorithm"><code>canonical = encode(kind = Bytes, payload)
+id        = BLAKE3(canonical)
+incumbent = index.lookup(id)
+if incumbent exists: require incumbent.bytes == canonical
+else: append canonical; index id → locator</code></pre>
+        </section>
+
+        <section class="structure-demo" data-demo="cdc" hidden>
+          <div class="byte-ribbon" id="cdc-ribbon" aria-label="Content-defined chunk boundary ribbon"></div>
+          <div class="control-strip compact-controls">
+            <label>Insert position <input id="cdc-position" type="range" min="4" max="60" value="19"></label>
+            <button id="cdc-insert" type="button">Insert one byte</button>
+            <button id="cdc-reset" type="button">Reset stream</button>
+          </div>
+          <div class="comparison">
+            <div><span>Boundary policy</span><strong>8 / 16 / 32 KiB</strong><i class="evidence observed">Observed profile</i></div>
+            <div><span>Changed scan window</span><strong id="cdc-window">local until rejoin</strong><i class="evidence projected">Projected demonstration</i></div>
+            <div><span>Tree consequence</span><strong>separate from CDC rejoin</strong><i class="evidence invariant">Invariant distinction</i></div>
+          </div>
+          <pre class="algorithm"><code>for byte in changed_window:
+  fingerprint = roll(fingerprint, byte)
+  if length ≥ min and marker(fingerprint): emit boundary
+  else if length == max: emit forced boundary
+stop local scan only after accepted old-boundary rejoin</code></pre>
+        </section>
+
+        <section class="structure-demo" data-demo="k64" hidden>
+          <svg class="structure-svg" viewBox="0 0 860 360" role="img" aria-labelledby="k64-title k64-desc">
+            <title id="k64-title">Current K64/F64 mapping tree</title>
+            <desc id="k64-desc">A root points to two internal nodes and eighty-three leaves. Early positional insertion repacks downstream mapping references while payload objects remain shared.</desc>
+            <path class="edge" d="M430 70 L260 145 M430 70 L600 145 M260 185 L105 275 M260 185 L230 275 M260 185 L355 275 M600 185 L505 275 M600 185 L630 275 M600 185 L755 275"></path>
+            <g class="node"><rect x="350" y="24" width="160" height="52" rx="8"></rect><text x="430" y="46">Root · F64</text><text x="430" y="64">2 children</text></g>
+            <g class="node changed"><rect x="180" y="140" width="160" height="52" rx="8"></rect><text x="260" y="162">Branch 0</text><text x="260" y="180">64 leaves</text></g>
+            <g class="node changed"><rect x="520" y="140" width="160" height="52" rx="8"></rect><text x="600" y="162">Branch 1</text><text x="600" y="180">19 leaves</text></g>
+            <g class="node changed"><rect x="45" y="270" width="120" height="52" rx="8"></rect><text x="105" y="292">Leaf 0</text><text x="105" y="310">≤64 refs</text></g>
+            <g class="node changed"><rect x="170" y="270" width="120" height="52" rx="8"></rect><text x="230" y="292">Leaf 1</text><text x="230" y="310">shifted</text></g>
+            <g class="node changed"><rect x="295" y="270" width="120" height="52" rx="8"></rect><text x="355" y="292">… 62</text><text x="355" y="310">shifted</text></g>
+            <g class="node changed"><rect x="445" y="270" width="120" height="52" rx="8"></rect><text x="505" y="292">Leaf 64</text><text x="505" y="310">shifted</text></g>
+            <g class="node changed"><rect x="570" y="270" width="120" height="52" rx="8"></rect><text x="630" y="292">…</text><text x="630" y="310">shifted</text></g>
+            <g class="node changed"><rect x="695" y="270" width="120" height="52" rx="8"></rect><text x="755" y="292">Leaf 82</text><text x="755" y="310">shifted</text></g>
+          </svg>
+          <div class="comparison">
+            <div><span>100 MiB topology</span><strong>83 leaves + 2 branches + root</strong><i class="evidence observed">Observed</i></div>
+            <div><span>Early +1 mapping</span><strong>196,091 B</strong><i class="evidence observed">Observed</i></div>
+            <div><span>Same-count mapping</span><strong>5,050 B</strong><i class="evidence observed">Observed</i></div>
+          </div>
+          <p class="callout">CAS payload reuse survives, but ordinal positions in the canonical mapping move. Payload locality does not imply metadata locality.</p>
+        </section>
+
+        <section class="structure-demo" data-demo="cd32" hidden>
+          <div class="marker-stream" id="marker-stream" aria-label="CD32-64 marker stream"></div>
+          <div class="comparison">
+            <div><span>Chosen case</span><strong id="marker-case">Normal marker mix</strong></div>
+            <div><span>Groups</span><strong id="marker-groups">32–64 entries</strong><i class="evidence invariant">Invariant envelope</i></div>
+            <div><span>Rejoin disposition</span><strong id="marker-outcome">Expected local; not guaranteed</strong><i class="evidence projected">Research model</i></div>
+          </div>
+          <pre class="algorithm"><code>for occurrence in ordered_stream:
+  group.push(occurrence)
+  if group.len &gt;= 32 and public_marker(occurrence.id): cut
+  else if group.len == 64: forced_cut
+
+normal local path: 8,554 B at height 2
+split envelope:    13,987 B
+hard fallback:     Θ(raw suffix + mapping suffix)</code></pre>
+          <p class="callout">All-marker, all-nonmarker, and repeated-ID streams expose the public boundary rule. CD32–64 is a research arm, not a hard-logarithmic splice guarantee.</p>
+        </section>
+
+        <section class="structure-demo" data-demo="bplus" hidden>
+          <svg class="structure-svg" id="bplus-svg" viewBox="0 0 860 390" role="img" aria-labelledby="bplus-title bplus-desc">
+            <title id="bplus-title">Byte-measured B+ rope insertion</title>
+            <desc id="bplus-desc">A root with byte measures points to forty-five leaves. A middle insertion creates a new leaf and root while sharing surrounding leaves.</desc>
+            <path class="edge" d="M430 76 L125 176 M430 76 L330 176 M430 76 L535 176 M430 76 L735 176 M330 228 L330 310 M535 228 L535 310"></path>
+            <g class="node changed"><rect x="315" y="24" width="230" height="58" rx="8"></rect><text x="430" y="47">New FileStateRoot</text><text x="430" y="67">100 MiB + 1 MiB</text></g>
+            <g class="node shared"><rect x="40" y="170" width="170" height="58" rx="8"></rect><text x="125" y="193">12 MiB</text><text x="125" y="213">shared subtree A</text></g>
+            <g class="node changed"><rect x="245" y="170" width="170" height="58" rx="8"></rect><text x="330" y="193">new 1 MiB</text><text x="330" y="213">replacement leaf</text></g>
+            <g class="node shared"><rect x="450" y="170" width="170" height="58" rx="8"></rect><text x="535" y="193">41 MiB</text><text x="535" y="213">shared subtree B</text></g>
+            <g class="node shared"><rect x="650" y="170" width="170" height="58" rx="8"></rect><text x="735" y="193">47 MiB</text><text x="735" y="213">shared subtree C</text></g>
+            <g class="node changed"><rect x="245" y="305" width="170" height="58" rx="8"></rect><text x="330" y="328">Extent slice</text><text x="330" y="348">new payload IDs</text></g>
+            <g class="node shared"><rect x="450" y="305" width="170" height="58" rx="8"></rect><text x="535" y="328">Extent slice</text><text x="535" y="348">old ID + offset</text></g>
+          </svg>
+          <div class="control-strip compact-controls">
+            <label>Locate byte <input id="rope-offset" type="range" min="0" max="100" value="53"></label>
+            <output id="rope-route">53 MiB → child B → leaf 23 → extent 5</output>
+            <button id="rope-split" type="button">Animate split + path copy</button>
+          </div>
+          <div class="comparison">
+            <div><span>100 MiB topology</span><strong>45 leaves + root = 46 objects</strong><i class="evidence projected">Projected</i></div>
+            <div><span>Ordinary path</span><strong>5,728 + 2,224 = 7,952 B</strong><i class="evidence projected">Projected</i></div>
+            <div><span>Splice complexity</span><strong>O(B + K + log N)</strong><i class="evidence projected">Target</i></div>
+          </div>
+        </section>
+      </article>
+
+      <aside class="panel inspector">
+        <h2 class="panel-title">Inspector</h2>
+        <dl class="metric-grid vertical" id="structure-metrics">
+          <div class="metric"><dt>Objects</dt><dd id="metric-objects">1</dd><span class="evidence invariant">Structure</span></div>
+          <div class="metric"><dt>Lookup</dt><dd id="metric-lookup">expected O(1)</dd><span class="evidence projected">Index model</span></div>
+          <div class="metric"><dt>Mutation</dt><dd id="metric-mutation">Θ(object bytes)</dd><span class="evidence invariant">Lower bound</span></div>
+          <div class="metric"><dt>Space</dt><dd id="metric-space">13 + N bytes</dd><span class="evidence observed">Codec</span></div>
+        </dl>
+        <div class="identity-inspector">
+          <h3>Identity inspector</h3>
+          <div class="identity-tabs" role="tablist" aria-label="Identity types">
+            <button role="tab" aria-selected="true" data-identity="payload">Payload</button>
+            <button role="tab" aria-selected="false" data-identity="mapping">Mapping</button>
+            <button role="tab" aria-selected="false" data-identity="file">File state</button>
+            <button role="tab" aria-selected="false" data-identity="content">Content</button>
+            <button role="tab" aria-selected="false" data-identity="inode">Inode</button>
+            <button role="tab" aria-selected="false" data-identity="commit">Commit</button>
+            <button role="tab" aria-selected="false" data-identity="namespace">Namespace</button>
+          </div>
+          <div class="identity-card" id="identity-card" role="tabpanel">
+            <strong>PayloadObjectId</strong>
+            <p>Authenticates one canonical payload object. Changes when canonical payload bytes change.</p>
+            <code>hash(canonical PayloadChunk)</code>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel topology-table">
+      <div class="panel-title row-title">
+        <div><span>Scale model</span><h2>Topology and live mapping by file size</h2></div>
+        <p>Extents at 1/10/100/500 MiB use retained anchors; target B+ nodes use the 8 KiB / 48-byte-entry / 70% fill model.</p>
+      </div>
+      <div class="table-scroll">
+        <table class="spec-table">
+          <thead><tr><th>File size</th><th>Extents</th><th>Current K64/F64</th><th>Current mapping</th><th>G6 packed</th><th>Target B+ topology</th><th>Target live mapping</th></tr></thead>
+          <tbody>
+            <tr data-size-row="1"><th>1 MiB</th><td>53 <span class="evidence observed">Observed</span></td><td>root + leaf</td><td>≈2.0 KiB <span class="evidence derived">Scaled</span></td><td>root + leaf</td><td>1 leaf + root</td><td>≈2.6 KiB <span class="evidence projected">Projected</span></td></tr>
+            <tr data-size-row="10"><th>10 MiB</th><td>531 <span class="evidence observed">Observed</span></td><td>9 leaves + root</td><td>≈19.3 KiB <span class="evidence derived">Scaled</span></td><td>9 leaves + root</td><td>5 leaves + root</td><td>25.5 KiB <span class="evidence projected">Projected</span></td></tr>
+            <tr data-size-row="100" class="is-selected"><th>100 MiB</th><td>5,284 <span class="evidence observed">Observed</span></td><td>83 leaves + 2 branches + root</td><td>196,055 B <span class="evidence observed">Observed</span></td><td>86 objects / 196,735 B</td><td>45 leaves + root</td><td>258,736 B <span class="evidence projected">Projected</span></td></tr>
+            <tr data-size-row="500"><th>500 MiB</th><td>26,533 <span class="evidence observed">Observed</span></td><td>415 leaves + 7 branches + root</td><td>≈960.9 KiB <span class="evidence derived">Scaled</span></td><td>same height envelope</td><td>225 leaves + 2 branches + root</td><td>≈1.24 MiB <span class="evidence projected">Projected</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="callout">Target tradeoff at 100 MiB: 86 → 46 mapping objects (46.51% fewer), but 196,055 → 258,736 live mapping bytes (31.97% more). Count-changing locality—not smallest live encoding—is the purpose.</p>
+    </section>
+
+    <section class="panel identity-matrix">
+      <div class="panel-title row-title"><div><span>Authority boundaries</span><h2>Never collapse these identities</h2></div></div>
+      <div class="table-scroll">
+        <table class="spec-table">
+          <thead><tr><th>Identity</th><th>Question answered</th><th>Changes on content edit?</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><th>PayloadObjectId</th><td>Which canonical payload object?</td><td>Yes</td><td><span class="evidence observed">Implemented role</span></td></tr>
+            <tr><th>MappingNodeId</th><td>Which canonical mapping node?</td><td>Yes</td><td><span class="evidence observed">Implemented role</span></td></tr>
+            <tr><th>FileStateRoot</th><td>Which immutable operational file structure?</td><td>Yes</td><td><span class="evidence projected">Target separation</span></td></tr>
+            <tr><th>ContentDigest</th><td>Which complete logical byte stream?</td><td>Yes</td><td><span class="evidence projected">Target separation</span></td></tr>
+            <tr><th>InodeId</th><td>Which filesystem object across edits and renames?</td><td>No</td><td><span class="evidence projected">Target</span></td></tr>
+            <tr><th>CommitId</th><td>Which accepted filesystem transition?</td><td>New per commit</td><td><span class="evidence projected">Target explicit ID</span></td></tr>
+            <tr><th>NamespaceRoot</th><td>Which immutable namespace state?</td><td>On namespace/path change</td><td><span class="evidence projected">Target</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="command-dialog" id="command-dialog" data-command-dialog aria-labelledby="command-title"><div class="command-dialog-inner"><header class="command-dialog-header"><div class="command-dialog-heading"><h2 id="command-title">Go to lesson</h2><button class="icon-button" type="button" data-command-close aria-label="Close">Esc</button></div><input class="command-search" data-command-input autocomplete="off" placeholder="Type a lesson…" aria-label="Search curriculum"></header><ul class="command-results" data-command-results></ul><footer class="command-dialog-footer"><span>↑↓ select</span><span>Enter open</span><span>Esc close</span></footer></div></dialog>
+
+  <footer class="site-footer">
+    <p>LayerFS Architecture Lab · instructional model, not a production benchmark</p>
+    <p><a href="../01-data-structures-and-storage.md">Read the detailed Markdown authority</a></p>
+  </footer>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+    const structureSelect = $('#structure-select');
+    const metricModel = {
+      cas: ['1', 'expected O(1)', 'Θ(object bytes)', '13 + N bytes'],
+      cdc: ['≈ F / target chunk', 'Θ(changed scan window)', 'expected local; worst Θ(suffix)', 'O(extents)'],
+      k64: ['86 @ 100 MiB', 'O(64 × H)', 'O(N_suffix) count-change', '196,055 B @ 100 MiB'],
+      cd32: ['86 packed @ 100 MiB', 'O(64 × H)', 'expected local; hard Θ(suffix)', '196,735 B packed'],
+      bplus: ['46 @ 100 MiB', 'O(log N)', 'O(B + K + log N)', '258,736 B @ 100 MiB']
+    };
+    const stageCopy = {
+      cas: ['CAS · immutable admission', 'Canonical bytes determine identity', 'Invariant'],
+      cdc: ['CDC · payload boundaries', 'A local byte change moves nearby boundaries', 'Observed profile'],
+      k64: ['Current · canonical-v2', 'Position changes can repack the mapping suffix', 'Observed'],
+      cd32: ['G6 research arm', 'Public markers seek rejoin inside 32–64 entry groups', 'Projected'],
+      bplus: ['Target operational structure', 'Byte measures preserve unchanged suffix subtrees', 'Projected']
+    };
+    function showStructure(name) {
+      structureSelect.value = name;
+      $$('.structure-demo').forEach(demo => {
+        const active = demo.dataset.demo === name;
+        demo.hidden = !active;
+        demo.classList.toggle('is-active', active);
+      });
+      $$('[data-structure]').forEach(button => {
+        const active = button.dataset.structure === name;
+        button.toggleAttribute('aria-current', active);
+      });
+      const [kicker, title, badge] = stageCopy[name];
+      $('#stage-kicker').textContent = kicker;
+      $('#stage-title').textContent = title;
+      $('#stage-evidence').textContent = badge;
+      const [objects, lookup, mutation, space] = metricModel[name];
+      $('#metric-objects').textContent = objects;
+      $('#metric-lookup').textContent = lookup;
+      $('#metric-mutation').textContent = mutation;
+      $('#metric-space').textContent = space;
+    }
+    structureSelect.addEventListener('change', event => showStructure(event.target.value));
+    $$('[data-structure]').forEach(button => button.addEventListener('click', () => showStructure(button.dataset.structure)));
+    $('#run-structure').addEventListener('click', () => showStructure(structureSelect.value));
+
+    const identities = {
+      payload: ['PayloadObjectId', 'Authenticates one canonical payload object. Changes when canonical payload bytes change.', 'hash(canonical PayloadChunk)'],
+      mapping: ['MappingNodeId', 'Authenticates one canonical file or directory mapping node.', 'hash(canonical MappingNode)'],
+      file: ['FileStateRoot', 'Names one immutable operational file structure. A history-shaped B+ rope need not equal the semantic digest.', 'root MappingNodeId'],
+      content: ['ContentDigest', 'Names the complete logical byte stream independent of operational tree shape.', 'hash(all logical file bytes)'],
+      inode: ['InodeId', 'Names one filesystem object across content edits, links, and renames.', 'stable allocated identifier'],
+      commit: ['CommitId', 'Names one accepted filesystem state transition and its parent/root binding.', 'hash(canonical CommitRecord)'],
+      namespace: ['NamespaceRoot', 'Names one immutable path-to-inode namespace state.', 'root DirectoryNodeId']
+    };
+    $$('[data-identity]').forEach(tab => tab.addEventListener('click', () => {
+      $$('[data-identity]').forEach(other => other.setAttribute('aria-selected', String(other === tab)));
+      const [name, text, formula] = identities[tab.dataset.identity];
+      $('#identity-card').innerHTML = `<strong>${name}</strong><p>${text}</p><code>${formula}</code>`;
+    }));
+
+    function demoDigest(text) {
+      let a = 2166136261;
+      for (const char of text) a = Math.imul(a ^ char.codePointAt(0), 16777619);
+      return `${(a >>> 0).toString(16).padStart(8, '0')}…demo`;
+    }
+    function updateCas(message = 'new immutable object') {
+      const value = $('#cas-input').value;
+      $('#cas-payload').textContent = value || '∅';
+      $('#cas-hash').textContent = demoDigest(`LFSO:${value}`);
+      $('#cas-result div:first-child strong').textContent = message;
+    }
+    $('#cas-input').addEventListener('input', () => updateCas());
+    $('#cas-mutate').addEventListener('click', () => {
+      const input = $('#cas-input');
+      input.value = `${input.value.slice(0, -1)}${input.value.endsWith('!') ? '?' : '!'}`;
+      updateCas('new ID; old object remains immutable');
+    });
+    $('#cas-duplicate').addEventListener('click', () => updateCas('reuse after incumbent byte equality'));
+    $('#cas-corrupt').addEventListener('click', () => {
+      updateCas('REJECT: bytes no longer match claimed ID');
+      $('#cas-result').classList.add('has-error');
+      setTimeout(() => $('#cas-result').classList.remove('has-error'), 900);
+    });
+    updateCas();
+
+    function renderCdc(inserted = false) {
+      const ribbon = $('#cdc-ribbon');
+      const position = Number($('#cdc-position').value);
+      ribbon.innerHTML = '';
+      for (let i = 0; i < 72; i++) {
+        const cell = document.createElement('span');
+        cell.textContent = (i + (inserted && i >= position ? 7 : 0)).toString(16).slice(-1);
+        if ([15, 33, 52, 68].includes(i)) cell.classList.add('boundary');
+        if (inserted && i === position) cell.classList.add('inserted');
+        if (inserted && i > position && i < 52) cell.classList.add('rescanned');
+        ribbon.append(cell);
+      }
+      $('#cdc-window').textContent = inserted ? `${52 - position} visual cells rescanned before rejoin` : 'unchanged reference stream';
+    }
+    $('#cdc-insert').addEventListener('click', () => renderCdc(true));
+    $('#cdc-reset').addEventListener('click', () => renderCdc(false));
+    $('#cdc-position').addEventListener('input', () => renderCdc(false));
+    renderCdc(false);
+
+    const markerCases = {
+      normal: ['Normal marker mix', 'groups cut on eligible markers', 'Expected local rejoin; hard fallback remains'],
+      all: ['All-marker stream', 'every group cuts at 32', 'Deterministic 32-entry groups; insertion can phase-shift suffix'],
+      none: ['All non-marker stream', 'every group forced at 64', 'Deterministic 64-entry groups; insertion can phase-shift suffix'],
+      repeat: ['Repeated ObjectId stream', 'marker result repeats', 'Public rule is steerable; suffix replay can persist']
+    };
+    function renderMarkers(kind) {
+      const stream = $('#marker-stream');
+      stream.innerHTML = '';
+      for (let i = 1; i <= 96; i++) {
+        const entry = document.createElement('span');
+        const marked = kind === 'all' || (kind === 'normal' && [37, 74].includes(i)) || (kind === 'repeat' && i % 32 === 0);
+        entry.textContent = marked ? '◆' : '·';
+        entry.className = marked ? 'is-marker' : '';
+        if ((kind === 'none' || kind === 'repeat') && i % 64 === 0) entry.classList.add('forced');
+        stream.append(entry);
+      }
+      const [name, groups, outcome] = markerCases[kind];
+      $('#marker-case').textContent = name;
+      $('#marker-groups').textContent = groups;
+      $('#marker-outcome').textContent = outcome;
+    }
+    $('#marker-select').addEventListener('change', event => renderMarkers(event.target.value));
+    renderMarkers('normal');
+
+    $('#rope-offset').addEventListener('input', event => {
+      const offset = Number(event.target.value);
+      const branch = offset < 12 ? 'A' : offset < 53 ? 'B' : 'C';
+      $('#rope-route').textContent = `${offset} MiB → child ${branch} → measured leaf → extent slice`;
+    });
+    $('#rope-split').addEventListener('click', () => {
+      $('#bplus-svg').classList.remove('is-animating');
+      requestAnimationFrame(() => $('#bplus-svg').classList.add('is-animating'));
+    });
+    $('#size-select').addEventListener('change', event => {
+      $$('[data-size-row]').forEach(row => row.classList.toggle('is-selected', row.dataset.sizeRow === event.target.value));
+    });
+  });
+  </script>
+</body>
+</html>

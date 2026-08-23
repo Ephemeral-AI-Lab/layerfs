@@ -1,0 +1,170 @@
+{
+  "campaigns": {
+    "gate": {
+      "checkpoint_revisions": [
+        1,
+        10,
+        100,
+        1000
+      ],
+      "complete_wall_hard_limit_ns": 150000000000,
+      "complete_wall_target_ns": [
+        30000000000,
+        60000000000
+      ],
+      "history_edits": 1000,
+      "run_concurrency_sentinel": true
+    },
+    "screen": {
+      "checkpoint_revisions": [
+        1,
+        10
+      ],
+      "complete_wall_hard_limit_ns": 19999999999,
+      "history_edits": 10,
+      "run_concurrency_sentinel": true
+    }
+  },
+  "checkpoint_operations": {
+    "exact_range_bytes": 4096,
+    "one_range_and_one_same_size_edit_per_checkpoint": true,
+    "range_samples_equal_checkpoint_count": true,
+    "same_size_edit_advances_parent_n_to_target_n_plus_1": true
+  },
+  "concurrency_sentinel": {
+    "busy_errors": 0,
+    "commits": 1,
+    "locked_errors": 0,
+    "reader_count": 2,
+    "reader_roots_immutable": true,
+    "size_bytes": 10485760,
+    "transactions": 1,
+    "writer_count": 1,
+    "writer_progress": true
+  },
+  "edit": {
+    "aba_publications_after_history": 2,
+    "length_bytes": 1048576,
+    "per_edit_hard_fields": [
+      "root",
+      "length",
+      "route",
+      "transactions",
+      "commits",
+      "q_terminal",
+      "temp_residue"
+    ],
+    "route": "SameSizeHistoryEdit",
+    "same_size": true
+  },
+  "base_publication": {
+    "commits": 1,
+    "ordinal": 1,
+    "route": "InitialBuild",
+    "transactions": 1
+  },
+  "envelope_schema": "phase4-g5-3-campaign-envelope-v2",
+  "full_reconstruction": {
+    "gate_count": 5,
+    "required_at": "every pre-edit checkpoint and distinct terminal end after final N-to-N+1 edit",
+    "screen_count": 3
+  },
+  "historical_read": {
+    "bytes": 4096,
+    "root": "B",
+    "substitution": "Forbidden"
+  },
+  "limits": {
+    "buffer_bytes": 1048576,
+    "dry_run_wall_ns": 19999999999,
+    "gate_wall_ns": 150000000000,
+    "preparation_wall_ns": 19999999999,
+    "rss_bytes": 20971520,
+    "screen_wall_ns": 19999999999,
+    "preparation_target_ns": 1000000000
+  },
+  "process": {
+    "child_processes": 1,
+    "long_lived": true,
+    "reaped": 1,
+    "started": 1,
+    "terminal_active_children": 0
+  },
+  "product_cli": {
+    "prepare_flag": "NONE_RUN_OWNED_SEALED_COPY_ONLY",
+    "run_flag": "--g5-history-integration",
+    "self_check_flag": "NONE_DIRECT_SCREEN_SHAPED_FOCUSED_RECEIPT",
+    "status": "SETTLED"
+  },
+  "product_change": {
+    "classification": "ClosedHistoryStoreSqliteReleaseBeforeIndependentConcurrency",
+    "population_changed": false,
+    "receipt_schema_changed": false,
+    "thresholds_changed": false,
+    "timers_changed": false,
+    "workload_changed": false
+  },
+  "focused_source_evidence": {
+    "command": {"bytes":416,"path":"implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/target/direct-screen-evidence-v2/COMMAND.txt","sha256":"4e73bccd0eb48aad6f2bdfdd2877d4cfd9f724b43c70d37e8eae883db2605ba6"},
+    "return_code": {"bytes":2,"path":"implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/target/direct-screen-evidence-v2/RETURN-CODE.txt","sha256":"9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"},
+    "rss": {"bytes":777,"path":"implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/target/direct-screen-evidence-v2/RSS.txt","sha256":"d17c533bc2d65a574573c3f16d8568e1af47034a35ea85b722b62daa8153857e"},
+    "stderr": {"bytes":0,"path":"implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/target/direct-screen-evidence-v2/stderr.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    "stdout": {"bytes":9656,"path":"implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/target/direct-screen-evidence-v2/stdout.json","sha256":"36039663d5c576041a64a89b1ecaf3042d35e286db4c3ec125ddf5e5bdf6625a"}
+  },
+  "product_schema": "phase4-g5-history-integration-v1",
+  "projection": {
+    "checkpoint_conservation_only": true,
+    "classification": "ExactThenLatestSparsePatch",
+    "exact_policy": "ExactEveryRoot",
+    "exact_parent_latest_target_per_checkpoint": true,
+    "exact_substitution": "Forbidden",
+    "gate_receipts": 8,
+    "screen_receipts": 4,
+    "latest_policy": "LatestFollowing",
+    "latest_route": "SparsePatchAuthenticatedEdge",
+    "semantic_distinction_authority": "G5-2-v3"
+  },
+  "reachability": {
+    "authority": "G5-0-v9",
+    "live_rerun_required": false
+  },
+  "schema": "phase4-g5-3-method-contract-v2",
+  "status": "READY_FOR_OWNED_INPUT_PREPARATION_AND_FREEZE",
+  "terminal": {
+    "active_descriptors": 0,
+    "q": 0,
+    "temporary_residue": 0,
+    "work_roots": 0
+  },
+  "external_input_operands": {
+    "fixture_1m": {
+      "path": "implementation-detail/phase-4/experiments/g5-foundation-h11/v1/method/fixture-1m.bin",
+      "bytes": 1048576,
+      "sha256": "4a3acf60f044bbae8ed0d0a8aa8fabd8b4cee74216dbccc36255b9c6fbe50a2a"
+    },
+    "expected_roots": {
+      "path": "implementation-detail/phase-4/experiments/g5-foundation-h11/v1/method/EXPECTED-ROOTS-v1.tsv",
+      "bytes": 459443,
+      "data_rows": 1001,
+      "sha256": "9e69b27ad587329e070153f7979f878e0f9bda43ca6dbbd290e7840d941e1813"
+    },
+    "concurrency_10m": {
+      "path": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v10/fixtures/10485760/S1-10.source",
+      "bytes": 10485760,
+      "mode": 292,
+      "sha256": "0c7a66930ae0d1d69fcc0b59942278eeb3a3fd92a8912e3e30963f288a8f430e"
+    }
+  },
+  "owned_input": {
+    "classification": "ExactCopyFsyncSealReopenRehashNoRegeneration",
+    "directory_mode": 365,
+    "file_mode": 292,
+    "files": {
+      "concurrency_10m": "concurrency-10m.source",
+      "expected_roots": "expected-roots.tsv",
+      "fixture_1m": "fixture-1m.bin"
+    },
+    "root": "target/phase4-g5-history-integration-inputs-v2",
+    "root_mode": 365
+  }
+}

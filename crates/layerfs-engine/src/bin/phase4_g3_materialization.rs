@@ -995,7 +995,7 @@ impl Scenario {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Roots {
     namespace: ObjectId,
     file: ObjectId,
@@ -1441,44 +1441,48 @@ fn build_and_publish_target(
 ) -> AnyResult<Roots> {
     let expected_references = source_cdc_sequence(source)?.0;
     store.transaction_attempt(metrics, |store, metrics| {
-        let prior = store
-            .current_head_accounted(metrics)?
-            .ok_or(CoreError::InvalidValidationReceipt)?;
-        let before = resolve_namespace_file_root(store, prior.1, metrics)?;
-        let mut builder = FileBuilder::new(SELECTED_PROFILE, expected_references, metrics)?;
-        let _cdc_charge = charge_capacity(metrics, 32 * 1024)?;
-        FastCdc::new().scan(File::open(source)?, |chunk| {
-            builder
-                .push_bytes(store, chunk, metrics)
-                .map_err(|error| core_failure(error.as_ref()))
-        })?;
-        let file = builder.finish(store, metrics)?;
-        let namespace = namespace_file_root(store, file, metrics)?;
-        let (operations, _operations_charge) =
-            charged_replace_operation(b"file", before, file, metrics)?;
-        let transition = publish_transition_with_operations(
-            store,
-            Some(prior.1),
-            namespace,
-            &operations,
-            metrics,
-        )?;
-        verify_transition(
-            store,
-            transition,
-            Some(prior.1),
-            namespace,
-            Some(&operations),
-            metrics,
-        )?;
-        let (length, references) = scrub_file(store, namespace, SELECTED_PROFILE, metrics)?;
-        store.publish(Some(&prior), namespace, transition, metrics)?;
-        Ok(Roots {
-            namespace,
-            file,
-            length,
-            references,
-        })
+        build_and_publish_target_in_active_transaction(store, source, expected_references, metrics)
+    })
+}
+
+fn build_and_publish_target_in_active_transaction(
+    store: &mut Store,
+    source: &Path,
+    expected_references: u64,
+    metrics: &mut Metrics,
+) -> AnyResult<Roots> {
+    let prior = store
+        .current_head_accounted(metrics)?
+        .ok_or(CoreError::InvalidValidationReceipt)?;
+    let before = resolve_namespace_file_root(store, prior.1, metrics)?;
+    let mut builder = FileBuilder::new(SELECTED_PROFILE, expected_references, metrics)?;
+    let _cdc_charge = charge_capacity(metrics, 32 * 1024)?;
+    FastCdc::new().scan(File::open(source)?, |chunk| {
+        builder
+            .push_bytes(store, chunk, metrics)
+            .map_err(|error| core_failure(error.as_ref()))
+    })?;
+    let file = builder.finish(store, metrics)?;
+    let namespace = namespace_file_root(store, file, metrics)?;
+    let (operations, _operations_charge) =
+        charged_replace_operation(b"file", before, file, metrics)?;
+    let transition =
+        publish_transition_with_operations(store, Some(prior.1), namespace, &operations, metrics)?;
+    verify_transition(
+        store,
+        transition,
+        Some(prior.1),
+        namespace,
+        Some(&operations),
+        metrics,
+    )?;
+    let (length, references) = scrub_file(store, namespace, SELECTED_PROFILE, metrics)?;
+    store.publish(Some(&prior), namespace, transition, metrics)?;
+    Ok(Roots {
+        namespace,
+        file,
+        length,
+        references,
     })
 }
 
@@ -3747,6 +3751,3739 @@ pub(super) fn run_g4_row(
     ), SOURCE_1)
 }
 
+const G5_PROJECTION_FIXTURE: &str = "G5-PROJECTION-FIXTURE-v2.tsv";
+const G5_PROJECTION_MAX_RANGES: usize = 256;
+const G5_PROJECTION_MAX_DIRTY_BYTES: u64 = 8 * 1024 * 1024;
+const G5_PROJECTION_MAX_BUFFER: u64 = 1024 * 1024;
+const G5_PROJECTION_MECHANISM_BYTES: u64 = 250_000;
+const G5_PROJECTION_ROUTE_CLASS: &str = "CompositePredeclaredExactCloneSparsePatchAndFullFallback";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ProjectionPlan {
+    Ranges(Vec<std::ops::Range<u64>>),
+    FullFallback,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionServiceError {
+    ParentChainMismatch,
+    InvalidDirtyRange,
+    FixtureMismatch,
+    Shutdown,
+    ExactRequestPending,
+    InvalidPolicyReplacement,
+    WorkerFailed,
+    Cancelled,
+}
+
+impl std::fmt::Display for ProjectionServiceError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::ParentChainMismatch => "ProjectionParentChainMismatch",
+            Self::InvalidDirtyRange => "ProjectionInvalidDirtyRange",
+            Self::FixtureMismatch => "ProjectionFixtureMismatch",
+            Self::Shutdown => "ProjectionServiceShutdown",
+            Self::ExactRequestPending => "ProjectionExactRequestPending",
+            Self::InvalidPolicyReplacement => "ProjectionInvalidPolicyReplacement",
+            Self::WorkerFailed => "ProjectionWorkerFailed",
+            Self::Cancelled => "ProjectionCancelled",
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionFault {
+    None,
+    CancelBeforeNative,
+    CancelPrivateSuccessor,
+    ShutdownInflight,
+    CloneFailure,
+    BeforeSync,
+    BeforeRename,
+    RenameLostAck,
+    DirectorySyncLostAck,
+    ReconciliationSyncFailure,
+    PostRenameStatFailure,
+    ReopenFailure,
+    ReaderReopenFailure,
+    MissingSeed,
+}
+
+impl ProjectionFault {
+    fn name(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::CancelBeforeNative => "CancelBeforeNative",
+            Self::CancelPrivateSuccessor => "CancelPrivateSuccessor",
+            Self::ShutdownInflight => "ShutdownInflight",
+            Self::CloneFailure => "CloneFailure",
+            Self::BeforeSync => "BeforeSync",
+            Self::BeforeRename => "BeforeRename",
+            Self::RenameLostAck => "RenameLostAck",
+            Self::DirectorySyncLostAck => "DirectorySyncLostAck",
+            Self::ReconciliationSyncFailure => "ReconciliationSyncFailure",
+            Self::PostRenameStatFailure => "PostRenameStatFailure",
+            Self::ReopenFailure => "ReopenFailure",
+            Self::ReaderReopenFailure => "ReaderReopenFailure",
+            Self::MissingSeed => "MissingSeed",
+        }
+    }
+
+    fn release_mode(mode: &str) -> Option<Self> {
+        match mode {
+            "fault-clone" => Some(Self::CloneFailure),
+            "fault-rename-lost-ack" => Some(Self::RenameLostAck),
+            "fault-directory-sync-lost-ack" => Some(Self::DirectorySyncLostAck),
+            "fault-post-rename-stat" => Some(Self::PostRenameStatFailure),
+            "fault-reopen" => Some(Self::ReopenFailure),
+            "fault-missing-seed" => Some(Self::MissingSeed),
+            _ => None,
+        }
+    }
+}
+
+fn projection_fault_selectors_json() -> String {
+    format!(
+        "[{}]",
+        [
+            ProjectionFault::CloneFailure,
+            ProjectionFault::RenameLostAck,
+            ProjectionFault::DirectorySyncLostAck,
+            ProjectionFault::PostRenameStatFailure,
+            ProjectionFault::ReopenFailure,
+            ProjectionFault::MissingSeed,
+        ]
+        .iter()
+        .map(|fault| format!("\"{}\"", fault.name()))
+        .collect::<Vec<_>>()
+        .join(",")
+    )
+}
+
+fn projection_fault_hooks_json() -> String {
+    format!(
+        "[{}]",
+        [
+            ProjectionFault::CancelBeforeNative,
+            ProjectionFault::CancelPrivateSuccessor,
+            ProjectionFault::ShutdownInflight,
+            ProjectionFault::CloneFailure,
+            ProjectionFault::BeforeSync,
+            ProjectionFault::BeforeRename,
+            ProjectionFault::RenameLostAck,
+            ProjectionFault::DirectorySyncLostAck,
+            ProjectionFault::ReconciliationSyncFailure,
+            ProjectionFault::PostRenameStatFailure,
+            ProjectionFault::ReopenFailure,
+            ProjectionFault::ReaderReopenFailure,
+            ProjectionFault::MissingSeed,
+        ]
+        .iter()
+        .map(|fault| format!("\"{}\"", fault.name()))
+        .collect::<Vec<_>>()
+        .join(",")
+    )
+}
+
+impl std::error::Error for ProjectionServiceError {}
+
+fn projection_plan(
+    ranges: impl IntoIterator<Item = std::ops::Range<u64>>,
+    length: u64,
+) -> AnyResult<ProjectionPlan> {
+    let mut admitted = Vec::with_capacity(G5_PROJECTION_MAX_RANGES);
+    for (index, range) in ranges.into_iter().enumerate() {
+        if index >= G5_PROJECTION_MAX_RANGES {
+            return Ok(ProjectionPlan::FullFallback);
+        }
+        if range.start > range.end || range.end > length {
+            return Err(ProjectionServiceError::InvalidDirtyRange.into());
+        }
+        if !range.is_empty() {
+            admitted.push(range);
+        }
+    }
+    let mut ranges = admitted;
+    ranges.sort_unstable_by_key(|range| (range.start, range.end));
+    let mut merged: Vec<std::ops::Range<u64>> = Vec::with_capacity(ranges.len().min(256));
+    for range in ranges {
+        if let Some(last) = merged.last_mut().filter(|last| range.start <= last.end) {
+            last.end = last.end.max(range.end);
+        } else {
+            merged.push(range);
+        }
+    }
+    let bytes = merged.iter().try_fold(0_u64, |total, range| {
+        total
+            .checked_add(range.end - range.start)
+            .ok_or(CoreError::LengthOverflow)
+    })?;
+    if merged.len() > G5_PROJECTION_MAX_RANGES || bytes > G5_PROJECTION_MAX_DIRTY_BYTES {
+        Ok(ProjectionPlan::FullFallback)
+    } else {
+        Ok(ProjectionPlan::Ranges(merged))
+    }
+}
+
+fn projection_build_class(
+    plan: &ProjectionPlan,
+    parent_length: u64,
+    target_length: u64,
+) -> Option<bool> {
+    match plan {
+        ProjectionPlan::Ranges(ranges) if parent_length == target_length && ranges.is_empty() => {
+            Some(false)
+        }
+        ProjectionPlan::Ranges(_) if parent_length == target_length => Some(true),
+        ProjectionPlan::FullFallback | ProjectionPlan::Ranges(_) => None,
+    }
+}
+
+fn latest_following_builds_to_wait(requests: usize) -> u64 {
+    match requests {
+        0 => 0,
+        1 => 1,
+        _ => 2,
+    }
+}
+
+struct ProjectionFixtureEdge {
+    target: Roots,
+    digest: [u8; 32],
+    range: std::ops::Range<u64>,
+    token: Option<ProjectionEdgeToken>,
+}
+
+struct ProjectionFixture {
+    directory: PathBuf,
+    parent: Roots,
+    target: Roots,
+    parent_digest: [u8; 32],
+    target_digest: [u8; 32],
+    patch_bytes: Vec<u8>,
+    count: Roots,
+    count_digest: [u8; 32],
+    storm_a: Roots,
+    storm_a_digest: [u8; 32],
+    storm_a_token: Option<ProjectionEdgeToken>,
+    storm_b: Roots,
+    storm_b_digest: [u8; 32],
+    storm_b_token: Option<ProjectionEdgeToken>,
+    latest: Roots,
+    latest_digest: [u8; 32],
+    patch: std::ops::Range<u64>,
+    exact_count: usize,
+    chain: Vec<ProjectionFixtureEdge>,
+}
+
+fn write_projection_fixture(
+    root: &Path,
+    prepared: &Prepared,
+    patch_bytes: &[u8],
+    count: Roots,
+    count_digest: [u8; 32],
+    storm_a: Roots,
+    storm_a_digest: [u8; 32],
+    storm_a_token: &ProjectionEdgeToken,
+    storm_b: Roots,
+    storm_b_digest: [u8; 32],
+    storm_b_token: &ProjectionEdgeToken,
+    latest: Roots,
+    latest_digest: [u8; 32],
+    exact_count: usize,
+    chain: &[ProjectionFixtureEdge],
+) -> AnyResult<PathBuf> {
+    let path = root.join(G5_PROJECTION_FIXTURE);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)?;
+    writeln!(file, "directory\t{}", prepared.directory_path.display())?;
+    writeln!(file, "parent_namespace\t{}", prepared.parent.namespace)?;
+    writeln!(file, "parent_file\t{}", prepared.parent.file)?;
+    writeln!(file, "parent_length\t{}", prepared.parent.length)?;
+    writeln!(file, "parent_references\t{}", prepared.parent.references)?;
+    writeln!(
+        file,
+        "parent_digest\t{}",
+        hex_bytes(&prepared.parent_digest)
+    )?;
+    writeln!(file, "target_namespace\t{}", prepared.target.namespace)?;
+    writeln!(file, "target_file\t{}", prepared.target.file)?;
+    writeln!(file, "target_length\t{}", prepared.target.length)?;
+    writeln!(file, "target_references\t{}", prepared.target.references)?;
+    writeln!(
+        file,
+        "target_digest\t{}",
+        hex_bytes(&prepared.target_digest)
+    )?;
+    writeln!(file, "patch_bytes\t{}", hex_bytes(patch_bytes))?;
+    for (name, roots, digest) in [
+        ("count", count, count_digest),
+        ("storm_a", storm_a, storm_a_digest),
+        ("storm_b", storm_b, storm_b_digest),
+        ("latest", latest, latest_digest),
+    ] {
+        writeln!(file, "{name}_namespace\t{}", roots.namespace)?;
+        writeln!(file, "{name}_file\t{}", roots.file)?;
+        writeln!(file, "{name}_length\t{}", roots.length)?;
+        writeln!(file, "{name}_references\t{}", roots.references)?;
+        writeln!(file, "{name}_digest\t{}", hex_bytes(&digest))?;
+    }
+    writeln!(file, "storm_a_token\t{}", storm_a_token.serialize())?;
+    writeln!(file, "storm_b_token\t{}", storm_b_token.serialize())?;
+    writeln!(
+        file,
+        "patch\t{}\t{}",
+        prepared.patch.start, prepared.patch.end
+    )?;
+    writeln!(file, "exact_count\t{exact_count}")?;
+    writeln!(file, "chain_count\t{}", chain.len())?;
+    for (index, edge) in chain.iter().enumerate() {
+        writeln!(
+            file,
+            "chain_{index:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            edge.target.namespace,
+            edge.target.file,
+            edge.target.length,
+            edge.target.references,
+            hex_bytes(&edge.digest),
+            edge.range.start,
+            edge.range.end,
+            edge.token
+                .as_ref()
+                .ok_or(CoreError::InvalidValidationReceipt)?
+                .serialize(),
+        )?;
+    }
+    file.sync_all()?;
+    sync_fd(&open_dir(root)?)?;
+    Ok(path)
+}
+
+fn parse_projection_fixture(root: &Path) -> AnyResult<ProjectionFixture> {
+    let text = fs::read_to_string(root.join(G5_PROJECTION_FIXTURE))?;
+    let mut fields = std::collections::BTreeMap::new();
+    for line in text.lines() {
+        let mut parts = line.split('\t');
+        let key = parts
+            .next()
+            .ok_or(ProjectionServiceError::FixtureMismatch)?;
+        let values: Vec<_> = parts.collect();
+        if values.is_empty() || fields.insert(key, values).is_some() {
+            return Err(ProjectionServiceError::FixtureMismatch.into());
+        }
+    }
+    let one = |name: &str| -> AnyResult<&str> {
+        let values = fields
+            .get(name)
+            .ok_or(ProjectionServiceError::FixtureMismatch)?;
+        if values.len() != 1 {
+            return Err(ProjectionServiceError::FixtureMismatch.into());
+        }
+        Ok(values[0])
+    };
+    let roots = |prefix: &str| -> AnyResult<Roots> {
+        Ok(Roots {
+            namespace: one(&format!("{prefix}_namespace"))?.parse()?,
+            file: one(&format!("{prefix}_file"))?.parse()?,
+            length: one(&format!("{prefix}_length"))?.parse()?,
+            references: one(&format!("{prefix}_references"))?.parse()?,
+        })
+    };
+    let digest =
+        |name: &str| -> AnyResult<[u8; 32]> { Ok(one(name)?.parse::<ObjectId>()?.to_bytes()) };
+    let patch = fields
+        .get("patch")
+        .filter(|values| values.len() == 2)
+        .ok_or(ProjectionServiceError::FixtureMismatch)?;
+    let fixture = ProjectionFixture {
+        directory: PathBuf::from(one("directory")?),
+        parent: roots("parent")?,
+        target: roots("target")?,
+        parent_digest: digest("parent_digest")?,
+        target_digest: digest("target_digest")?,
+        patch_bytes: decode_hex(one("patch_bytes")?)?,
+        count: roots("count")?,
+        count_digest: digest("count_digest")?,
+        storm_a: roots("storm_a")?,
+        storm_a_digest: digest("storm_a_digest")?,
+        storm_a_token: Some(ProjectionEdgeToken::parse(one("storm_a_token")?)?),
+        storm_b: roots("storm_b")?,
+        storm_b_digest: digest("storm_b_digest")?,
+        storm_b_token: Some(ProjectionEdgeToken::parse(one("storm_b_token")?)?),
+        latest: roots("latest")?,
+        latest_digest: digest("latest_digest")?,
+        patch: patch[0].parse()?..patch[1].parse()?,
+        exact_count: one("exact_count")?.parse()?,
+        chain: (0..one("chain_count")?.parse::<usize>()?)
+            .map(|index| -> AnyResult<_> {
+                let key = format!("chain_{index:03}");
+                let values = fields
+                    .get(key.as_str())
+                    .filter(|values| values.len() == 8)
+                    .ok_or(ProjectionServiceError::FixtureMismatch)?;
+                Ok(ProjectionFixtureEdge {
+                    target: Roots {
+                        namespace: values[0].parse()?,
+                        file: values[1].parse()?,
+                        length: values[2].parse()?,
+                        references: values[3].parse()?,
+                    },
+                    digest: values[4].parse::<ObjectId>()?.to_bytes(),
+                    range: values[5].parse()?..values[6].parse()?,
+                    token: Some(ProjectionEdgeToken::parse(values[7])?),
+                })
+            })
+            .collect::<AnyResult<Vec<_>>>()?,
+    };
+    if !fixture.directory.starts_with(root)
+        || fixture.patch.end > fixture.target.length
+        || fixture.patch_bytes.len()
+            != usize::try_from(fixture.patch.end - fixture.patch.start)
+                .map_err(|_| CoreError::LengthOverflow)?
+    {
+        return Err(ProjectionServiceError::FixtureMismatch.into());
+    }
+    Ok(fixture)
+}
+
+#[derive(Default)]
+struct ProjectionCounters {
+    submitted: u64,
+    started: u64,
+    completed: u64,
+    superseded_pending: u64,
+    cancelled: u64,
+    failed: u64,
+    stale: u64,
+    full_fallbacks: u64,
+    range_fetches: u64,
+    fetched_bytes: u64,
+    write_calls: u64,
+    written_bytes: u64,
+    clone_calls: u64,
+    clone_successes: u64,
+    clone_failures: u64,
+    temp_files_created: u64,
+    temp_files_removed: u64,
+    private_build_cancellations: u64,
+    restart_temps_discovered: u64,
+    restart_temps_removed: u64,
+    restart_temps_retained: u64,
+    missing_seed_fallbacks: u64,
+    seed_admission_rejections: u64,
+    data_sync_calls: u64,
+    metadata_sync_calls: u64,
+    rename_calls: u64,
+    directory_sync_calls: u64,
+    reconciliation_calls: u64,
+    sqlite_write_calls: u64,
+    sqlite_transactions: u64,
+    sqlite_commits: u64,
+    sqlite_busy_errors: u64,
+    sqlite_locked_errors: u64,
+    seed_rotations: u64,
+    q_high_water: u64,
+    q_terminal: u64,
+    max_buffer_bytes: u64,
+    max_in_flight: u64,
+    max_pending: u64,
+    payload_ns: u128,
+    durability_ns: u128,
+    verification_ns: u128,
+    sql_queries: u64,
+    sql_rows: u64,
+    blob_reads: u64,
+    blob_bytes: u64,
+    authenticated_objects: u64,
+    authenticated_bytes: u64,
+    exact_build_ns: Vec<u128>,
+    sparse_build_ns: Vec<u128>,
+    fallback_build_ns: Vec<u128>,
+    contention_fallback_build_ns: Vec<u128>,
+    build_evidence: Vec<ProjectionBuildEvidence>,
+    reader_initialization_ns: u128,
+    reader_initialization_calls: u64,
+    reader_initialization_sql_queries: u64,
+    reader_initialization_authenticated_objects: u64,
+    reader_initialization_authenticated_bytes: u64,
+    reader_initialization_q_high_water: u64,
+    contention_worker_start_ns: u128,
+    contention_worker_end_ns: u128,
+    end_to_end_edit_t0_ns: u128,
+    end_to_end_canonical_ack_t1_ns: u128,
+    end_to_end_enqueue_t2_ns: u128,
+    end_to_end_worker_start_t3_ns: u128,
+    end_to_end_native_ack_t4_ns: u128,
+    end_to_end_edit_wall_ns: u128,
+    end_to_end_canonical_ack_wall_ns: u128,
+    end_to_end_canonical_transactions: u64,
+    end_to_end_canonical_commits: u64,
+    end_to_end_canonical_sql_queries: u64,
+    end_to_end_canonical_authenticated_objects: u64,
+    end_to_end_canonical_authenticated_bytes: u64,
+    end_to_end_canonical_q_high_water: u64,
+    initial_descriptor_verification_bytes: u64,
+    initial_storage_logical_bytes: u64,
+    initial_storage_apparent_bytes: u64,
+    initial_storage_allocated_bytes: u64,
+    fault_finalizations: u64,
+    fault_outcome: Option<ProjectionFaultOutcome>,
+    fault_q_terminal: u64,
+    fault_temp_residue: u64,
+    fault_active_descriptors: u64,
+    fault_successor_descriptors: u64,
+    fault_storage_logical_bytes: u64,
+    fault_storage_apparent_bytes: u64,
+    fault_storage_allocated_bytes: u64,
+    fault_apply_wall_ns: u128,
+    fault_finalization_ns: u128,
+    fault_finalization_complete: bool,
+    fault_unwind_temp_removals: u64,
+    fault_active_identity_matches: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionFaultOutcome {
+    Cancelled,
+    Shutdown,
+    Stale,
+    WorkerFailed,
+    IdentityMismatch,
+    WrongLogicalRole,
+    AmbiguousDurability,
+    SqliteBusy,
+    SqliteLocked,
+    IoError,
+    Rejected,
+}
+
+impl ProjectionFaultOutcome {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Cancelled => "Cancelled",
+            Self::Shutdown => "Shutdown",
+            Self::Stale => "Stale",
+            Self::WorkerFailed => "WorkerFailed",
+            Self::IdentityMismatch => "IdentityMismatch",
+            Self::WrongLogicalRole => "WrongLogicalRole",
+            Self::AmbiguousDurability => "AmbiguousDurability",
+            Self::SqliteBusy => "SqliteBusy",
+            Self::SqliteLocked => "SqliteLocked",
+            Self::IoError => "IoError",
+            Self::Rejected => "Rejected",
+        }
+    }
+}
+
+impl ProjectionCounters {
+    fn fault_finalization_json(&self) -> String {
+        let invariants_pass = self.fault_finalization_complete
+            && self.fault_q_terminal == 0
+            && self.fault_temp_residue == 0
+            && self.fault_active_descriptors == 1
+            && self.fault_successor_descriptors == 0;
+        format!(
+            concat!(
+                "{{\"status\":\"{}\",\"receipt_complete\":{},\"invariants_pass\":{},",
+                "\"typed_outcome\":\"{}\",",
+                "\"fault_finalizations\":{},\"q_terminal\":{},\"temp_residue\":{},",
+                "\"temp_files_created\":{},\"temp_files_removed\":{},",
+                "\"unwind_temp_removals\":{},",
+                "\"unwind_temp_removal_provenance\":\"ProvenByOwnedTempDropPlusObservedZeroResidueBeforeRename\",",
+                "\"clone_calls\":{},\"clone_failures\":{},",
+                "\"data_sync_calls\":{},\"metadata_sync_calls\":{},",
+                "\"rename_calls\":{},\"directory_sync_calls\":{},",
+                "\"reconciliation_calls\":{},\"sql_queries\":{},",
+                "\"authenticated_objects\":{},\"authenticated_bytes\":{},",
+                "\"active_descriptors\":{},\"successor_descriptors\":{},",
+                "\"active_identity_matches_cached\":{},",
+                "\"active_descriptor_provenance\":\"ObservedFstatRetainedActiveDescriptor\",",
+                "\"successor_descriptor_provenance\":\"ProvenByApplyInnerStackUnwindBeforeFinalization\",",
+                "\"storage_logical_bytes\":{},\"storage_apparent_bytes\":{},",
+                "\"storage_allocated_bytes\":{},\"apply_wall_ns\":{},",
+                "\"finalization_wall_ns\":{}}}"
+            ),
+            if invariants_pass {
+                "PASS"
+            } else {
+                "REVISE"
+            },
+            self.fault_finalization_complete,
+            invariants_pass,
+            self.fault_outcome
+                .map(ProjectionFaultOutcome::name)
+                .unwrap_or("NotAttempted"),
+            self.fault_finalizations,
+            self.fault_q_terminal,
+            self.fault_temp_residue,
+            self.temp_files_created,
+            self.temp_files_removed,
+            self.fault_unwind_temp_removals,
+            self.clone_calls,
+            self.clone_failures,
+            self.data_sync_calls,
+            self.metadata_sync_calls,
+            self.rename_calls,
+            self.directory_sync_calls,
+            self.reconciliation_calls,
+            self.sql_queries,
+            self.authenticated_objects,
+            self.authenticated_bytes,
+            self.fault_active_descriptors,
+            self.fault_successor_descriptors,
+            self.fault_active_identity_matches,
+            self.fault_storage_logical_bytes,
+            self.fault_storage_apparent_bytes,
+            self.fault_storage_allocated_bytes,
+            self.fault_apply_wall_ns,
+            self.fault_finalization_ns,
+        )
+    }
+}
+
+struct ProjectionBuildEvidence {
+    plan: &'static str,
+    parent_length: u64,
+    target_length: u64,
+    range_count: usize,
+    wall_ns: u128,
+    contention: bool,
+    policy: &'static str,
+    ordinal: u64,
+    fault: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RequestPolicy {
+    ExactEveryRoot { ordinal: u64 },
+    LatestFollowing { stream: LatestStream, ordinal: u64 },
+    IsolatedSparseSentinel,
+    IsolatedOrdinaryFallback,
+}
+
+impl RequestPolicy {
+    fn evidence(self) -> (&'static str, u64) {
+        match self {
+            Self::ExactEveryRoot { ordinal } => ("ExactEveryRoot", ordinal),
+            Self::LatestFollowing {
+                stream: LatestStream::SameSize,
+                ordinal,
+            } => ("LatestFollowingSameSize", ordinal),
+            Self::LatestFollowing {
+                stream: LatestStream::CountStorm,
+                ordinal,
+            } => ("LatestFollowingCountStorm", ordinal),
+            Self::IsolatedSparseSentinel => ("IsolatedSparseSentinel", 0),
+            Self::IsolatedOrdinaryFallback => ("IsolatedOrdinaryFallback", 0),
+        }
+    }
+}
+
+fn projection_chain_policy(chain_index: usize, exact_count: usize) -> AnyResult<RequestPolicy> {
+    if chain_index < exact_count.saturating_sub(1) {
+        Ok(RequestPolicy::ExactEveryRoot {
+            ordinal: u64::try_from(chain_index + 1).map_err(|_| CoreError::LengthOverflow)?,
+        })
+    } else {
+        Ok(RequestPolicy::LatestFollowing {
+            stream: LatestStream::SameSize,
+            ordinal: u64::try_from(chain_index - exact_count.saturating_sub(1))
+                .map_err(|_| CoreError::LengthOverflow)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LatestStream {
+    SameSize,
+    CountStorm,
+}
+
+#[derive(Clone, Copy)]
+struct ProjectionTokenAuthority {
+    store_instance_id: [u8; 16],
+    validation_authority_id: [u8; 32],
+    validation_key: [u8; 32],
+    profile: [u8; 32],
+    integrity_epoch: u64,
+}
+
+impl ProjectionTokenAuthority {
+    fn from_store(store: &Store) -> Self {
+        Self {
+            store_instance_id: store.store_instance_id,
+            validation_authority_id: store.validation_authority_id,
+            validation_key: store.validation_key,
+            profile: store.profile,
+            integrity_epoch: store.integrity_epoch,
+        }
+    }
+}
+
+struct ProjectionEdgeBinding {
+    store_instance_id: [u8; 16],
+    validation_authority_id: [u8; 32],
+    profile: [u8; 32],
+    integrity_epoch: u64,
+    generation: u64,
+    head_root: ObjectId,
+    transition: ObjectId,
+    receipt: [u8; 216],
+    parent: Roots,
+    parent_digest: [u8; 32],
+    target: Roots,
+    target_digest: [u8; 32],
+    ranges: Vec<std::ops::Range<u64>>,
+    policy: RequestPolicy,
+}
+
+struct ProjectionEdgeToken {
+    binding: ProjectionEdgeBinding,
+    tag: [u8; 32],
+    consumed: bool,
+}
+
+fn projection_edge_tag(
+    validation_key: &[u8; 32],
+    binding: &ProjectionEdgeBinding,
+) -> AnyResult<[u8; 32]> {
+    let mut hasher = blake3::Hasher::new_keyed(validation_key);
+    hasher.update(b"layerfs/phase4/g5/projection-edge-token/v2\0");
+    hasher.update(&binding.store_instance_id);
+    hasher.update(&binding.validation_authority_id);
+    hasher.update(&binding.profile);
+    hasher.update(&binding.integrity_epoch.to_be_bytes());
+    hasher.update(&binding.generation.to_be_bytes());
+    hasher.update(binding.head_root.as_bytes());
+    hasher.update(binding.transition.as_bytes());
+    hasher.update(&binding.receipt);
+    for roots in [binding.parent, binding.target] {
+        hasher.update(roots.namespace.as_bytes());
+        hasher.update(roots.file.as_bytes());
+        hasher.update(&roots.length.to_be_bytes());
+        hasher.update(&roots.references.to_be_bytes());
+    }
+    hasher.update(&binding.parent_digest);
+    hasher.update(&binding.target_digest);
+    let (name, ordinal) = binding.policy.evidence();
+    hash_field(&mut hasher, name.as_bytes())?;
+    hasher.update(&ordinal.to_be_bytes());
+    hasher.update(
+        &u64::try_from(binding.ranges.len())
+            .map_err(|_| CoreError::LengthOverflow)?
+            .to_be_bytes(),
+    );
+    for range in &binding.ranges {
+        hasher.update(&range.start.to_be_bytes());
+        hasher.update(&range.end.to_be_bytes());
+    }
+    Ok(*hasher.finalize().as_bytes())
+}
+
+fn mint_projection_edge_token(
+    store: &Store,
+    head: &VisibleHead,
+    parent: Roots,
+    target: Roots,
+    parent_digest: [u8; 32],
+    target_digest: [u8; 32],
+    ranges: &[std::ops::Range<u64>],
+    policy: RequestPolicy,
+) -> AnyResult<ProjectionEdgeToken> {
+    if head.1 != target.namespace
+        || projection_plan(ranges.iter().cloned(), target.length)?
+            != ProjectionPlan::Ranges(ranges.to_vec())
+    {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    let binding = ProjectionEdgeBinding {
+        store_instance_id: store.store_instance_id,
+        validation_authority_id: store.validation_authority_id,
+        profile: store.profile,
+        integrity_epoch: store.integrity_epoch,
+        generation: head.0,
+        head_root: head.1,
+        transition: head.2,
+        receipt: head.3,
+        parent,
+        parent_digest,
+        target,
+        target_digest,
+        ranges: ranges.to_vec(),
+        policy,
+    };
+    Ok(ProjectionEdgeToken {
+        tag: projection_edge_tag(&store.validation_key, &binding)?,
+        binding,
+        consumed: false,
+    })
+}
+
+impl ProjectionEdgeToken {
+    fn serialize(&self) -> String {
+        let binding = &self.binding;
+        let (policy, ordinal) = binding.policy.evidence();
+        let ranges = binding
+            .ranges
+            .iter()
+            .map(|range| format!("{}-{}", range.start, range.end))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "v2|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            hex_bytes(&binding.store_instance_id),
+            hex_bytes(&binding.validation_authority_id),
+            hex_bytes(&binding.profile),
+            binding.integrity_epoch,
+            binding.generation,
+            binding.head_root,
+            binding.transition,
+            hex_bytes(&binding.receipt),
+            binding.parent.namespace,
+            binding.parent.file,
+            binding.parent.length,
+            binding.parent.references,
+            hex_bytes(&binding.parent_digest),
+            binding.target.namespace,
+            binding.target.file,
+            binding.target.length,
+            binding.target.references,
+            hex_bytes(&binding.target_digest),
+            policy,
+            ordinal,
+            binding.ranges.len(),
+            ranges,
+            hex_bytes(&self.tag),
+            u8::from(self.consumed),
+        )
+    }
+
+    fn parse(value: &str) -> AnyResult<Self> {
+        let mut split = value.split('|');
+        let mut fields = [""; 25];
+        for field in &mut fields {
+            *field = split.next().ok_or(CoreError::InvalidValidationReceipt)?;
+        }
+        if split.next().is_some() || fields[0] != "v2" || fields[24] != "0" {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        let fixed = |value: &str, length: usize| -> AnyResult<Vec<u8>> {
+            let bytes = decode_hex(value)?;
+            if bytes.len() != length {
+                return Err(CoreError::InvalidValidationReceipt.into());
+            }
+            Ok(bytes)
+        };
+        let fixed_array = |value: &str| -> AnyResult<[u8; 32]> {
+            Ok(fixed(value, 32)?
+                .try_into()
+                .map_err(|_| CoreError::InvalidValidationReceipt)?)
+        };
+        let policy = match (fields[19], fields[20].parse()?) {
+            ("ExactEveryRoot", ordinal) => RequestPolicy::ExactEveryRoot { ordinal },
+            ("LatestFollowingSameSize", ordinal) => RequestPolicy::LatestFollowing {
+                stream: LatestStream::SameSize,
+                ordinal,
+            },
+            ("LatestFollowingCountStorm", ordinal) => RequestPolicy::LatestFollowing {
+                stream: LatestStream::CountStorm,
+                ordinal,
+            },
+            ("IsolatedSparseSentinel", 0) => RequestPolicy::IsolatedSparseSentinel,
+            ("IsolatedOrdinaryFallback", 0) => RequestPolicy::IsolatedOrdinaryFallback,
+            _ => return Err(CoreError::InvalidValidationReceipt.into()),
+        };
+        let declared_ranges = fields[21].parse::<usize>()?;
+        if declared_ranges > G5_PROJECTION_MAX_RANGES
+            || (!fields[22].is_empty() && fields[22].split(',').count() != declared_ranges)
+            || (fields[22].is_empty() && declared_ranges != 0)
+        {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        let ranges = if fields[22].is_empty() {
+            Vec::new()
+        } else {
+            fields[22]
+                .split(',')
+                .map(|value| -> AnyResult<_> {
+                    let (start, end) = value
+                        .split_once('-')
+                        .ok_or(CoreError::InvalidValidationReceipt)?;
+                    Ok(start.parse()?..end.parse()?)
+                })
+                .collect::<AnyResult<Vec<_>>>()?
+        };
+        if ranges.len() != declared_ranges
+            || projection_plan(ranges.iter().cloned(), fields[16].parse()?)?
+                != ProjectionPlan::Ranges(ranges.clone())
+        {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        Ok(Self {
+            binding: ProjectionEdgeBinding {
+                store_instance_id: fixed(fields[1], 16)?
+                    .try_into()
+                    .map_err(|_| CoreError::InvalidValidationReceipt)?,
+                validation_authority_id: fixed_array(fields[2])?,
+                profile: fixed_array(fields[3])?,
+                integrity_epoch: fields[4].parse()?,
+                generation: fields[5].parse()?,
+                head_root: fields[6].parse()?,
+                transition: fields[7].parse()?,
+                receipt: fixed(fields[8], 216)?
+                    .try_into()
+                    .map_err(|_| CoreError::InvalidValidationReceipt)?,
+                parent: Roots {
+                    namespace: fields[9].parse()?,
+                    file: fields[10].parse()?,
+                    length: fields[11].parse()?,
+                    references: fields[12].parse()?,
+                },
+                parent_digest: fixed_array(fields[13])?,
+                target: Roots {
+                    namespace: fields[14].parse()?,
+                    file: fields[15].parse()?,
+                    length: fields[16].parse()?,
+                    references: fields[17].parse()?,
+                },
+                target_digest: fixed_array(fields[18])?,
+                ranges,
+                policy,
+            },
+            tag: fixed_array(fields[23])?,
+            consumed: false,
+        })
+    }
+
+    fn verify(
+        &self,
+        authority: ProjectionTokenAuthority,
+        request: &ProjectionRequest,
+    ) -> AnyResult<()> {
+        let binding = &self.binding;
+        let receipt = ValidatedSnapshotReceiptV1::decode(
+            &binding.receipt,
+            &authority.validation_key,
+            ObjectId::from_bytes(&authority.profile)?,
+            authority.validation_authority_id,
+        )?;
+        if self.consumed
+            || binding.store_instance_id != authority.store_instance_id
+            || binding.validation_authority_id != authority.validation_authority_id
+            || binding.profile != authority.profile
+            || binding.integrity_epoch != authority.integrity_epoch
+            || receipt.store_instance_id != binding.store_instance_id
+            || receipt.integrity_epoch != binding.integrity_epoch
+            || receipt.head_generation != binding.generation
+            || receipt.child_root_id != binding.head_root
+            || receipt.transition_id != binding.transition
+            || binding.head_root != binding.target.namespace
+            || binding.parent != request.parent
+            || binding.parent_digest != request.parent_digest
+            || binding.target != request.target
+            || binding.target_digest != request.target_digest
+            || binding.ranges != request.ranges()
+            || binding.policy != request.policy
+            || self.tag != projection_edge_tag(&authority.validation_key, binding)?
+        {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        Ok(())
+    }
+
+    fn consume(&mut self) -> AnyResult<()> {
+        if self.consumed {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        self.consumed = true;
+        Ok(())
+    }
+}
+
+fn build_projection_target(store: &mut Store, source: &Path) -> AnyResult<(Roots, VisibleHead)> {
+    let mut metrics = Metrics::default();
+    let roots = build_and_publish_target(store, source, &mut metrics)?;
+    finish_q(&mut metrics)?;
+    let head = store
+        .current_head()?
+        .ok_or(CoreError::InvalidValidationReceipt)?;
+    if head.1 != roots.namespace {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    Ok((roots, head))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prove_and_mint_projection_edge(
+    store: &mut Store,
+    head: &VisibleHead,
+    parent: Roots,
+    parent_digest: [u8; 32],
+    parent_source: &Path,
+    target: Roots,
+    target_digest: [u8; 32],
+    target_source: &Path,
+    range: &std::ops::Range<u64>,
+    policy: RequestPolicy,
+) -> AnyResult<ProjectionEdgeToken> {
+    let mut metrics = Metrics::default();
+    let proof = prove_canonical_range(
+        store,
+        parent,
+        parent_digest,
+        parent_source,
+        target,
+        target_digest,
+        target_source,
+        range,
+        &mut metrics,
+    )?;
+    finish_q(&mut metrics)?;
+    if proof.binding.parent_root != parent.namespace
+        || proof.binding.target_root != target.namespace
+        || proof.binding.range_start != range.start
+        || proof.binding.range_end != range.end
+    {
+        return Err(CoreError::InvalidValidationReceipt.into());
+    }
+    verify_transition(
+        store,
+        head.2,
+        Some(parent.namespace),
+        target.namespace,
+        None,
+        &mut metrics,
+    )?;
+    finish_q(&mut metrics)?;
+    mint_projection_edge_token(
+        store,
+        head,
+        parent,
+        target,
+        parent_digest,
+        target_digest,
+        std::slice::from_ref(range),
+        policy,
+    )
+}
+
+struct ProjectionLiveEdge {
+    roots: Roots,
+    digest: [u8; 32],
+    token: ProjectionEdgeToken,
+    edit_t0_ns: u128,
+    canonical_ack_t1_ns: u128,
+    edit_wall_ns: u128,
+    canonical_ack_wall_ns: u128,
+    transactions: u64,
+    commits: u64,
+    sql_queries: u64,
+    authenticated_objects: u64,
+    authenticated_bytes: u64,
+    q_high_water: u64,
+}
+
+fn build_live_projection_edge(
+    store_path: &Path,
+    directory: &Path,
+    parent: Roots,
+    parent_digest: [u8; 32],
+    range: &std::ops::Range<u64>,
+    replacement: &[u8],
+    origin: Instant,
+) -> AnyResult<ProjectionLiveEdge> {
+    let edit_t0_ns = origin.elapsed().as_nanos();
+    let edit_started = Instant::now();
+    let source = directory.join("projection-live-first.source");
+    fs::copy(directory.join("parent.source"), &source)?;
+    if replacement.len() != usize::try_from(range.end - range.start)? {
+        return Err(CoreError::LengthMismatch {
+            expected: range.end - range.start,
+            actual: u64::try_from(replacement.len())?,
+        }
+        .into());
+    }
+    let mut edited = OpenOptions::new().read(true).write(true).open(&source)?;
+    edited.seek(SeekFrom::Start(range.start))?;
+    edited.write_all(replacement)?;
+    edited.sync_all()?;
+    drop(edited);
+    let edit_wall_ns = edit_started.elapsed().as_nanos();
+    let (_, digest, _) = hash_file(&source)?;
+
+    let canonical_started = Instant::now();
+    let mut store = Store::open(store_path, SELECTED_PROFILE)?;
+    let mut metrics = Metrics::default();
+    let roots = build_and_publish_target(&mut store, &source, &mut metrics)?;
+    let head = store
+        .current_head_accounted(&mut metrics)?
+        .ok_or(CoreError::InvalidValidationReceipt)?;
+    let proof = prove_canonical_range(
+        &mut store,
+        parent,
+        parent_digest,
+        &directory.join("parent.source"),
+        roots,
+        digest,
+        &source,
+        range,
+        &mut metrics,
+    )?;
+    if proof.binding.parent_root != parent.namespace
+        || proof.binding.target_root != roots.namespace
+        || proof.binding.range_start != range.start
+        || proof.binding.range_end != range.end
+    {
+        return Err(CoreError::InvalidValidationReceipt.into());
+    }
+    verify_transition(
+        &store,
+        head.2,
+        Some(parent.namespace),
+        roots.namespace,
+        None,
+        &mut metrics,
+    )?;
+    let token = mint_projection_edge_token(
+        &store,
+        &head,
+        parent,
+        roots,
+        parent_digest,
+        digest,
+        std::slice::from_ref(range),
+        RequestPolicy::IsolatedSparseSentinel,
+    )?;
+    finish_q(&mut metrics)?;
+    let canonical_ack_wall_ns = canonical_started.elapsed().as_nanos();
+    Ok(ProjectionLiveEdge {
+        roots,
+        digest,
+        token,
+        edit_t0_ns,
+        canonical_ack_t1_ns: origin.elapsed().as_nanos(),
+        edit_wall_ns,
+        canonical_ack_wall_ns,
+        transactions: metrics.transactions,
+        commits: metrics.commits,
+        sql_queries: metrics.sql_query_calls,
+        authenticated_objects: metrics.objects_authenticated,
+        authenticated_bytes: metrics.canonical_bytes_authenticated,
+        q_high_water: metrics.q_high_water,
+    })
+}
+
+struct ProjectionRequest {
+    parent: Roots,
+    parent_digest: [u8; 32],
+    target: Roots,
+    target_digest: [u8; 32],
+    plan: ProjectionPlan,
+    contended: bool,
+    policy: RequestPolicy,
+    force_full_fallback: bool,
+    token: Option<ProjectionEdgeToken>,
+    edge_authenticated: bool,
+    end_to_end: Option<ProjectionEndToEndTiming>,
+    fault: ProjectionFault,
+}
+
+impl ProjectionRequest {
+    fn ranges(&self) -> &[std::ops::Range<u64>] {
+        match &self.plan {
+            ProjectionPlan::Ranges(ranges) => ranges,
+            ProjectionPlan::FullFallback => &[],
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ProjectionEndToEndTiming {
+    edit_t0_ns: u128,
+    canonical_ack_t1_ns: u128,
+    enqueue_t2_ns: Option<u128>,
+}
+
+struct ProjectionMailbox {
+    in_flight: bool,
+    pending: Option<ProjectionRequest>,
+    shutdown: bool,
+    release_first: bool,
+    submitted: u64,
+    coalesced: u64,
+    started: u64,
+    published: u64,
+    cancelled: u64,
+    failed: u64,
+    stale: u64,
+    sqlite_busy_errors: u64,
+    sqlite_locked_errors: u64,
+    worker_error: Option<String>,
+    token_authority: ProjectionTokenAuthority,
+    exact_ordinal: Option<u64>,
+    same_size_ordinal: Option<u64>,
+    count_storm_ordinal: Option<u64>,
+    isolated_sparse_accepted: bool,
+}
+
+fn projection_sqlite_error_counts(mut error: &(dyn std::error::Error + 'static)) -> (u64, u64) {
+    loop {
+        if let Some(rusqlite::Error::SqliteFailure(code, _)) =
+            error.downcast_ref::<rusqlite::Error>()
+        {
+            return match code.extended_code & 0xff {
+                rusqlite::ffi::SQLITE_BUSY => (1, 0),
+                rusqlite::ffi::SQLITE_LOCKED => (0, 1),
+                _ => (0, 0),
+            };
+        }
+        let Some(source) = error.source() else {
+            return (0, 0);
+        };
+        error = source;
+    }
+}
+
+fn projection_fault_outcome(error: &(dyn std::error::Error + 'static)) -> ProjectionFaultOutcome {
+    let (busy, locked) = projection_sqlite_error_counts(error);
+    if busy != 0 {
+        return ProjectionFaultOutcome::SqliteBusy;
+    }
+    if locked != 0 {
+        return ProjectionFaultOutcome::SqliteLocked;
+    }
+    if let Some(error) = error.downcast_ref::<ProjectionServiceError>() {
+        return match error {
+            ProjectionServiceError::Cancelled => ProjectionFaultOutcome::Cancelled,
+            ProjectionServiceError::Shutdown => ProjectionFaultOutcome::Shutdown,
+            ProjectionServiceError::ParentChainMismatch => ProjectionFaultOutcome::Stale,
+            ProjectionServiceError::WorkerFailed => ProjectionFaultOutcome::WorkerFailed,
+            ProjectionServiceError::InvalidDirtyRange
+            | ProjectionServiceError::FixtureMismatch
+            | ProjectionServiceError::ExactRequestPending
+            | ProjectionServiceError::InvalidPolicyReplacement => ProjectionFaultOutcome::Rejected,
+        };
+    }
+    if let Some(error) = error.downcast_ref::<CoreError>() {
+        return match error {
+            CoreError::IdentityMismatch => ProjectionFaultOutcome::IdentityMismatch,
+            CoreError::WrongLogicalRole => ProjectionFaultOutcome::WrongLogicalRole,
+            CoreError::AmbiguousDurability => ProjectionFaultOutcome::AmbiguousDurability,
+            _ => ProjectionFaultOutcome::Rejected,
+        };
+    }
+    if error.downcast_ref::<std::io::Error>().is_some() {
+        ProjectionFaultOutcome::IoError
+    } else {
+        ProjectionFaultOutcome::Rejected
+    }
+}
+
+struct ProjectionWorkerTerminal {
+    shared: std::sync::Arc<(std::sync::Mutex<ProjectionMailbox>, std::sync::Condvar)>,
+    success: bool,
+}
+
+impl Drop for ProjectionWorkerTerminal {
+    fn drop(&mut self) {
+        if self.success {
+            return;
+        }
+        let (mutex, condition) = &*self.shared;
+        if let Ok(mut mailbox) = mutex.lock() {
+            mailbox.in_flight = false;
+            mailbox.shutdown = true;
+            if mailbox.worker_error.is_none() {
+                mailbox.worker_error = Some("ProjectionWorkerTerminated".into());
+            }
+        }
+        condition.notify_all();
+    }
+}
+
+impl ProjectionMailbox {
+    fn policy_is_fresh(&self, policy: RequestPolicy) -> bool {
+        match policy {
+            RequestPolicy::ExactEveryRoot { ordinal } => {
+                self.exact_ordinal.is_none_or(|prior| ordinal > prior)
+            }
+            RequestPolicy::LatestFollowing {
+                stream: LatestStream::SameSize,
+                ordinal,
+            } => self.same_size_ordinal.is_none_or(|prior| ordinal > prior),
+            RequestPolicy::LatestFollowing {
+                stream: LatestStream::CountStorm,
+                ordinal,
+            } => self.count_storm_ordinal.is_none_or(|prior| ordinal > prior),
+            RequestPolicy::IsolatedSparseSentinel => !self.isolated_sparse_accepted,
+            RequestPolicy::IsolatedOrdinaryFallback => true,
+        }
+    }
+
+    fn record_policy(&mut self, policy: RequestPolicy) {
+        match policy {
+            RequestPolicy::ExactEveryRoot { ordinal } => self.exact_ordinal = Some(ordinal),
+            RequestPolicy::LatestFollowing {
+                stream: LatestStream::SameSize,
+                ordinal,
+            } => self.same_size_ordinal = Some(ordinal),
+            RequestPolicy::LatestFollowing {
+                stream: LatestStream::CountStorm,
+                ordinal,
+            } => self.count_storm_ordinal = Some(ordinal),
+            RequestPolicy::IsolatedSparseSentinel => self.isolated_sparse_accepted = true,
+            RequestPolicy::IsolatedOrdinaryFallback => {}
+        }
+    }
+
+    fn submit(&mut self, request: ProjectionRequest) -> AnyResult<()> {
+        self.submit_with_origin(request, None).map(|_| ())
+    }
+
+    fn submit_with_origin(
+        &mut self,
+        mut request: ProjectionRequest,
+        origin: Option<Instant>,
+    ) -> AnyResult<Option<u128>> {
+        if self.shutdown {
+            return Err(ProjectionServiceError::Shutdown.into());
+        }
+        if origin.is_some()
+            && !matches!(
+                request.end_to_end,
+                Some(ProjectionEndToEndTiming {
+                    enqueue_t2_ns: None,
+                    ..
+                })
+            )
+        {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        if matches!(request.plan, ProjectionPlan::FullFallback) {
+            request.force_full_fallback = true;
+        }
+        let sparse_edge = request.parent.length == request.target.length
+            && !request.force_full_fallback
+            && !request.ranges().is_empty();
+        match request.token.as_ref() {
+            Some(token) => token.verify(self.token_authority, &request)?,
+            None if sparse_edge => return Err(CoreError::InvalidValidationReceipt.into()),
+            None => {}
+        }
+        if !self.policy_is_fresh(request.policy) {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        let next_submitted = self
+            .submitted
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        let next_coalesced = self
+            .coalesced
+            .checked_add(u64::from(self.pending.is_some()))
+            .ok_or(CoreError::LengthOverflow)?;
+        let aggregate = if let Some(pending) = self.pending.as_ref() {
+            let (
+                RequestPolicy::LatestFollowing {
+                    stream: pending_stream,
+                    ordinal: pending_ordinal,
+                },
+                RequestPolicy::LatestFollowing { stream, ordinal },
+            ) = (pending.policy, request.policy)
+            else {
+                return Err(ProjectionServiceError::ExactRequestPending.into());
+            };
+            if stream != pending_stream || ordinal <= pending_ordinal {
+                return Err(ProjectionServiceError::InvalidPolicyReplacement.into());
+            }
+            if pending.target.namespace != request.parent.namespace
+                || pending.target.file != request.parent.file
+                || pending.target.length != request.parent.length
+                || pending.target.references != request.parent.references
+                || pending.target_digest != request.parent_digest
+            {
+                return Err(ProjectionServiceError::ParentChainMismatch.into());
+            }
+            Some(match (&pending.plan, &request.plan) {
+                (ProjectionPlan::Ranges(left), ProjectionPlan::Ranges(right)) => {
+                    projection_plan(left.iter().chain(right).cloned(), request.target.length)?
+                }
+                _ => ProjectionPlan::FullFallback,
+            })
+        } else {
+            None
+        };
+        if origin.is_some() && self.pending.is_some() {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        if let Some(token) = request.token.as_mut() {
+            token.consume()?;
+            request.edge_authenticated = true;
+        }
+        request.token = None;
+        self.record_policy(request.policy);
+        if let Some(mut pending) = self.pending.take() {
+            pending.target = request.target;
+            pending.target_digest = request.target_digest;
+            pending.policy = request.policy;
+            pending.force_full_fallback |= request.force_full_fallback;
+            if pending.force_full_fallback {
+                pending.plan = ProjectionPlan::FullFallback;
+            } else {
+                match aggregate.ok_or(CoreError::InvalidValidationReceipt)? {
+                    ProjectionPlan::Ranges(ranges) => pending.plan = ProjectionPlan::Ranges(ranges),
+                    ProjectionPlan::FullFallback => {
+                        pending.plan = ProjectionPlan::FullFallback;
+                        pending.force_full_fallback = true;
+                    }
+                }
+            }
+            pending.contended |= request.contended;
+            pending.edge_authenticated &= request.edge_authenticated;
+            self.pending = Some(pending);
+        } else {
+            self.pending = Some(request);
+        }
+        self.submitted = next_submitted;
+        self.coalesced = next_coalesced;
+        let enqueue_t2_ns = origin.map(|origin| origin.elapsed().as_nanos());
+        if let Some(enqueue_t2_ns) = enqueue_t2_ns {
+            self.pending
+                .as_mut()
+                .and_then(|request| request.end_to_end.as_mut())
+                .expect("accepted end-to-end request retains timing")
+                .enqueue_t2_ns = Some(enqueue_t2_ns);
+        }
+        Ok(enqueue_t2_ns)
+    }
+
+    fn take(&mut self) -> AnyResult<Option<ProjectionRequest>> {
+        let Some(request) = self.pending.take() else {
+            return Ok(None);
+        };
+        self.in_flight = true;
+        self.started = self
+            .started
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(Some(request))
+    }
+
+    fn complete(&mut self) -> AnyResult<()> {
+        self.in_flight = false;
+        self.published = self
+            .published
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(())
+    }
+
+    fn record_failure(&mut self, error: &(dyn std::error::Error + 'static)) -> AnyResult<()> {
+        self.in_flight = false;
+        let (busy, locked) = projection_sqlite_error_counts(error);
+        self.sqlite_busy_errors = self
+            .sqlite_busy_errors
+            .checked_add(busy)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.sqlite_locked_errors = self
+            .sqlite_locked_errors
+            .checked_add(locked)
+            .ok_or(CoreError::LengthOverflow)?;
+        match error.downcast_ref::<ProjectionServiceError>() {
+            Some(ProjectionServiceError::Cancelled) => {
+                self.cancelled = self
+                    .cancelled
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+            }
+            Some(ProjectionServiceError::ParentChainMismatch) => {
+                self.stale = self.stale.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+            }
+            _ => {
+                self.failed = self
+                    .failed
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+            }
+        }
+        self.shutdown = true;
+        Ok(())
+    }
+
+    fn equations_hold(&self) -> bool {
+        self.submitted == self.coalesced + self.started
+            && self.started == self.published + self.cancelled + self.failed + self.stale
+    }
+
+    fn ensure_worker_live(&self) -> AnyResult<()> {
+        if let Some(error) = &self.worker_error {
+            return Err(format!("{}: {error}", ProjectionServiceError::WorkerFailed).into());
+        }
+        Ok(())
+    }
+}
+
+struct ProjectionWorker {
+    directory_path: PathBuf,
+    directory: File,
+    store: Option<Store>,
+    active: VerifiedSeed,
+    counters: ProjectionCounters,
+    apply_native: Counters,
+    apply_rename_acknowledged: bool,
+    shutdown_rendezvous: Option<ProjectionShutdownRendezvous>,
+}
+
+struct ProjectionShutdownRendezvous {
+    private_ready: std::sync::mpsc::SyncSender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+    shutdown_state: std::sync::Arc<(std::sync::Mutex<ProjectionMailbox>, std::sync::Condvar)>,
+}
+
+struct ProjectionContentionRendezvous {
+    ready: std::sync::mpsc::SyncSender<()>,
+    writer_started: std::sync::mpsc::Receiver<()>,
+    reader_done: std::sync::mpsc::SyncSender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionReconciliation {
+    Target,
+    Prior,
+}
+
+fn reconcile_projection_publication(
+    store: &mut Store,
+    directory: &File,
+    active: &SeedIdentity,
+    target: Roots,
+    counters: &mut Counters,
+    metrics: &mut Metrics,
+) -> AnyResult<ProjectionReconciliation> {
+    if compare_destination_to_root(
+        store,
+        directory,
+        target.namespace,
+        metrics,
+        counters,
+        false,
+        false,
+    )
+    .map_err(|_| CoreError::AmbiguousDurability)?
+    {
+        counters.absorb_reconciliation(metrics)?;
+        return Ok(ProjectionReconciliation::Target);
+    }
+    if compare_destination_to_root(
+        store,
+        directory,
+        active.namespace_root,
+        metrics,
+        counters,
+        false,
+        false,
+    )
+    .map_err(|_| CoreError::AmbiguousDurability)?
+    {
+        counters.absorb_reconciliation(metrics)?;
+        return Ok(ProjectionReconciliation::Prior);
+    }
+    Err(CoreError::AmbiguousDurability.into())
+}
+
+fn reconcile_projection_publication_fresh(
+    store_path: &Path,
+    directory: &File,
+    active: &SeedIdentity,
+    target: Roots,
+    counters: &mut Counters,
+    metrics: &mut Metrics,
+) -> AnyResult<ProjectionReconciliation> {
+    let mut store = Store::open_existing_read_only(store_path, SELECTED_PROFILE)
+        .map_err(|_| CoreError::AmbiguousDurability)?;
+    reconcile_projection_publication(&mut store, directory, active, target, counters, metrics)
+}
+
+fn projection_read_scope<T>(
+    store: &mut Store,
+    operation: impl FnOnce(&mut Store) -> AnyResult<T>,
+) -> AnyResult<T> {
+    let diagnostic = store.projection_contention.clone();
+    if let Some(diagnostic) = diagnostic.as_ref() {
+        diagnostic.reader_autocommit.store(
+            u64::from(store.connection.is_autocommit()),
+            Ordering::SeqCst,
+        );
+        diagnostic.reader_scope_live.store(1, Ordering::SeqCst);
+    }
+    let result = operation(store);
+    if let Some(diagnostic) = diagnostic {
+        diagnostic.reader_scope_live.store(0, Ordering::SeqCst);
+        diagnostic.reader_autocommit.store(
+            u64::from(store.connection.is_autocommit()),
+            Ordering::SeqCst,
+        );
+    }
+    result
+}
+
+fn open_projection_seed(
+    directory: &File,
+    target: Roots,
+    digest: [u8; 32],
+) -> AnyResult<VerifiedSeed> {
+    let visible = stat_at(directory, DESTINATION_NAME)?.ok_or(CoreError::PublicationConflict)?;
+    if !visible.is_regular()
+        || visible.length != target.length
+        || u32::from(visible.mode & 0o7777) != MODE
+    {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    let file = openat_file(
+        directory,
+        DESTINATION_NAME,
+        libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        0,
+    )?;
+    let (native, storage) = fstat_file(&file)?;
+    if native != visible {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    Ok(VerifiedSeed {
+        file,
+        identity: SeedIdentity {
+            native,
+            namespace_root: target.namespace,
+            file_root: target.file,
+            length: target.length,
+            references: target.references,
+            digest,
+        },
+        storage,
+    })
+}
+
+fn verify_projection_temp_name(
+    directory: &File,
+    name: &str,
+    owned: NativeIdentity,
+) -> AnyResult<()> {
+    let named = stat_at(directory, name)?.ok_or(CoreError::IdentityMismatch)?;
+    if !named.is_regular()
+        || named.device != owned.device
+        || named.inode != owned.inode
+        || named.length != owned.length
+        || u32::from(named.mode & 0o7777) != u32::from(owned.mode & 0o7777)
+    {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    Ok(())
+}
+
+fn admit_projection_seed(
+    directory: &File,
+    active: &SeedIdentity,
+    metrics: &mut Metrics,
+) -> AnyResult<bool> {
+    let Some(before) = stat_at(directory, DESTINATION_NAME)? else {
+        return Ok(false);
+    };
+    if !before.is_regular() {
+        return Err(CoreError::WrongLogicalRole.into());
+    }
+    if before != active.native {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    let file = openat_file(
+        directory,
+        DESTINATION_NAME,
+        libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        0,
+    )?;
+    let opened = fstat_file(&file)?.0;
+    if opened != before {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    let (length, digest, mode) = g4_hash_descriptor(&file, opened, metrics)?;
+    let after = fstat_file(&file)?.0;
+    let named_after = stat_at(directory, DESTINATION_NAME)?;
+    if after != opened
+        || named_after != Some(after)
+        || length != active.length
+        || digest != active.digest
+        || mode != MODE
+    {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    Ok(true)
+}
+
+const PROJECTION_TEMP_OWNERSHIP_XATTR: &CStr = c"com.layerfs.projection-owner-v1";
+
+fn projection_temp_ownership_tag(
+    authority: ProjectionTokenAuthority,
+    name: &str,
+    native: NativeIdentity,
+) -> AnyResult<[u8; 32]> {
+    let mut hasher = blake3::Hasher::new_keyed(&authority.validation_key);
+    hasher.update(b"layerfs/phase4/g5/projection-temp-owner/v1\0");
+    hasher.update(&authority.store_instance_id);
+    hasher.update(&authority.validation_authority_id);
+    hasher.update(&authority.profile);
+    hasher.update(&authority.integrity_epoch.to_be_bytes());
+    hash_field(&mut hasher, name.as_bytes())?;
+    hasher.update(&native.device.to_be_bytes());
+    hasher.update(&native.inode.to_be_bytes());
+    Ok(*hasher.finalize().as_bytes())
+}
+
+fn mark_projection_temp_owned(
+    file: &File,
+    authority: ProjectionTokenAuthority,
+    name: &str,
+) -> AnyResult<()> {
+    let before = fstat_file(file)?.0;
+    if !before.is_regular() {
+        return Err(CoreError::WrongLogicalRole.into());
+    }
+    let tag = projection_temp_ownership_tag(authority, name, before)?;
+    // SAFETY: the descriptor, NUL-terminated attribute name, and tag bytes are live.
+    let result = unsafe {
+        libc::fsetxattr(
+            file.as_raw_fd(),
+            PROJECTION_TEMP_OWNERSHIP_XATTR.as_ptr(),
+            tag.as_ptr().cast(),
+            tag.len(),
+            0,
+            0,
+        )
+    };
+    if result == -1 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let after = fstat_file(file)?.0;
+    if after.device != before.device
+        || after.inode != before.inode
+        || after.length != before.length
+        || !after.is_regular()
+    {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    Ok(())
+}
+
+fn projection_temp_is_owned(
+    file: &File,
+    authority: ProjectionTokenAuthority,
+    name: &str,
+    native: NativeIdentity,
+) -> AnyResult<bool> {
+    let expected = projection_temp_ownership_tag(authority, name, native)?;
+    let mut observed = [0_u8; 32];
+    // SAFETY: the descriptor, NUL-terminated attribute name, and output bytes are live.
+    let read = unsafe {
+        libc::fgetxattr(
+            file.as_raw_fd(),
+            PROJECTION_TEMP_OWNERSHIP_XATTR.as_ptr(),
+            observed.as_mut_ptr().cast(),
+            observed.len(),
+            0,
+            0,
+        )
+    };
+    if read == -1 {
+        let error = std::io::Error::last_os_error();
+        return match error.raw_os_error() {
+            Some(code) if code == libc::ENOATTR || code == libc::ERANGE => Ok(false),
+            _ => Err(error.into()),
+        };
+    }
+    Ok(
+        usize::try_from(read).map_err(|_| CoreError::LengthOverflow)? == observed.len()
+            && observed == expected
+            && fstat_file(file)?.0 == native,
+    )
+}
+
+fn unlink_authenticated_projection_temp(
+    directory: &File,
+    name: &str,
+    file: &File,
+    authority: ProjectionTokenAuthority,
+    authenticated: NativeIdentity,
+    before_named_recheck: impl FnOnce() -> AnyResult<()>,
+) -> AnyResult<bool> {
+    if fstat_file(file)?.0 != authenticated
+        || !authenticated.is_regular()
+        || !projection_temp_is_owned(file, authority, name, authenticated)?
+    {
+        return Ok(false);
+    }
+    before_named_recheck()?;
+    let descriptor = fstat_file(file)?.0;
+    let named = stat_at(directory, name)?;
+    if descriptor != authenticated
+        || named != Some(authenticated)
+        || !descriptor.is_regular()
+        || u32::from(descriptor.mode & 0o7777) != u32::from(authenticated.mode & 0o7777)
+        || !projection_temp_is_owned(file, authority, name, authenticated)?
+    {
+        return Ok(false);
+    }
+    unlink_at(directory, name).map_err(Into::into)
+}
+
+fn cleanup_projection_restart_temps(
+    directory_path: &Path,
+    directory: &File,
+    authority: ProjectionTokenAuthority,
+) -> AnyResult<(u64, u64, u64)> {
+    let mut discovered = 0_u64;
+    let mut removed = 0_u64;
+    let mut retained = 0_u64;
+    for entry in fs::read_dir(directory_path)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if !name.as_bytes().starts_with(b".g3-tmp-") {
+            continue;
+        }
+        discovered = discovered.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+        let name = name
+            .as_os_str()
+            .to_str()
+            .ok_or(CoreError::InvalidIdentityText)?;
+        let Some(named) = stat_at(directory, name)? else {
+            retained = retained.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+            continue;
+        };
+        let removed_owned = if named.is_regular() {
+            match openat_file(
+                directory,
+                name,
+                libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+                0,
+            ) {
+                Ok(file) => {
+                    let opened = fstat_file(&file)?.0;
+                    opened == named
+                        && unlink_authenticated_projection_temp(
+                            directory,
+                            name,
+                            &file,
+                            authority,
+                            opened,
+                            || Ok(()),
+                        )?
+                }
+                Err(_) => false,
+            }
+        } else {
+            false
+        };
+        if removed_owned {
+            removed = removed.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+        } else {
+            retained = retained.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+        }
+    }
+    if removed != 0 {
+        sync_fd(directory)?;
+    }
+    Ok((discovered, removed, retained))
+}
+
+impl ProjectionWorker {
+    fn absorb_apply_native(&mut self) -> AnyResult<()> {
+        self.counters.clone_calls = self
+            .counters
+            .clone_calls
+            .checked_add(self.apply_native.clone_calls)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.clone_successes = self
+            .counters
+            .clone_successes
+            .checked_add(self.apply_native.clone_successes)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.clone_failures = self
+            .counters
+            .clone_failures
+            .checked_add(self.apply_native.clone_failures)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.temp_files_created = self
+            .counters
+            .temp_files_created
+            .checked_add(self.apply_native.temp_files_created)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.temp_files_removed = self
+            .counters
+            .temp_files_removed
+            .checked_add(self.apply_native.temp_files_removed)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(())
+    }
+
+    fn finalize_apply_error(
+        &mut self,
+        error: &(dyn std::error::Error + 'static),
+        apply_wall_ns: u128,
+    ) {
+        let started = Instant::now();
+        self.counters.fault_finalizations += 1;
+        self.counters.fault_outcome = Some(projection_fault_outcome(error));
+        self.counters.fault_q_terminal = q_current();
+        self.counters.q_terminal = self.counters.fault_q_terminal;
+        self.counters.fault_apply_wall_ns = apply_wall_ns;
+        let mut complete = true;
+        match count_residue(&self.directory_path, ".g3-tmp-") {
+            Ok(residue) => {
+                self.counters.fault_temp_residue = residue;
+                if residue == 0 && !self.apply_rename_acknowledged {
+                    self.counters.fault_unwind_temp_removals = self
+                        .apply_native
+                        .temp_files_created
+                        .saturating_sub(self.apply_native.temp_files_removed);
+                }
+            }
+            Err(_) => complete = false,
+        }
+        match fstat_file(&self.active.file) {
+            Ok((native, storage)) => {
+                self.counters.fault_active_descriptors = 1;
+                self.counters.fault_active_identity_matches = native == self.active.identity.native;
+                self.counters.fault_storage_logical_bytes = storage.logical;
+                self.counters.fault_storage_apparent_bytes = storage.apparent;
+                self.counters.fault_storage_allocated_bytes = storage.allocated;
+            }
+            _ => complete = false,
+        }
+        self.counters.fault_successor_descriptors = 0;
+        self.counters.fault_finalization_complete = complete;
+        self.counters.fault_finalization_ns = started.elapsed().as_nanos();
+    }
+
+    fn apply(
+        &mut self,
+        request: ProjectionRequest,
+        origin: Instant,
+        contention: Option<(&ProjectionContentionRendezvous, Instant)>,
+    ) -> AnyResult<()> {
+        self.apply_native = Counters::default();
+        self.apply_rename_acknowledged = false;
+        let started = Instant::now();
+        let result = self.apply_inner(request, origin, contention);
+        let accounting = self.absorb_apply_native();
+        match result {
+            Ok(()) => accounting,
+            Err(error) => {
+                self.finalize_apply_error(error.as_ref(), started.elapsed().as_nanos());
+                if accounting.is_err() {
+                    self.counters.fault_finalization_complete = false;
+                }
+                Err(error)
+            }
+        }
+    }
+
+    fn initialize_reader(&mut self) -> AnyResult<()> {
+        let started = Instant::now();
+        let target = self.active.identity.file_root;
+        let end = self.active.identity.length.min(1);
+        let mut metrics = Metrics::default();
+        {
+            let store = self
+                .store
+                .as_mut()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+            let _ = projection_read_scope(store, |store| {
+                read_file_range_segments(store, target, 0..end, &mut metrics)
+            })?;
+            store.connection.flush_prepared_statement_cache();
+            if !store.connection.is_autocommit() {
+                return Err(CoreError::PublicationConflict.into());
+            }
+        }
+        finish_q(&mut metrics)?;
+        self.counters.reader_initialization_calls = 1;
+        self.counters.reader_initialization_sql_queries = metrics.sql_query_calls;
+        self.counters.reader_initialization_authenticated_objects = metrics.objects_authenticated;
+        self.counters.reader_initialization_authenticated_bytes =
+            metrics.canonical_bytes_authenticated;
+        self.counters.reader_initialization_q_high_water = metrics.q_high_water;
+        self.absorb_metrics(&metrics)?;
+        self.counters.reader_initialization_ns = started.elapsed().as_nanos();
+        Ok(())
+    }
+
+    fn absorb_metrics(&mut self, metrics: &Metrics) -> AnyResult<()> {
+        self.counters.sqlite_write_calls = self
+            .counters
+            .sqlite_write_calls
+            .checked_add(metrics.sql_execute_calls)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.sqlite_transactions = self
+            .counters
+            .sqlite_transactions
+            .checked_add(metrics.transactions)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.sqlite_commits = self
+            .counters
+            .sqlite_commits
+            .checked_add(metrics.commits)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.sql_queries = self
+            .counters
+            .sql_queries
+            .checked_add(metrics.sql_query_calls)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.sql_rows = self
+            .counters
+            .sql_rows
+            .checked_add(metrics.sql_rows_returned)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.blob_reads = self
+            .counters
+            .blob_reads
+            .checked_add(metrics.row_blob_reads)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.blob_bytes = self
+            .counters
+            .blob_bytes
+            .checked_add(metrics.borrowed_row_blob_bytes)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.authenticated_objects = self
+            .counters
+            .authenticated_objects
+            .checked_add(metrics.objects_authenticated)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.authenticated_bytes = self
+            .counters
+            .authenticated_bytes
+            .checked_add(metrics.canonical_bytes_authenticated)
+            .ok_or(CoreError::LengthOverflow)?;
+        self.counters.q_high_water = self.counters.q_high_water.max(metrics.q_high_water);
+        Ok(())
+    }
+
+    fn apply_inner(
+        &mut self,
+        request: ProjectionRequest,
+        origin: Instant,
+        contention: Option<(&ProjectionContentionRendezvous, Instant)>,
+    ) -> AnyResult<()> {
+        let build_started = Instant::now();
+        if let Some(timing) = request.end_to_end {
+            let enqueue_t2_ns = timing.enqueue_t2_ns.ok_or(CoreError::PublicationConflict)?;
+            self.counters.end_to_end_edit_t0_ns = timing.edit_t0_ns;
+            self.counters.end_to_end_canonical_ack_t1_ns = timing.canonical_ack_t1_ns;
+            self.counters.end_to_end_enqueue_t2_ns = enqueue_t2_ns;
+            self.counters.end_to_end_worker_start_t3_ns = origin.elapsed().as_nanos();
+            if !(timing.edit_t0_ns <= timing.canonical_ack_t1_ns
+                && timing.canonical_ack_t1_ns <= enqueue_t2_ns
+                && enqueue_t2_ns <= self.counters.end_to_end_worker_start_t3_ns)
+            {
+                return Err(CoreError::PublicationConflict.into());
+            }
+        }
+        if request.parent.namespace != self.active.identity.namespace_root
+            || request.parent.file != self.active.identity.file_root
+            || request.parent.length != self.active.identity.length
+            || request.parent.references != self.active.identity.references
+            || request.parent_digest != self.active.identity.digest
+        {
+            return Err(ProjectionServiceError::ParentChainMismatch.into());
+        }
+        if request.fault == ProjectionFault::CancelBeforeNative {
+            return Err(ProjectionServiceError::Cancelled.into());
+        }
+        if request.fault == ProjectionFault::MissingSeed {
+            if !unlink_at(&self.directory, DESTINATION_NAME)? {
+                return Err(CoreError::IdentityMismatch.into());
+            }
+            sync_fd(&self.directory)?;
+            self.counters.directory_sync_calls = self
+                .counters
+                .directory_sync_calls
+                .checked_add(1)
+                .ok_or(CoreError::LengthOverflow)?;
+        }
+        let mut admission_metrics = Metrics::default();
+        let seed_present = match admit_projection_seed(
+            &self.directory,
+            &self.active.identity,
+            &mut admission_metrics,
+        ) {
+            Ok(present) => present,
+            Err(error) => {
+                self.counters.seed_admission_rejections = self
+                    .counters
+                    .seed_admission_rejections
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+                return Err(error);
+            }
+        };
+        finish_q(&mut admission_metrics)?;
+        self.absorb_metrics(&admission_metrics)?;
+        if !seed_present {
+            self.counters.missing_seed_fallbacks = self
+                .counters
+                .missing_seed_fallbacks
+                .checked_add(1)
+                .ok_or(CoreError::LengthOverflow)?;
+        }
+        let prior_identity = self.active.identity.clone();
+        let store_path = self
+            .store
+            .as_ref()
+            .ok_or(CoreError::ValidationAuthorityUnavailable)?
+            .path
+            .clone();
+        let mut binding_metrics = Metrics::default();
+        let bound = g4_roots(
+            self.store
+                .as_ref()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?,
+            request.target.namespace,
+            &mut binding_metrics,
+        )?;
+        finish_q(&mut binding_metrics)?;
+        self.absorb_metrics(&binding_metrics)?;
+        if bound.file != request.target.file
+            || bound.length != request.target.length
+            || bound.references != request.target.references
+        {
+            return Err(CoreError::IdentityMismatch.into());
+        }
+        let plan = if request.force_full_fallback || !seed_present {
+            ProjectionPlan::FullFallback
+        } else {
+            request.plan
+        };
+        if matches!(&plan, ProjectionPlan::Ranges(ranges) if !ranges.is_empty())
+            && !request.edge_authenticated
+        {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        let (policy, ordinal) = request.policy.evidence();
+        let mut plan_name = match &plan {
+            ProjectionPlan::Ranges(_) => "Ranges",
+            ProjectionPlan::FullFallback => "FullFallback",
+        };
+        let mut range_count = match &plan {
+            ProjectionPlan::Ranges(ranges) => ranges.len(),
+            ProjectionPlan::FullFallback => 0,
+        };
+        let mut build_class =
+            projection_build_class(&plan, request.parent.length, request.target.length);
+        let payload_started = Instant::now();
+        let (file, mut temp) = match plan {
+            ProjectionPlan::Ranges(ranges) if request.parent.length == request.target.length => {
+                let clone = if request.fault == ProjectionFault::CloneFailure {
+                    self.apply_native.clone_calls = self
+                        .apply_native
+                        .clone_calls
+                        .checked_add(1)
+                        .ok_or(CoreError::LengthOverflow)?;
+                    self.apply_native.clone_failures = self
+                        .apply_native
+                        .clone_failures
+                        .checked_add(1)
+                        .ok_or(CoreError::LengthOverflow)?;
+                    None
+                } else {
+                    clone_temp(
+                        &self.active,
+                        &self.directory,
+                        &mut self.apply_native,
+                        false,
+                        false,
+                        false,
+                    )?
+                };
+                let (candidate, cloned) = match clone {
+                    Some(candidate) => (candidate, true),
+                    None => {
+                        self.counters.full_fallbacks = self
+                            .counters
+                            .full_fallbacks
+                            .checked_add(1)
+                            .ok_or(CoreError::LengthOverflow)?;
+                        let candidate = create_temp(&self.directory, &mut self.apply_native)?;
+                        let mut output = candidate.0.try_clone()?;
+                        let mut fallback_metrics = Metrics::default();
+                        let store = self
+                            .store
+                            .as_mut()
+                            .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+                        let (length, references, digest) = projection_read_scope(store, |store| {
+                            stream_root(
+                                store,
+                                request.target.namespace,
+                                &mut output,
+                                &mut fallback_metrics,
+                            )
+                        })?;
+                        finish_q(&mut fallback_metrics)?;
+                        if length != request.target.length
+                            || references != request.target.references
+                            || digest != request.target_digest
+                        {
+                            return Err(CoreError::IdentityMismatch.into());
+                        }
+                        self.absorb_metrics(&fallback_metrics)?;
+                        plan_name = "FullFallback";
+                        build_class = None;
+                        range_count = 0;
+                        (candidate, false)
+                    }
+                };
+                let mut metrics = Metrics::default();
+                for range in ranges.into_iter().filter(|_| cloned) {
+                    let mut start = range.start;
+                    while start < range.end {
+                        let end = start
+                            .checked_add(G5_PROJECTION_MAX_BUFFER)
+                            .ok_or(CoreError::LengthOverflow)?
+                            .min(range.end);
+                        let store = self
+                            .store
+                            .as_mut()
+                            .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+                        let segments = projection_read_scope(store, |store| {
+                            read_file_range_segments(
+                                store,
+                                request.target.file,
+                                start..end,
+                                &mut metrics,
+                            )
+                        })?;
+                        let mut offset = start;
+                        for bytes in segments.values.iter() {
+                            pwrite_all(
+                                &candidate.0,
+                                offset,
+                                bytes,
+                                &mut self.counters.write_calls,
+                            )?;
+                            let length = u64::try_from(bytes.len())
+                                .map_err(|_| CoreError::LengthOverflow)?;
+                            offset = offset
+                                .checked_add(length)
+                                .ok_or(CoreError::LengthOverflow)?;
+                            self.counters.fetched_bytes = self
+                                .counters
+                                .fetched_bytes
+                                .checked_add(length)
+                                .ok_or(CoreError::LengthOverflow)?;
+                            self.counters.written_bytes = self
+                                .counters
+                                .written_bytes
+                                .checked_add(length)
+                                .ok_or(CoreError::LengthOverflow)?;
+                            self.counters.max_buffer_bytes =
+                                self.counters.max_buffer_bytes.max(length);
+                        }
+                        self.counters.range_fetches += 1;
+                        start = end;
+                    }
+                }
+                finish_q(&mut metrics)?;
+                self.absorb_metrics(&metrics)?;
+                candidate
+            }
+            _ => {
+                self.counters.full_fallbacks += 1;
+                let candidate = create_temp(&self.directory, &mut self.apply_native)?;
+                let mut output = candidate.0.try_clone()?;
+                let mut metrics = Metrics::default();
+                let store = self
+                    .store
+                    .as_mut()
+                    .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+                let (length, references, digest) = projection_read_scope(store, |store| {
+                    stream_root(store, request.target.namespace, &mut output, &mut metrics)
+                })?;
+                finish_q(&mut metrics)?;
+                if length != request.target.length
+                    || references != request.target.references
+                    || digest != request.target_digest
+                {
+                    return Err(CoreError::IdentityMismatch.into());
+                }
+                self.absorb_metrics(&metrics)?;
+                self.counters.max_buffer_bytes = self.counters.max_buffer_bytes.max(
+                    u64::try_from(layerfs_core::cdc::MAXIMUM_CHUNK_BYTES)
+                        .map_err(|_| CoreError::LengthOverflow)?,
+                );
+                candidate
+            }
+        };
+        self.counters.payload_ns = self
+            .counters
+            .payload_ns
+            .checked_add(payload_started.elapsed().as_nanos())
+            .ok_or(CoreError::LengthOverflow)?;
+        let temp_authority = ProjectionTokenAuthority::from_store(
+            self.store
+                .as_ref()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?,
+        );
+        mark_projection_temp_owned(&file, temp_authority, &temp.name)?;
+        if request.fault == ProjectionFault::ShutdownInflight {
+            let rendezvous = self
+                .shutdown_rendezvous
+                .as_ref()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+            rendezvous
+                .private_ready
+                .send(())
+                .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+            rendezvous
+                .release
+                .recv()
+                .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+            if !rendezvous
+                .shutdown_state
+                .0
+                .lock()
+                .map_err(|_| ProjectionServiceError::WorkerFailed)?
+                .shutdown
+            {
+                return Err(CoreError::PublicationConflict.into());
+            }
+        }
+        if matches!(
+            request.fault,
+            ProjectionFault::CancelPrivateSuccessor | ProjectionFault::BeforeSync
+        ) {
+            temp.remove(&mut self.apply_native)?;
+            sync_fd(&self.directory)?;
+            self.counters.directory_sync_calls = self
+                .counters
+                .directory_sync_calls
+                .checked_add(1)
+                .ok_or(CoreError::LengthOverflow)?;
+            return Err(match request.fault {
+                ProjectionFault::CancelPrivateSuccessor => {
+                    self.counters.private_build_cancellations = self
+                        .counters
+                        .private_build_cancellations
+                        .checked_add(1)
+                        .ok_or(CoreError::LengthOverflow)?;
+                    ProjectionServiceError::Cancelled.into()
+                }
+                ProjectionFault::BeforeSync => std::io::Error::from_raw_os_error(libc::EIO).into(),
+                _ => unreachable!(),
+            });
+        }
+        let contention_metrics = {
+            let store = self
+                .store
+                .as_mut()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+            store.connection.flush_prepared_statement_cache();
+            if !store.connection.is_autocommit() {
+                return Err(CoreError::PublicationConflict.into());
+            }
+            if let Some(diagnostic) = store.projection_contention.as_ref() {
+                diagnostic.reader_scope_live.store(0, Ordering::SeqCst);
+                diagnostic.reader_autocommit.store(1, Ordering::SeqCst);
+            }
+            if let Some((rendezvous, origin)) = contention {
+                self.counters.contention_worker_start_ns = origin.elapsed().as_nanos();
+                let mut metrics = Metrics::default();
+                let end = request.target.length.min(1);
+                let _ = projection_read_scope(store, |store| {
+                    rendezvous
+                        .ready
+                        .send(())
+                        .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+                    rendezvous
+                        .writer_started
+                        .recv()
+                        .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+                    if let Some(diagnostic) = store.projection_contention.as_ref() {
+                        diagnostic.barrier_scope_live.store(
+                            diagnostic.reader_scope_live.load(Ordering::SeqCst),
+                            Ordering::SeqCst,
+                        );
+                        diagnostic.barrier_autocommit.store(
+                            diagnostic.reader_autocommit.load(Ordering::SeqCst),
+                            Ordering::SeqCst,
+                        );
+                    }
+                    read_file_range_segments(store, request.target.file, 0..end, &mut metrics)
+                })?;
+                finish_q(&mut metrics)?;
+                store.connection.flush_prepared_statement_cache();
+                if !store.connection.is_autocommit() {
+                    return Err(CoreError::PublicationConflict.into());
+                }
+                rendezvous
+                    .reader_done
+                    .send(())
+                    .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+                Some(metrics)
+            } else {
+                None
+            }
+        };
+        if let Some(metrics) = contention_metrics {
+            self.absorb_metrics(&metrics)?;
+        }
+        let suspended_reader = if contention.is_some() {
+            let store = self
+                .store
+                .take()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+            let path = store.path.clone();
+            let diagnostic = store.projection_contention.clone();
+            drop(store);
+            Some((path, diagnostic))
+        } else {
+            None
+        };
+        let durability_started = Instant::now();
+        sync_fd(&file)?;
+        self.counters.data_sync_calls += 1;
+        chmod_fd(&file, MODE)?;
+        sync_fd(&file)?;
+        self.counters.metadata_sync_calls += 1;
+        let candidate_identity = fstat_file(&file)?.0;
+        if !candidate_identity.is_regular()
+            || candidate_identity.length != request.target.length
+            || u32::from(candidate_identity.mode & 0o7777) != MODE
+        {
+            return Err(CoreError::PublicationConflict.into());
+        }
+        verify_projection_temp_name(&self.directory, &temp.name, candidate_identity)?;
+        if request.fault == ProjectionFault::BeforeRename {
+            temp.remove(&mut self.apply_native)?;
+            sync_fd(&self.directory)?;
+            self.counters.directory_sync_calls = self
+                .counters
+                .directory_sync_calls
+                .checked_add(1)
+                .ok_or(CoreError::LengthOverflow)?;
+            return Err(std::io::Error::from_raw_os_error(libc::EIO).into());
+        }
+        let mut rename_acknowledged = false;
+        let publication = (|| -> AnyResult<VerifiedSeed> {
+            self.counters.rename_calls += 1;
+            rename_at(&self.directory, &temp.name, DESTINATION_NAME)?;
+            temp.active = false;
+            rename_acknowledged = true;
+            self.apply_rename_acknowledged = true;
+            if request.fault == ProjectionFault::RenameLostAck {
+                return Err(std::io::Error::from_raw_os_error(libc::EIO).into());
+            }
+            sync_fd(&self.directory)?;
+            self.counters.directory_sync_calls += 1;
+            if matches!(
+                request.fault,
+                ProjectionFault::DirectorySyncLostAck | ProjectionFault::ReconciliationSyncFailure
+            ) {
+                return Err(std::io::Error::from_raw_os_error(libc::EIO).into());
+            }
+            if request.fault == ProjectionFault::PostRenameStatFailure {
+                return Err(std::io::Error::from_raw_os_error(libc::ESTALE).into());
+            }
+            if request.fault == ProjectionFault::ReopenFailure {
+                let _ = stat_at(&self.directory, DESTINATION_NAME)?
+                    .ok_or(CoreError::PublicationConflict)?;
+                return Err(std::io::Error::from_raw_os_error(libc::EIO).into());
+            }
+            let seed =
+                open_projection_seed(&self.directory, request.target, request.target_digest)?;
+            if seed.identity.native.device != candidate_identity.device
+                || seed.identity.native.inode != candidate_identity.inode
+                || seed.identity.native.length != candidate_identity.length
+                || u32::from(seed.identity.native.mode & 0o7777)
+                    != u32::from(candidate_identity.mode & 0o7777)
+            {
+                return Err(CoreError::IdentityMismatch.into());
+            }
+            Ok(seed)
+        })();
+        let next_seed = match publication {
+            Ok(seed) => seed,
+            Err(first) => {
+                self.counters.reconciliation_calls = self
+                    .counters
+                    .reconciliation_calls
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+                let mut reconciliation_metrics = Metrics::default();
+                let reconciliation = reconcile_projection_publication_fresh(
+                    &store_path,
+                    &self.directory,
+                    &prior_identity,
+                    request.target,
+                    &mut self.apply_native,
+                    &mut reconciliation_metrics,
+                );
+                self.absorb_metrics(&reconciliation_metrics)?;
+                match reconciliation? {
+                    ProjectionReconciliation::Target => {
+                        temp.active = false;
+                        if request.fault == ProjectionFault::ReconciliationSyncFailure {
+                            return Err(CoreError::AmbiguousDurability.into());
+                        }
+                        sync_fd(&self.directory).map_err(|_| CoreError::AmbiguousDurability)?;
+                        self.counters.directory_sync_calls = self
+                            .counters
+                            .directory_sync_calls
+                            .checked_add(1)
+                            .ok_or(CoreError::LengthOverflow)?;
+                        open_projection_seed(&self.directory, request.target, request.target_digest)
+                            .map_err(|_| -> Box<dyn std::error::Error> {
+                                CoreError::AmbiguousDurability.into()
+                            })?
+                    }
+                    ProjectionReconciliation::Prior => {
+                        if temp.active {
+                            temp.remove(&mut self.apply_native)?;
+                        }
+                        return Err(first);
+                    }
+                }
+            }
+        };
+        if !rename_acknowledged {
+            temp.active = false;
+        }
+        self.counters.durability_ns = self
+            .counters
+            .durability_ns
+            .checked_add(durability_started.elapsed().as_nanos())
+            .ok_or(CoreError::LengthOverflow)?;
+        let verification_started = Instant::now();
+        self.active = next_seed;
+        self.counters.seed_rotations += 1;
+        if request.end_to_end.is_some() {
+            self.counters.end_to_end_native_ack_t4_ns = origin.elapsed().as_nanos();
+        }
+        self.counters.verification_ns = self
+            .counters
+            .verification_ns
+            .checked_add(verification_started.elapsed().as_nanos())
+            .ok_or(CoreError::LengthOverflow)?;
+        let elapsed = build_started.elapsed().as_nanos();
+        match build_class {
+            Some(true) => self.counters.sparse_build_ns.push(elapsed),
+            Some(false) => self.counters.exact_build_ns.push(elapsed),
+            None if contention.is_some() => {
+                self.counters.contention_fallback_build_ns.push(elapsed)
+            }
+            None => self.counters.fallback_build_ns.push(elapsed),
+        }
+        self.counters.build_evidence.push(ProjectionBuildEvidence {
+            plan: plan_name,
+            parent_length: request.parent.length,
+            target_length: request.target.length,
+            range_count,
+            wall_ns: elapsed,
+            contention: contention.is_some(),
+            policy,
+            ordinal,
+            fault: request.fault.name(),
+        });
+        if contention.is_some() {
+            let post_install = (|| -> AnyResult<()> {
+                contention
+                    .ok_or(CoreError::ValidationAuthorityUnavailable)?
+                    .0
+                    .release
+                    .recv()
+                    .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+                let (path, diagnostic) = suspended_reader
+                    .as_ref()
+                    .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+                if request.fault == ProjectionFault::ReaderReopenFailure {
+                    return Err(std::io::Error::from_raw_os_error(libc::EIO).into());
+                }
+                let mut reopened = Store::open_existing_read_only(path, SELECTED_PROFILE)?;
+                if let Some(diagnostic) = diagnostic {
+                    reopened.observe_projection_contention(std::sync::Arc::clone(diagnostic));
+                }
+                self.store = Some(reopened);
+                Ok(())
+            })();
+            if let Err(first) = post_install {
+                self.counters.reconciliation_calls = self
+                    .counters
+                    .reconciliation_calls
+                    .checked_add(1)
+                    .ok_or(CoreError::LengthOverflow)?;
+                let mut reconciliation_metrics = Metrics::default();
+                let reconciliation = reconcile_projection_publication_fresh(
+                    &store_path,
+                    &self.directory,
+                    &prior_identity,
+                    request.target,
+                    &mut self.apply_native,
+                    &mut reconciliation_metrics,
+                );
+                self.absorb_metrics(&reconciliation_metrics)?;
+                match reconciliation? {
+                    ProjectionReconciliation::Target => {
+                        sync_fd(&self.directory).map_err(|_| CoreError::AmbiguousDurability)?;
+                        self.counters.directory_sync_calls = self
+                            .counters
+                            .directory_sync_calls
+                            .checked_add(1)
+                            .ok_or(CoreError::LengthOverflow)?;
+                        let (path, diagnostic) = suspended_reader
+                            .as_ref()
+                            .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+                        let mut reopened = Store::open_existing_read_only(path, SELECTED_PROFILE)
+                            .map_err(|_| CoreError::AmbiguousDurability)?;
+                        if let Some(diagnostic) = diagnostic {
+                            reopened
+                                .observe_projection_contention(std::sync::Arc::clone(diagnostic));
+                        }
+                        self.store = Some(reopened);
+                    }
+                    ProjectionReconciliation::Prior => {
+                        self.active = open_projection_seed(
+                            &self.directory,
+                            Roots {
+                                namespace: prior_identity.namespace_root,
+                                file: prior_identity.file_root,
+                                length: prior_identity.length,
+                                references: prior_identity.references,
+                            },
+                            prior_identity.digest,
+                        )?;
+                    }
+                }
+                return Err(first);
+            }
+            self.counters.contention_worker_end_ns = contention
+                .map(|(_, origin)| origin.elapsed().as_nanos())
+                .unwrap_or_default();
+        }
+        Ok(())
+    }
+}
+
+fn projection_percentile(values: &[u128], percentile: usize) -> u128 {
+    if values.is_empty() {
+        return 0;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    sorted[(sorted.len() * percentile)
+        .div_ceil(100)
+        .saturating_sub(1)
+        .min(sorted.len() - 1)]
+}
+
+fn projection_ns_array(values: &[u128]) -> String {
+    format!(
+        "[{}]",
+        values
+            .iter()
+            .map(u128::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn projection_build_evidence_array(values: &[ProjectionBuildEvidence]) -> String {
+    format!(
+        "[{}]",
+        values
+            .iter()
+            .map(|value| format!(
+                "{{\"plan\":\"{}\",\"policy\":\"{}\",\"ordinal\":{},\"parent_length\":{},\"target_length\":{},\"range_count\":{},\"wall_ns\":{},\"contention\":{},\"fault\":\"{}\"}}",
+                value.plan,
+                value.policy,
+                value.ordinal,
+                value.parent_length,
+                value.target_length,
+                value.range_count,
+                value.wall_ns,
+                value.contention,
+                value.fault,
+            ))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn g5_projection_fixture_size(mode: &str) -> AnyResult<u64> {
+    Ok(match mode {
+        "self-check" | "screen-count" | "screen" | "gate" => G5_PROJECTION_MECHANISM_BYTES,
+        _ => return Err(format!("unknown G5 projection mode {mode}").into()),
+    })
+}
+
+pub(super) fn prepare_g5_projection_fixture(root: &Path, mode: &str) -> AnyResult<String> {
+    let size = g5_projection_fixture_size(mode)?;
+    let mut prepared = prepare(root, size, Scenario::QualifiedOneByte)?;
+    let (exact_count, latest_count) = match mode {
+        "self-check" => (1, 0),
+        "screen-count" => (1, 1),
+        "screen" => (2, 2),
+        "gate" => (64, 100),
+        _ => unreachable!(),
+    };
+    let mut target_source = open_readonly_nofollow(&prepared.directory_path.join("target.source"))?;
+    target_source.seek(SeekFrom::Start(prepared.patch.start))?;
+    let mut patch_bytes = vec![0_u8; usize::try_from(prepared.patch.end - prepared.patch.start)?];
+    target_source.read_exact(&mut patch_bytes)?;
+    drop(target_source);
+    let mut prior_source = prepared.directory_path.join("target.source");
+    let mut prior_roots = prepared.target;
+    let mut prior_digest = prepared.target_digest;
+    let mut chain = Vec::with_capacity(exact_count + latest_count - 1);
+    for index in 1..(exact_count + latest_count) {
+        let same_source = prepared
+            .directory_path
+            .join(format!("same-chain-{index:03}.source"));
+        fs::copy(&prior_source, &same_source)?;
+        let offset = u64::try_from(index).map_err(|_| CoreError::LengthOverflow)? % size;
+        let mut source = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&same_source)?;
+        source.seek(SeekFrom::Start(offset))?;
+        let mut byte = [0_u8; 1];
+        source.read_exact(&mut byte)?;
+        byte[0] ^= 0x5a;
+        source.seek(SeekFrom::Start(offset))?;
+        source.write_all(&byte)?;
+        source.sync_all()?;
+        drop(source);
+        let (_, digest, _) = hash_file(&same_source)?;
+        let (roots, head) = build_projection_target(&mut prepared.store, &same_source)?;
+        let range = offset..offset + 1;
+        let chain_index = index - 1;
+        let policy = projection_chain_policy(chain_index, exact_count)?;
+        let token = prove_and_mint_projection_edge(
+            &mut prepared.store,
+            &head,
+            prior_roots,
+            prior_digest,
+            &prior_source,
+            roots,
+            digest,
+            &same_source,
+            &range,
+            policy,
+        )?;
+        chain.push(ProjectionFixtureEdge {
+            target: roots,
+            digest,
+            range,
+            token: Some(token),
+        });
+        let retired_source = std::mem::replace(&mut prior_source, same_source);
+        if retired_source
+            .file_name()
+            .is_some_and(|name| name.as_bytes().starts_with(b"same-chain-"))
+        {
+            fs::remove_file(retired_source)?;
+        }
+        prior_roots = roots;
+        prior_digest = digest;
+    }
+    let count_source = prepared.directory_path.join("count.source");
+    fs::copy(&prior_source, &count_source)?;
+    if prior_source
+        .file_name()
+        .is_some_and(|name| name.as_bytes().starts_with(b"same-chain-"))
+    {
+        fs::remove_file(&prior_source)?;
+    }
+    let mut count_writer = OpenOptions::new().append(true).open(&count_source)?;
+    count_writer.write_all(&[0x5a])?;
+    count_writer.sync_all()?;
+    drop(count_writer);
+    let (_, count_digest, _) = hash_file(&count_source)?;
+    let (count, _) = build_projection_target(&mut prepared.store, &count_source)?;
+    let storm_a_source = prepared.directory_path.join("storm-a.source");
+    fs::copy(&count_source, &storm_a_source)?;
+    let mut writer = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&storm_a_source)?;
+    writer.seek(SeekFrom::Start(1))?;
+    writer.write_all(&[0x33])?;
+    writer.sync_all()?;
+    drop(writer);
+    let (_, storm_a_digest, _) = hash_file(&storm_a_source)?;
+    let (storm_a, storm_a_head) = build_projection_target(&mut prepared.store, &storm_a_source)?;
+    let storm_a_token = prove_and_mint_projection_edge(
+        &mut prepared.store,
+        &storm_a_head,
+        count,
+        count_digest,
+        &count_source,
+        storm_a,
+        storm_a_digest,
+        &storm_a_source,
+        &(1..2),
+        RequestPolicy::LatestFollowing {
+            stream: LatestStream::CountStorm,
+            ordinal: 0,
+        },
+    )?;
+    let storm_b_source = prepared.directory_path.join("storm-b.source");
+    fs::copy(&storm_a_source, &storm_b_source)?;
+    let mut writer = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&storm_b_source)?;
+    writer.seek(SeekFrom::Start(2))?;
+    writer.write_all(&[0x66])?;
+    writer.sync_all()?;
+    drop(writer);
+    let (_, storm_b_digest, _) = hash_file(&storm_b_source)?;
+    let (storm_b, storm_b_head) = build_projection_target(&mut prepared.store, &storm_b_source)?;
+    let storm_b_token = prove_and_mint_projection_edge(
+        &mut prepared.store,
+        &storm_b_head,
+        storm_a,
+        storm_a_digest,
+        &storm_a_source,
+        storm_b,
+        storm_b_digest,
+        &storm_b_source,
+        &(2..3),
+        RequestPolicy::LatestFollowing {
+            stream: LatestStream::CountStorm,
+            ordinal: 1,
+        },
+    )?;
+    let latest_source = prepared.directory_path.join("latest.source");
+    fs::copy(&storm_b_source, &latest_source)?;
+    let mut latest_writer = OpenOptions::new().append(true).open(&latest_source)?;
+    latest_writer.write_all(&[0xa5])?;
+    latest_writer.sync_all()?;
+    drop(latest_writer);
+    let (_, latest_digest, _) = hash_file(&latest_source)?;
+    let (latest, _) = build_projection_target(&mut prepared.store, &latest_source)?;
+    let (reset_parent, reset_head) = build_projection_target(
+        &mut prepared.store,
+        &prepared.directory_path.join("parent.source"),
+    )?;
+    if reset_parent != prepared.parent || reset_head.1 != prepared.parent.namespace {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    fs::remove_file(&count_source)?;
+    fs::remove_file(&storm_a_source)?;
+    fs::remove_file(&storm_b_source)?;
+    fs::remove_file(prepared.directory_path.join("target.source"))?;
+    let fixture = write_projection_fixture(
+        root,
+        &prepared,
+        &patch_bytes,
+        count,
+        count_digest,
+        storm_a,
+        storm_a_digest,
+        &storm_a_token,
+        storm_b,
+        storm_b_digest,
+        &storm_b_token,
+        latest,
+        latest_digest,
+        exact_count,
+        &chain,
+    )?;
+    Ok(format!("{{\"status\":\"PASS\",\"schema\":\"phase4-g5-projection-fixture-v2\",\"mode\":\"{mode}\",\"fixture\":\"{}\",\"size_bytes\":{size},\"preparation_timing\":\"outside-campaign\"}}", fixture.display()))
+}
+
+pub(super) fn run_g5_projection_suite(root: &Path, mode: &str) -> AnyResult<String> {
+    let mut fixture = parse_projection_fixture(root)?;
+    if fixture.parent.length != G5_PROJECTION_MECHANISM_BYTES {
+        return Err(ProjectionServiceError::FixtureMismatch.into());
+    }
+    let selected_fault = ProjectionFault::release_mode(mode).unwrap_or(ProjectionFault::None);
+    let requested_mode = mode;
+    let mode = if selected_fault == ProjectionFault::None {
+        mode
+    } else {
+        "self-check"
+    };
+    if !matches!(mode, "self-check" | "screen-count" | "screen" | "gate") {
+        return Err(format!("unknown G5 projection mode {mode}").into());
+    }
+    let started = Instant::now();
+    let live_edge = build_live_projection_edge(
+        &fixture.directory.join("store.sqlite"),
+        &fixture.directory,
+        fixture.parent,
+        fixture.parent_digest,
+        &fixture.patch,
+        &fixture.patch_bytes,
+        started,
+    )?;
+    if live_edge.roots != fixture.target || live_edge.digest != fixture.target_digest {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    let initial_end_to_end = (
+        live_edge.edit_t0_ns,
+        live_edge.canonical_ack_t1_ns,
+        live_edge.edit_wall_ns,
+        live_edge.canonical_ack_wall_ns,
+        live_edge.transactions,
+        live_edge.commits,
+        live_edge.sql_queries,
+        live_edge.authenticated_objects,
+        live_edge.authenticated_bytes,
+        live_edge.q_high_water,
+    );
+    let directory = open_dir(&fixture.directory)?;
+    let diagnostic = std::sync::Arc::new(ProjectionContentionDiagnostic::default());
+    let mut store =
+        Store::open_existing_read_only(&fixture.directory.join("store.sqlite"), SELECTED_PROFILE)?;
+    store.observe_projection_contention(std::sync::Arc::clone(&diagnostic));
+    let token_authority = ProjectionTokenAuthority::from_store(&store);
+    let restart_temps =
+        cleanup_projection_restart_temps(&fixture.directory, &directory, token_authority)?;
+    let active_file = openat_file(
+        &directory,
+        DESTINATION_NAME,
+        libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        0,
+    )?;
+    let (active_native, active_storage) = fstat_file(&active_file)?;
+    let mut active_metrics = Metrics::default();
+    let active_roots = g4_roots(&store, fixture.parent.namespace, &mut active_metrics)?;
+    let (active_length, active_digest, active_mode) =
+        g4_hash_descriptor(&active_file, active_native, &mut active_metrics)?;
+    finish_q(&mut active_metrics)?;
+    if active_roots != fixture.parent
+        || active_length != fixture.parent.length
+        || active_digest != fixture.parent_digest
+        || active_mode != MODE
+    {
+        return Err(CoreError::IdentityMismatch.into());
+    }
+    let active = VerifiedSeed {
+        file: active_file,
+        identity: SeedIdentity {
+            native: active_native,
+            namespace_root: fixture.parent.namespace,
+            file_root: fixture.parent.file,
+            length: fixture.parent.length,
+            references: fixture.parent.references,
+            digest: fixture.parent_digest,
+        },
+        storage: active_storage,
+    };
+    let shared = std::sync::Arc::new((
+        std::sync::Mutex::new(ProjectionMailbox {
+            in_flight: false,
+            pending: None,
+            shutdown: false,
+            release_first: false,
+            submitted: 0,
+            coalesced: 0,
+            started: 0,
+            published: 0,
+            cancelled: 0,
+            failed: 0,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: None,
+            token_authority,
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        }),
+        std::sync::Condvar::new(),
+    ));
+    let (worker_ready_tx, foreground_ready_rx) = std::sync::mpsc::sync_channel(0);
+    let (foreground_started_tx, worker_started_rx) = std::sync::mpsc::sync_channel(0);
+    let (worker_reader_done_tx, foreground_reader_done_rx) = std::sync::mpsc::sync_channel(0);
+    let (foreground_release_tx, worker_release_rx) = std::sync::mpsc::sync_channel(0);
+    let worker_contention = ProjectionContentionRendezvous {
+        ready: worker_ready_tx,
+        writer_started: worker_started_rx,
+        reader_done: worker_reader_done_tx,
+        release: worker_release_rx,
+    };
+    let origin = started;
+    let worker_shared = std::sync::Arc::clone(&shared);
+    let worker_directory_path = fixture.directory.clone();
+    let handle = std::thread::spawn(move || -> Result<ProjectionCounters, String> {
+        let mut terminal = ProjectionWorkerTerminal {
+            shared: std::sync::Arc::clone(&worker_shared),
+            success: false,
+        };
+        let mut worker = ProjectionWorker {
+            directory_path: worker_directory_path,
+            directory,
+            store: Some(store),
+            active,
+            counters: ProjectionCounters {
+                end_to_end_edit_t0_ns: initial_end_to_end.0,
+                end_to_end_canonical_ack_t1_ns: initial_end_to_end.1,
+                end_to_end_edit_wall_ns: initial_end_to_end.2,
+                end_to_end_canonical_ack_wall_ns: initial_end_to_end.3,
+                end_to_end_canonical_transactions: initial_end_to_end.4,
+                end_to_end_canonical_commits: initial_end_to_end.5,
+                end_to_end_canonical_sql_queries: initial_end_to_end.6,
+                end_to_end_canonical_authenticated_objects: initial_end_to_end.7,
+                end_to_end_canonical_authenticated_bytes: initial_end_to_end.8,
+                end_to_end_canonical_q_high_water: initial_end_to_end.9,
+                sql_queries: active_metrics.sql_query_calls,
+                sql_rows: active_metrics.sql_rows_returned,
+                sqlite_write_calls: active_metrics.sql_execute_calls,
+                sqlite_transactions: active_metrics.transactions,
+                sqlite_commits: active_metrics.commits,
+                blob_reads: active_metrics.row_blob_reads,
+                blob_bytes: active_metrics.borrowed_row_blob_bytes,
+                authenticated_objects: active_metrics.objects_authenticated,
+                authenticated_bytes: active_metrics.canonical_bytes_authenticated,
+                q_high_water: active_metrics.q_high_water,
+                initial_descriptor_verification_bytes: active_length,
+                initial_storage_logical_bytes: active_storage.logical,
+                initial_storage_apparent_bytes: active_storage.apparent,
+                initial_storage_allocated_bytes: active_storage.allocated,
+                restart_temps_discovered: restart_temps.0,
+                restart_temps_removed: restart_temps.1,
+                restart_temps_retained: restart_temps.2,
+                directory_sync_calls: u64::from(restart_temps.1 != 0),
+                ..ProjectionCounters::default()
+            },
+            apply_native: Counters::default(),
+            apply_rename_acknowledged: false,
+            shutdown_rendezvous: None,
+        };
+        worker
+            .initialize_reader()
+            .map_err(|error| format!("ProjectionReaderInitialization: {error:?}"))?;
+        let mut contention_pending = true;
+        let (mutex, condition) = &*worker_shared;
+        loop {
+            let mut mailbox = mutex
+                .lock()
+                .map_err(|_| "ProjectionMailboxPoisoned".to_string())?;
+            while mailbox.pending.is_none() && !mailbox.shutdown {
+                mailbox = condition
+                    .wait(mailbox)
+                    .map_err(|_| "ProjectionMailboxPoisoned".to_string())?;
+            }
+            let Some(request) = mailbox.take().map_err(|error| error.to_string())? else {
+                break;
+            };
+            worker.counters.max_in_flight = 1;
+            worker.counters.max_pending = 1;
+            condition.notify_all();
+            while !mailbox.release_first {
+                mailbox = condition
+                    .wait(mailbox)
+                    .map_err(|_| "ProjectionMailboxPoisoned".to_string())?;
+            }
+            drop(mailbox);
+            let contended = request.contended;
+            let contention =
+                (contended && contention_pending).then_some((&worker_contention, origin));
+            if let Err(error) = worker.apply(request, origin, contention) {
+                let fault_finalization = worker.counters.fault_finalization_json();
+                let mut mailbox = mutex
+                    .lock()
+                    .map_err(|_| "ProjectionMailboxPoisoned".to_string())?;
+                mailbox
+                    .record_failure(error.as_ref())
+                    .map_err(|record_error| record_error.to_string())?;
+                mailbox.worker_error = Some(format!("{error:?};{fault_finalization}"));
+                condition.notify_all();
+                return Err(format!(
+                    "ProjectionWorkerApply: {error:?};{fault_finalization}"
+                ));
+            }
+            if contended && contention_pending {
+                contention_pending = false;
+            }
+            let mut mailbox = mutex
+                .lock()
+                .map_err(|_| "ProjectionMailboxPoisoned".to_string())?;
+            mailbox.complete().map_err(|error| error.to_string())?;
+            condition.notify_all();
+        }
+        worker.counters.q_terminal = q_current();
+        if worker.counters.q_terminal != 0 {
+            return Err(format!(
+                "ProjectionTerminalQ:{}",
+                worker.counters.q_terminal
+            ));
+        }
+        terminal.success = true;
+        Ok(worker.counters)
+    });
+    let (mutex, condition) = &*shared;
+    let mut mailbox = mutex.lock().map_err(|_| "ProjectionMailboxPoisoned")?;
+    mailbox.submit(ProjectionRequest {
+        parent: fixture.parent,
+        parent_digest: fixture.parent_digest,
+        target: fixture.parent,
+        target_digest: fixture.parent_digest,
+        plan: projection_plan(std::iter::empty(), fixture.parent.length)?,
+        contended: false,
+        policy: RequestPolicy::ExactEveryRoot { ordinal: 0 },
+        force_full_fallback: false,
+        token: None,
+        edge_authenticated: false,
+        end_to_end: None,
+        fault: ProjectionFault::None,
+    })?;
+    condition.notify_one();
+    while !mailbox.in_flight && mailbox.worker_error.is_none() {
+        mailbox = condition
+            .wait(mailbox)
+            .map_err(|_| "ProjectionMailboxPoisoned")?;
+    }
+    mailbox.ensure_worker_live()?;
+    mailbox.release_first = true;
+    condition.notify_all();
+    while mailbox.published < 1 && mailbox.worker_error.is_none() {
+        mailbox = condition
+            .wait(mailbox)
+            .map_err(|_| "ProjectionMailboxPoisoned")?;
+    }
+    mailbox.ensure_worker_live()?;
+    let mut parent = fixture.parent;
+    let mut published = 1_u64;
+    mailbox
+        .submit_with_origin(
+            ProjectionRequest {
+                parent,
+                parent_digest: fixture.parent_digest,
+                target: fixture.target,
+                target_digest: fixture.target_digest,
+                plan: projection_plan(
+                    std::iter::once(fixture.patch.clone()),
+                    fixture.target.length,
+                )?,
+                contended: false,
+                policy: RequestPolicy::IsolatedSparseSentinel,
+                force_full_fallback: false,
+                token: Some(live_edge.token),
+                edge_authenticated: false,
+                end_to_end: Some(ProjectionEndToEndTiming {
+                    edit_t0_ns: live_edge.edit_t0_ns,
+                    canonical_ack_t1_ns: live_edge.canonical_ack_t1_ns,
+                    enqueue_t2_ns: None,
+                }),
+                fault: selected_fault,
+            },
+            Some(started),
+        )?
+        .ok_or(CoreError::PublicationConflict)?;
+    condition.notify_all();
+    published += 1;
+    while mailbox.published < published && mailbox.worker_error.is_none() {
+        mailbox = condition
+            .wait(mailbox)
+            .map_err(|_| "ProjectionMailboxPoisoned")?;
+    }
+    mailbox.ensure_worker_live()?;
+    parent = fixture.target;
+    let mut parent_digest = fixture.target_digest;
+    for (exact_index, edge) in fixture
+        .chain
+        .iter_mut()
+        .take(fixture.exact_count.saturating_sub(1))
+        .enumerate()
+    {
+        mailbox.submit(ProjectionRequest {
+            parent,
+            parent_digest,
+            target: edge.target,
+            target_digest: edge.digest,
+            plan: projection_plan(std::iter::once(edge.range.clone()), edge.target.length)?,
+            contended: false,
+            policy: RequestPolicy::ExactEveryRoot {
+                ordinal: u64::try_from(exact_index + 1).map_err(|_| CoreError::LengthOverflow)?,
+            },
+            force_full_fallback: false,
+            token: edge.token.take(),
+            edge_authenticated: false,
+            end_to_end: None,
+            fault: ProjectionFault::None,
+        })?;
+        condition.notify_all();
+        published += 1;
+        while mailbox.published < published && mailbox.worker_error.is_none() {
+            mailbox = condition
+                .wait(mailbox)
+                .map_err(|_| "ProjectionMailboxPoisoned")?;
+        }
+        mailbox.ensure_worker_live()?;
+        parent = edge.target;
+        parent_digest = edge.digest;
+    }
+    mailbox.release_first = false;
+    let latest = &mut fixture.chain[fixture.exact_count.saturating_sub(1)..];
+    if let Some(edge) = latest.first_mut() {
+        mailbox.submit(ProjectionRequest {
+            parent,
+            parent_digest,
+            target: edge.target,
+            target_digest: edge.digest,
+            plan: projection_plan(std::iter::once(edge.range.clone()), edge.target.length)?,
+            contended: false,
+            policy: RequestPolicy::LatestFollowing {
+                stream: LatestStream::SameSize,
+                ordinal: 0,
+            },
+            force_full_fallback: false,
+            token: edge.token.take(),
+            edge_authenticated: false,
+            end_to_end: None,
+            fault: ProjectionFault::None,
+        })?;
+        condition.notify_all();
+        while !mailbox.in_flight && mailbox.worker_error.is_none() {
+            mailbox = condition
+                .wait(mailbox)
+                .map_err(|_| "ProjectionMailboxPoisoned")?;
+        }
+        mailbox.ensure_worker_live()?;
+        parent = edge.target;
+        parent_digest = edge.digest;
+        for (index, edge) in latest[1..].iter_mut().enumerate() {
+            mailbox.submit(ProjectionRequest {
+                parent,
+                parent_digest,
+                target: edge.target,
+                target_digest: edge.digest,
+                plan: projection_plan(std::iter::once(edge.range.clone()), edge.target.length)?,
+                contended: false,
+                policy: RequestPolicy::LatestFollowing {
+                    stream: LatestStream::SameSize,
+                    ordinal: u64::try_from(index + 1).map_err(|_| CoreError::LengthOverflow)?,
+                },
+                force_full_fallback: false,
+                token: edge.token.take(),
+                edge_authenticated: false,
+                end_to_end: None,
+                fault: ProjectionFault::None,
+            })?;
+            parent = edge.target;
+            parent_digest = edge.digest;
+        }
+        mailbox.release_first = true;
+        condition.notify_all();
+        published = published
+            .checked_add(latest_following_builds_to_wait(latest.len()))
+            .ok_or(CoreError::LengthOverflow)?;
+        while mailbox.published < published && mailbox.worker_error.is_none() {
+            mailbox = condition
+                .wait(mailbox)
+                .map_err(|_| "ProjectionMailboxPoisoned")?;
+        }
+        mailbox.ensure_worker_live()?;
+    }
+    let same_size_root = parent;
+    drop(mailbox);
+    let (same_length, same_digest, _) = hash_at(&open_dir(&fixture.directory)?, DESTINATION_NAME)?;
+    let expected_same_digest = latest
+        .last()
+        .map(|value| value.digest)
+        .unwrap_or(fixture.target_digest);
+    if same_length != same_size_root.length || same_digest != expected_same_digest {
+        return Err(format!(
+            "ProjectionSameSizeCheckpoint: length={same_length}/{} digest={}/{}",
+            same_size_root.length,
+            hex_bytes(&same_digest),
+            hex_bytes(&expected_same_digest),
+        )
+        .into());
+    }
+    let foreground_root = fixture.directory.clone();
+    let foreground_diagnostic = std::sync::Arc::clone(&diagnostic);
+    let foreground = std::thread::spawn(move || -> Result<(u64, u64, u128, u128), String> {
+        foreground_ready_rx
+            .recv()
+            .map_err(|_| "ProjectionForegroundReadyDisconnected".to_string())?;
+        let mut store = Store::open(&foreground_root.join("store.sqlite"), SELECTED_PROFILE)
+            .map_err(|error| format!("ProjectionForegroundOpen: {error:?}"))?;
+        store.observe_projection_contention(std::sync::Arc::clone(&foreground_diagnostic));
+        let mut metrics = Metrics::default();
+        let foreground_start_ns = origin.elapsed().as_nanos();
+        let source = foreground_root.join("latest.source");
+        let publication = (|| -> AnyResult<Roots> {
+            let expected_references = source_cdc_sequence(&source)?.0;
+            store.begin(&mut metrics)?;
+            foreground_started_tx
+                .send(())
+                .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+            foreground_reader_done_rx
+                .recv()
+                .map_err(|_| ProjectionServiceError::WorkerFailed)?;
+            build_and_publish_target_in_active_transaction(
+                &mut store,
+                &source,
+                expected_references,
+                &mut metrics,
+            )
+        })();
+        if publication.is_err() && store.active_transaction.is_some() {
+            let _ = store.rollback(&mut metrics);
+        }
+        let foreground_end_ns = origin.elapsed().as_nanos();
+        foreground_release_tx
+            .send(())
+            .map_err(|_| "ProjectionForegroundReleaseDisconnected".to_string())?;
+        if let Err(error) = publication {
+            return Err(format!(
+                "ProjectionForegroundPublish: {error:?}; transactions={}; commits={}; commit_returns={}; commit_return_errors={}; commit_primary={}; commit_extended={}; reader_autocommit={}; reader_scope_live={}",
+                metrics.transactions,
+                metrics.commits,
+                metrics.commit_returns,
+                metrics.commit_return_errors,
+                foreground_diagnostic.commit_primary_code.load(Ordering::SeqCst),
+                foreground_diagnostic.commit_extended_code.load(Ordering::SeqCst),
+                foreground_diagnostic.commit_autocommit.load(Ordering::SeqCst),
+                foreground_diagnostic.commit_scope_live.load(Ordering::SeqCst),
+            ));
+        }
+        finish_q(&mut metrics).map_err(|error| error.to_string())?;
+        Ok((
+            metrics.transactions,
+            metrics.commits,
+            foreground_start_ns,
+            foreground_end_ns,
+        ))
+    });
+    let mut mailbox = mutex.lock().map_err(|_| "ProjectionMailboxPoisoned")?;
+    mailbox.release_first = true;
+    mailbox.submit(ProjectionRequest {
+        parent,
+        parent_digest,
+        target: fixture.count,
+        target_digest: fixture.count_digest,
+        plan: ProjectionPlan::FullFallback,
+        contended: false,
+        policy: RequestPolicy::IsolatedOrdinaryFallback,
+        force_full_fallback: true,
+        token: None,
+        edge_authenticated: false,
+        end_to_end: None,
+        fault: ProjectionFault::None,
+    })?;
+    condition.notify_all();
+    published += 1;
+    while mailbox.published < published && mailbox.worker_error.is_none() {
+        mailbox = condition
+            .wait(mailbox)
+            .map_err(|_| "ProjectionMailboxPoisoned")?;
+    }
+    mailbox.ensure_worker_live()?;
+    mailbox.release_first = false;
+    mailbox.submit(ProjectionRequest {
+        parent: fixture.count,
+        parent_digest: fixture.count_digest,
+        target: fixture.storm_a,
+        target_digest: fixture.storm_a_digest,
+        plan: projection_plan(std::iter::once(1..2), fixture.storm_a.length)?,
+        contended: false,
+        policy: RequestPolicy::LatestFollowing {
+            stream: LatestStream::CountStorm,
+            ordinal: 0,
+        },
+        force_full_fallback: false,
+        token: fixture.storm_a_token.take(),
+        edge_authenticated: false,
+        end_to_end: None,
+        fault: ProjectionFault::None,
+    })?;
+    condition.notify_all();
+    while !mailbox.in_flight && mailbox.worker_error.is_none() {
+        mailbox = condition
+            .wait(mailbox)
+            .map_err(|_| "ProjectionMailboxPoisoned")?;
+    }
+    mailbox.ensure_worker_live()?;
+    mailbox.submit(ProjectionRequest {
+        parent: fixture.storm_a,
+        parent_digest: fixture.storm_a_digest,
+        target: fixture.storm_b,
+        target_digest: fixture.storm_b_digest,
+        plan: projection_plan(std::iter::once(2..3), fixture.storm_b.length)?,
+        contended: false,
+        policy: RequestPolicy::LatestFollowing {
+            stream: LatestStream::CountStorm,
+            ordinal: 1,
+        },
+        force_full_fallback: true,
+        token: fixture.storm_b_token.take(),
+        edge_authenticated: false,
+        end_to_end: None,
+        fault: ProjectionFault::None,
+    })?;
+    mailbox.submit(ProjectionRequest {
+        parent: fixture.storm_b,
+        parent_digest: fixture.storm_b_digest,
+        target: fixture.latest,
+        target_digest: fixture.latest_digest,
+        plan: ProjectionPlan::FullFallback,
+        contended: true,
+        policy: RequestPolicy::LatestFollowing {
+            stream: LatestStream::CountStorm,
+            ordinal: 2,
+        },
+        force_full_fallback: true,
+        token: None,
+        edge_authenticated: false,
+        end_to_end: None,
+        fault: ProjectionFault::None,
+    })?;
+    mailbox.release_first = true;
+    mailbox.shutdown = true;
+    condition.notify_all();
+    drop(mailbox);
+    let mut counters = handle
+        .join()
+        .map_err(|_| "ProjectionWorkerPanicked")?
+        .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
+    let (foreground_transactions, foreground_commits, foreground_start_ns, foreground_end_ns) =
+        foreground
+            .join()
+            .map_err(|_| "ProjectionForegroundWriterPanicked")?
+            .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
+    let mailbox = mutex.lock().map_err(|_| "ProjectionMailboxPoisoned")?;
+    if !mailbox.equations_hold() || mailbox.in_flight || mailbox.pending.is_some() {
+        return Err(format!(
+            "ProjectionConservation: submitted={} coalesced={} started={} published={} cancelled={} failed={} stale={} inflight={} pending={}",
+            mailbox.submitted,
+            mailbox.coalesced,
+            mailbox.started,
+            mailbox.published,
+            mailbox.cancelled,
+            mailbox.failed,
+            mailbox.stale,
+            mailbox.in_flight,
+            mailbox.pending.is_some(),
+        )
+        .into());
+    }
+    counters.submitted = mailbox.submitted;
+    counters.started = mailbox.started;
+    counters.completed = mailbox.published;
+    counters.superseded_pending = mailbox.coalesced;
+    counters.cancelled = mailbox.cancelled;
+    counters.failed = mailbox.failed;
+    counters.stale = mailbox.stale;
+    counters.sqlite_busy_errors = mailbox.sqlite_busy_errors;
+    counters.sqlite_locked_errors = mailbox.sqlite_locked_errors;
+    drop(mailbox);
+    let checkpoint_started = Instant::now();
+    let (checkpoint_length, checkpoint_digest, checkpoint_mode) =
+        hash_at(&open_dir(&fixture.directory)?, DESTINATION_NAME)?;
+    let terminal_file = openat_file(
+        &open_dir(&fixture.directory)?,
+        DESTINATION_NAME,
+        libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        0,
+    )?;
+    let (_, terminal_storage) = fstat_file(&terminal_file)?;
+    drop(terminal_file);
+    let checkpoint_ns = checkpoint_started.elapsed().as_nanos();
+    if checkpoint_length != fixture.latest.length
+        || checkpoint_digest != fixture.latest_digest
+        || checkpoint_mode != MODE
+        || counters.max_in_flight > 1
+        || counters.max_pending > 1
+        || counters.cancelled != 0
+        || counters.failed != 0
+        || counters.stale != 0
+        || counters.q_terminal != 0
+        || counters.max_buffer_bytes > G5_PROJECTION_MAX_BUFFER
+        || counters.sqlite_write_calls != 0
+        || counters.sqlite_transactions != 0
+        || counters.sqlite_commits != 0
+        || counters.sqlite_busy_errors != 0
+        || counters.sqlite_locked_errors != 0
+        || foreground_transactions != 1
+        || foreground_commits != 1
+        || counters.contention_worker_start_ns >= counters.contention_worker_end_ns
+        || foreground_start_ns >= foreground_end_ns
+        || foreground_start_ns >= counters.contention_worker_end_ns
+        || counters.contention_worker_start_ns >= foreground_end_ns
+        || counters.end_to_end_canonical_transactions != 1
+        || counters.end_to_end_canonical_commits != 1
+        || !(counters.end_to_end_edit_t0_ns <= counters.end_to_end_canonical_ack_t1_ns
+            && counters.end_to_end_canonical_ack_t1_ns <= counters.end_to_end_enqueue_t2_ns
+            && counters.end_to_end_enqueue_t2_ns <= counters.end_to_end_worker_start_t3_ns
+            && counters.end_to_end_worker_start_t3_ns <= counters.end_to_end_native_ack_t4_ns)
+    {
+        return Err(format!(
+            "ProjectionTerminalGate: length={checkpoint_length}/{} digest={}/{} mode={checkpoint_mode:o}/{MODE:o} inflight={} pending={} q={} buffer={} writes={} foreground={foreground_transactions}/{foreground_commits} worker_interval={}/{} foreground_interval={}/{}",
+            fixture.latest.length,
+            hex_bytes(&checkpoint_digest),
+            hex_bytes(&fixture.latest_digest),
+            counters.max_in_flight,
+            counters.max_pending,
+            counters.q_terminal,
+            counters.max_buffer_bytes,
+            counters.sqlite_write_calls,
+            counters.contention_worker_start_ns,
+            counters.contention_worker_end_ns,
+            foreground_start_ns,
+            foreground_end_ns,
+        )
+        .into());
+    }
+    let exact_p50 = projection_percentile(&counters.exact_build_ns, 50);
+    let exact_p95 = projection_percentile(&counters.exact_build_ns, 95);
+    let sparse_p50 = projection_percentile(&counters.sparse_build_ns, 50);
+    let sparse_p95 = projection_percentile(&counters.sparse_build_ns, 95);
+    let fallback_p50 = projection_percentile(&counters.fallback_build_ns, 50);
+    let fallback_p95 = projection_percentile(&counters.fallback_build_ns, 95);
+    let contention_fallback_p50 = projection_percentile(&counters.contention_fallback_build_ns, 50);
+    let contention_fallback_p95 = projection_percentile(&counters.contention_fallback_build_ns, 95);
+    const G3_ACCEPTED_FALLBACK_BOUND_NS: u128 = 329_237_000;
+    let fallback_within_g3_bound = counters
+        .fallback_build_ns
+        .iter()
+        .all(|value| *value <= G3_ACCEPTED_FALLBACK_BOUND_NS);
+    if mode != "self-check"
+        && (exact_p50 > 5_000_000
+            || exact_p95 > 8_000_000
+            || sparse_p50 > 6_000_000
+            || sparse_p95 > 10_000_000
+            || counters
+                .fallback_build_ns
+                .iter()
+                .any(|value| *value > G3_ACCEPTED_FALLBACK_BOUND_NS))
+    {
+        return Err("ProjectionLatencyGateFailed".into());
+    }
+    let latest_count = fixture
+        .chain
+        .len()
+        .checked_sub(fixture.exact_count.saturating_sub(1))
+        .ok_or(CoreError::LengthOverflow)?;
+    fs::remove_file(fixture.directory.join("projection-live-first.source"))?;
+    sync_fd(&open_dir(&fixture.directory)?)?;
+    let terminal_residue = count_residue(&fixture.directory, ".g3-tmp-")?;
+    let wall = started.elapsed().as_nanos();
+    Ok(format!(
+        concat!(
+            "{{\"status\":\"PASS\",\"schema\":\"phase4-g5-projection-suite-v2\",",
+            "\"mode\":\"{}\",\"size_bytes\":{},\"route_class\":\"{}\",",
+            "\"worker_count\":1,\"submitted\":{},\"coalesced\":{},",
+            "\"started\":{},\"published\":{},\"cancelled\":{},\"failed\":{},\"stale\":{},",
+            "\"max_in_flight\":{},\"max_pending\":{},\"full_fallbacks\":{},",
+            "\"exact_build_ns\":{},\"exact_p50_ns\":{},\"exact_p95_ns\":{},",
+            "\"sparse_build_ns\":{},\"sparse_p50_ns\":{},\"sparse_p95_ns\":{},",
+            "\"full_fallback_build_ns\":{},\"full_fallback_p50_ns\":{},",
+            "\"full_fallback_p95_ns\":{},\"full_fallback_g3_bound_ns\":{},",
+            "\"full_fallback_within_g3_bound\":{},",
+            "\"contention_full_fallback_build_ns\":{},",
+            "\"contention_full_fallback_p50_ns\":{},",
+            "\"contention_full_fallback_p95_ns\":{},",
+            "\"contention_full_fallback_latency_claim\":\"NotClaimedDifferentConcurrentExecutionShape\",",
+            "\"build_evidence\":{},",
+            "\"reader_initialization_ns\":{},",
+            "\"reader_initialization_classification\":\"OneTimeReadOnlyProcessInitializationInsideCompleteWallOutsideServiceSamples\",",
+            "\"reader_initialization_calls\":{},\"reader_initialization_bytes_requested\":1,",
+            "\"reader_initialization_sql_queries\":{},",
+            "\"reader_initialization_authenticated_objects\":{},",
+            "\"reader_initialization_authenticated_bytes\":{},",
+            "\"reader_initialization_q_high_water\":{},",
+            "\"reader_initialization_read_only\":true,\"reader_initialization_query_only\":true,",
+            "\"reader_initialization_inside_complete_wall\":true,",
+            "\"reader_initialization_excluded_from_service_samples\":true,",
+            "\"end_to_end_edit_t0_ns\":{},\"end_to_end_canonical_ack_t1_ns\":{},",
+            "\"end_to_end_enqueue_t2_ns\":{},\"end_to_end_worker_start_t3_ns\":{},",
+            "\"end_to_end_native_ack_t4_ns\":{},\"end_to_end_edit_wall_ns\":{},",
+            "\"end_to_end_canonical_ack_wall_ns\":{},",
+            "\"end_to_end_canonical_transactions\":{},\"end_to_end_canonical_commits\":{},",
+            "\"end_to_end_canonical_sql_queries\":{},",
+            "\"end_to_end_canonical_authenticated_objects\":{},",
+            "\"end_to_end_canonical_authenticated_bytes\":{},",
+            "\"end_to_end_canonical_q_high_water\":{},",
+            "\"end_to_end_population\":1,",
+            "\"end_to_end_scope\":\"ObservedEditT0CanonicalAckT1EnqueueT2WorkerT3NativeAckT4\",",
+            "\"recurring_service_sample_scope\":\"WorkerT3ToNativeAckT4NotEndToEndEditLatency\",",
+            "\"initial_descriptor_binding\":\"ObservedAuthenticatedRootAndFullDescriptorDigest\",",
+            "\"initial_descriptor_verification_bytes\":{},",
+            "\"initial_storage_logical_bytes\":{},\"initial_storage_apparent_bytes\":{},",
+            "\"initial_storage_allocated_bytes\":{},",
+            "\"exact_every_root_population\":{},\"latest_following_population\":{},",
+            "\"projected_root\":\"{}\",\"last_requested_root\":\"{}\",",
+            "\"projected_equals_last_requested\":true,\"range_fetches\":{},",
+            "\"fetched_bytes\":{},\"write_calls\":{},\"written_bytes\":{},",
+            "\"clone_calls\":{},\"clone_successes\":{},\"clone_failures\":{},\"data_sync_calls\":{},",
+            "\"temp_files_created\":{},\"temp_files_removed\":{},",
+            "\"private_build_cancellations\":{},",
+            "\"restart_temps_discovered\":{},\"restart_temps_removed\":{},\"restart_temps_retained\":{},",
+            "\"missing_seed_fallbacks\":{},\"seed_admission_rejections\":{},",
+            "\"metadata_sync_calls\":{},\"rename_calls\":{},\"directory_sync_calls\":{},",
+            "\"reconciliation_calls\":{},\"sqlite_write_calls\":{},",
+            "\"sqlite_transactions\":{},\"sqlite_commits\":{},",
+            "\"projection_sqlite_counter_provenance\":\"ObservedMetricsAndSuccessfulNoErrorCompletion\",",
+            "\"foreground_transactions\":{},\"foreground_commits\":{},",
+            "\"contention_worker_start_ns\":{},\"contention_worker_end_ns\":{},",
+            "\"contention_foreground_start_ns\":{},\"contention_foreground_end_ns\":{},",
+            "\"contention_worker_and_foreground_transaction_intervals_overlap\":true,",
+            "\"contention_overlap_scope\":\"ObservedBroadWorkerAndForegroundTransactionIntervals\",",
+            "\"foreground_commit_within_end_to_end_t3_t4_claim\":\"NotClaimedDifferentRequest\",",
+            "\"reader_barrier_autocommit\":{},\"reader_barrier_scope_live\":{},",
+            "\"reader_commit_autocommit\":{},\"reader_commit_scope_live\":{},",
+            "\"foreground_commit_primary_code\":{},\"foreground_commit_extended_code\":{},",
+            "\"sqlite_busy_errors\":{},\"sqlite_locked_errors\":{},",
+            "\"sql_queries\":{},\"sql_rows\":{},\"blob_reads\":{},\"blob_bytes\":{},",
+            "\"authenticated_objects\":{},\"authenticated_bytes\":{},\"seed_rotations\":{},",
+            "\"q_high_water\":{},\"q_terminal\":{},",
+            "\"q_terminal_provenance\":\"ObservedWorkerThreadLocalQCurrent\",",
+            "\"max_buffer_bytes\":{},",
+            "\"fault_selector\":\"{}\",",
+            "\"fault_receipt\":{{\"status\":\"{}\",\"complete_apply_hooks\":true}},",
+            "\"supported_fault_selectors\":{},",
+            "\"focused_complete_apply_fault_hooks\":{},",
+            "\"timer_payload_ns\":{},\"timer_durability_ns\":{},",
+            "\"timer_descriptor_verification_ns\":{},",
+            "\"checkpoint_full_verification_ns\":{},\"checkpoint_outside_service_timer\":true,",
+            "\"terminal_in_flight\":0,\"terminal_pending\":0,\"terminal_workers\":0,",
+            "\"terminal_active_descriptors\":0,\"terminal_successor_descriptors\":0,",
+            "\"terminal_descriptor_classification\":\"ProvenByWorkerJoinAndOwnedDescriptorDrop\",",
+            "\"terminal_storage_logical_bytes\":{},\"terminal_storage_apparent_bytes\":{},",
+            "\"terminal_storage_allocated_bytes\":{},",
+            "\"terminal_temp_residue\":{},\"shutdown\":\"drained\",",
+            "\"operation_wall_ns\":{}}}"
+        ),
+        requested_mode,
+        G5_PROJECTION_MECHANISM_BYTES,
+        G5_PROJECTION_ROUTE_CLASS,
+        counters.submitted,
+        counters.superseded_pending,
+        counters.started,
+        counters.completed,
+        counters.cancelled,
+        counters.failed,
+        counters.stale,
+        counters.max_in_flight,
+        counters.max_pending,
+        counters.full_fallbacks,
+        projection_ns_array(&counters.exact_build_ns),
+        exact_p50,
+        exact_p95,
+        projection_ns_array(&counters.sparse_build_ns),
+        sparse_p50,
+        sparse_p95,
+        projection_ns_array(&counters.fallback_build_ns),
+        fallback_p50,
+        fallback_p95,
+        G3_ACCEPTED_FALLBACK_BOUND_NS,
+        fallback_within_g3_bound,
+        projection_ns_array(&counters.contention_fallback_build_ns),
+        contention_fallback_p50,
+        contention_fallback_p95,
+        projection_build_evidence_array(&counters.build_evidence),
+        counters.reader_initialization_ns,
+        counters.reader_initialization_calls,
+        counters.reader_initialization_sql_queries,
+        counters.reader_initialization_authenticated_objects,
+        counters.reader_initialization_authenticated_bytes,
+        counters.reader_initialization_q_high_water,
+        counters.end_to_end_edit_t0_ns,
+        counters.end_to_end_canonical_ack_t1_ns,
+        counters.end_to_end_enqueue_t2_ns,
+        counters.end_to_end_worker_start_t3_ns,
+        counters.end_to_end_native_ack_t4_ns,
+        counters.end_to_end_edit_wall_ns,
+        counters.end_to_end_canonical_ack_wall_ns,
+        counters.end_to_end_canonical_transactions,
+        counters.end_to_end_canonical_commits,
+        counters.end_to_end_canonical_sql_queries,
+        counters.end_to_end_canonical_authenticated_objects,
+        counters.end_to_end_canonical_authenticated_bytes,
+        counters.end_to_end_canonical_q_high_water,
+        counters.initial_descriptor_verification_bytes,
+        counters.initial_storage_logical_bytes,
+        counters.initial_storage_apparent_bytes,
+        counters.initial_storage_allocated_bytes,
+        fixture.exact_count,
+        latest_count,
+        fixture.latest.namespace,
+        fixture.latest.namespace,
+        counters.range_fetches,
+        counters.fetched_bytes,
+        counters.write_calls,
+        counters.written_bytes,
+        counters.clone_calls,
+        counters.clone_successes,
+        counters.clone_failures,
+        counters.data_sync_calls,
+        counters.temp_files_created,
+        counters.temp_files_removed,
+        counters.private_build_cancellations,
+        counters.restart_temps_discovered,
+        counters.restart_temps_removed,
+        counters.restart_temps_retained,
+        counters.missing_seed_fallbacks,
+        counters.seed_admission_rejections,
+        counters.metadata_sync_calls,
+        counters.rename_calls,
+        counters.directory_sync_calls,
+        counters.reconciliation_calls,
+        counters.sqlite_write_calls,
+        counters.sqlite_transactions,
+        counters.sqlite_commits,
+        foreground_transactions,
+        foreground_commits,
+        counters.contention_worker_start_ns,
+        counters.contention_worker_end_ns,
+        foreground_start_ns,
+        foreground_end_ns,
+        diagnostic.barrier_autocommit.load(Ordering::SeqCst),
+        diagnostic.barrier_scope_live.load(Ordering::SeqCst),
+        diagnostic.commit_autocommit.load(Ordering::SeqCst),
+        diagnostic.commit_scope_live.load(Ordering::SeqCst),
+        diagnostic.commit_primary_code.load(Ordering::SeqCst),
+        diagnostic.commit_extended_code.load(Ordering::SeqCst),
+        counters.sqlite_busy_errors,
+        counters.sqlite_locked_errors,
+        counters.sql_queries,
+        counters.sql_rows,
+        counters.blob_reads,
+        counters.blob_bytes,
+        counters.authenticated_objects,
+        counters.authenticated_bytes,
+        counters.seed_rotations,
+        counters.q_high_water,
+        counters.q_terminal,
+        counters.max_buffer_bytes,
+        selected_fault.name(),
+        if selected_fault == ProjectionFault::None {
+            "NotInjectedInPerformanceRun"
+        } else {
+            "ObservedCompleteApply"
+        },
+        projection_fault_selectors_json(),
+        projection_fault_hooks_json(),
+        counters.payload_ns,
+        counters.durability_ns,
+        counters.verification_ns,
+        checkpoint_ns,
+        terminal_storage.logical,
+        terminal_storage.apparent,
+        terminal_storage.allocated,
+        terminal_residue,
+        wall,
+    ))
+}
+
+pub(super) fn g5_projection_self_check(root: &Path) -> AnyResult<String> {
+    prepare_g5_projection_fixture(root, "self-check")?;
+    run_g5_projection_suite(root, "self-check")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3761,6 +7498,1570 @@ mod tests {
                 .expect("clock")
                 .as_nanos()
         ))
+    }
+
+    fn projection_json_scalar<'a>(report: &'a str, key: &str) -> &'a str {
+        let marker = format!("\"{key}\":");
+        let mut matches = report.match_indices(&marker);
+        let (offset, _) = matches.next().expect("receipt field");
+        assert!(matches.next().is_none());
+        let value = &report[offset + marker.len()..];
+        if let Some(value) = value.strip_prefix('"') {
+            &value[..value.find('"').expect("quoted receipt field")]
+        } else {
+            let end = value
+                .find(|character| character == ',' || character == '}')
+                .expect("scalar receipt field terminator");
+            &value[..end]
+        }
+    }
+
+    fn projection_request(label: &[u8]) -> ProjectionRequest {
+        let root = ObjectId::for_bytes(label);
+        let roots = Roots {
+            namespace: root,
+            file: root,
+            length: 16,
+            references: 1,
+        };
+        ProjectionRequest {
+            parent: roots,
+            parent_digest: root.to_bytes(),
+            target: roots,
+            target_digest: root.to_bytes(),
+            plan: ProjectionPlan::FullFallback,
+            contended: false,
+            policy: RequestPolicy::LatestFollowing {
+                stream: LatestStream::SameSize,
+                ordinal: 0,
+            },
+            force_full_fallback: false,
+            token: None,
+            edge_authenticated: false,
+            end_to_end: None,
+            fault: ProjectionFault::None,
+        }
+    }
+
+    fn projection_test_authority() -> ProjectionTokenAuthority {
+        ProjectionTokenAuthority {
+            store_instance_id: [0; 16],
+            validation_authority_id: [0; 32],
+            validation_key: [0; 32],
+            profile: [0; 32],
+            integrity_epoch: 0,
+        }
+    }
+
+    fn projection_apply_fixture(
+        label: &str,
+        fault: ProjectionFault,
+    ) -> (PathBuf, PathBuf, ProjectionWorker, ProjectionRequest) {
+        let root = test_root(label);
+        let prepared =
+            prepare(&root, SOURCE_1, Scenario::QualifiedOneByte).expect("projection fixture");
+        let directory_path = prepared.directory_path.clone();
+        let directory = prepared.directory.try_clone().expect("directory");
+        let parent = prepared.parent;
+        let parent_digest = prepared.parent_digest;
+        let target = prepared.target;
+        let target_digest = prepared.target_digest;
+        let patch = prepared.patch.clone();
+        let active_file = openat_file(
+            &directory,
+            DESTINATION_NAME,
+            libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+            0,
+        )
+        .expect("active file");
+        let (active_native, active_storage) = fstat_file(&active_file).expect("active stat");
+        let mut active_metrics = Metrics::default();
+        let active_roots =
+            g4_roots(&prepared.store, parent.namespace, &mut active_metrics).expect("active roots");
+        let (active_length, active_digest, active_mode) =
+            g4_hash_descriptor(&active_file, active_native, &mut active_metrics)
+                .expect("active descriptor");
+        finish_q(&mut active_metrics).expect("active Q0");
+        assert_eq!(active_roots, parent);
+        assert_eq!(active_length, parent.length);
+        assert_eq!(active_digest, parent_digest);
+        assert_eq!(active_mode, MODE);
+        let active = VerifiedSeed {
+            file: active_file,
+            identity: SeedIdentity {
+                native: active_native,
+                namespace_root: parent.namespace,
+                file_root: parent.file,
+                length: parent.length,
+                references: parent.references,
+                digest: parent_digest,
+            },
+            storage: active_storage,
+        };
+        drop(prepared.store);
+        let store =
+            Store::open_existing_read_only(&directory_path.join("store.sqlite"), SELECTED_PROFILE)
+                .expect("reader");
+        let mut worker = ProjectionWorker {
+            directory_path: directory_path.clone(),
+            directory,
+            store: Some(store),
+            active,
+            counters: ProjectionCounters::default(),
+            apply_native: Counters::default(),
+            apply_rename_acknowledged: false,
+            shutdown_rendezvous: None,
+        };
+        worker.initialize_reader().expect("initialize");
+        let request = ProjectionRequest {
+            parent,
+            parent_digest,
+            target,
+            target_digest,
+            plan: projection_plan(std::iter::once(patch), target.length).expect("plan"),
+            contended: false,
+            policy: RequestPolicy::IsolatedSparseSentinel,
+            force_full_fallback: false,
+            token: None,
+            edge_authenticated: true,
+            end_to_end: None,
+            fault,
+        };
+        (root, directory_path, worker, request)
+    }
+
+    fn assert_projection_fault_finalized(
+        worker: &ProjectionWorker,
+        outcome: ProjectionFaultOutcome,
+    ) {
+        assert_eq!(worker.counters.fault_finalizations, 1);
+        assert_eq!(worker.counters.fault_outcome, Some(outcome));
+        assert_eq!(worker.counters.fault_q_terminal, 0);
+        assert_eq!(worker.counters.q_terminal, 0);
+        assert_eq!(worker.counters.fault_temp_residue, 0);
+        assert_eq!(worker.counters.fault_active_descriptors, 1);
+        assert_eq!(worker.counters.fault_successor_descriptors, 0);
+        assert_eq!(
+            worker.counters.fault_storage_logical_bytes,
+            worker.active.storage.logical
+        );
+        assert_eq!(
+            worker.counters.fault_storage_apparent_bytes,
+            worker.active.storage.apparent
+        );
+        assert_eq!(
+            worker.counters.fault_storage_allocated_bytes,
+            worker.active.storage.allocated
+        );
+        assert!(worker.counters.fault_apply_wall_ns > 0);
+        assert!(worker.counters.fault_finalization_ns > 0);
+        assert!(worker.counters.fault_finalization_complete);
+        assert!(worker
+            .counters
+            .fault_finalization_json()
+            .contains("\"status\":\"PASS\""));
+    }
+
+    fn projection_token_mailbox(store: &Store) -> ProjectionMailbox {
+        ProjectionMailbox {
+            in_flight: false,
+            pending: None,
+            shutdown: false,
+            release_first: true,
+            submitted: 0,
+            coalesced: 0,
+            started: 0,
+            published: 0,
+            cancelled: 0,
+            failed: 0,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: None,
+            token_authority: ProjectionTokenAuthority::from_store(store),
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        }
+    }
+
+    #[test]
+    fn g5_projection_edge_token_rejects_mutation_replay_and_cross_stream_use() {
+        let root = test_root("g5-projection-edge-token");
+        let mut prepared = prepare(&root, SOURCE_1, Scenario::QualifiedOneByte).expect("fixture");
+        let head = prepared
+            .store
+            .current_head()
+            .expect("head read")
+            .expect("head");
+        let token = prove_and_mint_projection_edge(
+            &mut prepared.store,
+            &head,
+            prepared.parent,
+            prepared.parent_digest,
+            &prepared.directory_path.join("parent.source"),
+            prepared.target,
+            prepared.target_digest,
+            &prepared.directory_path.join("target.source"),
+            &prepared.patch,
+            RequestPolicy::IsolatedSparseSentinel,
+        )
+        .expect("mint");
+        let serialized = token.serialize();
+        assert!(ProjectionEdgeToken::parse(&format!("{serialized}|overflow")).is_err());
+        let mut oversized = serialized.split('|').collect::<Vec<_>>();
+        oversized[21] = "257";
+        assert!(ProjectionEdgeToken::parse(&oversized.join("|")).is_err());
+        let request = |token: ProjectionEdgeToken| ProjectionRequest {
+            parent: prepared.parent,
+            parent_digest: prepared.parent_digest,
+            target: prepared.target,
+            target_digest: prepared.target_digest,
+            plan: projection_plan(
+                std::iter::once(prepared.patch.clone()),
+                prepared.target.length,
+            )
+            .expect("plan"),
+            contended: false,
+            policy: RequestPolicy::IsolatedSparseSentinel,
+            force_full_fallback: false,
+            token: Some(token),
+            edge_authenticated: false,
+            end_to_end: None,
+            fault: ProjectionFault::None,
+        };
+
+        let mut valid = projection_token_mailbox(&prepared.store);
+        valid
+            .submit(request(
+                ProjectionEdgeToken::parse(&serialized).expect("parse"),
+            ))
+            .expect("valid token");
+        let accepted = valid.take().expect("take").expect("request");
+        assert!(accepted.edge_authenticated && accepted.token.is_none());
+        valid.complete().expect("complete");
+        assert!(valid
+            .submit(request(
+                ProjectionEdgeToken::parse(&serialized).expect("reparse"),
+            ))
+            .is_err());
+
+        let mut wrong_root = request(ProjectionEdgeToken::parse(&serialized).expect("token"));
+        wrong_root.target.namespace = ObjectId::for_bytes(b"wrong-root");
+        assert!(projection_token_mailbox(&prepared.store)
+            .submit(wrong_root)
+            .is_err());
+
+        let mut wrong_digest = request(ProjectionEdgeToken::parse(&serialized).expect("token"));
+        wrong_digest.target_digest[0] ^= 1;
+        assert!(projection_token_mailbox(&prepared.store)
+            .submit(wrong_digest)
+            .is_err());
+
+        let mut underdeclared = request(ProjectionEdgeToken::parse(&serialized).expect("token"));
+        underdeclared.plan = ProjectionPlan::Ranges(Vec::new());
+        assert!(projection_token_mailbox(&prepared.store)
+            .submit(underdeclared)
+            .is_err());
+
+        let mut substituted_seed = request(ProjectionEdgeToken::parse(&serialized).expect("token"));
+        substituted_seed.parent_digest[0] ^= 1;
+        assert!(projection_token_mailbox(&prepared.store)
+            .submit(substituted_seed)
+            .is_err());
+
+        let mut wrong_transition = request(ProjectionEdgeToken::parse(&serialized).expect("token"));
+        wrong_transition
+            .token
+            .as_mut()
+            .expect("token")
+            .binding
+            .transition = ObjectId::for_bytes(b"wrong-transition");
+        assert!(projection_token_mailbox(&prepared.store)
+            .submit(wrong_transition)
+            .is_err());
+
+        let mut cross_stream = request(ProjectionEdgeToken::parse(&serialized).expect("token"));
+        cross_stream.policy = RequestPolicy::LatestFollowing {
+            stream: LatestStream::CountStorm,
+            ordinal: 0,
+        };
+        assert!(projection_token_mailbox(&prepared.store)
+            .submit(cross_stream)
+            .is_err());
+
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_mailbox_conserves_state_and_drains() {
+        assert_eq!(
+            (0..2)
+                .map(|index| {
+                    projection_chain_policy(index, 2)
+                        .expect("screen policy")
+                        .evidence()
+                })
+                .collect::<Vec<_>>(),
+            vec![("ExactEveryRoot", 1), ("LatestFollowingSameSize", 0)]
+        );
+        assert_eq!(
+            (0..63)
+                .map(|index| projection_chain_policy(index, 64).expect("gate policy"))
+                .filter_map(|policy| match policy {
+                    RequestPolicy::ExactEveryRoot { ordinal } => Some(ordinal),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            (1..64).collect::<Vec<_>>()
+        );
+        assert_eq!(latest_following_builds_to_wait(0), 0);
+        assert_eq!(latest_following_builds_to_wait(1), 1);
+        assert_eq!(latest_following_builds_to_wait(2), 2);
+        assert_eq!(latest_following_builds_to_wait(100), 2);
+        let mut mailbox = ProjectionMailbox {
+            in_flight: false,
+            pending: None,
+            shutdown: false,
+            release_first: false,
+            submitted: 0,
+            coalesced: 0,
+            started: 0,
+            published: 0,
+            cancelled: 0,
+            failed: 0,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: None,
+            token_authority: projection_test_authority(),
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        };
+        let first = projection_request(b"first");
+        let mut latest = projection_request(b"latest");
+        latest.parent = first.target;
+        latest.parent_digest = first.target_digest;
+        latest.policy = RequestPolicy::LatestFollowing {
+            stream: LatestStream::SameSize,
+            ordinal: 1,
+        };
+        latest.contended = true;
+        mailbox.submit(first).expect("first");
+        mailbox.submit(latest).expect("replace pending");
+        let request = mailbox.take().expect("take").expect("pending");
+        assert_eq!(request.target.namespace, ObjectId::for_bytes(b"latest"));
+        assert!(request.contended);
+        mailbox.complete().expect("complete");
+        mailbox.shutdown = true;
+        assert!(mailbox.equations_hold());
+        assert!(!mailbox.in_flight && mailbox.pending.is_none());
+        assert_eq!(
+            mailbox
+                .submit(projection_request(b"late"))
+                .expect_err("shutdown")
+                .downcast_ref::<ProjectionServiceError>(),
+            Some(&ProjectionServiceError::Shutdown)
+        );
+    }
+
+    #[test]
+    fn g5_projection_policy_blocks_exact_pending_and_bounds_latest_replacement() {
+        let mut mailbox = ProjectionMailbox {
+            in_flight: false,
+            pending: None,
+            shutdown: false,
+            release_first: true,
+            submitted: 0,
+            coalesced: 0,
+            started: 0,
+            published: 0,
+            cancelled: 0,
+            failed: 0,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: None,
+            token_authority: projection_test_authority(),
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        };
+        let mut exact = projection_request(b"exact");
+        exact.policy = RequestPolicy::ExactEveryRoot { ordinal: 3 };
+        mailbox.submit(exact).expect("exact pending");
+        let mut next = projection_request(b"next");
+        next.policy = RequestPolicy::LatestFollowing {
+            stream: LatestStream::SameSize,
+            ordinal: 4,
+        };
+        next.end_to_end = Some(ProjectionEndToEndTiming {
+            edit_t0_ns: 1,
+            canonical_ack_t1_ns: 2,
+            enqueue_t2_ns: None,
+        });
+        assert_eq!(
+            mailbox
+                .submit_with_origin(next, Some(Instant::now()))
+                .expect_err("exact cannot coalesce")
+                .downcast_ref::<ProjectionServiceError>(),
+            Some(&ProjectionServiceError::ExactRequestPending)
+        );
+        assert_eq!(mailbox.submitted, 1);
+        assert!(matches!(
+            mailbox.pending.as_ref().expect("exact retained").policy,
+            RequestPolicy::ExactEveryRoot { ordinal: 3 }
+        ));
+        assert!(mailbox
+            .pending
+            .as_ref()
+            .expect("rejected submit did not replace pending")
+            .end_to_end
+            .is_none());
+
+        mailbox.pending = None;
+        mailbox.submitted = 0;
+        let mut first = projection_request(b"latest-a");
+        first.policy = RequestPolicy::LatestFollowing {
+            stream: LatestStream::SameSize,
+            ordinal: 0,
+        };
+        let mut replacement = projection_request(b"latest-b");
+        replacement.parent = first.target;
+        replacement.parent_digest = first.target_digest;
+        replacement.policy = RequestPolicy::LatestFollowing {
+            stream: LatestStream::SameSize,
+            ordinal: 1,
+        };
+        replacement.target.length = 1024;
+        replacement.plan = projection_plan(
+            (0..=G5_PROJECTION_MAX_RANGES).map(|index| {
+                let start = u64::try_from(index * 2).expect("offset");
+                start..start + 1
+            }),
+            replacement.target.length,
+        )
+        .expect("bounded admission");
+        mailbox.submit(first).expect("latest pending");
+        mailbox.submit(replacement).expect("latest replacement");
+        assert!(
+            mailbox
+                .pending
+                .as_ref()
+                .expect("aggregate")
+                .force_full_fallback
+        );
+        assert!(matches!(
+            mailbox.pending.as_ref().expect("aggregate").plan,
+            ProjectionPlan::FullFallback
+        ));
+    }
+
+    #[test]
+    fn g5_projection_worker_error_is_observable_without_waiting() {
+        let mailbox = ProjectionMailbox {
+            in_flight: false,
+            pending: None,
+            shutdown: true,
+            release_first: true,
+            submitted: 1,
+            coalesced: 0,
+            started: 1,
+            published: 0,
+            cancelled: 0,
+            failed: 1,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: Some("injected".into()),
+            token_authority: projection_test_authority(),
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        };
+        assert!(mailbox
+            .ensure_worker_live()
+            .expect_err("worker failure")
+            .to_string()
+            .contains("ProjectionWorkerFailed"));
+    }
+
+    #[test]
+    fn g5_projection_rendezvous_disconnects_before_either_phase() {
+        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(0);
+        drop(ready_rx);
+        assert!(ready_tx.send(()).is_err());
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel::<()>(0);
+        drop(release_tx);
+        assert!(release_rx.recv().is_err());
+    }
+
+    #[test]
+    fn g5_projection_clone_failure_streams_and_reconciliation_is_old_or_new() {
+        let root = test_root("g5-projection-clone-fallback");
+        let mut prepared = prepare(&root, SOURCE_1, Scenario::QualifiedOneByte).expect("fixture");
+        assert_eq!(
+            reconcile_projection_publication(
+                &mut Store::open_existing_read_only(
+                    &prepared.directory_path.join("store.sqlite"),
+                    SELECTED_PROFILE,
+                )
+                .expect("fresh reconciliation reader"),
+                &prepared.directory,
+                &prepared.seed.as_ref().expect("seed").identity,
+                prepared.target,
+                &mut Counters::default(),
+                &mut Metrics::default(),
+            )
+            .expect("prior"),
+            ProjectionReconciliation::Prior
+        );
+        assert_eq!(
+            reconcile_projection_publication_fresh(
+                &prepared.directory_path.join("missing-store.sqlite"),
+                &prepared.directory,
+                &prepared.seed.as_ref().expect("seed").identity,
+                prepared.target,
+                &mut Counters::default(),
+                &mut Metrics::default(),
+            )
+            .expect_err("missing reconciliation store")
+            .downcast_ref::<CoreError>(),
+            Some(&CoreError::AmbiguousDurability)
+        );
+        let mut native = Counters::default();
+        assert!(clone_temp(
+            prepared.seed.as_ref().expect("seed"),
+            &prepared.directory,
+            &mut native,
+            true,
+            false,
+            false
+        )
+        .expect("clone failure cleanup")
+        .is_none());
+        let (mut output, mut temp) =
+            create_temp(&prepared.directory, &mut native).expect("fallback temp");
+        let mut metrics = Metrics::default();
+        let (_, _, digest) = stream_root(
+            &mut prepared.store,
+            prepared.target.namespace,
+            &mut output,
+            &mut metrics,
+        )
+        .expect("stream fallback");
+        finish_q(&mut metrics).expect("Q0");
+        assert_eq!(digest, prepared.target_digest);
+        sync_fd(&output).expect("sync");
+        chmod_fd(&output, MODE).expect("mode");
+        sync_fd(&output).expect("metadata sync");
+        rename_at(&prepared.directory, &temp.name, DESTINATION_NAME).expect("publish");
+        temp.active = false;
+        sync_fd(&prepared.directory).expect("directory sync");
+        assert_eq!(
+            reconcile_projection_publication(
+                &mut prepared.store,
+                &prepared.directory,
+                &prepared.seed.as_ref().expect("seed").identity,
+                prepared.target,
+                &mut native,
+                &mut Metrics::default(),
+            )
+            .expect("target"),
+            ProjectionReconciliation::Target
+        );
+        let reopened =
+            open_projection_seed(&prepared.directory, prepared.target, prepared.target_digest)
+                .expect("post-rename reopen");
+        assert_eq!(reopened.identity.namespace_root, prepared.target.namespace);
+        assert_eq!(reopened.identity.digest, prepared.target_digest);
+        assert_eq!(
+            count_residue(&prepared.directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_stale_parent_fails_before_native_work() {
+        let root = test_root("g5-projection-stale-parent");
+        let mut prepared = prepare(&root, SOURCE_1, Scenario::QualifiedOneByte).expect("fixture");
+        let active = prepared.seed.take().expect("seed");
+        let active_root = active.identity.namespace_root;
+        let directory = prepared.directory.try_clone().expect("directory");
+        let store = Store::open_existing_read_only(
+            &prepared.directory_path.join("store.sqlite"),
+            SELECTED_PROFILE,
+        )
+        .expect("reader");
+        let mut worker = ProjectionWorker {
+            directory_path: prepared.directory_path.clone(),
+            directory,
+            store: Some(store),
+            active,
+            counters: ProjectionCounters::default(),
+            apply_native: Counters::default(),
+            apply_rename_acknowledged: false,
+            shutdown_rendezvous: None,
+        };
+        worker.initialize_reader().expect("initialize");
+        let stale = ObjectId::for_bytes(b"stale-parent");
+        let error = worker
+            .apply(
+                ProjectionRequest {
+                    parent: Roots {
+                        namespace: stale,
+                        file: stale,
+                        length: prepared.parent.length,
+                        references: prepared.parent.references,
+                    },
+                    parent_digest: stale.to_bytes(),
+                    target: prepared.target,
+                    target_digest: prepared.target_digest,
+                    plan: ProjectionPlan::FullFallback,
+                    contended: false,
+                    policy: RequestPolicy::IsolatedOrdinaryFallback,
+                    force_full_fallback: true,
+                    token: None,
+                    edge_authenticated: false,
+                    end_to_end: None,
+                    fault: ProjectionFault::None,
+                },
+                Instant::now(),
+                None,
+            )
+            .expect_err("stale parent");
+        assert_eq!(
+            error.downcast_ref::<ProjectionServiceError>(),
+            Some(&ProjectionServiceError::ParentChainMismatch)
+        );
+        assert_eq!(worker.active.identity.namespace_root, active_root);
+        assert_eq!(worker.counters.rename_calls, 0);
+        assert_projection_fault_finalized(&worker, ProjectionFaultOutcome::Stale);
+        let mut stale_mailbox = ProjectionMailbox {
+            in_flight: true,
+            pending: None,
+            shutdown: false,
+            release_first: true,
+            submitted: 1,
+            coalesced: 0,
+            started: 1,
+            published: 0,
+            cancelled: 0,
+            failed: 0,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: None,
+            token_authority: projection_test_authority(),
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        };
+        stale_mailbox
+            .record_failure(error.as_ref())
+            .expect("record stale completion");
+        assert_eq!(stale_mailbox.stale, 1);
+        assert_eq!(stale_mailbox.failed, 0);
+        assert!(stale_mailbox.equations_hold());
+        worker.active.identity.digest[0] ^= 1;
+        let substituted_seed = ProjectionRequest {
+            parent: prepared.parent,
+            parent_digest: prepared.parent_digest,
+            target: prepared.target,
+            target_digest: prepared.target_digest,
+            plan: projection_plan(
+                std::iter::once(prepared.patch.clone()),
+                prepared.target.length,
+            )
+            .expect("plan"),
+            contended: false,
+            policy: RequestPolicy::IsolatedSparseSentinel,
+            force_full_fallback: false,
+            token: None,
+            edge_authenticated: true,
+            end_to_end: None,
+            fault: ProjectionFault::None,
+        };
+        assert_eq!(
+            worker
+                .apply(substituted_seed, Instant::now(), None)
+                .expect_err("substituted seed")
+                .downcast_ref::<ProjectionServiceError>(),
+            Some(&ProjectionServiceError::ParentChainMismatch)
+        );
+        assert_eq!(
+            count_residue(&prepared.directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_release_faults_reconcile_through_complete_apply() {
+        for fault in [
+            ProjectionFault::CloneFailure,
+            ProjectionFault::RenameLostAck,
+            ProjectionFault::DirectorySyncLostAck,
+            ProjectionFault::PostRenameStatFailure,
+            ProjectionFault::ReopenFailure,
+        ] {
+            let (root, directory_path, mut worker, request) =
+                projection_apply_fixture(fault.name(), fault);
+            let target = request.target;
+            worker
+                .apply(request, Instant::now(), None)
+                .unwrap_or_else(|error| panic!("{}: {error:?}", fault.name()));
+            assert_eq!(worker.active.identity.namespace_root, target.namespace);
+            assert_eq!(worker.active.identity.file_root, target.file);
+            assert_eq!(
+                count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+                0
+            );
+            if fault == ProjectionFault::CloneFailure {
+                assert_eq!(worker.counters.clone_failures, 1);
+                assert_eq!(worker.counters.full_fallbacks, 1);
+                assert_eq!(worker.counters.reconciliation_calls, 0);
+            } else {
+                assert_eq!(worker.counters.reconciliation_calls, 1);
+                assert_eq!(
+                    worker.counters.directory_sync_calls,
+                    if fault == ProjectionFault::RenameLostAck {
+                        1
+                    } else {
+                        2
+                    }
+                );
+            }
+            drop(worker);
+            fs::remove_dir_all(root).expect("cleanup");
+        }
+
+        let (root, directory_path, mut worker, request) = projection_apply_fixture(
+            "reconciliation-sync-failure",
+            ProjectionFault::ReconciliationSyncFailure,
+        );
+        let prior = worker.active.identity.namespace_root;
+        assert_eq!(
+            worker
+                .apply(request, Instant::now(), None)
+                .expect_err("reconciliation sync must fail closed")
+                .downcast_ref::<CoreError>(),
+            Some(&CoreError::AmbiguousDurability)
+        );
+        assert_eq!(worker.active.identity.namespace_root, prior);
+        assert_eq!(worker.counters.reconciliation_calls, 1);
+        assert_eq!(worker.counters.directory_sync_calls, 1);
+        assert!(worker.apply_native.reconciliation_sql_queries > 0);
+        assert!(worker.counters.sql_queries >= worker.apply_native.reconciliation_sql_queries);
+        assert!(
+            worker.counters.authenticated_bytes
+                >= worker
+                    .apply_native
+                    .reconciliation_canonical_bytes_authenticated
+        );
+        assert_projection_fault_finalized(&worker, ProjectionFaultOutcome::AmbiguousDurability);
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_cancel_private_successor_removes_temp_and_records_cancellation() {
+        let (root, directory_path, mut worker, request) = projection_apply_fixture(
+            "cancel-private-successor",
+            ProjectionFault::CancelPrivateSuccessor,
+        );
+        let prior = worker.active.identity.namespace_root;
+        let error = worker
+            .apply(request, Instant::now(), None)
+            .expect_err("private successor cancellation");
+        assert_eq!(
+            error.downcast_ref::<ProjectionServiceError>(),
+            Some(&ProjectionServiceError::Cancelled)
+        );
+        assert_eq!(worker.active.identity.namespace_root, prior);
+        assert_eq!(worker.counters.temp_files_created, 1);
+        assert_eq!(worker.counters.temp_files_removed, 1);
+        assert_eq!(worker.counters.private_build_cancellations, 1);
+        assert_eq!(worker.counters.data_sync_calls, 0);
+        assert_eq!(worker.counters.rename_calls, 0);
+        assert_eq!(worker.counters.directory_sync_calls, 1);
+        assert_projection_fault_finalized(&worker, ProjectionFaultOutcome::Cancelled);
+        let mut mailbox = ProjectionMailbox {
+            in_flight: true,
+            pending: None,
+            shutdown: false,
+            release_first: true,
+            submitted: 1,
+            coalesced: 0,
+            started: 1,
+            published: 0,
+            cancelled: 0,
+            failed: 0,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: None,
+            token_authority: projection_test_authority(),
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        };
+        mailbox
+            .record_failure(error.as_ref())
+            .expect("record cancellation");
+        assert_eq!(mailbox.cancelled, 1);
+        assert_eq!(mailbox.failed, 0);
+        assert_eq!(mailbox.stale, 0);
+        assert!(mailbox.shutdown && !mailbox.in_flight && mailbox.equations_hold());
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        assert_eq!(q_current(), 0);
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_shutdown_inflight_drains_real_worker_loop() {
+        let (root, directory_path, mut worker, mut request) =
+            projection_apply_fixture("shutdown-inflight", ProjectionFault::ShutdownInflight);
+        let prior = worker.active.identity.namespace_root;
+        let (private_ready_tx, private_ready_rx) = std::sync::mpsc::sync_channel(0);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(0);
+        request.plan = ProjectionPlan::FullFallback;
+        request.force_full_fallback = true;
+        request.policy = RequestPolicy::IsolatedOrdinaryFallback;
+        request.token = None;
+        request.edge_authenticated = false;
+        let target = request.target;
+        let shared = std::sync::Arc::new((
+            std::sync::Mutex::new(ProjectionMailbox {
+                in_flight: false,
+                pending: None,
+                shutdown: false,
+                release_first: true,
+                submitted: 0,
+                coalesced: 0,
+                started: 0,
+                published: 0,
+                cancelled: 0,
+                failed: 0,
+                stale: 0,
+                sqlite_busy_errors: 0,
+                sqlite_locked_errors: 0,
+                worker_error: None,
+                token_authority: projection_test_authority(),
+                exact_ordinal: None,
+                same_size_ordinal: None,
+                count_storm_ordinal: None,
+                isolated_sparse_accepted: false,
+            }),
+            std::sync::Condvar::new(),
+        ));
+        worker.shutdown_rendezvous = Some(ProjectionShutdownRendezvous {
+            private_ready: private_ready_tx,
+            release: release_rx,
+            shutdown_state: std::sync::Arc::clone(&shared),
+        });
+        let worker_shared = std::sync::Arc::clone(&shared);
+        let handle = std::thread::spawn(move || {
+            let mut terminal = ProjectionWorkerTerminal {
+                shared: std::sync::Arc::clone(&worker_shared),
+                success: false,
+            };
+            loop {
+                let (mutex, condition) = &*worker_shared;
+                let mut mailbox = mutex.lock().expect("mailbox");
+                while mailbox.pending.is_none() && !mailbox.shutdown {
+                    mailbox = condition.wait(mailbox).expect("worker wait");
+                }
+                let Some(request) = mailbox.take().expect("worker take") else {
+                    break;
+                };
+                condition.notify_all();
+                drop(mailbox);
+                worker
+                    .apply(request, Instant::now(), None)
+                    .expect("in-flight request drains to publication");
+                let mut mailbox = mutex.lock().expect("completion mailbox");
+                mailbox.complete().expect("complete drained request");
+                condition.notify_all();
+            }
+            worker.counters.q_terminal = q_current();
+            assert_eq!(worker.counters.q_terminal, 0);
+            terminal.success = true;
+            worker
+        });
+        {
+            let (mutex, condition) = &*shared;
+            let mut mailbox = mutex.lock().expect("submit mailbox");
+            mailbox.submit(request).expect("submit shutdown request");
+            condition.notify_all();
+        }
+        private_ready_rx.recv().expect("private build ready");
+        {
+            let (mutex, condition) = &*shared;
+            let mut mailbox = mutex.lock().expect("controller mailbox");
+            assert!(mailbox.in_flight && !mailbox.shutdown);
+            mailbox.shutdown = true;
+            condition.notify_all();
+        }
+        release_tx.send(()).expect("release shutdown worker");
+        let worker = handle.join().expect("worker join");
+        assert_eq!(worker.active.identity.namespace_root, target.namespace);
+        assert_ne!(worker.active.identity.namespace_root, prior);
+        assert_eq!(worker.counters.temp_files_created, 1);
+        assert_eq!(worker.counters.temp_files_removed, 0);
+        assert_eq!(worker.counters.rename_calls, 1);
+        let mailbox = shared.0.lock().expect("terminal mailbox");
+        assert!(mailbox.shutdown);
+        assert!(!mailbox.in_flight && mailbox.pending.is_none());
+        assert_eq!(mailbox.published, 1);
+        assert_eq!(mailbox.failed, 0);
+        assert_eq!(mailbox.cancelled, 0);
+        assert_eq!(mailbox.stale, 0);
+        assert!(mailbox.worker_error.is_none() && mailbox.equations_hold());
+        drop(mailbox);
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        assert_eq!(q_current(), 0);
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_restart_discovers_and_removes_only_owned_temps() {
+        let (root, directory_path, mut worker, request) =
+            projection_apply_fixture("restart-owned-temp", ProjectionFault::None);
+        let mut native = Counters::default();
+        let (file, mut abandoned) =
+            create_temp(&worker.directory, &mut native).expect("abandoned owned temp");
+        let abandoned_name = abandoned.name.clone();
+        let authority = ProjectionTokenAuthority::from_store(worker.store.as_ref().expect("store"));
+        mark_projection_temp_owned(&file, authority, &abandoned_name).expect("ownership marker");
+        abandoned.active = false;
+        drop(file);
+        drop(abandoned);
+        let retained_name = ".g3-tmp-retained-unowned";
+        let retained = openat_file(
+            &worker.directory,
+            retained_name,
+            libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+            0o600,
+        )
+        .expect("unowned same-kind residue");
+        drop(retained);
+        let restart =
+            cleanup_projection_restart_temps(&directory_path, &worker.directory, authority)
+                .expect("restart cleanup");
+        assert_eq!(restart, (2, 1, 1));
+        assert!(stat_at(&worker.directory, &abandoned_name)
+            .expect("owned stat")
+            .is_none());
+        assert!(stat_at(&worker.directory, retained_name)
+            .expect("unowned stat")
+            .is_some_and(|native| native.is_regular()));
+        worker.counters.restart_temps_discovered = restart.0;
+        worker.counters.restart_temps_removed = restart.1;
+        worker.counters.restart_temps_retained = restart.2;
+        worker.counters.directory_sync_calls += u64::from(restart.1 != 0);
+        let target = request.target;
+        worker
+            .apply(request, Instant::now(), None)
+            .expect("publish after restart cleanup");
+        assert_eq!(worker.active.identity.namespace_root, target.namespace);
+        assert_eq!(worker.counters.restart_temps_discovered, 2);
+        assert_eq!(worker.counters.restart_temps_removed, 1);
+        assert_eq!(worker.counters.restart_temps_retained, 1);
+        assert!(unlink_at(&worker.directory, retained_name).expect("retained cleanup"));
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("terminal residue"),
+            0
+        );
+        assert_eq!(q_current(), 0);
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_restart_substitution_after_authentication_retains_replacement() {
+        let (root, directory_path, worker, _) =
+            projection_apply_fixture("restart-substitution", ProjectionFault::None);
+        let authority = ProjectionTokenAuthority::from_store(worker.store.as_ref().expect("store"));
+        let mut native = Counters::default();
+        let (file, mut owned) =
+            create_temp(&worker.directory, &mut native).expect("owned restart temp");
+        let name = owned.name.clone();
+        mark_projection_temp_owned(&file, authority, &name).expect("ownership marker");
+        let authenticated = fstat_file(&file).expect("authenticated identity").0;
+        owned.active = false;
+        let retained_name = ".g5-authenticated-restart-temp";
+        let replacement_identity = std::cell::Cell::new(None);
+        let removed = unlink_authenticated_projection_temp(
+            &worker.directory,
+            &name,
+            &file,
+            authority,
+            authenticated,
+            || {
+                rename_at(&worker.directory, &name, retained_name)?;
+                let replacement = openat_file(
+                    &worker.directory,
+                    &name,
+                    libc::O_RDWR
+                        | libc::O_CREAT
+                        | libc::O_EXCL
+                        | libc::O_CLOEXEC
+                        | libc::O_NOFOLLOW,
+                    0o600,
+                )?;
+                replacement_identity.set(Some(fstat_file(&replacement)?.0));
+                Ok(())
+            },
+        )
+        .expect("substitution classification");
+        assert!(!removed);
+        let replacement_identity = replacement_identity.get().expect("replacement identity");
+        assert_ne!(replacement_identity.inode, authenticated.inode);
+        assert_eq!(
+            stat_at(&worker.directory, &name).expect("replacement stat"),
+            Some(replacement_identity)
+        );
+        let retained = stat_at(&worker.directory, retained_name)
+            .expect("retained owned stat")
+            .expect("retained owned temp");
+        assert_eq!(retained.device, authenticated.device);
+        assert_eq!(retained.inode, authenticated.inode);
+        assert!(unlink_at(&worker.directory, &name).expect("replacement cleanup"));
+        assert!(unlink_at(&worker.directory, retained_name).expect("owned cleanup"));
+        sync_fd(&worker.directory).expect("cleanup sync");
+        drop(file);
+        drop(owned);
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("terminal residue"),
+            0
+        );
+        assert_eq!(q_current(), 0);
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_before_sync_and_before_rename_fail_with_prior_active() {
+        for (fault, data_sync, metadata_sync) in [
+            (ProjectionFault::BeforeSync, 0, 0),
+            (ProjectionFault::BeforeRename, 1, 1),
+        ] {
+            let (root, directory_path, mut worker, request) =
+                projection_apply_fixture(fault.name(), fault);
+            let prior = worker.active.identity.namespace_root;
+            let error = worker
+                .apply(request, Instant::now(), None)
+                .expect_err(fault.name());
+            assert_eq!(
+                error
+                    .downcast_ref::<std::io::Error>()
+                    .and_then(std::io::Error::raw_os_error),
+                Some(libc::EIO)
+            );
+            assert_eq!(worker.active.identity.namespace_root, prior);
+            assert_eq!(worker.counters.temp_files_created, 1);
+            assert_eq!(worker.counters.temp_files_removed, 1);
+            assert_eq!(worker.counters.data_sync_calls, data_sync);
+            assert_eq!(worker.counters.metadata_sync_calls, metadata_sync);
+            assert_eq!(worker.counters.rename_calls, 0);
+            assert_eq!(worker.counters.directory_sync_calls, 1);
+            assert_projection_fault_finalized(&worker, ProjectionFaultOutcome::IoError);
+            assert_eq!(
+                count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+                0
+            );
+            assert_eq!(q_current(), 0);
+            drop(worker);
+            fs::remove_dir_all(root).expect("cleanup");
+        }
+    }
+
+    #[test]
+    fn g5_projection_missing_seed_streams_verified_fallback_to_exact_target() {
+        let (root, directory_path, mut worker, request) =
+            projection_apply_fixture("missing-seed", ProjectionFault::MissingSeed);
+        let target = request.target;
+        let target_digest = request.target_digest;
+        worker
+            .apply(request, Instant::now(), None)
+            .expect("missing-seed fallback");
+        assert_eq!(worker.active.identity.namespace_root, target.namespace);
+        assert_eq!(worker.active.identity.file_root, target.file);
+        assert_eq!(worker.active.identity.length, target.length);
+        assert_eq!(worker.active.identity.digest, target_digest);
+        assert_eq!(worker.counters.missing_seed_fallbacks, 1);
+        assert_eq!(worker.counters.full_fallbacks, 1);
+        assert_eq!(worker.counters.clone_calls, 0);
+        assert_eq!(worker.counters.seed_rotations, 1);
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        assert_eq!(q_current(), 0);
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_symlink_seed_is_rejected_before_private_work() {
+        use std::os::unix::fs::symlink;
+
+        let (root, directory_path, mut worker, request) =
+            projection_apply_fixture("wrong-kind-symlink", ProjectionFault::None);
+        let prior = worker.active.identity.namespace_root;
+        let retained_name = ".g5-projection-retained-seed";
+        rename_at(&worker.directory, DESTINATION_NAME, retained_name).expect("retain seed");
+        symlink(retained_name, directory_path.join(DESTINATION_NAME)).expect("substitute symlink");
+        let error = worker
+            .apply(request, Instant::now(), None)
+            .expect_err("symlink seed admission");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::WrongLogicalRole)
+        );
+        assert_eq!(worker.active.identity.namespace_root, prior);
+        assert_eq!(worker.counters.seed_admission_rejections, 1);
+        assert_eq!(worker.counters.temp_files_created, 0);
+        assert_eq!(worker.counters.rename_calls, 0);
+        assert_projection_fault_finalized(&worker, ProjectionFaultOutcome::WrongLogicalRole);
+        assert!(unlink_at(&worker.directory, DESTINATION_NAME).expect("symlink cleanup"));
+        rename_at(&worker.directory, retained_name, DESTINATION_NAME).expect("restore seed");
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        assert_eq!(q_current(), 0);
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_in_place_untouched_seed_mutation_fails_before_private_work() {
+        let (root, directory_path, mut worker, request) =
+            projection_apply_fixture("in-place-seed-mutation", ProjectionFault::None);
+        let prior = worker.active.identity.namespace_root;
+        let before = stat_at(&worker.directory, DESTINATION_NAME)
+            .expect("before stat")
+            .expect("visible seed");
+        let dirty = request.ranges().first().expect("dirty range");
+        let offset = if dirty.start != 0 { 0 } else { dirty.end };
+        assert!(offset < request.parent.length && !dirty.contains(&offset));
+        let mut substitute = openat_file(
+            &worker.directory,
+            DESTINATION_NAME,
+            libc::O_RDWR | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+            0,
+        )
+        .expect("in-place writer");
+        substitute.seek(SeekFrom::Start(offset)).expect("seek");
+        let mut byte = [0_u8; 1];
+        substitute.read_exact(&mut byte).expect("read");
+        byte[0] ^= 0xff;
+        substitute.seek(SeekFrom::Start(offset)).expect("seek");
+        substitute.write_all(&byte).expect("write");
+        substitute.sync_all().expect("sync mutation");
+        let after = fstat_file(&substitute).expect("after stat").0;
+        assert_eq!(after.device, before.device);
+        assert_eq!(after.inode, before.inode);
+        assert_eq!(after.length, before.length);
+        drop(substitute);
+
+        let error = worker
+            .apply(request, Instant::now(), None)
+            .expect_err("mutated seed");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::IdentityMismatch)
+        );
+        assert_eq!(worker.active.identity.namespace_root, prior);
+        assert_eq!(worker.counters.seed_admission_rejections, 1);
+        assert_eq!(worker.counters.clone_calls, 0);
+        assert_eq!(worker.counters.temp_files_created, 0);
+        assert_eq!(worker.counters.rename_calls, 0);
+        assert_projection_fault_finalized(&worker, ProjectionFaultOutcome::IdentityMismatch);
+        assert!(!worker.counters.fault_active_identity_matches);
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        assert_eq!(q_current(), 0);
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_temp_name_substitution_fails_before_rename() {
+        let root = test_root("projection-temp-name-substitution");
+        fs::create_dir(&root).expect("root");
+        let directory = open_dir(&root).expect("directory");
+        let mut native = Counters::default();
+        let (owned_file, temp) = create_temp(&directory, &mut native).expect("owned temp");
+        let owned = fstat_file(&owned_file).expect("owned identity").0;
+        let original_name = temp.name.clone();
+        let retained_name = ".g5-owned-temp-retained";
+        rename_at(&directory, &original_name, retained_name).expect("retain owned inode");
+        let substitute = openat_file(
+            &directory,
+            &original_name,
+            libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+            0o600,
+        )
+        .expect("substitute");
+        assert_eq!(
+            verify_projection_temp_name(&directory, &original_name, owned)
+                .expect_err("substituted name")
+                .downcast_ref::<CoreError>(),
+            Some(&CoreError::IdentityMismatch)
+        );
+        drop(substitute);
+        assert!(unlink_at(&directory, &original_name).expect("substitute cleanup"));
+        drop(owned_file);
+        drop(temp);
+        assert!(unlink_at(&directory, retained_name).expect("retained cleanup"));
+        drop(directory);
+        fs::remove_dir(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_cancel_then_restart_preserves_seed_and_publishes() {
+        let (root, directory_path, mut worker, cancelled) =
+            projection_apply_fixture("cancel-restart-apply", ProjectionFault::CancelBeforeNative);
+        let prior = worker.active.identity.namespace_root;
+        let target = cancelled.target;
+        let restarted = ProjectionRequest {
+            parent: cancelled.parent,
+            parent_digest: cancelled.parent_digest,
+            target: cancelled.target,
+            target_digest: cancelled.target_digest,
+            plan: cancelled.plan.clone(),
+            contended: false,
+            policy: cancelled.policy,
+            force_full_fallback: cancelled.force_full_fallback,
+            token: None,
+            edge_authenticated: true,
+            end_to_end: None,
+            fault: ProjectionFault::None,
+        };
+        assert_eq!(
+            worker
+                .apply(cancelled, Instant::now(), None)
+                .expect_err("cancel")
+                .downcast_ref::<ProjectionServiceError>(),
+            Some(&ProjectionServiceError::Cancelled)
+        );
+        assert_eq!(worker.active.identity.namespace_root, prior);
+        assert_eq!(worker.counters.rename_calls, 0);
+
+        worker
+            .apply(restarted, Instant::now(), None)
+            .expect("restart publish");
+        assert_eq!(worker.active.identity.namespace_root, target.namespace);
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_reader_reopen_failure_reconciles_installed_target() {
+        let (root, directory_path, mut worker, mut request) = projection_apply_fixture(
+            "reader-reopen-reconcile",
+            ProjectionFault::ReaderReopenFailure,
+        );
+        request.contended = true;
+        let target = request.target;
+        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(0);
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(0);
+        let (done_tx, done_rx) = std::sync::mpsc::sync_channel(0);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(0);
+        let rendezvous = ProjectionContentionRendezvous {
+            ready: ready_tx,
+            writer_started: started_rx,
+            reader_done: done_tx,
+            release: release_rx,
+        };
+        let database = directory_path.join("store.sqlite");
+        let foreground = std::thread::spawn(move || {
+            ready_rx.recv().expect("ready");
+            let mut store = Store::open(&database, SELECTED_PROFILE).expect("writer");
+            let mut metrics = Metrics::default();
+            store.begin(&mut metrics).expect("begin");
+            started_tx.send(()).expect("started");
+            done_rx.recv().expect("reader done");
+            store.rollback(&mut metrics).expect("rollback");
+            finish_q(&mut metrics).expect("Q0");
+            release_tx.send(()).expect("release");
+        });
+        let origin = Instant::now();
+        assert!(worker
+            .apply(request, origin, Some((&rendezvous, origin)))
+            .is_err());
+        foreground.join().expect("foreground");
+        assert_eq!(worker.active.identity.namespace_root, target.namespace);
+        assert!(worker.store.is_some());
+        assert_eq!(worker.counters.reconciliation_calls, 1);
+        assert!(worker.counters.directory_sync_calls >= 2);
+        assert_eq!(
+            count_residue(&directory_path, ".g3-tmp-").expect("residue"),
+            0
+        );
+        drop(worker);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_cancellation_releases_owned_temp_and_restart_conserves_state() {
+        let root = test_root("g5-projection-cancel-restart");
+        fs::create_dir(&root).expect("root");
+        let directory = open_dir(&root).expect("directory");
+        let mut native = Counters::default();
+        let (file, temp) = create_temp(&directory, &mut native).expect("owned temp");
+        drop(file);
+        drop(temp);
+        assert_eq!(count_residue(&root, ".g3-tmp-").expect("cancel cleanup"), 0);
+
+        let mut mailbox = ProjectionMailbox {
+            in_flight: false,
+            pending: None,
+            shutdown: false,
+            release_first: true,
+            submitted: 0,
+            coalesced: 0,
+            started: 0,
+            published: 0,
+            cancelled: 0,
+            failed: 0,
+            stale: 0,
+            sqlite_busy_errors: 0,
+            sqlite_locked_errors: 0,
+            worker_error: None,
+            token_authority: projection_test_authority(),
+            exact_ordinal: None,
+            same_size_ordinal: None,
+            count_storm_ordinal: None,
+            isolated_sparse_accepted: false,
+        };
+        mailbox
+            .submit(projection_request(b"cancelled"))
+            .expect("submit cancelled");
+        mailbox.take().expect("take cancelled").expect("request");
+        mailbox.in_flight = false;
+        mailbox.cancelled = 1;
+        assert!(mailbox.equations_hold());
+        let mut restart = projection_request(b"restart");
+        restart.policy = RequestPolicy::LatestFollowing {
+            stream: LatestStream::SameSize,
+            ordinal: 1,
+        };
+        mailbox.submit(restart).expect("restart submit");
+        mailbox
+            .take()
+            .expect("restart take")
+            .expect("restart request");
+        mailbox.complete().expect("restart complete");
+        mailbox.shutdown = true;
+        assert!(mailbox.equations_hold());
+        assert!(!mailbox.in_flight && mailbox.pending.is_none());
+        drop(directory);
+        fs::remove_dir(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_coalesces_ranges_and_falls_back_at_exact_caps() {
+        assert_eq!(
+            projection_plan(vec![8..12, 0..4, 4..8], 16).expect("merge"),
+            ProjectionPlan::Ranges(vec![0..12])
+        );
+        let too_many = (0..=G5_PROJECTION_MAX_RANGES).map(|index| {
+            let start = u64::try_from(index * 2).expect("start");
+            start..start + 1
+        });
+        assert_eq!(
+            projection_plan(too_many, 1024).expect("count fallback"),
+            ProjectionPlan::FullFallback
+        );
+        assert_eq!(
+            projection_plan((0..1_000_000).map(|_| 0..1), 16)
+                .expect("overlapping producer fallback"),
+            ProjectionPlan::FullFallback
+        );
+        assert_eq!(
+            projection_plan(
+                vec![0..G5_PROJECTION_MAX_DIRTY_BYTES + 1],
+                G5_PROJECTION_MAX_DIRTY_BYTES + 1
+            )
+            .expect("byte fallback"),
+            ProjectionPlan::FullFallback
+        );
+        assert_eq!(
+            projection_plan(vec![9..8], 16)
+                .expect_err("invalid range")
+                .downcast_ref::<ProjectionServiceError>(),
+            Some(&ProjectionServiceError::InvalidDirtyRange)
+        );
+        assert_eq!(
+            projection_build_class(&ProjectionPlan::Ranges(vec![16..17]), 16, 17),
+            None
+        );
+    }
+
+    #[test]
+    fn g5_projection_fixture_modes_are_exact_compact_and_within_preparation_budget() {
+        let mut preparation_ns = 0_u128;
+        for (mode, size, exact_count, latest_count) in [
+            ("self-check", 250_000_u64, 1_usize, 0_usize),
+            ("screen-count", 250_000, 1, 1),
+            ("screen", 250_000, 2, 2),
+            ("gate", 250_000, 64, 100),
+        ] {
+            assert_eq!(g5_projection_fixture_size(mode).expect("mode size"), size);
+            let root = test_root(&format!("g5-projection-compact-{mode}"));
+            let started = Instant::now();
+            let report = prepare_g5_projection_fixture(&root, mode).expect("compact fixture");
+            preparation_ns = preparation_ns
+                .checked_add(started.elapsed().as_nanos())
+                .expect("preparation wall");
+            assert!(report.contains(&format!("\"mode\":\"{mode}\"")));
+            assert!(report.contains(&format!("\"size_bytes\":{size}")));
+            let fixture = parse_projection_fixture(&root).expect("parse compact fixture");
+            assert_eq!(fixture.exact_count, exact_count);
+            assert_eq!(fixture.chain.len(), exact_count + latest_count - 1);
+
+            let mut pending = vec![root.clone()];
+            while let Some(path) = pending.pop() {
+                for entry in fs::read_dir(&path).expect("compact inventory") {
+                    let entry = entry.expect("compact entry");
+                    let metadata = fs::symlink_metadata(entry.path()).expect("compact metadata");
+                    assert!(!metadata.file_type().is_symlink());
+                    assert!(!entry.file_name().as_bytes().starts_with(b"same-chain-"));
+                    if metadata.is_dir() {
+                        pending.push(entry.path());
+                    } else {
+                        assert!(metadata.is_file());
+                        assert!(metadata.len() <= 100_000_000);
+                    }
+                }
+            }
+            fs::remove_dir_all(root).expect("compact cleanup");
+        }
+        println!("G5ProjectionFourModePreparationElapsedNs={preparation_ns}");
+        assert!(preparation_ns <= 60_000_000_000);
+    }
+
+    #[test]
+    fn g5_projection_rotates_the_active_visible_seed() {
+        let root = test_root("g5-projection-rotation");
+        let report = g5_projection_self_check(&root).expect("projection self-check");
+        assert!(report.contains("\"submitted\":6"));
+        assert!(report.contains("\"coalesced\":1"));
+        assert!(report.contains("\"published\":5"));
+        assert!(report.contains("\"seed_rotations\":5"));
+        assert!(report.contains("\"full_fallbacks\":2"));
+        assert!(report.contains("\"q_terminal\":0"));
+        assert!(report.contains("\"shutdown\":\"drained\""));
+        assert_eq!(
+            projection_json_scalar(&report, "size_bytes"),
+            G5_PROJECTION_MECHANISM_BYTES.to_string()
+        );
+        assert_eq!(
+            projection_json_scalar(&report, "route_class"),
+            G5_PROJECTION_ROUTE_CLASS
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_release_fault_selector_emits_receipt() {
+        let root = test_root("g5-projection-release-fault-selector");
+        prepare_g5_projection_fixture(&root, "self-check").expect("fixture");
+        let report =
+            run_g5_projection_suite(&root, "fault-directory-sync-lost-ack").expect("fault receipt");
+        assert!(report.contains("\"status\":\"PASS\""));
+        assert!(report.contains("\"fault_selector\":\"DirectorySyncLostAck\""));
+        assert!(report.contains("\"status\":\"ObservedCompleteApply\""));
+        assert!(report.contains("\"reconciliation_calls\":1"));
+        assert!(report.contains("\"directory_sync_calls\":6"));
+        assert_eq!(projection_json_scalar(&report, "size_bytes"), "250000");
+        assert_eq!(
+            projection_json_scalar(&report, "route_class"),
+            G5_PROJECTION_ROUTE_CLASS
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+
+        let root = test_root("g5-projection-release-missing-seed");
+        prepare_g5_projection_fixture(&root, "self-check").expect("fixture");
+        let report = run_g5_projection_suite(&root, "fault-missing-seed").expect("fault receipt");
+        assert!(report.contains("\"status\":\"PASS\""));
+        assert!(report.contains("\"fault_selector\":\"MissingSeed\""));
+        assert!(report.contains("\"status\":\"ObservedCompleteApply\""));
+        assert!(report.contains("\"missing_seed_fallbacks\":1"));
+        assert!(report.contains("\"seed_admission_rejections\":0"));
+        assert!(report.contains("\"q_terminal\":0"));
+        assert!(report.contains("\"terminal_temp_residue\":0"));
+        assert_eq!(projection_json_scalar(&report, "size_bytes"), "250000");
+        assert_eq!(
+            projection_json_scalar(&report, "route_class"),
+            G5_PROJECTION_ROUTE_CLASS
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn g5_projection_parent_chain_and_fixture_errors_are_exact() {
+        let active_root = ObjectId::for_bytes(b"active");
+        let other = ObjectId::for_bytes(b"other");
+        let root = test_root("g5-projection-errors");
+        fs::create_dir(&root).expect("root");
+        assert_eq!(
+            parse_projection_fixture(&root)
+                .err()
+                .expect("missing fixture")
+                .downcast_ref::<std::io::Error>()
+                .and_then(std::io::Error::raw_os_error),
+            Some(libc::ENOENT)
+        );
+        let active = Roots {
+            namespace: active_root,
+            file: active_root,
+            length: 1,
+            references: 1,
+        };
+        let request = projection_request(b"other");
+        assert_ne!(request.parent.namespace, active.namespace);
+        assert_eq!(
+            ProjectionServiceError::ParentChainMismatch.to_string(),
+            "ProjectionParentChainMismatch"
+        );
+        assert_eq!(
+            ProjectionServiceError::FixtureMismatch.to_string(),
+            "ProjectionFixtureMismatch"
+        );
+        assert_eq!(other, request.target.namespace);
+        fs::remove_dir(root).expect("cleanup");
     }
 
     #[test]

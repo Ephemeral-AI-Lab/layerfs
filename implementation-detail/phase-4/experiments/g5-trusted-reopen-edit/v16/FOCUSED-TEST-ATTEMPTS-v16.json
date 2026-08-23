@@ -1,0 +1,30 @@
+{
+  "schema": "phase4-g5-1-focused-test-attempts-v16",
+  "status": "PASS",
+  "classification": "CompleteRoundTripLifecycleEquationFocusedClosure",
+  "settled_hashes": {
+    "shared_product_source": "c7d269e98ab096a1ab651d78584a47453666175fdb06518717e78cebe12b5295",
+    "fresh_v16_release": "479ff27ca30a562b0de0b27710739867d5d844c508f6a18138100dd2132435ad",
+    "runner": "630a5966282502d497fb8076d77919dced7e065526fa67f0e5571d6c10cd7919",
+    "primary_analyzer": "80af0e865a73039b2b3261539842829c7f1f110f7080d45db2d2be8ade6e768e",
+    "independent_analyzer": "2ba8c8f7fb6eb1687352f88387d8a6573f2c1a0d7cf59912b4a69f1c2c4eb6ff",
+    "schedule": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6",
+    "expected_outcomes": "edca17eea7276ec00017374fef7efa549db8eae18ac4ca9c040874024c6ac2cc"
+  },
+  "commands": [
+    {"command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark complete_lifecycle_equation_starts_after_same_open_authority", "result": "PASS 1/1"},
+    {"command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark row_json_reconciles_q_sql_and_changed_work_fields", "result": "PASS 1/1 unaffected row equation"},
+    {"command": "cargo build --release --manifest-path v16/g5-benchmark/Cargo.toml", "result": "PASS"},
+    {"command": "python3 -m py_compile runner.py analyzers/primary.py analyzers/independent.py", "result": "PASS"},
+    {"command": "python3 runner.py --self-check", "result": "PASS 15/15, arms=200, checkpoints=56"},
+    {"command": "python3 analyzers/primary.py --self-check", "result": "PASS 14/14"},
+    {"command": "python3 analyzers/independent.py --self-check", "result": "PASS 14/14"}
+  ],
+  "repair": {
+    "removed_term": "same_open_authority_establishment_ns",
+    "equation": "mapping + proof + commit + reopen + scrub + reconstruction + range",
+    "unchanged": ["workload", "trust", "durability", "schedule", "thresholds", "decision equation"]
+  },
+  "v15_attempts_preserved": [1, 2, 3, 4, 5],
+  "authoritative_state": {"v16_freeze": false, "v16_dry_run": false, "v16_screen": false, "v16_gate": false, "v16_rows": 0, "benchmark_lock": false}
+}

@@ -1,0 +1,13 @@
+case	stage	required_observation	decision
+cancel-private-successor	private-build	observed cancellation/status/work/temp/descriptor/Q counters and retained prior projection	hard
+shutdown-inflight	shutdown	observed started/completed/cancelled/failed/stale/published counters and terminal drain	hard
+restart-owned-temp	restart	observed discovered/removed/retained temp entries and exact canonical/projected roots	hard
+stale-worker-token	publication	observed stale completion and proof that no newer target was overwritten	hard
+clone-failure	clone	observed clone dispatch/error/fallback/publication/reconciliation/cleanup counters	hard
+before-sync	data-sync	observed old projection retained, successor removed, no publication	hard
+before-rename	rename	observed old projection retained, successor cleanup and directory state	hard
+after-rename-lost-ack	reconciliation	observed requested-visible reconciliation and exact final root	hard
+seed-substitution	seed-admission	observed identity/kind/root rejection before patch or publication	hard
+missing-seed	seed-admission	observed full fallback route and exact final root	hard
+wrong-kind-or-symlink	seed-admission	observed no-follow typed rejection and observed publication counter demonstrating pre-publication failure	hard
+foreground-contention	worker-read	observed reader state, SQLite result codes, writer transaction/COMMIT and interval overlap	hard

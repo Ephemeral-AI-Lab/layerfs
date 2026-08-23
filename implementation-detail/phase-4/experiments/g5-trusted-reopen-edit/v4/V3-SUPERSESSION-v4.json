@@ -1,0 +1,10 @@
+{
+  "schema": "phase4-g5-1-v3-supersession-v4",
+  "status": "PREMEASUREMENT_REVISE",
+  "superseded_attempt": "v3",
+  "superseded_failure_path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v3/PREMEASUREMENT-REVISE-v3.json",
+  "superseded_failure_sha256": "8390fb2b803135a834ff68b5e2110e45f4e9256dac369fbd527e738c854a1d82",
+  "statement": "V3 remains byte-preserved and nonqualifying. V4 adds only the scheduled frozen-G4 S07 full-create/range sentinel and independent analyzer custody for its raw evidence.",
+  "row_reuse": false,
+  "measurement_started_in_v3": false
+}

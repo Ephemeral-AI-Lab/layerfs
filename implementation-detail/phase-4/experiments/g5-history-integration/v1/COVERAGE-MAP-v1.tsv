@@ -1,0 +1,19 @@
+family	case	authority	population	acceptance
+retained-history	continuous-checkpoint-sequence	live-g5-3	1MiB revisions 1,10,100,1000	one long-lived child; exact ordered checkpoints
+history-fill	lightweight-same-size-edits	live-g5-3	continuous sequence through revision 1000	per edit only root/length/route; 1 transaction; 1 COMMIT; Q0; residue0
+checkpoint-operations	exact-4KiB-range-plus-same-size-edit	live-g5-3	N=1,10,100,1000	one separately observed range and edit at each checkpoint; no claim of 1000 range samples
+history-projection	exact-vs-latest-checkpoint-conservation	live-g5-3	each checkpoint	exact historical requested root and latest current root conserved; G5-2 v3 remains semantic distinction authority
+reconstruction	checkpoint-and-end	live-g5-3	N=1,10,100,1000 plus end	exact root/length/digest; Q0; residue0
+revert	A-to-B-to-A	live-g5-3	same child after N=1000	A root/digest restored; B retained and distinct; one transaction/COMMIT per publication
+historical-read	exact-B-after-revert	live-g5-3	one exact historical-root range read	exact B root and 4KiB bytes/digest; never latest-substituted
+concurrency	2-readers-1-writer-COMMIT	live-g5-3	one 10MiB sentinel	immutable readers stable; writer 1 transaction/1 COMMIT; Busy/Locked0; progress observed
+reachability	read-only-retained-graph	reused-g5-0-v9	8 sealed H11 rows	hash-bound PASS; no G5-3 rerun required
+storage-slope	unique-revision-diagnostic	reused-g5-0-v9	N=1,10,100,1000	6 objects; 23030 canonical bytes; 2255 mapping bytes; ~24858.9069 apparent bytes per revision; diagnostic only
+trusted-boundary	verified/trusted-transition	reused-g5-1-v27	200 arms/56 checkpoints	hash-bound PASS; no rerun
+projection-mechanism	warm-exact/sparse/fallback	reused-g5-2-v3	exact 250000-byte mechanism	hash-bound PASS; no rerun
+lifecycle	one-child-terminal	live-g5-3	one child per campaign	started1/reaped1; terminal child/Q/residue/descriptors0; work root cleaned
+random-edits	deterministic-random	skipped	0	outside narrowed contract
+branch-history	branch-DAG	skipped	0	outside narrowed contract; linear A-B-A retained
+backup-restore	complete-store-backup	skipped	0	outside narrowed contract
+gc	destructive-mark-sweep	skipped	0	outside narrowed contract
+shutdown-restart	service-drain-restart	reused-g5-2-v3	sealed terminal fault/service matrix	already closed; no G5-3 rerun

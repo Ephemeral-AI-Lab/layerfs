@@ -1,0 +1,53 @@
+{
+  "authorization": "AUTHORIZED",
+  "evidence_blockers": [],
+  "exact_source_binding": "EXACT-SOURCE-FINAL2-FOCUSED-FAULT-BINDING-v3.json",
+  "g5_1_terminal_path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/G5-1-TERMINAL-AUDIT-v27.json",
+  "g5_1_terminal_sha256": "29dc23bb1f0d474eae24347082e74142189ada6d29a4a3fbffac3cb1ebb0c8e5",
+  "g5_1_v27_pass_present": true,
+  "input_manifest": null,
+  "measured_rows": 0,
+  "product_rows": 0,
+  "readiness": "PREMEASUREMENT-READINESS-AUDIT-v3.json",
+  "required_before_authorization": [],
+  "schema": "phase4-g5-2-premeasurement-revise-v3",
+  "source_blockers": [],
+  "status": "SUPERSEDED_BY_READINESS_PASS",
+  "superseded_focused_bindings": [
+    "EXACT-SOURCE-FOCUSED-FAULT-BINDING-v3.json",
+    "EXACT-SOURCE-T2-FOCUSED-FAULT-BINDING-v3.json"
+  ],
+  "v2_disposition": "../v2/PREMEASUREMENT-REVISE-v2.json",
+  "settled_source": {
+    "sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+    "release_sha256": "59e766c9ee6917135941421338d8c72f8dcd97227d33b6cfb68f176f2f0d85ad",
+    "focused_tests_passed": 26,
+    "route_class": "CompositePredeclaredExactCloneSparsePatchAndFullFallback"
+  },
+  "preparation_method": {
+    "fixture_mode_size_bytes": {
+      "self-check": 250000,
+      "screen-count": 250000,
+      "screen": 250000,
+      "gate": 250000
+    },
+    "preferred_wall_ns": 20000000000,
+    "hard_wall_ns": 60000000000,
+    "max_input_root_bytes": 10000000,
+    "max_file_bytes": 100000000,
+    "observed_four_mode_wall_ns": 18096478083,
+    "status": "PROSPECTIVE_AUTHORIZED_NOT_PREPARED"
+  },
+  "preserved_preparation_attempts": [
+    {
+      "path": "attempts/preparation-attempt-1/INTERRUPTED-PREPARATION-v3.json",
+      "classification": "InterruptedByUserSizeAndPreparationBudgetChange"
+    },
+    {
+      "path": "attempts/preparation-attempt-2/PREPARATION-1-2-4-4-NO-GO-v3.json",
+      "classification": "PreservedPremeasurementNoGo",
+      "elapsed_ns": 240386892251
+    }
+  ],
+  "mechanism_scope": "Exact250000ByteProjectionMechanismOnlyNoLargeFileClaim"
+}

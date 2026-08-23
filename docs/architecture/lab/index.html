@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive LayerFS architecture tutorial: CAS, CDC, COW, immutable publication, VFS views, and measured evidence.">
+  <title>LayerFS Architecture Lab · Overview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="architecture.css">
+  <script src="architecture.js" defer></script>
+</head>
+<body data-page="index">
+  <a class="skip-link" href="#main">Skip to lesson</a>
+  <div class="app-shell">
+    <div class="mobile-nav">
+      <a class="wordmark" href="index.html" aria-label="LayerFS Architecture Lab home">
+        <span class="wordmark-mark" aria-hidden="true">L/</span>
+        <span>LayerFS lab</span>
+      </a>
+      <div class="mobile-nav-actions">
+        <button class="icon-button" type="button" data-command-open aria-label="Search lessons"><span aria-hidden="true">⌕</span></button>
+        <button class="icon-button" type="button" data-nav-toggle aria-expanded="false" aria-controls="mobile-curriculum" aria-label="Open curriculum"><span aria-hidden="true">☰</span></button>
+      </div>
+    </div>
+
+    <div class="mobile-nav-drawer" id="mobile-curriculum" data-mobile-panel hidden>
+      <nav class="site-nav" aria-label="Mobile curriculum">
+        <p class="site-nav-label">Curriculum</p>
+        <ul class="site-nav-group">
+          <li><a href="index.html" data-page="index"><span class="nav-index">00</span>Overview</a></li>
+          <li><a href="identities.html" data-page="identities"><span class="nav-index">01</span>Identities</a></li>
+          <li><a href="cas.html" data-page="cas"><span class="nav-index">02</span>CAS</a></li>
+          <li><a href="cdc.html" data-page="cdc"><span class="nav-index">03</span>CDC</a></li>
+          <li><a href="data-structures.html" data-page="data-structures"><span class="nav-index">04</span>Data structures</a></li>
+          <li><a href="k64-f64.html" data-page="k64-f64"><span class="nav-index">05</span>K64/F64</a></li>
+          <li><a href="cd32-64.html" data-page="cd32-64"><span class="nav-index">06</span>CD32–64</a></li>
+          <li><a href="bplus-rope.html" data-page="bplus-rope"><span class="nav-index">07</span>B+ rope</a></li>
+          <li><a href="operations.html" data-page="operations"><span class="nav-index">08</span>Operations</a></li>
+          <li><a href="performance.html" data-page="performance"><span class="nav-index">09</span>Performance</a></li>
+          <li><a href="vfs-recovery.html" data-page="vfs-recovery"><span class="nav-index">10</span>VFS &amp; recovery</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <aside class="site-header" aria-label="LayerFS curriculum">
+      <a class="wordmark" href="index.html" aria-label="LayerFS Architecture Lab home">
+        <span class="wordmark-mark" aria-hidden="true">L/</span>
+        <span>LayerFS lab</span>
+      </a>
+      <nav class="site-nav" aria-label="Curriculum">
+        <p class="site-nav-label">Curriculum</p>
+        <ul class="site-nav-group">
+          <li><a href="index.html" data-page="index"><span class="nav-index">00</span>Overview</a></li>
+          <li><a href="identities.html" data-page="identities"><span class="nav-index">01</span>Identities</a></li>
+          <li><a href="cas.html" data-page="cas"><span class="nav-index">02</span>CAS</a></li>
+          <li><a href="cdc.html" data-page="cdc"><span class="nav-index">03</span>CDC</a></li>
+          <li><a href="data-structures.html" data-page="data-structures"><span class="nav-index">04</span>Data structures</a></li>
+          <li><a href="k64-f64.html" data-page="k64-f64"><span class="nav-index">05</span>K64/F64</a></li>
+          <li><a href="cd32-64.html" data-page="cd32-64"><span class="nav-index">06</span>CD32–64</a></li>
+          <li><a href="bplus-rope.html" data-page="bplus-rope"><span class="nav-index">07</span>B+ rope</a></li>
+          <li><a href="operations.html" data-page="operations"><span class="nav-index">08</span>Operations</a></li>
+          <li><a href="performance.html" data-page="performance"><span class="nav-index">09</span>Performance</a></li>
+          <li><a href="vfs-recovery.html" data-page="vfs-recovery"><span class="nav-index">10</span>VFS &amp; recovery</a></li>
+        </ul>
+      </nav>
+      <button class="command-trigger" type="button" data-command-open><span>Find a lesson</span><kbd>⌘ K</kbd></button>
+    </aside>
+
+    <main class="lesson" id="main">
+      <header class="lesson-header">
+        <p class="lesson-kicker">Lesson 00 · End to end</p>
+        <h1>One graph. One guarded publication.</h1>
+        <p class="lesson-lede">Source bytes become immutable objects. Copy-on-write creates a new candidate graph. One expected-head transition makes that graph current. VFS and native files are views—not canonical truth.</p>
+        <div class="lesson-meta">
+          <button type="button" class="evidence evidence--observed" data-evidence-detail="Source facts and accepted G5 results are marked Observed.">Observed</button>
+          <button type="button" class="evidence evidence--projected" data-evidence-detail="B+ rope, stable inode, and production VFS figures are design projections until implemented and measured.">Projected</button>
+        </div>
+      </header>
+
+      <section class="section-block" id="mental-model">
+        <div class="section-heading">
+          <p class="eyebrow">60-second mental model</p>
+          <h2>Immutable data; tiny mutable authority</h2>
+          <p>Five stages explain the system. Select a stage to see its input, output, cost, and authority boundary.</p>
+        </div>
+
+        <div class="stepper" id="spine-stepper" aria-label="Architecture stages">
+          <button class="step-button" type="button" data-step="cas" aria-current="step">1 · CAS</button>
+          <button class="step-button" type="button" data-step="cdc">2 · CDC</button>
+          <button class="step-button" type="button" data-step="cow">3 · COW</button>
+          <button class="step-button" type="button" data-step="commit">4 · Commit</button>
+          <button class="step-button" type="button" data-step="vfs">5 · VFS</button>
+        </div>
+
+        <div class="lab-grid">
+          <figure class="panel panel--framed" aria-labelledby="spine-title">
+            <figcaption class="panel-title" id="spine-title">Authority spine <span class="panel-note" id="spine-status">Canonical bytes enter CAS</span></figcaption>
+            <div class="diagram">
+              <svg id="spine-svg" viewBox="0 0 880 360" role="img" aria-labelledby="spine-svg-title spine-svg-desc">
+                <title id="spine-svg-title">LayerFS end-to-end authority graph</title>
+                <desc id="spine-svg-desc">Source bytes flow through CDC into immutable payloads and mappings, then a guarded commit publishes a root which the VFS resolves.</desc>
+                <path class="edge" d="M160 180H250M370 180H460M580 180H670"/>
+                <path class="edge" d="M730 130V78H510V130"/>
+                <g class="node" data-spine-node="cdc">
+                  <rect x="40" y="130" width="120" height="100" rx="6"/>
+                  <text x="100" y="170" text-anchor="middle">CDC</text>
+                  <text x="100" y="196" text-anchor="middle">8 / 16 / 32 KiB</text>
+                </g>
+                <g class="node" data-spine-node="cas">
+                  <rect x="250" y="130" width="120" height="100" rx="6"/>
+                  <text x="310" y="170" text-anchor="middle">CAS</text>
+                  <text x="310" y="196" text-anchor="middle">immutable bytes</text>
+                </g>
+                <g class="node" data-spine-node="cow">
+                  <rect x="460" y="130" width="120" height="100" rx="6"/>
+                  <text x="520" y="170" text-anchor="middle">COW graph</text>
+                  <text x="520" y="196" text-anchor="middle">new root</text>
+                </g>
+                <g class="node" data-spine-node="commit">
+                  <rect x="670" y="130" width="120" height="100" rx="6"/>
+                  <text x="730" y="170" text-anchor="middle">Authority</text>
+                  <text x="730" y="196" text-anchor="middle">1 COMMIT</text>
+                </g>
+                <g class="node" data-spine-node="vfs">
+                  <rect x="450" y="18" width="120" height="60" rx="6"/>
+                  <text x="510" y="55" text-anchor="middle">VFS view</text>
+                </g>
+                <text x="310" y="288" text-anchor="middle">canonical immutable truth</text>
+                <text x="730" y="288" text-anchor="middle">small mutable selector</text>
+              </svg>
+            </div>
+          </figure>
+
+          <aside class="panel" aria-live="polite">
+            <p class="panel-kicker" id="step-class">Invariant</p>
+            <h3 id="step-title">CAS admits complete canonical bytes</h3>
+            <p id="step-copy">Hash the complete canonical object. Reuse an occupied identity only after complete equality and authentication.</p>
+            <dl class="variables">
+              <div><dt>Input</dt><dd id="step-input">canonical bytes</dd></div>
+              <div><dt>Output</dt><dd id="step-output">ObjectId</dd></div>
+              <div><dt>Time</dt><dd id="step-time">Θ(object bytes)</dd></div>
+              <div><dt>Authority</dt><dd id="step-authority">immutable</dd></div>
+            </dl>
+            <p class="callout" id="step-rule"><strong>Never:</strong> trust an occupied key without byte equality.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section-block" id="authority-wall">
+        <div class="section-heading">
+          <p class="eyebrow">Authority wall</p>
+          <h2>Current source and target design are different systems</h2>
+          <p>The tutorial compares them; it does not merge their claims.</p>
+        </div>
+        <div class="comparison">
+          <article class="comparison-side">
+            <p class="comparison-label">Implemented / evidenced now</p>
+            <h3>Core primitives + narrow G5 mechanisms</h3>
+            <div class="matrix">
+              <div class="matrix-row"><span class="matrix-key">Core</span><span class="matrix-value">Object codec, FastCDC, in-memory CAS, flat <code>LogicalFile</code>, provisional COW tree, K64/F64 codec</span></div>
+              <div class="matrix-row"><span class="matrix-key">Engine</span><span class="matrix-value">Reusable SQLite schema-v1; benchmark-private G5 schema-v5 is separate</span></div>
+              <div class="matrix-row"><span class="matrix-key">VFS / SDK</span><span class="matrix-value">Placeholders only; no production operations</span></div>
+              <div class="matrix-row"><span class="matrix-key">GC</span><span class="matrix-value">Read-only reachability; no destructive GC</span></div>
+            </div>
+            <button type="button" class="evidence evidence--observed" data-evidence-detail="Observed in checked-out crates and accepted G5 terminal evidence.">Observed</button>
+          </article>
+          <article class="comparison-side">
+            <p class="comparison-label">Proposed / research</p>
+            <h3>Measured rope + persistent namespace + VFS-first reads</h3>
+            <div class="matrix">
+              <div class="matrix-row"><span class="matrix-key">File</span><span class="matrix-value">Byte-measured B+ extent rope with slices and stable operational root</span></div>
+              <div class="matrix-row"><span class="matrix-key">Namespace</span><span class="matrix-value">Persistent directory index and stable <code>InodeId</code></span></div>
+              <div class="matrix-row"><span class="matrix-key">Storage</span><span class="matrix-value">Immutable carriers/segments plus transactional locator index</span></div>
+              <div class="matrix-row"><span class="matrix-key">View</span><span class="matrix-value">VFS reads the accepted graph; native file is a derived cache/export</span></div>
+            </div>
+            <button type="button" class="evidence evidence--projected" data-evidence-detail="Requires identity/format ADRs, implementation, exact-source tests, and measurement.">Projected</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block" id="identities">
+        <div class="section-heading">
+          <p class="eyebrow">Equality domains</p>
+          <h2>Seven identities answer seven questions</h2>
+          <p>Sharing one 32-byte Rust wrapper does not make the roles substitutable.</p>
+        </div>
+        <div class="identity-grid">
+          <a class="node" href="identities.html#payload"><strong>PayloadObjectId</strong><span>Which canonical payload bytes?</span></a>
+          <a class="node" href="identities.html#mapping"><strong>MappingNodeId</strong><span>Which canonical mapping node?</span></a>
+          <a class="node" href="identities.html#file-state"><strong>FileStateRoot</strong><span>Which operational immutable file?</span></a>
+          <a class="node" href="identities.html#content-digest"><strong>ContentDigest</strong><span>Which complete logical byte stream?</span></a>
+          <a class="node" href="identities.html#inode"><strong>InodeId</strong><span>Which stable filesystem object?</span></a>
+          <a class="node" href="identities.html#commit"><strong>CommitId</strong><span>Which accepted state or transition?</span></a>
+          <a class="node" href="identities.html#namespace"><strong>NamespaceRoot</strong><span>Which immutable directory topology?</span></a>
+        </div>
+      </section>
+
+      <section class="section-block" id="numbers">
+        <div class="section-heading">
+          <p class="eyebrow">Quantified anchors</p>
+          <h2>Numbers before adjectives</h2>
+          <p>Observed values stay separate from derived arithmetic and projected alternatives.</p>
+        </div>
+        <div class="metric-grid metric-grid--three">
+          <div class="metric"><span class="metric-label">100 MiB extents · Observed</span><strong class="metric-value">5,284</strong><span class="metric-detail">Mean 19,844.36 B per extent</span></div>
+          <div class="metric"><span class="metric-label">Current mapping · Observed</span><strong class="metric-value">196,055 B</strong><span class="metric-detail">86 objects: 83 leaves + 2 branches + root</span></div>
+          <div class="metric"><span class="metric-label">Trusted edit p50 · Observed</span><strong class="metric-value">7.871–9.418 ms</strong><span class="metric-detail">93.77–94.79% paired median reduction</span></div>
+          <div class="metric"><span class="metric-label">Sparse projector · Observed</span><strong class="metric-value">1.265 / 1.469 ms</strong><span class="metric-detail">p50 / p95; warm 250,000-byte service sample</span></div>
+          <div class="metric"><span class="metric-label">B+ mapping objects · Projected</span><strong class="metric-value">46</strong><span class="metric-detail">46.5% fewer objects; 32.0% more live mapping bytes</span></div>
+          <div class="metric"><span class="metric-label">Midpoint visibility · Projected</span><strong class="metric-value">100–199×</strong><span class="metric-detail">Fewer logical bytes before virtual visibility; not latency</span></div>
+        </div>
+        <p class="callout callout--warning"><strong>Do not infer wall time from byte ratios.</strong> SQL, hashing, syscalls, scheduling, durability, and VFS overhead remain.</p>
+      </section>
+
+      <section class="section-block" id="curriculum">
+        <div class="section-heading">
+          <p class="eyebrow">Curriculum</p>
+          <h2>Follow one concept per lesson</h2>
+          <p>Each page uses the same pattern: model → fields → algorithm → lab → Big-O → numbers → failures → status → sources.</p>
+        </div>
+        <div class="curriculum-grid">
+          <a href="identities.html"><strong>01 · Identities</strong><span>Equality domains, preimages, substitutions</span></a>
+          <a href="cas.html"><strong>02 · CAS</strong><span>Canonical bytes, admission, dedup, verification</span></a>
+          <a href="cdc.html"><strong>03 · CDC</strong><span>FastCDC cut points and local resynchronization</span></a>
+          <a href="data-structures.html"><strong>04 · Data structures</strong><span>Graph, namespace, storage carrier and index</span></a>
+          <a href="k64-f64.html"><strong>05 · K64/F64</strong><span>Current compact positional mapping</span></a>
+          <a href="cd32-64.html"><strong>06 · CD32–64</strong><span>G6 candidate and suffix-linear fallback</span></a>
+          <a href="bplus-rope.html"><strong>07 · B+ rope</strong><span>Projected hard-local operational structure</span></a>
+          <a href="operations.html"><strong>08 · Operations</strong><span>Read, write, edit, snapshot, projection</span></a>
+          <a href="performance.html"><strong>09 · Performance</strong><span>Big-O, byte work, scaling, evidence</span></a>
+          <a href="vfs-recovery.html"><strong>10 · VFS &amp; recovery</strong><span>Virtual view, mailbox, durability, crashes</span></a>
+        </div>
+      </section>
+
+      <section class="section-block" id="sources">
+        <div class="section-heading">
+          <p class="eyebrow">Sources</p>
+          <h2>Read authority in order</h2>
+        </div>
+        <ol class="source-list">
+          <li><span class="evidence evidence--invariant">Guide</span><a href="../00-overview-and-identities.md">Overview and identity crosswalk</a></li>
+          <li><span class="evidence evidence--observed">Source</span><a href="../../../crates/layerfs-core/src/">Current <code>layerfs-core</code></a></li>
+          <li><span class="evidence evidence--observed">Evidence</span><a href="../../../implementation-detail/phase-4/experiments/g5-terminal/v1/G5-TERMINAL-REPORT-v1.md">G5 terminal report</a></li>
+          <li><span class="evidence evidence--projected">Research</span><a href="../../../research/phase-4/g6-canonical-extent-tree/cost-model.md">G6 analytical cost model</a></li>
+        </ol>
+      </section>
+
+      <footer class="site-footer">
+        <p>LayerFS Architecture Lab · Evidence before claims</p>
+        <div class="site-footer-links"><a href="../README.md">Markdown package</a><a href="identities.html">Next: identities</a><button class="command-trigger" type="button" data-command-open>Jump to lesson</button></div>
+      </footer>
+    </main>
+  </div>
+
+  <dialog class="command-dialog" id="command-dialog" aria-labelledby="command-title">
+    <div class="command-dialog-inner">
+      <div class="command-dialog-header">
+        <div class="command-dialog-heading"><h2 id="command-title">Open a lesson</h2><button class="icon-button" type="button" data-command-close aria-label="Close command palette">×</button></div>
+        <input class="command-search" type="search" data-command-input autocomplete="off" placeholder="Search identities, CDC, projection…" aria-label="Search lessons">
+      </div>
+      <ul class="command-results" data-command-results aria-label="Lesson results"></ul>
+      <div class="command-dialog-footer"><span><kbd>↑</kbd> <kbd>↓</kbd> select</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+    </div>
+  </dialog>
+
+  <script>
+    document.addEventListener("layerfs:ready", () => {
+      const steps = [
+        { key: "cas", className: "Invariant", title: "CAS admits complete canonical bytes", copy: "Hash the complete canonical object. Reuse an occupied identity only after complete equality and authentication.", input: "canonical bytes", output: "ObjectId", time: "Θ(object bytes)", authority: "immutable", rule: "trust an occupied key without byte equality" },
+        { key: "cdc", className: "Observed", title: "CDC chooses bounded payload boundaries", copy: "FastCDC scans source bytes with frozen 8 / 16 / 32 KiB bounds. It does not define the file tree or publication.", input: "byte stream", output: "ordered chunks", time: "Θ(scanned bytes)", authority: "construction", rule: "change the CDC profile mid-operation" },
+        { key: "cow", className: "Invariant", title: "COW creates a new changed spine", copy: "Old roots stay immutable. Equal payloads and untouched subtrees keep their ObjectIds and remain shared.", input: "base root + edit", output: "candidate root", time: "representation-dependent", authority: "unpublished", rule: "mutate an old root in place" },
+        { key: "commit", className: "Invariant", title: "One guarded transition publishes the root", copy: "Objects are durable first. One writer transaction checks expected head and dispatches exactly one publication COMMIT.", input: "complete candidate", output: "accepted root", time: "O(changed objects)", authority: "mutable head", rule: "blindly retry an ambiguous COMMIT" },
+        { key: "vfs", className: "Projected", title: "VFS resolves the accepted graph", copy: "A virtual view reads exact ranges from immutable mappings and payloads. Native projection and full export remain derived.", input: "accepted root + range", output: "verified bytes", time: "O(log N + Cᵣ + R)", authority: "derived view", rule: "treat a native cache as canonical truth" }
+      ];
+      const stepper = document.querySelector("#spine-stepper");
+      const fields = {
+        status: document.querySelector("#spine-status"), className: document.querySelector("#step-class"), title: document.querySelector("#step-title"), copy: document.querySelector("#step-copy"), input: document.querySelector("#step-input"), output: document.querySelector("#step-output"), time: document.querySelector("#step-time"), authority: document.querySelector("#step-authority"), rule: document.querySelector("#step-rule")
+      };
+      window.LayerFSLab.setupStepper(stepper, (index) => {
+        const step = steps[index];
+        fields.status.textContent = step.title;
+        fields.className.textContent = step.className;
+        fields.title.textContent = step.title;
+        fields.copy.textContent = step.copy;
+        fields.input.textContent = step.input;
+        fields.output.textContent = step.output;
+        fields.time.textContent = step.time;
+        fields.authority.textContent = step.authority;
+        fields.rule.innerHTML = "<strong>Never:</strong> " + step.rule + ".";
+        document.querySelectorAll("[data-spine-node]").forEach((node) => node.classList.toggle("node--new", node.dataset.spineNode === step.key));
+      });
+    });
+  </script>
+</body>
+</html>

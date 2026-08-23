@@ -1,0 +1,41 @@
+{
+  "schema": "phase4-g5-1-premeasurement-revise-v3",
+  "status": "REVISE",
+  "classification": "UNDISPATCHED_PROTECTED_SCREEN_SENTINEL",
+  "authoritative_dry_run_started": false,
+  "screen_started": false,
+  "gate_started": false,
+  "global_lock_acquired": false,
+  "measured_rows": 0,
+  "full_wrapper_forecast_ns": 110000000000,
+  "full_wrapper_limit_ns": 120000000000,
+  "tracked_diff_sha256": "55fc88993b567080fdcb3a09e04421390dfc4686f57b523c092c914026b6051e",
+  "shared_product_source_sha256": "aa8ece69e2815c56a6ba6fedfb82214f3a456d8358363b663515f9c5c2cd6221",
+  "key_file_hashes": {
+    "runner.py": "70052bb4af122c516dd64462eebc2cd74b65e74c1da265c287908c6672daec39",
+    "analyzers/primary.py": "0644b8be2181dbb5efe5676a5afc9cf39c566639cbdc1b1a1ba24a3891a77a5c",
+    "analyzers/independent.py": "07a465253b303f83ab2f177ceeb1afa83c558ecf2fdebad757021cbfad49eadc",
+    "method/SCHEDULE-v3.tsv": "49bb7d1455209f3357f1ba9e3699938921172871a2107e765db480ead33f6e27",
+    "g5-benchmark/src/session.rs": "4ac423ec21c08d37e070cbfc963218334f01c97d3ebebace7478966b7b31fd90"
+  },
+  "passing_checks": {
+    "whole_child_logical_q": "PASS including Store paths",
+    "product_g5_tests": "4 passed",
+    "product_path_q_test": "PASS",
+    "product_row_q_test": "PASS",
+    "v3_transport_tests": "3 passed",
+    "v3_transport_check": "PASS clean",
+    "runner_python_compile": "PASS",
+    "runner_interface_self_check": "PASS",
+    "gate_arms": 200
+  },
+  "blocker": "Screen sequence S07 protected full-create/range sentinel is scheduled but has no dispatched command. Runner refuses before global lock acquisition.",
+  "repair": "V4 adds only a frozen-G4 fixture/prepare/full-create/range adapter and analyzer custody for S07.",
+  "non_authoritative_generated_residue": [
+    "g5-benchmark/target/**",
+    "__pycache__/**"
+  ],
+  "superseded_by": "v4",
+  "g5_1_pass": false,
+  "g6_eligible": false
+}

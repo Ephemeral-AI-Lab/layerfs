@@ -1,0 +1,96 @@
+{
+  "schema": "layerfs-g5-projection-v3-focused-source-execution-v3",
+  "status": "PASS",
+  "working_directory": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "source": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+    "bytes": 381063,
+    "sha256": "d5c9f8023498c040b9ec103fe4d7e179d5d62c0b84e51eb82fd77631f75a8992"
+  },
+  "executable": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/debug/phase4_create_edit_benchmark",
+    "bytes": 5782288,
+    "sha256": "c2f2d0852279e870f391fe3d8d7cb32fc4303175f3f704f9cf5cb3c2aee083bb"
+  },
+  "fixture_method": {
+    "sizes_decimal_bytes": {
+      "self-check": 250000,
+      "screen-count": 250000,
+      "screen": 250000,
+      "gate": 250000
+    },
+    "populations_unchanged": {
+      "self-check": {"exact": 1, "latest": 0},
+      "screen-count": {"exact": 1, "latest": 1},
+      "screen": {"exact": 2, "latest": 2},
+      "gate": {"exact": 64, "latest": 100}
+    },
+    "all_files_max_bytes": 100000000,
+    "all_files_within_max": true,
+    "same_chain_sources_terminal": 0
+  },
+  "focused_execution": {
+    "command": ["cargo", "test", "-p", "layerfs-engine", "--bin", "phase4_create_edit_benchmark", "projection_", "--", "--nocapture"],
+    "command_sha256": "6d9b865882d56b78cbbac2cfa3eb8aed22b9398db5b93149a53ea145d5ca4df3",
+    "returncode": 0,
+    "return_sha256": "af3a5483097caad779582ac4b57aefe6aa53ff59c1e369ba0c2fcd41180007d8",
+    "stdout": {
+      "path": "/private/tmp/layerfs-g5-projection-v3-size-final250k.tHl96L/focused.stdout.log",
+      "bytes": 2964,
+      "sha256": "a1bd2fb72737dbb751fbd219f39a13c94a1f4b62ec7172e7cbbe487ab81151a9"
+    },
+    "stderr": {
+      "path": "/private/tmp/layerfs-g5-projection-v3-size-final250k.tHl96L/focused.stderr.log",
+      "bytes": 202,
+      "sha256": "3063fceece8aad13cbe835882f5581fd7d9ba00718de3ac4180fdfa2f936cb70"
+    },
+    "return_file": {
+      "path": "/private/tmp/layerfs-g5-projection-v3-size-final250k.tHl96L/focused.returncode",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "result": {"passed": 26, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 98, "wall_seconds": 18.11},
+    "four_mode_preparation_elapsed_ns": 18096478083,
+    "preferred_preparation_limit_ns": 20000000000,
+    "hard_preparation_limit_ns": 60000000000,
+    "preferred_preparation_limit_pass": true,
+    "hard_preparation_limit_pass": true
+  },
+  "isolated_preparation_timing": {
+    "command": ["cargo", "test", "-p", "layerfs-engine", "--bin", "phase4_create_edit_benchmark", "g5_projection_fixture_modes_are_exact_compact_and_within_preparation_budget", "--", "--nocapture"],
+    "command_sha256": "88f0ebbe3c3c61f019184f656a2b6b85e2cd6c528434a62e2d035e212fed2ee5",
+    "returncode": 0,
+    "return_sha256": "af3a5483097caad779582ac4b57aefe6aa53ff59c1e369ba0c2fcd41180007d8",
+    "elapsed_ns": 17337345583,
+    "stdout": {"path": "/private/tmp/layerfs-g5-projection-v3-size-250k.L0TTmd/stdout.log", "bytes": 290, "sha256": "31245e3509956bbb6ea3e77d6d4930cf28b7fb4f289c911fd5dfa6b74b73d34f"},
+    "stderr": {"path": "/private/tmp/layerfs-g5-projection-v3-size-250k.L0TTmd/stderr.log", "bytes": 307, "sha256": "1d64674acad153452e09c9c5906b45db318952cf2479bd59aad0ac2a483118b3"},
+    "return_file": {"path": "/private/tmp/layerfs-g5-projection-v3-size-250k.L0TTmd/returncode", "bytes": 2, "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"}
+  },
+  "preserved_no_go": {
+    "sizes_decimal_bytes": {"self-check": 1000000, "screen-count": 2000000, "screen": 4000000, "gate": 4000000},
+    "elapsed_ns": 240386892251,
+    "returncode": 101,
+    "return_sha256": "dc6987dc61cf1f73df923a08226980764248de23fd96c353f2fd1b8b40a4c141",
+    "stdout": {"path": "/private/tmp/layerfs-g5-projection-v3-size-final.mlhW6n/focused.stdout.log", "bytes": 3262, "sha256": "432f4fdce3830986312f4a576408a644816e65c69a3a3be317e53d2a046d5af7"},
+    "stderr": {"path": "/private/tmp/layerfs-g5-projection-v3-size-final.mlhW6n/focused.stderr.log", "bytes": 735, "sha256": "8e3bded24562fb530730396faca69b3a0694f834d7ffa3d4e0b0c2a5bbaf9777"},
+    "return_file": {"path": "/private/tmp/layerfs-g5-projection-v3-size-final.mlhW6n/focused.returncode", "bytes": 4, "sha256": "39b8dc3fc8b44765c8e6f1adee04c5b465e555ab791cc42d0d9e810d5b64297c"},
+    "disposition": "NO-GO-PRESERVED"
+  },
+  "superseded_one_megabyte_attempt": "InterruptedOnProspectiveSupersessionNoResult",
+  "format_check": "PASS",
+  "diff_check": "PASS",
+  "cases": [
+    {"case": "cancel-private-successor", "required_observation": "observed cancellation/status/work/temp/descriptor/Q counters and retained prior projection", "tests": ["g5_projection_cancel_private_successor_removes_temp_and_records_cancellation@phase4_g3_materialization.rs:8256"], "typed_outcome": "ProjectionServiceError::Cancelled/ProjectionFaultOutcome::Cancelled", "counter_claims": ["prior retained", "temp 1/1", "private cancellation 1", "data sync 0", "rename 0", "cancelled/failed/stale 1/0/0", "Q/residue 0/0"]},
+    {"case": "shutdown-inflight", "required_observation": "observed started/completed/cancelled/failed/stale/published counters and terminal drain", "tests": ["g5_projection_shutdown_inflight_drains_real_worker_loop@phase4_g3_materialization.rs:8315"], "typed_outcome": "SuccessfulShutdownDrainPublished", "counter_claims": ["submitted/started/published 1/1/1", "cancelled/failed/stale 0/0/0", "terminal pending/in-flight 0/0", "target installed", "Q/residue 0/0"]},
+    {"case": "restart-owned-temp", "required_observation": "observed discovered/removed/retained temp entries and exact canonical/projected roots", "tests": ["g5_projection_restart_discovers_and_removes_only_owned_temps@phase4_g3_materialization.rs:8425", "g5_projection_restart_substitution_after_authentication_retains_replacement@phase4_g3_materialization.rs:8479"], "typed_outcome": "SuccessfulAuthenticatedCleanupOrRetainedSubstitution", "counter_claims": ["discovered/removed/retained 2/1/1", "exact target", "replacement survives", "authenticated original survives retained", "no wrong inode removed", "Q/residue 0/0"]},
+    {"case": "stale-worker-token", "required_observation": "observed stale completion and proof that no newer target was overwritten", "tests": ["g5_projection_stale_parent_fails_before_native_work@phase4_g3_materialization.rs:8067"], "typed_outcome": "ProjectionServiceError::ParentChainMismatch/ProjectionFaultOutcome::Stale", "counter_claims": ["active retained", "rename 0", "stale/failed 1/0", "Q/residue 0/0"]},
+    {"case": "before-sync", "required_observation": "observed old projection retained, successor removed, no publication", "tests": ["g5_projection_before_sync_and_before_rename_fail_with_prior_active@phase4_g3_materialization.rs:8542#BeforeSync"], "typed_outcome": "EIO/IoError", "counter_claims": ["prior retained", "temp 1/1", "data/metadata sync 0/0", "rename 0", "Q/residue 0/0"]},
+    {"case": "before-rename", "required_observation": "observed old projection retained, successor cleanup and directory state", "tests": ["g5_projection_before_sync_and_before_rename_fail_with_prior_active@phase4_g3_materialization.rs:8542#BeforeRename"], "typed_outcome": "EIO/IoError", "counter_claims": ["prior retained", "temp 1/1", "data/metadata sync 1/1", "rename 0", "Q/residue 0/0"]},
+    {"case": "seed-substitution", "required_observation": "observed identity/kind/root rejection before patch or publication", "tests": ["g5_projection_in_place_untouched_seed_mutation_fails_before_private_work@phase4_g3_materialization.rs:8637", "g5_projection_edge_token_rejects_mutation_replay_and_cross_stream_use@phase4_g3_materialization.rs:7666"], "typed_outcome": "CoreError::IdentityMismatch/ProjectionFaultOutcome::IdentityMismatch", "counter_claims": ["same inode/length mutation rejected", "seed rejection 1", "clone/temp/rename 0/0/0", "token replay/root/digest/range/transition/cross-stream rejected", "Q/residue 0/0"]},
+    {"case": "missing-seed", "required_observation": "observed full fallback route and exact final root", "tests": ["g5_projection_missing_seed_streams_verified_fallback_to_exact_target@phase4_g3_materialization.rs:8578"], "typed_outcome": "SuccessfulVerifiedFullFallback", "counter_claims": ["exact target identity", "missing fallback 1", "full fallback 1", "clone 0", "rotation 1", "Q/residue 0/0"]},
+    {"case": "wrong-kind-or-symlink", "required_observation": "observed no-follow typed rejection and observed publication counter demonstrating pre-publication failure", "tests": ["g5_projection_symlink_seed_is_rejected_before_private_work@phase4_g3_materialization.rs:8604"], "typed_outcome": "CoreError::WrongLogicalRole/ProjectionFaultOutcome::WrongLogicalRole", "counter_claims": ["prior retained", "seed rejection 1", "temp/rename 0/0", "Q/residue 0/0"]},
+    {"case": "foreground-contention", "required_observation": "observed reader state, SQLite result codes, writer transaction/COMMIT and interval overlap", "tests": ["g5_projection_rotates_the_active_visible_seed@phase4_g3_materialization.rs:8952", "projection_reader_is_query_only_and_rejects_writes@phase4_create_edit_benchmark.rs:14393"], "typed_outcome": "SuccessfulContendedFallbackWithForegroundOneCommit", "counter_claims": ["query_only 1/write rejected", "submitted/coalesced/published 6/1/5", "projection tx/commit 0/0", "foreground tx/commit 1/1", "Busy/Locked 0/0", "broad intervals overlap", "unrelated t3-t4 COMMIT NotClaimed", "Q 0/drained"]}
+  ],
+  "excluded_campaign_cases": ["clone-failure", "after-rename-lost-ack"],
+  "campaign_prepare_freeze_actions": 0
+}

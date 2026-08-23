@@ -1,0 +1,39 @@
+{
+  "schema": "phase4-g5-1-anti-cheat-disposition-v24",
+  "status": "AUTHORITY_REVISE",
+  "mechanism_evidence": "CREDIBLE_CACHE_WARM_PRECONDITIONED_NOT_COLD_REOPEN",
+  "promotion_authority": false,
+  "g5_2_authorized": false,
+  "v24_preserved": true,
+  "findings": [
+    "The frozen v24 screen terminated REVISE and explicitly set gate_authorized=false and g5_2_authorized=false.",
+    "SOURCE-FREEZE-v24 bound runner.py, while the later screen and gate executed runner_attempt_2.py with prospectively undeclared whole-database preconditioning.",
+    "The later method retained the same product executable but reclassified the result under post-observation method bytes that were not bound by the v24 source freeze.",
+    "Frozen G4 controls used one-shot processes while G5 Verified rows used persistent children, so the direct no-regression comparison was process-shape confounded."
+  ],
+  "required_clean_rerun": {
+    "classification": "ProspectiveFreshMethodVersion",
+    "database_preconditioning": "DeclaredAndFrozenBeforeRowsChargedInsideCompleteWall",
+    "executed_runner": "DirectlyHashBoundBySourceFreeze",
+    "g4_vs_g5_verified_process_shape": "MatchedOneShot",
+    "g5_verified_vs_g5_trusted_process_shape": "Matched",
+    "cache_claim": "CacheWarmPreconditionedNotColdReopen",
+    "screen_limit_ns": 20000000000,
+    "gate_limit_ns": 150000000000,
+    "thresholds_changed": false,
+    "schedule_changed": false
+  },
+  "bindings": {
+    "source_freeze_v24_sha256": "6e941d1e253e1146cdc0059b6a5934e7054f71ab5c996ee9e3e224f69b6a8d78",
+    "frozen_runner_v24_sha256": "611e5ca68cb4689f3ec805f566c5c127f26155a11db53f6a3dd7af72942fd757",
+    "executed_runner_attempt_2_v24_sha256": "6f0c7ae1885648abd639e0c58b767049503b7cc8eaf403f78eec5fd03dc7a614",
+    "original_causal_screen_decision_sha256": "4121beb2ccefbb556b3739d05196ef462ae50f96b1ca6645a7ac709940644b26",
+    "original_screen_final_hashes_sha256": "c9d07f6a48024c91913e73e6091f402f232a063eae786f334cb162e2924eb049",
+    "attempt_2_screen_final_hashes_sha256": "dab8a8933784e6617bfe561af597eba5421ccca5ebb9fe5810030540f04826b0",
+    "attempt_2_gate_final_hashes_sha256": "b5680b6284739e118ff3ed42cc0572b842542af813aa85a0a3adbbb0adbf0696",
+    "attempt_2_gate_complete_wall_sha256": "3fdea183ad01f67ff3401c2acb3762126e5a1564521f2623e575bb7eac5b76db",
+    "attempt_2_analyzer_agreement_sha256": "84a8d5e59ec5c95fc80eefabd4263396fff7080565aa78594"
+  },
+  "historical_product_rows_reused": false,
+  "historical_decision_rewritten": false
+}

@@ -1,0 +1,3 @@
+phase	invocations	sentinel_modes	primary_exact_population	primary_latest_population	complete_wall_limit_ns	primary_fixture_mode	result_root
+screen	3	self-check,screen-count	2	2	19999999999	screen	phase4-g5-warm-projection-v2-screen
+gate	3	self-check,screen-count	64	100	150000000000	gate	phase4-g5-warm-projection-v2-gate

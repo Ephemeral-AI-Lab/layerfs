@@ -1,0 +1,43 @@
+{
+  "schema": "phase4-g5-1-premeasurement-revise-v5",
+  "status": "REVISE",
+  "classification": "FRESH_PRE_RELEASE_INTEGRATION_AUDIT",
+  "authoritative_dry_run_started": false,
+  "screen_started": false,
+  "gate_started": false,
+  "global_lock_acquired": false,
+  "measured_rows": 0,
+  "tracked_diff_sha256": "55fc88993b567080fdcb3a09e04421390dfc4686f57b523c092c914026b6051e",
+  "shared_product_source_sha256": "aa8ece69e2815c56a6ba6fedfb82214f3a456d8358363b663515f9c5c2cd6221",
+  "key_file_hashes": {
+    "runner.py": "833682992295102a6656891711ef9f736c7ded11242b6985997a15f5e255fb49",
+    "analyzers/primary.py": "c29f51d4aa99c08fd6acd109c35dd5f9fe89386adddb6b0e4abd7cd0443c888d",
+    "analyzers/independent.py": "02addfe86e0313ce6fdaeda74fa038bb22dfeb5f1d7b60cfb114f5684c2597e1",
+    "g5-benchmark/src/session.rs": "75c31bf8b942f4d99e85d360252e7502acd1fdcb198e3c4911b4aa3564df5952",
+    "method/SCHEDULE-v5.tsv": "49bb7d1455209f3357f1ba9e3699938921172871a2107e765db480ead33f6e27"
+  },
+  "passing_checks": {
+    "trusted_product_semantics": "PASS",
+    "store_path_q": "PASS",
+    "s07_custody_environment_and_exact_tuples": "PASS in runner",
+    "focused_product_tests": "6 passed across selected groups",
+    "transport_tests": "3 passed",
+    "gate_cardinality": 200
+  },
+  "blockers": [
+    "Four live per-request/semantic PathBuf owners remain outside child Q high-water.",
+    "Both analyzers require whole-dict range equality and reject valid observed timing fields.",
+    "Frozen-G4 decision normalization omits same-open authority establishment.",
+    "The 110-second forecast ignores repeated large-file hashing and is not conservative.",
+    "Analyzers omit Q high-water, 1-MiB buffer, SQL/BLOB/auth/scrub parity, and general residue gates.",
+    "Secondary five-pair ordering is position-skewed 18/12 per comparison.",
+    "Runner does not enforce dry-run -> screen -> static -> gate chronology or fsync timing files.",
+    "S07 non-row RSS and exact allowed inventory are not hard-gated.",
+    "Complete wall ends before final manifest/read-only verification.",
+    "Sample-count addendum names v5 rather than the next v6 repair."
+  ],
+  "repair": "V6 changes only child Q ownership and benchmark/evidence method; integrity mode and trusted mechanism remain unchanged.",
+  "superseded_by": "v6",
+  "g5_1_pass": false,
+  "g6_eligible": false
+}

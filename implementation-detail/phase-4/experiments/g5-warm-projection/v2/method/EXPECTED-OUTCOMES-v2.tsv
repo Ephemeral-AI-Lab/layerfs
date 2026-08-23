@@ -1,0 +1,28 @@
+metric	expectation	classification
+product_processes	3	hard
+hard_gated_product_reports	3	hard
+primary_decision_report	100-MiB screen|gate	hard
+worker_count	1	hard
+max_in_flight	<=1	hard
+max_pending	<=1	hard
+sqlite_write_calls	0	hard
+sqlite_transactions	0	hard
+sqlite_commits	0	hard
+sqlite_busy_errors	0	hard
+sqlite_locked_errors	0	hard
+foreground_transactions	1 per report	hard
+foreground_commits	1 per report	hard
+foreground_worker_intervals	overlap	hard
+worker_reader_connection	autocommit, no live explicit read scope at barrier/COMMIT	hard
+max_buffer_bytes	<=1048576	hard
+combined_peak_rss_bytes	<=33554432	hard
+exact_projection_service_p50_ns	<=5000000	hard
+exact_projection_service_p95_ns	<=8000000	hard
+sparse_projection_service_p50_ns	<=6000000	hard
+sparse_projection_service_p95_ns	<=10000000	hard
+terminal_owned_resources	0	hard
+cache_state	WarmUnknownPreparedFixtureAPFSClone	claim-boundary
+primary_independent_agreement	exact	hard
+lossless_process_evidence	command,clone,stdout,stderr,return,RSS,parsed receipt fsynced before evaluation	hard
+policy_route_orthogonality	fixed requested populations independently gated from executed route classes	hard
+terminal_wall_scope	cleanup + preliminary analyzer pair + lock release receipt	hard

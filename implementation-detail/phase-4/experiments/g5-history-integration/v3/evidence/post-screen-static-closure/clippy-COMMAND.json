@@ -1,0 +1,1 @@
+{"argv":["cargo","clippy","--locked","--","-D","warnings"],"cwd":"/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/implementation-detail/phase-4/experiments/g5-history-integration/v3/history-benchmark"}

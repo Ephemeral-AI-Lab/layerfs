@@ -1,0 +1,161 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v13",
+  "status": "PASS",
+  "disposition": "PREMEASUREMENT_READY_FOR_OPERAND_ADOPTION_AND_FREEZE_ONLY",
+  "classification": "IndependentCurrentByteReadinessAuditBeforeOneTimeV13InputAndMethodFreezeAdoption",
+  "severity_findings": {
+    "P0": [],
+    "P1": [],
+    "P2": []
+  },
+  "audit_basis": {
+    "source_read_only": true,
+    "preparation_commands_executed": 0,
+    "build_commands_executed": 0,
+    "calibration_commands_executed": 0,
+    "freeze_commands_executed": 0,
+    "dry_run_commands_executed": 0,
+    "screen_commands_executed": 0,
+    "gate_commands_executed": 0,
+    "lock_acquisitions": 0,
+    "measured_rows": 0
+  },
+  "focused_test_authority": {
+    "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v13/FOCUSED-TEST-ATTEMPTS-v13.json",
+    "schema": "phase4-g5-1-focused-test-attempts-v13",
+    "status": "PASS",
+    "bytes": 8356,
+    "sha256": "e4ab9e078875dc88fa34b82203fdebd35e959c6e8b2c6726d49cbb64e0d591bf",
+    "settled_bindings": 14,
+    "settled_bindings_rehashed": 14,
+    "failed_bindings": 0,
+    "runner_self_check": {
+      "status": "PASS",
+      "checks": 14,
+      "gate_arms": 200,
+      "checkpoints": 56
+    },
+    "primary_analyzer_self_check": {
+      "status": "PASS",
+      "checks": 14
+    },
+    "independent_analyzer_self_check": {
+      "status": "PASS",
+      "checks": 14
+    }
+  },
+  "settled_source_hashes": {
+    "shared_product_source": "8b0437cb26226b133bbc2039772262325fd375657859c81f45fd08f259b6f2b0",
+    "v10_session": "390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897",
+    "reused_v10_release": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b",
+    "reused_v10_input_manifest": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df",
+    "runner": "15b54cd23c3101c972a40f03791dc7aaddc331c0cf4b7e99075ff8fae599331b",
+    "primary_analyzer": "695c94d8445054a96d9e80c95279a723a074ec848f611071deb4012bc7a3f989",
+    "independent_analyzer": "1761fe74ed87c30253d2144ddd1566ac18f16edb39ad437966634bb60eddb7a1",
+    "preregistration": "772046d7ee2e8081a3b5d78244e562eae4629bacd48d78b114b73dbf9cfc3179",
+    "review_synthesis": "5b585a15d2e92a4477a9b7f7baf4182e40a45e093af7bb888bf92cea23e00b13",
+    "sample_count_addendum": "274a723aa3b644234eb0d992a2691a395400b3e9c901b62e467471fd892dfca4",
+    "limitations": "767e9099ae915398bf660d5dbb89f00c1b86d17c0e4e3c1cb5caf0abd8989f32",
+    "schedule": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6",
+    "expected_outcomes": "edca17eea7276ec00017374fef7efa549db8eae18ac4ca9c040874024c6ac2cc",
+    "v12_supersession": "11bdabb541103014d418ee525c785f327f438a483d86f80615cababa2a45be9f",
+    "focused_ledger": "e4ab9e078875dc88fa34b82203fdebd35e959c6e8b2c6726d49cbb64e0d591bf"
+  },
+  "v12_custody": {
+    "supersession_sha256": "11bdabb541103014d418ee525c785f327f438a483d86f80615cababa2a45be9f",
+    "terminal_bindings": 19,
+    "terminal_bindings_rehashed": 19,
+    "terminal_binding_failures": 0,
+    "input_manifest_rows_rehashed": 93,
+    "input_manifest_sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df",
+    "input_row_bindings_sha256": "361370348b8dc8b7d6a5166c201f2246a3f2f051f805c66ec787874fa87f966a",
+    "method_manifest_rows_rehashed": 72,
+    "method_manifest_sha256": "93e705d6a5d3cc169b6ee20c84cb6f39c0fa129a6cd64615ba53fcaf1a7e4cbb",
+    "method_row_bindings_sha256": "4a6a7dba8d4d8f4b85c91bdf671aa48b36e7e114e3f3848dab24fcf4ab0721d7",
+    "source_freeze_sha256": "753fd85fb9f4e486fda095d5bc5a6ac684a60e9b44fc5be81e4ee77ed400e676",
+    "freeze_verification_sha256": "eb99a28502ff9b1eafdbe08a28a994ea167ec6b7042292dbe32095f9358f9c41",
+    "failure": {
+      "status": "FROZEN_METHOD_DEFECT",
+      "verification_error": "RuntimeError: dry-run intent custody mismatch",
+      "producer_missing_fields": {
+        "wrapper_initialization_samples_completed": 0,
+        "wrapper_recurring_samples_completed": 0
+      },
+      "dry_process_status": "PASS_REVOKED_BY_POST_RUN_FROZEN_VERIFIER",
+      "diagnostic_forecast_ns": 106344946549,
+      "measured_rows": 0,
+      "screen_gate_lock": "absent"
+    }
+  },
+  "external_operand_custody": {
+    "input_root": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v10",
+    "input_reuse": true,
+    "product_release_reuse": true,
+    "measured_rows_reused": false,
+    "files": 93,
+    "directories_below_root": 14,
+    "root_mode": "0555",
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "symlinks_or_other_kinds": 0,
+    "release_bytes": 1405760,
+    "release_mode": "0755",
+    "release_sha256": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b"
+  },
+  "repository_identity": {
+    "repository": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+    "branch": "codex/empty-worktree",
+    "head": "d58c5a1307253dfc221fe50de996c183deb9458a",
+    "git_status_bytes": 665,
+    "git_status_sha256": "a55ad7058bd38099fa70ebbaa2c558138878c6db900a87995e2e21c6fb6274b4",
+    "tracked_diff_bytes": 119219,
+    "tracked_diff_sha256": "f2a09bf78bf7f4e1f2f8b05076616c3cb415b44a06179fce68c6b96e279e4698"
+  },
+  "method_source_preflight": {
+    "prospective_source_count": 78,
+    "sorted_and_unique": true,
+    "focused_ledger_included": true,
+    "readiness_audit_included": true,
+    "future_input_manifest_included": true,
+    "v12_supersession_included": true,
+    "v12_method_manifest_included": true,
+    "v12_freeze_verification_included": true,
+    "missing_after_readiness_creation": [
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v13/method/INPUT-MANIFEST-v13.tsv"
+    ]
+  },
+  "v13_method": {
+    "product_source_changed": false,
+    "schedule_changed": false,
+    "threshold_changed": false,
+    "gate_arms": 200,
+    "matched_pairs": 100,
+    "complete_roundtrip_checkpoints": 56,
+    "dry_intent_initial_progress_fields": 10,
+    "split_initialization_counter": 0,
+    "split_recurring_counter": 0,
+    "shared_producer_verifier_contract": true
+  },
+  "generated_residue": {
+    "classification": "NonAuthoritativeGeneratedPythonBytecode",
+    "directories": 0,
+    "files": 0,
+    "method_authority": false,
+    "evidence_authority": false
+  },
+  "authoritative_absence": {
+    "input_manifest_v13": false,
+    "method_manifest_v13": false,
+    "source_freeze_v13": false,
+    "freeze_verification_v13": false,
+    "wrapper_calibration_v13": false,
+    "dry_run_v13": false,
+    "premeasurement_revise_v13": false,
+    "static_closure_v13": false,
+    "screen_result_v13": false,
+    "gate_result_v13": false,
+    "benchmark_lock": false,
+    "measured_rows": 0
+  },
+  "readiness_rule": "Only one exact v13 input/method manifest, source-freeze, and independent-rehash adoption may follow. Zero-row remains closed until that freeze verification passes; screen and gate remain closed until zero-row PASS."
+}

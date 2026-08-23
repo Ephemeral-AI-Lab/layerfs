@@ -1,0 +1,1 @@
+{"benchmark_lock_present":false,"error":"NameError: name 'true' is not defined","freeze_present_after_attempt":false,"input_manifest_preserved":true,"measured_campaign_rows":0,"owned_input_preparation_rerun":false,"product_processes":0,"schema":"phase4-g5-3-freeze-attempt-failure-v2","status":"PREMEASUREMENT_REVISE","treatment":"AppendOnlyMechanicalSameVersionAttempt"}

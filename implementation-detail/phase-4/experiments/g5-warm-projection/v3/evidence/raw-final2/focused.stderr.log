@@ -1,0 +1,3 @@
+   Compiling layerfs-engine v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-engine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.09s
+     Running unittests src/bin/phase4_create_edit_benchmark.rs (target/debug/deps/phase4_create_edit_benchmark-78f305e43bbdce06)

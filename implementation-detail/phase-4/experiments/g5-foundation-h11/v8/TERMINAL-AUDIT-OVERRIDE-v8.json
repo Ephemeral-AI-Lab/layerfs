@@ -1,0 +1,30 @@
+{
+  "schema": "phase4-g5-h11-terminal-audit-v8",
+  "status": "REVISE",
+  "disposition": "H11_REVISE_EXACT_BLOCKER",
+  "preserved_terminal_sha256": "39e49eade31dd3506504a81240cab2ef27e7f4b70a155cfe2069c9ed7f8356b8",
+  "preserved_final_manifest_sha256": "3f23af7b0cfd882308fa83323856596998b03653d13bfac437023253f3b44514",
+  "raw_sha256": "8a849b15e6f33a86b588bbf0936f76df775ada7369f22741b7f89b1e703831c2",
+  "source_sha256": "1a983034fd0125ec88c7febe69dd3dcc92ce0bbacb21aca838b7b9ed41002a42",
+  "blockers": [
+    {
+      "line": 1455,
+      "expression": "env::args().collect::<Vec<_>>()",
+      "reason": "benchmark-owned Vec<String> and argument String capacities remain live across h11_sample outside both Q ledgers"
+    },
+    {
+      "line": 954,
+      "expression": "drop(operations_charge); drop(operations);",
+      "reason": "historical operation capacity is decharged before owned Vec drop"
+    }
+  ],
+  "diagnostic_pass": {
+    "performance": true,
+    "custody": true,
+    "complete_wall_ns": 8980774792,
+    "rss_max_bytes": 13975552
+  },
+  "effective_disposition": "H11_REVISE_G5_0_NOT_CLOSED",
+  "repair_rule": "preserve v8; create fresh v9 source/executable using borrowed process arguments and correct drop order; no row reuse"
+}
+

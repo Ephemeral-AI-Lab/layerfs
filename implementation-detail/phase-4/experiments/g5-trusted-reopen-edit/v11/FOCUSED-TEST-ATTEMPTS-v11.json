@@ -1,0 +1,80 @@
+{
+  "schema": "phase4-g5-1-focused-test-attempts-v11",
+  "status": "PASS",
+  "classification": "MethodOnlyFocusedClosureWithUnchangedHashVerifiedV10ProductOperand",
+  "settled_bytes": {
+    "shared_product_source": {"path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs", "sha256": "8b0437cb26226b133bbc2039772262325fd375657859c81f45fd08f259b6f2b0"},
+    "v10_session": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/src/session.rs", "sha256": "390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897"},
+    "reused_v10_release": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/target/release/layerfs-g5-trusted-child-v10", "sha256": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b"},
+    "reused_v10_input_manifest": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/method/INPUT-MANIFEST-v10.tsv", "rows": 93, "sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df"},
+    "runner": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/runner.py", "sha256": "4077f207647dbb0da1e7aa86c971c743a3fbe8e2c74ba5094f7eb6ef6d7fb570"},
+    "primary": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/analyzers/primary.py", "sha256": "74c0f0bfa685ae48d64fcac7b0252edf10bf8954d4a39e9ec2a5c4b90b53e314"},
+    "independent": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/analyzers/independent.py", "sha256": "a076e65e01c48f67453012ca248d907dc0e9314f6423caba658598c6f072c6e4"},
+    "preregistration": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/PREREGISTRATION-v11.md", "sha256": "d47f1132a23645d20a5e048c6d27ecb9ed56e4af17e351ec15bd66a7a9c1984d"},
+    "review_synthesis": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/REVIEW-SYNTHESIS-v11.md", "sha256": "4d6ff407ec15b0ff22b88fbae726accf1827c6c32c50decfb5c2135b849190a8"},
+    "sample_count_addendum": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/SAMPLE-COUNT-INTERPRETATION-ADDENDUM-v11.md", "sha256": "adc80dfb04d66f8638c584533d340d7c2c058c4a638366074183e2c0f354624d"},
+    "limitations": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/LIMITATIONS-v11.json", "sha256": "ac72ec3f4cc8d8c7f8933481a1688bf8898d6ebbe0230fcef2fa5873ba9459d3"},
+    "schedule": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/method/SCHEDULE-v11.tsv", "sha256": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6"},
+    "expectations": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/method/EXPECTED-OUTCOMES-v11.tsv", "sha256": "ff379445dfec70981abee2579351fdcf591c8713c3664e66fe945504c32f82a4"},
+    "v10_supersession": {"path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/V10-SUPERSESSION-v11.json", "sha256": "fcfd9f7c4444447b4c03bd78e98bf102dc447d77c6d84f2b03c29ac84a3afdd3"}
+  },
+  "commands": [
+    {
+      "command": "PYTHONPYCACHEPREFIX=/tmp/layerfs-g5-v11-pycache PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/runner.py implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/analyzers/primary.py implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/analyzers/independent.py",
+      "result": "PASS"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/runner.py --self-check",
+      "result": {"status": "PASS", "checks": 13, "gate_arms": 200, "checkpoints": 56}
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/analyzers/primary.py --self-check",
+      "result": {"status": "PASS", "checks": 9, "mutations_rejected": ["all-row-claim", "closure-mismatch", "provenance-mismatch", "receipt-laundering", "legacy-catalog", "paired-receipt-hash"]}
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v11/analyzers/independent.py --self-check",
+      "result": {"status": "PASS", "checks": 9, "mutations_rejected": ["all-row-claim", "closure-mismatch", "provenance-mismatch", "receipt-laundering", "legacy-catalog", "paired-receipt-hash"]}
+    },
+    {
+      "command": "read-only import: verify_repository_identity plus actual sealed-master published_visible_state calibration/campaign shape assertions",
+      "result": {"status": "PASS", "v10_terminal_bindings_rehashed": 15, "v10_method_rows_rehashed": 66, "head_generation": 1, "head_receipt_bytes": 216, "schema_rootpage_rows": 3}
+    },
+    {"command": "git diff --check", "result": "PASS"}
+  ],
+  "analyzer_parity_contract": {
+    "both_comparisons_pair_equal": ["rooted_logical_state", "authority_and_expectations_sidecars", "mutation_side_work"],
+    "g4_verified_vs_g5_verified_additionally_pair_equal": "full authentication/read/SQL/BLOB work",
+    "g5_verified_vs_g5_trusted_not_pair_equal": "scrub/authentication/read work; individually hard-gated and fully reported"
+  },
+  "calibration_separation": {
+    "semantics": "CalibrationConstantRowShapeNotProductAuthority",
+    "closure_provenance": "CalibrationShapeOnlyNoProductParity",
+    "reachable_parity": "NotClaimedCalibrationShapeOnly",
+    "receipt_semantics": "CalibrationOpaqueHeadReceiptHashNotClosureOrFreshness",
+    "product_rows": 0,
+    "stores_opened": 0,
+    "locks_acquired": 0
+  },
+  "v10_product_evidence_reference": {
+    "focused_ledger_path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/FOCUSED-TEST-ATTEMPTS-v10.json",
+    "focused_ledger_sha256": "b498db29e2c136d8bfee8e1bc482db626de1f2089cd2a16f3c365a8440456563",
+    "reason_not_rerun": "shared product source, v10 transport source, and reused release are unchanged exact hashes; v11 changes only runner/analyzers/method",
+    "retained_results": "shared and overlay trust tests, 9/9 transport tests, exact eight-row touched matrix, three exact COMMIT/reconciliation tests, cargo fmt and diff closure all PASS"
+  },
+  "generated_residue": {
+    "classification": "NonAuthoritativeGeneratedPythonBytecode",
+    "repo_pycache_terminal_count": 0,
+    "disposition": "two runner/analyzer pycache generations created by py_compile were moved recoverably to narrowly named Trash paths before settled hashes"
+  },
+  "authoritative_state": {
+    "v11_input_manifest_present": false,
+    "v11_method_manifest_present": false,
+    "v11_source_freeze_present": false,
+    "v11_freeze_verification_present": false,
+    "v11_dry_run_started": false,
+    "benchmark_lock_acquired": false,
+    "screen_started": false,
+    "gate_started": false,
+    "measured_campaign_rows": 0
+  }
+}

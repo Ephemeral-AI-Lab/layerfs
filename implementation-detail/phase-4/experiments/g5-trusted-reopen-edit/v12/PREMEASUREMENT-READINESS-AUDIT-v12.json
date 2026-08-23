@@ -1,0 +1,273 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v12",
+  "status": "PASS",
+  "disposition": "PREMEASUREMENT_READY_FOR_OPERAND_ADOPTION_AND_FREEZE_ONLY",
+  "classification": "IndependentCurrentByteReadinessAuditBeforeOneTimeV12InputAndMethodFreezeAdoption",
+  "audit_basis": {
+    "source_read_only": true,
+    "build_commands_executed": 0,
+    "calibration_commands_executed": 0,
+    "operand_adoption_commands_executed": 0,
+    "freeze_commands_executed": 0,
+    "dry_run_commands_executed": 0,
+    "screen_commands_executed": 0,
+    "gate_commands_executed": 0,
+    "lock_acquisitions": 0,
+    "measured_rows": 0
+  },
+  "severity_findings": {
+    "P0": [],
+    "P1": [],
+    "P2": []
+  },
+  "repository_identity": {
+    "repository": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+    "branch": "codex/empty-worktree",
+    "head": "d58c5a1307253dfc221fe50de996c183deb9458a",
+    "git_status_command": "git status --porcelain=v2 --untracked-files=normal -z",
+    "git_status_bytes": 665,
+    "git_status_sha256": "a55ad7058bd38099fa70ebbaa2c558138878c6db900a87995e2e21c6fb6274b4",
+    "tracked_diff_command": "git diff --binary",
+    "tracked_diff_bytes": 119219,
+    "tracked_diff_sha256": "f2a09bf78bf7f4e1f2f8b05076616c3cb415b44a06179fce68c6b96e279e4698",
+    "interpretation": "dirty and untracked G5 custody is expected; the prospective source freeze independently binds the same current status and tracked diff"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "python": "Python 3.14.3",
+    "host": "Darwin arm64 macOS 26.4.1 build 25E253"
+  },
+  "focused_test_authority": {
+    "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/FOCUSED-TEST-ATTEMPTS-v12.json",
+    "schema": "phase4-g5-1-focused-test-attempts-v12",
+    "status": "PASS",
+    "bytes": 9166,
+    "sha256": "8f565863b5e7bb7881184b19e92777dc3ceba391535a0d128e616e8d1b9b4cce",
+    "settled_bindings": 14,
+    "settled_bindings_rehashed": 14,
+    "focused_product_reference_sha256": "b498db29e2c136d8bfee8e1bc482db626de1f2089cd2a16f3c365a8440456563",
+    "runner_self_check": {
+      "status": "PASS",
+      "checks": 13,
+      "gate_arms": 200,
+      "checkpoints": 56
+    },
+    "primary_analyzer_self_check": {
+      "status": "PASS",
+      "checks": 14
+    },
+    "independent_analyzer_self_check": {
+      "status": "PASS",
+      "checks": 14
+    },
+    "forged_prearm_mutations_rejected_by_both": [
+      "inflated-bound",
+      "wrong-plan",
+      "wrong-input",
+      "wrong-database-row"
+    ]
+  },
+  "settled_bytes": {
+    "shared_product_source": {
+      "path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+      "bytes": 853017,
+      "sha256": "8b0437cb26226b133bbc2039772262325fd375657859c81f45fd08f259b6f2b0"
+    },
+    "v10_transport_session": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/src/session.rs",
+      "bytes": 56927,
+      "sha256": "390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897"
+    },
+    "reused_v10_release": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/target/release/layerfs-g5-trusted-child-v10",
+      "bytes": 1405760,
+      "sha256": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b",
+      "mode": "0755",
+      "classification": "UnchangedExactHashVerifiedExternalReleaseNotFilesystemImmutable"
+    },
+    "runner": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/runner.py",
+      "bytes": 244263,
+      "sha256": "6be95947dc807116a1add2d736488fb2eb88abaed80ca712b15da707b968ba21"
+    },
+    "primary_analyzer": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/primary.py",
+      "bytes": 83854,
+      "sha256": "ead1354ea7e1e8f86542f2e569c175b01c9b8d771155681ecea0a086fd7ac777"
+    },
+    "independent_analyzer": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/independent.py",
+      "bytes": 80816,
+      "sha256": "63c23b19bb8a257882ad32f1b7516f9332ce2217cc2de3d124b3f4652a7fed90"
+    },
+    "preregistration": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/PREREGISTRATION-v12.md",
+      "bytes": 20827,
+      "sha256": "5535b885b553622db77afd87c9cdf0548e93b15c504e282d7e31bc6f6aadf620"
+    },
+    "review_synthesis": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/REVIEW-SYNTHESIS-v12.md",
+      "bytes": 12401,
+      "sha256": "2e47dcc4ed4d5681961fc7b08108682fd8eee06c4440c10e8734bc1e38b06e64"
+    },
+    "sample_count_addendum": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/SAMPLE-COUNT-INTERPRETATION-ADDENDUM-v12.md",
+      "bytes": 1843,
+      "sha256": "183f1e1a1b2eb7879a1e6e1a205ea82d8a924343846e77102c1866d2ea6c8d80"
+    },
+    "limitations": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/LIMITATIONS-v12.json",
+      "bytes": 13640,
+      "sha256": "0fe7dee690cead1fa73d18077ef46d68b6c1641a0fde684d7880660ab55ba4ac"
+    },
+    "schedule": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/SCHEDULE-v12.tsv",
+      "bytes": 4784,
+      "sha256": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6"
+    },
+    "expected_outcomes": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/EXPECTED-OUTCOMES-v12.tsv",
+      "bytes": 7513,
+      "sha256": "edca17eea7276ec00017374fef7efa549db8eae18ac4ca9c040874024c6ac2cc"
+    },
+    "focused_ledger": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/FOCUSED-TEST-ATTEMPTS-v12.json",
+      "bytes": 9166,
+      "sha256": "8f565863b5e7bb7881184b19e92777dc3ceba391535a0d128e616e8d1b9b4cce"
+    },
+    "v11_supersession": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/V11-SUPERSESSION-v12.json",
+      "bytes": 5369,
+      "sha256": "992dae78996a4f03d0798b2e0140a79c8becbb07c33691d726c862c3a92f04e4"
+    }
+  },
+  "v11_terminal_custody": {
+    "supersession_sha256": "992dae78996a4f03d0798b2e0140a79c8becbb07c33691d726c862c3a92f04e4",
+    "terminal_bindings_reopened_and_rehashed": 18,
+    "terminal_bindings_failed": 0,
+    "declared_input_rows": 93,
+    "declared_method_rows": 67,
+    "declared_wrapper_raw_rows": 3,
+    "forecast_ns": 129202697050,
+    "limit_ns": 120000000000,
+    "overrun_ns": 9202697050,
+    "measured_rows": 0,
+    "screen_present": false,
+    "gate_present": false,
+    "lock_present": false,
+    "frozen_calibration_contradiction": {
+      "classification": "FROZEN_METHOD_DEFECT",
+      "cardinality": 3,
+      "nested_semantics": "CalibrationConstantRowShapeNotProductAuthority",
+      "top_level_semantics": "product-authenticated-root-transition-ordered-closure-not-all-object-table"
+    }
+  },
+  "independent_manifest_rehash": {
+    "v10_input": {
+      "rows": 93,
+      "manifest_sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df",
+      "row_bindings_sha256": "361370348b8dc8b7d6a5166c201f2246a3f2f051f805c66ec787874fa87f966a"
+    },
+    "v10_method": {
+      "rows": 66,
+      "manifest_sha256": "73869b9a31304f55acf9d88f6035edcd0f3ae81bc0eca4373249e116acafd963",
+      "row_bindings_sha256": "8a90889027c850820a7ff53da6fec47a2742a77faeed64dd39189fdd64893095"
+    },
+    "v11_input": {
+      "rows": 93,
+      "manifest_sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df",
+      "row_bindings_sha256": "361370348b8dc8b7d6a5166c201f2246a3f2f051f805c66ec787874fa87f966a"
+    },
+    "v11_method": {
+      "rows": 67,
+      "manifest_sha256": "e2ac6799f4fdcfd65526e4b38f7ea833a2f1d169be430ca6ac8432d73fb161ec",
+      "row_bindings_sha256": "54604e874f6740818f1d824452dfaf7b3afd7650427053fa4d15b7c160b5237a"
+    }
+  },
+  "external_operand_custody": {
+    "input_root": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v10",
+    "input_reuse": true,
+    "product_release_reuse": true,
+    "measured_rows_reused": false,
+    "files": 93,
+    "directories_below_root": 14,
+    "root_mode": "0555",
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "symlinks_or_other_kinds": 0,
+    "input_manifest_sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df",
+    "release_sha256": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b"
+  },
+  "controlling_hashes": {
+    "implementation-detail/phase-4/g5/implementation-verification-plan.md": "7a7092424d7bd7f55f8479791d04d4411b4cd9a1a7a5618355f5015cb7ee0acd",
+    "research/phase-4/g5-round-0/benchmark-contracts/g5-fast-iteration-contract.md": "36495a4640e1d20591ece55f7f2ce35bd8b6ed76ccae41e43c288fa01f0635ba",
+    "implementation-detail/phase-4/baseline/current-benchmark-scoreboard.md": "aae8a7abe2a13c3dfdf4adc006b31bc08a18fc05d02f7b7b06489d7ed0910b77",
+    "implementation-detail/phase-4/experiments/g4-materialization-acceptance/G4-STAGE-TERMINAL-v1.json": "0297ca2e3b49ddb7d8d2d435713450dcc336397b53cbaaaee9647a46eebcede8",
+    "implementation-detail/phase-4/experiments/g5-foundation-h11/v9/G5-0-TERMINAL-AUDIT-v9.json": "baef3615ab28c5b56d5714e86f870845d16a02bad688ad270892f7395ce18e26"
+  },
+  "method_source_preflight": {
+    "prospective_source_count": 72,
+    "focused_ledger_included": true,
+    "readiness_audit_included": true,
+    "v11_supersession_included": true,
+    "future_input_manifest_included": true,
+    "missing_after_readiness_creation": [
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/INPUT-MANIFEST-v12.tsv"
+    ],
+    "first_authoritative_write_only_after_preflight": true
+  },
+  "product_correctness_and_trust": {
+    "integrity_mode": "Store-lifetime Verified default or explicit TrustedLocalDev",
+    "trusted_branch_boundary": "edit-base scope establishment only",
+    "verified_reopen_after_trusted": "authenticated declared-parent resolution plus complete current-and-parent scrub",
+    "object_authentication": "shared fetched/new/incumbent identity, role, length, topology, and canonical equality remain unconditional",
+    "carry_forward": "trusted assumptions never become verified receipt-covered work and trusted publication never authorizes verified carry",
+    "publication": "expected-head fencing, one writer transaction, one publication COMMIT, durability, and fresh reconciliation remain shared",
+    "faults": "exact two-mode missing/identity/wrong-role/malformed touched matrix fails before COMMIT with old head, no carry, cleanup, and Q0",
+    "rollback_freshness": "NotProtected"
+  },
+  "v12_method": {
+    "product_source_changed_from_v11": false,
+    "schedule_changed_from_v11": false,
+    "gate_arms": 200,
+    "matched_pairs": 100,
+    "complete_roundtrip_checkpoints": 56,
+    "wrapper_initialization_samples": 1,
+    "wrapper_recurring_samples": 3,
+    "wrapper_conservative_factor": 4,
+    "initialization_scope": "database discovery plus read-only published-visible-state plus measured evidence write/file-fsync/directory-fsync",
+    "query_ns": "reported subset of total_ns",
+    "terminal_artifact": "OutsideInitializationBoundInsideCompleteWallFinalization",
+    "all_object_table_scans": 0,
+    "all_object_table_catalog_parity": "NotClaimedSeparateFutureAllRowCasAudit",
+    "calibration_semantics": "CalibrationConstantRowShapeNotProductAuthority",
+    "campaign_semantics": "product-authenticated-root-transition-ordered-closure-not-all-object-table"
+  },
+  "generated_residue": {
+    "classification": "NonAuthoritativeGeneratedPythonBytecode",
+    "directories": 2,
+    "files": 3,
+    "method_authority": false,
+    "evidence_authority": false,
+    "disposition": "retained and excluded from all source/method/evidence manifests"
+  },
+  "authoritative_absence": {
+    "input_manifest_v12": false,
+    "method_manifest_v12": false,
+    "source_freeze_v12": false,
+    "freeze_verification_v12": false,
+    "wrapper_calibration_v12": false,
+    "dry_run_intent_v12": false,
+    "dry_run_v12": false,
+    "dry_run_failed_v12": false,
+    "dry_run_disposition_v12": false,
+    "premeasurement_revise_v12": false,
+    "static_closure_v12": false,
+    "screen_result_v12": false,
+    "gate_result_v12": false,
+    "benchmark_lock": false,
+    "measured_rows": 0
+  },
+  "readiness_rule": "Only one exact v12 input/method manifest, source-freeze, and independent-rehash adoption may follow. Zero-row remains closed until that freeze verification passes; screen and gate remain closed until zero-row PASS."
+}

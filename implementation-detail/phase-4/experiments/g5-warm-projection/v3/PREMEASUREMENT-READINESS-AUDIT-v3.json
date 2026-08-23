@@ -1,0 +1,147 @@
+{
+  "audit_scope": "Exact250KMechanismCurrentSourceReleaseMethodFaultCustodyG5_1TerminalBeforeInputPreparationFreezeForecastOrCampaign",
+  "authorization": {
+    "input_preparation": true,
+    "input_adoption_and_freeze": true,
+    "freeze": true,
+    "forecast": true,
+    "dry_run": true,
+    "screen": true,
+    "gate": true,
+    "g5_2": true,
+    "g6": false
+  },
+  "findings": {
+    "P0": [],
+    "P1": [],
+    "P2": []
+  },
+  "g5_1_authority": {
+    "addendum_path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/G5-1-TERMINAL-ADDENDUM-v27.json",
+    "addendum_sha256": "dbcdb6ef3a3d111662267c4b2f35b97d80c0250eb298330d26e3828abbd6e75a",
+    "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/G5-1-TERMINAL-AUDIT-v27.json",
+    "sha256": "29dc23bb1f0d474eae24347082e74142189ada6d29a4a3fbffac3cb1ebb0c8e5",
+    "status": "PASS",
+    "version": 27
+  },
+  "generated_residue": {
+    "authoritative": false,
+    "pycache_removed": true
+  },
+  "hashes": {
+    "runner": "ff77aff0549d344581ccf4a65658ace103c07626f25a18cbaae3ac1f9f108e95",
+    "primary": "f332454c04092524529ae0e39c55379854ffd7a23b3afb89cfc67acaac690bb6",
+    "independent": "6e46dbc58cc86720d6e817e43ef86e9cc13ccecaeb24e579d05ef47630d7d5a7",
+    "method_contract": "9ac1ac82b5e19c92c1576829bde6ff088e460e08a3816699c732426f2450df45",
+    "schedule": "a4211efb177b6cae7aefd910260ca917b2eae1dc0977a0340c1462948562b4c6",
+    "expected": "2735aa4ec8c48474344cf7b670287ad812d326202a8cfcd2eaf624246357a780",
+    "fault_matrix": "10362ddb3793e857478624dd5b2efabf8975db5506d79954b2f49f1a6e265b0c",
+    "source_fault_proofs": "4e8dfce27f5160c460b9c2f167da7e21db1e186d29020339be14cae0acdd526a",
+    "preparation_forecast": "e7a329e4485d18eeef52fd547dca90ca6c678a5f952075886339f22cfaf32bfc",
+    "preregistration": "cbd13f738c58a826346a0ae8ba28d8b02437f3228ee5e1b280238ec557f481a9",
+    "limitations": "6fc7cc31c5b7d43396afb5e616c5b188ef4df145c6c7e32062f72cc26af4ed8f",
+    "promotion_readiness": "32d089d30546d603ef383670298ab5f497588d80497e82c77c5d3409150f1836",
+    "readiness_plan": "1270a7636c7bfb508b2df74cc2df681e1bfadba7928ddf686c573ab083db63d1",
+    "focused_fault_execution": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+    "final_source_binding": "ae90e292d5ef11f94e5ae86ed213a22c6dd08afe1340a16cc9e5c19a785d6d6c",
+    "focused_ledger": "fa151177b9f7383f3e3c4b9ba5d21b89ea62da80374515b95b695b9b23698502",
+    "premeasurement_disposition": "86cd35b6ddbf17216d710011c4fb6d3ca8de73dc09e663156186e3d1d11e5c89",
+    "source": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+    "executable": "59e766c9ee6917135941421338d8c72f8dcd97227d33b6cfb68f176f2f0d85ad",
+    "contract_receipt": "842dfb4e2f355bab1d27df259eec1a0b972ca64936a0d6599bfa0bfed85c45a0",
+    "raw_final2_aggregate": "e4267fddb1b84d0008900b553509f6a3a43d2938eec84898663ca4e77198f447",
+    "g5_1_terminal": "29dc23bb1f0d474eae24347082e74142189ada6d29a4a3fbffac3cb1ebb0c8e5",
+    "g5_1_terminal_addendum": "dbcdb6ef3a3d111662267c4b2f35b97d80c0250eb298330d26e3828abbd6e75a",
+    "v2_disposition": "260374b73b643af7a7741306edaa435b131b403146b3e7be15219d5131aba23f"
+  },
+  "measurement_state": {
+    "benchmark_lock_present": false,
+    "dry_run_present": false,
+    "gate_result_present": false,
+    "input_manifest_present": false,
+    "measured_rows": 0,
+    "product_processes": 0,
+    "product_rows": 0,
+    "screen_result_present": false,
+    "source_freeze_present": false
+  },
+  "method": {
+    "campaign_fault_process_cases": [
+      "clone-failure",
+      "after-rename-lost-ack"
+    ],
+    "fault_matrix_cases": 12,
+    "focused_complete_apply_cases": 10,
+    "focused_projection_tests": 26,
+    "gate_limit_ns": 150000000000,
+    "mode_populations": {
+      "gate": [
+        64,
+        100
+      ],
+      "screen": [
+        2,
+        2
+      ],
+      "screen-count": [
+        1,
+        1
+      ],
+      "self-check": [
+        1,
+        0
+      ]
+    },
+    "raw_focused_artifacts_rehashed": 42,
+    "rss_limit_bytes": 33554432,
+    "runner_self_check": {
+      "status": "PASS",
+      "checks": 40
+    },
+    "screen_limit_ns": 19999999999,
+    "slot_limits": {
+      "in_flight": 1,
+      "pending": 1,
+      "workers": 1
+    },
+    "source_proofs_rehashed": 10,
+    "preparation": {
+      "fixture_mode_size_bytes": {
+        "self-check": 250000,
+        "screen-count": 250000,
+        "screen": 250000,
+        "gate": 250000
+      },
+      "preferred_wall_ns": 20000000000,
+      "hard_wall_ns": 60000000000,
+      "source_contract_observed_wall_ns": 17682553333,
+      "forecast_ns": 19500000000,
+      "max_input_root_bytes": 10000000,
+      "max_file_bytes": 100000000,
+      "sealing": "Files0444Directories0555FsyncReopenRehashBeforeFreezeAndEachClone",
+      "status": "PROSPECTIVE_AUTHORIZED_NOT_PREPARED"
+    },
+    "route_class": "CompositePredeclaredExactCloneSparsePatchAndFullFallback",
+    "mechanism_scope": "Exact250000ByteProjectionMechanismOnlyNoLargeFileClaim"
+  },
+  "nonblocking_limitations": [
+    "benchmark-private wp4m schema is not promotion-ready architecture",
+    "authoritative engine/schema extraction remains later G6/product-promotion work",
+    "these limitations do not block the narrowed G5-2 benchmark contract"
+  ],
+  "preparation_forecast_sha256": "e7a329e4485d18eeef52fd547dca90ca6c678a5f952075886339f22cfaf32bfc",
+  "schema": "phase4-g5-2-premeasurement-readiness-audit-v3",
+  "source_repair": "Exact250KMechanismContractRouteReceiptAndSealedInputMethod",
+  "status": "PASS",
+  "preserved_preparation_attempts": [
+    {
+      "path": "attempts/preparation-attempt-1/INTERRUPTED-PREPARATION-v3.json",
+      "classification": "InterruptedByUserSizeAndPreparationBudgetChange"
+    },
+    {
+      "path": "attempts/preparation-attempt-2/PREPARATION-1-2-4-4-NO-GO-v3.json",
+      "classification": "PreservedPremeasurementNoGo",
+      "elapsed_ns": 240386892251
+    }
+  ]
+}

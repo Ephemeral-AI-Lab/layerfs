@@ -1,0 +1,37 @@
+{
+  "schema": "phase4-g5-h11-static-closure-v8",
+  "status": "PASS",
+  "source_sha256": "1a983034fd0125ec88c7febe69dd3dcc92ce0bbacb21aca838b7b9ed41002a42",
+  "executable_sha256": "da7ebd93f21e00dfc0d2592311b8dbbc724acbfddcbb8059274752cdc1d57965",
+  "runner_sha256": "cb5181888413db947314ac65fc813803abd69e5be7de17f4b675002ed9820929",
+  "primary_sha256": "e3cb4371074816a95104a0a363cd6338914c09cd17e8a2f4804a9ba8096f83fa",
+  "independent_sha256": "09e3e9b31b4307e52d92313fd4b429d8626eee029b13119d1a18036544f3d1d7",
+  "method_manifest_sha256": "4d813f2b196cffbc3ad94e3155cd2135e8f612f9e839ba3ce9fb9afdd7a97e93",
+  "source_freeze_sha256": "b4f771e7b69c5152a48be666696ad3d49509d6cc02cf629641300c1d370ad023",
+  "focused_tests": {
+    "preparation_and_historical_q": "PASS",
+    "whole_harness_q": "PASS",
+    "store_open_phases": "PASS"
+  },
+  "h11_tests": {
+    "passed": 90,
+    "ignored": 0,
+    "failed": 0,
+    "status": "PASS"
+  },
+  "h11_clippy_deny_warnings": "PASS",
+  "h11_fmt": "PASS",
+  "python_compile": "PASS",
+  "diff_whitespace": "PASS",
+  "retained_workspace_static": {
+    "artifact_sha256": "9c30e3f16f608f2311375db81cce74f29255f5f89f515ba8403337267ac0ad82",
+    "tests_passed": 166,
+    "ignored": 1,
+    "failed": 0,
+    "clippy_deny_warnings": "PASS",
+    "reason": "workspace Rust source unchanged since v4"
+  },
+  "screen_complete_wall_ns": 5723860291,
+  "gate_started": false
+}
+

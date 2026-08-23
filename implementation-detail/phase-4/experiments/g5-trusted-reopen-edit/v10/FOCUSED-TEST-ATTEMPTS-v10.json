@@ -1,0 +1,150 @@
+{
+  "schema": "phase4-g5-1-focused-test-attempts-v10",
+  "status": "PASS_AFTER_DIAGNOSTIC_REPAIRS",
+  "source_and_transport": {
+    "shared_exact_tests_passed": [
+      "g5_verified_scope_derives_and_scrubs_trusted_transition_parents_after_reopen",
+      "g5_touched_error_matrix_is_exact_in_both_modes_before_commit",
+      "compact_v2_first_edit_after_reopen_times_the_exact_three_phase_equation"
+    ],
+    "overlay_exact_tests_passed": [
+      "product::tests::g5_verified_scope_derives_and_scrubs_trusted_transition_parents_after_reopen",
+      "product::tests::g5_touched_error_matrix_is_exact_in_both_modes_before_commit",
+      "product::tests::compact_v2_first_edit_after_reopen_times_the_exact_three_phase_equation",
+      "product::g5_transport_tests::touched_error_matrix_is_two_mode_exact_and_terminal_q_zero"
+    ],
+    "focused_transport_module": {
+      "passed": 9,
+      "failed": 0,
+      "filtered_out": 96
+    },
+    "touched_matrix_json_records": 8,
+    "touched_matrix_cartesian_product_exact": true,
+    "existing_semantic_records": 10,
+    "existing_semantic_compatibility": "PASS",
+    "terminal_q_zero": true
+  },
+  "runner": {
+    "command": "python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/runner.py --self-check",
+    "result": {
+      "status": "PASS",
+      "checks": 13,
+      "gate_arms": 200,
+      "checkpoints": 56
+    },
+    "python_compile": "PASS",
+    "coverage": [
+      "gate scalar and S06 dual comparison intervals",
+      "child construction request and close cleanup",
+      "product-child high-water and per-child RSS classification",
+      "immediate work-root cleanup and terminal zero",
+      "logical versus physical catalog separation",
+      "workload and retained-evidence forecast enumeration",
+      "freeze direct-field contract and supersession inclusion",
+      "freeze-verification non-cycle protocol",
+      "frozen G4 synchronous-one-shot RSS classification",
+      "zero-product wrapper calibration and four-component forecast v3"
+    ]
+  },
+  "analyzers": {
+    "python_compile": "PASS",
+    "synthetic_gate": {
+      "operation_arms": 200,
+      "matched_pairs": 100,
+      "fixed_checkpoints": 56,
+      "product_child_rss_records": 71,
+      "cleanup_receipts": 200,
+      "primary": "PASS",
+      "independent": "PASS",
+      "exact_normalized_agreement": true
+    },
+    "synthetic_mutations_rejected_by_both": [
+      "incorrect common interval",
+      "physical field injected into logical catalog",
+      "false lifecycle terminal status",
+      "cleanup receipt with active row root",
+      "touched matrix COMMIT mutation",
+      "obsolete touched-corruption cardinality",
+      "noncanonical lifecycle artifact encoding"
+    ]
+  },
+  "diagnostic_attempts": [
+    {
+      "classification": "ZERO_TESTS_SELECTED",
+      "cause": "first overlay filter omitted the product:: module prefix",
+      "repair": "use the module-qualified exact filter",
+      "product_failure": false
+    },
+    {
+      "classification": "WRONG_WORKING_DIRECTORY",
+      "cause": "rustfmt received repository-relative paths from the nested v10 crate",
+      "repair": "rerun from the repository root",
+      "result": "PASS",
+      "product_failure": false
+    },
+    {
+      "classification": "DEBUG_BINARY_NOT_YET_MATERIALIZED",
+      "cause": "cargo test produced only the hashed test executable",
+      "repair": "one non-release cargo build materialized the debug semantic child",
+      "result": "semantic compatibility and matrix JSON checks PASS",
+      "release_build": false,
+      "product_failure": false
+    }
+  ],
+  "settled_byte_rerun": [
+    {
+      "command": "python3 -m py_compile implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/runner.py implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/analyzers/primary.py implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/analyzers/independent.py",
+      "result": "PASS"
+    },
+    {
+      "command": "python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/runner.py --self-check",
+      "result": "PASS checks=13 gate_arms=200 checkpoints=56"
+    },
+    {
+      "command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark tests::g5_verified_scope_derives_and_scrubs_trusted_transition_parents_after_reopen -- --exact",
+      "result": "1 passed; 0 failed; 95 filtered out; 0.42 s"
+    },
+    {
+      "command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark tests::g5_touched_error_matrix_is_exact_in_both_modes_before_commit -- --exact",
+      "result": "1 passed; 0 failed; 95 filtered out; 0.58 s"
+    },
+    {
+      "command": "cargo test --manifest-path implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/Cargo.toml product::tests::g5_verified_scope_derives_and_scrubs_trusted_transition_parents_after_reopen -- --exact",
+      "result": "1 passed; 0 failed; 104 filtered out; 0.41 s"
+    },
+    {
+      "command": "cargo test --manifest-path implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/Cargo.toml product::tests::g5_touched_error_matrix_is_exact_in_both_modes_before_commit -- --exact",
+      "result": "1 passed; 0 failed; 104 filtered out; 0.58 s"
+    },
+    {
+      "command": "cargo test --manifest-path implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/Cargo.toml product::g5_transport_tests::touched_error_matrix_is_two_mode_exact_and_terminal_q_zero -- --exact",
+      "result": "1 passed; 0 failed; 104 filtered out; eight exact PASS rows plus terminal Q0; 0.10 s"
+    },
+    {
+      "command": "cargo fmt --all -- --check && git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark tests::actual_commit_error_uses_fresh_reconciliation -- --exact",
+      "result": "1 passed; 0 failed; 95 filtered out; 0.02 s"
+    },
+    {
+      "command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark tests::normal_publish_retains_requested_visible_diagnostic -- --exact",
+      "result": "1 passed; 0 failed; 95 filtered out; 0.01 s"
+    },
+    {
+      "command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark tests::real_commit_dispatch_boundaries_cover_requested_different_and_ambiguous -- --exact",
+      "result": "1 passed; 0 failed; 95 filtered out; 0.03 s"
+    }
+  ],
+  "authoritative_state": {
+    "release_build_started": false,
+    "input_preparation_started": false,
+    "manifest_or_freeze_generated": false,
+    "benchmark_lock_acquired": false,
+    "dry_run_started": false,
+    "screen_started": false,
+    "gate_started": false,
+    "measured_campaign_rows": 0
+  }
+}

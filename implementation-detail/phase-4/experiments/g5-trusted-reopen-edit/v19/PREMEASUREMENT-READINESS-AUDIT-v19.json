@@ -1,0 +1,11 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v19",
+  "status": "PASS",
+  "disposition": "READY_FOR_ONE_TIME_FREEZE_AND_ZERO_ROW",
+  "severity_findings": {"P0": [], "P1": [], "P2": []},
+  "focused_sha256": "e91c88a9c1225cc961ae66f2c75d8c7ee9f95d599900254815b05fc972818b7c",
+  "shared_product_source_sha256": "a9d115ea124766369c244c789fd71d8bc92dcaf419b3d9fcbb6389e7ad50d912",
+  "release_sha256": "85495b06285c503cd20da762c7aa8e12c923a80000e86fa0a0950c7597d04fc0",
+  "fixed_population": {"gate_arms": 200, "matched_pairs": 100, "complete_roundtrip_checkpoints": 56, "screen_limit_ns": 20000000000, "gate_limit_ns": 150000000000},
+  "authoritative_absence": {"freeze": false, "dry_run": false, "screen": false, "gate": false, "benchmark_lock": false, "rows": 0}
+}

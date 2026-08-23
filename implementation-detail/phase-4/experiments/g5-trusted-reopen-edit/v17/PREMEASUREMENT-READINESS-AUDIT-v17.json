@@ -1,0 +1,13 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v17",
+  "status": "PASS",
+  "disposition": "READY_FOR_ONE_TIME_FREEZE_AND_ZERO_ROW",
+  "severity_findings": {"P0": [], "P1": [], "P2": []},
+  "focused_sha256": "89ec27b15bcf96f1955322620330dbba1068e07d5968c02336126fcf3c5fd1cf",
+  "shared_product_source_sha256": "c7d269e98ab096a1ab651d78584a47453666175fdb06518717e78cebe12b5295",
+  "fresh_release_sha256": "3880091e77a4e2f34c3fd41eca5fd9bb58e4232ba50aab515783f6a6a8a0b680",
+  "v16_screen_preserved": {"rows": 8, "wall_ns": 12121869666, "rows_reused": 0},
+  "repository": {"branch": "codex/empty-worktree", "head": "d58c5a1307253dfc221fe50de996c183deb9458a"},
+  "fixed_population": {"gate_arms": 200, "matched_pairs": 100, "complete_roundtrip_checkpoints": 56, "screen_limit_ns": 20000000000, "gate_limit_ns": 120000000000},
+  "authoritative_absence": {"freeze": false, "dry_run": false, "screen": false, "gate": false, "benchmark_lock": false, "v17_rows": 0}
+}

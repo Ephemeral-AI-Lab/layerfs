@@ -85,15 +85,18 @@ requires both a >5% ratio and at least 1.000 ms absolute regression for product
 materiality; none of the three rows meets the absolute condition. Three fresh
 independent read-only audit lanes passed with no source/evidence P0/P1.
 
-Phase 4 therefore remains incomplete and no platform or production integration
-is accepted. G4 is closed; this task stops before and authorizes no G5
-implementation or measurement.
-Concurrent premature `research/phase-4/g5-round-0` planning is foreign to and
-excluded from G4 custody; its presence is not evidence that G5 has been
-accepted or started under this roadmap. The native mechanism remains
-benchmark-private and operation-local, persists no replayable destination
-receipt, and makes no malicious same-UID guarantee. Physical I/O, OS cache
-residency, and stable-media completion remain Unavailable.
+G5 is now **TERMINAL PASS** under the narrowed benchmark-mechanism contract:
+G5-0 v9, G5-1 v27, G5-2 v3, and G5-3 v3 all pass their exact source,
+performance, resource, custody, and cleanup gates. G6 is eligible but has not
+started. The [G5 terminal report](experiments/g5-terminal/v1/G5-TERMINAL-REPORT-v1.md)
+and [scoreboard](experiments/g5-terminal/v1/FINAL-SCOREBOARD-v1.tsv) are the
+controlling handoff. G4 and every failed G5 attempt remain preserved.
+
+No platform or production integration is accepted. The native mechanisms
+remain benchmark-private; controlled-cold physical I/O, OS cache residency,
+rollback freshness, malicious same-UID protection, production extraction, and
+destructive GC remain unavailable or deferred exactly as listed in the
+[terminal limitations](experiments/g5-terminal/v1/LIMITATIONS-v1.md).
 
 - [Fast-lane amendment](wp4m/fixed-radix-fast-lane-amendment.md)
 - [Compact evidence contract](wp4m/fixed-radix-compact-evidence-contract.md)
@@ -126,6 +129,8 @@ residency, and stable-media completion remain Unavailable.
 - [G4 accepted baseline](baseline/g4-materialization-acceptance-baseline-v1.md)
 - [G4 report](experiments/g4-materialization-acceptance/G4-REPORT.md)
 - [Current benchmark scoreboard](baseline/current-benchmark-scoreboard.md)
+- [Prospective G5 implementation and verification plan](g5/implementation-verification-plan.md)
+- [G5 terminal execution handoff prompt](g5/G5-EXECUTION-HANDOFF-PROMPT.md)
 - [CP-0010 current grind checkpoint](test-checkpoint-report/cp-0010-dirty-72ed9fee8e6a-fastcdc-v2-phase4-grind.md)
 - [CP-0011 writer-memory checkpoint](test-checkpoint-report/cp-0011-dirty-3e167cdcdc26-sqlite-writer-memory.md)
 

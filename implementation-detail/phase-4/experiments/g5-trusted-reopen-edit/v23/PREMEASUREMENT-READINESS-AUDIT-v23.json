@@ -1,0 +1,36 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v23",
+  "status": "PASS",
+  "findings": {"P0": [], "P1": [], "P2": []},
+  "repository": {
+    "head": "d58c5a1307253dfc221fe50de996c183deb9458a",
+    "branch": "codex/empty-worktree",
+    "status_sha256": "57eda02625087c979ab47f12f5b71814449fbebebe78facc976a9b3ee8baf1cc",
+    "shared_source_diff_sha256": "bfa63e4ade4c68f9b249e3910b8d4da023ad8f4fc789dc989513cb77fd822e87"
+  },
+  "progress": {
+    "product_rows": 0,
+    "screen_rows": 0,
+    "gate_rows": 0,
+    "benchmark_lock": "absent",
+    "screen_result_root": "absent",
+    "gate_result_root": "absent"
+  },
+  "schedule": {"gate_arms": 200, "matched_pairs": 100, "complete_roundtrip_checkpoints": 56, "screen_limit_ns": 20000000000, "gate_limit_ns": 150000000000},
+  "hashes": {
+    "shared_source": "8124d62e559deb7d43a686cdda233a7707b916d4f99fa58d222b5557820e1005",
+    "session": "a5b0e70eaec1837e54245dde547be82f5c56d79679a774b3aa52398656ba9d6d",
+    "runner": "d1fbcd48b69db0eee7d95d0d7b320a8d3aa76df5744c9b29e756a32a4ea5928e",
+    "primary": "42bdd25f4464bac04df6be240b91d5a287677670bf92fc88a059cc78a5a8982a",
+    "independent": "3c6db794964e8e669e8c289ecbb5e9d6bafce131ba6cc80fc837d264c5067b19",
+    "preregistration": "688404e11e7a6252dd97c19b7ec83ab3fdd2027ec458a8e260c848f71b9f20d5",
+    "review": "2b3af3415f9b9b9dbfcd5055b09252ea23835970edf89bec326684cc74206329",
+    "limitations": "a05c624ac7a09161aef0b5a8fd9aacc5df4bab6911eb58ff85f83c83239ba3ac",
+    "schedule": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6",
+    "expectations": "edca17eea7276ec00017374fef7efa549db8eae18ac4ca9c040874024c6ac2cc",
+    "focused": "f5011a704331d0b73e4eb223ba152645770a7f4fc99dacfd221830d244793eeb",
+    "v22_supersession": "3c3676e1342ab103c1b33c28dac0cca300a42f32b9abae48711f79f60c8b9284",
+    "release": "1af4570394b564016565fd6e6de0cbc78c221317fadef1b59491bd090d10eae9",
+    "reused_input_manifest": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df"
+  }
+}

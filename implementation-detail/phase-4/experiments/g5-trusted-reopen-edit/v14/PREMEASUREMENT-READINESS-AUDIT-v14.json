@@ -1,0 +1,85 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v14",
+  "status": "PASS",
+  "disposition": "PREMEASUREMENT_READY_FOR_OPERAND_ADOPTION_AND_FREEZE_ONLY",
+  "classification": "IndependentCurrentByteReadinessAuditBeforeOneTimeV14FreezeAdoption",
+  "severity_findings": {"P0": [], "P1": [], "P2": []},
+  "focused_test_authority": {
+    "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v14/FOCUSED-TEST-ATTEMPTS-v14.json",
+    "bytes": 5389,
+    "sha256": "e3d993625297841fbdcb12734eecc7174e189afe415aee36a336e12a04355f8a",
+    "settled_bindings": 14,
+    "settled_bindings_rehashed": 14,
+    "runner_checks": 15,
+    "primary_checks": 14,
+    "independent_checks": 14
+  },
+  "settled_source_hashes": {
+    "runner": "dd0c440ee5a344a92e5a3b554e5601c42962ce62511772fbce42469a14d87147",
+    "primary_analyzer": "7072547f1fb3a3b201251e36eae23af01fc275290b50b6fbed3a7f227bc1aaac",
+    "independent_analyzer": "553a0281b7285e87f5d1d90205f3717c2411dae9e2c6a94551ca840805701be0",
+    "preregistration": "86408bf4bf33ad522caeece810b965e9b2936bd82ef753a34404d27f1fb0e251",
+    "review_synthesis": "4222b7d4a08652f671276683f1973cec6bba5f0bac053a5b4ff0a67b79e1021a",
+    "sample_count_addendum": "2ba41e22f43cbb3e03c606e54b57821b03f5a30d0124fd2be67f1e17afb0fd48",
+    "limitations": "6bff717d5fa46a11d8f10ffb8711d7f1fdbb41ddde19790b368e3fefa7849008",
+    "schedule": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6",
+    "expected_outcomes": "edca17eea7276ec00017374fef7efa549db8eae18ac4ca9c040874024c6ac2cc",
+    "v13_supersession": "cf5b5b7df77985a7f6a46b1a863fd3778f1dc063b06b942abb12af7c39077a2b"
+  },
+  "v13_custody": {
+    "terminal_bindings_rehashed": 21,
+    "terminal_binding_failures": 0,
+    "method_manifest_rows_rehashed": 78,
+    "method_manifest_sha256": "c266fcced5edb85ac535ee91d34a3ab98d8f59c6711572e5e8817c0c83d7adbb",
+    "input_rows_rehashed": 93,
+    "input_manifest_sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df",
+    "lock_release_sha256": "c815c640b99fe6292cc861bdfca50944823d1528093ce643c12dd87cf92f4464",
+    "lock_attestation_sha256": "3fd520e53b03fe8a33cfcc863f33c8a952473f1b0dd97dc2e1a7b8bc82a52a9c",
+    "lock_release_reconciled": true,
+    "screen_result_roots": 0,
+    "measured_rows": 0,
+    "terminal_lock_present": false
+  },
+  "owned_lock_verifier": {
+    "historical_global_lock_absent": true,
+    "historical_locks_acquired": 0,
+    "absent_current_lock_context": "PASS",
+    "later_owned_lock_context": "PASS",
+    "calibration_root_residue_both_contexts": "REJECTED",
+    "current_lock_used_as_historical_evidence": false
+  },
+  "external_operands": {
+    "input_reuse": true,
+    "product_release_reuse": true,
+    "measured_rows_reused": false,
+    "input_root": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v10",
+    "files": 93,
+    "directories": 14,
+    "root_and_directory_mode": "0555",
+    "file_mode": "0444",
+    "release_sha256": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b"
+  },
+  "repository_identity": {
+    "branch": "codex/empty-worktree",
+    "head": "d58c5a1307253dfc221fe50de996c183deb9458a",
+    "git_status_bytes": 665,
+    "git_status_sha256": "a55ad7058bd38099fa70ebbaa2c558138878c6db900a87995e2e21c6fb6274b4",
+    "tracked_diff_bytes": 119219,
+    "tracked_diff_sha256": "f2a09bf78bf7f4e1f2f8b05076616c3cb415b44a06179fce68c6b96e279e4698"
+  },
+  "method_source_preflight": {
+    "prospective_source_count": 86,
+    "missing_after_readiness_creation": ["implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v14/method/INPUT-MANIFEST-v14.tsv"]
+  },
+  "authoritative_absence": {
+    "input_manifest_v14": false,
+    "method_manifest_v14": false,
+    "source_freeze_v14": false,
+    "freeze_verification_v14": false,
+    "dry_run_v14": false,
+    "screen_result_v14": false,
+    "gate_result_v14": false,
+    "benchmark_lock": false,
+    "measured_rows": 0
+  }
+}

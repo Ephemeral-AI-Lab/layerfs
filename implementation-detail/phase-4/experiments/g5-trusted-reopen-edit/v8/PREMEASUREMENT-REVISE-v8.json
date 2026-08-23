@@ -1,0 +1,43 @@
+{
+  "schema": "phase4-g5-1-premeasurement-revise-v8",
+  "status": "REVISE",
+  "classification": "ZERO_ROW_CALIBRATED_COMPLETE_WALL_FORECAST",
+  "release_build_status": "PASS",
+  "release_executable_sha256": "61f1d62de08227ce5085ab73f195d5b8ff9cd226ed090a37e4a6eec7e5b27df0",
+  "input_preparation_status": "PASS",
+  "input_root": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v8",
+  "preparation_custody_sha256": "0df15ccbd9aba8cbb207e1c742d0ef30f9377dcc0076e5ee2e1d7a6aa08dddd2",
+  "source_freeze_sha256": "dad81f5de63e7fe85ee887cf737a2d3b42d8d0f4f5414591dd410a40a4ade01d",
+  "method_manifest_sha256": "3931233ce01220508a12fe6b534ef94e17259c466a1bd45926dd65aa37fb1566",
+  "input_manifest_sha256": "28eb034edf42819cf8118b29172711221e890ea24b1b94a90ebf3b1e7bc2d467",
+  "authoritative_dry_run_started": true,
+  "authoritative_dry_run_status": "REVISE",
+  "dry_run_pass_artifact_created": false,
+  "screen_started": false,
+  "gate_started": false,
+  "global_lock_acquired": false,
+  "measured_rows": 0,
+  "failure": "Conservative calibrated complete-wrapper forecast exceeds 120 seconds.",
+  "diagnostic_recomputation_after_failure": {
+    "classification": "read-only root-cause diagnostic; not a replacement authoritative dry-run",
+    "python_sha256_bytes_per_second": 1605771279,
+    "external_shasum_bytes_per_second": 283233093,
+    "conservative_floor_bytes_per_second": 141616546,
+    "floor_rule": "half the slower observed implementation",
+    "expected_gate_hash_bytes": 72596459562,
+    "hash_forecast_ns": 512626960709,
+    "nonhash_base_forecast_ns": 70000000000,
+    "complete_forecast_ns": 582626960709,
+    "limit_ns": 120000000000
+  },
+  "dominant_hash_bytes": {
+    "two_hundred_isolated_clone_pre_dispatch_hashes": 42813237840,
+    "two_hundred_post_row_custody": 21841666640,
+    "frozen_g4_internal_pre_dispatch_hashes": 5460416660,
+    "input_manifest_preverification": 1617081834
+  },
+  "repair_boundary": "V9 must remove redundant full-file passes through prospectively stronger native clone and logical-state evidence; it must not change the 200-arm schedule, half-slower calibration floor, thresholds, or v8 evidence.",
+  "superseded_by": "v9",
+  "g5_1_pass": false,
+  "g6_eligible": false
+}

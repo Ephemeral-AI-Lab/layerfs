@@ -1,0 +1,26 @@
+{
+  "schema": "phase4-g5-1-limitations-v26",
+  "status": "PROSPECTIVE",
+  "cache_claim": "CacheWarmPreconditionedNotColdReopen",
+  "cold_reopen_claim": false,
+  "database_preconditioning": {
+    "buffer_bytes": 65536,
+    "inside_complete_wall": true,
+    "inside_product_timer": false,
+    "layerfs_sql_or_authentication_work": false,
+    "g4_wrapper_extra_read": false,
+    "g5_wrapper_read": true
+  },
+  "process_shape": {
+    "g4_verified": "one-shot",
+    "g5_verified": "one-shot",
+    "g5_trusted": "one-shot",
+    "environment": {"MallocNanoZone": "0"}
+  },
+  "screen_limit_ns": 20000000000,
+  "gate_limit_ns": 150000000000,
+  "rss_limit_bytes_per_product_child": 20971520,
+  "aggregate_rss_claim": "NotClaimed",
+  "rollback_freshness": "NotProtected",
+  "historical_rows_reused": false
+}

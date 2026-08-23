@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark">
+  <meta name="description" content="LeetCode-style LayerFS FastCDC lesson: boundaries, edit influence, bounded rejoin, complexity, counters, and failure modes.">
+  <title>CDC · LayerFS Architecture Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="architecture.css"><script src="architecture.js" defer></script>
+</head>
+<body class="app-shell" data-page="cdc">
+  <!-- Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 -->
+  <a class="skip-link" href="#main">Skip to lesson</a>
+  <header class="site-header"><a class="wordmark" href="index.html"><span aria-hidden="true">LFS</span><span>Architecture Lab</span></a><nav class="site-nav" aria-label="Primary curriculum"><a href="index.html" data-page="index">Overview</a><a href="identities.html" data-page="identities">Identities</a><a href="cas.html" data-page="cas">CAS</a><a href="cdc.html" data-page="cdc" aria-current="page">CDC</a><a href="data-structures.html" data-page="data-structures">Data structures</a><a href="k64-f64.html" data-page="k64-f64">K64/F64</a><a href="cd32-64.html" data-page="cd32-64">CD32-64</a><a href="bplus-rope.html" data-page="bplus-rope">B+ rope</a><a href="operations.html" data-page="operations">Operations</a><a href="performance.html" data-page="performance">Performance</a><a href="vfs-recovery.html" data-page="vfs-recovery">VFS &amp; recovery</a></nav><button class="command-trigger" type="button" data-command-open aria-label="Open curriculum navigator">⌘ K</button></header>
+  <nav class="mobile-nav" aria-label="Mobile curriculum"><a class="wordmark" href="index.html"><span class="wordmark-mark" aria-hidden="true">LFS</span><span>Architecture Lab</span></a><div class="mobile-nav-actions"><button class="icon-button" type="button" data-nav-toggle aria-expanded="false">Curriculum</button><button class="icon-button" type="button" data-command-open aria-label="Open lesson navigator">⌘K</button></div></nav><div class="mobile-nav-drawer" data-mobile-panel hidden><nav class="site-nav"><a href="index.html">Overview</a><a href="identities.html">Identities</a><a href="cas.html">CAS</a><a href="cdc.html" aria-current="page">CDC</a><a href="data-structures.html">Data structures</a><a href="k64-f64.html">K64/F64</a><a href="cd32-64.html">CD32-64</a><a href="bplus-rope.html">B+ rope</a><a href="operations.html">Operations</a><a href="performance.html">Performance</a><a href="vfs-recovery.html">VFS &amp; recovery</a></nav></div>
+
+  <main id="main" class="lesson">
+    <header class="lesson-header"><div><p class="eyebrow">Lesson 04 · content-defined chunking</p><h1>CDC makes payload boundaries local</h1><p>A bounded streaming scanner converts a byte stream into 8–32 KiB content-defined chunks. An edit can regain the old boundary sequence locally, or fail with a typed bounded-resynchronization error.</p></div><dl class="metric-grid"><div class="metric"><dt>Minimum</dt><dd>8 KiB</dd><span class="evidence observed">Observed source</span></div><div class="metric"><dt>Target</dt><dd>16 KiB</dd><span class="evidence observed">Observed source</span></div><div class="metric"><dt>Maximum</dt><dd>32 KiB</dd><span class="evidence observed">Observed source</span></div><div class="metric"><dt>Edit probe cap</dt><dd>1 MiB</dd><span class="evidence observed">Observed source</span></div></dl></header>
+
+    <section class="panel mental-model">
+      <div class="panel-title row-title"><div><span>60-second model</span><h2>Same bytes nearby tend to recover the same chunk boundaries</h2></div></div>
+      <div class="object-flow"><div class="node"><b>Byte stream</b><small>reader input</small></div><span class="edge">→ rolling gear hash →</span><div class="node changed"><b>Boundary policy</b><small>min / target / max</small></div><span class="edge">→ emit →</span><div class="node shared"><b>Payload chunks</b><small>CAS admission next</small></div></div>
+      <div class="comparison"><div><span>CDC owns</span><strong>payload cut positions</strong></div><div><span>CAS owns</span><strong>canonical identity and dedup</strong></div><div><span>Mapping tree owns</span><strong>ordered file structure</strong></div></div>
+    </section>
+
+    <section class="lab-grid">
+      <aside class="panel">
+        <h2 class="panel-title">Input</h2>
+        <div class="control-stack">
+          <label>Simulation
+            <select id="cdc-case"><option value="normal">Normal local rejoin</option><option value="no-rejoin">No rejoin in bounded window</option><option value="adversarial">Adversarial boundary churn</option></select>
+          </label>
+          <label>Edit position <input id="cdc-edit-position" type="range" min="8" max="72" value="27"><output id="cdc-edit-output">27</output></label>
+          <label>Inserted bytes <select id="cdc-edit-size"><option value="1">1 B</option><option value="4096">4 KiB</option><option value="65536">64 KiB</option><option value="1048576">1 MiB</option></select></label>
+          <button id="cdc-run" type="button">Run boundary simulation</button>
+          <button id="cdc-step" type="button">Advance scan window</button>
+          <button id="cdc-reset" type="button">Reset</button>
+        </div>
+        <div class="formula-card"><span>Streaming scan</span><code>Θ(F)</code><span>Local edit attempt</span><code>O(B + W), W ≤ 1 MiB</code><span>Scanner memory</span><code>O(32 KiB)</code></div>
+      </aside>
+
+      <article class="panel">
+        <div class="panel-title row-title"><div><span>Boundary trace</span><h2 id="cdc-case-title">Normal local rejoin</h2></div><span class="evidence projected">Didactic simulation</span></div>
+        <div class="cdc-timeline byte-ribbon" id="cdc-old" aria-label="Old chunk boundary timeline"></div>
+        <div class="timeline-caption"><span>Old byte stream</span><span>boundary = vertical rule</span></div>
+        <div class="cdc-timeline byte-ribbon" id="cdc-new" aria-label="Edited chunk boundary timeline"></div>
+        <div class="timeline-caption"><span>Edited byte stream</span><span id="cdc-status">waiting</span></div>
+        <div class="scan-window" id="scan-window"><span></span></div>
+        <div class="comparison"><div><span>Bytes scanned</span><strong id="cdc-scanned">0</strong><i class="evidence projected">Visual model</i></div><div><span>Chunks emitted</span><strong id="cdc-emitted">0</strong><i class="evidence projected">Visual model</i></div><div><span>Disposition</span><strong id="cdc-disposition">not started</strong><i class="evidence invariant" id="cdc-disposition-class">Typed result</i></div></div>
+        <pre class="algorithm"><code>consume(reader):
+  fill chunk until MINIMUM_CHUNK_BYTES
+  before TARGET: scan with small masks
+  after TARGET:  scan with large masks
+  on marker:     emit chunk; reset hash to PROFILE_SEED
+  at MAXIMUM:    emit forced boundary
+  at EOF:        emit remaining non-empty chunk</code></pre>
+      </article>
+
+      <aside class="panel">
+        <h2 class="panel-title">Scanner state</h2>
+        <dl class="metric-grid vertical"><div class="metric"><dt>Profile seed</dt><dd>0</dd><span class="evidence observed">Observed source</span></div><div class="metric"><dt>Normalization shift</dt><dd>2</dd><span class="evidence observed">Observed source</span></div><div class="metric"><dt>Read buffer</dt><dd>32,768 B</dd><span class="evidence observed">Observed source</span></div><div class="metric"><dt>Chunk capacity</dt><dd>32,768 B</dd><span class="evidence observed">Observed test</span></div></dl>
+        <div class="callout"><b>Critical separation</b><p>Finding the old CDC chunk stream again does not prove a canonical mapping tree also rejoins locally. G6 CD32–64 requires a second grouping rejoin.</p></div>
+      </aside>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title row-title"><div><span>Frozen profile fields</span><h2>Scanner state and boundary regions</h2></div></div>
+      <div class="table-scroll"><table class="spec-table"><thead><tr><th>Field</th><th>Value</th><th>Purpose</th><th>Evidence</th></tr></thead><tbody><tr><th>MINIMUM_CHUNK_BYTES</th><td>8,192</td><td>No marker accepted before this length</td><td><span class="evidence observed">Observed source</span></td></tr><tr><th>TARGET_CHUNK_BYTES</th><td>16,384</td><td>Switches normalized mask regime</td><td><span class="evidence observed">Observed source</span></td></tr><tr><th>MAXIMUM_CHUNK_BYTES</th><td>32,768</td><td>Forces a cut and bounds scanner allocation</td><td><span class="evidence observed">Observed source</span></td></tr><tr><th>NORMALIZATION_SHIFT</th><td>2</td><td>Applies normalized FastCDC mask selection</td><td><span class="evidence observed">Observed source</span></td></tr><tr><th>PROFILE_SEED</th><td>0</td><td>Initial and post-emit hash state</td><td><span class="evidence observed">Observed source</span></td></tr><tr><th>CdcCounters</th><td>bytes_scanned, chunks_emitted</td><td>Observed streaming-work counters</td><td><span class="evidence observed">Implemented</span></td></tr></tbody></table></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title row-title"><div><span>Scale</span><h2>Observed extent populations</h2></div><p>Mapping bytes are handled by later structures; this table counts the payload occurrences emitted from retained fixtures.</p></div>
+      <div class="table-scroll"><table class="spec-table"><thead><tr><th>Logical file</th><th>Payload extents</th><th>Mean bytes / extent</th><th>Approx. extents / MiB</th><th>Classification</th></tr></thead><tbody><tr><th>1 MiB</th><td>53</td><td>19,784.45</td><td>53.00</td><td><span class="evidence observed">Extents observed</span><span class="evidence derived">Ratios derived</span></td></tr><tr><th>10 MiB</th><td>531</td><td>19,747.19</td><td>53.10</td><td><span class="evidence observed">Extents observed</span></td></tr><tr><th>100 MiB</th><td>5,284</td><td>19,844.36</td><td>52.84</td><td><span class="evidence observed">Extents observed</span></td></tr><tr><th>500 MiB</th><td>26,533</td><td>19,759.17</td><td>53.07</td><td><span class="evidence observed">Extents observed</span></td></tr></tbody></table></div>
+    </section>
+
+    <section class="panel comparison-section">
+      <div class="panel-title row-title"><div><span>Complexity and failure</span><h2>Expected locality with a fail-closed bound</h2></div></div>
+      <div class="comparison"><div><span>Full create / replace</span><strong>Θ(F) scan · O(32 KiB) scanner</strong><i class="evidence invariant">Lower bound + source bound</i></div><div><span>Local replace attempt</span><strong>O(B + W), W ≤ 1 MiB</strong><i class="evidence derived">Source bound</i></div><div><span>No accepted rejoin</span><strong>BoundedResynchronization { scanned, limit }</strong><i class="evidence observed">Typed error</i></div></div>
+      <div class="table-scroll"><table class="spec-table"><thead><tr><th>Condition</th><th>Result</th><th>Why it matters</th></tr></thead><tbody><tr><th>Reader error</th><td><code>CoreError::Io</code></td><td>No partial success masquerades as a complete stream</td></tr><tr><th>Counter / length overflow</th><td><code>CoreError::LengthOverflow</code></td><td>Checked arithmetic fails closed</td></tr><tr><th>Chunk exceeds 32 KiB CAS contract</th><td><code>CoreError::ObjectLimitExceeded</code></td><td>CAS cannot admit an oversized payload chunk</td></tr><tr><th>Rejoin absent inside 1 MiB edit window</th><td><code>CoreError::BoundedResynchronization</code></td><td>Caller must choose a broader/full fallback explicitly</td></tr><tr><th>Fetched chunk has wrong length / identity</th><td><code>ChunkLengthMismatch</code> / <code>ChunkIdentityMismatch</code></td><td>CDC output never bypasses payload authentication</td></tr></tbody></table></div>
+    </section>
+
+    <section class="panel status-sources"><div class="panel-title row-title"><div><span>Current status</span><h2>Implemented scanner; bounded edit rejoin in public core</h2></div></div><div class="comparison"><div><span>Implemented</span><strong>streaming FastCDC + counters + fixed profile</strong><i class="evidence observed">Current source</i></div><div><span>Implemented</span><strong>bounded edit probe and typed no-rejoin error</strong><i class="evidence observed">Current source</i></div><div><span>Not implied</span><strong>hard-logarithmic mapping splice or native projection</strong><i class="evidence invariant">Architecture boundary</i></div></div><h3>Sources</h3><ul class="source-list"><li><a href="../../../crates/layerfs-core/src/cdc/mod.rs">FastCDC source and tests</a></li><li><a href="../../../crates/layerfs-core/src/content/mod.rs">Bounded edit and rejoin implementation</a></li><li><a href="../../../crates/layerfs-core/src/error.rs">Typed CoreError definitions</a></li><li><a href="../01-data-structures-and-storage.md">Data-structure authority</a></li><li><a href="../02-operation-algorithms.md">Operation algorithms</a></li><li><a href="../03-performance-and-complexity.md">Quantified fixture anchors</a></li></ul></section>
+  </main>
+
+  <dialog class="command-dialog" id="command-dialog" data-command-dialog aria-labelledby="command-title"><div class="command-dialog-inner"><header class="command-dialog-header"><div class="command-dialog-heading"><h2 id="command-title">Go to lesson</h2><button class="icon-button" type="button" data-command-close aria-label="Close">Esc</button></div><input class="command-search" data-command-input autocomplete="off" placeholder="Type a lesson…" aria-label="Search curriculum"></header><ul class="command-results" data-command-results></ul><footer class="command-dialog-footer"><span>↑↓ select</span><span>Enter open</span><span>Esc close</span></footer></div></dialog>
+  <footer class="site-footer"><p>LayerFS Architecture Lab · CDC is payload segmentation, not mapping authority</p><p><a href="k64-f64.html">Next: K64/F64 mapping →</a></p></footer>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const $ = s => document.querySelector(s);
+    let progress = 0;
+    let running = false;
+    const oldCuts = [16, 34, 53, 71];
+    function makeTimeline(target, cuts, insertedAt = -1, affectedUntil = -1) {
+      target.innerHTML = '';
+      for (let i = 0; i < 80; i++) {
+        const cell = document.createElement('span');
+        cell.textContent = (i % 16).toString(16);
+        if (cuts.includes(i)) cell.classList.add('boundary');
+        if (i === insertedAt) cell.classList.add('inserted');
+        if (i > insertedAt && i <= affectedUntil) cell.classList.add('rescanned');
+        target.append(cell);
+      }
+    }
+    function scenarioCuts(kind, edit) {
+      if (kind === 'normal') return {cuts:[16, edit + 13, 53, 71], rejoin:53};
+      if (kind === 'no-rejoin') return {cuts:[16, edit + 17, edit + 35, 79], rejoin:80};
+      return {cuts:[8, 24, edit + 5, edit + 21, edit + 37, 79], rejoin:80};
+    }
+    function render() {
+      const kind = $('#cdc-case').value;
+      const edit = Number($('#cdc-edit-position').value);
+      const model = scenarioCuts(kind, edit);
+      makeTimeline($('#cdc-old'), oldCuts);
+      makeTimeline($('#cdc-new'), model.cuts, edit, Math.min(model.rejoin, edit + progress));
+      const labels = {normal:'Normal local rejoin','no-rejoin':'No rejoin in bounded window',adversarial:'Adversarial boundary churn'};
+      $('#cdc-case-title').textContent = labels[kind];
+      $('#cdc-edit-output').textContent = edit;
+      const span = Math.max(0, Math.min(progress, model.rejoin - edit));
+      $('#cdc-scanned').textContent = span ? `${span} visual cells` : '0';
+      $('#cdc-emitted').textContent = String(model.cuts.filter(cut => cut <= edit + progress).length);
+      const done = edit + progress >= model.rejoin;
+      $('#cdc-status').textContent = done ? (kind === 'normal' ? 'old boundary sequence rejoined' : 'bounded probe exhausted') : 'scanning changed influence window';
+      $('#cdc-disposition').textContent = done ? (kind === 'normal' ? 'local rejoin accepted' : 'BoundedResynchronization') : 'in progress';
+      $('#scan-window span').textContent = `scan ${edit} → ${Math.min(80, edit + progress)}`;
+      $('#scan-window').setAttribute('data-progress', String(Math.min(100, progress * 2)));
+    }
+    function reset() { running = false; progress = 0; render(); }
+    $('#cdc-case').addEventListener('change', reset);
+    $('#cdc-edit-position').addEventListener('input', reset);
+    $('#cdc-run').addEventListener('click', () => { progress = 80; render(); });
+    $('#cdc-step').addEventListener('click', () => { progress = Math.min(80, progress + 8); render(); });
+    $('#cdc-reset').addEventListener('click', reset);
+    render();
+  });
+  </script>
+</body></html>

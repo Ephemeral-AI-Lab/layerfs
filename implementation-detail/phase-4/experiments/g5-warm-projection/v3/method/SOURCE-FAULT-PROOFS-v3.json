@@ -1,0 +1,344 @@
+{
+  "campaign_process_cases": [
+    "clone-failure",
+    "after-rename-lost-ack"
+  ],
+  "focused_complete_apply_cases": [
+    "cancel-private-successor",
+    "shutdown-inflight",
+    "restart-owned-temp",
+    "stale-worker-token",
+    "before-sync",
+    "before-rename",
+    "seed-substitution",
+    "missing-seed",
+    "wrong-kind-or-symlink",
+    "foreground-contention"
+  ],
+  "proofs": [
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "active_descriptors": 1,
+        "cancelled": 1,
+        "data_sync_calls": 0,
+        "directory_sync_calls": 1,
+        "failed": 0,
+        "fault_finalizations": 1,
+        "fault_q_terminal": 0,
+        "fault_temp_residue": 0,
+        "private_build_cancellations": 1,
+        "q_terminal": 0,
+        "rename_calls": 0,
+        "stale": 0,
+        "started": 1,
+        "submitted": 1,
+        "successor_descriptors": 0,
+        "temp_files_created": 1,
+        "temp_files_removed": 1
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "cancel-private-successor",
+      "matrix_row": {
+        "case": "cancel-private-successor",
+        "decision": "hard",
+        "required_observation": "observed cancellation/status/work/temp/descriptor/Q counters and retained prior projection",
+        "stage": "private-build"
+      },
+      "matrix_row_sha256": "ee98a424387391450045058e7f909da32b5bebfa0d59a936f25047dd93294543",
+      "required_observation": "observed cancellation/status/work/temp/descriptor/Q counters and retained prior projection",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_cancel_private_successor_removes_temp_and_records_cancellation@phase4_g3_materialization.rs:8280",
+      "typed_outcome": "ProjectionServiceError::Cancelled/ProjectionFaultOutcome::Cancelled"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "cancelled": 0,
+        "coalesced": 0,
+        "failed": 0,
+        "published": 1,
+        "q_terminal": 0,
+        "rename_calls": 1,
+        "stale": 0,
+        "started": 1,
+        "submitted": 1,
+        "temp_files_created": 1,
+        "temp_files_removed": 0,
+        "terminal_temp_residue": 0
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "shutdown-inflight",
+      "matrix_row": {
+        "case": "shutdown-inflight",
+        "decision": "hard",
+        "required_observation": "observed started/completed/cancelled/failed/stale/published counters and terminal drain",
+        "stage": "shutdown"
+      },
+      "matrix_row_sha256": "e75f712865923663c616e4dd6d6bdb5007924733ea443cebda8d19a88099e60d",
+      "required_observation": "observed started/completed/cancelled/failed/stale/published counters and terminal drain",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_shutdown_inflight_drains_real_worker_loop@phase4_g3_materialization.rs:8339",
+      "typed_outcome": "SuccessfulShutdownDrainPublished"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "authenticated_originals_retained": 1,
+        "post_auth_substitution_cases": 1,
+        "q_terminal": 0,
+        "replacements_retained": 1,
+        "restart_temps_discovered": 2,
+        "restart_temps_removed": 1,
+        "restart_temps_retained": 1,
+        "terminal_temp_residue": 0,
+        "wrong_inodes_removed": 0
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "restart-owned-temp",
+      "matrix_row": {
+        "case": "restart-owned-temp",
+        "decision": "hard",
+        "required_observation": "observed discovered/removed/retained temp entries and exact canonical/projected roots",
+        "stage": "restart"
+      },
+      "matrix_row_sha256": "f316d7233a55eacf5096d68b72b9b201434d7c5f803b5e439e9d916831c15a6c",
+      "required_observation": "observed discovered/removed/retained temp entries and exact canonical/projected roots",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_restart_discovers_and_removes_only_owned_temps@phase4_g3_materialization.rs:8449; g5_projection_restart_substitution_after_authentication_retains_replacement@phase4_g3_materialization.rs:8503",
+      "typed_outcome": "SuccessfulAuthenticatedCleanupOrRetainedSubstitution"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "active_descriptors": 1,
+        "failed": 0,
+        "fault_finalizations": 1,
+        "fault_q_terminal": 0,
+        "fault_temp_residue": 0,
+        "q_terminal": 0,
+        "rename_calls": 0,
+        "stale": 1,
+        "started": 1,
+        "submitted": 1,
+        "successor_descriptors": 0
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "stale-worker-token",
+      "matrix_row": {
+        "case": "stale-worker-token",
+        "decision": "hard",
+        "required_observation": "observed stale completion and proof that no newer target was overwritten",
+        "stage": "publication"
+      },
+      "matrix_row_sha256": "32d4614bf2ee1d4c7e70dbd5a33f1a6dbb2dbbce9a704876b139876f7270c097",
+      "required_observation": "observed stale completion and proof that no newer target was overwritten",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_stale_parent_fails_before_native_work@phase4_g3_materialization.rs:8091",
+      "typed_outcome": "ProjectionServiceError::ParentChainMismatch/ProjectionFaultOutcome::Stale"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "active_descriptors": 1,
+        "data_sync_calls": 0,
+        "directory_sync_calls": 1,
+        "fault_finalizations": 1,
+        "fault_q_terminal": 0,
+        "fault_temp_residue": 0,
+        "metadata_sync_calls": 0,
+        "q_terminal": 0,
+        "rename_calls": 0,
+        "successor_descriptors": 0,
+        "temp_files_created": 1,
+        "temp_files_removed": 1
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "before-sync",
+      "matrix_row": {
+        "case": "before-sync",
+        "decision": "hard",
+        "required_observation": "observed old projection retained, successor removed, no publication",
+        "stage": "data-sync"
+      },
+      "matrix_row_sha256": "efbb53751ffdf14c66e5b532a68ddd6e56e94681a80261be2d8275646e4be2d9",
+      "required_observation": "observed old projection retained, successor removed, no publication",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_before_sync_and_before_rename_fail_with_prior_active@phase4_g3_materialization.rs:8566#BeforeSync",
+      "typed_outcome": "EIO/IoError"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "active_descriptors": 1,
+        "data_sync_calls": 1,
+        "directory_sync_calls": 1,
+        "fault_finalizations": 1,
+        "fault_q_terminal": 0,
+        "fault_temp_residue": 0,
+        "metadata_sync_calls": 1,
+        "q_terminal": 0,
+        "rename_calls": 0,
+        "successor_descriptors": 0,
+        "temp_files_created": 1,
+        "temp_files_removed": 1
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "before-rename",
+      "matrix_row": {
+        "case": "before-rename",
+        "decision": "hard",
+        "required_observation": "observed old projection retained, successor cleanup and directory state",
+        "stage": "rename"
+      },
+      "matrix_row_sha256": "d53b7fc842442cf417ddb0ee2255ff88137dea4c1ad70e64724d5f82f05d3150",
+      "required_observation": "observed old projection retained, successor cleanup and directory state",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_before_sync_and_before_rename_fail_with_prior_active@phase4_g3_materialization.rs:8566#BeforeRename",
+      "typed_outcome": "EIO/IoError"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "active_descriptors": 1,
+        "clone_calls": 0,
+        "fault_finalizations": 1,
+        "fault_q_terminal": 0,
+        "fault_temp_residue": 0,
+        "q_terminal": 0,
+        "rename_calls": 0,
+        "seed_admission_rejections": 1,
+        "successor_descriptors": 0,
+        "temp_files_created": 0
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "seed-substitution",
+      "matrix_row": {
+        "case": "seed-substitution",
+        "decision": "hard",
+        "required_observation": "observed identity/kind/root rejection before patch or publication",
+        "stage": "seed-admission"
+      },
+      "matrix_row_sha256": "afb763cd98ffcca97751f67d357cfe51131de8bee3d2d9be1ac8b45d27e47e6f",
+      "required_observation": "observed identity/kind/root rejection before patch or publication",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_in_place_untouched_seed_mutation_fails_before_private_work@phase4_g3_materialization.rs:8661; g5_projection_edge_token_rejects_mutation_replay_and_cross_stream_use@phase4_g3_materialization.rs:7690",
+      "typed_outcome": "CoreError::IdentityMismatch/ProjectionFaultOutcome::IdentityMismatch"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "clone_calls": 0,
+        "full_fallbacks": 1,
+        "missing_seed_fallbacks": 1,
+        "q_terminal": 0,
+        "seed_rotations": 1,
+        "terminal_temp_residue": 0
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "missing-seed",
+      "matrix_row": {
+        "case": "missing-seed",
+        "decision": "hard",
+        "required_observation": "observed full fallback route and exact final root",
+        "stage": "seed-admission"
+      },
+      "matrix_row_sha256": "b01a6714263dac9cf466ab4eb4b669ba964538edb5672d84c80494a7e384a1d1",
+      "required_observation": "observed full fallback route and exact final root",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_missing_seed_streams_verified_fallback_to_exact_target@phase4_g3_materialization.rs:8602",
+      "typed_outcome": "SuccessfulVerifiedFullFallback"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "active_descriptors": 1,
+        "fault_finalizations": 1,
+        "fault_q_terminal": 0,
+        "fault_temp_residue": 0,
+        "q_terminal": 0,
+        "rename_calls": 0,
+        "seed_admission_rejections": 1,
+        "successor_descriptors": 0,
+        "temp_files_created": 0
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "wrong-kind-or-symlink",
+      "matrix_row": {
+        "case": "wrong-kind-or-symlink",
+        "decision": "hard",
+        "required_observation": "observed no-follow typed rejection and observed publication counter demonstrating pre-publication failure",
+        "stage": "seed-admission"
+      },
+      "matrix_row_sha256": "3c677db165b38bbfe6b2bee5e5872b81609dca46c1fd55abd9104d4c0a06434e",
+      "required_observation": "observed no-follow typed rejection and observed publication counter demonstrating pre-publication failure",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_symlink_seed_is_rejected_before_private_work@phase4_g3_materialization.rs:8628",
+      "typed_outcome": "CoreError::WrongLogicalRole/ProjectionFaultOutcome::WrongLogicalRole"
+    },
+    {
+      "classification": "ObservedFocusedCompleteApply",
+      "counter_claims": {
+        "cancelled": 0,
+        "coalesced": 1,
+        "failed": 0,
+        "foreground_commit_extended_code": 0,
+        "foreground_commit_primary_code": 0,
+        "foreground_commits": 1,
+        "foreground_transactions": 1,
+        "full_fallbacks": 2,
+        "published": 5,
+        "q_terminal": 0,
+        "reader_barrier_autocommit": 1,
+        "reader_barrier_scope_live": 1,
+        "reader_commit_autocommit": 1,
+        "reader_commit_scope_live": 0,
+        "seed_rotations": 5,
+        "sqlite_busy_errors": 0,
+        "sqlite_commits": 0,
+        "sqlite_locked_errors": 0,
+        "sqlite_transactions": 0,
+        "sqlite_write_calls": 0,
+        "stale": 0,
+        "started": 5,
+        "submitted": 6,
+        "terminal_temp_residue": 0
+      },
+      "execution_receipt_path": "implementation-detail/phase-4/experiments/g5-warm-projection/v3/evidence/FOCUSED-FAULT-EXECUTION-v3.json",
+      "execution_receipt_sha256": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+      "fault_class": "foreground-contention",
+      "matrix_row": {
+        "case": "foreground-contention",
+        "decision": "hard",
+        "required_observation": "observed reader state, SQLite result codes, writer transaction/COMMIT and interval overlap",
+        "stage": "worker-read"
+      },
+      "matrix_row_sha256": "3ce64a02502646c0e188060f14ad9af6d96d8003af7427537f9198cc60319319",
+      "required_observation": "observed reader state, SQLite result codes, writer transaction/COMMIT and interval overlap",
+      "source_path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+      "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+      "test_locator": "g5_projection_rotates_the_active_visible_seed@phase4_g3_materialization.rs:8976; projection_reader_is_query_only_and_rejects_writes@phase4_create_edit_benchmark.rs:14393",
+      "typed_outcome": "SuccessfulContendedFallbackWithForegroundOneCommit"
+    }
+  ],
+  "schema": "phase4-g5-2-source-fault-proofs-v3",
+  "status": "PASS"
+}

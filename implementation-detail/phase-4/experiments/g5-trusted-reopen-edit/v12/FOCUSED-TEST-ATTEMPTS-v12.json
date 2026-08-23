@@ -1,0 +1,221 @@
+{
+  "schema": "phase4-g5-1-focused-test-attempts-v12",
+  "status": "PASS",
+  "recorded_at_utc": "2026-08-22T23:29:24Z",
+  "classification": "MethodOnlyFocusedClosureWithUnchangedHashVerifiedV10ProductOperand",
+  "settled_bytes": {
+    "shared_product_source": {
+      "path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+      "bytes": 853017,
+      "sha256": "8b0437cb26226b133bbc2039772262325fd375657859c81f45fd08f259b6f2b0"
+    },
+    "v10_session": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/src/session.rs",
+      "bytes": 56927,
+      "sha256": "390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897"
+    },
+    "reused_v10_release": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/target/release/layerfs-g5-trusted-child-v10",
+      "bytes": 1405760,
+      "sha256": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b"
+    },
+    "reused_v10_input_manifest": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/method/INPUT-MANIFEST-v10.tsv",
+      "bytes": 12799,
+      "rows": 93,
+      "sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df"
+    },
+    "runner": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/runner.py",
+      "bytes": 244263,
+      "sha256": "6be95947dc807116a1add2d736488fb2eb88abaed80ca712b15da707b968ba21"
+    },
+    "primary": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/primary.py",
+      "bytes": 83854,
+      "sha256": "ead1354ea7e1e8f86542f2e569c175b01c9b8d771155681ecea0a086fd7ac777"
+    },
+    "independent": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/independent.py",
+      "bytes": 80816,
+      "sha256": "63c23b19bb8a257882ad32f1b7516f9332ce2217cc2de3d124b3f4652a7fed90"
+    },
+    "preregistration": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/PREREGISTRATION-v12.md",
+      "bytes": 20827,
+      "sha256": "5535b885b553622db77afd87c9cdf0548e93b15c504e282d7e31bc6f6aadf620"
+    },
+    "review_synthesis": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/REVIEW-SYNTHESIS-v12.md",
+      "bytes": 12401,
+      "sha256": "2e47dcc4ed4d5681961fc7b08108682fd8eee06c4440c10e8734bc1e38b06e64"
+    },
+    "sample_count_addendum": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/SAMPLE-COUNT-INTERPRETATION-ADDENDUM-v12.md",
+      "bytes": 1843,
+      "sha256": "183f1e1a1b2eb7879a1e6e1a205ea82d8a924343846e77102c1866d2ea6c8d80"
+    },
+    "limitations": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/LIMITATIONS-v12.json",
+      "bytes": 13640,
+      "sha256": "0fe7dee690cead1fa73d18077ef46d68b6c1641a0fde684d7880660ab55ba4ac"
+    },
+    "schedule": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/SCHEDULE-v12.tsv",
+      "bytes": 4784,
+      "sha256": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6"
+    },
+    "expectations": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/EXPECTED-OUTCOMES-v12.tsv",
+      "bytes": 7513,
+      "sha256": "edca17eea7276ec00017374fef7efa549db8eae18ac4ca9c040874024c6ac2cc"
+    },
+    "v11_supersession": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/V11-SUPERSESSION-v12.json",
+      "bytes": 5369,
+      "sha256": "992dae78996a4f03d0798b2e0140a79c8becbb07c33691d726c862c3a92f04e4"
+    }
+  },
+  "commands": [
+    {
+      "command": "PYTHONPYCACHEPREFIX=/tmp/layerfs-g5-v12-pycache PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/runner.py implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/primary.py implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/independent.py",
+      "result": "PASS"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/runner.py --self-check",
+      "result": {
+        "status": "PASS",
+        "checks": 13,
+        "gate_arms": 200,
+        "checkpoints": 56
+      }
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/primary.py --self-check",
+      "result": {
+        "status": "PASS",
+        "checks": 14,
+        "mutations_rejected": [
+          "all-row-claim",
+          "closure-mismatch",
+          "provenance-mismatch",
+          "receipt-laundering",
+          "inflated-bound",
+          "wrong-database-row",
+          "wrong-input",
+          "wrong-plan",
+          "legacy-catalog",
+          "paired-receipt-hash"
+        ]
+      }
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/independent.py --self-check",
+      "result": {
+        "status": "PASS",
+        "checks": 14,
+        "mutations_rejected": [
+          "all-row-claim",
+          "closure-mismatch",
+          "provenance-mismatch",
+          "receipt-laundering",
+          "inflated-bound",
+          "wrong-database-row",
+          "wrong-input",
+          "wrong-plan",
+          "legacy-catalog",
+          "paired-receipt-hash"
+        ]
+      }
+    },
+    {
+      "command": "read-only import: verify_repository_identity plus actual sealed-master wrapper plan and published_visible_state assertions",
+      "result": {
+        "status": "PASS",
+        "v10_terminal_bindings_rehashed": 15,
+        "v10_method_rows_rehashed": 66,
+        "v11_terminal_bindings_rehashed": 18,
+        "v11_method_rows_rehashed": 67,
+        "selected_master": "bases/same-middle-104857600",
+        "head_generation": 1,
+        "head_receipt_bytes": 216,
+        "schema_rootpage_rows": 3
+      }
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "jq empty LIMITATIONS-v12.json V11-SUPERSESSION-v12.json",
+      "result": "PASS"
+    }
+  ],
+  "prearm_dry_binding": {
+    "bounded_scope": "database discovery plus read-only published-visible-state plus measured evidence write/file-fsync/directory-fsync",
+    "query_ns_classification": "ReportedSubsetOfTotalInitialization",
+    "terminal_artifact_classification": "OutsideInitializationBoundInsideCompleteWallFinalization",
+    "independent_analyzer_sources": [
+      "DRY-RUN-v12.json",
+      "INPUT-MANIFEST-v12.tsv",
+      "PREARM-WRAPPER-INITIALIZATION-EVIDENCE-v12.json",
+      "PREARM-WRAPPER-INITIALIZATION-v12.json"
+    ],
+    "forged_mutations_rejected_by_both": [
+      "inflated-bound",
+      "wrong-plan",
+      "wrong-input",
+      "wrong-database-row"
+    ]
+  },
+  "calibration_separation": {
+    "top_level_semantics_derived_from_nested_state": true,
+    "semantics": "CalibrationConstantRowShapeNotProductAuthority",
+    "closure_provenance": "CalibrationShapeOnlyNoProductParity",
+    "reachable_parity": "NotClaimedCalibrationShapeOnly",
+    "receipt_semantics": "CalibrationOpaqueHeadReceiptHashNotClosureOrFreshness",
+    "product_rows": 0,
+    "stores_opened": 0,
+    "locks_acquired": 0
+  },
+  "v10_product_evidence_reference": {
+    "focused_ledger_path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/FOCUSED-TEST-ATTEMPTS-v10.json",
+    "focused_ledger_sha256": "b498db29e2c136d8bfee8e1bc482db626de1f2089cd2a16f3c365a8440456563",
+    "reason_not_rerun": "shared product source, v10 transport source, reused release, and sealed inputs are unchanged exact hashes; v12 changes only runner, analyzers, and method",
+    "retained_results": "shared and overlay trust tests, 9/9 transport tests, exact eight-row touched matrix, three exact COMMIT/reconciliation tests, cargo fmt, and static product diff closure all PASS"
+  },
+  "independent_read_only_audits": {
+    "performance_and_method": {
+      "status": "PASS",
+      "P0": 0,
+      "P1": 0,
+      "P2": 0
+    },
+    "source_q_and_authority": {
+      "status": "PASS",
+      "P0": 0,
+      "P1": 0,
+      "P2": 0
+    }
+  },
+  "generated_residue": {
+    "classification": "NonAuthoritativeGeneratedPythonBytecode",
+    "repo_pycache_terminal_count": 2,
+    "paths": [
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/__pycache__",
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/analyzers/__pycache__"
+    ],
+    "disposition": "retained as generated non-authoritative residue; never method or evidence authority"
+  },
+  "authoritative_state": {
+    "v12_input_manifest_present": false,
+    "v12_method_manifest_present": false,
+    "v12_source_freeze_present": false,
+    "v12_freeze_verification_present": false,
+    "v12_dry_run_started": false,
+    "benchmark_lock_acquired": false,
+    "screen_started": false,
+    "gate_started": false,
+    "measured_campaign_rows": 0
+  }
+}

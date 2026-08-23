@@ -1,0 +1,26 @@
+metric	expectation	classification
+product_children	1 started/1 reaped per campaign	hard
+source_bytes	1048576	hard
+checkpoint_range_bytes	4096 once per checkpoint; not per history-fill edit	hard
+edit_route	SameSizeHistoryEdit	hard
+per_edit_transaction_commit	1/1	hard
+per_edit_q_residue	0/0	hard
+checkpoint_sequence	ordered exact 1,10,100,1000 gate; 1,10 screen	hard
+checkpoint_reconstruction	exact root/length/digest; Q0/residue0	hard
+history_projection	checkpoint conservation of exact historical requested root and latest current root; semantic distinction reused from G5-2	hard
+aba	A->B->A exact A restoration with B retained	hard
+historical_read	exact 4096-byte B read after revert; no latest substitution	hard
+concurrency	10485760 bytes; readers2/writer1; writer tx/COMMIT1/1; Busy/Locked0; reader roots stable	hard
+full_reconstructions	5 gate/3 screen; terminal end is distinct after final N-to-N+1 edit	hard
+rss_bytes	<=20971520	hard
+buffer_bytes	<=1048576	hard
+terminal	children/Q/residue/descriptors/work-roots all0	hard
+screen_complete_wall_ns	<20000000000	hard
+gate_complete_wall_ns	<=150000000000; 30-60s target reported	hard
+analyzer_agreement	exact normalized decision	hard
+owned_input_custody	exact source/copy hashes; files0444; root0555; expected roots1001; preparation <20s	hard
+process_evidence	lossless command/stdout/stderr/return/RSS/parsed receipt before evaluation	hard
+final_evidence	terminal/raw/primary/independent/lock decision plus sorted artifact manifest	hard
+read_only_reachability	reused G5-0 v9 authority	reuse
+random_branch_backup_gc	NotInNarrowedContract	not-claimed
+shutdown_restart	ReusedG5-2V3NoRerun	reuse

@@ -2,6 +2,13 @@
 
 Status: research only; no implementation or profile-selection authority.
 
+Implementation authority update (2026-08-23): Phase 4 G5 is terminal PASS for
+the narrowed benchmark-mechanism contract. G6 is eligible but not started. The
+controlling artifacts are the [G5 terminal report](../../implementation-detail/phase-4/experiments/g5-terminal/v1/G5-TERMINAL-REPORT-v1.md),
+[scoreboard](../../implementation-detail/phase-4/experiments/g5-terminal/v1/FINAL-SCOREBOARD-v1.tsv),
+and [limitations](../../implementation-detail/phase-4/experiments/g5-terminal/v1/LIMITATIONS-v1.md).
+This research index does not enlarge those claims or authorize G6 execution.
+
 Research began on 2026-08-20, branch `codex/empty-worktree`, checkpoint
 `83d085bd80e82ae22b4a9766f2fc8aed03501fb8`. A separate concurrent task later
 advanced the branch to checkpoint
@@ -88,14 +95,18 @@ performance result.
 | Measurement | [Benchmark and evidence method](foundations/benchmark-and-evidence.md) | What campaign is sufficient for causal, acceptance, scale, and portability claims? |
 | Portfolio | [Hypothesis ledger](foundations/hypothesis-ledger.md) | Which ideas are proven, refuted, open, blocked, or deliberately deferred? |
 | Synthesis | [Decision map](decision-map.md) | Which smallest experiment should run next, and what can stop immediately? |
+| G5-1 Foundation | [G5 Round 0](g5-round-0/README.md) | Final G4 reconciliation, Xet transfer analysis, lane dispositions, and the H11 whole-harness Q blocker |
 | Historical prompt pack | [Pre-CP-0009 concurrent research](while-waiting-phase-4-to-finish/index.md) | Preserved research inputs; old prompts must be amended to current CP-0009/WP4-P authority before reuse |
 
 ## Current empirical anchor
 
-CP-0009 is the exact current-product control. WP4-P is complete and remains
-closed at K64/F64 + DIR256K. A future candidate must run adjacent balanced A/B
-against the exact CP-0009 binary; its standalone median is context, never a
-historical subtraction operand:
+Terminal amendment: CP-0009 below is a preserved historical control. The current G5 authority is the closed G4 terminal at checkpoint `d58c5a1307253dfc221fe50de996c183deb9458a`, stage-terminal SHA-256 `0297ca2e3b49ddb7d8d2d435713450dcc336397b53cbaaaee9647a46eebcede8`, and the final protected scoreboard linked from [G5-1 reconciliation](g5-round-0/baseline/g4-final-reconciliation.md).
+
+CP-0009 was the exact current-product control at that checkpoint. WP4-P is
+complete and remains closed at K64/F64 + DIR256K. Its rows below are historical
+evidence; the final G4 terminal/scoreboard now governs G5. Any reuse of the
+CP-0009 binary must preserve its adjacent-comparison context rather than treat
+its standalone median as a subtraction operand:
 
 | Measure | Accepted value |
 |---|---:|

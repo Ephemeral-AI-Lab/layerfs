@@ -11,6 +11,7 @@ use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -323,6 +324,32 @@ enum QualificationMode {
     ChangedSpine,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum IntegrityMode {
+    #[default]
+    Verified,
+    TrustedLocalDev,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EditBaseProvenance {
+    VerifiedCompleteClosure,
+    TrustedLocalUnverifiedClosure,
+}
+
+impl EditBaseProvenance {
+    fn record_equal_edges(self, metrics: &mut Metrics, count: u64) -> CoreResult<()> {
+        match self {
+            Self::VerifiedCompleteClosure => {
+                add(&mut metrics.incremental_receipt_covered_edges, count)
+            }
+            Self::TrustedLocalUnverifiedClosure => {
+                add(&mut metrics.trusted_assumed_equal_edges, count)
+            }
+        }
+    }
+}
+
 fn qualification_mode() -> AnyResult<QualificationMode> {
     match env::var("WP4M_M45_QUALIFICATION_MODE")
         .unwrap_or_else(|_| "changed-spine".to_string())
@@ -379,6 +406,8 @@ enum PublicationStatus {
 struct PublicationOutcome {
     status: PublicationStatus,
     diagnostic: Option<FailureProvenance>,
+    edit_base_provenance: Option<EditBaseProvenance>,
+    verified_carry_forward: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -536,6 +565,13 @@ struct Metrics {
     incremental_replacement_spine_objects_authenticated: u64,
     incremental_replacement_spine_bytes_authenticated: u64,
     incremental_receipt_covered_edges: u64,
+    trusted_assumed_equal_edges: u64,
+    trusted_assumed_prior_references: u64,
+    trusted_assumed_prior_raw_bytes: u64,
+    edit_base_complete_scrub_calls: u64,
+    edit_base_complete_scrub_canonical_bytes: u64,
+    edit_base_transition_wall_ns: u128,
+    edit_base_scrub_wall_ns: u128,
     incremental_new_or_different_edges: u64,
     incremental_new_subtree_objects_authenticated: u64,
     incremental_new_subtree_bytes_authenticated: u64,
@@ -588,6 +624,9 @@ struct RejoinBufferEvidence {
 
 #[derive(Clone, Debug, Default)]
 struct PhaseTimes {
+    store_preflight_ns: u128,
+    sqlite_open_and_profile_ns: u128,
+    visible_head_lookup_ns: u128,
     same_open_authority_establishment_ns: u128,
     canonical_cas_mapping_stage_ns: u128,
     precommit_closure_validation_ns: u128,
@@ -1561,6 +1600,45 @@ struct SameOpenValidationPermit {
 }
 
 #[derive(Debug)]
+struct TrustedLocalEditScope {
+    open_identity: u64,
+    store_instance_id: [u8; 16],
+    validation_authority_id: [u8; 32],
+    integrity_epoch: u64,
+    profile: [u8; 32],
+    generation: u64,
+    root: ObjectId,
+    transition: ObjectId,
+    receipt: [u8; 216],
+    authority_serial: u64,
+    transaction_identity: u64,
+    consumed: bool,
+    _receipt_charge: CapacityCharge,
+}
+
+#[derive(Debug)]
+struct TrustedLocalEditPermit {
+    open_identity: u64,
+    store_instance_id: [u8; 16],
+    validation_authority_id: [u8; 32],
+    integrity_epoch: u64,
+    profile: [u8; 32],
+    generation: u64,
+    root: ObjectId,
+    transition: ObjectId,
+    receipt: [u8; 216],
+    authority_serial: u64,
+    transaction_identity: u64,
+    _receipt_charge: CapacityCharge,
+}
+
+#[derive(Debug)]
+enum EditBaseScope {
+    Verified(SameOpenValidationPermit),
+    Trusted(TrustedLocalEditPermit),
+}
+
+#[derive(Debug)]
 struct CarriedSameOpenAuthority {
     open_identity: u64,
     store_instance_id: [u8; 16],
@@ -1700,10 +1778,123 @@ impl SameOpenValidationPermit {
     }
 }
 
+impl TrustedLocalEditScope {
+    fn consume(
+        &mut self,
+        store: &Store,
+        metrics: &mut Metrics,
+    ) -> AnyResult<TrustedLocalEditPermit> {
+        if self.consumed {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        self.consumed = true;
+        if store.integrity_mode != IntegrityMode::TrustedLocalDev
+            || self.open_identity != store.open_identity
+            || self.authority_serial != store.same_open_authority_serial
+            || store
+                .active_transaction
+                .map(|transaction| transaction.identity)
+                != Some(self.transaction_identity)
+        {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        if self.store_instance_id != store.store_instance_id
+            || self.validation_authority_id != store.validation_authority_id
+            || self.integrity_epoch != store.integrity_epoch
+            || self.profile != store.profile
+        {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        let _head_receipt_charge = charge_capacity(metrics, 216)?;
+        let current = store
+            .current_head_accounted(metrics)?
+            .ok_or(CoreError::InvalidValidationReceipt)?;
+        if current.0 != self.generation
+            || current.1 != self.root
+            || current.2 != self.transition
+            || current.3.as_slice() != self.receipt
+        {
+            return Err(CoreError::InvalidValidationReceipt.into());
+        }
+        Ok(TrustedLocalEditPermit {
+            open_identity: self.open_identity,
+            store_instance_id: self.store_instance_id,
+            validation_authority_id: self.validation_authority_id,
+            integrity_epoch: self.integrity_epoch,
+            profile: self.profile,
+            generation: self.generation,
+            root: self.root,
+            transition: self.transition,
+            receipt: self.receipt,
+            authority_serial: self.authority_serial,
+            transaction_identity: self.transaction_identity,
+            _receipt_charge: charge_capacity(metrics, 216)?,
+        })
+    }
+}
+
+impl TrustedLocalEditPermit {
+    fn covers(&self, store: &Store, head: &VisibleHead) -> bool {
+        store.integrity_mode == IntegrityMode::TrustedLocalDev
+            && self.open_identity == store.open_identity
+            && self.store_instance_id == store.store_instance_id
+            && self.validation_authority_id == store.validation_authority_id
+            && self.integrity_epoch == store.integrity_epoch
+            && self.profile == store.profile
+            && self.generation == head.0
+            && self.root == head.1
+            && self.transition == head.2
+            && head.3.as_slice() == self.receipt
+            && self.authority_serial == store.same_open_authority_serial
+            && store
+                .active_transaction
+                .map(|transaction| transaction.identity)
+                == Some(self.transaction_identity)
+    }
+}
+
+impl EditBaseScope {
+    fn provenance(&self) -> EditBaseProvenance {
+        match self {
+            Self::Verified(_) => EditBaseProvenance::VerifiedCompleteClosure,
+            Self::Trusted(_) => EditBaseProvenance::TrustedLocalUnverifiedClosure,
+        }
+    }
+
+    fn root(&self) -> ObjectId {
+        match self {
+            Self::Verified(permit) => permit.root,
+            Self::Trusted(permit) => permit.root,
+        }
+    }
+
+    fn covers(&self, store: &Store, head: &VisibleHead) -> bool {
+        match self {
+            Self::Verified(permit) => permit.covers(store, head),
+            Self::Trusted(permit) => permit.covers(store, head),
+        }
+    }
+
+    fn record_prior_coverage(
+        &self,
+        references: u64,
+        raw_bytes: u64,
+        metrics: &mut Metrics,
+    ) -> CoreResult<()> {
+        self.provenance().record_equal_edges(metrics, references)?;
+        if self.provenance() == EditBaseProvenance::TrustedLocalUnverifiedClosure {
+            add(&mut metrics.trusted_assumed_prior_references, references)?;
+            add(&mut metrics.trusted_assumed_prior_raw_bytes, raw_bytes)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct ActiveTransaction {
     identity: u64,
-    witness_issued: bool,
+    edit_scope_issued: bool,
+    edit_base_provenance: Option<EditBaseProvenance>,
     construction_proof_issued: bool,
     construction_proof_consumed: bool,
     carry_forward_authorized: bool,
@@ -2219,6 +2410,7 @@ fn profile_id() -> [u8; 32] {
 struct Store {
     path: PathBuf,
     authority_path: PathBuf,
+    integrity_mode: IntegrityMode,
     profile: [u8; 32],
     store_instance_id: [u8; 16],
     validation_authority_id: [u8; 32],
@@ -2235,12 +2427,68 @@ struct Store {
     #[cfg(test)]
     next_put_fault: Option<PutFault>,
     connection: Connection,
+    #[cfg(target_os = "macos")]
+    projection_contention: Option<std::sync::Arc<ProjectionContentionDiagnostic>>,
+    _path_charge: Option<CapacityCharge>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+struct ProjectionContentionDiagnostic {
+    reader_scope_live: AtomicU64,
+    reader_autocommit: AtomicU64,
+    barrier_scope_live: AtomicU64,
+    barrier_autocommit: AtomicU64,
+    commit_scope_live: AtomicU64,
+    commit_autocommit: AtomicU64,
+    commit_primary_code: AtomicU64,
+    commit_extended_code: AtomicU64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct StoreOpenPhases {
+    preflight_ns: u128,
+    sqlite_open_and_profile_ns: u128,
 }
 
 fn authority_path(path: &Path) -> PathBuf {
     let mut value = path.as_os_str().to_os_string();
     value.push(".authority");
     PathBuf::from(value)
+}
+
+struct OwnedStorePaths {
+    path: PathBuf,
+    authority_path: PathBuf,
+    charge: Option<CapacityCharge>,
+}
+
+fn owned_store_paths(path: &Path, metrics: Option<&mut Metrics>) -> AnyResult<OwnedStorePaths> {
+    const AUTHORITY_SUFFIX: &str = ".authority";
+    let path_capacity = path.as_os_str().as_encoded_bytes().len();
+    let authority_capacity = path_capacity
+        .checked_add(AUTHORITY_SUFFIX.len())
+        .ok_or(CoreError::LengthOverflow)?;
+    let combined_capacity = path_capacity
+        .checked_add(authority_capacity)
+        .ok_or(CoreError::LengthOverflow)?;
+    let charge = metrics
+        .map(|metrics| charge_capacity(metrics, combined_capacity))
+        .transpose()?;
+
+    let mut owned_path = OsString::with_capacity(path_capacity);
+    owned_path.push(path);
+    let mut owned_authority = OsString::with_capacity(authority_capacity);
+    owned_authority.push(path);
+    owned_authority.push(AUTHORITY_SUFFIX);
+    if owned_path.capacity() != path_capacity || owned_authority.capacity() != authority_capacity {
+        return Err(CoreError::LengthOverflow.into());
+    }
+    Ok(OwnedStorePaths {
+        path: PathBuf::from(owned_path),
+        authority_path: PathBuf::from(owned_authority),
+        charge,
+    })
 }
 
 fn os_random<const N: usize>() -> CoreResult<[u8; N]> {
@@ -2382,22 +2630,61 @@ fn preflight_existing_store(path: &Path, requested: [u8; 32]) -> AnyResult<()> {
 
 impl Store {
     fn open(path: &Path, candidate: Candidate) -> AnyResult<Self> {
-        Self::open_inner(path, candidate, None)
+        Self::open_with_integrity_mode(path, candidate, IntegrityMode::Verified)
     }
 
-    fn open_measured(path: &Path, candidate: Candidate, metrics: &mut Metrics) -> AnyResult<Self> {
-        Self::open_inner(path, candidate, Some(metrics))
+    fn open_with_integrity_mode(
+        path: &Path,
+        candidate: Candidate,
+        integrity_mode: IntegrityMode,
+    ) -> AnyResult<Self> {
+        Self::open_inner(path, candidate, integrity_mode, None, None)
+    }
+
+    fn open_measured(
+        path: &Path,
+        candidate: Candidate,
+        metrics: &mut Metrics,
+        phases: Option<&mut StoreOpenPhases>,
+    ) -> AnyResult<Self> {
+        Self::open_measured_with_integrity_mode(
+            path,
+            candidate,
+            metrics,
+            phases,
+            IntegrityMode::Verified,
+        )
+    }
+
+    fn open_measured_with_integrity_mode(
+        path: &Path,
+        candidate: Candidate,
+        metrics: &mut Metrics,
+        phases: Option<&mut StoreOpenPhases>,
+        integrity_mode: IntegrityMode,
+    ) -> AnyResult<Self> {
+        Self::open_inner(path, candidate, integrity_mode, Some(metrics), phases)
     }
 
     fn open_inner(
         path: &Path,
         _candidate: Candidate,
+        integrity_mode: IntegrityMode,
         mut metrics: Option<&mut Metrics>,
+        mut phases: Option<&mut StoreOpenPhases>,
     ) -> AnyResult<Self> {
+        let owned_paths = owned_store_paths(path, metrics.as_deref_mut())?;
         let profile = profile_id();
-        preflight_existing_store(path, profile)?;
-        let connection = Connection::open(path)?;
-        let authority_path = authority_path(path);
+        let preflight_started = phases.as_ref().map(|_| Instant::now());
+        preflight_existing_store(&owned_paths.path, profile)?;
+        let sqlite_started = phases.as_ref().map(|_| Instant::now());
+        if let Some(phases) = phases.as_deref_mut() {
+            phases.preflight_ns = sqlite_started
+                .expect("phase timer")
+                .duration_since(preflight_started.expect("phase timer"))
+                .as_nanos();
+        }
+        let connection = Connection::open(&owned_paths.path)?;
         let delete_journal = connection.query_row("PRAGMA journal_mode=DELETE", [], |row| {
             Ok(matches!(row.get_ref(0)?, ValueRef::Text(value) if value.eq_ignore_ascii_case(b"delete")))
         })?;
@@ -2511,7 +2798,7 @@ impl Store {
                     {
                         return Err(CoreError::ProfileMismatch.into());
                     }
-                    let validation_key = read_authority(&authority_path)?;
+                    let validation_key = read_authority(&owned_paths.authority_path)?;
                     (
                         instance,
                         authority,
@@ -2526,7 +2813,7 @@ impl Store {
                 Some(_) => return Err(CoreError::InvalidRecord("store_authority").into()),
                 None => {
                     let store_instance_id = os_random()?;
-                    let validation_key = create_authority(&authority_path)?;
+                    let validation_key = create_authority(&owned_paths.authority_path)?;
                     let validation_authority_id =
                         ValidatedSnapshotReceiptV1::validation_authority_id(
                             store_instance_id,
@@ -2565,9 +2852,132 @@ impl Store {
         {
             return Err(CoreError::InvalidRecord("store_authority").into());
         }
-        Ok(Self {
-            path: path.to_path_buf(),
+        let open_identity = next_open_identity()?;
+        let OwnedStorePaths {
+            path,
             authority_path,
+            charge: path_charge,
+        } = owned_paths;
+        let store = Self {
+            path,
+            authority_path,
+            integrity_mode,
+            profile,
+            store_instance_id,
+            validation_authority_id,
+            validation_key,
+            integrity_epoch,
+            open_identity,
+            same_open_authority_serial: 0,
+            mutation_serial: 0,
+            next_transaction_identity: 0,
+            active_transaction: None,
+            carried_same_open_authority: None,
+            #[cfg(test)]
+            next_publish_fault: None,
+            #[cfg(test)]
+            next_put_fault: None,
+            connection,
+            #[cfg(target_os = "macos")]
+            projection_contention: None,
+            _path_charge: path_charge,
+        };
+        if let Some(phases) = phases {
+            phases.sqlite_open_and_profile_ns =
+                sqlite_started.expect("phase timer").elapsed().as_nanos();
+        }
+        Ok(store)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn open_existing_read_only(path: &Path, _candidate: Candidate) -> AnyResult<Self> {
+        let owned_paths = owned_store_paths(path, None)?;
+        let profile = profile_id();
+        preflight_existing_store(&owned_paths.path, profile)?;
+        let connection =
+            Connection::open_with_flags(&owned_paths.path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        connection.pragma_update(None, "query_only", true)?;
+        connection.pragma_update(None, "temp_store", "FILE")?;
+        connection.pragma_update(None, "mmap_size", 0_i64)?;
+        connection.pragma_update(None, "cache_spill", 2_000_i64)?;
+        let row: (
+            Vec<u8>,
+            Vec<u8>,
+            Vec<u8>,
+            Vec<u8>,
+            i64,
+            String,
+            i64,
+            i64,
+            i64,
+        ) = connection.query_row(
+            "SELECT profile_id, store_instance_id, validation_authority_id, integrity_epoch,
+                        schema_version, journal_mode, synchronous, temp_store, mmap_size
+                 FROM wp4m_meta WHERE id = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                ))
+            },
+        )?;
+        let persisted_profile: [u8; 32] = row
+            .0
+            .try_into()
+            .map_err(|_| CoreError::InvalidRecord("store_authority"))?;
+        let store_instance_id: [u8; 16] = row
+            .1
+            .try_into()
+            .map_err(|_| CoreError::InvalidRecord("store_authority"))?;
+        let validation_authority_id: [u8; 32] = row
+            .2
+            .try_into()
+            .map_err(|_| CoreError::InvalidRecord("store_authority"))?;
+        let integrity_epoch = u64::from_be_bytes(
+            row.3
+                .try_into()
+                .map_err(|_| CoreError::InvalidRecord("store_authority"))?,
+        );
+        let validation_key = read_authority(&owned_paths.authority_path)?;
+        let journal_mode: String =
+            connection.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
+        let synchronous: i64 = connection.query_row("PRAGMA synchronous", [], |row| row.get(0))?;
+        let temp_store: i64 = connection.query_row("PRAGMA temp_store", [], |row| row.get(0))?;
+        let mmap_size: i64 = connection.query_row("PRAGMA mmap_size", [], |row| row.get(0))?;
+        let query_only: i64 = connection.query_row("PRAGMA query_only", [], |row| row.get(0))?;
+        let cache_spill: i64 = connection.query_row("PRAGMA cache_spill", [], |row| row.get(0))?;
+        if persisted_profile != profile
+            || row.4 != 5
+            || !row.5.eq_ignore_ascii_case("delete")
+            || row.6 != 2
+            || row.7 != 1
+            || row.8 != 0
+            || !journal_mode.eq_ignore_ascii_case("delete")
+            || synchronous != 2
+            || temp_store != 1
+            || mmap_size != 0
+            || query_only != 1
+            || cache_spill != 2_000
+            || validation_authority_id
+                != ValidatedSnapshotReceiptV1::validation_authority_id(
+                    store_instance_id,
+                    &validation_key,
+                )
+        {
+            return Err(CoreError::ProfileMismatch.into());
+        }
+        Ok(Self {
+            path: owned_paths.path,
+            authority_path: owned_paths.authority_path,
+            integrity_mode: IntegrityMode::Verified,
             profile,
             store_instance_id,
             validation_authority_id,
@@ -2584,7 +2994,17 @@ impl Store {
             #[cfg(test)]
             next_put_fault: None,
             connection,
+            projection_contention: None,
+            _path_charge: owned_paths.charge,
         })
+    }
+
+    #[cfg(target_os = "macos")]
+    fn observe_projection_contention(
+        &mut self,
+        diagnostic: std::sync::Arc<ProjectionContentionDiagnostic>,
+    ) {
+        self.projection_contention = Some(diagnostic);
     }
 
     fn issue_same_open_witness(
@@ -2592,16 +3012,20 @@ impl Store {
         head: &VisibleHead,
         metrics: &mut Metrics,
     ) -> AnyResult<SameOpenValidationWitness> {
+        if self.integrity_mode != IntegrityMode::Verified {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
         let receipt_charge = charge_capacity(metrics, 216)?;
         let transaction_identity = {
             let transaction = self
                 .active_transaction
                 .as_mut()
                 .ok_or(CoreError::ValidationAuthorityUnavailable)?;
-            if transaction.witness_issued {
+            if transaction.edit_scope_issued {
                 return Err(CoreError::ValidationAuthorityUnavailable.into());
             }
-            transaction.witness_issued = true;
+            transaction.edit_scope_issued = true;
+            transaction.edit_base_provenance = Some(EditBaseProvenance::VerifiedCompleteClosure);
             transaction.identity
         };
         let receipt = head
@@ -2630,6 +3054,9 @@ impl Store {
         &mut self,
         metrics: &mut Metrics,
     ) -> AnyResult<SameOpenValidationWitness> {
+        if self.integrity_mode != IntegrityMode::Verified {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
         let carried = self
             .carried_same_open_authority
             .take()
@@ -2639,10 +3066,11 @@ impl Store {
                 .active_transaction
                 .as_mut()
                 .ok_or(CoreError::ValidationAuthorityUnavailable)?;
-            if transaction.witness_issued {
+            if transaction.edit_scope_issued {
                 return Err(CoreError::ValidationAuthorityUnavailable.into());
             }
-            transaction.witness_issued = true;
+            transaction.edit_scope_issued = true;
+            transaction.edit_base_provenance = Some(EditBaseProvenance::VerifiedCompleteClosure);
             transaction.identity
         };
         let current = self
@@ -2680,25 +3108,73 @@ impl Store {
         })
     }
 
+    fn issue_trusted_local_edit_scope(
+        &mut self,
+        head: &VisibleHead,
+        metrics: &mut Metrics,
+    ) -> AnyResult<TrustedLocalEditScope> {
+        if self.integrity_mode != IntegrityMode::TrustedLocalDev
+            || self.carried_same_open_authority.is_some()
+        {
+            return Err(CoreError::ValidationAuthorityUnavailable.into());
+        }
+        let receipt_charge = charge_capacity(metrics, 216)?;
+        let transaction_identity = {
+            let transaction = self
+                .active_transaction
+                .as_mut()
+                .ok_or(CoreError::ValidationAuthorityUnavailable)?;
+            if transaction.edit_scope_issued {
+                return Err(CoreError::ValidationAuthorityUnavailable.into());
+            }
+            transaction.edit_scope_issued = true;
+            transaction.edit_base_provenance =
+                Some(EditBaseProvenance::TrustedLocalUnverifiedClosure);
+            transaction.identity
+        };
+        let receipt = head
+            .3
+            .as_slice()
+            .try_into()
+            .map_err(|_| CoreError::InvalidValidationReceipt)?;
+        Ok(TrustedLocalEditScope {
+            open_identity: self.open_identity,
+            store_instance_id: self.store_instance_id,
+            validation_authority_id: self.validation_authority_id,
+            integrity_epoch: self.integrity_epoch,
+            profile: self.profile,
+            generation: head.0,
+            root: head.1,
+            transition: head.2,
+            receipt,
+            authority_serial: self.same_open_authority_serial,
+            transaction_identity,
+            consumed: false,
+            _receipt_charge: receipt_charge,
+        })
+    }
+
     fn carry_requested_head(
         &mut self,
         requested: &VisibleHead,
         authority_serial: u64,
         authorized: bool,
     ) {
-        self.carried_same_open_authority = authorized.then_some(CarriedSameOpenAuthority {
-            open_identity: self.open_identity,
-            store_instance_id: self.store_instance_id,
-            validation_authority_id: self.validation_authority_id,
-            integrity_epoch: self.integrity_epoch,
-            profile: self.profile,
-            generation: requested.0,
-            root: requested.1,
-            transition: requested.2,
-            receipt: requested.3,
-            authority_serial,
-            mutation_serial: self.mutation_serial,
-        });
+        let verified = self.integrity_mode == IntegrityMode::Verified;
+        self.carried_same_open_authority =
+            (authorized && verified).then_some(CarriedSameOpenAuthority {
+                open_identity: self.open_identity,
+                store_instance_id: self.store_instance_id,
+                validation_authority_id: self.validation_authority_id,
+                integrity_epoch: self.integrity_epoch,
+                profile: self.profile,
+                generation: requested.0,
+                root: requested.1,
+                transition: requested.2,
+                receipt: requested.3,
+                authority_serial,
+                mutation_serial: self.mutation_serial,
+            });
     }
 
     fn mark_construction_proof_issued(
@@ -2773,7 +3249,8 @@ impl Store {
         self.next_transaction_identity = next_transaction_identity;
         self.active_transaction = Some(ActiveTransaction {
             identity: next_transaction_identity,
-            witness_issued: false,
+            edit_scope_issued: false,
+            edit_base_provenance: None,
             construction_proof_issued: false,
             construction_proof_consumed: false,
             carry_forward_authorized: false,
@@ -3473,9 +3950,19 @@ impl Store {
         let fault = self.next_publish_fault.take();
         #[cfg(not(test))]
         let fault = None;
+        let edit_base_provenance = self
+            .active_transaction
+            .and_then(|transaction| transaction.edit_base_provenance);
         let started = Instant::now();
         let result = self.publish_with_fault(expected_head, child, transition, fault, metrics);
-        Self::finish_publication(started, result, metrics)
+        let verified_carry_forward = self.carried_same_open_authority.is_some();
+        Self::finish_publication(
+            started,
+            result,
+            edit_base_provenance,
+            verified_carry_forward,
+            metrics,
+        )
     }
 
     fn publish_qualified(
@@ -3487,14 +3974,26 @@ impl Store {
         let fault = self.next_publish_fault.take();
         #[cfg(not(test))]
         let fault = None;
+        let edit_base_provenance = self
+            .active_transaction
+            .and_then(|transaction| transaction.edit_base_provenance);
         let started = Instant::now();
         let result = self.publish_authorized_with_fault(authority, fault, metrics);
-        Self::finish_publication(started, result, metrics)
+        let verified_carry_forward = self.carried_same_open_authority.is_some();
+        Self::finish_publication(
+            started,
+            result,
+            edit_base_provenance,
+            verified_carry_forward,
+            metrics,
+        )
     }
 
     fn finish_publication(
         started: Instant,
         result: AnyResult<FailureProvenance>,
+        edit_base_provenance: Option<EditBaseProvenance>,
+        verified_carry_forward: bool,
         metrics: &mut Metrics,
     ) -> AnyResult<PublicationOutcome> {
         metrics.commit_publish_call_wall_ns = started.elapsed().as_nanos();
@@ -3509,11 +4008,15 @@ impl Store {
             Ok(PublicationOutcome {
                 status: PublicationStatus::RequestedVisible,
                 diagnostic: Some(provenance),
+                edit_base_provenance,
+                verified_carry_forward,
             })
         } else {
             Ok(PublicationOutcome {
                 status: PublicationStatus::Committed,
                 diagnostic: None,
+                edit_base_provenance,
+                verified_carry_forward,
             })
         }
     }
@@ -3698,15 +4201,41 @@ impl Store {
             .same_open_authority_serial
             .checked_add(1)
             .ok_or(CoreError::LengthOverflow)?;
-        let carry_forward_authorized = self
-            .active_transaction
-            .is_some_and(|transaction| transaction.carry_forward_authorized);
+        let carry_forward_authorized = self.active_transaction.is_some_and(|transaction| {
+            self.integrity_mode == IntegrityMode::Verified
+                && transaction.edit_base_provenance
+                    == Some(EditBaseProvenance::VerifiedCompleteClosure)
+                && transaction.carry_forward_authorized
+        });
         metrics.sql_execute_calls = next_sql_execute_calls;
         metrics.commits = next_commits;
         metrics.sqlite_status_before_dispatch = self.sqlite_status_snapshot();
         metrics.commit_dispatch_filesystem = self.filesystem_snapshot();
+        #[cfg(target_os = "macos")]
+        if let Some(diagnostic) = self.projection_contention.as_ref() {
+            diagnostic.commit_scope_live.store(
+                diagnostic.reader_scope_live.load(Ordering::SeqCst),
+                Ordering::SeqCst,
+            );
+            diagnostic.commit_autocommit.store(
+                diagnostic.reader_autocommit.load(Ordering::SeqCst),
+                Ordering::SeqCst,
+            );
+        }
         let commit_started = Instant::now();
         let commit_result = self.connection.execute_batch("COMMIT");
+        #[cfg(target_os = "macos")]
+        if let (Some(diagnostic), Err(rusqlite::Error::SqliteFailure(error, _))) =
+            (self.projection_contention.as_ref(), commit_result.as_ref())
+        {
+            diagnostic.commit_primary_code.store(
+                u64::from((error.extended_code & 0xff) as u8),
+                Ordering::SeqCst,
+            );
+            diagnostic
+                .commit_extended_code
+                .store(error.extended_code as u64, Ordering::SeqCst);
+        }
         metrics.commit_dispatch_to_return_wall_ns = commit_started.elapsed().as_nanos();
         metrics.commit_returns = next_commit_returns;
         metrics.sqlite_status_after_return = self.sqlite_status_snapshot();
@@ -4170,7 +4699,7 @@ struct FullCreateConstructionProof {
 
 struct CountChangeConstructionState {
     scope: ConstructionScopeProof,
-    permit: SameOpenValidationPermit,
+    base_scope: EditBaseScope,
     prior_root: ObjectId,
     before_file: ObjectId,
     insertion_ordinal: u64,
@@ -4602,7 +5131,7 @@ impl CountChangeConstructionState {
     #[allow(clippy::too_many_arguments)]
     fn new(
         store: &Store,
-        permit: SameOpenValidationPermit,
+        base_scope: EditBaseScope,
         prior_root: ObjectId,
         before_file: ObjectId,
         insertion_ordinal: u64,
@@ -4613,15 +5142,15 @@ impl CountChangeConstructionState {
         let current = store
             .current_head_accounted(metrics)?
             .ok_or(CoreError::InvalidValidationReceipt)?;
-        if !permit.covers(store, &current)
-            || permit.root != prior_root
+        if !base_scope.covers(store, &current)
+            || base_scope.root() != prior_root
             || insertion_ordinal >= old_references
         {
             return Err(CoreError::ValidationAuthorityUnavailable.into());
         }
         Ok(Self {
             scope: ConstructionScopeProof::new(store, metrics)?,
-            permit,
+            base_scope,
             prior_root,
             before_file,
             insertion_ordinal,
@@ -4648,7 +5177,8 @@ impl CountChangeConstructionState {
             .covered_total_raw
             .checked_add(total_raw)
             .ok_or(CoreError::LengthOverflow)?;
-        add(&mut metrics.incremental_receipt_covered_edges, references)
+        self.base_scope
+            .record_prior_coverage(references, total_raw, metrics)
     }
 
     fn accept_inserted(
@@ -4827,7 +5357,7 @@ impl CountChangeConstructionProof {
             .current_head_accounted(metrics)?
             .ok_or(CoreError::InvalidValidationReceipt)?;
         let state = &self.workspace.file.state;
-        if !state.permit.covers(store, &current) || current.1 != state.prior_root {
+        if !state.base_scope.covers(store, &current) || current.1 != state.prior_root {
             return Err(CoreError::ValidationAuthorityUnavailable.into());
         }
         let transaction = store
@@ -4835,7 +5365,8 @@ impl CountChangeConstructionProof {
             .as_mut()
             .ok_or(CoreError::ValidationAuthorityUnavailable)?;
         transaction.construction_proof_consumed = true;
-        transaction.carry_forward_authorized = true;
+        transaction.carry_forward_authorized =
+            state.base_scope.provenance() == EditBaseProvenance::VerifiedCompleteClosure;
         add(&mut metrics.construction_proof_consumptions, 1)?;
         Ok(CountChangeQualification {
             prior_root: state.prior_root,
@@ -5046,7 +5577,7 @@ impl FileBuilder {
         candidate: Candidate,
         expected_references: u64,
         store: &Store,
-        permit: SameOpenValidationPermit,
+        base_scope: EditBaseScope,
         prior_root: ObjectId,
         before_file: ObjectId,
         insertion_ordinal: u64,
@@ -5057,7 +5588,7 @@ impl FileBuilder {
         let mut builder = Self::new(candidate, expected_references, metrics)?;
         builder.count_change = Some(CountChangeConstructionState::new(
             store,
-            permit,
+            base_scope,
             prior_root,
             before_file,
             insertion_ordinal,
@@ -5678,6 +6209,16 @@ fn source_label(size: u64) -> String {
         SOURCE_100 => "S1-100".to_string(),
         SOURCE_500 => "S1-500".to_string(),
         _ => format!("S1-{size}"),
+    }
+}
+
+fn borrowed_source_label(size: u64) -> CoreResult<&'static str> {
+    match size {
+        SOURCE_1 => Ok("S1-1"),
+        SOURCE_10 => Ok("S1-10"),
+        SOURCE_100 => Ok("S1-100"),
+        SOURCE_500 => Ok("S1-500"),
+        _ => Err(CoreError::LengthOverflow),
     }
 }
 
@@ -8019,7 +8560,7 @@ fn edit_file_count_change_proven(
     store: &mut Store,
     candidate: Candidate,
     edit_point: EditPoint,
-    permit: SameOpenValidationPermit,
+    base_scope: EditBaseScope,
     metrics: &mut Metrics,
 ) -> AnyResult<(
     ObjectId,
@@ -8034,7 +8575,7 @@ fn edit_file_count_change_proven(
     let prior_head = store
         .current_head_accounted(metrics)?
         .ok_or(CoreError::InvalidValidationReceipt)?;
-    if !permit.covers(store, &prior_head) {
+    if !base_scope.covers(store, &prior_head) {
         return Err(CoreError::ValidationAuthorityUnavailable.into());
     }
     let before_file = resolve_namespace_file_root(store, prior_head.1, metrics)?;
@@ -8059,7 +8600,7 @@ fn edit_file_count_change_proven(
         candidate,
         expected_references,
         store,
-        permit,
+        base_scope,
         prior_head.1,
         before_file,
         edit_point.position,
@@ -8871,6 +9412,7 @@ fn verify_changed_file_pair(
     final_node: bool,
     prior_active: &mut Vec<ObjectId>,
     replacement_active: &mut Vec<ObjectId>,
+    provenance: EditBaseProvenance,
     metrics: &mut Metrics,
 ) -> AnyResult<(u64, u64)> {
     if usize::from(level) > MAX_DEPTH {
@@ -8912,7 +9454,7 @@ fn verify_changed_file_pair(
                 prior_references.iter().zip(&replacement_references)
             {
                 if prior_reference == replacement_reference {
-                    add(&mut metrics.incremental_receipt_covered_edges, 1)?;
+                    provenance.record_equal_edges(metrics, 1)?;
                     continue;
                 }
                 if prior_reference.object_id == replacement_reference.object_id {
@@ -8994,7 +9536,7 @@ fn verify_changed_file_pair(
                     }
                     .into());
                 }
-                add(&mut metrics.incremental_receipt_covered_edges, 1)?;
+                provenance.record_equal_edges(metrics, 1)?;
             } else {
                 add(&mut metrics.incremental_new_or_different_edges, 1)?;
                 changed.push(ChangedFilePair {
@@ -9025,6 +9567,7 @@ fn verify_changed_file_pair(
                 pair.final_node,
                 prior_active,
                 replacement_active,
+                provenance,
                 metrics,
             )?;
             if prior_actual != pair.prior_declared {
@@ -9051,7 +9594,7 @@ fn verify_changed_file_pair(
 
 fn verify_same_count_changed_spine(
     store: &Store,
-    permit: SameOpenValidationPermit,
+    base_scope: EditBaseScope,
     replacement_root: ObjectId,
     _candidate: Candidate,
     metrics: &mut Metrics,
@@ -9060,12 +9603,12 @@ fn verify_same_count_changed_spine(
     let head = store
         .current_head_accounted(metrics)?
         .ok_or(CoreError::InvalidValidationReceipt)?;
-    if !permit.covers(store, &head) {
+    if !base_scope.covers(store, &head) {
         return Err(CoreError::ValidationAuthorityUnavailable.into());
     }
     add(&mut metrics.incremental_qualification_calls, 1)?;
     let (_prior_namespace_charge, prior_namespace, prior_namespace_bytes) =
-        store.get(permit.root, metrics)?;
+        store.get(base_scope.root(), metrics)?;
     record_spine_authentication(metrics, SpineSide::Prior, prior_namespace_bytes.len())?;
     let (_replacement_namespace_charge, replacement_namespace, replacement_namespace_bytes) =
         store.get(replacement_root, metrics)?;
@@ -9130,7 +9673,7 @@ fn verify_same_count_changed_spine(
     let _prior_active_charge = charge_dfs_frames(active_capacity, metrics)?;
     let _replacement_active_charge = charge_dfs_frames(active_capacity, metrics)?;
     let mut prior_active = Vec::with_capacity(active_capacity);
-    prior_active.extend([permit.root, prior_file]);
+    prior_active.extend([base_scope.root(), prior_file]);
     let mut replacement_active = Vec::with_capacity(active_capacity);
     replacement_active.extend([replacement_root, replacement_file]);
     let mut prior_previous = 0_u64;
@@ -9154,7 +9697,7 @@ fn verify_same_count_changed_spine(
                 }
                 .into());
             }
-            add(&mut metrics.incremental_receipt_covered_edges, 1)?;
+            base_scope.provenance().record_equal_edges(metrics, 1)?;
         } else {
             add(&mut metrics.incremental_new_or_different_edges, 1)?;
             let (prior_actual, replacement_actual) = verify_changed_file_pair(
@@ -9165,6 +9708,7 @@ fn verify_same_count_changed_spine(
                 index + 1 == prior_children.len(),
                 &mut prior_active,
                 &mut replacement_active,
+                base_scope.provenance(),
                 metrics,
             )?;
             if prior_actual != prior_declared {
@@ -9266,7 +9810,7 @@ fn qualify_same_middle_full_closure(
 #[allow(clippy::too_many_arguments)]
 fn qualify_same_middle_changed_spine(
     store: &Store,
-    permit: SameOpenValidationPermit,
+    base_scope: EditBaseScope,
     prior_root: ObjectId,
     root: ObjectId,
     transition: ObjectId,
@@ -9284,7 +9828,7 @@ fn qualify_same_middle_changed_spine(
         Some(operations),
         metrics,
     )?;
-    verify_same_count_changed_spine(store, permit, root, candidate, metrics)
+    verify_same_count_changed_spine(store, base_scope, root, candidate, metrics)
 }
 
 fn verify_file(
@@ -9530,7 +10074,7 @@ fn scrub_file(
                         reference: file_codec::FileReference,
                         metrics: &mut Metrics|
      -> AnyResult<()> {
-        store.with_borrowed_bytes(reference.object_id, metrics, |canonical, _metrics| {
+        store.with_borrowed_bytes(reference.object_id, metrics, |canonical, _| {
             let raw = layerfs_core::decode_bytes_object(canonical)?;
             if u32::try_from(raw.len()).map_err(|_| CoreError::LengthOverflow)?
                 != reference.raw_length
@@ -9551,6 +10095,46 @@ fn scrub_file(
     Ok((length, references))
 }
 
+fn authenticated_transition_parent(
+    store: &Store,
+    transition: ObjectId,
+    metrics: &mut Metrics,
+) -> AnyResult<Option<ObjectId>> {
+    let bytes = store.get_bytes(transition, metrics)?;
+    let decoded_page_count = delta_codec::measure_mapping_transition_pages(&bytes)?;
+    let _decoded_pages_charge = charge_capacity(
+        metrics,
+        decoded_page_count
+            .checked_mul(Q_TREE_NODE_BYTES)
+            .ok_or(CoreError::LengthOverflow)?,
+    )?;
+    Ok(delta_codec::decode_mapping_transition(&bytes)?.parent)
+}
+
+fn record_edit_base_scrub(
+    store: &mut Store,
+    root: ObjectId,
+    candidate: Candidate,
+    metrics: &mut Metrics,
+) -> AnyResult<()> {
+    let before = metrics.canonical_bytes_authenticated;
+    let started = Instant::now();
+    scrub_file(store, root, candidate, metrics)?;
+    metrics.edit_base_scrub_wall_ns = metrics
+        .edit_base_scrub_wall_ns
+        .checked_add(started.elapsed().as_nanos())
+        .ok_or(CoreError::LengthOverflow)?;
+    add(&mut metrics.edit_base_complete_scrub_calls, 1)?;
+    add(
+        &mut metrics.edit_base_complete_scrub_canonical_bytes,
+        metrics
+            .canonical_bytes_authenticated
+            .checked_sub(before)
+            .ok_or(CoreError::LengthOverflow)?,
+    )?;
+    Ok(())
+}
+
 fn establish_same_open_file_witness(
     store: &mut Store,
     candidate: Candidate,
@@ -9568,22 +10152,166 @@ fn establish_same_open_file_witness(
     let head = store
         .current_head_accounted(metrics)?
         .ok_or(CoreError::InvalidValidationReceipt)?;
+    let transition_started = Instant::now();
+    let declared_parent = authenticated_transition_parent(store, head.2, metrics)?;
+    let verified_parent = expected_parent.or(declared_parent);
     verify_transition(
         store,
         head.2,
-        expected_parent,
+        verified_parent,
         head.1,
         expected_operations,
         metrics,
     )?;
-    scrub_file(store, head.1, candidate, metrics)?;
-    if let Some(parent) = expected_parent {
-        scrub_file(store, parent, candidate, metrics)?;
+    metrics.edit_base_transition_wall_ns = metrics
+        .edit_base_transition_wall_ns
+        .checked_add(transition_started.elapsed().as_nanos())
+        .ok_or(CoreError::LengthOverflow)?;
+    record_edit_base_scrub(store, head.1, candidate, metrics)?;
+    if let Some(parent) = verified_parent {
+        record_edit_base_scrub(store, parent, candidate, metrics)?;
     }
     if store.current_head_accounted(metrics)?.as_ref() != Some(&head) {
         return Err(CoreError::PublicationConflict.into());
     }
     store.issue_same_open_witness(&head, metrics)
+}
+
+fn establish_trusted_local_edit_scope(
+    store: &mut Store,
+    expected_parent: Option<ObjectId>,
+    expected_operations: Option<&[delta_codec::TransitionOperation]>,
+    metrics: &mut Metrics,
+) -> AnyResult<TrustedLocalEditScope> {
+    if store.integrity_mode != IntegrityMode::TrustedLocalDev
+        || store.active_transaction.is_none()
+        || store.carried_same_open_authority.is_some()
+    {
+        return Err(CoreError::ValidationAuthorityUnavailable.into());
+    }
+    let _head_receipt_charge = charge_capacity(metrics, 216)?;
+    let head = store
+        .current_head_accounted(metrics)?
+        .ok_or(CoreError::InvalidValidationReceipt)?;
+    let transition_started = Instant::now();
+    let declared_parent = authenticated_transition_parent(store, head.2, metrics)?;
+    verify_transition(
+        store,
+        head.2,
+        expected_parent.or(declared_parent),
+        head.1,
+        expected_operations,
+        metrics,
+    )?;
+    metrics.edit_base_transition_wall_ns = metrics
+        .edit_base_transition_wall_ns
+        .checked_add(transition_started.elapsed().as_nanos())
+        .ok_or(CoreError::LengthOverflow)?;
+    if store.current_head_accounted(metrics)?.as_ref() != Some(&head) {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    store.issue_trusted_local_edit_scope(&head, metrics)
+}
+
+fn establish_edit_base_scope(
+    store: &mut Store,
+    candidate: Candidate,
+    expected_parent: Option<ObjectId>,
+    expected_operations: Option<&[delta_codec::TransitionOperation]>,
+    metrics: &mut Metrics,
+) -> AnyResult<EditBaseScope> {
+    match store.integrity_mode {
+        IntegrityMode::Verified => {
+            let mut witness = establish_same_open_file_witness(
+                store,
+                candidate,
+                expected_parent,
+                expected_operations,
+                metrics,
+            )?;
+            Ok(EditBaseScope::Verified(witness.consume(store, metrics)?))
+        }
+        IntegrityMode::TrustedLocalDev => {
+            let mut scope = establish_trusted_local_edit_scope(
+                store,
+                expected_parent,
+                expected_operations,
+                metrics,
+            )?;
+            Ok(EditBaseScope::Trusted(scope.consume(store, metrics)?))
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SnapshotClosureRoot {
+    root: ObjectId,
+    transition: ObjectId,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SnapshotVerification {
+    roots_verified: u64,
+}
+
+fn verify_snapshot_root(
+    store: &mut Store,
+    snapshot: SnapshotClosureRoot,
+    candidate: Candidate,
+    metrics: &mut Metrics,
+) -> AnyResult<()> {
+    let parent = authenticated_transition_parent(store, snapshot.transition, metrics)?;
+    verify_transition(
+        store,
+        snapshot.transition,
+        parent,
+        snapshot.root,
+        None,
+        metrics,
+    )?;
+    scrub_file(store, snapshot.root, candidate, metrics)?;
+    Ok(())
+}
+
+fn verify_snapshot_closure(
+    store: &mut Store,
+    current_head: &VisibleHead,
+    explicit_retained_roots: &[SnapshotClosureRoot],
+    candidate: Candidate,
+    metrics: &mut Metrics,
+) -> AnyResult<SnapshotVerification> {
+    preflight_existing_store(&store.path, store.profile)?;
+    let key = read_authority(&store.authority_path)?;
+    if key != store.validation_key
+        || ValidatedSnapshotReceiptV1::validation_authority_id(store.store_instance_id, &key)
+            != store.validation_authority_id
+    {
+        return Err(CoreError::ValidationAuthorityUnavailable.into());
+    }
+    let observed = store
+        .fresh_read_only_head(metrics)?
+        .ok_or(CoreError::InvalidValidationReceipt)?;
+    if observed != *current_head {
+        return Err(CoreError::PublicationConflict.into());
+    }
+    verify_snapshot_root(
+        store,
+        SnapshotClosureRoot {
+            root: current_head.1,
+            transition: current_head.2,
+        },
+        candidate,
+        metrics,
+    )?;
+    for retained in explicit_retained_roots {
+        verify_snapshot_root(store, *retained, candidate, metrics)?;
+    }
+    Ok(SnapshotVerification {
+        roots_verified: u64::try_from(explicit_retained_roots.len())
+            .map_err(|_| CoreError::LengthOverflow)?
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?,
+    })
 }
 
 fn verify_ranges(
@@ -11227,12 +11955,31 @@ impl std::fmt::Display for JsonOptionalString<'_> {
     }
 }
 
+struct JsonOptionalHex<'a>(Option<&'a [u8]>);
+
+impl std::fmt::Display for JsonOptionalHex<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(value) => write!(formatter, "\"{}\"", HexBytes(value)),
+            None => formatter.write_str("\"Unavailable\""),
+        }
+    }
+}
+
 struct HexBytes<'a>(&'a [u8]);
 
 impl std::fmt::Display for HexBytes<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for byte in self.0 {
-            write!(formatter, "{byte:02x}")?;
+        const DIGITS: &[u8; 16] = b"0123456789abcdef";
+        let mut output = [0_u8; 4096];
+        for chunk in self.0.chunks(output.len() / 2) {
+            for (index, byte) in chunk.iter().copied().enumerate() {
+                output[index * 2] = DIGITS[usize::from(byte >> 4)];
+                output[index * 2 + 1] = DIGITS[usize::from(byte & 0x0f)];
+            }
+            formatter.write_str(
+                std::str::from_utf8(&output[..chunk.len() * 2]).map_err(|_| std::fmt::Error)?,
+            )?;
         }
         Ok(())
     }
@@ -11314,6 +12061,51 @@ fn executable_sha256(path: &Path) -> AnyResult<String> {
         return Err("invalid executable SHA-256".into());
     }
     Ok(digest)
+}
+
+fn validate_sha256(value: &str) -> CoreResult<()> {
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(CoreError::InvalidRecord("SHA-256"));
+    }
+    Ok(())
+}
+
+struct RunRowSession<'a> {
+    source: &'a Path,
+    database: &'a Path,
+    authority: &'a Path,
+    expectations: &'a Path,
+    executable_sha256: &'a str,
+    base_copy_method: &'a str,
+    base_database_sha256: &'a str,
+    base_authority_sha256: &'a str,
+    base_expectations_sha256: &'a str,
+    qualification_mode: QualificationMode,
+}
+
+impl RunRowSession<'_> {
+    fn validate(&self) -> AnyResult<()> {
+        validate_sha256(self.executable_sha256)?;
+        validate_sha256(self.base_database_sha256)?;
+        validate_sha256(self.base_authority_sha256)?;
+        validate_sha256(self.base_expectations_sha256)?;
+        if !matches!(
+            self.base_copy_method,
+            "physical-byte-copy-identical-database-authority-expectations"
+                | "fast-lane-isolated-prepared-row"
+                | "fixed-radix-acceptance-master-copy"
+        ) {
+            return Err(CoreError::InvalidRecord("base copy method").into());
+        }
+        if !self.source.is_file()
+            || !self.database.is_file()
+            || !self.authority.is_file()
+            || !self.expectations.is_file()
+        {
+            return Err(CoreError::MissingObject.into());
+        }
+        Ok(())
+    }
 }
 
 fn write_range_measurements(
@@ -11407,6 +12199,7 @@ fn row_json(
     phase_metrics: &[PhaseMetricInterval],
     ranges_json: &str,
     executable_sha256: &str,
+    session: &RunRowSession<'_>,
     publication: Option<PublicationOutcome>,
     error: Option<&str>,
 ) -> AnyResult<ChargedString> {
@@ -11427,10 +12220,8 @@ fn row_json(
     let edit_reference_count_before = JsonOptional(edit_point.map(|point| point.reference_count));
     let edit_reference_count_after = JsonOptional(edit_point.map(|_| actual_references));
     let edit_offset = JsonOptional(edit_point.map(|point| point.byte_offset));
-    let edit_removed = edit_oracle.map(|oracle| hex_bytes(&oracle.removed));
-    let edit_inserted = edit_oracle.map(|oracle| hex_bytes(&oracle.inserted));
-    let edit_removed = JsonOptionalString(edit_removed.as_deref());
-    let edit_inserted = JsonOptionalString(edit_inserted.as_deref());
+    let edit_removed = JsonOptionalHex(edit_oracle.map(|oracle| oracle.removed.as_slice()));
+    let edit_inserted = JsonOptionalHex(edit_oracle.map(|oracle| oracle.inserted.as_slice()));
     let edit_count_classification = match edit_point {
         Some(point) if point.reference_count == actual_references => "same-count",
         Some(_) => "count-changing",
@@ -11441,18 +12232,24 @@ fn row_json(
         .canonical_cas_mapping_stage_ns
         .checked_add(phases.precommit_closure_validation_ns)
         .and_then(|value| value.checked_add(phases.sqlite_commit_durability_ns));
-    let lifecycle_sum = durable_sum
-        .and_then(|value| {
-            value.checked_add(if operation == "first-edit-after-reopen" {
-                phases.same_open_authority_establishment_ns
-            } else {
-                0
-            })
-        })
-        .and_then(|value| value.checked_add(phases.fresh_reopen_head_ns))
-        .and_then(|value| value.checked_add(phases.fresh_full_scrub_ns))
-        .and_then(|value| value.checked_add(phases.reconstruction_ns))
-        .and_then(|value| value.checked_add(phases.range_verification_ns));
+    let edit_base_scope_residual_ns = phases
+        .same_open_authority_establishment_ns
+        .checked_sub(metrics.edit_base_transition_wall_ns)
+        .and_then(|value| value.checked_sub(metrics.edit_base_scrub_wall_ns))
+        .ok_or(CoreError::LengthOverflow)?;
+    let first_edit_component_sum_ns = phases
+        .store_preflight_ns
+        .checked_add(phases.sqlite_open_and_profile_ns)
+        .and_then(|value| value.checked_add(phases.visible_head_lookup_ns))
+        .and_then(|value| value.checked_add(metrics.edit_base_transition_wall_ns))
+        .and_then(|value| value.checked_add(metrics.edit_base_scrub_wall_ns))
+        .and_then(|value| value.checked_add(edit_base_scope_residual_ns))
+        .and_then(|value| value.checked_add(phases.canonical_cas_mapping_stage_ns))
+        .and_then(|value| value.checked_add(phases.precommit_closure_validation_ns))
+        .and_then(|value| value.checked_add(phases.sqlite_commit_durability_ns))
+        .ok_or(CoreError::LengthOverflow)?;
+    let first_edit_equation_total_ns = first_edit_total(phases)?;
+    let lifecycle_sum = complete_lifecycle_phase_sum(phases).ok();
     let commit_pre_and_post_dispatch_wall_ns = metrics
         .commit_publish_call_wall_ns
         .checked_sub(metrics.commit_dispatch_to_return_wall_ns)
@@ -11590,19 +12387,10 @@ fn row_json(
         operation,
         "full" | "same-middle" | "plus1-early" | "plus1-middle"
     ) || is_one_byte_operation(operation);
-    let base_copy_method = match env::var("WP4M_BASE_COPY_METHOD").as_deref() {
-        Ok("physical-byte-copy-identical-database-authority-expectations") => {
-            "physical-byte-copy-identical-database-authority-expectations"
-        }
-        Ok("fixed-radix-acceptance-master-copy") => "fixed-radix-acceptance-master-copy",
-        _ => "regenerated-isolated-database",
-    };
-    let base_database_sha256 =
-        env::var("WP4M_BASE_DATABASE_SHA256").unwrap_or_else(|_| "Unavailable".to_string());
-    let base_authority_sha256 =
-        env::var("WP4M_BASE_AUTHORITY_SHA256").unwrap_or_else(|_| "Unavailable".to_string());
-    let base_expectations_sha256 =
-        env::var("WP4M_BASE_EXPECTATIONS_SHA256").unwrap_or_else(|_| "Unavailable".to_string());
+    let base_copy_method = session.base_copy_method;
+    let base_database_sha256 = session.base_database_sha256;
+    let base_authority_sha256 = session.base_authority_sha256;
+    let base_expectations_sha256 = session.base_expectations_sha256;
     let precommit_reconstructs = matches!(operation, "dir-create" | "dir-replace" | "dir-leading");
     let qualification_mode_label = if operation == "full" {
         "C1-construction-proof"
@@ -11622,22 +12410,44 @@ fn row_json(
     let directory_row = operation.starts_with("dir-");
     let reported_size_bytes = if directory_row { 0 } else { size };
     let fixture_label = if directory_row {
-        "wide-directory-100000".to_string()
+        "wide-directory-100000"
     } else {
-        source_label(size)
+        borrowed_source_label(size)?
     };
     let file_height = expected_references
         .map(file_codec::expected_file_level)
         .transpose()?;
-    let (publication_status, publication_diagnostic) = match publication {
-        Some(PublicationOutcome { status, diagnostic }) => {
-            let status = match status {
-                PublicationStatus::Committed => "Committed",
-                PublicationStatus::RequestedVisible => "RequestedVisible",
-            };
-            (status, diagnostic)
+    let (publication_status, publication_diagnostic, edit_base_provenance, verified_carry_forward) =
+        match publication {
+            Some(PublicationOutcome {
+                status,
+                diagnostic,
+                edit_base_provenance,
+                verified_carry_forward,
+            }) => {
+                let status = match status {
+                    PublicationStatus::Committed => "Committed",
+                    PublicationStatus::RequestedVisible => "RequestedVisible",
+                };
+                (
+                    status,
+                    diagnostic,
+                    edit_base_provenance,
+                    verified_carry_forward,
+                )
+            }
+            None => ("Unavailable", None, None, false),
+        };
+    let integrity_mode_label = match edit_base_provenance {
+        Some(EditBaseProvenance::TrustedLocalUnverifiedClosure) => "trusted-local-dev",
+        _ => "verified",
+    };
+    let edit_base_provenance_label = match edit_base_provenance {
+        Some(EditBaseProvenance::VerifiedCompleteClosure) => "verified-complete-closure",
+        Some(EditBaseProvenance::TrustedLocalUnverifiedClosure) => {
+            "trusted-local-unverified-closure"
         }
-        None => ("Unavailable", None),
+        None => "not-applicable",
     };
     let receipt_provenance = ProvenanceDisplay(publication_diagnostic);
     macro_rules! render_row {
@@ -11873,6 +12683,24 @@ fn row_json(
                     metrics.sqlite_status_after_return.read_calls,
                 )
             })
+            .and_then(|_| {
+                compact_writer.0.remove_last_object_brace()?;
+                write!(
+                    &mut compact_writer,
+                    ",\"integrity_mode\":\"{integrity_mode_label}\",\"edit_base_provenance\":\"{edit_base_provenance_label}\",\"rollback_freshness\":\"NotProtected\",\"edit_base_complete_scrub_calls\":{},\"edit_base_complete_scrub_canonical_bytes\":{},\"trusted_assumed_equal_edges\":{},\"trusted_assumed_prior_references\":{},\"trusted_assumed_prior_raw_bytes\":{},\"verified_carry_forward\":{verified_carry_forward},\"store_preflight_wall_ns\":{},\"sqlite_open_and_profile_wall_ns\":{},\"visible_head_lookup_and_open_wrapper_wall_ns\":{},\"edit_base_transition_wall_ns\":{},\"edit_base_complete_scrub_wall_ns\":{},\"edit_base_scope_residual_wall_ns\":{edit_base_scope_residual_ns},\"first_edit_component_sum_wall_ns\":{first_edit_component_sum_ns},\"first_edit_equation_total_wall_ns\":{first_edit_equation_total_ns},\"first_edit_timer_equation_matches\":{},\"reconciliation_nested_in_commit\":true}}",
+                    metrics.edit_base_complete_scrub_calls,
+                    metrics.edit_base_complete_scrub_canonical_bytes,
+                    metrics.trusted_assumed_equal_edges,
+                    metrics.trusted_assumed_prior_references,
+                    metrics.trusted_assumed_prior_raw_bytes,
+                    phases.store_preflight_ns,
+                    phases.sqlite_open_and_profile_ns,
+                    phases.visible_head_lookup_ns,
+                    metrics.edit_base_transition_wall_ns,
+                    metrics.edit_base_scrub_wall_ns,
+                    first_edit_component_sum_ns == first_edit_equation_total_ns,
+                )
+            })
         }};
     }
     metrics.q_current = q_current();
@@ -11999,6 +12827,7 @@ fn operation_qualification_mode(
     operation: &str,
     expected_reference_count: Option<u64>,
     edit_point: Option<EditPoint>,
+    fallback: QualificationMode,
 ) -> AnyResult<QualificationMode> {
     if is_one_byte_operation(operation) {
         let expected_reference_count = expected_reference_count.ok_or(CoreError::LengthOverflow)?;
@@ -12009,14 +12838,28 @@ fn operation_qualification_mode(
             QualificationMode::FullClosure
         });
     }
-    qualification_mode()
+    Ok(fallback)
 }
 
 fn first_edit_total(phases: &PhaseTimes) -> CoreResult<u128> {
     phases
-        .fresh_reopen_head_ns
-        .checked_add(phases.same_open_authority_establishment_ns)
+        .store_preflight_ns
+        .checked_add(phases.sqlite_open_and_profile_ns)
+        .and_then(|value| value.checked_add(phases.visible_head_lookup_ns))
+        .and_then(|value| value.checked_add(phases.same_open_authority_establishment_ns))
         .and_then(|value| value.checked_add(phases.durable_capture_total_ns))
+        .ok_or(CoreError::LengthOverflow)
+}
+
+fn complete_lifecycle_phase_sum(phases: &PhaseTimes) -> CoreResult<u128> {
+    phases
+        .canonical_cas_mapping_stage_ns
+        .checked_add(phases.precommit_closure_validation_ns)
+        .and_then(|value| value.checked_add(phases.sqlite_commit_durability_ns))
+        .and_then(|value| value.checked_add(phases.fresh_reopen_head_ns))
+        .and_then(|value| value.checked_add(phases.fresh_full_scrub_ns))
+        .and_then(|value| value.checked_add(phases.reconstruction_ns))
+        .and_then(|value| value.checked_add(phases.range_verification_ns))
         .ok_or(CoreError::LengthOverflow)
 }
 
@@ -12038,8 +12881,7 @@ fn capture_same_middle(
     let authority_metrics_started = *metrics;
     let authority_started = Instant::now();
     store.transaction_attempt(metrics, |store, metrics| {
-        let mut witness = establish_same_open_file_witness(store, candidate, None, None, metrics)?;
-        let permit = witness.consume(store, metrics)?;
+        let base_scope = establish_edit_base_scope(store, candidate, None, None, metrics)?;
         let authority_metrics_ended = *metrics;
         let authority_ns = authority_started.elapsed().as_nanos();
 
@@ -12071,7 +12913,7 @@ fn capture_same_middle(
                 let current = store
                     .current_head_accounted(metrics)?
                     .ok_or(CoreError::InvalidValidationReceipt)?;
-                if !permit.covers(store, &current) {
+                if !base_scope.covers(store, &current) {
                     return Err(CoreError::ValidationAuthorityUnavailable.into());
                 }
                 qualify_same_middle_full_closure(
@@ -12090,7 +12932,7 @@ fn capture_same_middle(
             QualificationMode::ChangedSpine => {
                 qualify_same_middle_changed_spine(
                     store,
-                    permit,
+                    base_scope,
                     prior_head.1,
                     root_id,
                     transition_id,
@@ -12168,8 +13010,7 @@ fn capture_count_change(
     let authority_metrics_started = *metrics;
     let authority_started = Instant::now();
     store.transaction_attempt(metrics, |store, metrics| {
-        let mut witness = establish_same_open_file_witness(store, candidate, None, None, metrics)?;
-        let permit = witness.consume(store, metrics)?;
+        let base_scope = establish_edit_base_scope(store, candidate, None, None, metrics)?;
         let authority_metrics_ended = *metrics;
         let authority_ns = authority_started.elapsed().as_nanos();
 
@@ -12184,7 +13025,7 @@ fn capture_count_change(
             return Err(CoreError::PublicationConflict.into());
         }
         let (root_id, transition_id, mut proof, expected_operations, expected_operations_charge) =
-            edit_file_count_change_proven(store, candidate, edit_point, permit, metrics)?;
+            edit_file_count_change_proven(store, candidate, edit_point, base_scope, metrics)?;
         let mapping_end = Instant::now();
         let mapping_metrics_ended = *metrics;
 
@@ -12349,53 +13190,80 @@ fn capture_full_create(
 fn run_row(
     root: &Path,
     candidate: Candidate,
+    integrity_mode: IntegrityMode,
     size: u64,
     operation: &str,
     iteration: usize,
     warmup: bool,
     validation: RowValidation,
 ) -> AnyResult<ChargedString> {
-    require_optimized_benchmark()?;
     let executable_sha256 = executable_sha256(&env::current_exe()?)?;
     if env::var("WP4M_EXECUTABLE_SHA256").is_ok_and(|expected| expected != executable_sha256) {
         return Err("running executable SHA-256 does not match row custody".into());
     }
-    if executable_sha256.len() != 64
-        || !executable_sha256
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit())
-    {
-        return Err("invalid row executable SHA-256".into());
-    }
     let source = source_path(root, size);
-    let db_path = row_database_path(root, candidate, size, operation, iteration);
-    if !db_path.is_file()
-        || !authority_path(&db_path).is_file()
-        || !expectations_path(&db_path).is_file()
-    {
-        return Err("row database was not prepared outside the measured process".into());
-    }
+    let database = row_database_path(root, candidate, size, operation, iteration);
+    let authority = authority_path(&database);
+    let expectations = expectations_path(&database);
     let fast_lane = env::var("LAYERFS_FAST_LANE").as_deref() == Ok("1");
     let fixed_radix_acceptance = env::var("LAYERFS_FIXED_RADIX_ACCEPTANCE").as_deref() == Ok("1");
-    let base_method = env::var("WP4M_BASE_COPY_METHOD");
-    let accepted_base = base_method.as_deref()
-        == Ok("physical-byte-copy-identical-database-authority-expectations")
-        || (fast_lane && base_method.as_deref() == Ok("fast-lane-isolated-prepared-row"))
-        || (fixed_radix_acceptance
-            && base_method.as_deref() == Ok("fixed-radix-acceptance-master-copy"));
+    let base_copy_method = env::var("WP4M_BASE_COPY_METHOD")?;
+    let accepted_base = base_copy_method
+        == "physical-byte-copy-identical-database-authority-expectations"
+        || (fast_lane && base_copy_method == "fast-lane-isolated-prepared-row")
+        || (fixed_radix_acceptance && base_copy_method == "fixed-radix-acceptance-master-copy");
     if !accepted_base {
         return Err(
             "row requires a physical byte-copied database/authority/expectation start".into(),
         );
     }
-    require_file_custody_hash("WP4M_BASE_DATABASE_SHA256", &db_path)?;
-    require_file_custody_hash("WP4M_BASE_AUTHORITY_SHA256", &authority_path(&db_path))?;
-    require_file_custody_hash(
-        "WP4M_BASE_EXPECTATIONS_SHA256",
-        &expectations_path(&db_path),
-    )?;
+    let base_database_sha256 = require_file_custody_hash("WP4M_BASE_DATABASE_SHA256", &database)?;
+    let base_authority_sha256 =
+        require_file_custody_hash("WP4M_BASE_AUTHORITY_SHA256", &authority)?;
+    let base_expectations_sha256 =
+        require_file_custody_hash("WP4M_BASE_EXPECTATIONS_SHA256", &expectations)?;
+    let session = RunRowSession {
+        source: &source,
+        database: &database,
+        authority: &authority,
+        expectations: &expectations,
+        executable_sha256: &executable_sha256,
+        base_copy_method: &base_copy_method,
+        base_database_sha256: &base_database_sha256,
+        base_authority_sha256: &base_authority_sha256,
+        base_expectations_sha256: &base_expectations_sha256,
+        qualification_mode: qualification_mode()?,
+    };
+    run_row_with_session(
+        candidate,
+        integrity_mode,
+        size,
+        operation,
+        iteration,
+        warmup,
+        validation,
+        &session,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_row_with_session(
+    candidate: Candidate,
+    integrity_mode: IntegrityMode,
+    size: u64,
+    operation: &str,
+    iteration: usize,
+    warmup: bool,
+    validation: RowValidation,
+    session: &RunRowSession<'_>,
+) -> AnyResult<ChargedString> {
+    require_optimized_benchmark()?;
+    session.validate()?;
+    let executable_sha256 = session.executable_sha256;
+    let source = session.source;
+    let db_path = session.database;
     let mut metrics = Metrics::default();
-    let prepared = read_prepared_expectations(&expectations_path(&db_path), &mut metrics)?;
+    let prepared = read_prepared_expectations(session.expectations, &mut metrics)?;
     let ChargedPreparedExpectations {
         value:
             PreparedExpectations {
@@ -12455,7 +13323,7 @@ fn run_row(
         let mut metrics = Metrics::default();
         let open_metrics_started = metrics;
         let open_started = Instant::now();
-        let mut store = Store::open_measured(&db_path, candidate, &mut metrics)?;
+        let mut store = Store::open_measured(&db_path, candidate, &mut metrics, None)?;
         let _head_receipt_charge = charge_capacity(&mut metrics, 216)?;
         let head = store
             .current_head_accounted(&mut metrics)?
@@ -12625,6 +13493,7 @@ fn run_row(
             &phase_metrics,
             &ranges_json,
             &executable_sha256,
+            session,
             None,
             None,
         );
@@ -12659,7 +13528,9 @@ fn run_row(
             if prepared_result != (result.root, result.transition, result.closure) {
                 return Err(CoreError::PublicationConflict.into());
             }
-            (Some(result), Some(oracle.inserted.clone()))
+            let mut replacement = ChargedVec::with_capacity(oracle.inserted.len(), &mut metrics)?;
+            replacement.extend_from_slice(&oracle.inserted);
+            (Some(result), Some(replacement))
         } else {
             if edit_oracle.is_some() {
                 return Err("non-edit row contains an edit oracle".into());
@@ -12670,8 +13541,12 @@ fn run_row(
     if (operation == "full") && base != Some(prepared_result) {
         return Err(CoreError::PublicationConflict.into());
     }
-    let qualification_mode =
-        operation_qualification_mode(operation, expected_reference_count, edit_point)?;
+    let qualification_mode = operation_qualification_mode(
+        operation,
+        expected_reference_count,
+        edit_point,
+        session.qualification_mode,
+    )?;
     let expected_dir_replacement = if operation == "dir-replace" {
         Some((
             u64::try_from(DIRECTORY_ENTRIES / 2 + 1).map_err(|_| CoreError::LengthOverflow)?,
@@ -12683,7 +13558,14 @@ fn run_row(
     let first_edit = operation == "first-edit-after-reopen";
     let initial_reopen_started = Instant::now();
     let initial_reopen_metrics_started = metrics;
-    let mut store = Store::open_measured(&db_path, candidate, &mut metrics)?;
+    let mut initial_open_phases = StoreOpenPhases::default();
+    let mut store = Store::open_measured_with_integrity_mode(
+        &db_path,
+        candidate,
+        &mut metrics,
+        Some(&mut initial_open_phases),
+        integrity_mode,
+    )?;
     if first_edit {
         let (base_root, base_transition, _) = base.ok_or("first edit base is missing")?;
         let head = store
@@ -12695,8 +13577,20 @@ fn run_row(
     }
     let initial_reopen_end = Instant::now();
     let initial_reopen_metrics_ended = metrics;
+    let initial_reopen_ns = initial_reopen_end
+        .duration_since(initial_reopen_started)
+        .as_nanos();
+    let initial_visible_head_lookup_ns = initial_reopen_ns
+        .checked_sub(initial_open_phases.preflight_ns)
+        .and_then(|value| value.checked_sub(initial_open_phases.sqlite_open_and_profile_ns))
+        .ok_or(CoreError::LengthOverflow)?;
     let physical_before = store.physical_snapshot();
-    let mut phases = PhaseTimes::default();
+    let mut phases = PhaseTimes {
+        store_preflight_ns: initial_open_phases.preflight_ns,
+        sqlite_open_and_profile_ns: initial_open_phases.sqlite_open_and_profile_ns,
+        visible_head_lookup_ns: initial_visible_head_lookup_ns,
+        ..PhaseTimes::default()
+    };
     let authority_metrics_started = metrics;
     let authority_metrics_ended = metrics;
     if operation == "dir-lookup" {
@@ -12760,6 +13654,7 @@ fn run_row(
             &phase_metrics,
             &ranges_json,
             &executable_sha256,
+            session,
             None,
             None,
         );
@@ -12982,10 +13877,11 @@ fn run_row(
         publication,
     } = capture_outcome;
     phases = capture_phases;
+    phases.store_preflight_ns = initial_open_phases.preflight_ns;
+    phases.sqlite_open_and_profile_ns = initial_open_phases.sqlite_open_and_profile_ns;
+    phases.visible_head_lookup_ns = initial_visible_head_lookup_ns;
     if first_edit {
-        phases.fresh_reopen_head_ns = initial_reopen_end
-            .duration_since(initial_reopen_started)
-            .as_nanos();
+        phases.fresh_reopen_head_ns = initial_reopen_ns;
     }
     if validation == RowValidation::CaptureOnly {
         if (root_id, transition_id) != (prepared_result.0, prepared_result.1)
@@ -13076,6 +13972,7 @@ fn run_row(
             phase_metrics,
             &ranges_json,
             &executable_sha256,
+            session,
             Some(publication),
             None,
         )?;
@@ -13085,7 +13982,7 @@ fn run_row(
         let reopen_started = commit_end;
         let reopen_metrics_started = metrics;
         drop(store);
-        let mut store = Store::open_measured(&db_path, candidate, &mut metrics)?;
+        let mut store = Store::open_measured(&db_path, candidate, &mut metrics, None)?;
         {
             let _fresh_head_receipt_charge = charge_capacity(&mut metrics, 216)?;
             let head = store
@@ -13284,6 +14181,7 @@ fn run_row(
             &phase_metrics,
             &ranges_json,
             &executable_sha256,
+            session,
             Some(publication),
             None,
         )?;
@@ -13489,6 +14387,29 @@ mod tests {
 
     const COW_TEST_REFERENCES: u64 = 4_100;
     const DEEP_COW_TEST_REFERENCES: u64 = 64 * 64 * 64 + 1;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn projection_reader_is_query_only_and_rejects_writes() {
+        let database = test_path("projection-reader.sqlite");
+        drop(Store::open(&database, SELECTED_PROFILE).expect("create store"));
+        let reader = Store::open_existing_read_only(&database, SELECTED_PROFILE)
+            .expect("open projection reader");
+        assert_eq!(
+            reader
+                .connection
+                .query_row("PRAGMA query_only", [], |row| row.get::<_, i64>(0))
+                .expect("query-only pragma"),
+            1
+        );
+        assert!(reader
+            .connection
+            .execute("DELETE FROM wp4m_objects", [])
+            .is_err());
+        assert!(reader.current_head().expect("read head").is_none());
+        drop(reader);
+        remove_sqlite_image(&database).expect("database cleanup");
+    }
 
     #[test]
     fn g1_writer_memory_runtime_policy_is_connection_local_and_format_preserving() {
@@ -13913,6 +14834,31 @@ mod tests {
         assert_eq!(object.u128("q_high_water"), Some(123));
         assert!(object.numeric("q_high_water"));
         assert!(JsonObject::parse(r#"{"x":1,"x":2}"#).is_err());
+        assert_eq!(HexBytes(&[0x00, 0xab, 0xff]).to_string(), "00abff");
+        assert_eq!(HexBytes(&vec![0x5a; 4097]).to_string(), "5a".repeat(4097));
+    }
+
+    #[test]
+    fn complete_lifecycle_equation_starts_after_same_open_authority() {
+        let phases = PhaseTimes {
+            same_open_authority_establishment_ns: 11,
+            canonical_cas_mapping_stage_ns: 2,
+            precommit_closure_validation_ns: 3,
+            sqlite_commit_durability_ns: 5,
+            fresh_reopen_head_ns: 7,
+            fresh_full_scrub_ns: 11,
+            reconstruction_ns: 13,
+            range_verification_ns: 17,
+            ..PhaseTimes::default()
+        };
+        assert_eq!(complete_lifecycle_phase_sum(&phases), Ok(58));
+        assert_eq!(
+            complete_lifecycle_phase_sum(&PhaseTimes {
+                same_open_authority_establishment_ns: 0,
+                ..phases
+            }),
+            Ok(58)
+        );
     }
 
     #[test]
@@ -13948,6 +14894,19 @@ mod tests {
 
     #[test]
     fn row_json_reconciles_q_sql_and_changed_work_fields() {
+        const SHA256: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+        let session = RunRowSession {
+            source: Path::new("source"),
+            database: Path::new("database"),
+            authority: Path::new("authority"),
+            expectations: Path::new("expectations"),
+            executable_sha256: SHA256,
+            base_copy_method: "physical-byte-copy-identical-database-authority-expectations",
+            base_database_sha256: SHA256,
+            base_authority_sha256: SHA256,
+            base_expectations_sha256: SHA256,
+            qualification_mode: QualificationMode::ChangedSpine,
+        };
         let metrics = Metrics {
             statement_cache_acquisitions: 3,
             sql_query_calls: 5,
@@ -14007,7 +14966,8 @@ mod tests {
             },
             &[],
             "",
-            &"0".repeat(64),
+            SHA256,
+            &session,
             Some(PublicationOutcome {
                 status: PublicationStatus::RequestedVisible,
                 diagnostic: Some(failure_provenance(
@@ -14016,6 +14976,8 @@ mod tests {
                     Reconciliation::RequestedVisible,
                     None,
                 )),
+                edit_base_provenance: Some(EditBaseProvenance::VerifiedCompleteClosure),
+                verified_carry_forward: true,
             }),
             None,
         )
@@ -14028,6 +14990,23 @@ mod tests {
             Some(u128::try_from(json.len()).expect("JSON length"))
         );
         assert_eq!(object.u128("q_current"), Some(0));
+        assert_eq!(object.string("integrity_mode"), Some("verified"));
+        assert_eq!(
+            object.string("edit_base_provenance"),
+            Some("verified-complete-closure")
+        );
+        assert_eq!(object.string("rollback_freshness"), Some("NotProtected"));
+        assert_eq!(object.boolean("verified_carry_forward"), Some(true));
+        assert_eq!(object.u128("edit_base_complete_scrub_calls"), Some(0));
+        assert_eq!(object.u128("trusted_assumed_equal_edges"), Some(0));
+        assert_eq!(
+            object.boolean("first_edit_timer_equation_matches"),
+            Some(true)
+        );
+        assert_eq!(
+            object.boolean("reconciliation_nested_in_commit"),
+            Some(true)
+        );
         assert_eq!(
             object.u128("q_report_output_bytes"),
             Some(u128::try_from(json.len()).expect("JSON length"))
@@ -14487,11 +15466,11 @@ mod tests {
         store: &mut Store,
         candidate: Candidate,
         metrics: &mut Metrics,
-    ) -> SameOpenValidationPermit {
+    ) -> EditBaseScope {
         store.begin(metrics).expect("begin witness transaction");
         let mut witness = establish_same_open_file_witness(store, candidate, None, None, metrics)
             .expect("base full scrub witness");
-        witness.consume(store, metrics).expect("consume witness")
+        EditBaseScope::Verified(witness.consume(store, metrics).expect("consume witness"))
     }
 
     fn digest_array(value: &str) -> [u8; 32] {
@@ -17974,6 +18953,937 @@ mod tests {
     }
 
     #[test]
+    fn measured_store_paths_are_exactly_charged_and_decharged() {
+        assert_eq!(q_current(), 0);
+        let database = test_path("measured-store-path-charge.sqlite");
+        let path_capacity = database.as_os_str().as_encoded_bytes().len();
+        let authority_capacity = path_capacity + ".authority".len();
+        let expected = path_capacity + authority_capacity;
+        let mut metrics = Metrics::default();
+        let store = Store::open_measured(&database, SELECTED_PROFILE, &mut metrics, None)
+            .expect("measured store");
+        assert_eq!(store.path.capacity(), path_capacity);
+        assert_eq!(store.authority_path.capacity(), authority_capacity);
+        assert_eq!(
+            store._path_charge.as_ref().map(|charge| charge.0),
+            Some(expected as u64)
+        );
+        assert_eq!(metrics.q_current, expected as u64);
+        assert_eq!(metrics.q_high_water, expected as u64);
+        assert_eq!(q_current(), expected as u64);
+        drop(store);
+        assert_eq!(q_current(), 0);
+        remove_sqlite_image(&database).expect("measured store cleanup");
+
+        let invalid = test_path("measured-store-path-charge-invalid.sqlite");
+        fs::write(&invalid, b"not a SQLite store").expect("invalid store");
+        let invalid_path_capacity = invalid.as_os_str().as_encoded_bytes().len();
+        let invalid_expected = invalid_path_capacity * 2 + ".authority".len();
+        let mut error_metrics = Metrics::default();
+        assert!(
+            Store::open_measured(&invalid, SELECTED_PROFILE, &mut error_metrics, None).is_err()
+        );
+        assert_eq!(error_metrics.q_current, invalid_expected as u64);
+        assert_eq!(error_metrics.q_high_water, invalid_expected as u64);
+        assert_eq!(q_current(), 0);
+        fs::remove_file(invalid).expect("invalid store cleanup");
+    }
+
+    #[test]
+    fn g5_integrity_mode_scope_scrub_carry_and_snapshot_are_exact() {
+        let candidate = SELECTED_PROFILE;
+        let database = test_path("g5-integrity-mode.sqlite");
+        let (store, root, _) = build_uniform_base(&database, candidate);
+        assert_eq!(store.integrity_mode, IntegrityMode::Verified);
+        drop(store);
+
+        let mut verified = Store::open(&database, candidate).expect("verified default reopen");
+        let verified_head = verified
+            .current_head()
+            .expect("verified head")
+            .expect("head");
+        let mut verified_metrics = Metrics::default();
+        verified
+            .begin(&mut verified_metrics)
+            .expect("verified begin");
+        let verified_scope =
+            establish_edit_base_scope(&mut verified, candidate, None, None, &mut verified_metrics)
+                .expect("verified scope");
+        assert_eq!(
+            verified_scope.provenance(),
+            EditBaseProvenance::VerifiedCompleteClosure
+        );
+        assert_eq!(verified_metrics.edit_base_complete_scrub_calls, 1);
+        assert!(verified_metrics.edit_base_complete_scrub_canonical_bytes > 0);
+        assert_eq!(verified_metrics.leaf_batch_queries, 0);
+        assert_eq!(verified_metrics.leaf_batch_references, 0);
+        assert!(verified_metrics.borrowed_row_blob_reads > 0);
+        drop(verified_scope);
+        verified
+            .rollback(&mut verified_metrics)
+            .expect("verified rollback");
+        finish_q(&mut verified_metrics).expect("verified Q");
+        drop(verified);
+
+        let mut trusted =
+            Store::open_with_integrity_mode(&database, candidate, IntegrityMode::TrustedLocalDev)
+                .expect("trusted reopen");
+        assert_eq!(trusted.integrity_mode, IntegrityMode::TrustedLocalDev);
+        let mut trusted_metrics = Metrics::default();
+        trusted.begin(&mut trusted_metrics).expect("trusted begin");
+        let trusted_scope =
+            establish_edit_base_scope(&mut trusted, candidate, None, None, &mut trusted_metrics)
+                .expect("trusted scope");
+        assert_eq!(
+            trusted_scope.provenance(),
+            EditBaseProvenance::TrustedLocalUnverifiedClosure
+        );
+        assert_eq!(trusted_metrics.edit_base_complete_scrub_calls, 0);
+        assert_eq!(trusted_metrics.edit_base_complete_scrub_canonical_bytes, 0);
+        let error =
+            establish_edit_base_scope(&mut trusted, candidate, None, None, &mut trusted_metrics)
+                .expect_err("trusted scope is transaction-single-use");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::ValidationAuthorityUnavailable)
+        );
+        drop(trusted_scope);
+        trusted
+            .rollback(&mut trusted_metrics)
+            .expect("trusted rollback");
+        finish_q(&mut trusted_metrics).expect("trusted Q");
+
+        let mut snapshot_metrics = Metrics::default();
+        let verification = verify_snapshot_closure(
+            &mut trusted,
+            &verified_head,
+            &[],
+            candidate,
+            &mut snapshot_metrics,
+        )
+        .expect("explicit snapshot verification");
+        assert_eq!(verification.roots_verified, 1);
+        assert_eq!(snapshot_metrics.transactions, 0);
+        assert_eq!(snapshot_metrics.commits, 0);
+        finish_q(&mut snapshot_metrics).expect("snapshot Q");
+        assert_eq!(
+            trusted.current_head().expect("unchanged head"),
+            Some(verified_head)
+        );
+        assert_eq!(verified_head.1, root);
+        drop(trusted);
+        remove_sqlite_image(&database).expect("G5 integrity cleanup");
+    }
+
+    #[test]
+    fn borrowed_scrub_authenticates_each_reference_without_batch_state() {
+        let candidate = SELECTED_PROFILE;
+        let database = test_path("borrowed-scrub-parity.sqlite");
+        let (mut store, root, _) = build_uniform_base(&database, candidate);
+        let mut metrics = Metrics::default();
+        let result = scrub_file(&mut store, root, candidate, &mut metrics).expect("borrowed scrub");
+        assert_eq!(result.1, metrics.borrowed_row_blob_reads);
+        assert_eq!(metrics.objects_authenticated, metrics.row_blob_reads);
+        assert_eq!(
+            metrics.canonical_bytes_authenticated,
+            metrics.row_blob_copy_bytes + metrics.borrowed_row_blob_bytes
+        );
+        assert_eq!(metrics.sql_query_calls, metrics.objects_authenticated);
+        assert_eq!(
+            metrics.statement_cache_acquisitions,
+            metrics.objects_authenticated
+        );
+        assert_eq!(metrics.leaf_batch_queries, 0);
+        assert_eq!(metrics.leaf_batch_references, 0);
+        finish_q(&mut metrics).expect("borrowed scrub Q");
+        drop(store);
+        remove_sqlite_image(&database).expect("borrowed scrub cleanup");
+    }
+
+    #[test]
+    fn g5_trusted_count_change_uses_assumptions_and_never_carries_verified_authority() {
+        let candidate = SELECTED_PROFILE;
+        let database = test_path("g5-trusted-count-change.sqlite");
+        let (store, _, _) = build_uniform_base(&database, candidate);
+        drop(store);
+        let mut store =
+            Store::open_with_integrity_mode(&database, candidate, IntegrityMode::TrustedLocalDev)
+                .expect("trusted reopen");
+        let mut metrics = Metrics::default();
+        store.begin(&mut metrics).expect("trusted begin");
+        let base_scope = establish_edit_base_scope(&mut store, candidate, None, None, &mut metrics)
+            .expect("trusted edit base");
+        let point = EditPoint {
+            reference_count: COW_TEST_REFERENCES,
+            position: COW_TEST_REFERENCES / 2,
+            byte_offset: COW_TEST_REFERENCES / 2,
+            replacement_length: 1,
+        };
+        let prior = store.current_head().expect("prior head").expect("head");
+        let (root, transition, mut proof, operations, operations_charge) =
+            edit_file_count_change_proven(&mut store, candidate, point, base_scope, &mut metrics)
+                .expect("trusted count change");
+        proof
+            .consume(&mut store, &mut metrics)
+            .expect("trusted proof consumption");
+        let authority = store
+            .mint_publication_authority_after_qualification(
+                Some(&prior),
+                root,
+                transition,
+                &mut metrics,
+            )
+            .expect("trusted publication authority");
+        let publication = store
+            .publish_qualified(authority, &mut metrics)
+            .expect("trusted publication");
+        assert_eq!(publication.status, PublicationStatus::Committed);
+        assert_eq!(
+            publication.edit_base_provenance,
+            Some(EditBaseProvenance::TrustedLocalUnverifiedClosure)
+        );
+        assert!(!publication.verified_carry_forward);
+        assert_eq!(metrics.incremental_receipt_covered_edges, 0);
+        assert_eq!(
+            metrics.trusted_assumed_prior_references,
+            COW_TEST_REFERENCES
+        );
+        assert_eq!(metrics.trusted_assumed_prior_raw_bytes, COW_TEST_REFERENCES);
+        assert_eq!(metrics.trusted_assumed_equal_edges, COW_TEST_REFERENCES);
+        assert_eq!(metrics.leaf_batch_queries, 0);
+        assert_eq!(metrics.leaf_batch_references, 0);
+        assert_eq!(metrics.leaf_batch_references_max, 0);
+        assert!(store.carried_same_open_authority.is_none());
+        assert_eq!(metrics.transactions, 1);
+        assert_eq!(metrics.commits, 1);
+        drop(proof);
+        drop(operations);
+        drop(operations_charge);
+        finish_q(&mut metrics).expect("trusted count-change Q");
+        drop(store);
+
+        let mut verified = Store::open(&database, candidate).expect("verified reopen");
+        let head = verified
+            .current_head()
+            .expect("verified head")
+            .expect("head");
+        let mut verification_metrics = Metrics::default();
+        verify_snapshot_closure(
+            &mut verified,
+            &head,
+            &[],
+            candidate,
+            &mut verification_metrics,
+        )
+        .expect("verified closure after trusted commit");
+        finish_q(&mut verification_metrics).expect("verified closure Q");
+        drop(verified);
+        remove_sqlite_image(&database).expect("trusted count-change cleanup");
+    }
+
+    #[test]
+    fn g5_verified_scope_derives_and_scrubs_trusted_transition_parents_after_reopen() {
+        let candidate = SELECTED_PROFILE;
+        for commit_count in [1_u8, 2] {
+            let database = test_path(&format!(
+                "g5-trusted-chain-verified-reopen-{commit_count}.sqlite"
+            ));
+            let (base, _, _) = build_uniform_base(&database, candidate);
+            drop(base);
+
+            let mut trusted = Store::open_with_integrity_mode(
+                &database,
+                candidate,
+                IntegrityMode::TrustedLocalDev,
+            )
+            .expect("trusted reopen");
+            let mut trusted_metrics = Metrics::default();
+            for ordinal in 0..commit_count {
+                let prior = trusted.current_head().expect("prior head").expect("head");
+                trusted.begin(&mut trusted_metrics).expect("trusted begin");
+                let scope = establish_edit_base_scope(
+                    &mut trusted,
+                    candidate,
+                    None,
+                    None,
+                    &mut trusted_metrics,
+                )
+                .expect("trusted scope");
+                assert_eq!(
+                    scope.provenance(),
+                    EditBaseProvenance::TrustedLocalUnverifiedClosure
+                );
+                let before_file =
+                    resolve_namespace_file_root(&trusted, prior.1, &mut trusted_metrics)
+                        .expect("prior file");
+                let value = [b'a'.checked_add(ordinal).expect("test byte")];
+                let reference =
+                    make_reference(&mut trusted, &value, &mut trusted_metrics).expect("reference");
+                let mut builder =
+                    FileBuilder::new(candidate, COW_TEST_REFERENCES, &mut trusted_metrics)
+                        .expect("builder");
+                for _ in 0..COW_TEST_REFERENCES {
+                    builder
+                        .push_reference(&mut trusted, reference, &mut trusted_metrics)
+                        .expect("push reference");
+                }
+                let after_file = builder
+                    .finish(&mut trusted, &mut trusted_metrics)
+                    .expect("file");
+                let root = namespace_file_root(&mut trusted, after_file, &mut trusted_metrics)
+                    .expect("root");
+                let (operations, operations_charge) = charged_replace_operation(
+                    b"file",
+                    before_file,
+                    after_file,
+                    &mut trusted_metrics,
+                )
+                .expect("replace operation");
+                let transition = publish_transition_with_operations(
+                    &mut trusted,
+                    Some(prior.1),
+                    root,
+                    &operations,
+                    &mut trusted_metrics,
+                )
+                .expect("transition");
+                drop(scope);
+                let publication = trusted
+                    .publish(Some(&prior), root, transition, &mut trusted_metrics)
+                    .expect("trusted publication");
+                drop(operations);
+                drop(operations_charge);
+                assert_eq!(publication.status, PublicationStatus::Committed);
+                assert_eq!(
+                    publication.edit_base_provenance,
+                    Some(EditBaseProvenance::TrustedLocalUnverifiedClosure)
+                );
+                assert!(!publication.verified_carry_forward);
+                assert!(trusted.carried_same_open_authority.is_none());
+            }
+            assert_eq!(trusted_metrics.commits, u64::from(commit_count));
+            finish_q(&mut trusted_metrics).expect("trusted chain Q");
+            drop(trusted);
+
+            let mut verified = Store::open(&database, candidate).expect("default verified reopen");
+            assert_eq!(verified.integrity_mode, IntegrityMode::Verified);
+            assert!(verified.carried_same_open_authority.is_none());
+            let head = verified
+                .current_head()
+                .expect("verified head")
+                .expect("head");
+            let mut verified_metrics = Metrics::default();
+            verified
+                .begin(&mut verified_metrics)
+                .expect("verified begin");
+            let declared_parent =
+                authenticated_transition_parent(&verified, head.2, &mut verified_metrics)
+                    .expect("declared parent")
+                    .expect("non-genesis parent");
+            assert_ne!(declared_parent, head.1);
+            let scope = establish_edit_base_scope(
+                &mut verified,
+                candidate,
+                None,
+                None,
+                &mut verified_metrics,
+            )
+            .expect("verified scope after trusted chain");
+            assert_eq!(
+                scope.provenance(),
+                EditBaseProvenance::VerifiedCompleteClosure
+            );
+            assert_eq!(verified_metrics.edit_base_complete_scrub_calls, 2);
+            assert!(verified_metrics.edit_base_complete_scrub_canonical_bytes > 0);
+            assert!(verified.carried_same_open_authority.is_none());
+            drop(scope);
+            verified
+                .rollback(&mut verified_metrics)
+                .expect("verified rollback");
+            assert!(verified.carried_same_open_authority.is_none());
+            finish_q(&mut verified_metrics).expect("verified chain Q");
+            drop(verified);
+            remove_sqlite_image(&database).expect("trusted chain cleanup");
+        }
+    }
+
+    #[test]
+    fn g5_touched_error_matrix_is_exact_in_both_modes_before_commit() {
+        let candidate = SELECTED_PROFILE;
+        for mode in [IntegrityMode::Verified, IntegrityMode::TrustedLocalDev] {
+            for case in [
+                "missing-object",
+                "identity-mismatch",
+                "wrong-logical-role",
+                "malformed-logical-record",
+            ] {
+                let database = test_path(&format!("g5-touched-{case}-{mode:?}.sqlite"));
+                let (base, _, file) = build_uniform_base(&database, candidate);
+                drop(base);
+                let mut store = Store::open_with_integrity_mode(&database, candidate, mode)
+                    .expect("mode reopen");
+                let prior = store.current_head().expect("prior head").expect("head");
+                let mut wrong_canonical = None;
+                let touched = match case {
+                    "missing-object" => {
+                        assert_eq!(
+                            store
+                                .connection
+                                .execute(
+                                    "DELETE FROM wp4m_objects WHERE object_id=?1",
+                                    params![file.as_bytes().as_slice()],
+                                )
+                                .expect("delete touched object"),
+                            1
+                        );
+                        file
+                    }
+                    "identity-mismatch" => {
+                        assert_eq!(
+                            store
+                                .connection
+                                .execute(
+                                    "UPDATE wp4m_objects SET canonical_bytes=zeroblob(length(canonical_bytes)) WHERE object_id=?1",
+                                    params![file.as_bytes().as_slice()],
+                                )
+                                .expect("corrupt touched identity"),
+                            1
+                        );
+                        file
+                    }
+                    "wrong-logical-role" => {
+                        let canonical = encode_canonical_object(
+                            &Object::bytes(b"wrong-role-incumbent".to_vec())
+                                .expect("wrong-role bytes"),
+                        )
+                        .expect("wrong-role canonical");
+                        let id = ObjectId::for_bytes(&canonical);
+                        store
+                            .connection
+                            .execute(
+                                "INSERT INTO wp4m_objects (object_id, kind, canonical_length, canonical_bytes) VALUES (?1, ?2, ?3, ?4)",
+                                params![
+                                    id.as_bytes().as_slice(),
+                                    ObjectKind::Directory as u8,
+                                    i64::try_from(canonical.len()).expect("canonical length"),
+                                    canonical.as_slice(),
+                                ],
+                            )
+                            .expect("inject wrong-role incumbent");
+                        wrong_canonical = Some(canonical);
+                        id
+                    }
+                    "malformed-logical-record" => {
+                        let (id, canonical) = canonical_bytes(
+                            file_codec::mapping_bytes(file_codec::FILE_ROOT_TAG, &[])
+                                .expect("malformed mapping envelope"),
+                        )
+                        .expect("authenticated malformed canonical");
+                        store
+                            .connection
+                            .execute(
+                                "INSERT INTO wp4m_objects (object_id, kind, canonical_length, canonical_bytes) VALUES (?1, ?2, ?3, ?4)",
+                                params![
+                                    id.as_bytes().as_slice(),
+                                    ObjectKind::Bytes as u8,
+                                    i64::try_from(canonical.len()).expect("canonical length"),
+                                    canonical.as_slice(),
+                                ],
+                            )
+                            .expect("inject malformed logical record");
+                        id
+                    }
+                    _ => unreachable!(),
+                };
+                let mut metrics = Metrics::default();
+                let error = store
+                    .transaction_attempt(&mut metrics, |store, metrics| {
+                        let scope =
+                            establish_edit_base_scope(store, candidate, None, None, metrics)?;
+                        let result = match case {
+                            "missing-object" | "identity-mismatch" => {
+                                store.get_bytes(touched, metrics).map(|_| ())
+                            }
+                            "wrong-logical-role" => store.put(
+                                touched,
+                                wrong_canonical.as_deref().expect("wrong canonical"),
+                                metrics,
+                            ),
+                            "malformed-logical-record" => {
+                                let bytes = store.get_bytes(touched, metrics)?;
+                                let payload =
+                                    file_codec::decode_mapping(&bytes, file_codec::FILE_ROOT_TAG)?;
+                                let _ = file_codec::parse_file_root(payload)?;
+                                Ok(())
+                            }
+                            _ => unreachable!(),
+                        };
+                        drop(scope);
+                        result
+                    })
+                    .expect_err("touched error must fail before commit");
+                let failure = error
+                    .downcast_ref::<PublicationFailure>()
+                    .expect("transaction failure");
+                let expected = match case {
+                    "missing-object" => FailureCause::MissingObject(file),
+                    "identity-mismatch" => FailureCause::Core(CoreError::IdentityMismatch),
+                    "wrong-logical-role" => FailureCause::Core(CoreError::WrongLogicalRole),
+                    "malformed-logical-record" => FailureCause::Core(CoreError::UnexpectedEof),
+                    _ => unreachable!(),
+                };
+                assert_eq!(failure.0.first, Some(expected));
+                assert_eq!(failure.0.dominant, Some(expected));
+                assert_eq!(metrics.transactions, 1);
+                assert_eq!(metrics.commits, 0);
+                assert!(store.active_transaction.is_none());
+                assert!(store.carried_same_open_authority.is_none());
+                assert_eq!(store.current_head().expect("unchanged head"), Some(prior));
+                finish_q(&mut metrics).expect("touched matrix Q");
+                drop(store);
+                remove_sqlite_image(&database).expect("touched matrix cleanup");
+            }
+        }
+    }
+
+    #[test]
+    fn g5_touched_identity_corruption_fails_both_modes_before_commit() {
+        let candidate = SELECTED_PROFILE;
+        for mode in [IntegrityMode::Verified, IntegrityMode::TrustedLocalDev] {
+            let database = test_path(&format!("g5-touched-corruption-{mode:?}.sqlite"));
+            let (store, prior_root, file) = build_uniform_base(&database, candidate);
+            drop(store);
+            let mut store =
+                Store::open_with_integrity_mode(&database, candidate, mode).expect("mode reopen");
+            let prior_head = store.current_head().expect("prior head").expect("head");
+            store
+                .connection
+                .execute(
+                    "UPDATE wp4m_objects SET canonical_bytes = zeroblob(length(canonical_bytes)) WHERE object_id = ?1",
+                    params![file.as_bytes().as_slice()],
+                )
+                .expect("corrupt touched mapping");
+            let mut metrics = Metrics::default();
+            let error = store
+                .transaction_attempt(&mut metrics, |store, metrics| {
+                    let _scope = establish_edit_base_scope(store, candidate, None, None, metrics)?;
+                    edit_file(
+                        store,
+                        candidate,
+                        "same-middle",
+                        EditPoint {
+                            reference_count: COW_TEST_REFERENCES,
+                            position: COW_TEST_REFERENCES / 2,
+                            byte_offset: COW_TEST_REFERENCES / 2,
+                            replacement_length: 1,
+                        },
+                        true,
+                        metrics,
+                    )?;
+                    Ok(())
+                })
+                .expect_err("touched identity corruption must fail");
+            assert_eq!(
+                error
+                    .downcast_ref::<PublicationFailure>()
+                    .and_then(|failure| failure.0.dominant),
+                Some(FailureCause::Core(CoreError::IdentityMismatch))
+            );
+            assert_eq!(metrics.commits, 0);
+            assert_eq!(
+                store.current_head().expect("unchanged head"),
+                Some(prior_head)
+            );
+            assert_eq!(prior_head.1, prior_root);
+            finish_q(&mut metrics).expect("touched corruption Q");
+            drop(store);
+            remove_sqlite_image(&database).expect("touched corruption cleanup");
+        }
+    }
+
+    #[test]
+    fn g5_unrelated_corruption_is_the_declared_trusted_policy_difference() {
+        fn build_tail_distinct_base(
+            database: &Path,
+            candidate: Candidate,
+        ) -> (Store, ObjectId, ObjectId, ObjectId) {
+            let mut store = Store::open(database, candidate).expect("open distinct base");
+            let mut metrics = Metrics::default();
+            store.begin(&mut metrics).expect("begin distinct base");
+            let ordinary = make_reference(&mut store, b"x", &mut metrics).expect("ordinary");
+            let distinct = make_reference(&mut store, b"y", &mut metrics).expect("distinct");
+            let mut builder =
+                FileBuilder::new(candidate, COW_TEST_REFERENCES, &mut metrics).expect("builder");
+            for ordinal in 0..COW_TEST_REFERENCES {
+                builder
+                    .push_reference(
+                        &mut store,
+                        if ordinal + 1 == COW_TEST_REFERENCES {
+                            distinct
+                        } else {
+                            ordinary
+                        },
+                        &mut metrics,
+                    )
+                    .expect("push distinct base reference");
+            }
+            let file = builder
+                .finish(&mut store, &mut metrics)
+                .expect("distinct file");
+            let root = namespace_file_root(&mut store, file, &mut metrics).expect("namespace");
+            let transition =
+                publish_transition(&mut store, None, root, &mut metrics).expect("transition");
+            store
+                .publish(None, root, transition, &mut metrics)
+                .expect("publish distinct base");
+            (store, root, file, distinct.object_id)
+        }
+
+        let candidate = SELECTED_PROFILE;
+        let position = COW_TEST_REFERENCES / 2;
+        let point = EditPoint {
+            reference_count: COW_TEST_REFERENCES,
+            position,
+            byte_offset: position,
+            replacement_length: 1,
+        };
+
+        let shadow_database = test_path("g5-unrelated-shadow.sqlite");
+        let (mut shadow, prior_root, before_file, _) =
+            build_tail_distinct_base(&shadow_database, candidate);
+        let mut shadow_metrics = Metrics::default();
+        let (expected_root, expected_transition) = edit_file(
+            &mut shadow,
+            candidate,
+            "same-middle",
+            point,
+            false,
+            &mut shadow_metrics,
+        )
+        .expect("shadow edit");
+        let expected_after_file =
+            resolve_namespace_file_root(&shadow, expected_root, &mut shadow_metrics)
+                .expect("shadow after file");
+        let operation = delta_codec::TransitionOperation::Replace {
+            path: b"file".to_vec(),
+            before: before_file,
+            after: expected_after_file,
+        };
+        let transition_digest = verify_transition(
+            &shadow,
+            expected_transition,
+            Some(prior_root),
+            expected_root,
+            Some(std::slice::from_ref(&operation)),
+            &mut shadow_metrics,
+        )
+        .expect("shadow transition verification");
+        let (fingerprint, sequence) = uniform_file_observations_for_changes(&[
+            (position, 0x5a),
+            (COW_TEST_REFERENCES - 1, b'y'),
+        ]);
+        let content_digest = verify_file(
+            &shadow,
+            expected_root,
+            candidate,
+            Some(&fingerprint),
+            Some(&sequence),
+            &mut shadow_metrics,
+        )
+        .expect("shadow closure")
+        .0;
+        let expected = ExpectedEditResult {
+            before_file,
+            after_file: expected_after_file,
+            root: expected_root,
+            transition: expected_transition,
+            closure: combined_closure_digest(transition_digest, content_digest),
+        };
+        shadow
+            .rollback(&mut shadow_metrics)
+            .expect("shadow rollback");
+        finish_q(&mut shadow_metrics).expect("shadow Q");
+        drop(shadow);
+        remove_sqlite_image(&shadow_database).expect("shadow cleanup");
+
+        let verified_database = test_path("g5-unrelated-verified.sqlite");
+        let (store, _, _, corrupt_id) = build_tail_distinct_base(&verified_database, candidate);
+        drop(store);
+        let mut verified = Store::open(&verified_database, candidate).expect("verified reopen");
+        verified
+            .connection
+            .execute(
+                "UPDATE wp4m_objects SET canonical_bytes = zeroblob(length(canonical_bytes)) WHERE object_id = ?1",
+                params![corrupt_id.as_bytes().as_slice()],
+            )
+            .expect("corrupt unrelated verified object");
+        let mut verified_metrics = Metrics::default();
+        verified
+            .begin(&mut verified_metrics)
+            .expect("verified begin");
+        let error =
+            establish_edit_base_scope(&mut verified, candidate, None, None, &mut verified_metrics)
+                .expect_err("verified scrub must see unrelated corruption");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::IdentityMismatch)
+        );
+        verified
+            .rollback(&mut verified_metrics)
+            .expect("verified rollback");
+        finish_q(&mut verified_metrics).expect("verified unrelated Q");
+        drop(verified);
+        remove_sqlite_image(&verified_database).expect("verified cleanup");
+
+        let trusted_database = test_path("g5-unrelated-trusted.sqlite");
+        let (store, trusted_prior_root, _, corrupt_id) =
+            build_tail_distinct_base(&trusted_database, candidate);
+        drop(store);
+        assert_eq!(trusted_prior_root, prior_root);
+        let mut trusted = Store::open_with_integrity_mode(
+            &trusted_database,
+            candidate,
+            IntegrityMode::TrustedLocalDev,
+        )
+        .expect("trusted reopen");
+        trusted
+            .connection
+            .execute(
+                "UPDATE wp4m_objects SET canonical_bytes = zeroblob(length(canonical_bytes)) WHERE object_id = ?1",
+                params![corrupt_id.as_bytes().as_slice()],
+            )
+            .expect("corrupt unrelated trusted object");
+        let prior_head = trusted.current_head().expect("prior head").expect("head");
+        let mut trusted_metrics = Metrics::default();
+        let publication = trusted
+            .transaction_attempt(&mut trusted_metrics, |store, metrics| {
+                let base_scope = establish_edit_base_scope(store, candidate, None, None, metrics)?;
+                let (root, transition) =
+                    edit_file(store, candidate, "same-middle", point, true, metrics)?;
+                let (operations, operations_charge) =
+                    charged_replace_operation(b"file", before_file, expected_after_file, metrics)?;
+                qualify_same_middle_changed_spine(
+                    store,
+                    base_scope,
+                    prior_head.1,
+                    root,
+                    transition,
+                    &operations,
+                    expected,
+                    candidate,
+                    metrics,
+                )?;
+                let authority = store.mint_publication_authority_after_qualification(
+                    Some(&prior_head),
+                    root,
+                    transition,
+                    metrics,
+                )?;
+                drop(operations);
+                drop(operations_charge);
+                store.publish_qualified(authority, metrics)
+            })
+            .expect("trusted untouched edit may commit");
+        assert_eq!(publication.status, PublicationStatus::Committed);
+        assert_eq!(trusted_metrics.commits, 1);
+        let trusted_head = trusted.current_head().expect("trusted head").expect("head");
+        assert_eq!(
+            (trusted_head.1, trusted_head.2),
+            (expected_root, expected_transition)
+        );
+        finish_q(&mut trusted_metrics).expect("trusted unrelated Q");
+
+        let mut snapshot_metrics = Metrics::default();
+        let error = verify_snapshot_closure(
+            &mut trusted,
+            &trusted_head,
+            &[],
+            candidate,
+            &mut snapshot_metrics,
+        )
+        .expect_err("later complete verification must see unrelated corruption");
+        assert_eq!(
+            error.downcast_ref::<CoreError>(),
+            Some(&CoreError::IdentityMismatch)
+        );
+        finish_q(&mut snapshot_metrics).expect("failed snapshot Q");
+        drop(trusted);
+        remove_sqlite_image(&trusted_database).expect("trusted cleanup");
+    }
+
+    #[test]
+    fn g5_rollback_replay_and_authority_sidecar_matrix_is_mode_invariant() {
+        fn expect_authority_unavailable(database: &Path, mode: IntegrityMode) {
+            let error = match Store::open_with_integrity_mode(database, SELECTED_PROFILE, mode) {
+                Ok(_) => panic!("invalid authority must fail in {mode:?}"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.downcast_ref::<CoreError>(),
+                Some(&CoreError::ValidationAuthorityUnavailable)
+            );
+        }
+
+        fn open_head(database: &Path, mode: IntegrityMode) -> VisibleHead {
+            let store = Store::open_with_integrity_mode(database, SELECTED_PROFILE, mode)
+                .expect("mode reopen");
+            store.current_head().expect("current head").expect("head")
+        }
+
+        let candidate = SELECTED_PROFILE;
+        let database = test_path("g5-rollback-authority.sqlite");
+        let authority = authority_path(&database);
+        let database_v1 = test_path("g5-rollback-authority-v1.sqlite");
+        let database_v2 = test_path("g5-rollback-authority-v2.sqlite");
+        let authority_v1 = test_path("g5-rollback-authority-v1.key");
+        let authority_target = test_path("g5-rollback-authority-target.key");
+        let other_database = test_path("g5-rollback-authority-other.sqlite");
+
+        let (store, root_v1, file_v1) = build_uniform_base(&database, candidate);
+        let head_v1 = store.current_head().expect("v1 head").expect("head");
+        drop(store);
+        fs::copy(&database, &database_v1).expect("save v1 database");
+        fs::copy(&authority, &authority_v1).expect("save v1 authority");
+
+        let mut store = Store::open(&database, candidate).expect("reopen for v2");
+        let mut metrics = Metrics::default();
+        store.begin(&mut metrics).expect("begin v2");
+        let reference = make_reference(&mut store, b"z", &mut metrics).expect("v2 reference");
+        let mut builder =
+            FileBuilder::new(candidate, COW_TEST_REFERENCES, &mut metrics).expect("v2 builder");
+        for _ in 0..COW_TEST_REFERENCES {
+            builder
+                .push_reference(&mut store, reference, &mut metrics)
+                .expect("v2 reference push");
+        }
+        let file_v2 = builder.finish(&mut store, &mut metrics).expect("v2 file");
+        let root_v2 = namespace_file_root(&mut store, file_v2, &mut metrics).expect("v2 root");
+        let operation = delta_codec::TransitionOperation::Replace {
+            path: b"file".to_vec(),
+            before: file_v1,
+            after: file_v2,
+        };
+        let transition_v2 = publish_transition_with_operations(
+            &mut store,
+            Some(root_v1),
+            root_v2,
+            std::slice::from_ref(&operation),
+            &mut metrics,
+        )
+        .expect("v2 transition");
+        store
+            .publish(Some(&head_v1), root_v2, transition_v2, &mut metrics)
+            .expect("publish v2");
+        let head_v2 = store.current_head().expect("v2 head").expect("head");
+        assert_ne!(head_v1, head_v2);
+        finish_q(&mut metrics).expect("v2 Q");
+        drop(store);
+        fs::copy(&database, &database_v2).expect("save v2 database");
+        let authority_bytes = fs::read(&authority).expect("current authority");
+        assert_eq!(
+            authority_bytes,
+            fs::read(&authority_v1).expect("v1 authority")
+        );
+
+        // Without external monotonic authority, both DB-only and DB+sidecar
+        // rollback to an old internally valid head are intentionally NotProtected.
+        for restore_sidecar in [false, true] {
+            fs::copy(&database_v1, &database).expect("restore v1 database");
+            if restore_sidecar {
+                fs::copy(&authority_v1, &authority).expect("restore v1 sidecar");
+            }
+            for mode in [IntegrityMode::Verified, IntegrityMode::TrustedLocalDev] {
+                assert_eq!(open_head(&database, mode), head_v1);
+            }
+        }
+
+        // The old receipt also remains valid if replayed into the append-only v2
+        // database: receipt authentication is not a rollback-freshness oracle.
+        fs::copy(&database_v2, &database).expect("restore v2 database");
+        let connection = Connection::open(&database).expect("open replay fixture");
+        connection
+            .execute(
+                "UPDATE wp4m_visible_head
+                 SET generation=?1, child=?2, transition=?3, validation_receipt=?4
+                 WHERE id=1",
+                params![
+                    head_v1.0.to_be_bytes().as_slice(),
+                    head_v1.1.as_bytes().as_slice(),
+                    head_v1.2.as_bytes().as_slice(),
+                    head_v1.3.as_slice(),
+                ],
+            )
+            .expect("replay old valid head and receipt");
+        drop(connection);
+        for mode in [IntegrityMode::Verified, IntegrityMode::TrustedLocalDev] {
+            assert_eq!(open_head(&database, mode), head_v1);
+        }
+
+        let (other, _, _) = build_uniform_base(&other_database, candidate);
+        drop(other);
+        let other_authority = fs::read(authority_path(&other_database)).expect("other authority");
+
+        // A database from another Store does not authenticate under the current
+        // sidecar, and a replaced sidecar does not authenticate the current DB.
+        fs::copy(&other_database, &database).expect("install wrong-store database");
+        fs::write(&authority, &authority_bytes).expect("restore current authority");
+        fs::set_permissions(&authority, fs::Permissions::from_mode(0o600))
+            .expect("current authority mode");
+        for mode in [IntegrityMode::Verified, IntegrityMode::TrustedLocalDev] {
+            expect_authority_unavailable(&database, mode);
+        }
+        fs::copy(&database_v2, &database).expect("restore current database");
+        fs::write(&authority, &other_authority).expect("install replaced authority");
+        fs::set_permissions(&authority, fs::Permissions::from_mode(0o600))
+            .expect("replaced authority mode");
+        for mode in [IntegrityMode::Verified, IntegrityMode::TrustedLocalDev] {
+            expect_authority_unavailable(&database, mode);
+        }
+
+        for malformed in ["missing", "wrong-size", "wrong-mode", "symlink"] {
+            if authority.exists() || authority.is_symlink() {
+                fs::remove_file(&authority).expect("remove prior authority fixture");
+            }
+            match malformed {
+                "missing" => {}
+                "wrong-size" => {
+                    fs::write(&authority, [0_u8; 31]).expect("wrong-size authority");
+                    fs::set_permissions(&authority, fs::Permissions::from_mode(0o600))
+                        .expect("wrong-size authority mode");
+                }
+                "wrong-mode" => {
+                    fs::write(&authority, &authority_bytes).expect("wrong-mode authority");
+                    fs::set_permissions(&authority, fs::Permissions::from_mode(0o644))
+                        .expect("wrong authority mode");
+                }
+                "symlink" => {
+                    fs::write(&authority_target, &authority_bytes).expect("symlink target");
+                    fs::set_permissions(&authority_target, fs::Permissions::from_mode(0o600))
+                        .expect("symlink target mode");
+                    std::os::unix::fs::symlink(&authority_target, &authority)
+                        .expect("authority symlink");
+                }
+                _ => unreachable!(),
+            }
+            for mode in [IntegrityMode::Verified, IntegrityMode::TrustedLocalDev] {
+                expect_authority_unavailable(&database, mode);
+            }
+            if malformed == "symlink" {
+                fs::remove_file(&authority_target).expect("symlink target cleanup");
+            }
+        }
+
+        if authority.exists() || authority.is_symlink() {
+            fs::remove_file(&authority).expect("authority fixture cleanup");
+        }
+        for path in [database_v1, database_v2, authority_v1] {
+            fs::remove_file(path).expect("rollback fixture cleanup");
+        }
+        remove_sqlite_image(&database).expect("rollback matrix cleanup");
+        remove_sqlite_image(&other_database).expect("wrong-store cleanup");
+    }
+
+    #[test]
     fn same_open_witness_requires_full_scrub_and_is_exactly_single_use() {
         let candidate = SELECTED_PROFILE;
         let database = test_path("same-open-witness.sqlite");
@@ -18119,6 +20029,11 @@ mod tests {
             Some(root)
         );
         store.rollback(&mut metrics).expect("rollback failed scrub");
+        drop(invalidated);
+        drop(reopened_witness);
+        drop(permit);
+        drop(witness);
+        finish_q(&mut metrics).expect("failed scrub Q");
 
         drop(store);
         remove_sqlite_image(&database).expect("database cleanup");
@@ -19093,14 +21008,24 @@ mod tests {
             replacement_length: 1,
         };
         assert_eq!(
-            operation_qualification_mode("one-byte-middle", Some(43), Some(selector_point))
-                .expect("count change"),
+            operation_qualification_mode(
+                "one-byte-middle",
+                Some(43),
+                Some(selector_point),
+                QualificationMode::ChangedSpine,
+            )
+            .expect("count change"),
             QualificationMode::FullClosure
         );
         assert_eq!(
-            operation_qualification_mode("one-byte-middle", None, None)
-                .expect_err("missing counts must not select a fast path")
-                .downcast_ref::<CoreError>(),
+            operation_qualification_mode(
+                "one-byte-middle",
+                None,
+                None,
+                QualificationMode::ChangedSpine,
+            )
+            .expect_err("missing counts must not select a fast path")
+            .downcast_ref::<CoreError>(),
             Some(&CoreError::LengthOverflow)
         );
         let mut offsets = Vec::new();
@@ -19137,9 +21062,13 @@ mod tests {
             )
             .expect("oracle");
             let mut metrics = Metrics::default();
-            let qualification_mode =
-                operation_qualification_mode(operation, Some(expected_references), Some(point))
-                    .expect("one-byte qualification mode");
+            let qualification_mode = operation_qualification_mode(
+                operation,
+                Some(expected_references),
+                Some(point),
+                QualificationMode::ChangedSpine,
+            )
+            .expect("one-byte qualification mode");
             let expected_mode = if expected_references == point.reference_count {
                 QualificationMode::ChangedSpine
             } else {
@@ -19256,17 +21185,27 @@ mod tests {
 
         let total_started = Instant::now();
         let mut metrics = Metrics::default();
-        let mut store =
-            Store::open_measured(&database, SELECTED_PROFILE, &mut metrics).expect("timed reopen");
+        let mut open_phases = StoreOpenPhases::default();
+        let mut store = Store::open_measured(
+            &database,
+            SELECTED_PROFILE,
+            &mut metrics,
+            Some(&mut open_phases),
+        )
+        .expect("timed reopen");
         let head = store.current_head_accounted(&mut metrics).expect("head");
         assert_eq!(
             head.map(|value| (value.1, value.2)),
             Some((base_root, base_transition))
         );
         let reopen_end = Instant::now();
-        let qualification_mode =
-            operation_qualification_mode(operation, Some(expected_references), Some(point))
-                .expect("first-edit qualification mode");
+        let qualification_mode = operation_qualification_mode(
+            operation,
+            Some(expected_references),
+            Some(point),
+            QualificationMode::ChangedSpine,
+        )
+        .expect("first-edit qualification mode");
         assert_eq!(qualification_mode, QualificationMode::ChangedSpine);
         let mut outcome = capture_same_middle(
             &mut store,
@@ -19283,21 +21222,30 @@ mod tests {
             &mut metrics,
         )
         .expect("first edit");
-        outcome.phases.fresh_reopen_head_ns = reopen_end.duration_since(total_started).as_nanos();
+        let initial_reopen_ns = reopen_end.duration_since(total_started).as_nanos();
+        outcome.phases.store_preflight_ns = open_phases.preflight_ns;
+        outcome.phases.sqlite_open_and_profile_ns = open_phases.sqlite_open_and_profile_ns;
+        outcome.phases.visible_head_lookup_ns =
+            initial_reopen_ns - open_phases.preflight_ns - open_phases.sqlite_open_and_profile_ns;
         let total = first_edit_total(&outcome.phases).expect("timer sum");
-        assert!(outcome.phases.fresh_reopen_head_ns > 0);
+        assert!(initial_reopen_ns > 0);
+        assert!(open_phases.preflight_ns > 0);
+        assert!(open_phases.sqlite_open_and_profile_ns > 0);
+        assert!(
+            open_phases.preflight_ns + open_phases.sqlite_open_and_profile_ns <= initial_reopen_ns
+        );
         assert!(outcome.phases.same_open_authority_establishment_ns > 0);
         assert!(outcome.phases.durable_capture_total_ns > 0);
         assert_eq!(
             total,
-            outcome.phases.fresh_reopen_head_ns
+            initial_reopen_ns
                 + outcome.phases.same_open_authority_establishment_ns
                 + outcome.phases.durable_capture_total_ns
         );
         assert!(total <= total_started.elapsed().as_nanos());
         drop(outcome);
-        finish_q(&mut metrics).expect("terminal Q");
         drop(store);
+        finish_q(&mut metrics).expect("terminal Q");
         fs::remove_file(source).expect("source cleanup");
         remove_sqlite_image(&database).expect("database cleanup");
     }
@@ -19663,6 +21611,35 @@ fn main() -> AnyResult<()> {
             );
             Ok(())
         }
+        #[cfg(target_os = "macos")]
+        Some("--g5-projection-prepare") => {
+            let root = Path::new(args.get(2).ok_or("missing G5 projection fixture root")?);
+            let mode = args.get(3).ok_or("missing G5 projection mode")?;
+            println!(
+                "{}",
+                phase4_g3_materialization::prepare_g5_projection_fixture(root, mode)?
+            );
+            Ok(())
+        }
+        #[cfg(target_os = "macos")]
+        Some("--g5-projection-run") => {
+            let root = Path::new(args.get(2).ok_or("missing G5 projection fixture root")?);
+            let mode = args.get(3).ok_or("missing G5 projection mode")?;
+            println!(
+                "{}",
+                phase4_g3_materialization::run_g5_projection_suite(root, mode)?
+            );
+            Ok(())
+        }
+        #[cfg(target_os = "macos")]
+        Some("--g5-projection-self-check") => {
+            let root = Path::new(args.get(2).ok_or("missing G5 projection self-check root")?);
+            println!(
+                "{}",
+                phase4_g3_materialization::g5_projection_self_check(root)?
+            );
+            Ok(())
+        }
         Some("--fast-fixture") => {
             let root = Path::new(args.get(2).ok_or("missing fast fixture root")?);
             let size = args.get(3).ok_or("missing fast fixture size")?.parse::<u64>()?;
@@ -19691,6 +21668,7 @@ fn main() -> AnyResult<()> {
             let output = run_row(
                 root,
                 SELECTED_PROFILE,
+                IntegrityMode::Verified,
                 size,
                 operation,
                 iteration,
@@ -19746,6 +21724,7 @@ fn main() -> AnyResult<()> {
             let output = run_row(
                 root,
                 SELECTED_PROFILE,
+                IntegrityMode::Verified,
                 size,
                 operation,
                 iteration,
@@ -19795,6 +21774,7 @@ fn main() -> AnyResult<()> {
             let output = run_row(
                 root,
                 SELECTED_PROFILE,
+                IntegrityMode::Verified,
                 size,
                 operation,
                 iteration,

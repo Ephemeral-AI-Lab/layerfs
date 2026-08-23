@@ -1,0 +1,34 @@
+{
+  "schema": "phase4-g5-1-premeasurement-revise-v7",
+  "status": "REVISE",
+  "classification": "INPUT_PREPARATION_STDOUT_PROTOCOL",
+  "release_build_status": "PASS",
+  "release_executable_sha256": "777743da938f35e731a5e395d18a47f4abe880db22a20de6a75b358e7ff0f4da",
+  "prepare_inputs_started": true,
+  "prepare_inputs_completed": false,
+  "authoritative_dry_run_started": false,
+  "screen_started": false,
+  "gate_started": false,
+  "global_lock_acquired": false,
+  "measured_rows": 0,
+  "tracked_diff_sha256": "55fc88993b567080fdcb3a09e04421390dfc4686f57b523c092c914026b6051e",
+  "partial_input_root": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v7",
+  "partial_input_files": {
+    "fixtures/1048576/S1-1.source": "4a3acf60f044bbae8ed0d0a8aa8fabd8b4cee74216dbccc36255b9c6fbe50a2a",
+    "fixtures/1048576/phase4-fast-fixture.json": "6205438b13211da93bb671288a80d07e26370d27348da43aadec26e5d9e059b2"
+  },
+  "method_evidence_created": false,
+  "root_cause": "prepare_fast_fixture emits its retained human-readable fixture=... line before the v7 transport emits native JSON; runner attempted json.loads on every nonempty stdout line.",
+  "effect": "The first 1-MiB fixture was fully created, but runner stopped before recording preparation custody or creating later fixtures/bases/freeze/dry-run.",
+  "repair": "V8 retains the legacy line as explicit diagnostic stdout, parses exactly one final native JSON record, and applies the same explicit stdout grammar to preparation commands.",
+  "v7_key_hashes": {
+    "runner.py": "08e29079f00e36d81f9f43391f1e389fe2c6c7f072de4030e97620555239f0f8",
+    "analyzers/primary.py": "1d825f45fc82278cf802dbe77decc5a07264a0832c0084ed13c65e16c0aa4484",
+    "analyzers/independent.py": "a5d266e3dde428dd2b236d389f567a5157f5b9ba4bb5650cbbfba6e78546360d",
+    "g5-benchmark/src/session.rs": "defcc784e2a04023dac7063cfc621760943a4c84251b0373414729d60b1f95c1",
+    "g5-benchmark/build.rs": "9260f932e303a7f8e30c1479394f6ce286b6da78f2e16bc12cca1ba218be3682"
+  },
+  "superseded_by": "v8",
+  "g5_1_pass": false,
+  "g6_eligible": false
+}

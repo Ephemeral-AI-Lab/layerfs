@@ -1,0 +1,25 @@
+{
+  "schema": "phase4-g5-1-focused-test-attempts-v24",
+  "status": "PASS",
+  "attempt": 1,
+  "product_rows": 0,
+  "checks": [
+    {"command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark borrowed_scrub_authenticates_each_reference_without_batch_state -- --nocapture", "result": "1 passed; 0 failed"},
+    {"command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark g5_trusted_count_change_uses_assumptions_and_never_carries_verified_authority -- --nocapture", "result": "1 passed; 0 failed; serial fixed-radix path and zero mapping-leaf batch counters"},
+    {"command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark count_change_proof_matches_full_shadow_and_carries_same_open_authority -- --nocapture", "result": "1 passed; 0 failed; exact root/transition parity"},
+    {"command": "cargo test -p layerfs-engine --bin phase4_create_edit_benchmark g5_touched_error_matrix_is_exact_in_both_modes_before_commit -- --nocapture", "result": "1 passed; 0 failed"},
+    {"command": "python3 -m py_compile runner.py analyzers/primary.py analyzers/independent.py", "result": "PASS"},
+    {"command": "python3 runner.py --self-check", "result": "PASS; checks=15; gate_arms=200; checkpoints=56"},
+    {"command": "python3 analyzers/primary.py --self-check", "result": "PASS; checks=14"},
+    {"command": "python3 analyzers/independent.py --self-check", "result": "PASS; checks=14"}
+  ],
+  "acceptance": {"trusted_paired_p50_improvement_basis_points_minimum": 9000, "first_edit_trusted_p95_ns_maximum": 25000000, "absolute_p50_gate": "NotClaimed", "verified_material_regression": "forbidden"},
+  "hashes": {
+    "shared_source": "a2a4dd414ad72101e06c8daef6bd410dcbdcba20435d704d957ed751a00e9738",
+    "session": "a5b0e70eaec1837e54245dde547be82f5c56d79679a774b3aa52398656ba9d6d",
+    "runner": "611e5ca68cb4689f3ec805f566c5c127f26155a11db53f6a3dd7af72942fd757",
+    "primary": "98e6ea5e4c8b4966b2a5332a833f66b97e79b3556a8976cbbdcd615114d2be2b",
+    "independent": "d30b1098a45082a6f39aa2d1d5f083f44a5bc52d869831cadee58b958ced5d60",
+    "release": "aaecd980122fa7f1ca6792fffb227c6ea526983dc7c604ccdac540a090041810"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v26",
+  "status": "PASS",
+  "branch": "codex/empty-worktree",
+  "head": "d58c5a1307253dfc221fe50de996c183deb9458a",
+  "audit_scope": "ProspectiveMethodAndCustodyBeforeInputManifestFreezeDryRunOrBenchmarkLock",
+  "findings": {"P0": [], "P1": [], "P2": []},
+  "measurement_state": {
+    "input_manifest_present": false,
+    "method_manifest_present": false,
+    "source_freeze_present": false,
+    "freeze_verification_present": false,
+    "dry_run_present": false,
+    "screen_result_present": false,
+    "gate_result_present": false,
+    "benchmark_lock_present": false,
+    "preparation_attempts_preserved": 1,
+    "product_rows": 0,
+    "measured_rows": 0
+  },
+  "method": {
+    "explicit_source_count_before_future_input_manifest": 29,
+    "global_worktree_is_method_authority": false,
+    "authority": "ExplicitSourceManifest",
+    "executed_runner_directly_bound": true,
+    "historical_narrative_chain_in_method_manifest": false,
+    "gate_arms": 200,
+    "complete_roundtrip_checkpoints": 56,
+    "screen_limit_ns": 20000000000,
+    "gate_limit_ns": 150000000000,
+    "g4_verified_process_shape": "one-shot",
+    "g5_verified_process_shape": "one-shot",
+    "g5_trusted_process_shape": "one-shot",
+    "g5_child_expected_rows": 1,
+    "g5_terminal_evidence_required": true,
+    "database_preconditioning_independently_analyzed": true,
+    "schedule_process_shape_independently_analyzed": true,
+    "authorization_guard_fail_closed": true,
+    "freeze_verifier_requires_current_v24_authority_only": true,
+    "preparation_attempt_1_is_historical_non_authority": true,
+    "cache_claim": "CacheWarmPreconditionedNotColdReopen"
+  },
+  "hashes": {
+    "runner_sha256": "b1c3cd927d5c18d4b856801f3ab6ab31f7f63317b99d5b131f6833da1c4dffc4",
+    "primary_sha256": "961cc4bbff44b68b7bf8495e8ea0bf779abf34c9f0e354e4f8c72a9c8fb996a2",
+    "independent_sha256": "17e51b6b61090f033a893a6da0b502132b83f17b331da70c3d02b4c07d8a9a87",
+    "focused_tests_sha256": "fa3597104494107378b970af57e763a386e2da2bfb9ab71d7f456069d81ee53e",
+    "preregistration_sha256": "d3ee0d69c41db5c4823fbc8cca6521609c5fb14b4a75e6e4bf72f9fd22ad568c",
+    "review_sha256": "b5405371e3be2b5ab61d073e14263068bbb7b6b82e6497e26118fe0ed9b14947",
+    "sample_addendum_sha256": "ba3cb75b5278128472e55f0e0dee65f89be68442390f8ea276705ebad9ac8081",
+    "limitations_sha256": "6c182b4bcd3c72c41bba841b0b0c88c50e10d4b840584bd346e7eeaf30ee913b",
+    "schedule_sha256": "d98b078f927b3a24494c96e1f20eedb44246e40529f6d44ab3b30ab5273b2104",
+    "expectations_sha256": "edca17eea7276ec00017374fef7efa549db8eae18ac4ca9c040874024c6ac2cc",
+    "v24_product_release_sha256": "aaecd980122fa7f1ca6792fffb227c6ea526983dc7c604ccdac540a090041810",
+    "v24_anti_cheat_sha256": "1a0d5d7072f611dcd1d3d33928d25db629baa2eb5406c58f016790e11cd1cdc6",
+    "v24_supersession_v26_sha256": "6c118e16123670d65b170884e14dca73b37058c09fe903fc3907bba5abb00caf",
+    "v10_sealed_input_manifest_sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df"
+  },
+  "generated_residue": {
+    "pycache_removed": true,
+    "authoritative": false
+  },
+  "authorization": {
+    "input_adoption_and_freeze": true,
+    "dry_run": true,
+    "screen": true,
+    "gate": true,
+    "g5_2": false
+  }
+}

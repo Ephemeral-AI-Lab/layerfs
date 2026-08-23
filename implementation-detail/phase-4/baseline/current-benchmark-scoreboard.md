@@ -1,12 +1,24 @@
 # Phase-4 current benchmark scoreboard
 
-Status: **Phase 4 active — G0–G3 complete; G4 STAGE TERMINAL PASS under the
-user-approved 1-ms absolute-regression materiality rule; v12 remains SEALED
-TERMINAL REVISE under its frozen relative-only contract; stop before G5**
+Status: **G5 TERMINAL PASS; G6 eligible and not started. G4 remains closed;
+v12 remains SEALED TERMINAL REVISE under its frozen relative-only contract.**
 
 Date: 2026-08-22
 Current executable: `e72988fc25e96f608d0d405e157ea8e837029595ace916f066932082a736db33`
 Current normalized ledger: `dc563d339401b0e7cdf84b20f1a8da20c99b5f0da849c700e86dceaa9de546b1`
+
+## G5 terminal amendment
+
+The controlling G5 scoreboard is
+[FINAL-SCOREBOARD-v1.tsv](../experiments/g5-terminal/v1/FINAL-SCOREBOARD-v1.tsv).
+G5-0 v9, G5-1 v27, G5-2 v3, and G5-3 v3 are terminal PASS. G5-1 completes
+200 rows in 95.098 seconds with Verified no-regression and 9,377–9,479 bp
+paired-median Trusted improvement. G5-2 qualifies an honest 250,000-byte warm
+projection mechanism. G5-3 completes 1,000 retained 1 MiB revisions plus the
+10 MiB two-reader/one-writer sentinel in 4.782 seconds at 18,923,520-byte RSS.
+All accepted screens are below 20 seconds and all current gates below 150
+seconds. These are benchmark-private, warm/narrow claims; the terminal
+[limitations](../experiments/g5-terminal/v1/LIMITATIONS-v1.md) remain binding.
 
 ## Headline results
 

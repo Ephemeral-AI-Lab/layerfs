@@ -1,0 +1,44 @@
+{
+  "schema": "phase4-g5-terminal-correction-precision-addendum-v1",
+  "status": "PASS",
+  "disposition": "APPEND_ONLY_DOCUMENTATION_PRECISION_NO_MEASUREMENT_CHANGE",
+  "prior_corrected_bindings": {
+    "terminal_correction_addendum_sha256": "49bc01ae569050615e1923b14195976b85a355f8f966861ac4e3d4f5d0fca20d",
+    "terminal_report_sha256": "3542b85aa2a2d4fb287e5718088c3eeae40dd0b1cf4cc734508cae35255b4506",
+    "aggregate_manifest_sha256": "eff830e5e77a6cf16ecf09598769cde8ab40c64ab5c39988a8787dc5c368cd44",
+    "readonly_verification_sha256": "981ece08cfbf3a0423542c870b14bec0b035dd410f83485ceb6e25806e02b848"
+  },
+  "g5_3_cache_precision": {
+    "writer_pages": 1280,
+    "reader_one_pages": 1280,
+    "reader_two_pages": 1280,
+    "sqlite_page_bytes": 4096,
+    "configured_aggregate_sqlite_page_cache_budget_bytes": 15728640,
+    "configured_reference_budget_at_2000_pages_bytes": 24576000,
+    "configured_budget_reduction_bytes": 8847360,
+    "classification": "ConfiguredBudgetNotObservedAllocationOrHardMemoryCeiling",
+    "actual_hard_bound": "ProductProcessMaximumResidentSetSize",
+    "rss_limit_bytes": 20971520,
+    "accepted_screen_rss_bytes": 18563072,
+    "accepted_gate_rss_bytes": 18923520
+  },
+  "g5_3_complexity_precision": {
+    "symbols": {
+      "R": "retained revision states processed by the history fill",
+      "S": "verified current-closure or file bytes per revision",
+      "U_R": "unique retained SQLite/CAS objects accumulated through R revisions"
+    },
+    "verified_history_fill": "Theta(R*S) because each fill publication performs the Verified scrub for its current closure",
+    "current_root_work": "Does not enumerate R; SQLite lookup may contribute O(log U_R) in addition to operation-local closure/path work",
+    "retained_reachability_and_statistics": "Theta(R+U_R)",
+    "benchmark_metadata": "O(R)",
+    "storage_and_gc_scope": "Append-only retained storage remains; reachability is read-only and no destructive GC is claimed"
+  },
+  "product_source_changed": false,
+  "measurement_changed": false,
+  "benchmark_rerun": false,
+  "threshold_changed": false,
+  "g5_status": "PASS",
+  "g6_eligible": true,
+  "g6_started": false
+}

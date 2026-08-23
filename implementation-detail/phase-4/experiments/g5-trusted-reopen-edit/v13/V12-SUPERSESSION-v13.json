@@ -1,0 +1,111 @@
+{
+  "schema": "phase4-g5-1-v12-supersession-v13",
+  "status": "PASS",
+  "classification": "MethodOnlyProspectiveRevisionAfterFrozenPostDryRunIntentCustodyFailure",
+  "superseded_attempt": "v12",
+  "superseded_disposition": "PREMEASUREMENT_REVISE",
+  "input_reuse": true,
+  "product_release_reuse": true,
+  "measured_rows_reused": false,
+  "terminal_chain": {
+    "dry_run": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/DRY-RUN-v12.json",
+      "sha256": "c2dbb3db128bc9524b51a8e44f58cf3499c96c32d916242b7808ac78bdef8a24"
+    },
+    "dry_run_calibration_stderr": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/DRY-RUN-CALIBRATION-v12.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "dry_run_calibration_stdout": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/DRY-RUN-CALIBRATION-v12.stdout",
+      "sha256": "5c3adfed416d4f22a375d36c9f939009d9ff04b9d591724e5e8f12ebcf47b667"
+    },
+    "dry_run_calibration_terminal": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/DRY-RUN-CALIBRATION-TERMINAL-v12.json",
+      "sha256": "da07737c8d542409ae9dee00622abfcacc4242cea0aff20f9b787f133fea019e"
+    },
+    "dry_run_disposition": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/DRY-RUN-DISPOSITION-v12.json",
+      "sha256": "8bf82679317c01896feaf9449c9233ac5f27501885d0f8330bd8fbe76a4cfc83"
+    },
+    "dry_run_intent": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/DRY-RUN-INTENT-v12.json",
+      "sha256": "2dd9115bc020f3291fe322e2de5e62f5baa0f5ff4f293ee21576ce1037fc6f9d"
+    },
+    "focused": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/FOCUSED-TEST-ATTEMPTS-v12.json",
+      "sha256": "8f565863b5e7bb7881184b19e92777dc3ceba391535a0d128e616e8d1b9b4cce"
+    },
+    "freeze_verification": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/FREEZE-VERIFICATION-v12.json",
+      "sha256": "eb99a28502ff9b1eafdbe08a28a994ea167ec6b7042292dbe32095f9358f9c41"
+    },
+    "input_manifest": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/INPUT-MANIFEST-v12.tsv",
+      "rows": 93,
+      "sha256": "69482a350edd0c39128487f963cc3b60b19974437dbc7b538fe66932a637d8df"
+    },
+    "method_manifest": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/METHOD-MANIFEST-v12.tsv",
+      "rows": 72,
+      "sha256": "93e705d6a5d3cc169b6ee20c84cb6f39c0fa129a6cd64615ba53fcaf1a7e4cbb"
+    },
+    "post_dry_run_verification_failure": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/POST-DRY-RUN-VERIFICATION-FAILURE-v12.json",
+      "sha256": "9fbb99582b038719dec3cc20924bc1ffdd1dbf468dff625ac0daaaa189727787"
+    },
+    "premeasurement_revise": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/PREMEASUREMENT-REVISE-v12.json",
+      "sha256": "e15ec11bebfc8cac7f73deacee5677ece62f5c8463b8c5d961434f5dfe0d15bc"
+    },
+    "readiness": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/PREMEASUREMENT-READINESS-AUDIT-v12.json",
+      "sha256": "1e66402bb2f92cb84d07521211013abfc4d693325da7e0c6e7730b5e98e13df5"
+    },
+    "release": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/target/release/layerfs-g5-trusted-child-v10",
+      "sha256": "89226715912afcb1c2b002b5b17bbfaba0406825658349283a31a3b202f0e07b"
+    },
+    "source_freeze": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/method/SOURCE-FREEZE-v12.json",
+      "sha256": "753fd85fb9f4e486fda095d5bc5a6ac684a60e9b44fc5be81e4ee77ed400e676"
+    },
+    "v11_supersession": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/V11-SUPERSESSION-v12.json",
+      "sha256": "992dae78996a4f03d0798b2e0140a79c8becbb07c33691d726c862c3a92f04e4"
+    },
+    "wrapper_calibration_intent": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/WRAPPER-CALIBRATION-INTENT-v12.json",
+      "sha256": "29a4cf7341e7780d3e76b7b08d5761492798b1ff91249bea3d7443b415a1b112"
+    },
+    "wrapper_calibration_raw": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/WRAPPER-CALIBRATION-RAW-v12.jsonl",
+      "rows": 4,
+      "sha256": "d5b360123c41ce477c5f733ff2d979e710b98c5637cc8c56ec61ed82edb57a24"
+    },
+    "wrapper_calibration_result": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v12/WRAPPER-CALIBRATION-RESULT-v12.json",
+      "sha256": "86aec0f39ae6b75e577cfdd32b9a9088a57f0e122867db6b53c5ffd6dea32ab9"
+    }
+  },
+  "v12_failure": {
+    "status": "FROZEN_METHOD_DEFECT",
+    "verification_error": "RuntimeError: dry-run intent custody mismatch",
+    "producer_missing_fields": {
+      "wrapper_initialization_samples_completed": 0,
+      "wrapper_recurring_samples_completed": 0
+    },
+    "dry_process_status": "PASS_REVOKED_BY_POST_RUN_FROZEN_VERIFIER",
+    "forecast_ns": 106344946549,
+    "limit_ns": 120000000000,
+    "reserve_ns": 13655053451,
+    "measured_rows": 0,
+    "screen_result_present": false,
+    "gate_result_present": false,
+    "global_lock_present": false
+  },
+  "v13_change_scope": "runner-intent-contract-and-method-version-only",
+  "v13_input_root": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v10",
+  "v13_release_path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/target/release/layerfs-g5-trusted-child-v10",
+  "v13_statement": "V13 preserves every v12 byte and reuses only the exact hash-verified v10 release and sealed inputs. It reuses no v12 product row or timing observation as result authority; the v12 zero-product timings remain bound historical diagnosis only."
+}

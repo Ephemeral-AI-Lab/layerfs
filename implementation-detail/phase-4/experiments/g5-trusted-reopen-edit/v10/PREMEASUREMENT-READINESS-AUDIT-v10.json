@@ -1,0 +1,509 @@
+{
+  "schema": "phase4-g5-1-premeasurement-readiness-audit-v10",
+  "status": "PASS",
+  "disposition": "PREMEASUREMENT_READY",
+  "audit_basis": {
+    "classification": "IndependentCurrentByteReadinessAudit",
+    "scope": "settled shared product source, v10 transport, runner, both analyzers, controlling documents, schedule, expectations, v9 terminal failure and supersession, focused-test ledger, repository identity, and premeasurement artifact absence",
+    "source_read_only": true,
+    "campaign_commands_executed": 0,
+    "build_commands_executed": 0,
+    "calibration_commands_executed": 0,
+    "preparation_commands_executed": 0,
+    "freeze_commands_executed": 0,
+    "dry_run_commands_executed": 0,
+    "screen_commands_executed": 0,
+    "gate_commands_executed": 0,
+    "lock_acquisitions": 0,
+    "measured_rows": 0
+  },
+  "severity_blockers": {
+    "P0": [],
+    "P1": [],
+    "P2": []
+  },
+  "repository_identity_before_authoritative_preparation": {
+    "repository": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+    "branch": "codex/empty-worktree",
+    "head": "d58c5a1307253dfc221fe50de996c183deb9458a",
+    "git_status_command": "git status --porcelain=v2 --untracked-files=normal -z",
+    "git_status_bytes": 665,
+    "git_status_sha256": "a55ad7058bd38099fa70ebbaa2c558138878c6db900a87995e2e21c6fb6274b4",
+    "tracked_diff_command": "git diff --binary",
+    "tracked_diff_bytes": 119219,
+    "tracked_diff_sha256": "f2a09bf78bf7f4e1f2f8b05076616c3cb415b44a06179fce68c6b96e279e4698",
+    "interpretation": "prospective dirty-worktree identity is explicitly bound and must be reproduced by the later source freeze; no cleanliness claim is made"
+  },
+  "settled_bytes": {
+    "shared_product_source": {
+      "path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+      "bytes": 853017,
+      "sha256": "8b0437cb26226b133bbc2039772262325fd375657859c81f45fd08f259b6f2b0"
+    },
+    "v10_session": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/src/session.rs",
+      "bytes": 56927,
+      "sha256": "390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897"
+    },
+    "v10_runner": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/runner.py",
+      "bytes": 221941,
+      "sha256": "e71ec52b0c9d6bda2f1eb212d122cc27ce741b44a7940bb6f305d56d10efd220"
+    },
+    "primary_analyzer": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/analyzers/primary.py",
+      "bytes": 70278,
+      "sha256": "dde5eb1d53ddc2a1872044c5052bbd50d21de603654cd948efcebd1998da9bea"
+    },
+    "independent_analyzer": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/analyzers/independent.py",
+      "bytes": 67746,
+      "sha256": "9dad06393f6354518986a5d1432caa210f218c1c99561108e0591c8d07862b32"
+    },
+    "preregistration": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/PREREGISTRATION-v10.md",
+      "bytes": 18473,
+      "sha256": "f0559bffaa073f0f5bf7adfb9c8bd1af8b9b66fbaed60c64435883126cf154f2"
+    },
+    "review_synthesis": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/REVIEW-SYNTHESIS-v10.md",
+      "bytes": 10304,
+      "sha256": "bfb6f28ff1b7af716152113624b404bfb0fde6c17d3cc14e3fc781a70adedb36"
+    },
+    "sample_count_addendum": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/SAMPLE-COUNT-INTERPRETATION-ADDENDUM-v10.md",
+      "bytes": 1844,
+      "sha256": "0226c69131e7f111b436f079aa410505d245336dc22e5ac5f005c1148d0e3776"
+    },
+    "limitations": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/LIMITATIONS-v10.json",
+      "bytes": 10423,
+      "sha256": "b8cb9512612628ca0e53defacddc35b3f14079a2cb21873a440d6afaa4c4ea8e"
+    },
+    "focused_test_ledger": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/FOCUSED-TEST-ATTEMPTS-v10.json",
+      "bytes": 6756,
+      "sha256": "b498db29e2c136d8bfee8e1bc482db626de1f2089cd2a16f3c365a8440456563"
+    },
+    "schedule": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/method/SCHEDULE-v10.tsv",
+      "bytes": 4784,
+      "sha256": "46a1f22a3d3d64236ec3db317a55afc17f6cf63d4f970abf6b10bddde93d2bf6"
+    },
+    "expected_outcomes": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/method/EXPECTED-OUTCOMES-v10.tsv",
+      "bytes": 7197,
+      "sha256": "93748b1fdcdb36c7eb2f7bbba116f600a5ab6a0fdc736e9fcb9f8a2b6ae8cb26"
+    },
+    "v9_supersession": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/V9-SUPERSESSION-v10.json",
+      "bytes": 1373,
+      "sha256": "30c4972ea88f3548d7be3ec5a126227955231d7ba643f67464c3d46ceaf91421"
+    },
+    "v9_terminal_failure": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v9/PREMEASUREMENT-REVISE-v9.json",
+      "bytes": 5853,
+      "sha256": "6b3340894747b30a3ee26b3283aa285064cd2bbc3271d3ccb3a6f00ec01d3ec7"
+    }
+  },
+  "product_correctness_and_trust": {
+    "integrity_mode": "immutable for each Store lifetime; Store::open defaults to Verified and the explicit constructor is the only mode selection",
+    "trusted_branch_boundary": "the only integrity-mode branch is edit-base establishment; both branches authenticate the current visible head receipt and declared transition parent, verify the transition, and then use the same object, mapping, construction, proof, publication, COMMIT, and reconciliation paths",
+    "verified_parent_derivation": "authenticated declared parent is read first and expected_parent.or(declared_parent) is passed to transition verification and to verified parent scrub",
+    "global_none_genesis": "verify_transition preserves the global rule that expected_parent=None permits only a genesis transition with no operations or pages; non-genesis transitions replay against Some(parent)",
+    "verified_scrubs": "verified establishment scrubs the current root and, when present, the authenticated parent root; trusted establishment omits only those complete eager scrubs",
+    "equal_edge_accounting": "VerifiedCompleteClosure records receipt-covered equal edges; TrustedLocalUnverifiedClosure records trusted-assumed equal edges and distinct assumed prior references/raw bytes",
+    "object_authentication": "all shared get, get_bytes, borrowed row, batched mapping traversal, incumbent put, transition decode, proof, and publication consumers retain identity, kind, canonical-length, logical-role, and structural authentication",
+    "carry_forward": "carry is authorized only for Verified plus VerifiedCompleteClosure plus a consumed qualifying proof; Trusted cannot create, retain, or consume carried same-open authority, and rollback clears any carried authority",
+    "publication": "the visible-head update remains an unconditional one-row CAS boundary; there is exactly one COMMIT dispatch per publication attempt, reconciliation is fresh and post-dispatch, and reconciliation time is subtracted from the nested commit interval before being exposed separately",
+    "rollback_freshness": "NotProtected is reported without claiming anti-rollback protection",
+    "snapshot_verifier": "verify_snapshot_closure authenticates the current transition/root closure and every explicitly retained transition/root closure, while unreachable object-table rows remain outside its declared boundary",
+    "source_evidence_lines": {
+      "mode_and_provenance": "shared source lines 328-350",
+      "single_use_scope_types": "shared source lines 1569-1639 and 1707-1876",
+      "provenance_counters": "shared source lines 1878-1889, 9295-9305, 9373-9383, and 9534-9554",
+      "transaction_and_carry": "shared source lines 2890-3042 and 3095-3140",
+      "commit_and_reconciliation": "shared source lines 4041-4107",
+      "verified_and_trusted_establishment": "shared source lines 9940-10085",
+      "snapshot_verifier": "shared source lines 10088-10122"
+    }
+  },
+  "semantic_fault_matrix": {
+    "schema": "phase4-g5-trusted-semantic-v10",
+    "case": "touched-error-matrix",
+    "cardinality": 8,
+    "modes": [
+      "verified",
+      "trusted-local-dev"
+    ],
+    "faults": {
+      "missing-object": "MissingObject",
+      "identity-mismatch": "IdentityMismatch",
+      "wrong-logical-role": "WrongLogicalRole",
+      "malformed-logical-record": "UnexpectedEof"
+    },
+    "exact_gates": {
+      "failure_boundary": "PreCommit",
+      "transactions": 1,
+      "commits": 0,
+      "publication": null,
+      "reconciliation": "NotAttempted",
+      "verified_carry_forward": false,
+      "prior_head_unchanged": true,
+      "cleanup_ok": true,
+      "residue": false,
+      "q_current": 0
+    },
+    "existing_semantic_records_preserved": 10,
+    "both_analyzers_require_exact_cartesian_product_and_exact_errors": true
+  },
+  "focused_proof_ledger": {
+    "status": "PASS_AFTER_DIAGNOSTIC_REPAIRS",
+    "shared_exact_tests_passed": 3,
+    "overlay_exact_tests_passed": 4,
+    "focused_transport_module": {
+      "passed": 9,
+      "failed": 0,
+      "filtered_out": 96
+    },
+    "runner_self_check": {
+      "status": "PASS",
+      "checks": 13,
+      "gate_arms": 200,
+      "checkpoints": 56
+    },
+    "analyzer_synthetic_agreement": "PASS",
+    "exact_reconciliation_tests": [
+      {
+        "name": "tests::actual_commit_error_uses_fresh_reconciliation",
+        "result": "1 passed; 0 failed; 95 filtered out",
+        "proof": "a real SQLite COMMIT error retains the first Io failure, performs one fresh reconciliation as PriorVisible, leaves no active transaction, and does not publish a head"
+      },
+      {
+        "name": "tests::normal_publish_retains_requested_visible_diagnostic",
+        "result": "1 passed; 0 failed; 95 filtered out",
+        "proof": "lost acknowledgement with the requested head visible returns RequestedVisible with one COMMIT and retains the non-dominant diagnostic"
+      },
+      {
+        "name": "tests::real_commit_dispatch_boundaries_cover_requested_different_and_ambiguous",
+        "result": "1 passed; 0 failed; 95 filtered out",
+        "proof": "real COMMIT dispatch boundaries distinguish RequestedVisible, DifferentHead, and Ambiguous with exact dominant and reconciliation-error causes"
+      }
+    ],
+    "authoritative_campaign_state_in_ledger": {
+      "release_build_started": false,
+      "input_preparation_started": false,
+      "manifest_or_freeze_generated": false,
+      "benchmark_lock_acquired": false,
+      "dry_run_started": false,
+      "screen_started": false,
+      "gate_started": false,
+      "measured_campaign_rows": 0
+    }
+  },
+  "schedule_and_decision_contract": {
+    "schedule_rows": 21,
+    "screen_sequences": 7,
+    "gate_sequences": 14,
+    "comparison_pairs": {
+      "g4_verified_vs_g5_verified": 50,
+      "g5_verified_vs_g5_trusted": 50
+    },
+    "gate_arms": 200,
+    "primary_pairs_per_comparison": 20,
+    "secondary_pairs_per_operation_per_comparison": 5,
+    "secondary_pairs_per_comparison": 30,
+    "fixed_complete_roundtrip_arms": 56,
+    "fixed_checkpoint_rule": "first and final arm for every role in each of 28 gate role-sequences",
+    "screen_complete_roundtrip": "all S01, S05, and S06 operation arms",
+    "pair_ordering": "each 30-pair secondary aggregate has exact 15/15 first-role balance with frozen AB/BA alternation",
+    "primary_and_same_g5_interval": "full-first-edit-equation",
+    "secondary_g4_vs_g5_interval": "common-edit-through-reconciliation",
+    "common_interval_components": [
+      "edit_base_scope_ns",
+      "mapping_and_construction_ns",
+      "proof_ns",
+      "publication_commit_ns",
+      "reconciliation_ns"
+    ],
+    "s06_dual_intervals": {
+      "g4_verified_vs_g5_verified": "common-edit-through-reconciliation for the secondary operation",
+      "g5_verified_vs_g5_trusted": "full-first-edit-equation"
+    },
+    "g4_timer_normalization": "fresh reopen/head is included once, same-open authority plus fresh scrub is included once, COMMIT excludes nested reconciliation before reconciliation is added once, and unavailable G4 preflight/open split fields remain zero only outside the common secondary decision"
+  },
+  "child_q_rss_and_cleanup": {
+    "argument_transport": "Darwin process-owned argc/argv is borrowed via _NSGetArgc/_NSGetArgv and CStr without an owned argument Vec or String",
+    "outer_path_q": "row and semantic PathBuf capacities are computed before allocation, charged as one exact aggregate, and the charge field is declared after all owned PathBuf fields so paths drop before decharge",
+    "nested_store_q": "Store database and authority PathBuf capacities are separately and exactly charged; live-Q assertions observe outer plus nested Store ownership without double counting",
+    "request_report_drop_order": "RunRowSession drops, report is emitted and dropped, request paths drop, then terminal Q is checked; final terminal output follows zero argument/request/schedule/timing/report owners and q_current=0",
+    "sequence_child_lifecycle": "only the current sequence-scoped G5 role children remain live, all close/reap paths precede the next sequence, simultaneous product-child high-water is at most 2, and terminal active count is 0",
+    "rss_classification": "PerProductChildRetainedPeak",
+    "rss_limit_bytes_per_product_child": 20971520,
+    "rss_aggregation_across_children": false,
+    "frozen_g4_rss_kind": "synchronous-one-shot",
+    "work_root_cleanup": "each arm has an inventory-bound immediate-cleanup receipt; started, cleaned, and receipt counts are equal; maximum active work roots is 1; terminal active roots and cleanup failures are 0",
+    "runner_and_both_analyzers_gate_q_buffers_sql_blob_scrub_residue_fsync_chronology_complete_wall": true
+  },
+  "logical_and_physical_evidence": {
+    "logical_catalog_schema": "g5-v10-ordered-logical-catalog-v1",
+    "logical_catalog_authority": "domain-separated typed length-prefixed complete benchmark-owned logical rows ordered by table tag and primary key",
+    "logical_fields_include": [
+      "sqlite schema type/name/table/sql digest",
+      "meta row count and digest",
+      "object id/kind/canonical length/blob length ordered digest and sums",
+      "head generation/root/transition/216-byte receipt digest",
+      "overall logical catalog digest"
+    ],
+    "canonical_blobs_read_by_wrapper_catalog": false,
+    "physical_observation_schema": "g5-v10-physical-allocation-observation-v1",
+    "physical_classification": "NotLogicalParity",
+    "physical_fields_excluded_from_logical_parity": [
+      "database file bytes",
+      "SQLite page size",
+      "SQLite page count",
+      "SQLite freelist count",
+      "SQLite allocated and freelist bytes",
+      "SQLite schema rootpages"
+    ],
+    "post_database_sha256_claim": "absent and rejected",
+    "small_physical_sidecars_hashed": [
+      "post_authority_sha256",
+      "post_expectations_sha256"
+    ]
+  },
+  "freeze_and_method_authority": {
+    "generation_rule": "input manifest is written first; the method manifest and source freeze are then generated exactly once and last after every controlling byte and release operand settles",
+    "method_source_names_includes": [
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/PREMEASUREMENT-READINESS-AUDIT-v10.json",
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/FOCUSED-TEST-ATTEMPTS-v10.json",
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/V9-SUPERSESSION-v10.json"
+    ],
+    "method_source_path_existence": "all presently controlling fixed source paths exist once this audit is written; INPUT-MANIFEST-v10.tsv is the sole intentionally future-generated fixed path and is written immediately before method_source_names is evaluated",
+    "excluded_generated_discovery": [
+      "all __pycache__ entries",
+      "all recursively discovered g5-benchmark target entries"
+    ],
+    "explicit_target_exception": "the frozen G4 executable under its retained target evidence tree is intentionally named as an operand, not recursively admitted as generated source",
+    "postfreeze_verification_in_method_authority": false,
+    "postfreeze_verification_classification": "PostFreezeIndependentRehashNotMethodAuthority",
+    "independent_verification": "reopens and SHA-256 hashes every input and method manifest row, reconstructs both manifests byte-for-byte, rechecks direct freeze hashes and non-hash interface/forecast/repository fields, and must postdate both manifests and the source freeze",
+    "hash_cycle": false,
+    "direct_freeze_fields_include": [
+      "branch",
+      "HEAD",
+      "git status SHA-256",
+      "tracked diff SHA-256",
+      "explicit source list and aggregate",
+      "method and input manifest SHA-256",
+      "G4 executable and retained raw SHA-256",
+      "G5 executable SHA-256",
+      "schedule, expectations, and limitations SHA-256",
+      "interface contract",
+      "forecast model and base components",
+      "120-second full-wrapper limit"
+    ]
+  },
+  "dry_run_and_forecast_v3": {
+    "forecast_model": "phase4-g5-1-v10-fast-law-forecast-v3",
+    "chronology": [
+      "verify the frozen repository, manifests, sealed input, postfreeze rehash, schedule, and retained evidence without starting a product or calibration",
+      "derive the complete deterministic wrapper candidate plan read-only",
+      "write and fsync top-level DRY-RUN-INTENT-v10.json",
+      "run exactly one zero-product wrapper calibration with three samples and immediate cleanup",
+      "run the read-only 100-MiB Python/external SHA-256 calibration",
+      "enumerate exact prospective work and hash bytes and sum four forecast components",
+      "write and fsync complete DRY-RUN-v10.json with PASS or REVISE",
+      "on calibrated overrun write and fsync PREMEASUREMENT-REVISE-v10.json",
+      "write and fsync DRY-RUN-DISPOSITION-v10.json last and stop before screen on REVISE"
+    ],
+    "candidate_dominance": {
+      "candidate_count": 7,
+      "complete_table_retained": true,
+      "table_order": "relative_path ascending",
+      "dominance_tuple": [
+        "file_count",
+        "total_manifest_bytes",
+        "directory_count",
+        "relative_path"
+      ],
+      "selection": "deterministic lexicographic maximum",
+      "selected_actions_bound": "exact native clone/inventory/logical-catalog/sidecar/evidence-fsync/cleanup action counts are bound before samples"
+    },
+    "failure_funnel": {
+      "intent_precedes_both_calibrations": true,
+      "covered_steps": [
+        "wrapper calibration",
+        "hash calibration",
+        "work and byte enumeration",
+        "forecasting",
+        "dry artifact sealing"
+      ],
+      "unexpected_failure_order": [
+        "DRY-RUN-FAILED-v10.json",
+        "DRY-RUN-DISPOSITION-v10.json with status REVISE"
+      ],
+      "absent_optional_artifacts_are_recorded": true,
+      "successful_wrapper_result_required_for_failure_evidence": false,
+      "measured_rows_on_failure": 0,
+      "global_lock_acquired_on_failure": false
+    },
+    "future_wrapper_calibration": {
+      "samples": 3,
+      "conservative_factor": 4,
+      "forecast_charge": "200 * (4 * maximum of the three complete-wrapper sample totals)",
+      "product_children": 0,
+      "store_opens": 0,
+      "product_rows": 0,
+      "global_lock_acquisitions": 0,
+      "temporary_root_terminal_absent": true
+    },
+    "four_forecast_components": {
+      "retained_child_and_checkpoint_work_ns": 68746375648,
+      "fixed_campaign_finalization_ns": 10000000000,
+      "calibrated_per_arm_wrapper_work": "future zero-product three-sample factor-four result times 200 arms",
+      "external_bulk_hash_bytes_at_calibrated_floor": "exact enumerated bytes divided by the slower-half throughput floor"
+    },
+    "retained_h11_binding": {
+      "observed_complete_wall_ns": 9254244292,
+      "rounded_fixed_allowance_ns": 10000000000,
+      "classification": "ProspectiveAllowanceNotProvenUpperBound",
+      "scope": "global lock, analyzers, payload/final manifests, terminal/final verification; not per-arm work"
+    },
+    "forecast_caution": "the fixed 10-second finalization component is a prospective allowance anchored to H11, not a proven 200-row upper bound; only the eventual complete gate wall is terminal timing authority",
+    "reserve_classification": "RemainingTimeNotWorkAndNotTimingEvidence",
+    "reserve_is_forecast_component": false,
+    "forecast_limit_ns": 120000000000,
+    "forecast_overrun_behavior": "durable PREMEASUREMENT_REVISE with no row, pair, checkpoint, threshold, or evidence reduction"
+  },
+  "v9_supersession": {
+    "v9_disposition": "PREMEASUREMENT_REVISE",
+    "v9_terminal_failure_sha256": "6b3340894747b30a3ee26b3283aa285064cd2bbc3271d3ccb3a6f00ec01d3ec7",
+    "v10_supersession_sha256": "30c4972ea88f3548d7be3ec5a126227955231d7ba643f67464c3d46ceaf91421",
+    "v9_release_executable": false,
+    "v9_prepared_input": false,
+    "v9_authoritative_dry_run": false,
+    "v9_screen": false,
+    "v9_gate": false,
+    "v9_lock_acquisition": false,
+    "v9_measured_rows": 0,
+    "v10_reuses_v9_inputs_or_rows": false
+  },
+  "premeasurement_absence_gates": {
+    "release_executable": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/target/release/layerfs-g5-trusted-child-v10",
+      "present": false
+    },
+    "input_root": {
+      "path": "target/phase4-g5-trusted-reopen-edit-inputs-20260823-v10",
+      "present": false
+    },
+    "input_manifest": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/method/INPUT-MANIFEST-v10.tsv",
+      "present": false
+    },
+    "method_manifest": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/method/METHOD-MANIFEST-v10.tsv",
+      "present": false
+    },
+    "source_freeze": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/method/SOURCE-FREEZE-v10.json",
+      "present": false
+    },
+    "freeze_verification": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/FREEZE-VERIFICATION-v10.json",
+      "present": false
+    },
+    "wrapper_calibration_intent": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/WRAPPER-CALIBRATION-INTENT-v10.json",
+      "present": false
+    },
+    "wrapper_calibration_raw": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/WRAPPER-CALIBRATION-RAW-v10.jsonl",
+      "present": false
+    },
+    "wrapper_calibration_result": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/WRAPPER-CALIBRATION-RESULT-v10.json",
+      "present": false
+    },
+    "wrapper_calibration_root": {
+      "path": "target/phase4-g5-trusted-reopen-edit-wrapper-calibration-20260823-v10",
+      "present": false
+    },
+    "dry_run_intent": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/DRY-RUN-INTENT-v10.json",
+      "present": false
+    },
+    "dry_run_hash_stdout": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/DRY-RUN-CALIBRATION-v10.stdout",
+      "present": false
+    },
+    "dry_run_hash_stderr": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/DRY-RUN-CALIBRATION-v10.stderr",
+      "present": false
+    },
+    "dry_run_hash_terminal": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/DRY-RUN-CALIBRATION-TERMINAL-v10.json",
+      "present": false
+    },
+    "dry_run": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/DRY-RUN-v10.json",
+      "present": false
+    },
+    "dry_run_disposition": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/DRY-RUN-DISPOSITION-v10.json",
+      "present": false
+    },
+    "dry_run_failed": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/DRY-RUN-FAILED-v10.json",
+      "present": false
+    },
+    "premeasurement_revise": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/PREMEASUREMENT-REVISE-v10.json",
+      "present": false
+    },
+    "static_closure": {
+      "path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/STATIC-CLOSURE-v10.json",
+      "present": false
+    },
+    "screen_result_root": {
+      "path": "target/phase4-g5-trusted-reopen-edit-20260823-v10-screen",
+      "present": false
+    },
+    "gate_result_root": {
+      "path": "target/phase4-g5-trusted-reopen-edit-20260823-v10",
+      "present": false
+    },
+    "benchmark_lock": {
+      "path": "target/BENCHMARK_LOCK",
+      "present": false
+    },
+    "v10_authoritative_raw_jsonl_files": {
+      "count": 0,
+      "present": false
+    }
+  },
+  "non_authoritative_generated_residue": {
+    "python_cache_directories_present": [
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/__pycache__",
+      "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/analyzers/__pycache__"
+    ],
+    "debug_build_target_present": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/target",
+    "release_executable_present": false,
+    "classification": "GeneratedNonAuthoritativeFocusedCheckResidue",
+    "method_authority_inclusion": false,
+    "campaign_evidence_inclusion": false,
+    "preserved_not_deleted": true
+  },
+  "final_readiness_judgment": {
+    "no_p0_p1_p2_blocker": true,
+    "source_correctness_ready": true,
+    "transport_and_q_ready": true,
+    "semantic_and_fault_gates_ready": true,
+    "schedule_and_analyzers_ready": true,
+    "freeze_protocol_ready": true,
+    "dry_run_protocol_ready": true,
+    "forecast_is_prospective_not_a_performance_result": true,
+    "next_authorized_step": "release build and preparation only under the separately controlled premeasurement workflow; this audit does not perform or authorize a measured row"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "date": "2026-08-24",
+  "framework": "vanilla-html",
+  "font_stack": "standalone legacy page only; no shared project font system",
+  "palette": "standalone legacy page only; no shared project token system",
+  "motion": "no project motion library",
+  "spacing": "no shared project spacing scale",
+  "preserve": [
+    "architecture Markdown content authority",
+    "existing knowledge/canonical-objects.html"
+  ],
+  "introduce": [
+    "Cobalt token system",
+    "Workbench multipage structure",
+    "vanilla JavaScript interactions",
+    "responsive and accessibility discipline"
+  ]
+}

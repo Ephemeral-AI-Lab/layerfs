@@ -1,0 +1,36 @@
+{
+  "schema": "phase4-g5-h11-static-closure-v6",
+  "status": "PASS",
+  "repair_scope": "runner/analyzer-only",
+  "retained_rust_static": {
+    "artifact": "implementation-detail/phase-4/experiments/g5-foundation-h11/v4/STATIC-CLOSURE-v4.json",
+    "sha256": "9c30e3f16f608f2311375db81cce74f29255f5f89f515ba8403337267ac0ad82",
+    "workspace_tests": {
+      "passed": 166,
+      "ignored": 1,
+      "failed": 0
+    },
+    "workspace_clippy_deny_warnings": "PASS",
+    "h11_clippy_deny_warnings": "PASS",
+    "fmt": "PASS",
+    "rationale": "Rust source and executable unchanged since v4; broad suites not rerun"
+  },
+  "v6_focused": {
+    "python_compile": "PASS",
+    "binary_schema_binding": "PASS",
+    "positive_analyzer_agreement": "PASS",
+    "synthetic_negative_analyzer_agreement": "PASS",
+    "parseable_revise_exit_handling": "PASS",
+    "diff_whitespace": "PASS"
+  },
+  "tracked_diff_sha256": "47296e03cfa5256a0b9448589f25e98958918155d683b3d7722999df06b4d775",
+  "runner_sha256": "e40d4611d5bcbfd10e8ad641a36e6aa3a0ea74861f6d20b6ce96a3fac60cee6d",
+  "primary_sha256": "2d376562197d9b865d3d9d07b6554402485b169aae1a30fe5b0d158e28e7d99b",
+  "independent_sha256": "9eb765ccfd3da7fd4372e78d7cc31b717f311f3a1cc15d6b07488ed6c94e4997",
+  "method_manifest_sha256": "4d8efde38194f11d50bd12cd054fd1ad77bf5149bc75d0d7d85efc6f07dcf5a8",
+  "source_freeze_sha256": "fad4faa8a37b75fff2af494457e8c4cdf4ee3517bee0d4a9e3f1a887e576a1f4",
+  "release_executable_sha256": "87e0fb9136be4c64f49697e0c3b9565d0344d3c3172182052a8f08cccbf10f2f",
+  "screen_complete_wall_ns": 3919588375,
+  "measured_gate_started": false
+}
+

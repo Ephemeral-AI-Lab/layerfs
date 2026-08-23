@@ -1,0 +1,120 @@
+{
+  "authorization": {
+    "forecast": true,
+    "freeze": true,
+    "gate": true,
+    "prepare": true,
+    "screen": true
+  },
+  "blockers": [],
+  "execution_prerequisites": [
+    "freeze must independently revalidate external and owned input equality plus executable custody",
+    "zero-row forecast must PASS before screen",
+    "screen and post-screen static closure must PASS before gate"
+  ],
+  "focused_evidence": {
+    "adoption_sha256": "f06243e2a765c8382cfac50a2d6a106102df8f845db6c17e6208915e26ace436",
+    "analyzer_agreement": true,
+    "independent_sha256": "f5b878a93e3012924c675d219d62960727a2f0710fa24a70aaccc402e3240ca2",
+    "maximum_resident_set_size": 19496960,
+    "primary_sha256": "eec9f21ab392847ae62b95ebe9cfe58271ce958bb7189f0bde306e3364da2a0a",
+    "product_processes_executed_by_adoption": 0,
+    "raw_envelope_sha256": "4fe705b6d9969721929d042c2e915bab7aacfdb5c4780069a635bb670f4a75f2",
+    "rss_limit_bytes": 20971520,
+    "status": "PASS",
+    "stdout_sha256": "36039663d5c576041a64a89b1ecaf3042d35e286db4c3ec125ddf5e5bdf6625a"
+  },
+  "measurement_state": {
+    "benchmark_lock_present": false,
+    "forecast_present": false,
+    "gate_result_present": false,
+    "input_manifest_present": true,
+    "measured_campaign_product_processes": 0,
+    "product_rows": 0,
+    "screen_result_present": false,
+    "source_freeze_present": false
+  },
+  "method_hashes": {
+    "coverage_map": "e7239499b8fb2189fa4768c604c88318caadfdcef68199fd01c9ff9ab44f05be",
+    "expected_outcomes": "61db8b2b436684113c746da37d17d736d69c999ad7a662ad2e91e04e9f226a06",
+    "focused_ledger": "adb339ad2a9da7bf15e7de2f2b6cc2031d3ffaf74602faf2060458605dd9a6e8",
+    "independent": "ff2319c55368f808912ab6d7b5ddbfa0b7d1bed48ed6cb1cdf1ea9ff1f682e3f",
+    "limitations": "a07efbd5903f3e4c68a0212fb93141cc642341ccb5deb76ec50f28672b643e11",
+    "method_contract": "a82e3b053f818c4dc5969805e322e0cf9f04aae05d90a40b50a2a5dec3f45212",
+    "premeasurement_revise": "41590245d9f9243652d09a6f2ee6e68de13dc76cb932a276519b2508db6acc5a",
+    "preregistration": "2984a9b6a8583ccba56360f3ff7f4286aced4bd1e4bfd9d465ff27f5747bc45d",
+    "primary": "30860dd2d10b8445aa4e1914d8c767020bdc35da7f3207e31b7968db26404fed",
+    "reused_authority": "af1e9d4d1506ed07a128a0b8b827a84cd90469f54cb1d4aeef6b8b7f5e63a28f",
+    "freeze_attempt_1": "ce539413e90e72e8b8fef967a63caa0d4f11e21aa7ab474f5bf142f7873d161e",
+    "runner": "8fbf256312a2b89985a49556528559caf4f099cc328882061f950d419036bf6e",
+    "schedule": "cad103f5d419228984ec6527e4c765c23df658004742efdd23610d588c34cb46"
+  },
+  "owned_input": {
+    "classification": "ExactCopyFsyncSealReopenRehashNoRegeneration",
+    "complete_wall_ns": 27316625,
+    "input_manifest_sha256": "4db99313ae71601c80117b217ae24ac286d9c9b8b457b86d13fa9d0c616698d8",
+    "preparation_terminal_sha256": "496c8de93f33b53e90d1f545a76998e8f089dbe37533ad838279222a05e4b19e",
+    "root": "target/phase4-g5-history-integration-inputs-v2",
+    "root_mode": 365,
+    "status": "PASS",
+    "within_subsecond_target": true
+  },
+  "product": {
+    "executable_bytes": 1379584,
+    "executable_path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/target/release/layerfs-g5-history-integration-v2",
+    "executable_sha256": "c24a141519c05212d9ee46f6f9d3fb26c87b2a644c2d223a8f000f748ebff1c7",
+    "project_path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark",
+    "source_files": [
+      {
+        "bytes": 470,
+        "path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/Cargo.toml",
+        "sha256": "7aec0accf649c7c1a40bb75269d1ed142b3cfc4c54b235ee0fd10ec796d0dcdd"
+      },
+      {
+        "bytes": 4824,
+        "path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/Cargo.lock",
+        "sha256": "1be26831fdbc8a9b7b33ca64d362f9856a1440da82ba08b0a79fc911437c0537"
+      },
+      {
+        "bytes": 1720,
+        "path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/build.rs",
+        "sha256": "177fa8598d43697cb3ca4141ed182857343607a0bbfe13cc52fc691ab1fda565"
+      },
+      {
+        "bytes": 515,
+        "path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/src/main.rs",
+        "sha256": "ed2654aa64fad916b55ee25b77d88686e04f38ed4e63e972f2c298ca134d15af"
+      },
+      {
+        "bytes": 92240,
+        "path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/src/history.rs",
+        "sha256": "ad3fc907f8657e972c5af20c186f2b16bfb22f76a50c820efb39dd4c22d2420d"
+      },
+      {
+        "bytes": 12162,
+        "path": "implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/src/history_g3.rs",
+        "sha256": "ca6ceec955e7aa72596a92466b4df37c7a761988eeb80059f0a5d3340469f348"
+      },
+      {
+        "bytes": 864420,
+        "path": "crates/layerfs-engine/src/bin/phase4_create_edit_benchmark.rs",
+        "sha256": "596828bda762896511d13b7dea2882ca5e28b3469275f5b0b9d833159cb83e10"
+      },
+      {
+        "bytes": 382874,
+        "path": "crates/layerfs-engine/src/bin/phase4_g3_materialization.rs",
+        "sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4"
+      }
+    ]
+  },
+  "reused_authorities": {
+    "g5_0_terminal_sha256": "baef3615ab28c5b56d5714e86f870845d16a02bad688ad270892f7395ce18e26",
+    "g5_1_terminal_sha256": "29dc23bb1f0d474eae24347082e74142189ada6d29a4a3fbffac3cb1ebb0c8e5",
+    "g5_2_custody_addendum_sha256": "b56168d4c38cbd6d784d6c354240742c4509e8ab9c6d6543205291deeb99a355",
+    "g5_2_terminal_sha256": "83c45ec171ea4a0ee9d40252cf87b0e8d2098e33899865220f2c942590f06059",
+    "g5_3_v1_screen_revise_sha256": "37a3a0049d5095ae90208c792dc8c52b64e5e1fa7b6b15be701884f075ba788f",
+    "g5_3_v1_supersession_sha256": "002ba182f6c2e30916d37c9a70fcf6ae08b1e4126585ba88e0ed4ca7dd119b90"
+  },
+  "schema": "phase4-g5-3-premeasurement-readiness-v2",
+  "status": "PASS"
+}

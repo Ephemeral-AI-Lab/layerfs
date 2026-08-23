@@ -1,0 +1,70 @@
+{
+  "schema": "phase4-g5-terminal-readonly-verification-v1",
+  "status": "PASS",
+  "terminal_audit_sha256": "aa52df904452240d324eb12ce909918d5def4c911c7893582f6aae359e299e08",
+  "correction_addendum_sha256": "49bc01ae569050615e1923b14195976b85a355f8f966861ac4e3d4f5d0fca20d",
+  "correction_precision_addendum_sha256": "aa637c40d24ef17d0b45a241016f976248e6fc8b3a944b4231bbf71c9c3e6284",
+  "final_manifest_sha256": "abeb16956b2d71d8945c1cd0f16874b1eeed1ecdb3d2066f340c04a4cd96d31f",
+  "final_manifest_bytes": 6555,
+  "final_manifest_data_rows": 42,
+  "final_manifest_rows_reopened_rehashed": 42,
+  "final_manifest_mismatches": 0,
+  "nested_verification": {
+    "g5_0_final": "38/38",
+    "g5_0_payload": "32/32",
+    "g5_1_screen_final": "76/76",
+    "g5_1_gate_final": "625/625",
+    "g5_1_gate_payload": "620/620",
+    "g5_1_inputs": "93/93",
+    "g5_1_method_manifest_data_rows": 54,
+    "g5_1_method_current_live_paths": "53/54",
+    "g5_1_method_current_path_mismatch": "current-benchmark-scoreboard.md evolved after accepted freeze",
+    "g5_1_accepted_source_executable_rows_analyzers": "unchanged",
+    "g5_2_screen": "54/54",
+    "g5_2_gate": "54/54",
+    "g5_2_inputs": "24/24",
+    "g5_2_source_freeze": "66/66",
+    "g5_3_source_freeze": "37/37",
+    "g5_3_static_closure": "19/19",
+    "g5_3_screen_final": "16/16",
+    "g5_3_gate_final": "16/16",
+    "g5_3_screen_process": "6/6",
+    "g5_3_gate_process": "6/6"
+  },
+  "sealed_inputs": {
+    "g5_1_root_and_directories_mode": 365,
+    "g5_1_files_mode": 292,
+    "g5_2_files_rehashed": 24,
+    "g5_3_root_mode": 365,
+    "g5_3_files_mode": 292,
+    "g5_3_files_rehashed": 3,
+    "g5_3_expected_roots_data_rows": 1001
+  },
+  "analyzer_agreement": {
+    "g5_0": true,
+    "g5_1": true,
+    "g5_2": true,
+    "g5_3": true
+  },
+  "benchmark_locks_absent": {
+    "g5_0": true,
+    "g5_1": true,
+    "g5_2": true,
+    "g5_3": true
+  },
+  "documentation_precision": {
+    "g5_3_cache_value_classification": "ConfiguredAggregateSQLitePageCacheBudgetNotObservedHardMemoryCeiling",
+    "g5_3_actual_memory_bound": "ProductProcessMaximumResidentSetSize",
+    "g5_3_verified_history_fill": "Theta(R*S)",
+    "g5_3_current_root_lookup": "NoREnumerationMayIncludeO(log U_R)SQLiteLookup",
+    "g5_3_reachability_statistics": "Theta(R+U_R)",
+    "g5_3_benchmark_metadata": "O(R)"
+  },
+  "p0_findings_open": 0,
+  "p1_terminal_corrections_disclosed": 2,
+  "p1_findings_open_after_correction": 0,
+  "classification": "AppendOnlyTerminalCorrectionAndRehashNoProductSourceOrBenchmarkRerun",
+  "g5_status": "PASS",
+  "g6_eligible": true,
+  "g6_started": false
+}

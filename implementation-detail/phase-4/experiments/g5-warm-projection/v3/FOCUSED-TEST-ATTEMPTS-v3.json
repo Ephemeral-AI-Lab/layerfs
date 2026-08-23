@@ -1,0 +1,93 @@
+{
+  "commands": [
+    {
+      "command": "python3 -m py_compile runner.py analyzers/primary.py analyzers/independent.py",
+      "result": "PASS"
+    },
+    {
+      "command": "python3 runner.py self-check",
+      "result": {
+        "schema": "phase4-g5-2-runner-self-check-v3",
+        "status": "PASS",
+        "checks": 40,
+        "product_processes": 0,
+        "product_rows": 0,
+        "partial_process_evidence_retained": true
+      }
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "layerfs-engine",
+        "--bin",
+        "phase4_create_edit_benchmark",
+        "projection_",
+        "--",
+        "--nocapture"
+      ],
+      "result": {
+        "authority": "EXACT-SOURCE-FINAL2-FOCUSED-FAULT-BINDING-v3.json",
+        "passed": 26,
+        "failed": 0,
+        "returncode": 0,
+        "wall_seconds": 17.57
+      }
+    }
+  ],
+  "current_hashes": {
+    "runner": "ff77aff0549d344581ccf4a65658ace103c07626f25a18cbaae3ac1f9f108e95",
+    "primary": "f332454c04092524529ae0e39c55379854ffd7a23b3afb89cfc67acaac690bb6",
+    "independent": "6e46dbc58cc86720d6e817e43ef86e9cc13ccecaeb24e579d05ef47630d7d5a7",
+    "method_contract": "9ac1ac82b5e19c92c1576829bde6ff088e460e08a3816699c732426f2450df45",
+    "schedule": "a4211efb177b6cae7aefd910260ca917b2eae1dc0977a0340c1462948562b4c6",
+    "expected": "2735aa4ec8c48474344cf7b670287ad812d326202a8cfcd2eaf624246357a780",
+    "fault_matrix": "10362ddb3793e857478624dd5b2efabf8975db5506d79954b2f49f1a6e265b0c",
+    "source_fault_proofs": "4e8dfce27f5160c460b9c2f167da7e21db1e186d29020339be14cae0acdd526a",
+    "preparation_forecast": "e7a329e4485d18eeef52fd547dca90ca6c678a5f952075886339f22cfaf32bfc",
+    "preregistration": "cbd13f738c58a826346a0ae8ba28d8b02437f3228ee5e1b280238ec557f481a9",
+    "limitations": "6fc7cc31c5b7d43396afb5e616c5b188ef4df145c6c7e32062f72cc26af4ed8f",
+    "promotion_readiness": "32d089d30546d603ef383670298ab5f497588d80497e82c77c5d3409150f1836",
+    "readiness_plan": "1270a7636c7bfb508b2df74cc2df681e1bfadba7928ddf686c573ab083db63d1",
+    "focused_fault_execution": "0f0c559f812d170a4a389bfec2209f08a3eb41a8a7b10fec3b1fa09ca363fb69",
+    "final_source_binding": "ae90e292d5ef11f94e5ae86ed213a22c6dd08afe1340a16cc9e5c19a785d6d6c",
+    "premeasurement_revise": "86cd35b6ddbf17216d710011c4fb6d3ca8de73dc09e663156186e3d1d11e5c89",
+    "source": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+    "executable": "59e766c9ee6917135941421338d8c72f8dcd97227d33b6cfb68f176f2f0d85ad",
+    "focused_source_execution_bcc5": "7e7f920dcef0dd77d8928f0913918f69b2815940a6f12fa05e23e9c9d5bae4b2",
+    "contract_receipt": "842dfb4e2f355bab1d27df259eec1a0b972ca64936a0d6599bfa0bfed85c45a0"
+  },
+  "preparation_forecast_sha256": "e7a329e4485d18eeef52fd547dca90ca6c678a5f952075886339f22cfaf32bfc",
+  "raw_final2_aggregate_sha256": "e4267fddb1b84d0008900b553509f6a3a43d2938eec84898663ca4e77198f447",
+  "raw_final2_files": 42,
+  "schema": "phase4-g5-2-focused-tests-v3",
+  "source_repair": "Exact250KMechanismContractRouteReceiptAndSealedInputMethod",
+  "status": "PASS",
+  "test_scope": "Python py_compile plus 40-check runner/analyzer mutation self-check and hash-bound 26/26 exact bcc5 focused authority; no authoritative input preparation, freeze, forecast, lock, screen, gate, or campaign product process",
+  "v3_authorization": "AUTHORIZED_BY_CURRENT_BYTE_READINESS_PASS",
+  "preparation": {
+    "fixture_mode_size_bytes": {
+      "self-check": 250000,
+      "screen-count": 250000,
+      "screen": 250000,
+      "gate": 250000
+    },
+    "preferred_wall_ns": 20000000000,
+    "hard_wall_ns": 60000000000,
+    "observed_four_mode_wall_ns": 18096478083,
+    "isolated_observed_wall_ns": 17337345583,
+    "max_input_root_bytes": 10000000,
+    "max_file_bytes": 100000000,
+    "status": "PROSPECTIVE_AUTHORIZED_NOT_PREPARED",
+    "forecast_ns": 19500000000,
+    "sealing_included": true
+  },
+  "additional_custody_execution": {
+    "classification": "IndependentFocusedCustodyDuplicateNotProductMeasurement",
+    "source_sha256": "bcc5fd96f4c41ecc5ed1d8c1ecc89c2623ac5ef4ea9cfe3f4c451d1a2102e6d4",
+    "passed": 26,
+    "failed": 0,
+    "stdout_sha256": "2e26e09ee1ce279dedb44e6fc3dc659d0625e6009da9d6a75327020211da96a2"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "phase4-g5-1-v24-supersession-v26",
+  "status": "PASS",
+  "v24_disposition": "MechanismEvidenceOnlyAuthorityRevise",
+  "v24_anti_cheat_sha256": "1a0d5d7072f611dcd1d3d33928d25db629baa2eb5406c58f016790e11cd1cdc6",
+  "product_release_reuse": true,
+  "product_release_sha256": "aaecd980122fa7f1ca6792fffb227c6ea526983dc7c604ccdac540a090041810",
+  "sealed_input_reuse": true,
+  "measured_rows_reused": false,
+  "v26_authority_requires_fresh_rows": true,
+  "v24_history_rewritten": false
+}

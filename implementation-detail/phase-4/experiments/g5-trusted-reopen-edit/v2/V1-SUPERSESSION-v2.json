@@ -1,0 +1,10 @@
+{
+  "schema": "phase4-g5-1-v1-supersession-v2",
+  "status": "PREMEASUREMENT_REVISE",
+  "superseded_attempt": "v1",
+  "superseded_failure_path": "implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v1/PREMEASUREMENT-REVISE-v1.json",
+  "superseded_failure_sha256": "1928751e0cc38f2477986bb429a4da511f6ef537bc3d0c4fb7448817945c43a5",
+  "statement": "V1 remains byte-preserved and nonqualifying. V2 repairs only the evidence transport, input custody, semantic protocol, and whole-child accounting blockers before any measurement.",
+  "row_reuse": false,
+  "measurement_started_in_v1": false
+}

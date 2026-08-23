@@ -1,0 +1,32 @@
+
+running 26 tests
+test phase4_g3_materialization::tests::g5_projection_mailbox_conserves_state_and_drains ... ok
+test phase4_g3_materialization::tests::g5_projection_coalesces_ranges_and_falls_back_at_exact_caps ... ok
+test phase4_g3_materialization::tests::g5_projection_policy_blocks_exact_pending_and_bounds_latest_replacement ... ok
+test phase4_g3_materialization::tests::g5_projection_rendezvous_disconnects_before_either_phase ... ok
+test phase4_g3_materialization::tests::g5_projection_parent_chain_and_fixture_errors_are_exact ... ok
+test phase4_g3_materialization::tests::g5_projection_cancellation_releases_owned_temp_and_restart_conserves_state ... ok
+test phase4_g3_materialization::tests::g5_projection_rotates_the_active_visible_seed ... ok
+test phase4_g3_materialization::tests::g5_projection_cancel_private_successor_removes_temp_and_records_cancellation ... ok
+test phase4_g3_materialization::tests::g5_projection_restart_substitution_after_authentication_retains_replacement ... ok
+test phase4_g3_materialization::tests::g5_projection_cancel_then_restart_preserves_seed_and_publishes ... ok
+test phase4_g3_materialization::tests::g5_projection_temp_name_substitution_fails_before_rename ... ok
+test phase4_g3_materialization::tests::g5_projection_worker_error_is_observable_without_waiting ... ok
+test phase4_g3_materialization::tests::g5_projection_restart_discovers_and_removes_only_owned_temps ... ok
+test phase4_g3_materialization::tests::g5_projection_in_place_untouched_seed_mutation_fails_before_private_work ... ok
+test tests::projection_reader_is_query_only_and_rejects_writes ... ok
+test phase4_g3_materialization::tests::g5_projection_edge_token_rejects_mutation_replay_and_cross_stream_use ... ok
+test phase4_g3_materialization::tests::g5_projection_reader_reopen_failure_reconciles_installed_target ... ok
+test phase4_g3_materialization::tests::g5_projection_missing_seed_streams_verified_fallback_to_exact_target ... ok
+test phase4_g3_materialization::tests::g5_projection_clone_failure_streams_and_reconciliation_is_old_or_new ... ok
+test phase4_g3_materialization::tests::g5_projection_stale_parent_fails_before_native_work ... ok
+test phase4_g3_materialization::tests::g5_projection_release_fault_selector_emits_receipt ... ok
+test phase4_g3_materialization::tests::g5_projection_shutdown_inflight_drains_real_worker_loop ... ok
+test phase4_g3_materialization::tests::g5_projection_symlink_seed_is_rejected_before_private_work ... ok
+test phase4_g3_materialization::tests::g5_projection_before_sync_and_before_rename_fail_with_prior_active ... ok
+test phase4_g3_materialization::tests::g5_projection_release_faults_reconcile_through_complete_apply ... ok
+G5ProjectionFourModePreparationElapsedNs=17682553333
+test phase4_g3_materialization::tests::g5_projection_fixture_modes_are_exact_compact_and_within_preparation_budget ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 98 filtered out; finished in 17.70s
+

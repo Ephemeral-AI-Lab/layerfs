@@ -1,0 +1,51 @@
+{
+  "schema": "phase4-g5-1-premeasurement-revise-v1",
+  "status": "REVISE",
+  "classification": "PREMEASUREMENT_TRANSPORT_AND_WHOLE_CHILD_Q",
+  "authoritative_dry_run_started": false,
+  "screen_started": false,
+  "gate_started": false,
+  "global_lock_acquired": false,
+  "measured_rows": 0,
+  "full_wrapper_forecast_ns": 110000000000,
+  "full_wrapper_limit_ns": 120000000000,
+  "forecast_status": "PASS",
+  "tracked_diff_sha256": "ae72b0f0f8bdbbd7b6807c404cb806a583bcbcfb3c8123b2b404552ad54f2a2c",
+  "shared_product_source_sha256": "32ce03e23f1794b00252b1b37ef5c8cbc081de98288af4b8fc220730b315c437",
+  "frozen_files": {
+    "PREREGISTRATION-v1.md": "c69bc75a00bc310270f538f0c0dae5480740d5320177174723bcc62df3aef46a",
+    "REVIEW-SYNTHESIS-v1.md": "3d1a5651923b116fe0d0c8c806bc4cdbd54afa6aee91e8ffe0dfcf1955fa9d33",
+    "SAMPLE-COUNT-INTERPRETATION-ADDENDUM-v1.md": "8bb06361cdf038eadabccf305750f0320f835c5e54d7dd553fc62d0236735ae4",
+    "LIMITATIONS-v1.json": "fd62d7d1cb370d2bb16bf9c43900b5aa4cee4deeb1e0b2aafd6ab711b9f59c21",
+    "runner.py": "3ae4fc70c7b95ec66fc1350f6ec2bd744b22de83bb4c5126a32c757c1c37bd17",
+    "analyzers/primary.py": "067f65dc3ee478d9399ca1b9bedcb6cf876f9af946fc67133eab7294e639a72b",
+    "analyzers/independent.py": "595421f5cdf7aa9c39386428e557725c896a33936f4c1e67b73e4647d33f6d48",
+    "method/SCHEDULE-v1.tsv": "0fce90c32e9b16d68f67d4a0ba56df52802fddda7e0f2f63e04efeb50f3cf145",
+    "method/EXPECTED-OUTCOMES-v1.tsv": "0ec378713cd4166bfa23647802e7c469330d2803271be7cf5df196e38f54b11a",
+    "g5-benchmark/Cargo.toml": "5cdf81e1a605b925ea268033971c83ef558629c97a90e281a4d331750728ac28",
+    "g5-benchmark/Cargo.lock": "28fd911e18c83e87280589161e313d890533946343bc77619d6bd46cbcc08f6a",
+    "g5-benchmark/build.rs": "0801e99c07a106d3b7854bf2ba288e28dc54e7d984d0ef2bd519023dc733c3c4",
+    "g5-benchmark/src/main.rs": "34b99a2e17e596b71a8738049e138310bd6e2f88bac906249edc3a569f9dad65",
+    "g5-benchmark/src/session.rs": "5925ce46566a5975872fa84b07daba31e520855b3b046b0d5cb452d3675472b9"
+  },
+  "passing_checks": {
+    "product_g5_focused_tests": "4 passed",
+    "product_row_json_q_test": "PASS",
+    "child_transport_tests": "4 passed",
+    "python_compile": "PASS",
+    "schedule_gate_arms": 200
+  },
+  "blockers": [
+    "No release fixture/base preparation transport.",
+    "No release semantic/fault screen transport.",
+    "Product custody environment Strings remain outside whole-child logical Q.",
+    "No frozen release executable/input/method/source package exists."
+  ],
+  "non_authoritative_generated_residue": [
+    "g5-benchmark/target/**",
+    "__pycache__/**"
+  ],
+  "superseded_by": "v2",
+  "g5_1_pass": false,
+  "g6_eligible": false
+}

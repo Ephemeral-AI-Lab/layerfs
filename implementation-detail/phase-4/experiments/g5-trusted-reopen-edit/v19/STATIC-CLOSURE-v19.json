@@ -1,0 +1,12 @@
+{
+  "schema": "phase4-g5-1-static-closure-v19",
+  "status": "PASS",
+  "source_freeze_sha256": "c410c8fd3240e939b326d2e5ac208cd12c3c46bbc0f802f023fe77f2d58c511b",
+  "tracked_diff_sha256": "364a0e9be637c0fe04d9aa6b677c2a7f104c8f963500fff19c4a030c5e314d50",
+  "g5_executable_sha256": "85495b06285c503cd20da762c7aa8e12c923a80000e86fa0a0950c7597d04fc0",
+  "screen_terminal_verification_sha256": "d36526667a0e997b7c2de54cb4a9ed44545ef8fc926a7a8b68a6d307a939e2e6",
+  "screen_final_artifact_hashes_sha256": "3666c81f35b30d6b376abd7873da8924899782b357c0d2c51ffa10f554614872",
+  "screen_final_readonly_verification_sha256": "f51444e486dfe57c2c8fde67b03b260b740b64a0b01767ec6215fdc682db6f77",
+  "screen_complete_wall_sha256": "5ffc1553d0a8fd3f91ed4894a93e5ec1e67e6e7e064f3663df2e07b23cc8f3f6",
+  "screen_complete_wall_ns": 11864063334
+}

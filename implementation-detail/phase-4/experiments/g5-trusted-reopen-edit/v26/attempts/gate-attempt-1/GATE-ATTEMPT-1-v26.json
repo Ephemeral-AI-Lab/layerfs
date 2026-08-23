@@ -1,0 +1,16 @@
+{
+  "schema": "phase4-g5-1-gate-attempt-v26",
+  "attempt": 1,
+  "status": "PREMEASUREMENT_REVISE",
+  "classification": "MechanicalMissingPostScreenStaticClosure",
+  "recorded_utc": "2026-08-23T08:33:52Z",
+  "failure": "gate ladder evidence is incomplete",
+  "benchmark_lock_acquisitions": 0,
+  "product_processes_started": 0,
+  "product_rows": 0,
+  "measured_rows": 0,
+  "gate_result_root_created": false,
+  "repair": "create the preregistered post-screen static closure from the frozen screen terminal, final manifest, readonly verification, and complete-wall hashes",
+  "method_or_product_bytes_changed": false,
+  "authoritative_for_execution": false
+}

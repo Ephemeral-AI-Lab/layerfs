@@ -1,0 +1,103 @@
+{
+  "buffer_limit_bytes": 1048576,
+  "campaigns": {
+    "gate": {
+      "complete_wall_limit_ns": 150000000000,
+      "modes": [
+        "self-check",
+        "screen-count",
+        "gate"
+      ],
+      "primary": {
+        "exact_every_root": 64,
+        "latest_following": 100
+      }
+    },
+    "screen": {
+      "complete_wall_limit_ns": 19999999999,
+      "modes": [
+        "self-check",
+        "screen-count",
+        "screen"
+      ],
+      "primary": {
+        "exact_every_root": 2,
+        "latest_following": 2
+      }
+    }
+  },
+  "compact_fixture_limits": {
+    "max_aggregate_bytes": 10000000,
+    "max_file_bytes": 100000000,
+    "max_files": 8,
+    "max_input_root_bytes": 10000000,
+    "max_token_or_edit_bytes": 8388608
+  },
+  "fallback_isolated_limit_ns": 329237000,
+  "fault_classes": [
+    "release",
+    "cancel",
+    "restart",
+    "stale",
+    "clone",
+    "data-sync",
+    "rename",
+    "lost-ack",
+    "seed",
+    "contention"
+  ],
+  "fixture_descriptor": "G5-PROJECTION-FIXTURE-v2.tsv",
+  "fixture_mode_size_bytes": {
+    "gate": 250000,
+    "screen": 250000,
+    "screen-count": 250000,
+    "self-check": 250000
+  },
+  "latency_limits_ns": {
+    "exact_p50": 5000000,
+    "exact_p95": 8000000,
+    "sparse_p50": 6000000,
+    "sparse_p95": 10000000
+  },
+  "mode_populations": {
+    "gate": [
+      64,
+      100
+    ],
+    "screen": [
+      2,
+      2
+    ],
+    "screen-count": [
+      1,
+      1
+    ],
+    "self-check": [
+      1,
+      0
+    ]
+  },
+  "policy_latency_claim": "ObservedBySemanticPolicyIndependentOfExecutionRoute",
+  "preparation_complete_wall_limit_ns": 60000000000,
+  "preparation_preferred_wall_ns": 20000000000,
+  "product_schema": "phase4-g5-projection-suite-v2",
+  "route_latency_claim": "ObservedByExecutionRouteIndependentOfSemanticPolicy",
+  "rss_limit_bytes": 33554432,
+  "schema": "phase4-g5-2-method-contract-v3",
+  "slot_limits": {
+    "in_flight": 1,
+    "pending": 1,
+    "workers": 1
+  },
+  "status": "PROSPECTIVE",
+  "route_class": "CompositePredeclaredExactCloneSparsePatchAndFullFallback",
+  "mechanism_scope": "Exact250000ByteProjectionMechanismOnlyNoLargeFileClaim",
+  "primary_decision_scope": "EachPredeclared250000ByteModePopulationHardGated",
+  "input_sealing": {
+    "files_mode": 292,
+    "directories_mode": 365,
+    "fsync_before_seal": true,
+    "reopen_rehash_mode_check": true,
+    "reverify_before_each_clone": true
+  }
+}
