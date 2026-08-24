@@ -4,6 +4,7 @@ use crate::error::{CoreError, CoreResult};
 
 pub const DIGEST_BYTES: usize = 32;
 const OBJECT_DOMAIN: &[u8] = b"layerfs/object\0";
+const CONTENT_DOMAIN: &[u8] = b"layerfs/content-bytes/v1\0";
 
 pub struct ContentDigestWriter {
     hasher: blake3::Hasher,
@@ -11,9 +12,9 @@ pub struct ContentDigestWriter {
 
 impl ContentDigestWriter {
     pub fn new() -> Self {
-        Self {
-            hasher: blake3::Hasher::new(),
-        }
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(CONTENT_DOMAIN);
+        Self { hasher }
     }
 
     pub fn finish(self) -> [u8; DIGEST_BYTES] {
@@ -136,7 +137,11 @@ mod tests {
 
         assert_eq!(
             fragmented.finish(),
-            *blake3::hash(b"fragmented input").as_bytes()
+            [
+                0x65, 0xdc, 0xc1, 0x71, 0xa7, 0x79, 0xc6, 0x1c, 0xa7, 0xdb, 0x9a, 0xb2, 0x52, 0xfc,
+                0xd7, 0x73, 0xe2, 0x2e, 0x66, 0xbd, 0xb0, 0xbb, 0x2a, 0x0e, 0xd8, 0x87, 0xa1, 0xe0,
+                0x3b, 0x44, 0xbe, 0x2d,
+            ]
         );
     }
 }

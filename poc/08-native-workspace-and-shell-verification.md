@@ -1,7 +1,7 @@
 # Native APFS workspace and Bash verification
 
-Status: **required PoC product and verification contract; commands are proposed
-until the SDK/evaluator exists**.
+Status: **required PoC product and verification contract; the SDK/evaluator now
+exists, and current proof/limitations are recorded in `poc/17`**.
 
 ## 1. Required user story
 

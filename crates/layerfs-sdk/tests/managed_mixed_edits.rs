@@ -140,6 +140,53 @@ fn live_noop_revalidates_the_native_root_binding_in_constant_work() {
 }
 
 #[test]
+fn equal_root_refresh_revalidates_the_native_root_binding() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!(
+            "layerfs-managed-refresh-root-binding-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&base).unwrap();
+    let opened =
+        LayerFs::open_with_integrity(&base.join("store"), IntegrityMode::TrustedLocalDev).unwrap();
+    let mut source = opened
+        .fs
+        .materialize_external(opened.head, &base.join("source"))
+        .unwrap();
+    fs::write(source.path().join("file"), b"root binding").unwrap();
+    let root = source.capture_quiescent().unwrap();
+    let state = opened.fs.current_head("main").unwrap();
+    let mut managed = opened.fs.materialize_managed(root).unwrap();
+    let managed_path = fs::read_dir(base.join("store"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(".layerfs-managed-"))
+        })
+        .unwrap();
+    let displaced = base.join("displaced-managed-refresh-root");
+    fs::rename(&managed_path, &displaced).unwrap();
+    fs::create_dir(&managed_path).unwrap();
+
+    assert!(matches!(
+        managed.refresh(&state),
+        Err(VfsError::ExternalDirtyConflict)
+    ));
+
+    drop(managed);
+    drop(source);
+    drop(opened);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn rename_collision_is_refused_before_visibility_and_preserves_authority() {
     let base = fs::canonicalize(std::env::temp_dir())
         .unwrap()

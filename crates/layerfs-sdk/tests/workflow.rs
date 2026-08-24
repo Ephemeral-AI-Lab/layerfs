@@ -468,7 +468,8 @@ fn new_earlier_hard_link_alias_preserves_only_live_topology_authority() {
     assert_eq!(top_level_inode(&store, root_b, "a-new"), inode_a);
     assert_eq!(top_level_inode(&store, root_b, "z-old"), inode_a);
 
-    opened.fs.rollback(root_a).unwrap();
+    let expected = opened.fs.current_head("main").unwrap();
+    opened.fs.rollback(&expected, root_a).unwrap();
     let initial_path = initial.path().to_owned();
     drop(initial);
     let mut reopened = opened.fs.open_external(&initial_path).unwrap();
@@ -659,6 +660,88 @@ fn warm_materialization_is_exact_no_rewrite_and_mismatch_rolls_back() {
 }
 
 #[test]
+fn historical_external_projection_cannot_publish_over_current_main() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!(
+            "layerfs-sdk-historical-external-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&base).unwrap();
+    let opened = LayerFs::open(&base.join("store")).unwrap();
+    let mut first = opened
+        .fs
+        .materialize_external(opened.head, &base.join("first"))
+        .unwrap();
+    fs::write(first.path().join("file"), b"first").unwrap();
+    let root_a = first.capture_quiescent().unwrap();
+    let mut second = opened
+        .fs
+        .materialize_external(root_a, &base.join("second"))
+        .unwrap();
+    fs::write(second.path().join("file"), b"second").unwrap();
+    let root_b = second.capture_quiescent().unwrap();
+    let current = opened.fs.current_head("main").unwrap();
+    assert_eq!(current.root, root_b);
+
+    let mut historical = opened
+        .fs
+        .materialize_external(root_a, &base.join("historical"))
+        .unwrap();
+    assert_eq!(fs::read(historical.path().join("file")).unwrap(), b"first");
+    assert!(matches!(
+        historical.capture_quiescent(),
+        Err(VfsError::ExternalDirtyConflict)
+    ));
+    assert_eq!(opened.fs.current_head("main").unwrap(), current);
+
+    drop(historical);
+    drop(second);
+    drop(first);
+    drop(opened);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn rollback_rejects_a_stale_caller_decision() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!(
+            "layerfs-sdk-stale-rollback-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&base).unwrap();
+    let opened = LayerFs::open(&base.join("store")).unwrap();
+    let root_a = opened.head;
+    let stale_expected = opened.fs.current_head("main").unwrap();
+    let mut winner = opened
+        .fs
+        .materialize_external(root_a, &base.join("winner"))
+        .unwrap();
+    fs::write(winner.path().join("file"), b"winner").unwrap();
+    let root_b = winner.capture_quiescent().unwrap();
+
+    assert!(matches!(
+        opened.fs.rollback(&stale_expected, root_a),
+        Err(VfsError::ExternalDirtyConflict)
+    ));
+    assert_eq!(stale_expected.root, root_a);
+    assert_eq!(opened.fs.current_head("main").unwrap().root, root_b);
+
+    drop(winner);
+    drop(opened);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn stale_managed_replay_marks_native_mutation_dirty_and_retry_fails_closed() {
     let base = fs::canonicalize(std::env::temp_dir())
         .unwrap()
@@ -782,10 +865,15 @@ fn restrictive_file_allows_exact_noop_refuses_mutation_and_captures_read_only() 
     assert_eq!(exact.capture().unwrap(), root);
 
     let mut refused = opened.fs.materialize_managed(root).unwrap();
-    assert!(matches!(
-        refused.replace("file", 0, 9, b"different"),
-        Err(VfsError::NativeProtected)
-    ));
+    for _ in 0..2 {
+        assert!(matches!(
+            refused.replace("file", 0, 9, b"different"),
+            Err(VfsError::NativeProtected)
+        ));
+    }
+    let (_, counters) = refused.checkpoint_observed().unwrap();
+    assert_eq!(counters.descriptor_spool_bytes_current, 0);
+    assert_eq!(counters.descriptor_spool_bytes_terminal, 0);
     refused.discard().unwrap();
     assert!(Command::new("chflags")
         .arg("nouchg")

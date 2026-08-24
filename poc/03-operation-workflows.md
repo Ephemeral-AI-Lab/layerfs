@@ -1,6 +1,7 @@
 # Apple/APFS PoC operation workflows
 
-Status: **implementation contract; proposed paths are not current product evidence**
+Status: **historical implementation contract**. Current product routes and
+evidence are recorded in `poc/13` and `poc/17`.
 
 This document defines the smallest end-to-end operation model for the Apple
 PoC. It deliberately separates current reusable source, qualified

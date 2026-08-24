@@ -85,6 +85,9 @@ pub enum EngineError {
     InvalidRecord(&'static str),
     InvalidTransaction,
     PublicationConflict,
+    UnresolvedGenerationResidue {
+        generation: u64,
+    },
     AmbiguousDurability,
     CounterOverflow,
     InjectedFailure(&'static str),
@@ -131,6 +134,12 @@ impl fmt::Display for EngineError {
             Self::InvalidTransaction => formatter.write_str("capture transaction is not active"),
             Self::PublicationConflict => {
                 formatter.write_str("publication expected ref does not match")
+            }
+            Self::UnresolvedGenerationResidue { generation } => {
+                write!(
+                    formatter,
+                    "unresolved Store generation {generation} residue"
+                )
             }
             Self::AmbiguousDurability => formatter.write_str("publication outcome is ambiguous"),
             Self::CounterOverflow => formatter.write_str("counter arithmetic overflow"),
@@ -502,6 +511,8 @@ impl Engine {
     fn compact_to_created(&self, destination: &Path) -> EngineResult<CompactionStorageObservation> {
         let old_generation_bytes = fs::metadata(&self.path).map_err(io_engine_error)?.len();
         let source = self.lock_connection()?;
+        reject_legacy_compaction_state(&source)?;
+        authenticate_complete_object_index(&source)?;
         let retained = integrity::retained_union(&source, &self.path)?;
         let mark_database_bytes = retained.work.storage_bytes()?;
         let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
@@ -1014,6 +1025,49 @@ impl Engine {
             _ => Ok(()),
         }
     }
+}
+
+fn reject_legacy_compaction_state(connection: &Connection) -> EngineResult<()> {
+    let present = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM layerfs_roots)
+                 OR EXISTS(SELECT 1 FROM layerfs_deltas)
+                 OR EXISTS(SELECT 1 FROM layerfs_store_meta WHERE visible_root IS NOT NULL)",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(map_sqlite_error)?;
+    if present {
+        Err(EngineError::InvalidRecord("legacy compaction state"))
+    } else {
+        Ok(())
+    }
+}
+
+fn authenticate_complete_object_index(connection: &Connection) -> EngineResult<()> {
+    let mut statement = connection
+        .prepare(
+            "SELECT object_id, kind, canonical_length, canonical_bytes
+             FROM layerfs_objects ORDER BY rowid",
+        )
+        .map_err(map_sqlite_error)?;
+    let mut rows = statement.query([]).map_err(map_sqlite_error)?;
+    while let Some(row) = rows.next().map_err(map_sqlite_error)? {
+        let id = ObjectId::from_bytes(&row.get::<_, Vec<u8>>(0).map_err(map_sqlite_error)?)?;
+        let kind = row.get::<_, i64>(1).map_err(map_sqlite_error)?;
+        let length = row.get::<_, i64>(2).map_err(map_sqlite_error)?;
+        let bytes = match row.get_ref(3).map_err(map_sqlite_error)? {
+            ValueRef::Blob(bytes) => bytes,
+            _ => return Err(EngineError::InvalidRecord("object bytes")),
+        };
+        let (summary, _) = authenticate_borrowed_unaccounted(id, kind, length, bytes)?;
+        let decoded = validate_object_from(Cursor::new(bytes))
+            .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+        if decoded != summary {
+            return Err(EngineError::InvalidRecord("object summary"));
+        }
+    }
+    Ok(())
 }
 
 fn engine_step(step: &'static str, error: EngineError) -> EngineError {

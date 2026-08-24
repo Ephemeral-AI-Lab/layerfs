@@ -6,12 +6,14 @@ older PoC passage conflicts with this file, repair the older passage before
 implementation; do not choose locally.
 
 Stage One note: this file remains authority for accepted canonical bytes,
-correctness, durability, portability, and AppleWorkspaceV1 behavior. The
-prospective performance/product-route completion in
+correctness, durability, portability, and AppleWorkspaceV1 behavior except for
+the explicitly superseded transition record below. The performance/product-route completion in
 [12-stage1-performance-completion.md](12-stage1-performance-completion.md)
 controls only the new Stage One work identified after implementation and the
-operation profile. It may add product APIs and changed-root refresh without
-changing this file's canonical or durability decisions.
+operation profile. FileStateV3 publication uses immutable roots plus named refs;
+Merkle root diff is changed-root authority, and a new canonical V3 delta remains
+deferred. Legacy root/delta rows are compatibility state. This supersedes older
+root-plus-delta publication wording without changing any accepted object bytes.
 
 ## 1. Final disposition
 
@@ -26,7 +28,11 @@ AppleWorkspaceV1 is an exact ordinary-APFS workspace compatibility profile. It
 does not claim fast arbitrary-shell capture at large scale, mounted filesystem
 integration, hostile-writer safety or hardware power-loss qualification.
 
-## 2. Current source versus target
+## 2. Historical preimplementation source versus target
+
+This table records the source state at the original handoff audit. It is not a
+description of the post-Stage-One tree; current implementation and custody are
+recorded in `poc/13` and `poc/17`.
 
 | Surface | Current source | Handoff target |
 |---|---|---|

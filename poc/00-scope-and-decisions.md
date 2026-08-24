@@ -1,6 +1,8 @@
 # PoC scope, decisions, and acceptance contract
 
-Status: **prospective design authority for Apple/APFS PoC v1**.
+Status: **frozen design authority; historical preimplementation wording is not
+current-source evidence**. Current implementation and closure are in `poc/13`
+and `poc/17`.
 
 This file freezes the smallest coherent implementation target. A change to a
 canonical field, identity role, supported operation, durability boundary, or
@@ -33,8 +35,8 @@ canonical immutable payload objects
 fixed FastCDC profile
 persistent byte-measured B+ extent rope
 persistent byte-bounded B+ namespace trees
-canonical parent/child delta
-SQLite object/root/delta publication
+immutable parent/child roots plus Merkle root diff
+SQLite object/ref publication; legacy root/delta rows are compatibility state
 Verified and explicit TrustedLocalDev modes
 ordinary APFS directory materialization
 optional verified clone + same-size patch
@@ -133,7 +135,7 @@ OperationAndEvidencePrepared
   -> WriterTransactionOpen
   -> ExpectedHeadMatched
   -> ObjectStreamAndTreeInserted
-  -> RootDeltaAndRefInserted
+  -> RootAndRefInserted
   -> CommitDispatched
   -> Committed
 
@@ -142,10 +144,16 @@ failure before transaction -> NoTransaction
 failure after transaction, before dispatch -> RollbackAttempted -> Prior | CleanupError
 ```
 
-All SQLite object/root/delta/ref rows are inserted inside that one writer
+All current-profile SQLite object/ref rows are inserted inside that one writer
 transaction. Large inputs stream through bounded buffers while the transaction
 is open; no separate durable carrier or pre-transaction object COMMIT exists.
 Only `Committed` or reconciled `New` may advance a workspace/reference head.
+
+The earlier canonical-delta proposal is superseded for FileStateV3 by
+`poc/13` section I11: immutable roots and refs are durable authority, Merkle
+root diff derives transitions, and a new canonical delta format is deferred.
+Existing legacy root/delta tables remain compatibility state and must not be
+silently discarded by maintenance.
 
 ### 5.2 Workspace
 

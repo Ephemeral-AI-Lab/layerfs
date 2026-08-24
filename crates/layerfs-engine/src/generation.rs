@@ -111,6 +111,7 @@ pub fn open_or_create(
                 selected.generation.checked_sub(1),
                 driver,
             )?;
+            reject_unresolved_next_generation(directory, &selected)?;
             drop(provisional);
             drop(maintenance);
             return open_current(directory, mode);
@@ -232,6 +233,7 @@ pub fn compact(
     directory: &Path,
     driver: &dyn StoreGenerationDriver,
 ) -> EngineResult<Engine> {
+    let mode = engine.mode;
     engine.maintenance_pin.take();
     let maintenance = acquire_maintenance(directory)?;
     let prior = read_selector(&directory.join("CURRENT"))?;
@@ -245,6 +247,7 @@ pub fn compact(
     }
     crate::scratch::recover_owned_near(selected.path(), prior.store_id, driver)?;
     cleanup_owned_residue(directory, &prior, None, driver)?;
+    reject_unresolved_next_generation(directory, &prior)?;
     drop(selected);
     let source_bytes = fs::metadata(engine.path())
         .map_err(super::io_engine_error)?
@@ -285,9 +288,24 @@ pub fn compact(
         .map_err(|_| EngineError::AmbiguousDurability)?;
     drop(maintenance);
     drop(reopened);
-    let mut engine = open_current(directory, IntegrityMode::Verified)?;
+    let mut engine = open_current(directory, mode)?;
     engine.last_compaction = Some(observation);
     Ok(engine)
+}
+
+fn reject_unresolved_next_generation(
+    directory: &Path,
+    selected: &StoreSelector,
+) -> EngineResult<()> {
+    let generation = selected
+        .generation
+        .checked_add(1)
+        .ok_or(EngineError::CounterOverflow)?;
+    if directory.join(generation_filename(generation)).exists() {
+        Err(EngineError::UnresolvedGenerationResidue { generation })
+    } else {
+        Ok(())
+    }
 }
 
 fn selector(engine: &Engine, generation: u64) -> EngineResult<StoreSelector> {
@@ -605,6 +623,7 @@ fn pin_connection(directory: &Path) -> EngineResult<Connection> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use layerfs_core::{encode_bytes_object, ObjectId};
     use std::process::Command;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
@@ -620,6 +639,19 @@ mod tests {
             crate::scratch::DiskTable::create_near(Path::new(&store), "crash-child").unwrap();
         table.put(b"pending", &vec![0xa5; 64 * 1024]).unwrap();
         std::process::exit(91);
+    }
+
+    #[test]
+    fn unselected_generation_crash_child() {
+        let Some(directory) = std::env::var_os("LAYERFS_UNSELECTED_GENERATION_CRASH") else {
+            return;
+        };
+        let directory = PathBuf::from(directory);
+        let engine = open_current(&directory, IntegrityMode::Verified).unwrap();
+        engine
+            .compact_to(&directory.join(generation_filename(1)))
+            .unwrap();
+        std::process::exit(93);
     }
 
     struct NativeDriver;
@@ -921,6 +953,166 @@ mod tests {
             store_id
         );
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn compaction_authenticates_unreachable_objects_before_discarding_them() {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-generation-corrupt-orphan-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let engine =
+            open_or_create(&directory, &NativeDriver, IntegrityMode::TrustedLocalDev).unwrap();
+        let canonical = encode_bytes_object(b"unreachable").unwrap();
+        let id = ObjectId::for_bytes(&canonical);
+        engine.put_object_if_absent(id, &canonical).unwrap();
+        let selected_path = engine.path().to_owned();
+        drop(engine);
+        Connection::open(&selected_path)
+            .unwrap()
+            .execute(
+                "UPDATE layerfs_objects SET canonical_bytes = zeroblob(canonical_length) WHERE object_id = ?1",
+                rusqlite::params![id.as_bytes().as_slice()],
+            )
+            .unwrap();
+
+        let before = fs::read(directory.join("CURRENT")).unwrap();
+        let engine = open_current(&directory, IntegrityMode::TrustedLocalDev).unwrap();
+        assert!(compact(engine, &directory, &NativeDriver).is_err());
+        assert_eq!(fs::read(directory.join("CURRENT")).unwrap(), before);
+        assert!(!directory.join(generation_filename(1)).exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn exact_next_generation_without_selector_is_reported_and_preserved() {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-generation-unresolved-next-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let engine = open_or_create(&directory, &NativeDriver, IntegrityMode::Verified).unwrap();
+        drop(engine);
+        let candidate = directory.join(generation_filename(1));
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "generation::tests::unselected_generation_crash_child",
+            ])
+            .env("LAYERFS_UNSELECTED_GENERATION_CRASH", &directory)
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(93));
+
+        assert!(matches!(
+            open_or_create(&directory, &NativeDriver, IntegrityMode::Verified),
+            Err(EngineError::UnresolvedGenerationResidue { generation: 1 })
+        ));
+        assert!(candidate.exists());
+        assert!(!directory.join("CURRENT.tmp").exists());
+        let engine = open_current(&directory, IntegrityMode::Verified).unwrap();
+        assert!(matches!(
+            compact(engine, &directory, &NativeDriver),
+            Err(EngineError::UnresolvedGenerationResidue { generation: 1 })
+        ));
+        assert!(candidate.exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn compaction_returns_the_callers_store_lifetime_mode() {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-generation-trusted-compact-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let engine =
+            open_or_create(&directory, &NativeDriver, IntegrityMode::TrustedLocalDev).unwrap();
+        let engine = compact(engine, &directory, &NativeDriver).unwrap();
+        assert_eq!(engine.mode, IntegrityMode::TrustedLocalDev);
+        drop(engine);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn compaction_rejects_nonempty_legacy_state_without_erasing_it() {
+        for legacy in ["root", "delta", "visible"] {
+            let directory = std::env::temp_dir().join(format!(
+                "layerfs-generation-legacy-{legacy}-compact-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            let engine =
+                open_or_create(&directory, &NativeDriver, IntegrityMode::TrustedLocalDev).unwrap();
+            let selected_path = engine.path().to_owned();
+            drop(engine);
+            let root = ObjectId::for_bytes(b"legacy root");
+            let directory_object = ObjectId::for_bytes(b"legacy directory");
+            let connection = Connection::open(&selected_path).unwrap();
+            match legacy {
+                "root" => connection.execute(
+                    "INSERT INTO layerfs_roots (root_id, directory_object, parent_root) VALUES (?1, ?2, NULL)",
+                    rusqlite::params![root.as_bytes().as_slice(), directory_object.as_bytes().as_slice()],
+                ),
+                "delta" => connection.execute(
+                    "INSERT INTO layerfs_deltas (delta_id, parent_root, child_root, payload) VALUES (?1, NULL, ?2, X'00')",
+                    rusqlite::params![root.as_bytes().as_slice(), directory_object.as_bytes().as_slice()],
+                ),
+                "visible" => connection.execute(
+                    "UPDATE layerfs_store_meta SET visible_root = ?1 WHERE store_id = 1",
+                    rusqlite::params![root.as_bytes().as_slice()],
+                ),
+                _ => unreachable!(),
+            }
+            .unwrap();
+            drop(connection);
+
+            let before = fs::read(directory.join("CURRENT")).unwrap();
+            let engine = open_current(&directory, IntegrityMode::TrustedLocalDev).unwrap();
+            assert!(matches!(
+                compact(engine, &directory, &NativeDriver),
+                Err(EngineError::InvalidRecord("legacy compaction state"))
+            ));
+            assert_eq!(fs::read(directory.join("CURRENT")).unwrap(), before);
+            assert!(!directory.join(generation_filename(1)).exists());
+            let connection = Connection::open(&selected_path).unwrap();
+            let preserved = match legacy {
+                "root" => connection
+                    .query_row("SELECT EXISTS(SELECT 1 FROM layerfs_roots)", [], |row| {
+                        row.get::<_, bool>(0)
+                    })
+                    .unwrap(),
+                "delta" => connection
+                    .query_row("SELECT EXISTS(SELECT 1 FROM layerfs_deltas)", [], |row| {
+                        row.get::<_, bool>(0)
+                    })
+                    .unwrap(),
+                "visible" => connection
+                    .query_row(
+                        "SELECT visible_root IS NOT NULL FROM layerfs_store_meta WHERE store_id = 1",
+                        [],
+                        |row| row.get::<_, bool>(0),
+                    )
+                    .unwrap(),
+                _ => unreachable!(),
+            };
+            assert!(preserved, "{legacy} state was erased");
+            drop(connection);
+            fs::remove_dir_all(directory).unwrap();
+        }
     }
 
     #[test]

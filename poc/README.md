@@ -1,6 +1,7 @@
 # LayerFS Apple/APFS PoC v1
 
-Status: **AppleWorkspaceV1 and Stage One implementation closed for this PoC**.
+Status: **AppleWorkspaceV1 and Stage One implementation closed for this PoC
+after adversarial correctness repair**.
 The controlling closure and custody record is
 [17 — Stage One closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
@@ -44,6 +45,7 @@ programs for each small implementation repair.
 | [13 — Stage One implementation and complexity](13-stage1-implementation-and-complexity.md) | Exact resulting tree, files to edit, route algorithms, counter proofs and tests | Product implementation |
 | [14 — 100 MiB operation campaign](14-stage1-single-file-benchmark.md) | Fast deterministic read/write/edit/reconstruct/materialize/refresh/reopen campaign | Single-file evaluator |
 | [15 — Real workspace campaign](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/code workspace and complete workflow | Workspace evaluator |
+| [16 — Apple random-edit edge benchmark](16-stage1-part1-apple-edge-benchmark.md) | Deferred supplemental real-APFS edit/checkpoint/refresh design | Supplemental evaluator |
 | [17 — Stage One closure and accepted A02 exception](17-stage1-closure.md) | Final disposition, current-source custody, measured PASS gates, and the explicit A02 waiver | Stage One closure |
 
 ## 2. Reading order
@@ -65,6 +67,7 @@ programs for each small implementation repair.
   -> 13 exact implementation/complexity audit
   -> 14 100 MiB operation campaign
   -> 15 <=300 MiB workspace campaign
+  -> 16 deferred Apple random-edit supplement
   -> 17 Stage One closure and custody
 ```
 
@@ -124,7 +127,7 @@ Managed edit bytes -> FastCDC -> payload CAS objects
 | Same-size projection | Optional verified parent clone plus bounded patch | Clone as correctness authority |
 | Length-changing projection | Exact streaming fallback for ordinary native file; logical edit remains local | Pretending APFS shifts a contiguous suffix for free |
 | Capture | Managed exact-range fast path; arbitrary external-editor capture walks and scans the complete supported workspace | Inferring complete changed paths/ranges from mtime/FSEvents |
-| History | Immutable roots and deltas; fork copies no object bytes and updates an indexed ref | Deep replay stack for ordinary reads |
+| History | Immutable roots and named refs; Merkle root diff derives changes; a new canonical V3 delta is deferred | Deep replay stack for ordinary reads |
 | Rollback | Expected-head ref/root movement to an already verified immutable root | Destructive mutation of old roots |
 | Compaction/GC | Explicit offline exclusive mark-copy-verify-swap; no background deletion | Online/in-place/background GC |
 | Public API | `open`, `materialize_managed`, `materialize_external`, managed/external `capture`, `discard`; managed edit surface may be PoC-only | Writable-path leakage from managed authority; backend registry/plugin framework |

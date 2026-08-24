@@ -303,10 +303,7 @@ pub fn replay(
     Ok((state, counters))
 }
 
-pub(crate) fn spool_metadata(
-    spool: &mut dyn OwnedTempHandle,
-    metadata: &NativeMetadata,
-) -> VfsResult<(u64, u64)> {
+pub(crate) fn encode_spooled_metadata(metadata: &NativeMetadata) -> VfsResult<Vec<u8>> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(b"LFSMETA1");
     bytes.extend_from_slice(&metadata.mode.to_be_bytes());
@@ -347,12 +344,7 @@ pub(crate) fn spool_metadata(
     if bytes.len() > MAX_NATIVE_XATTR_BYTES + 128 * 1024 {
         return Err(VfsError::InvalidState);
     }
-    let offset = spool.seek(SeekFrom::End(0))?;
-    spool.write_all(&bytes)?;
-    Ok((
-        offset,
-        u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?,
-    ))
+    Ok(bytes)
 }
 
 fn load_spooled_metadata(
@@ -624,7 +616,7 @@ fn load_record<S: ObjectRead>(
     let id = inode_table_lookup(store, table, inode, &mut inode_counters)?
         .ok_or(VfsError::InvalidState)?;
     counters.add_inode_table(inode_counters)?;
-    Ok(decode_inode_record(&store.get(id)?)?)
+    Ok(store.with_authenticated_canonical(id, decode_inode_record)?)
 }
 
 pub(crate) fn native_parent<'a>(
@@ -702,4 +694,73 @@ fn replace_native(
         suffix_bytes_shifted: shifted,
         ..NativeOperationCounters::default()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layerfs_core::content::rope::ObjectStore;
+    use layerfs_core::inode::{inode_table_from_root, InodeId, InodeRecordV1};
+    use layerfs_core::namespace_codec::encode_inode_record;
+    use layerfs_core::{CoreError, CoreResult, ObjectId};
+    use std::cell::Cell;
+    use std::collections::BTreeMap;
+
+    #[derive(Default)]
+    struct TrackingStore {
+        objects: BTreeMap<ObjectId, Vec<u8>>,
+        gets: Cell<u64>,
+        authenticated: Cell<u64>,
+    }
+
+    impl ObjectStore for TrackingStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.gets.set(self.gets.get() + 1);
+            self.objects
+                .get(&id)
+                .cloned()
+                .ok_or(CoreError::MissingObject)
+        }
+
+        fn put(&mut self, bytes: &[u8]) -> CoreResult<ObjectId> {
+            let id = ObjectId::for_bytes(bytes);
+            self.objects.entry(id).or_insert_with(|| bytes.to_vec());
+            Ok(id)
+        }
+
+        fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> CoreResult<T>
+        where
+            F: FnOnce(&[u8]) -> CoreResult<T>,
+        {
+            self.authenticated.set(self.authenticated.get() + 1);
+            let bytes = self.objects.get(&id).ok_or(CoreError::MissingObject)?;
+            if ObjectId::for_bytes(bytes) != id {
+                return Err(CoreError::IdentityMismatch);
+            }
+            callback(bytes)
+        }
+    }
+
+    #[test]
+    fn managed_inode_record_uses_the_borrowed_authenticated_route() {
+        let mut store = TrackingStore::default();
+        let inode = InodeId::allocate([7; 32], 1);
+        let record = InodeRecordV1 {
+            kind: InodeKind::RegularFile,
+            namespace_ref_count: 1,
+            content_root: ObjectId::for_bytes(b"content"),
+            metadata_root: ObjectId::for_bytes(b"metadata"),
+        };
+        let record_id = store.put(&encode_inode_record(record).unwrap()).unwrap();
+        let table = inode_table_from_root(&mut store, inode, record_id).unwrap();
+        store.gets.set(0);
+        store.authenticated.set(0);
+
+        assert_eq!(
+            load_record(&store, table, inode, &mut OperationCounters::default()).unwrap(),
+            record
+        );
+        assert_eq!(store.gets.get(), 0);
+        assert_eq!(store.authenticated.get(), 2);
+    }
 }

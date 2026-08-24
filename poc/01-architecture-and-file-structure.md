@@ -1,7 +1,8 @@
 # Apple/APFS PoC architecture and file structure
 
-Status: **implementation blueprint; new format and APIs are proposed, not yet
-implemented or measured**.
+Status: **historical implementation blueprint**. The proposed tree has since
+been implemented; current source and evidence are described by `poc/13` and
+`poc/17`.
 
 This document deliberately treats existing plans and benchmark reports as
 hypotheses. The checked-out Rust source is the implementation truth; accepted

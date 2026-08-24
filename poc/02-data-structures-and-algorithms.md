@@ -1,7 +1,8 @@
 # Apple/APFS PoC data structures and algorithms
 
-Status: **proposed fresh-profile contract; not implemented, benchmarked, or
-compatible with current v1/v2 mapping bytes**.
+Status: **frozen fresh-profile contract, now implemented**. Current-source and
+measurement disposition are recorded in `poc/13` and `poc/17`; explicit later
+supersessions control where this historical contract differs.
 
 The selected PoC candidate is an immutable, byte-measured B+ extent rope with
 path-copy updates. Its operational root may depend on edit history. This is a
@@ -125,7 +126,8 @@ The G6 research document also used **provisional** `v3` language for a
 different CD32-64 format, but no such bytes were implemented. Before freezing
 this PoC, the controlling ADR must explicitly supersede that research profile;
 no CD32-64 profile ID, tag, golden, or decoder may be reused for this B+ codec.
-The checked-out implemented maximum remains v2.
+At the time of the original design audit, the implemented maximum was v2; the
+current tree contains this distinct selected v3 B+ profile.
 
 #### 3.1.1 Exact profile-ID preimage
 

@@ -1,0 +1,21 @@
+{
+  "schema":"layerfs-stage1-single-file-master-v1",
+  "generator":{"version":"phase4-fill-retained-buffer-v1","label":"S1-100","seed":81,"bytes":104857600,"raw_blake3":"bb883eecf4ea85d80432953791dcc352243da94175e7503e2c476afe9bd0bab7","cdc_references":5284,"cdc_sequence_blake3":"5bb376c3c54d8724973a7b160acab599f2f5cee4b4a56e855ff0cbe987425994","cdc_counter_scope":"independent_streamed_file_oracle","new_file_aggregate_rope_references":5286},
+  "replacement_blake3":"1f618a47715aaef584ed31415ec368c29de703fa95fe7c82acd7019e8327f712",
+  "inventory_blake3":"c6f2d971575c4fe8767b2d95c949210d2936100098dea65f72345e88b6c1bd5c",
+  "logical_file_mode":420,
+  "logical_mtime_seconds":0,
+  "preparation_wall_ns":4260444625,
+  "bases":{
+    "append":{"root":"4d1f9a6f39ca9dd8f85e838f130caacffe24213ad068086ee0c2cac0fbfecdae","generation":1,"selector_generation":0,"store_id":"7de7edebf8eb409e54a79af227d30fe461d6de01e15f9d00edab270dbc081635","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109178880},
+    "delete":{"root":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","generation":1,"selector_generation":0,"store_id":"f4c33e422e0ec1127c236fe38b8719666ebf8c26e7ec21a7174f2efa5101d9a4","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109182976},
+    "history":{"root":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","generation":1,"selector_generation":0,"store_id":"f4c33e422e0ec1127c236fe38b8719666ebf8c26e7ec21a7174f2efa5101d9a4","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109182976},
+    "import-genesis":{"root":"591cb0996be8318179e66bb6ce0048d966cfaa6b0805d10c45598957bcfa7295","generation":0,"selector_generation":0,"store_id":"be79b50f0333e9f2c9e98bb1eb0e461f1e67cd8527f5f159c461805084f93e87","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":53248},
+    "insert":{"root":"1d5708f412457cb9625fe230dd4a96ca5e6bb61cb1677709783690cb0209c83b","generation":1,"selector_generation":0,"store_id":"991114774c349a5b6a3d79ea6e01e6763225521f08b32c82e8e675ea812b0f79","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109166592},
+    "overwrite":{"root":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","generation":1,"selector_generation":0,"store_id":"f4c33e422e0ec1127c236fe38b8719666ebf8c26e7ec21a7174f2efa5101d9a4","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109182976},
+    "read-reconstruct":{"root":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","generation":1,"selector_generation":0,"store_id":"f4c33e422e0ec1127c236fe38b8719666ebf8c26e7ec21a7174f2efa5101d9a4","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109182976},
+    "refresh-a-b":{"root":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","root_a":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","root_b":"feca6bd653e4abc5e49e392fac3838d861a99388044515fe075dad6a463ab00f","generation":3,"selector_generation":0,"store_id":"f4c33e422e0ec1127c236fe38b8719666ebf8c26e7ec21a7174f2efa5101d9a4","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109211648},
+    "replace-existing":{"root":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","generation":1,"selector_generation":0,"store_id":"f4c33e422e0ec1127c236fe38b8719666ebf8c26e7ec21a7174f2efa5101d9a4","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109182976},
+    "truncate":{"root":"e7bcff1d903c7fa532c7aa364d0cfe0d601625205680e5cc0753a7849eef9043","generation":1,"selector_generation":0,"store_id":"f4c33e422e0ec1127c236fe38b8719666ebf8c26e7ec21a7174f2efa5101d9a4","profile_id":"6290e9107018d54c36ef2fc8d79ad11629010344b3d337e100d483a54f6668bd","store_database_bytes":109182976}
+  }
+}

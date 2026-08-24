@@ -10,7 +10,7 @@ use layerfs_engine::scratch::DiskTable;
 use layerfs_engine::{Engine, EngineError};
 use std::collections::HashMap;
 use std::fmt;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -223,6 +223,11 @@ impl LayerVfs {
         path: &Path,
     ) -> VfsResult<(ExternalWorkspace, OperationCounters)> {
         let reservation = self.operation_q.reserve();
+        let expected = self
+            .engine
+            .read_ref("main")?
+            .ok_or(VfsError::InvalidState)?;
+        let base_matches_expected = root == expected.root;
         let native = self.driver.open_workspace(
             path,
             crate::driver::WorkspacePolicy::ExternalCooperative,
@@ -239,10 +244,8 @@ impl LayerVfs {
                 engine: self.engine.clone(),
                 native,
                 path: path.to_owned(),
-                expected: self
-                    .engine
-                    .read_ref("main")?
-                    .ok_or(VfsError::InvalidState)?,
+                expected,
+                base_matches_expected,
                 writers,
                 owned: false,
                 owned_identity: None,
@@ -274,6 +277,7 @@ impl LayerVfs {
                 .engine
                 .read_ref("main")?
                 .ok_or(VfsError::InvalidState)?,
+            base_matches_expected: true,
             writers,
             owned: false,
             owned_identity: None,
@@ -345,6 +349,7 @@ impl LayerVfs {
                 native,
                 path,
                 expected,
+                base_matches_expected: true,
                 writers,
                 owned: true,
                 owned_identity: Some(owned_identity),
@@ -371,18 +376,19 @@ impl LayerVfs {
         };
         Ok(self.engine.fork_ref(&source, name)?.root)
     }
-    pub fn rollback(&self, target: ObjectId) -> VfsResult<ObjectId> {
-        let expected = self
-            .engine
-            .read_ref("main")?
-            .ok_or(VfsError::InvalidState)?;
-        Ok(self.engine.move_ref(&expected, target)?.root)
+    pub fn rollback(&self, expected: &RefState, target: ObjectId) -> VfsResult<RefState> {
+        self.move_main(expected, target)
     }
     pub fn move_main(&self, expected: &RefState, target: ObjectId) -> VfsResult<RefState> {
         if expected.name != "main" {
             return Err(VfsError::InvalidState);
         }
-        Ok(self.engine.move_ref(expected, target)?)
+        self.engine
+            .move_ref(expected, target)
+            .map_err(|error| match error {
+                EngineError::PublicationConflict => VfsError::ExternalDirtyConflict,
+                error => error.into(),
+            })
     }
 }
 
@@ -521,7 +527,7 @@ impl ManagedWorkspace {
         self.state = ManagedState::Live;
         counters.workspace_reuses = 1;
         counters.descriptor_resets = 1;
-        self.observe_spool(&mut counters)?;
+        Self::record_spool_observation(&mut counters, Some(0));
         reservation.finish(&mut counters);
         Ok((next, counters))
     }
@@ -576,6 +582,10 @@ impl ManagedWorkspace {
             return Err(VfsError::ExternalDirtyConflict);
         }
         if external.expected.root == target.root {
+            if external.native.revalidate_root_binding().is_err() {
+                self.state = ManagedState::ExternalDirtyConflict;
+                return Err(VfsError::ExternalDirtyConflict);
+            }
             external.expected = target.clone();
             let mut counters = OperationCounters {
                 native: NativeOperationCounters {
@@ -653,10 +663,8 @@ impl ManagedWorkspace {
         if self.edits.len() == 64 {
             return Err(VfsError::InvalidState);
         }
+        let replacement_len = u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?;
         let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
-        let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
-        let spool_offset = spool.seek(SeekFrom::End(0))?;
-        spool.write_all(bytes)?;
         let old_hard_link_key =
             match crate::managed_edit::native_hard_link_key(external.native.as_ref(), path) {
                 Ok(key) => key,
@@ -676,7 +684,6 @@ impl ManagedWorkspace {
             Err(error @ VfsError::NativeProtected) => return Err(error),
             Err(error) => {
                 self.state = ManagedState::Indeterminate;
-                let _ = spool.seek(SeekFrom::Start(spool_offset));
                 return Err(error);
             }
         };
@@ -708,20 +715,22 @@ impl ManagedWorkspace {
                 return Err(error);
             }
         }
-        let (metadata_offset, metadata_len) =
-            match crate::managed_edit::spool_metadata(spool.as_mut(), &metadata) {
-                Ok(evidence) => evidence,
-                Err(error) => {
-                    self.state = ManagedState::Indeterminate;
-                    return Err(error);
-                }
-            };
+        let metadata = match crate::managed_edit::encode_spooled_metadata(&metadata) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                self.state = ManagedState::Indeterminate;
+                return Err(error);
+            }
+        };
+        let (offsets, spool_bytes) = self.append_spool_parts(&[bytes, &metadata])?;
+        let (spool_offset, _) = offsets[0];
+        let (metadata_offset, metadata_len) = offsets[1];
         self.edits.push(crate::managed_edit::ManagedEdit::Replace {
             path: path.clone(),
             start,
             delete_len,
             spool_offset,
-            replacement_len: u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?,
+            replacement_len,
             metadata_offset,
             metadata_len,
             sync_required,
@@ -732,7 +741,7 @@ impl ManagedWorkspace {
             native: native_counters,
             ..OperationCounters::default()
         };
-        self.observe_spool(&mut counters)?;
+        Self::record_spool_observation(&mut counters, Some(spool_bytes));
         reservation.finish(&mut counters);
         Ok(counters)
     }
@@ -808,29 +817,23 @@ impl ManagedWorkspace {
                     self.state = ManagedState::Indeterminate;
                     return Err(error);
                 }
-                let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
-                let (source_metadata_offset, source_metadata_len) =
-                    match crate::managed_edit::spool_metadata(
-                        spool.as_mut(),
-                        &source_parent_metadata,
-                    ) {
-                        Ok(evidence) => evidence,
-                        Err(error) => {
-                            self.state = ManagedState::Indeterminate;
-                            return Err(error);
-                        }
-                    };
-                let (target_metadata_offset, target_metadata_len) =
-                    match crate::managed_edit::spool_metadata(
-                        spool.as_mut(),
-                        &target_parent_metadata,
-                    ) {
-                        Ok(evidence) => evidence,
-                        Err(error) => {
-                            self.state = ManagedState::Indeterminate;
-                            return Err(error);
-                        }
-                    };
+                let metadata = (|| {
+                    Ok::<_, VfsError>((
+                        crate::managed_edit::encode_spooled_metadata(&source_parent_metadata)?,
+                        crate::managed_edit::encode_spooled_metadata(&target_parent_metadata)?,
+                    ))
+                })();
+                let (source_metadata, target_metadata) = match metadata {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        self.state = ManagedState::Indeterminate;
+                        return Err(error);
+                    }
+                };
+                let (offsets, spool_bytes) =
+                    self.append_spool_parts(&[&source_metadata, &target_metadata])?;
+                let (source_metadata_offset, source_metadata_len) = offsets[0];
+                let (target_metadata_offset, target_metadata_len) = offsets[1];
                 self.edits.push(crate::managed_edit::ManagedEdit::Rename {
                     from: from.clone(),
                     to: to.clone(),
@@ -847,7 +850,7 @@ impl ManagedWorkspace {
                     },
                     ..OperationCounters::default()
                 })?;
-                self.observe_spool(&mut counters)?;
+                Self::record_spool_observation(&mut counters, Some(spool_bytes));
                 reservation.finish(&mut counters);
                 Ok(counters)
             }
@@ -904,20 +907,80 @@ impl ManagedWorkspace {
         self.spool.take();
         Ok(())
     }
-    fn observe_spool(&mut self, counters: &mut OperationCounters) -> VfsResult<()> {
-        let bytes = if let Some(spool) = self.spool.as_mut() {
-            let position = spool.stream_position()?;
-            let bytes = spool.seek(SeekFrom::End(0))?;
-            spool.seek(SeekFrom::Start(position))?;
-            counters.owned_temp_current = 1;
-            bytes
-        } else {
-            0
+    fn append_spool_parts(&mut self, parts: &[&[u8]]) -> VfsResult<(Vec<(u64, u64)>, u64)> {
+        let start = match self.spool.as_mut() {
+            Some(spool) => spool.seek(SeekFrom::End(0)).map_err(VfsError::from),
+            None => Err(VfsError::InvalidState),
         };
-        counters.owned_temp_terminal = counters.owned_temp_current;
-        counters.descriptor_spool_bytes_current = bytes;
-        counters.descriptor_spool_bytes_terminal = bytes;
+        let start = match start {
+            Ok(start) => start,
+            Err(error) => {
+                self.state = ManagedState::Indeterminate;
+                return Err(error);
+            }
+        };
+        let append = (|| {
+            let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
+            let mut offsets = Vec::with_capacity(parts.len());
+            let mut offset = start;
+            for bytes in parts {
+                let len = u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?;
+                spool.write_all(bytes)?;
+                offsets.push((offset, len));
+                offset = offset.checked_add(len).ok_or(VfsError::InvalidState)?;
+            }
+            Ok((offsets, offset))
+        })();
+        match append {
+            Ok(offsets) => Ok(offsets),
+            Err(error) => {
+                self.state = ManagedState::Indeterminate;
+                self.restore_spool_prefix(start)
+                    .map_err(|_| VfsError::Indeterminate)?;
+                Err(error)
+            }
+        }
+    }
+    fn restore_spool_prefix(&mut self, len: u64) -> VfsResult<()> {
+        let external = self.external.as_ref().ok_or(VfsError::InvalidState)?;
+        let root = external.native.root_directory()?;
+        let mut replacement = external.native.create_temp_at(root.as_ref())?;
+        let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
+        spool.seek(SeekFrom::Start(0))?;
+        let copied = std::io::copy(&mut spool.take(len), replacement.as_mut())?;
+        if copied != len {
+            return Err(VfsError::InvalidState);
+        }
+        self.spool = Some(replacement);
         Ok(())
+    }
+    fn observe_spool(&mut self, counters: &mut OperationCounters) -> VfsResult<()> {
+        let observation = (|| {
+            if let Some(spool) = self.spool.as_mut() {
+                let position = spool.stream_position()?;
+                let bytes = spool.seek(SeekFrom::End(0))?;
+                spool.seek(SeekFrom::Start(position))?;
+                Ok(Some(bytes))
+            } else {
+                Ok(None)
+            }
+        })();
+        match observation {
+            Ok(bytes) => {
+                Self::record_spool_observation(counters, bytes);
+                Ok(())
+            }
+            Err(error) => {
+                self.state = ManagedState::Indeterminate;
+                Err(error)
+            }
+        }
+    }
+    fn record_spool_observation(counters: &mut OperationCounters, bytes: Option<u64>) {
+        counters.owned_temp_current = u64::from(bytes.is_some());
+        counters.owned_temp_terminal = counters.owned_temp_current;
+        counters.descriptor_spool_bytes_current = bytes.unwrap_or(0);
+        counters.descriptor_spool_bytes_terminal = counters.descriptor_spool_bytes_current;
     }
     fn require_live(&self) -> VfsResult<()> {
         match self.state {
@@ -1034,6 +1097,7 @@ pub struct ExternalWorkspace {
     native: Box<dyn crate::driver::ProjectionWorkspace>,
     path: PathBuf,
     expected: RefState,
+    base_matches_expected: bool,
     writers: SharedLeaseState,
     owned: bool,
     owned_identity: Option<Vec<u8>>,
@@ -1055,6 +1119,9 @@ impl ExternalWorkspace {
         let reservation = self.operation_q.reserve();
         if !self.active {
             return Err(VfsError::InvalidState);
+        }
+        if !self.base_matches_expected {
+            return Err(VfsError::ExternalDirtyConflict);
         }
         let mut capture = CaptureLease::begin(self.writers.clone())?;
         let (root, mut counters) = if let Some(root) = self.committed {
@@ -1182,6 +1249,130 @@ impl Drop for WriterLease {
 #[cfg(test)]
 mod lease_tests {
     use super::*;
+
+    struct EndSeekFailure;
+
+    struct LaterEndSeekFailure {
+        end_seeks: u8,
+        len: u64,
+        position: u64,
+    }
+
+    impl Read for EndSeekFailure {
+        fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    impl Write for EndSeekFailure {
+        fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Seek for EndSeekFailure {
+        fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+            match position {
+                SeekFrom::End(_) => Err(std::io::Error::other("injected end-seek failure")),
+                _ => Ok(0),
+            }
+        }
+    }
+
+    impl crate::driver::OwnedTempHandle for EndSeekFailure {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+            self
+        }
+    }
+
+    impl Read for LaterEndSeekFailure {
+        fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    impl Write for LaterEndSeekFailure {
+        fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+            let written = u64::try_from(buffer.len()).unwrap();
+            self.position += written;
+            self.len = self.len.max(self.position);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Seek for LaterEndSeekFailure {
+        fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+            match position {
+                SeekFrom::Start(position) => self.position = position,
+                SeekFrom::Current(0) => {}
+                SeekFrom::End(0) => {
+                    self.end_seeks += 1;
+                    if self.end_seeks > 1 {
+                        return Err(std::io::Error::other("injected observation failure"));
+                    }
+                    self.position = self.len;
+                }
+                _ => return Err(std::io::Error::other("unsupported test seek")),
+            }
+            Ok(self.position)
+        }
+    }
+
+    impl crate::driver::OwnedTempHandle for LaterEndSeekFailure {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+            self
+        }
+    }
+
+    #[test]
+    fn initial_spool_seek_failure_is_fail_closed() {
+        let mut workspace = ManagedWorkspace {
+            external: None,
+            edits: Vec::new(),
+            state: ManagedState::Live,
+            spool: Some(Box::new(EndSeekFailure)),
+        };
+
+        assert!(workspace.append_spool_parts(&[b"edit"]).is_err());
+        assert_eq!(workspace.state, ManagedState::Indeterminate);
+    }
+
+    #[test]
+    fn post_append_spool_observation_failure_is_fail_closed() {
+        let mut workspace = ManagedWorkspace {
+            external: None,
+            edits: Vec::new(),
+            state: ManagedState::Live,
+            spool: Some(Box::new(LaterEndSeekFailure {
+                end_seeks: 0,
+                len: 0,
+                position: 0,
+            })),
+        };
+
+        workspace.append_spool_parts(&[b"edit"]).unwrap();
+        workspace.state = ManagedState::Dirty;
+        assert!(workspace
+            .observe_spool(&mut OperationCounters::default())
+            .is_err());
+        assert_eq!(workspace.state, ManagedState::Indeterminate);
+    }
 
     #[test]
     fn writer_and_capture_admission_are_one_atomic_state_transition() {

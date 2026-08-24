@@ -81,7 +81,11 @@ Prepared input roots:
 | `Rempty` | `0` | streamed import/write |
 | `Rhistory_0` | `104,857,600` | base for four measured retained revisions |
 
-No intermediate or output regular file may exceed 100 MiB.
+No input, intermediate user-data, or native output regular file may exceed
+100 MiB. SQLite Store authority files are excluded from that user-file ceiling
+and are reported separately. The preserved campaign observed a maximum Store
+database above 100 MiB; this is Store amplification evidence, not a user-file
+ceiling PASS.
 
 Each operation base contains only the authority required before that
 operation. A measured output is not preinserted in its base Store. The sole

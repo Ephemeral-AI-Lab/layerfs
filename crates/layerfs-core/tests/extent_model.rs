@@ -4,7 +4,8 @@ use layerfs_core::content::extent_codec::{
 };
 use layerfs_core::content::rope::FileStateRoot;
 use layerfs_core::content::rope::{
-    build, diff_ranges, read_range, replace, validate_file, visit_extents, ObjectRead, ObjectStore,
+    build, diff_ranges, read_all, read_range, replace, validate_file, visit_extents, ObjectRead,
+    ObjectStore,
 };
 use layerfs_core::{decode_bytes_object, encode_bytes_object};
 use layerfs_core::{CoreError, CoreResult, ObjectId};
@@ -98,6 +99,41 @@ impl ObjectRead for CountRead<'_> {
     fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
         self.reads.set(self.reads.get() + 1);
         ObjectStore::get(self.store, id)
+    }
+}
+
+struct MissingBatchCallback<'a>(&'a MemoryStore);
+
+impl ObjectRead for MissingBatchCallback<'_> {
+    fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+        ObjectStore::get(self.0, id)
+    }
+
+    fn get_authenticated_batch<F>(&self, _ids: &[ObjectId], _callback: F) -> CoreResult<()>
+    where
+        F: FnMut(ObjectId, &[u8]) -> CoreResult<()>,
+    {
+        Ok(())
+    }
+}
+
+struct ExtraBatchCallback<'a>(&'a MemoryStore);
+
+impl ObjectRead for ExtraBatchCallback<'_> {
+    fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+        ObjectStore::get(self.0, id)
+    }
+
+    fn get_authenticated_batch<F>(&self, ids: &[ObjectId], mut callback: F) -> CoreResult<()>
+    where
+        F: FnMut(ObjectId, &[u8]) -> CoreResult<()>,
+    {
+        for id in ids {
+            let canonical = self.0 .0.get(id).ok_or(CoreError::MissingObject)?;
+            callback(*id, decode_bytes_object(canonical)?)?;
+        }
+        let id = *ids.last().ok_or(CoreError::MissingObject)?;
+        callback(id, decode_bytes_object(self.0 .0.get(&id).unwrap())?)
     }
 }
 
@@ -258,6 +294,42 @@ fn product_range_reader_uses_bounded_authenticated_payload_batches() {
     assert_eq!(actual, bytes);
     assert!(reader.batches.get() > 0);
     assert_eq!(reader.state_reads.get(), 1);
+}
+
+#[test]
+fn missing_payload_batch_callback_is_rejected() {
+    let bytes = b"callback cardinality";
+    let mut store = MemoryStore::default();
+    let (root, _) = build(&mut store, bytes.as_slice()).unwrap();
+
+    assert_eq!(
+        read_range(
+            &MissingBatchCallback(&store),
+            root,
+            0..bytes.len() as u64,
+            Vec::new(),
+        ),
+        Err(CoreError::InvalidRecord("payload batch cardinality"))
+    );
+}
+
+#[test]
+fn extra_payload_batch_callback_is_rejected_without_panicking() {
+    let bytes = b"callback cardinality";
+    let mut store = MemoryStore::default();
+    let (root, _) = build(&mut store, bytes.as_slice()).unwrap();
+    let extra = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        read_range(
+            &ExtraBatchCallback(&store),
+            root,
+            0..bytes.len() as u64,
+            Vec::new(),
+        )
+    }));
+    assert!(matches!(
+        extra,
+        Ok(Err(CoreError::InvalidRecord("payload batch cardinality")))
+    ));
 }
 
 #[test]
@@ -434,43 +506,65 @@ fn splices_match_vec_and_preserve_retained_root_without_suffix_payload_reads() {
 }
 
 #[test]
-fn deterministic_randomized_splices_match_after_every_edit_and_keep_history() {
-    let mut random = 0x8f31_27ab_5ce4_d901_u64;
-    let mut next = || {
-        random ^= random << 13;
-        random ^= random >> 7;
-        random ^= random << 17;
-        random
-    };
-    let mut expected = (0..200_000).map(|_| next() as u8).collect::<Vec<_>>();
-    let original = expected.clone();
-    let mut store = MemoryStore::default();
-    let (retained, _) = build(&mut store, expected.as_slice()).unwrap();
-    let mut root = retained;
-    for _ in 0..200 {
-        let start = next() as usize % (expected.len() + 1);
-        let delete = (next() as usize % 2049).min(expected.len() - start);
-        let replacement_len = next() as usize % 2049;
-        let replacement = (0..replacement_len)
-            .map(|_| next() as u8)
-            .collect::<Vec<_>>();
-        expected.splice(start..start + delete, replacement.iter().copied());
-        root = replace(
-            &mut store,
-            root,
-            start as u64,
-            delete as u64,
-            replacement.as_slice(),
-        )
-        .unwrap()
-        .0;
-        let mut actual = Vec::new();
-        read_range(&store, root, 0..expected.len() as u64, &mut actual).unwrap();
-        assert_eq!(actual, expected);
+fn two_thousand_randomized_splices_match_every_revision_and_retained_history() {
+    fn run(seed: u64) {
+        const MAX_FILE_BYTES: usize = 256 * 1024;
+        const REVISIONS: usize = 1_000;
+        const CHECKPOINTS: [usize; 6] = [0, 1, 127, 499, 999, 1_000];
+
+        let mut random = seed;
+        let mut next = || {
+            random ^= random << 13;
+            random ^= random >> 7;
+            random ^= random << 17;
+            random
+        };
+        let mut expected = (0..200_000).map(|_| next() as u8).collect::<Vec<_>>();
+        let mut store = MemoryStore::default();
+        let (mut root, _) = build(&mut store, expected.as_slice()).unwrap();
+        let mut roots = Vec::with_capacity(REVISIONS + 1);
+        roots.push(root);
+        let mut checkpoints = vec![(0, expected.clone())];
+
+        for revision in 1..=REVISIONS {
+            let start = next() as usize % (expected.len() + 1);
+            let delete = (next() as usize % 2049).min(expected.len() - start);
+            let retained_len = expected.len() - delete;
+            let maximum_replacement = (MAX_FILE_BYTES - retained_len).min(2048);
+            let replacement_len = next() as usize % (maximum_replacement + 1);
+            let replacement = (0..replacement_len)
+                .map(|_| next() as u8)
+                .collect::<Vec<_>>();
+            expected.splice(start..start + delete, replacement.iter().copied());
+            root = replace(
+                &mut store,
+                root,
+                start as u64,
+                delete as u64,
+                replacement.as_slice(),
+            )
+            .unwrap()
+            .0;
+            roots.push(root);
+
+            let mut actual = Vec::new();
+            read_all(&store, root, &mut actual).unwrap();
+            assert_eq!(actual, expected, "seed={seed:#x}, revision={revision}");
+            if CHECKPOINTS.contains(&revision) {
+                checkpoints.push((revision, expected.clone()));
+            }
+        }
+
+        assert_eq!(roots.len(), REVISIONS + 1);
+        for (revision, expected) in checkpoints {
+            let mut actual = Vec::new();
+            read_all(&store, roots[revision], &mut actual).unwrap();
+            assert_eq!(actual, expected, "seed={seed:#x}, checkpoint={revision}");
+        }
     }
-    let mut historical = Vec::new();
-    read_range(&store, retained, 0..original.len() as u64, &mut historical).unwrap();
-    assert_eq!(historical, original);
+
+    run(0x8f31_27ab_5ce4_d901);
+    run(0x196a_0c43_e7b2_85df);
 }
 
 #[test]
@@ -729,5 +823,55 @@ fn validation_binds_empty_state_and_visits_unread_children() {
     assert_eq!(
         validate_file(&store, root),
         Err(CoreError::IdentityMismatch)
+    );
+}
+
+#[test]
+fn full_empty_read_authenticates_and_binds_its_mapping_root() {
+    let mut store = MemoryStore::default();
+    let (valid, _) = build(&mut store, [].as_slice()).unwrap();
+    let valid_state = decode_file_state(store.0.get(&valid.0).unwrap()).unwrap();
+    assert_eq!(read_all(&store, valid, Vec::new()).unwrap().nodes_read, 2);
+
+    let missing_mapping = valid_state.mapping_root;
+    let missing_bytes = store.0.remove(&missing_mapping).unwrap();
+    assert_eq!(
+        read_all(&store, valid, Vec::new()),
+        Err(CoreError::MissingObject)
+    );
+    store.0.insert(missing_mapping, missing_bytes);
+
+    let wrong_state = FileStateV3 {
+        mapping_root: valid.0,
+        ..valid_state
+    };
+    let wrong = FileStateRoot(store.put(&encode_file_state(wrong_state).unwrap()).unwrap());
+    assert_eq!(
+        read_all(&store, wrong, Vec::new()),
+        Err(CoreError::InvalidMappingTag { tag: 0x0a })
+    );
+
+    let payload = store.put(&encode_bytes_object(&[7]).unwrap()).unwrap();
+    let nonempty_mapping = store
+        .put(
+            &encode_node(&ExtentNodeV3::Leaf {
+                subtree_logical_bytes: 1,
+                extents: vec![ExtentSliceV3::new(payload, 0, 1).unwrap()],
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let nonempty_state = FileStateV3 {
+        mapping_root: nonempty_mapping,
+        ..valid_state
+    };
+    let nonempty = FileStateRoot(
+        store
+            .put(&encode_file_state(nonempty_state).unwrap())
+            .unwrap(),
+    );
+    assert_eq!(
+        read_all(&store, nonempty, Vec::new()),
+        Err(CoreError::InvalidRecord("extent summary"))
     );
 }

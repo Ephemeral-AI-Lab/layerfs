@@ -328,9 +328,6 @@ pub fn read_all_bounded<S: ObjectRead, W: Write>(
     if state.logical_len > maximum {
         return Err(CoreError::ObjectLimitExceeded);
     }
-    if state.logical_len == 0 {
-        return Ok(counters);
-    }
     read_node(
         store,
         Summary {
@@ -1559,7 +1556,10 @@ fn read_decoded_node<S: ObjectRead, W: Write>(
                     .collect::<Vec<_>>();
                 let mut index = 0_usize;
                 store.get_authenticated_batch(&ids, |id, payload| {
-                    let (extent, logical, end) = batch[index];
+                    let (extent, logical, end) = batch
+                        .get(index)
+                        .copied()
+                        .ok_or(CoreError::InvalidRecord("payload batch cardinality"))?;
                     if id != extent.payload_object_id {
                         return Err(CoreError::IdentityMismatch);
                     }
@@ -1585,6 +1585,9 @@ fn read_decoded_node<S: ObjectRead, W: Write>(
                         add(counters.payload_bytes_read, (stop - start) as u64)?;
                     Ok(())
                 })?;
+                if index != batch.len() {
+                    return Err(CoreError::InvalidRecord("payload batch cardinality"));
+                }
             }
         }
         ExtentNodeV3::Branch {

@@ -225,14 +225,16 @@ uses a fixed benchmark root/fixture, or requires APFS clone success.
   Internal SQLite objects are excluded only by exact `NOT GLOB 'sqlite_*'`;
   `sqliteX` tables/triggers are visible and rejected for stores and candidates.
 - [x] Implement authenticated complete and exact-range object reads.
-- [x] Replace current redundant object loads with one SELECT, one borrowed-row
-  authentication, one strict decode and no separate length query.
+- [x] Replace product fetched-object loads with one SELECT, one borrowed-row
+  authentication, one strict role decode and no separate length query.
 - [x] Implement ordered payload batches of at most 64 references, preserving
   duplicate occurrence order and exact missing/wrong-role errors.
 - [x] Prepare only bounded operation descriptors/evidence before `BEGIN`; do
   not accumulate a large candidate object set in memory or a durable carrier.
 - [x] After `BEGIN` and expected-state validation, stream/authenticate/insert
-  every SQLite object/root/delta/ref row inside that one writer transaction.
+  every current-profile SQLite object/ref row inside that one writer
+  transaction. Legacy root/delta rows are compatibility state, not current V3
+  transition authority.
 - [x] Check expected ref/root plus generation before publication.
 - [x] Dispatch exactly one publication COMMIT for a state change.
 - [x] Dispatch zero publication COMMITs for a normalized no-op.
@@ -274,8 +276,8 @@ uses a fixed benchmark root/fixture, or requires APFS clone success.
 - [x] Report total peak as retained old generation + new generation + mark
   database + candidate journal/temp + selector temporary bytes.
 - [x] Install through checksummed `CURRENT` and StoreGenerationDriver; recovery
-  never guesses highest generation filename.
-  The selected/prior install paths pass; the complete sync/crash fault matrix remains.
+  never guesses highest generation filename. Selected/prior install paths pass;
+  unselected exact-next residue is preserved and surfaced explicitly.
 - [x] Read selectors with fixed 154+1-byte storage and keep directory-sync
   failure durability-ambiguous without deleting the prior generation. Missing
   `CURRENT` with any generation fails closed; only exact next-candidate/partial
@@ -312,8 +314,10 @@ uses a fixed benchmark root/fixture, or requires APFS clone success.
   Apple-only `libc` ownership from the benchmark crate if still required.
 - [x] Replace the OS crate's non-overridable `forbid(unsafe_code)` with
   deny-by-default and allow unsafe only in one reviewed `apple::ffi` submodule;
-  expose safe wrappers for every required syscall and test exact errno/partial
-  I/O behavior. The reviewed boundary exists; the complete errno/partial-I/O matrix remains.
+  expose safe wrappers for every required syscall. The reviewed boundary and
+  focused errno/partial-I/O tests exist.
+- [ ] Complete the exhaustive syscall-by-syscall errno/partial-I/O matrix if it
+  becomes a product qualification requirement; it is not claimed by Stage One.
 - [x] Implement no-follow destination/directory admission.
 - [x] Walk and pin every top-level parent component with no-follow opens; create
   managed roots exclusively and preserve a colliding caller-owned tree.

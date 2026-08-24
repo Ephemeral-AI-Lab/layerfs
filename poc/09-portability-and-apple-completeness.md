@@ -324,7 +324,9 @@ driver to prove platform independence without requiring APFS.
 - [x] ordinary files/directories/symlinks/hard links and supported metadata round-trip;
 - [x] Bash and writable-mmap workflows pass through ordinary APFS paths;
 - [x] every canonical file/namespace/inode/metadata structure passes differential and corruption tests;
-- [x] crash/reopen/publication/native-replace/compaction matrices pass;
+- [x] focused crash/reopen/publication/native-replace/compaction boundaries
+  implemented by Stage One pass; no exhaustive hardware/power-loss matrix is
+  claimed;
 - [x] G5 trust, one-COMMIT, reconciliation and resource invariants remain;
 - [x] no benchmark binary owns product semantics;
 - [x] one compact real-workspace measurement passes; no production SLO inferred;

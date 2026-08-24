@@ -1,0 +1,49 @@
+# Portable evidence manifest
+
+SHA-256 values below bind the portable files copied from the original ignored
+`target/` evidence. The campaign's historical aggregate hash remains
+`ba53703603f2513d7864bb6e5ffb2948e38371e1f1f06ac108cad9ef3a36445f`;
+that aggregate includes original pathnames, so the portable copy is verified by
+the per-file hashes instead.
+
+## Pre-repair A01–A17 campaign
+
+```text
+campaign-time.txt  1c5ddaa593b4eff505a3d948adc7a42ba30e72d3790338fcc558963f78d3498b
+environment.json   c384fa28310e67691bf691cf205cd7e6c99f63910bd026daf2c6fcb662b09768
+master.json        9a1fae41c1d6ce8075777989ff2f9946396475ae486a2512be61c0c80b9e1ca2
+rows.jsonl         af422d7f1eea02e995136524414b6150f407bec0bab472396faa2cf66a266b68
+schedule.json      5a57aa55957a6077d2b681cf3b31f7506189265a7354d3a16a7adeaad93c22ed
+summary.json       0fa7e3ec0279a453730ccfde216f22c5c7b79f1a850b39d57a301a70f807eaa4
+summary.md         c1cedaa80b805ea5bf204abd6f0eecbf1a6f0d3fdc855866c84ad601d4b9a7de
+```
+
+## A02 diagnostic
+
+```text
+preregistration.json  918fcef3aae654003dbeb5f62609b8e296cc34bb6d8cf4f1c2f3793d9b8d9254
+result.json           0d7ecc3cfbceb75239137616d130208f3d7e29c776c1388d24f3a204e54a184f
+trace.tsv             a24b4670fbaea926dc493909b3dfc50923667d8f2483897ceabd817c7b6ec790
+```
+
+`result.json` contains BLAKE3 custody references for all nine child receipts;
+the portable `children/` directory retains those exact
+receipts and their empty stdout/stderr witnesses.
+
+The post-repair closure manifest is generated only after source settlement and
+is stored under `stage1-post-repair-closure/`.
+
+## Post-adversarial-repair closure
+
+```text
+closure.json                         fe7c10d008d898d850e4ad702702218d0bc3cc3d5029bb686cd839dfa0beb36f
+closure-v2-clippy-failure.typescript cd79d95ee18b0b5994025ce8a4b2134e4a71ac5a65f788180851e3df3dfd3585
+closure-v3.typescript                6c8e91582d815fd5d38bb9ca930de00802d5e2a7e1c194f834ac3263accceb9a
+closure-v4-superseded.typescript     89ccca84463a3baefbf3e916f28e1fc9eb768f7f2b61dae76e97916445d477b1
+closure-v5.typescript                0fbfffe6c695fa6615fae5ff8e7237c3fc085e5bfa64a6f2fa08ddd3b96abbf4
+run-closure.zsh                      b247941f68f82947b236ca184463aeb37908ed123c15d3f0ea15d4539ada5305
+run-touched-closure-v4.zsh           677f069f74977b816aa2cfc119a3067687a7dadedc1f9a0eebcf69342b52c3d0
+run-touched-closure-v5.zsh           677f069f74977b816aa2cfc119a3067687a7dadedc1f9a0eebcf69342b52c3d0
+readiness-v4-superseded.json         fb0579e3d107dff97549395a155c6b1fb1e3c03b32164b70992c9e53b848d6be
+readiness.json                       ecb99f0343265570f12f8a2e550d83cb54014a89a4e4de68ca331a5e9146bfff
+```

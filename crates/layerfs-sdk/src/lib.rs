@@ -215,8 +215,12 @@ impl LayerFs {
     pub fn fork(&self, root: RootId, name: &str) -> Result<RootId, layerfs_vfs::VfsError> {
         self.0.fork(root, name)
     }
-    pub fn rollback(&self, root: RootId) -> Result<RootId, layerfs_vfs::VfsError> {
-        self.0.rollback(root)
+    pub fn rollback(
+        &self,
+        expected: &RefState,
+        root: RootId,
+    ) -> Result<RefState, layerfs_vfs::VfsError> {
+        self.0.rollback(expected, root)
     }
     pub fn move_main(
         &self,

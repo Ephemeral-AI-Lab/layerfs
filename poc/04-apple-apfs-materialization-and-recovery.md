@@ -1,9 +1,10 @@
 # Apple/APFS materialization and recovery
 
-Status: **target AppleWorkspaceV1 contract, not current implementation; APFS
-accelerators are optional and noncanonical**
+Status: **historical AppleWorkspaceV1 target contract; now implemented within
+the limitations recorded by `poc/17`; APFS accelerators remain optional and
+noncanonical**
 
-## 1. Current source truth
+## 1. Historical preimplementation source truth
 
 | Surface | Actual repository state | What may be reused |
 |---|---|---|

@@ -184,6 +184,7 @@ struct CampaignData {
 #[derive(Clone, Debug)]
 struct ProcessResources {
     operation: String,
+    observed: bool,
     current_rss_bytes: u64,
     process_peak_rss_bytes: u64,
 }
@@ -279,11 +280,13 @@ pub fn run_single_file(run: &Path) -> EvalResult<()> {
     )?;
     durable_write(&run.join("summary.json"), &incomplete_summary_json(0))?;
     durable_write(&run.join("campaign-time.txt"), "0\n")?;
+    durable_write(&run.join("rows.jsonl"), "")?;
     arm_hard_stop();
     let mut campaign_data = CampaignData::default();
     let mut start_master_receipt = "Unavailable".to_owned();
     let mut final_master_receipt = "Unavailable".to_owned();
     let mut terminal_receipt = None;
+    let mut fd_baseline = None;
 
     let result = (|| {
         let environment = environment()?;
@@ -292,7 +295,6 @@ pub fn run_single_file(run: &Path) -> EvalResult<()> {
             &environment_json(&environment),
         )?;
         durable_write(&run.join("schedule.json"), &schedule_json(false))?;
-        durable_write(&run.join("rows.jsonl"), "")?;
         regular_file_ceiling_preflight()?;
         verify_user_file_ceiling(&fixture_root().join("input"))?;
         let master = read_master(&fixture_root())?;
@@ -313,7 +315,8 @@ pub fn run_single_file(run: &Path) -> EvalResult<()> {
             data: &mut campaign_data,
         };
         campaign.observe_process_resources("campaign-baseline")?;
-        let fd_baseline = fd_count()?;
+        let observed_fd_baseline = fd_count()?;
+        fd_baseline = Some(observed_fd_baseline);
         execute_campaign(&mut campaign, &master)?;
         campaign.check_deadline()?;
         if campaign.data.reset_count != RESET_COUNT {
@@ -327,7 +330,7 @@ pub fn run_single_file(run: &Path) -> EvalResult<()> {
         if final_master_digest != start_master_digest {
             return Err("sealed master changed during campaign".to_owned());
         }
-        let terminal = terminal_resources(fd_baseline)?;
+        let terminal = terminal_resources(observed_fd_baseline)?;
         terminal_receipt = Some(terminal.clone());
         let terminal_error = append_a16(&mut campaign, &terminal, true)?;
         let artifact_started = Instant::now();
@@ -386,11 +389,25 @@ pub fn run_single_file(run: &Path) -> EvalResult<()> {
 
     if let Err(error) = &result {
         let artifact_started = Instant::now();
+        let a16_error = if terminal_receipt.is_none() {
+            match append_failure_a16(run, started, &mut campaign_data, fd_baseline) {
+                Ok(terminal) => {
+                    terminal_receipt = Some(terminal);
+                    None
+                }
+                Err(error) => Some(error),
+            }
+        } else {
+            None
+        };
         let rows_sync = sync_rows(run);
-        let diagnostic = rows_sync.as_ref().err().map_or_else(
-            || error.clone(),
-            |sync| format!("{error}; rows sync failed: {sync}"),
-        );
+        let mut diagnostic = error.clone();
+        if let Some(a16) = a16_error {
+            diagnostic.push_str(&format!("; A16 append failed: {a16}"));
+        }
+        if let Err(sync) = &rows_sync {
+            diagnostic.push_str(&format!("; rows sync failed: {sync}"));
+        }
         let provisional_wall = started.elapsed().as_nanos();
         let _ = durable_write(
             &run.join("campaign-time.txt"),
@@ -1721,6 +1738,7 @@ fn run_a17(campaign: &mut Campaign<'_>, master: &Master) -> EvalResult<()> {
     if counters.descriptor_resets != 100
         || counters.workspace_reuses != 100
         || counters.workspace_materializations != 0
+        || counters.rematerializations != 0
     {
         return Err("A17 reuse/rematerialization/descriptor equation failed".to_owned());
     }
@@ -2218,7 +2236,7 @@ fn counters_json(value: &OperationDiagnostics) -> String {
             "\"namespace\":{{\"nodes_read\":{},\"nodes_emitted\":{}}},",
             "\"inode_table\":{{\"nodes_read\":{},\"nodes_emitted\":{}}},",
             "\"native\":{},\"workspace_materializations\":{},\"workspace_reuses\":{},",
-            "\"descriptor_resets\":{},\"root_diff_nodes\":{},",
+            "\"rematerializations\":{},\"descriptor_resets\":{},\"root_diff_nodes\":{},",
             "\"changed_paths\":{},\"full_fallback_files\":{},\"plan_rows\":{},",
             "\"plan_scratch_high_water_bytes\":{},\"current_digest_bytes\":{},",
             "\"uncached_prior_digest_bytes\":{},\"changed_current_cdc_bytes\":{},",
@@ -2248,6 +2266,7 @@ fn counters_json(value: &OperationDiagnostics) -> String {
         native_json(value),
         value.workspace_materializations,
         value.workspace_reuses,
+        value.rematerializations,
         value.descriptor_resets,
         value.root_diff_nodes,
         value.changed_paths,
@@ -2371,6 +2390,7 @@ fn timer_residual(total: u128, attributed: u128) -> EvalResult<u128> {
 #[derive(Clone, Debug, Default)]
 struct TerminalResources {
     observed: bool,
+    observation_error: Option<String>,
     fd_baseline: u64,
     fd_terminal: u64,
     attempt_residue: u64,
@@ -2392,6 +2412,7 @@ struct Statistics {
 fn terminal_resources(fd_baseline: u64) -> EvalResult<TerminalResources> {
     Ok(TerminalResources {
         observed: true,
+        observation_error: None,
         fd_baseline,
         fd_terminal: fd_count()?,
         attempt_residue: attempt_residue_count()?,
@@ -2406,14 +2427,19 @@ fn append_a16(
     terminal: &TerminalResources,
     master_unchanged: bool,
 ) -> EvalResult<Option<String>> {
-    let failed = terminal.fd_terminal != terminal.fd_baseline
+    let failed = !terminal.observed
+        || terminal.fd_terminal != terminal.fd_baseline
         || terminal.attempt_residue != 0
         || terminal.open_store_connections != 0
         || terminal.maximum_rss_bytes > 67_108_864
         || campaign.data.last_q_terminal_bytes != Some(0)
         || !master_unchanged;
-    let error = failed.then(|| {
-        format!(
+    let error = failed.then(|| match terminal.observation_error.as_deref() {
+        Some(observation) => format!(
+            "A16 terminal resource observation unavailable: {observation}; Q {:?}, master unchanged {}",
+            campaign.data.last_q_terminal_bytes, master_unchanged,
+        ),
+        None => format!(
             "A16 terminal resource equation failed: fd {}/{}, residue {}, connections {}, current RSS {}, peak RSS {}, Q {:?}, master unchanged {}",
             terminal.fd_terminal,
             terminal.fd_baseline,
@@ -2423,29 +2449,36 @@ fn append_a16(
             terminal.maximum_rss_bytes,
             campaign.data.last_q_terminal_bytes,
             master_unchanged,
-        )
+        ),
     });
     let resources = ProcessResources {
         operation: "A16".to_owned(),
+        observed: terminal.observed,
         current_rss_bytes: terminal.current_rss_bytes,
         process_peak_rss_bytes: terminal.maximum_rss_bytes,
     };
     campaign.row_with_resources(
         format!(
-            "{{\"id\":\"A16\",\"gate_status\":\"{}\",\"gate_error\":{},\"terminal\":{{\"operation_q_bytes\":{},\"fd_baseline\":{},\"fd_terminal\":{},\"active_store_connections\":{},\"owned_temp_journal_attempt_residue\":{},\"current_rss_bytes\":{},\"process_peak_rss_bytes\":{},\"maximum_rss_bytes\":{}}},\"store_database_bytes_max\":{},\"maximum_user_regular_file_bytes\":{FILE_BYTES},\"master_unchanged\":{master_unchanged}}}",
+            "{{\"id\":\"A16\",\"gate_status\":\"{}\",\"gate_error\":{},\"terminal\":{{\"observed\":{},\"observation_error\":{},\"operation_q_bytes\":{},\"fd_baseline\":{},\"fd_terminal\":{},\"active_store_connections\":{},\"owned_temp_journal_attempt_residue\":{},\"current_rss_bytes\":{},\"process_peak_rss_bytes\":{},\"maximum_rss_bytes\":{}}},\"store_database_bytes_max\":{},\"maximum_user_regular_file_bytes\":{FILE_BYTES},\"master_unchanged\":{master_unchanged}}}",
             if failed { "FAIL" } else { "PASS" },
             error
                 .as_deref()
                 .map(|value| format!("\"{}\"", json_escape(value)))
                 .unwrap_or_else(|| "null".to_owned()),
+            terminal.observed,
+            terminal
+                .observation_error
+                .as_deref()
+                .map(|value| format!("\"{}\"", json_escape(value)))
+                .unwrap_or_else(|| "null".to_owned()),
             option_u64_json(campaign.data.last_q_terminal_bytes),
-            terminal.fd_baseline,
-            terminal.fd_terminal,
-            terminal.open_store_connections,
-            terminal.attempt_residue,
-            terminal.current_rss_bytes,
-            terminal.maximum_rss_bytes,
-            terminal.maximum_rss_bytes,
+            observed_u64_json(terminal.observed, terminal.fd_baseline),
+            observed_u64_json(terminal.observed, terminal.fd_terminal),
+            observed_u64_json(terminal.observed, terminal.open_store_connections),
+            observed_u64_json(terminal.observed, terminal.attempt_residue),
+            observed_u64_json(terminal.observed, terminal.current_rss_bytes),
+            observed_u64_json(terminal.observed, terminal.maximum_rss_bytes),
+            observed_u64_json(terminal.observed, terminal.maximum_rss_bytes),
             option_u64_json(campaign.data.store_database_bytes_max),
         ),
         resources,
@@ -2453,21 +2486,60 @@ fn append_a16(
     Ok(error)
 }
 
+fn append_failure_a16(
+    run: &Path,
+    started: Instant,
+    data: &mut CampaignData,
+    fd_baseline: Option<u64>,
+) -> EvalResult<TerminalResources> {
+    let terminal = match fd_baseline {
+        Some(fd_baseline) => {
+            terminal_resources(fd_baseline).unwrap_or_else(|error| TerminalResources {
+                observation_error: Some(error),
+                ..TerminalResources::default()
+            })
+        }
+        None => TerminalResources {
+            observation_error: Some("FD baseline unavailable".to_owned()),
+            ..TerminalResources::default()
+        },
+    };
+    let rows = OpenOptions::new()
+        .append(true)
+        .open(run.join("rows.jsonl"))
+        .map_err(io_error)?;
+    let mut campaign = Campaign {
+        run,
+        started,
+        rows,
+        data,
+    };
+    let _ = append_a16(&mut campaign, &terminal, false)?;
+    campaign.rows.sync_all().map_err(io_error)?;
+    Ok(terminal)
+}
+
 fn process_resources(operation: &str) -> EvalResult<ProcessResources> {
     Ok(ProcessResources {
         operation: operation.to_owned(),
+        observed: true,
         current_rss_bytes: current_rss_bytes()?,
         process_peak_rss_bytes: maximum_rss_bytes()?,
     })
 }
 
 fn process_resources_json(value: &ProcessResources) -> String {
+    let crossed = if value.observed {
+        (value.process_peak_rss_bytes > 67_108_864).to_string()
+    } else {
+        "\"Unavailable\"".to_owned()
+    };
     format!(
-        "{{\"operation\":\"{}\",\"current_rss_bytes\":{},\"process_peak_rss_bytes\":{},\"crossed_64_mib\":{}}}",
+        "{{\"operation\":\"{}\",\"observed\":{},\"current_rss_bytes\":{},\"process_peak_rss_bytes\":{},\"crossed_64_mib\":{crossed}}}",
         json_escape(&value.operation),
-        value.current_rss_bytes,
-        value.process_peak_rss_bytes,
-        value.process_peak_rss_bytes > 67_108_864,
+        value.observed,
+        observed_u64_json(value.observed, value.current_rss_bytes),
+        observed_u64_json(value.observed, value.process_peak_rss_bytes),
     )
 }
 
@@ -2588,12 +2660,17 @@ fn process_resource_summary_json(data: &CampaignData) -> String {
         .iter()
         .enumerate()
         .map(|(sequence, value)| {
+            let crossed = if value.observed {
+                (value.process_peak_rss_bytes > 67_108_864).to_string()
+            } else {
+                "\"Unavailable\"".to_owned()
+            };
             format!(
-                "{{\"sequence\":{sequence},\"operation\":\"{}\",\"current_rss_bytes\":{},\"process_peak_rss_bytes\":{},\"crossed_64_mib\":{}}}",
+                "{{\"sequence\":{sequence},\"operation\":\"{}\",\"observed\":{},\"current_rss_bytes\":{},\"process_peak_rss_bytes\":{},\"crossed_64_mib\":{crossed}}}",
                 json_escape(&value.operation),
-                value.current_rss_bytes,
-                value.process_peak_rss_bytes,
-                value.process_peak_rss_bytes > 67_108_864,
+                value.observed,
+                observed_u64_json(value.observed, value.current_rss_bytes),
+                observed_u64_json(value.observed, value.process_peak_rss_bytes),
             )
         })
         .collect::<Vec<_>>();
@@ -2601,7 +2678,7 @@ fn process_resource_summary_json(data: &CampaignData) -> String {
         .process_resources
         .iter()
         .enumerate()
-        .find(|(_, value)| value.process_peak_rss_bytes > 67_108_864)
+        .find(|(_, value)| value.observed && value.process_peak_rss_bytes > 67_108_864)
         .map_or_else(
             || "null".to_owned(),
             |(sequence, value)| {
@@ -3324,6 +3401,34 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn earlier_failure_appends_an_unavailable_a16_row() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-a16-early-failure-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("rows.jsonl"), "").unwrap();
+        let mut data = CampaignData::default();
+        let terminal = append_failure_a16(&root, Instant::now(), &mut data, None).unwrap();
+
+        assert!(!terminal.observed);
+        let row = fs::read_to_string(root.join("rows.jsonl")).unwrap();
+        let lines = row.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 1);
+        #[cfg(target_os = "macos")]
+        valid_json(lines[0]);
+        assert!(row.contains("\"id\":\"A16\""));
+        assert!(row.contains("\"gate_status\":\"FAIL\""));
+        assert!(row.contains("\"observed\":false"));
+        assert!(row.contains("\"fd_baseline\":\"Unavailable\""));
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     #[ignore = "requires the prepared 100 MiB APFS fixture"]
@@ -3452,11 +3557,13 @@ mod tests {
             .insert("A01".to_owned(), FILE_BYTES);
         data.process_resources.push(ProcessResources {
             operation: "campaign-baseline".to_owned(),
+            observed: true,
             current_rss_bytes: 50 * MIB,
             process_peak_rss_bytes: 50 * MIB,
         });
         data.process_resources.push(ProcessResources {
             operation: "A01".to_owned(),
+            observed: true,
             current_rss_bytes: 60 * MIB,
             process_peak_rss_bytes: 65 * MIB,
         });
@@ -3503,6 +3610,7 @@ mod tests {
         assert!(json.contains("\"temp_calls\":1"));
         assert!(json.contains("\"sync_calls\":2"));
         assert!(json.contains("\"replace_calls\":1"));
+        assert!(json.contains("\"rematerializations\":0"));
     }
 
     #[cfg(target_os = "macos")]

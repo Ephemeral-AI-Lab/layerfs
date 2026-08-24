@@ -1,7 +1,8 @@
 # Minimal implementation plan
 
-Status: proposed implementation authority for the Apple/APFS PoC. It does not
-turn G5 measurements or G6 research into product evidence.
+Status: historical implementation plan for the Apple/APFS PoC. Completion and
+current evidence are recorded in `poc/17`; this page does not turn G5
+measurements or G6 research into product evidence.
 
 Related decisions and contracts:
 

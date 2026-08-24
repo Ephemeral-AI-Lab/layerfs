@@ -533,8 +533,15 @@ fn run_workflow(base: &Path) -> Result<PocReceipt, Box<dyn std::error::Error>> {
         reopened.fs.diagnostics()?,
     ));
     let before_rollback = reopened.fs.diagnostics()?;
+    let expected_rollback = reopened.fs.current_head("main")?;
+    if expected_rollback.root != root_final {
+        return Err("S11 rollback base changed before request".into());
+    }
     let operation_started = Instant::now();
-    assert_eq!(reopened.fs.rollback(root_a)?, root_a);
+    assert_eq!(
+        reopened.fs.rollback(&expected_rollback, root_a)?.root,
+        root_a
+    );
     let operation_wall_ns = operation_started.elapsed().as_nanos();
     operations.push(operation_receipt(
         "rollback",
@@ -590,8 +597,15 @@ fn run_workflow(base: &Path) -> Result<PocReceipt, Box<dyn std::error::Error>> {
     );
     drop(diverged_oracle);
     let before_rollback = reopened.fs.diagnostics()?;
+    let expected_rollback = reopened.fs.current_head("main")?;
+    if expected_rollback.root != root_diverged {
+        return Err("S11 divergent rollback base changed before request".into());
+    }
     let operation_started = Instant::now();
-    assert_eq!(reopened.fs.rollback(root_final)?, root_final);
+    assert_eq!(
+        reopened.fs.rollback(&expected_rollback, root_final)?.root,
+        root_final
+    );
     let operation_wall_ns = operation_started.elapsed().as_nanos();
     operations.push(operation_receipt(
         "rollback",

@@ -237,30 +237,90 @@ fn one_thousand_tiny_revisions_remain_directly_readable_after_reopen() {
     ));
     let engine = Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap();
     let root_inode = InodeId::allocate([0x44; 32], 0);
+    let file_inode = InodeId::allocate([0x44; 32], 1);
     let mut expected = None;
     let mut roots = Vec::new();
     for serial in 0..1_000_u64 {
+        let payload = serial.to_be_bytes();
+        let mut publication = engine.begin_publication(expected.as_ref(), "main").unwrap();
+        let (mode, _) = build(&mut publication, 0o755_u32.to_be_bytes().as_slice()).unwrap();
+        let mut mtime = Vec::new();
+        mtime.extend_from_slice(&0_i64.to_be_bytes());
+        mtime.extend_from_slice(&0_u32.to_be_bytes());
+        let (mtime, _) = build(&mut publication, mtime.as_slice()).unwrap();
+        let metadata = build_metadata_tree(
+            &mut publication,
+            &[
+                MetadataEntryV1 {
+                    key: MetadataKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                    value_file_root: mode.0,
+                },
+                MetadataEntryV1 {
+                    key: MetadataKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                    value_file_root: mtime.0,
+                },
+            ],
+        )
+        .unwrap();
+        let (content, _) = build(&mut publication, payload.as_slice()).unwrap();
+        let file_record = publication
+            .put_object(
+                &encode_inode_record(InodeRecordV1 {
+                    kind: InodeKind::RegularFile,
+                    namespace_ref_count: 1,
+                    content_root: content.0,
+                    metadata_root: metadata,
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let directory = empty_directory(&mut publication).unwrap();
+        let directory = directory_insert(
+            &mut publication,
+            directory,
+            CanonicalName::new("entry").unwrap(),
+            file_inode,
+        )
+        .unwrap()
+        .0;
+        let root_record = publication
+            .put_object(
+                &encode_inode_record(InodeRecordV1 {
+                    kind: InodeKind::Directory,
+                    namespace_ref_count: 0,
+                    content_root: directory.0,
+                    metadata_root: metadata,
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let table = inode_table_from_root(&mut publication, root_inode, root_record).unwrap();
+        let table = inode_table_upsert(&mut publication, table, file_inode, file_record)
+            .unwrap()
+            .0;
         let canonical = encode_namespace_root(NamespaceRootV1 {
             profile_id: profile_id(),
             root_directory_inode: root_inode,
-            inode_table_root: ObjectId::for_bytes(&serial.to_be_bytes()),
+            inode_table_root: table.0,
         })
         .unwrap();
-        let next = engine
-            .begin_publication(expected.as_ref(), "main")
-            .unwrap()
-            .publish_namespace(&canonical)
-            .unwrap();
-        roots.push((next.root, canonical));
+        let next = publication.publish_namespace(&canonical).unwrap();
+        roots.push((next.clone(), canonical, content, payload));
         expected = Some(next);
     }
     drop(engine);
-    let reopened = Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap();
-    for (root, canonical) in roots {
+    let reopened = Engine::open(&path).unwrap();
+    assert_eq!(reopened.read_ref("main").unwrap(), expected);
+    assert_eq!(reopened.retained_roots().unwrap().len(), 1_000);
+    for index in [0, 499, 999] {
+        let (state, canonical, content, payload) = &roots[index];
         assert_eq!(
-            reopened.load_object(root).unwrap().canonical_bytes,
-            canonical
+            reopened.load_object(state.root).unwrap().canonical_bytes,
+            *canonical
         );
+        let mut observed = Vec::new();
+        read_range(&reopened, *content, 0..payload.len() as u64, &mut observed).unwrap();
+        assert_eq!(observed, *payload);
     }
     drop(reopened);
     fs::remove_file(path).unwrap();

@@ -1,0 +1,659 @@
+^D+target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:4> export CARGO_TERM_COLOR=never
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:6> git rev-parse HEAD
+1e2bf54d4f1d32ed365c1add0998352e9307cd8e
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:7> git status '--porcelain=v1'
+ M crates/layerfs-core/src/content/rope.rs
+ M crates/layerfs-core/src/identity/digest.rs
+ M crates/layerfs-core/tests/extent_model.rs
+ M crates/layerfs-engine/src/generation.rs
+ M crates/layerfs-engine/src/lib.rs
+ M crates/layerfs-engine/tests/store_and_publication.rs
+ M crates/layerfs-sdk/src/lib.rs
+ M crates/layerfs-sdk/tests/managed_mixed_edits.rs
+ M crates/layerfs-sdk/tests/workflow.rs
+ M crates/layerfs-vfs/src/managed_edit.rs
+ M crates/layerfs-vfs/src/workspace.rs
+ M poc/00-scope-and-decisions.md
+ M poc/01-architecture-and-file-structure.md
+ M poc/02-data-structures-and-algorithms.md
+ M poc/03-operation-workflows.md
+ M poc/04-apple-apfs-materialization-and-recovery.md
+ M poc/05-minimal-implementation-plan.md
+ M poc/07-implementation-checklist.md
+ M poc/08-native-workspace-and-shell-verification.md
+ M poc/09-portability-and-apple-completeness.md
+ M poc/10-handoff-freeze.md
+ M poc/14-stage1-single-file-benchmark.md
+ M poc/17-stage1-closure.md
+ M poc/README.md
+ M tools/layerfs-eval/src/apple_poc.rs
+ M tools/layerfs-eval/src/stage1.rs
+?? poc/evidence/
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:8> git diff --binary HEAD
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:8> shasum -a 256
+0d66a66e0c24a8b43e0d8c3032e8d301a22bb1650e79d58cca323394314781cd  -
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:9> git ls-files -co --exclude-standard -- '*.rs' Cargo.toml Cargo.lock
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:9> LC_ALL=C sort
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:9> xargs shasum -a 256
+614cf27bb89cfbe8ef494131f8930a094b3d39d1692d982e444d58dd5caaaf8c  Cargo.lock
+dbcb7eeb7672bdd5e8bb8ece8d238879e867b6f7f343ddfed50e20f807760621  Cargo.toml
+4e3feec665619c7a32832d8c607fa658da60e9f5d565fc9c94a65ddd5978f854  crates/layerfs-core/src/canonical_v2.rs
+015bd35667b405bf5934ad8b65d27066b24e9c3407ac882ad8c25be655de72cb  crates/layerfs-core/src/cas/mod.rs
+beb8637ea160f5b61401c0dec2b632927c81be0b491b443142973dc23108edb5  crates/layerfs-core/src/cdc/gear.rs
+938e07cec43c0fd1b889d054b61113247de74d43429f7c382134287c9d0acaf4  crates/layerfs-core/src/cdc/mod.rs
+6415af7d36a63230e6d8c5f4c5709675ce7a16a665cd2e5c0e14c2ce2ea79043  crates/layerfs-core/src/content/extent.rs
+9ce98311028b9a9bec6058a050a99be379f4196df634f71fe6e2906c8e54b583  crates/layerfs-core/src/content/extent_codec.rs
+540858329c435afa29fe1d8325ad7eb3608a348c33037fab535ffa9a79d7a1dd  crates/layerfs-core/src/content/mod.rs
+4859be5b08a0907fa0c1352ca9edde6a09056b99d0d39445d8cbaf85eb321497  crates/layerfs-core/src/content/persistence.rs
+c165e960d7325e99c9ef44c3c8a66f596880e9356cd199abc7195422ef6fb11b  crates/layerfs-core/src/content/rope.rs
+4043d8390cb9b86d4584340dc8c9929bb07720a978e47ac688b72e502424d657  crates/layerfs-core/src/cow/mod.rs
+98d77d29b6413ed1302cca71e7699af7b85f2a846165ad63ae39722151e28112  crates/layerfs-core/src/cow/mutate.rs
+4c15d359ae028ed3a04344ff97929c5798550d629dfd2883f8fdadc2a1f189f1  crates/layerfs-core/src/cow/persistence.rs
+ec97b3c1b8f3ac9418c7c9bcc97d12e2c4b87d571b25b00828b6d38c65804aae  crates/layerfs-core/src/cow/tree.rs
+764ff62d96c88827980375b3a13f4b049a46a35e6115641b931ab950787da5f2  crates/layerfs-core/src/delta/codec.rs
+c417e08dc2b6ecb39dc8371ccc5517780f948924425d33921b1036f725c46b1e  crates/layerfs-core/src/delta/mod.rs
+e828e199dcd6c1cc0c50b2f39ed24162b555f9c5772c36053d4ef1706e23be68  crates/layerfs-core/src/error.rs
+0bbe60b18e17635b9576457824aff64d1d9dd392442af81e709042151a0ca573  crates/layerfs-core/src/format/mod.rs
+6ea2931b095ddecaf48a5accf1c12820c72f15fb9150d60971b524bb83e6c660  crates/layerfs-core/src/format/path.rs
+3f291ec33170455454ec10f6b466b14b7c5adc446f9ec5700263693c27b7a83c  crates/layerfs-core/src/identity/digest.rs
+4e6fe13f99abc20d0395c8e95de937614070f7d7bf7e3027d52259990927f54c  crates/layerfs-core/src/identity/ids.rs
+b9f2bdbb597ece9249780f5f982fc63f8c7f849695fabe4a58a90ee9d5fb591c  crates/layerfs-core/src/identity/mod.rs
+5ef4e213e1ca99304a6917bf68b7242ef90690bafc2c5a3120258ed96eb15517  crates/layerfs-core/src/inode.rs
+05e623e0711a7d4ae11cf45c418365129d27fb0f6b9dde7ef658fa37a5cf6230  crates/layerfs-core/src/lib.rs
+2ca5b3e8957331011f328fe87315c6fd43c6162c4da7ddee2960b571b30ea34f  crates/layerfs-core/src/limits.rs
+e69cb869d78e2b968a80a2c71fee85f7c8e0ddb70c9b9a7d415a4186a8b60bad  crates/layerfs-core/src/metadata.rs
+7e54f848cd0413bdd07040bfb80e7015d6e0fcff41681e4be46c578cb259f2cf  crates/layerfs-core/src/namespace.rs
+8ea7a1ab928a545a57351599ef2379d8037d219b34236734b329cad1f80c79f9  crates/layerfs-core/src/namespace_codec.rs
+416f768367a358543d9a59b7088b0456d0d8ccedc90457371bdbc2143cf95424  crates/layerfs-core/src/object/codec.rs
+b509807331850c59f9fb4683ba50b0984707a5667b97315af3e9c2454f104fd5  crates/layerfs-core/src/object/mod.rs
+fe6cb9e79d3d9aa16cc82896015d3a0765fb542be5a333a2f5d74f47e42801ae  crates/layerfs-core/src/object/model.rs
+f42eb13125cc19ecfc3e4567d35926b2871cd65b46d9f0af985c5a1782f02a5e  crates/layerfs-core/src/validation.rs
+43ffd693158361d2ddb90572a571a729596732535f7c0fcae237adfb7fdad5c5  crates/layerfs-core/tests/canonical_v2_fixture_oracle.rs
+9de111ca5cdd545fe1488f337e429e45214130f58cde0894ae84761e78b58c75  crates/layerfs-core/tests/canonical_v2_shadow.rs
+66bfebeff9f43a8441c93401a0851dd939563c7f26e6e9c993480219b2640e9a  crates/layerfs-core/tests/extent_codec.rs
+1992a755bd07bdb728427e113c587a5c30d55824bad8bb85b139e91a6e0174d3  crates/layerfs-core/tests/extent_model.rs
+cb480f6469427c4e3eba7aed95d7e5fd40b5e560f8d5547d4de43cc2de3f3a63  crates/layerfs-core/tests/namespace_codec.rs
+a230a81cf96f18a01ca2c512e5d89aac6d7d35962d9075be801b39bde2977dec  crates/layerfs-core/tests/namespace_model.rs
+cfb8a5c71e774d98a8778f69c7874e48fcb71fe1c4e7fffa6cf7da7b3f09c6ea  crates/layerfs-engine/src/generation.rs
+7573222430324ff17fb6cbbd40ca12ac435e7ee030aca4e984ee70cfeebbe962  crates/layerfs-engine/src/integrity.rs
+8382cf8c8d81c45acf923af662e192991169ddd50d606ef6d5079ba0fcdc5fc2  crates/layerfs-engine/src/lib.rs
+7a72e3f47f125da082ee992ed09a0e2cad15fa195fd460b60588a98a6b0c4b0e  crates/layerfs-engine/src/publication.rs
+cf9077296dd9b630dfbcd0a7cb3b632c40169e7a5891ecaf1e7a0afb19b7395b  crates/layerfs-engine/src/refs.rs
+3a03806cd0687dad4107daa82bf909b7076f8c30748c43760763ba3978af02e9  crates/layerfs-engine/src/scratch.rs
+61b061136e426b007a9cb7c5d5099929ea7bfc177f7669c53dd5a22654b8cad1  crates/layerfs-engine/tests/faults_and_reopen.rs
+3f1f05bec4fda365407aa6efd40c039065f5250097ceb4b8f5c04fbff54da85b  crates/layerfs-engine/tests/store_and_publication.rs
+7ce18a70ad3b382a6bb175bac0b6a0690eed49615a7421395a621577cb9216db  crates/layerfs-os/src/apple/apfs.rs
+e70aef2558a230aaae8120719fedb4558edd6f030dec33c70e59517d18c96c90  crates/layerfs-os/src/apple/ffi.rs
+1f082bb47bd10f119437d80bbba64306b277ee4089d793016002301d269579b9  crates/layerfs-os/src/apple/metadata.rs
+7fab1a775fe8f811372b1f7b238f2f9b64a2ec2493b3efa299ceae6bc412490e  crates/layerfs-os/src/apple/mod.rs
+7397dc80217c1efa279cbcef85602e08cb23317e4a772002992e5603b61e09c1  crates/layerfs-os/src/apple/store.rs
+07a03439183a7fc35d47269c0a557d5af4e4e54b4045e92befb6f7fc28c77931  crates/layerfs-os/src/apple/workspace.rs
+da12829f148dc8ccb329a1cf3a74e478f9e9a4fd7352884e20ee9abfe01948fc  crates/layerfs-os/src/lib.rs
+0613d0693371371e603204aeda396c339e06b8e63956e6364194b5dc238921a7  crates/layerfs-os/tests/apple_stage1.rs
+2668f284b630a2c49d90713379b4d4d9ec5d6b8e4d201a014ee6056314e8d50c  crates/layerfs-sdk/src/lib.rs
+dd5369cb17e866d331e8a0547d56eb8fb42bb4ff1a8e194b58daa7a7189275a4  crates/layerfs-sdk/tests/external_identity.rs
+6d89258c8bcc9a2f5eb5b31c0aafb6dedc216526193b24e52aae5645d550d4f0  crates/layerfs-sdk/tests/managed_mixed_edits.rs
+db9914d33c381102462dd95248f51c2f826629ad2a780cfd12120fbe4345c08b  crates/layerfs-sdk/tests/stage1_routes.rs
+1cd4a6e1d3568119d7038e8510440afd7c22b62d792c3a6619491b620caaff3f  crates/layerfs-sdk/tests/workflow.rs
+de729c21011248309f96737ad4c39eea69627b0bffadaaebe588fc1314f3fe37  crates/layerfs-vfs/src/capture.rs
+c73f8101839237d7494f7df0b1bb458a076fee27e3a459571ece73a4d6aac0fd  crates/layerfs-vfs/src/driver.rs
+9d8d29d2f6c7a745e4f8f0ef52a975b7956de303a8a82579708a26d9b1eff5da  crates/layerfs-vfs/src/lib.rs
+b4a7b99b33d5f11f9961f2dc563b590a9c2d3b13258847954378aca667d1372b  crates/layerfs-vfs/src/managed_edit.rs
+64de86ef0c3a4a3244e9ea7c755ede2b9e934c117355d6a026ce09e675b6b037  crates/layerfs-vfs/src/materialize.rs
+8e8473ce3a6b60eb1b6676837d44b9b55d92c659f2c84cda2452b52da8b7b8f5  crates/layerfs-vfs/src/refresh.rs
+acf0795f8b0c276000449bfdd9709d7bf97ccf35a0bf9222a8edaad42cf335db  crates/layerfs-vfs/src/resolver.rs
+e868fe390dfbfbfab75707eabba9596cde34e44de065425e05fd0cbc4e5c8eb4  crates/layerfs-vfs/src/workspace.rs
+a5293e4479d4e9160a3b0c4e161f4ef42e9604446a8ca0410a001f7386d6f187  implementation-detail/phase-4/experiments/fastcdc-contiguous-region-kernel/fastcdc_region_screen.rs
+f42ca62345485d31fb23c04698db209506696056016992ff78a7cebf38ef2cec  implementation-detail/phase-4/experiments/fastcdc-hot-loop/fastcdc_exact_screen.rs
+162b0db2f088aa3535a3d878854c24aa7217f86973ad34b306c3dd987e737e2d  implementation-detail/phase-4/experiments/g5-foundation-h11/v1/h11-benchmark/build.rs
+506d49b26af2c60a0047a31458484a163d66432493ceeb39c3ba7f026af85ee5  implementation-detail/phase-4/experiments/g5-foundation-h11/v1/h11-benchmark/src/h11.rs
+89c667232de533ab105764e5a83c4735bacc0e609b6008bfdeab638a66526d94  implementation-detail/phase-4/experiments/g5-foundation-h11/v1/h11-benchmark/src/h11_g3.rs
+5d58d140a1d138d1518d9ebeb154994a909d0786fc39845eef9b9681af81df8e  implementation-detail/phase-4/experiments/g5-foundation-h11/v1/h11-benchmark/src/main.rs
+162b0db2f088aa3535a3d878854c24aa7217f86973ad34b306c3dd987e737e2d  implementation-detail/phase-4/experiments/g5-foundation-h11/v3/h11-benchmark/build.rs
+adc06c1009030371a5dba38df0e397f55edff7b565b7280d75e62e536a09efc9  implementation-detail/phase-4/experiments/g5-foundation-h11/v3/h11-benchmark/src/h11.rs
+ed6bac85f6351734000fbffe26f2774667e9217b010bd7a4efa669e0b0460a26  implementation-detail/phase-4/experiments/g5-foundation-h11/v3/h11-benchmark/src/h11_g3.rs
+cbd8ec6dc80d96c5e0d4a8ac8037345a12bd272552abff2e547d8b01061edb7c  implementation-detail/phase-4/experiments/g5-foundation-h11/v3/h11-benchmark/src/main.rs
+0b8c7f3e671d6bc0eb561f6f1b5b0b4caeef42631f0e9b544c4280e426ec6464  implementation-detail/phase-4/experiments/g5-foundation-h11/v4/h11-benchmark/build.rs
+7e03b66d29fc341ac65f0ec84f9f8e02fd90b75b9fb4449ab4c8437bed5d1196  implementation-detail/phase-4/experiments/g5-foundation-h11/v4/h11-benchmark/src/h11.rs
+173f06565355d3c0559883a0e0b499158c1bc71d65cc8bde0bee8da8092aca7c  implementation-detail/phase-4/experiments/g5-foundation-h11/v4/h11-benchmark/src/h11_g3.rs
+cbd8ec6dc80d96c5e0d4a8ac8037345a12bd272552abff2e547d8b01061edb7c  implementation-detail/phase-4/experiments/g5-foundation-h11/v4/h11-benchmark/src/main.rs
+3d1e5288fbf6bdc1bfcd955a017891c100153475d745b8ebdb27da891dcdca94  implementation-detail/phase-4/experiments/g5-foundation-h11/v7/h11-benchmark/build.rs
+c847566e3b400e761e9de53ccb96f95bea95fca89d71567141f84af4bc294205  implementation-detail/phase-4/experiments/g5-foundation-h11/v7/h11-benchmark/src/h11.rs
+42582578233be19f7f1d8a83ce607f0ae41be58301fcfbe7efab55f8bff06354  implementation-detail/phase-4/experiments/g5-foundation-h11/v7/h11-benchmark/src/h11_g3.rs
+16b7c60e996e47bf73b661c573c54e74bb30e5925e8f32bf3e2d5444c96de65c  implementation-detail/phase-4/experiments/g5-foundation-h11/v7/h11-benchmark/src/main.rs
+0b8c7f3e671d6bc0eb561f6f1b5b0b4caeef42631f0e9b544c4280e426ec6464  implementation-detail/phase-4/experiments/g5-foundation-h11/v8/h11-benchmark/build.rs
+1a983034fd0125ec88c7febe69dd3dcc92ce0bbacb21aca838b7b9ed41002a42  implementation-detail/phase-4/experiments/g5-foundation-h11/v8/h11-benchmark/src/h11.rs
+8decc933b8ecebf73486ba157ef961d68cd8c02f3a869929cc6eebeeaf9e7f97  implementation-detail/phase-4/experiments/g5-foundation-h11/v8/h11-benchmark/src/h11_g3.rs
+cbd8ec6dc80d96c5e0d4a8ac8037345a12bd272552abff2e547d8b01061edb7c  implementation-detail/phase-4/experiments/g5-foundation-h11/v8/h11-benchmark/src/main.rs
+0b8c7f3e671d6bc0eb561f6f1b5b0b4caeef42631f0e9b544c4280e426ec6464  implementation-detail/phase-4/experiments/g5-foundation-h11/v9/h11-benchmark/build.rs
+92c1290369c33098b47e46b173c10c2d6a9e088ee62e5e022cd0283ab3ac9261  implementation-detail/phase-4/experiments/g5-foundation-h11/v9/h11-benchmark/src/h11.rs
+1e175f7f66b9078ea422ff43ab4f0fc5efa4fb0ef223015561b91d48e6b95073  implementation-detail/phase-4/experiments/g5-foundation-h11/v9/h11-benchmark/src/h11_g3.rs
+cbd8ec6dc80d96c5e0d4a8ac8037345a12bd272552abff2e547d8b01061edb7c  implementation-detail/phase-4/experiments/g5-foundation-h11/v9/h11-benchmark/src/main.rs
+177fa8598d43697cb3ca4141ed182857343607a0bbfe13cc52fc691ab1fda565  implementation-detail/phase-4/experiments/g5-history-integration/v1/history-benchmark/build.rs
+224b4fb4366a1da1adf64c25e536b3acaf9f40e4e5d81a56bb18d34520aa0c00  implementation-detail/phase-4/experiments/g5-history-integration/v1/history-benchmark/src/history.rs
+ca6ceec955e7aa72596a92466b4df37c7a761988eeb80059f0a5d3340469f348  implementation-detail/phase-4/experiments/g5-history-integration/v1/history-benchmark/src/history_g3.rs
+d2ca3e4f209d12fb9e198fa5fb135fc8f496de5877de183b446053ec62623d83  implementation-detail/phase-4/experiments/g5-history-integration/v1/history-benchmark/src/main.rs
+177fa8598d43697cb3ca4141ed182857343607a0bbfe13cc52fc691ab1fda565  implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/build.rs
+29f0b4ee9dda8fe2fcf526c2c923479c666ec2fcef298e4d34fe550bef2de663  implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/src/history.rs
+ca6ceec955e7aa72596a92466b4df37c7a761988eeb80059f0a5d3340469f348  implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/src/history_g3.rs
+ed2654aa64fad916b55ee25b77d88686e04f38ed4e63e972f2c298ca134d15af  implementation-detail/phase-4/experiments/g5-history-integration/v2/history-benchmark/src/main.rs
+177fa8598d43697cb3ca4141ed182857343607a0bbfe13cc52fc691ab1fda565  implementation-detail/phase-4/experiments/g5-history-integration/v3/history-benchmark/build.rs
+221d6c3599cea0917349a7912800e5b8e5de9d56a4bb016f9dc5ced8118f35b5  implementation-detail/phase-4/experiments/g5-history-integration/v3/history-benchmark/src/history.rs
+ca6ceec955e7aa72596a92466b4df37c7a761988eeb80059f0a5d3340469f348  implementation-detail/phase-4/experiments/g5-history-integration/v3/history-benchmark/src/history_g3.rs
+ed2654aa64fad916b55ee25b77d88686e04f38ed4e63e972f2c298ca134d15af  implementation-detail/phase-4/experiments/g5-history-integration/v3/history-benchmark/src/main.rs
+0801e99c07a106d3b7854bf2ba288e28dc54e7d984d0ef2bd519023dc733c3c4  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v1/g5-benchmark/build.rs
+34b99a2e17e596b71a8738049e138310bd6e2f88bac906249edc3a569f9dad65  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v1/g5-benchmark/src/main.rs
+5925ce46566a5975872fa84b07daba31e520855b3b046b0d5cb452d3675472b9  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v1/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v10/g5-benchmark/src/session.rs
+8b0437cb26226b133bbc2039772262325fd375657859c81f45fd08f259b6f2b0  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v14/FROZEN-SHARED-SOURCE-v14.rs
+53a8eb097ed14c3c073de6d7cbc4687f79ed8ae185e835e5f44c2ca4c97c4164  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v15/FROZEN-SHARED-SOURCE-v15.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v15/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v15/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v15/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v16/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v16/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v16/g5-benchmark/src/session.rs
+0c527e4d90aee1f9c05f2de913cb8f5a4165d1c2012b17d11a36fc26c5413ba4  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v17/attempt-2/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v17/attempt-2/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v17/attempt-2/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v17/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v17/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v17/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v18/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v18/g5-benchmark/src/main.rs
+d545d783e80cd25b3803c0154fa4a6a12c627aaa4c73d5655d0fcf1fcc865546  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v18/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v19/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v19/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v19/g5-benchmark/src/session.rs
+d210c0ab8e70b88f337c13a8a8010e27ef40e18980335281b889bdda5c38f63c  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v2/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v2/g5-benchmark/src/main.rs
+7c005b1bfe104a0f9a2fbddd05efdae3b81feeb5447fa8e9bf83d972f29ea8cb  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v2/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v20/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v20/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v20/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v21/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v21/g5-benchmark/src/main.rs
+390be927f99b1d5915644c93f498c2bc857fda6af175bd9d2a3d676c33b42897  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v21/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v22/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v22/g5-benchmark/src/main.rs
+a5b0e70eaec1837e54245dde547be82f5c56d79679a774b3aa52398656ba9d6d  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v22/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v23/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v23/g5-benchmark/src/main.rs
+a5b0e70eaec1837e54245dde547be82f5c56d79679a774b3aa52398656ba9d6d  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v23/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v24/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v24/g5-benchmark/src/main.rs
+a5b0e70eaec1837e54245dde547be82f5c56d79679a774b3aa52398656ba9d6d  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v24/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v25/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v25/g5-benchmark/src/main.rs
+dcf1db51c48368554b67e9aec1fcd3963efd6af765df40daedd1c903810bee7a  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v25/g5-benchmark/src/session.rs
+d733362a31b8dbbee6c341cc9cc8014e041a3b56fe32a307150b1a9e9a1266ab  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/g4-control/build.rs
+a579346b6675ed22f5f7299c0d795ce6297a7a47405ec621b99274e319baf9c7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/g4-control/src/main.rs
+a5b0e70eaec1837e54245dde547be82f5c56d79679a774b3aa52398656ba9d6d  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/g4-control/src/session.rs
+9e115c63600c06a7dc82b9c1e31ecdef69d4bd226f7e08908cb1fc10a34d2e86  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/g5-benchmark/src/main.rs
+a5b0e70eaec1837e54245dde547be82f5c56d79679a774b3aa52398656ba9d6d  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v27/g5-benchmark/src/session.rs
+d210c0ab8e70b88f337c13a8a8010e27ef40e18980335281b889bdda5c38f63c  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v3/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v3/g5-benchmark/src/main.rs
+4ac423ec21c08d37e070cbfc963218334f01c97d3ebebace7478966b7b31fd90  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v3/g5-benchmark/src/session.rs
+d210c0ab8e70b88f337c13a8a8010e27ef40e18980335281b889bdda5c38f63c  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v4/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v4/g5-benchmark/src/main.rs
+9b639c34f0024538d737badf7db54548c779affa141b0db6e863d5dc864f6b77  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v4/g5-benchmark/src/session.rs
+d210c0ab8e70b88f337c13a8a8010e27ef40e18980335281b889bdda5c38f63c  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v5/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v5/g5-benchmark/src/main.rs
+75c31bf8b942f4d99e85d360252e7502acd1fdcb198e3c4911b4aa3564df5952  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v5/g5-benchmark/src/session.rs
+d210c0ab8e70b88f337c13a8a8010e27ef40e18980335281b889bdda5c38f63c  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v6/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v6/g5-benchmark/src/main.rs
+0ffb84506233a4e36d05acc6b5a9a77236a3ccd884b0fda7dad11ab35c7405c9  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v6/g5-benchmark/src/session.rs
+9260f932e303a7f8e30c1479394f6ce286b6da78f2e16bc12cca1ba218be3682  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v7/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v7/g5-benchmark/src/main.rs
+defcc784e2a04023dac7063cfc621760943a4c84251b0373414729d60b1f95c1  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v7/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v8/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v8/g5-benchmark/src/main.rs
+44c5c2fe2b72aa024481039816bd5b649fe2d84766dabffea5279f5947e734ca  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v8/g5-benchmark/src/session.rs
+1cca62aa244c4aa57cac0261832bd4c4ed195f7c94363d8dc6ac55a89d89c27b  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v9/g5-benchmark/build.rs
+60b87b184225967ed8ec4e77700f5af788d45efefc8456af047cbace831185d7  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v9/g5-benchmark/src/main.rs
+d05db0bc580659a41f030bdd6a8720890b6eabe85a20b5c75b65c692abca1455  implementation-detail/phase-4/experiments/g5-trusted-reopen-edit/v9/g5-benchmark/src/session.rs
+29de69c83d2aadc6cec3a30e79cf98346aee8319cc7c33b0c0a0c3f7f85f3e5d  implementation-detail/phase-4/preserved-benchmark-sources/phase4_create_edit_benchmark.rs
+e535d66bada965f35aab59b5d3bed60cb867884941d401f9cdae0545eaac6a05  implementation-detail/phase-4/preserved-benchmark-sources/phase4_engine_parity.rs
+7def4cf2a3b279df762b245cba51a781fd7054a79835a8f47ea741206375f0fa  implementation-detail/phase-4/preserved-benchmark-sources/phase4_g3_materialization.rs
+648e78d93148e13eb19cb1ef64723bb7851b7a0c399264afc4f8245c00684522  tools/layerfs-eval/src/apple_poc.rs
+18afe0eba97124116e5cb6d141f447a073ba4313efecb083c3c26aba2f54d5b8  tools/layerfs-eval/src/main.rs
+a2abcf6c9ed3fc0b237a067321fd631d446947e3f66d00c580df377abb5eef09  tools/layerfs-eval/src/stage1.rs
+4544ded108c8590f06ba4074ee742f88a9598bfa54f11b27db5d18c36ea7ba6f  tools/layerfs-eval/src/stage1_fixture.rs
+0e257a9a745ad349664179c45ebd03dc155d4a44806f8a91d0b692057e198f07  tools/layerfs-eval/src/stage1_fixture_cdc.rs
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:10> cargo fmt --all -- --check
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:11> cargo check --workspace --all-targets
+    Checking layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/tools/layerfs-eval)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.10s
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:12> cargo clippy --workspace --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:13> cargo test --workspace --all-targets -- '--test-threads=1'
+   Compiling layerfs-os v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-os)
+   Compiling layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/tools/layerfs-eval)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.92s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_core-d5ec4e3437b86dcf)
+
+running 55 tests
+test canonical_v2::tests::literal_vectors_and_error_precedence_are_exact ... ok
+test canonical_v2::tests::native_v2_codecs_are_strict_and_never_translate_v1 ... ok
+test cas::tests::authenticated_range_returns_nothing_for_a_well_formed_identity_substitution ... ok
+test cas::tests::chunk_identity_authenticates_complete_canonical_bytes ... ok
+test cas::tests::chunk_storage_is_bounded_by_the_cdc_maximum ... ok
+test cas::tests::rejects_missing_malformed_and_unequal_replacement ... ok
+test cas::tests::scan_identity_deduplicates_and_preserves_callback_bytes ... ok
+test cdc::tests::callback_failure_is_propagated_exactly ... ok
+test cdc::tests::fragmentation_does_not_change_boundaries ... ok
+test cdc::tests::frozen_boundaries_are_deterministic ... ok
+test cdc::tests::scanner_buffer_capacity_is_fixed ... ok
+test cdc::tests::short_and_maximum_edges_are_bounded ... ok
+test content::tests::bounded_edits_reconstruct_and_reuse_authenticated_chunks ... ok
+test content::tests::bounded_rejoin_failure_is_typed ... ok
+test content::tests::empty_and_eof_ranges_are_explicit ... ok
+test content::tests::full_replace_is_a_separate_streaming_path ... ok
+test content::tests::reads_only_chunks_overlapping_a_cross_chunk_range ... ok
+test content::tests::reconstructs_exact_bytes_from_ordered_chunks ... ok
+test content::tests::rejects_invalid_declared_lengths ... ok
+test content::tests::rejects_missing_chunks ... ok
+test cow::mutate::tests::add_remove_replace_rename_and_metadata_have_exact_deltas ... ok
+test cow::mutate::tests::delta_application_is_authenticated_and_replay_is_safe ... ok
+test cow::mutate::tests::directory_entry_limits_are_typed ... ok
+test cow::mutate::tests::failed_mutations_leave_the_parent_unchanged ... ok
+test cow::mutate::tests::mutation_rebuilds_only_the_changed_ancestor_spine ... ok
+test cow::mutate::tests::one_byte_content_edits_keep_phase_two_reuse_and_range_locality ... ok
+test cow::persistence::tests::streaming_partition_rejects_slack_and_cross_page_duplicate ... ok
+test delta::tests::empty_delta_is_deterministic_and_idempotent ... ok
+test delta::tests::wrong_parent_and_wrong_target_fail_without_mutating_the_parent ... ok
+test format::path::tests::accepts_root_and_canonical_paths ... ok
+test format::path::tests::enforces_path_bounds ... ok
+test format::path::tests::orders_parents_and_components_by_bytes ... ok
+test format::path::tests::rejects_invalid_paths ... ok
+test identity::digest::tests::content_digest_writer_is_fragmentation_independent ... ok
+test identity::digest::tests::object_domain_is_not_unframed_hashing ... ok
+test identity::digest::tests::object_hash_is_fragmentation_independent ... ok
+test identity::ids::tests::ids_are_fixed_and_text_round_trips ... ok
+test legacy_selected_goldens::print_selected_golden_manifest ... ignored, prints the independently generated normative TSV
+test legacy_selected_goldens::selected_profile_rejects_representative_malformed_records ... ok
+test legacy_selected_goldens::selected_profile_success_vectors_match_independent_bytes_and_ids ... ok
+test namespace::tests::variable_width_directory_borrows_until_both_branches_are_filled ... ok
+test object::codec::tests::borrowed_bytes_encoding_matches_owned_canonical_identity ... ok
+test object::codec::tests::canonical_vectors_are_fixed ... ok
+test object::codec::tests::directory_names_use_the_canonical_name_bound ... ok
+test object::codec::tests::identity_authenticates_supplied_bytes_before_decoding ... ok
+test object::codec::tests::object_id_matches_hash_of_canonical_encoding ... ok
+test object::codec::tests::rejects_declared_fields_larger_than_remaining_payload ... ok
+test object::codec::tests::rejects_malformed_and_noncanonical_bytes ... ok
+test object::codec::tests::rejects_manually_unsorted_directory_wire_bytes ... ok
+test object::codec::tests::rejects_truncated_payloads_and_invalid_fields ... ok
+test object::codec::tests::round_trips_and_streams_each_object_kind ... ok
+test object::codec::tests::shallow_authentication_defers_payload_rules_to_the_exact_role_decoder ... ok
+test object::codec::tests::streaming_decode_handles_fragmented_and_short_reads ... ok
+test validation::tests::exact_receipt_round_trip_and_boundaries ... ok
+test validation::tests::receipt_rejects_each_authority_binding ... ok
+
+test result: ok. 54 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+     Running tests/canonical_v2_fixture_oracle.rs (target/debug/deps/canonical_v2_fixture_oracle-a3dfc942d4721d75)
+
+running 1 test
+test independent_actual_fixture_oracle_freezes_complete_v2_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.40s
+
+     Running tests/canonical_v2_shadow.rs (target/debug/deps/canonical_v2_shadow-917e2cf97752e3e2)
+
+running 3 tests
+test canonical_v2_shadow_closes_format_authority_edit_and_range_questions ... ok
+test canonical_v2_shadow_covers_radix_and_range_boundaries ... ok
+test canonical_v2_shadow_freezes_vectors_and_retained_size_model ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/extent_codec.rs (target/debug/deps/extent_codec-bab0c647da2b4528)
+
+running 3 tests
+test literal_empty_leaf_and_file_state_are_exact ... ok
+test profile_digest_is_literal_and_malformed_framing_is_rejected ... ok
+test selected_nonempty_boundary_ids_are_literal ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/extent_model.rs (target/debug/deps/extent_model-d9d749ae620e28f8)
+
+running 18 tests
+test authenticated_child_summary_mismatch_and_underfull_nonroot_are_rejected ... ok
+test deep_splice_rejoins_boundary_fragments_before_they_become_nonroots ... ok
+test extent_visitor_streams_the_mapping_without_fetching_payload_bytes ... ok
+test extra_payload_batch_callback_is_rejected_without_panicking ... ok
+test fetched_identity_is_unconditional ... ok
+test fetched_payload_above_frozen_ceiling_is_rejected ... ok
+test frozen_three_mib_mapping_is_below_one_percent ... ok
+test full_empty_read_authenticates_and_binds_its_mapping_root ... ok
+test large_replacement_persists_no_flushed_unreachable_prefix_nodes ... ok
+test missing_payload_batch_callback_is_rejected ... ok
+test paired_diff_handles_unequal_height_and_partition_without_payload_reads ... ok
+test paired_diff_skips_equal_roots_and_length_mismatch_mappings ... ok
+test product_range_reader_uses_bounded_authenticated_payload_batches ... ok
+test replace_persists_no_new_unreachable_objects ... ok
+test splices_match_vec_and_preserve_retained_root_without_suffix_payload_reads ... ok
+test streamed_build_and_ranges_match_vec_oracle ... ok
+test two_thousand_randomized_splices_match_every_revision_and_retained_history ... ok
+test validation_binds_empty_state_and_visits_unread_children ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 54.01s
+
+     Running tests/namespace_codec.rs (target/debug/deps/namespace_codec-f4d6919c4bb7b153)
+
+running 7 tests
+test directory_inode_and_metadata_nodes_are_strict_and_ordered ... ok
+test exact_namespace_values_round_trip_and_reject_trailing_bytes ... ok
+test inode_decoder_rejects_size_count_and_level_before_entry_allocation ... ok
+test metadata_child_ranges_must_not_overlap ... ok
+test metadata_empty_root_is_canonical_and_one_child_root_is_not ... ok
+test persistent_metadata_tree_round_trips_multiple_levels ... ok
+test portable_and_apple_metadata_are_exact_and_order_preserving ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/namespace_model.rs (target/debug/deps/namespace_model-3237186aa4f34b32)
+
+running 18 tests
+test deterministic_mixed_directory_edits_preserve_periodic_roots ... ok
+test directory_and_inode_child_ranges_must_not_overlap ... ok
+test directory_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test directory_diff_streams_valid_unmatched_prefixes_tails_and_renames ... ok
+test directory_state_and_branch_summaries_are_authoritative ... ok
+test inode_branch_summary_and_occupancy_are_authoritative ... ok
+test inode_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test inode_remove_merges_collapses_and_preserves_retained_root ... ok
+test inode_table_scales_and_record_update_rewrites_only_its_spine ... ok
+test level_two_ranges_use_true_leftmost_leaf_minimum ... ok
+test paired_persistent_diffs_prune_unchanged_directory_and_inode_subtrees ... ok
+test remove_and_rename_persist_only_reachable_directory_and_inode_nodes ... ok
+test remove_merge_root_collapse_and_rename_match_oracle ... ok
+test repeated_child_levels_are_rejected_before_loading_grandchildren ... ok
+test ten_thousand_names_path_copy_and_retained_roots_match_ordered_oracle ... ok
+test underfull_middle_directory_borrows_right_before_merging_left ... ok
+test underfull_middle_inode_leaf_borrows_right_before_merging_left ... ok
+test variable_width_directory_borrows_until_both_leaves_are_filled ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.79s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_engine-c18c3f99d8dfd8a4)
+
+running 45 tests
+test generation::tests::candidate_inspection_never_mutates_empty_or_foreign_sqlite ... ok
+test generation::tests::cleanup_waits_for_selected_verified_authority ... ok
+test generation::tests::compaction_authenticates_unreachable_objects_before_discarding_them ... ok
+test generation::tests::compaction_preflights_space_before_creating_candidate ... ok
+test generation::tests::compaction_rejects_nonempty_legacy_state_without_erasing_it ... ok
+test generation::tests::compaction_returns_the_callers_store_lifetime_mode ... ok
+test generation::tests::definitely_uninstalled_genesis_is_cleaned_in_the_same_call ... ok
+test generation::tests::exact_next_candidate_cleanup_preserves_valid_unrelated_temporary_selector ... ok
+test generation::tests::exact_next_generation_without_selector_is_reported_and_preserved ... 
+running 1 test
+ok
+test generation::tests::exclusive_maintenance_recovers_child_exit_hot_scratch ... 
+running 1 test
+ok
+test generation::tests::failed_selector_install_recovers_prior_and_removes_only_owned_candidate ... ok
+test generation::tests::genesis_current_compaction_and_reopen_preserve_store_identity ... ok
+test generation::tests::genesis_handoff_reopens_the_generation_selected_after_maintenance ... ok
+test generation::tests::maintenance_lock_blocks_cleanup_and_lost_ack_reconciles_requested_selector ... ok
+test generation::tests::mismatched_compaction_source_never_cleans_target_residue ... ok
+test generation::tests::missing_selector_fails_closed_and_exact_candidate_residue_recovers ... ok
+test generation::tests::port_is_object_safe_and_preserves_install_then_sync_order ... ok
+test generation::tests::post_visible_cleanup_sync_failure_is_ambiguous ... ok
+test generation::tests::preseeded_wal_maintenance_is_admitted_reconfigured_and_pinned ... ok
+test generation::tests::scratch_crash_child ... ok
+test generation::tests::selector_cleanup_refuses_path_substitution_after_inspection ... ok
+test generation::tests::selector_directory_sync_failure_is_ambiguous_and_preserves_prior_generation ... ok
+test generation::tests::selector_is_exact_154_bytes_and_strictly_checksummed ... ok
+test generation::tests::selector_reader_rejects_oversize_without_read_to_end ... ok
+test generation::tests::trusted_recovery_reopens_in_the_requested_store_lifetime_mode ... ok
+test generation::tests::unselected_generation_crash_child ... ok
+test publication::tests::publication_crash_child ... ok
+test publication::tests::publication_t0_through_t6_survive_real_process_exit_and_reopen ... 
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.01s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+ok
+test publication::tests::restore_primary_rejects_same_store_id_stale_path_replacement ... ok
+test scratch::tests::constructor_failure_removes_exact_owned_files ... ok
+test scratch::tests::drop_closes_connection_and_removes_exact_owned_files ... ok
+test scratch::tests::exclusive_recovery_removes_only_authenticated_unlocked_crash_scratch ... ok
+test scratch::tests::namespaces_share_one_connection_and_isolate_keys_and_queues ... ok
+test scratch::tests::recovery_preserves_same_marker_impostor_schema ... ok
+test scratch::tests::store_bound_creation_does_not_reopen_exclusively_locked_authority ... ok
+test tests::admission_never_mutates_foreign_or_incomplete_databases ... ok
+test tests::capture_is_atomic_and_durable ... ok
+test tests::foreign_hot_journal_child ... ok
+test tests::immutable_reuse_and_tamper_are_distinct ... ok
+test tests::payload_batch_union_preserves_order_without_sorting ... ok
+test tests::profile_range_reopen_and_counters ... ok
+test tests::read_only_admission_preserves_foreign_hot_journal_bytes ... 
+running 1 test
+ok
+test tests::reconciliation_read_never_creates_missing_or_accepts_replaced_store ... ok
+test tests::sqlite_error_mapping_preserves_required_classes ... ok
+test tests::two_verified_snapshot_readers_coexist ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s
+
+     Running tests/faults_and_reopen.rs (target/debug/deps/faults_and_reopen-5b73d5fc93224a6d)
+
+running 6 tests
+test commit_busy_rolls_back_primary_before_reconciliation_and_engine_reuse ... ok
+test initial_verified_scrub_serializes_against_trusted_writer ... ok
+test live_verified_handle_rechecks_history_written_by_trusted_handle ... ok
+test successful_live_scrub_clears_history_once_durably ... ok
+test trusted_ref_with_missing_inode_table_never_becomes_verified_authority ... ok
+test verified_reopen_rejects_invalid_ref_rows_before_closure ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/store_and_publication.rs (target/debug/deps/store_and_publication-7ca9cc5ee8c6fc15)
+
+running 10 tests
+test borrowed_object_load_and_ordered_batch_fetch_once_and_authenticate_once_per_occurrence ... ok
+test canonical_rope_objects_share_the_publication_transaction ... ok
+test one_thousand_tiny_revisions_remain_directly_readable_after_reopen ... ok
+test publication_is_one_guarded_commit_and_fork_rollback_copy_no_objects ... ok
+test verified_fork_rejects_unretained_orphan_root ... ok
+test verified_publication_counts_every_integrity_fetch_authentication_and_role_decode ... ok
+test verified_publication_rejects_all_hashes_correct_unreachable_inode ... ok
+test verified_publication_rejects_missing_reachable_inode_table_before_visibility ... ok
+test verified_publication_rejects_present_zero_bsd_flags ... ok
+test verified_publication_survives_cache_spill_without_reopening_store ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.44s
+
+     Running unittests src/main.rs (target/debug/deps/layerfs_eval-a7920cdaf9f0de0e)
+
+running 23 tests
+test stage1::tests::artifact_json_is_valid ... ok
+test stage1::tests::content_locality_excludes_observed_metadata_ropes ... ok
+test stage1::tests::earlier_failure_appends_an_unavailable_a16_row ... ok
+test stage1::tests::failing_a16_is_appended_before_the_gate_error ... ok
+test stage1::tests::failure_summary_retains_partial_statistics_targets_and_resources ... ok
+test stage1::tests::frozen_reset_and_edit_populations_are_exact ... ok
+test stage1::tests::frozen_statistics_use_one_based_order_rules ... ok
+test stage1::tests::full_import_reports_the_phase_that_owns_peak_rss ... ignored, requires the prepared 100 MiB APFS fixture
+test stage1::tests::random_ranges_are_globally_non_overlapping ... ok
+test stage1::tests::random_ranges_reuse_the_exact_file_read_plan ... ignored, requires the prepared 100 MiB APFS fixture
+test stage1::tests::readiness_artifacts_are_append_only ... ok
+test stage1::tests::sdk_q_and_native_call_observations_are_not_zeroed_by_serialization ... ok
+test stage1_fixture::fixture_cdc::tests::oracle_uses_frozen_core_profile_and_literal_raw_sequence ... ok
+test stage1_fixture::tests::apfs_parser_rejects_deceptive_personality_text ... ok
+test stage1_fixture::tests::apfs_preflight_resolves_the_containing_volume ... ok
+test stage1_fixture::tests::clone_id_proves_apfs_copy_on_write_pair ... ok
+test stage1_fixture::tests::failed_attempt_admission_cleans_its_owned_clone ... ok
+test stage1_fixture::tests::inventory_digest_normalizes_the_sealed_permission_contract ... ok
+test stage1_fixture::tests::json_helpers_read_nested_objects ... ok
+test stage1_fixture::tests::preparation_failure_receipts_are_append_only_and_context_bound ... ok
+test stage1_fixture::tests::preparation_reopen_source_uses_private_fixture_root ... ok
+test stage1_fixture::tests::retained_generator_is_chunk_stable ... ok
+test stage1_fixture::tests::retained_generator_matches_frozen_digest ... ok
+
+test result: ok. 21 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 4.82s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_os-173acfa29ae8828e)
+
+running 22 tests
+test apple::ffi::tests::apfs_clone_temp_supports_independent_same_offset_patch ... ok
+test apple::ffi::tests::entry_token_changes_for_an_in_place_live_writer ... ok
+test apple::ffi::tests::private_cleanup_neutralizes_mode_zero_and_deny_delete_acl ... ok
+test apple::ffi::tests::verified_tombstone_cleanup_clears_immutable_and_append_flags ... ok
+test apple::metadata::tests::many_xattrs_have_one_aggregate_memory_ceiling ... ok
+test apple::metadata::tests::metadata_read_stays_bound_to_the_open_descriptor_after_substitution ... ok
+test apple::metadata::tests::only_exact_provenance_is_environmental ... ok
+test apple::metadata::tests::ordered_extended_acl_round_trips_exactly ... ok
+test apple::metadata::tests::provenance_is_filtered_while_supported_xattrs_round_trip ... ok
+test apple::metadata::tests::provenance_value_is_not_canonical_input_and_exclusions_stay_fatal ... ok
+test apple::metadata::tests::refusal_happens_before_any_metadata_mutation ... ok
+test apple::metadata::tests::setuid_and_setgid_are_rejected_before_mode_projection ... ok
+test apple::workspace::tests::apfs_preflight_rejects_case_and_normalization_collisions ... ok
+test apple::workspace::tests::managed_owned_root_collision_preserves_preexisting_tree ... ok
+test apple::workspace::tests::native_n0_and_n4_n5_cleanup_and_reconciliation_matrix ... ok
+test apple::workspace::tests::owned_recovery_crash_child ... ok
+test apple::workspace::tests::reopen_removes_only_unlocked_store_bound_owned_workspace ... 
+running 1 test
+ok
+test apple::workspace::tests::same_size_clone_patch_replaces_an_existing_single_link_destination ... ok
+test apple::workspace::tests::symlink_metadata_survives_reopen_and_lost_parent_sync_ack_is_ambiguous ... ok
+test apple::workspace::tests::top_level_workspace_admission_never_follows_a_symlink ... ok
+test apple::workspace::tests::workspace_admission_never_follows_parent_symlinks ... ok
+test apple::workspace::tests::workspace_metadata_refusal_precedes_permission_mutation ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/apple_stage1.rs (target/debug/deps/apple_stage1-aa245ab85a937eb7)
+
+running 5 tests
+test identity_checked_removal_never_unlinks_a_replacement ... ok
+test nested_directory_delta_applies_when_root_directory_mapping_is_equal ... ok
+test refresh_covers_lifecycle_metadata_and_hard_links ... ok
+test selective_refresh_resolves_more_than_sixteen_topology_edges ... ok
+test symlink_metadata_only_refresh_syncs_parent_and_survives_fresh_open ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_sdk-52736273d5d1ee32)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/external_identity.rs (target/debug/deps/external_identity-d58af30661e5cf33)
+
+running 1 test
+test external_capture_reuses_unchanged_file_roots_and_cdc_scans_only_changes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests/managed_mixed_edits.rs (target/debug/deps/managed_mixed_edits-5e81330506b6eb5c)
+
+running 4 tests
+test checkpoint_syncs_the_final_token_after_mixed_same_path_edits ... ok
+test equal_root_refresh_revalidates_the_native_root_binding ... ok
+test live_noop_revalidates_the_native_root_binding_in_constant_work ... ok
+test rename_collision_is_refused_before_visibility_and_preserves_authority ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests/stage1_routes.rs (target/debug/deps/stage1_routes-e37d8d7b9ceb245a)
+
+running 4 tests
+test managed_refresh_applies_only_the_changed_canonical_range ... ok
+test managed_workspace_rotates_one_hundred_checkpoints_without_rematerializing ... ok
+test public_direct_routes_stream_and_preserve_history ... ok
+test repeated_ranges_reuse_only_the_exact_resolved_root_and_path ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.79s
+
+     Running tests/workflow.rs (target/debug/deps/workflow-f950ec80f4a6786d)
+
+running 12 tests
+test hard_link_flags_are_finalized_after_the_last_alias_and_owned_discard_clears_them ... ok
+test historical_external_projection_cannot_publish_over_current_main ... ok
+test into_external_preserves_inode_after_clone_and_in_place_fallback ... ok
+test into_external_rename_preserves_inode_by_native_hard_link_key ... ok
+test live_hard_link_split_never_reuses_one_inode_for_two_native_keys ... ok
+test new_earlier_hard_link_alias_preserves_only_live_topology_authority ... ok
+test ordinary_apple_workspace_captures_bash_reopens_and_reads_history ... ok
+test provenance_value_does_not_change_the_canonical_root ... ok
+test restrictive_file_allows_exact_noop_refuses_mutation_and_captures_read_only ... ok
+test rollback_rejects_a_stale_caller_decision ... ok
+test stale_managed_replay_marks_native_mutation_dirty_and_retry_fails_closed ... ok
+test warm_materialization_is_exact_no_rewrite_and_mismatch_rolls_back ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.69s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_vfs-8c3e926588dfbba6)
+
+running 5 tests
+test driver::tests::erased_driver_and_handles_are_object_safe ... ok
+test managed_edit::tests::managed_inode_record_uses_the_borrowed_authenticated_route ... ok
+test operation_counter_tests::operation_counters_preserve_structural_and_native_facts ... ok
+test refresh::tests::ordered_paths_support_the_valid_256_component_depth ... ok
+test workspace::lease_tests::writer_and_capture_admission_are_one_atomic_state_transition ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:14> cargo build --release --workspace
+   Compiling layerfs-core v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-core)
+   Compiling layerfs-engine v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-engine)
+   Compiling layerfs-vfs v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-vfs)
+   Compiling layerfs-os v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-os)
+   Compiling layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-sdk)
+   Compiling layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/tools/layerfs-eval)
+    Finished `release` profile [optimized] target(s) in 9.01s
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:15> git diff --check
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:16> target/release/layerfs-eval stage1 readiness-only single-file
+stage1-readiness status=PASS receipt=/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-readiness.json reset_upper_ns=4520375 forecast_campaign_wall_ns=60244100250 measured_rows=0
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:17> jq -c '{schema,status,measured_rows_started,git_commit,dirty_tree_blake3,source_tree_blake3,executable_blake3,fixture_master_blake3,store_sqlite_profile,reset_observations_ns,reset_upper_ns}' target/layerfs-stage1-readiness.json
+{"schema":"layerfs-stage1-readiness-v2","status":"PASS","measured_rows_started":false,"git_commit":"1e2bf54d4f1d32ed365c1add0998352e9307cd8e","dirty_tree_blake3":"e341e519b2541bfd81438a3a631ef7ac9031efdad6cbd1cde080a46b5f280570","source_tree_blake3":"9796fedab94b8480753273ba84055aea1a1b5d2b48c2a9f82c2af0f7e0a2e423","executable_blake3":"c6d67991ba3c50b3fb17e6f48e4cc674154c0b8b04457faf631bcf62a50827f4","fixture_master_blake3":"90c591230353634d755bdb165739932e1b8b51beea3b301284d371d829a64da4","store_sqlite_profile":{"page_size":4096,"cache_pages":1280,"cache_spill_pages":1280},"reset_observations_ns":[4520375,3588208,3870541],"reset_upper_ns":4520375}
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:18> shasum -a 256 target/release/layerfs-eval target/layerfs-stage1-readiness.json
+f49e0f444cb7767643accc5cb297edd54cd2bc010147930b0917f44119adbd57  target/release/layerfs-eval
+2b16239dc496d33d5417a382e54e72188d0d5101d5b88af32938c7a1e0b7e196  target/layerfs-stage1-readiness.json
++target/layerfs-stage1-closure-adversarial-20260824-v3/run-closure.zsh:19> shasum -a 256 poc/evidence/stage1-pre-repair-campaign-20260824/summary.json poc/evidence/stage1-pre-repair-campaign-20260824/rows.jsonl poc/evidence/a02-diagnostic-20260824/result.json
+0fa7e3ec0279a453730ccfde216f22c5c7b79f1a850b39d57a301a70f807eaa4  poc/evidence/stage1-pre-repair-campaign-20260824/summary.json
+af422d7f1eea02e995136524414b6150f407bec0bab472396faa2cf66a266b68  poc/evidence/stage1-pre-repair-campaign-20260824/rows.jsonl
+0d7ecc3cfbceb75239137616d130208f3d7e29c776c1388d24f3a204e54a184f  poc/evidence/a02-diagnostic-20260824/result.json

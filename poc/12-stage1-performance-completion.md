@@ -1,6 +1,7 @@
 # Stage One — Performance Completion Authority
 
-Status: **implemented and closed for this PoC with one accepted performance exception**
+Status: **implemented and closed after adversarial correctness repair, with one
+accepted performance exception**
 Source baseline: `e643667` (`perf: instrument Apple PoC operations`)
 Scope: non-mounted Apple/APFS PoC; correctness first; implementation before measurement
 
