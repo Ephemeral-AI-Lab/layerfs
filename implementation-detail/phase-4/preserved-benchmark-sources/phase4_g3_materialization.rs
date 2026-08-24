@@ -1,3 +1,5 @@
+//! Preserved historical Phase-4 G3 materialization harness; not product code.
+
 use std::ffi::{CStr, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};

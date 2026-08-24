@@ -19,6 +19,25 @@ const LARGE_MASK: u64 = 0x0000_d901_0353_0000;
 const SHIFTED_SMALL_MASK: u64 = 0x0001_b206_06a6_e000;
 const SHIFTED_LARGE_MASK: u64 = 0x0001_b202_06a6_0000;
 
+pub fn profile_id() -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"layerfs/fastcdc-profile/v1\0");
+    hasher.update(b"two-byte-rolling-gear-v1");
+    hasher.update(&(MINIMUM_CHUNK_BYTES as u32).to_be_bytes());
+    hasher.update(&(TARGET_CHUNK_BYTES as u32).to_be_bytes());
+    hasher.update(&(MAXIMUM_CHUNK_BYTES as u32).to_be_bytes());
+    hasher.update(&[NORMALIZATION_SHIFT as u8]);
+    hasher.update(&PROFILE_SEED.to_be_bytes());
+    hasher.update(&SMALL_MASK.to_be_bytes());
+    hasher.update(&LARGE_MASK.to_be_bytes());
+    hasher.update(&SHIFTED_SMALL_MASK.to_be_bytes());
+    hasher.update(&SHIFTED_LARGE_MASK.to_be_bytes());
+    for value in GEAR {
+        hasher.update(&value.to_be_bytes());
+    }
+    *hasher.finalize().as_bytes()
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CdcCounters {
     pub bytes_scanned: u64,

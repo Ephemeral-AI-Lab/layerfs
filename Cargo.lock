@@ -120,7 +120,6 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "layerfs-core",
- "libc",
  "rusqlite",
 ]
 
@@ -128,20 +127,25 @@ dependencies = [
 name = "layerfs-eval"
 version = "0.1.0"
 dependencies = [
- "blake3",
- "layerfs-core",
- "layerfs-engine",
- "layerfs-os",
+ "layerfs-sdk",
 ]
 
 [[package]]
 name = "layerfs-os"
 version = "0.1.0"
+dependencies = [
+ "layerfs-engine",
+ "layerfs-vfs",
+ "libc",
+]
 
 [[package]]
 name = "layerfs-sdk"
 version = "0.1.0"
 dependencies = [
+ "layerfs-core",
+ "layerfs-engine",
+ "layerfs-os",
  "layerfs-vfs",
 ]
 
@@ -151,7 +155,6 @@ version = "0.1.0"
 dependencies = [
  "layerfs-core",
  "layerfs-engine",
- "layerfs-os",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-//! Phase-4 selected-profile correctness and regression harness.
+//! Preserved historical Phase-4 selected-profile correctness and regression harness.
 //!
 //! The private SQLite schema is fixed to K64/F64 + DIR256K and never opens the
 //! production v1 engine.

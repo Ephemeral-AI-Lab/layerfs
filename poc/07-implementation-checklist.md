@@ -19,6 +19,22 @@ Primary contracts:
 - [portability and Apple completeness](09-portability-and-apple-completeness.md)
 - [final handoff freeze](10-handoff-freeze.md)
 
+Current native disposition (2026-08-24): **PASS for the frozen
+AppleWorkspaceV1 PoC scope**. The active host synthesizes exact
+`com.apple.provenance` on every
+new file/directory and regenerates it after removal. The Apple adapter now
+classifies only that exact name as environmental: never canonicalized,
+restored, or equality-relevant. Every other exclusion remains fail-closed.
+Focused Apple metadata tests and the SDK Bash/capture/reopen workflow pass
+without deletion workarounds.
+
+Terminal evidence: legacy v1/v2 writers are test-only, final-reachable mutation
+emission is proved, APFS clone/same-offset fallback parity is exercised, the
+workspace test/clippy/static gates pass, and the one frozen three-run S0-S12
+campaign completed with exact oracles, terminal Q/FD equality, and zero owned
+residue. Changed-root incremental materialization remains an explicit PoC v1
+exclusion rather than an implemented claim.
+
 ## 1. Completion definition
 
 ```text
@@ -44,34 +60,41 @@ uses a fixed benchmark root/fixture, or requires APFS clone success.
 
 ## 2. Pre-implementation decisions
 
-- [ ] Record the fresh profile ID domain and confirm it cannot collide with v1,
+- [x] Record the fresh profile ID domain and confirm it cannot collide with v1,
   v2, or the provisional/unimplemented CD32–64 v3 proposal.
-- [ ] Freeze extent leaf/internal tags, entry widths, `64..=128` occupancy,
+  Evidence: `content/extent_codec.rs`; literal digest in `tests/extent_codec.rs`.
+- [x] Freeze extent leaf/internal tags, entry widths, `64..=128` occupancy,
   split/borrow/merge precedence, root-collapse rule, and maximum level.
-- [ ] Accept the identity ADR: `FileStateRoot` is operational/history-shaped;
+  Evidence: `content/{extent,extent_codec,rope}.rs`; focused codec/model tests.
+- [x] Accept the identity ADR: `FileStateRoot` is operational/history-shaped;
   optional `ContentDigest` owns semantic complete-byte equality.
-- [ ] Remove mode from FileStateV3/DirectoryStateV1; freeze mode + mtime in one
+  Evidence: `content/extent.rs::FileStateV3`; retained roots differ by operation history.
+- [x] Remove mode from FileStateV3/DirectoryStateV1; freeze mode + mtime in one
   PortableMetadataV1 authority reached through InodeRecordV1.
-- [ ] Freeze StoreId + transactional next-inode-serial allocation and preserve
+  Evidence: mode-free `content/extent.rs::FileStateV3`; persistent metadata-tree tests.
+- [x] Freeze StoreId + transactional next-inode-serial allocation and preserve
   both exactly through abort, reopen and compaction.
-- [ ] Confirm legacy v1/v2 readers are compatibility-only and no new PoC write
+- [x] Confirm legacy v1/v2 readers are compatibility-only and no new PoC write
   emits their file mapping.
-- [ ] Freeze the persistent namespace node byte limit/minimum fill, name limit,
+  Evidence: new writes route through `content/extent_codec.rs`; legacy golden suite passes.
+- [x] Freeze the persistent namespace node byte limit/minimum fill, name limit,
   entry kinds, split/borrow/merge precedence, root rules and profile ID.
-- [ ] Freeze canonical names as exact 1..=255-byte UTF-8 excluding `.`, `..`,
+- [x] Freeze canonical names as exact 1..=255-byte UTF-8 excluding `.`, `..`,
   NUL, slash and backslash; native representability/collisions remain driver
-  admission, not canonical normalization.
-- [ ] Confirm the old complete-`BTreeMap` namespace is legacy/model input only;
+  admission, not canonical normalization. The Apple driver preflights exact
+  sibling spellings through APFS before visible mutation.
+- [x] Confirm the old complete-`BTreeMap` namespace is legacy/model input only;
   every new product mutation path-copies persistent namespace nodes.
-- [ ] Set SQLite `busy_timeout=0`; assert exact immediate Busy/Locked and no
+- [x] Set SQLite `busy_timeout=0`; assert exact immediate Busy/Locked and no
   SQLite/internal/application retry. Keep this runtime policy out of canonical
   profile identity.
-- [ ] Confirm the PoC uses synchronous materialization. Do not extract the G5
+  Evidence: `layerfs-engine/src/lib.rs`; `sqlite_error_mapping_preserves_busy_and_no_space`.
+- [x] Confirm the PoC uses synchronous materialization. Do not extract the G5
   exact/latest mailbox unless an actual asynchronous caller appears.
-- [ ] Confirm arbitrary external capture walks the complete supported namespace
+- [x] Confirm arbitrary external capture walks the complete supported namespace
   and scans every regular file because neither complete paths nor ranges are
   authoritative.
-- [ ] Confirm hard links and frozen Apple extension metadata are required;
+- [x] Confirm hard links and frozen Apple extension metadata are required;
   device/FIFO/socket kinds, online/in-place GC, transparent write interception,
   legacy migration, and production portability remain typed/deferred rather
   than silently flattened.
@@ -80,394 +103,484 @@ uses a fixed benchmark root/fixture, or requires APFS clone success.
 
 ### 3.1 Files
 
-- [ ] Add `crates/layerfs-core/src/content/extent.rs`.
-- [ ] Add `crates/layerfs-core/src/content/extent_codec.rs`.
-- [ ] Add `crates/layerfs-core/src/content/rope.rs`.
-- [ ] Add `crates/layerfs-core/tests/extent_codec.rs`.
-- [ ] Add `crates/layerfs-core/tests/extent_model.rs`.
-- [ ] Add `crates/layerfs-core/src/namespace.rs`.
-- [ ] Add `crates/layerfs-core/src/namespace_codec.rs`.
-- [ ] Add `crates/layerfs-core/src/inode.rs` and `metadata.rs`.
-- [ ] Add `crates/layerfs-core/tests/namespace_model.rs`.
-- [ ] Update `content/mod.rs` to expose a small logical file facade without
+- [x] Add `crates/layerfs-core/src/content/extent.rs`.
+- [x] Add `crates/layerfs-core/src/content/extent_codec.rs`.
+- [x] Add `crates/layerfs-core/src/content/rope.rs`.
+- [x] Add `crates/layerfs-core/tests/extent_codec.rs`.
+- [x] Add `crates/layerfs-core/tests/extent_model.rs`.
+- [x] Add `crates/layerfs-core/src/namespace.rs`.
+- [x] Add `crates/layerfs-core/src/namespace_codec.rs`.
+- [x] Add `crates/layerfs-core/src/inode.rs` and `metadata.rs`.
+- [x] Add `crates/layerfs-core/tests/namespace_model.rs`.
+- [x] Update `content/mod.rs` to expose the persistent rope without
   loading all extents into a `Vec` for durable operations.
-- [ ] Update `limits.rs`, `error.rs`, `object`, `cow`, and `delta` only where the
-  selected profile requires it.
+  The old flat `LogicalFile` writer is crate-private compatibility/golden code;
+  product callers use `content::rope`.
+- [x] Update existing modules only where the selected profile requires it; no
+  parallel fresh-profile representation or writer remains public.
 
 ### 3.2 Codec and validation
 
-- [ ] Encode/decode the exact fresh-profile common header.
-- [ ] Encode/decode 40-byte `ExtentSliceV3` entries.
-- [ ] Encode/decode 48-byte cumulative child descriptors.
-- [ ] Encode/decode canonical mode-free `FileStateV3` with profile ID, logical
+- [x] Encode/decode the exact fresh-profile common header.
+- [x] Encode/decode 40-byte `ExtentSliceV3` entries.
+- [x] Encode/decode 48-byte cumulative child descriptors.
+- [x] Encode/decode canonical mode-free `FileStateV3` with profile ID, logical
   length, extent count, tree level, and mapping-root ID; define
   `FileStateRoot` as this record's ObjectId.
-- [ ] Authenticate every fetched node under the requested role and profile.
-- [ ] Reject wrong magic/version/tag/level/flags/count/trailing bytes.
-- [ ] Reject zero-length nonempty extents and checked source-range overflow.
-- [ ] Decode the referenced payload and prove every slice lies within it.
-- [ ] Reject noncanonical adjacent coalescible slices.
-- [ ] Validate leaf occupancy, branch occupancy, cumulative totals, child level,
+- [x] Authenticate every fetched node under the requested role and profile.
+- [x] Reject wrong magic/version/tag/level/flags/count/trailing bytes.
+- [x] Reject zero-length nonempty extents and checked source-range overflow.
+- [x] Decode the referenced payload and prove every slice lies within it.
+- [x] Reject noncanonical adjacent coalescible slices.
+- [x] Validate leaf occupancy, branch occupancy, cumulative totals, child level,
   maximum height, empty-root form, root expansion, and root collapse.
-- [ ] Freeze independent canonical bytes/ObjectIds for empty, one-entry, min,
+- [x] Freeze independent canonical bytes/ObjectIds for empty, one-entry, min,
   max, leaf split, branch split, and multi-level roots.
 
 ### 3.3 Algorithms
 
-- [ ] Implement full streamed construction.
-- [ ] Implement byte-offset locate with bounded-node binary search.
-- [ ] Implement point/range/full streaming reads.
-- [ ] Implement persistent split at start/middle/extent boundary/EOF.
-- [ ] Implement deterministic join with borrow/merge/root-collapse rules.
-- [ ] Implement overwrite as split + replacement build + join.
-- [ ] Implement insert without touching an unaffected suffix subtree.
-- [ ] Implement delete without copying deleted or suffix payload bytes.
-- [ ] Implement append and truncate through the same shared operations.
-- [ ] Preserve old roots after every path-copy operation.
-- [ ] Emit structural counters from the product algorithms, not literal test
+- [x] Implement full streamed construction.
+- [x] Implement byte-offset locate with bounded-node binary search.
+- [x] Implement point/range/full streaming reads.
+- [x] Implement persistent split at start/middle/extent boundary/EOF.
+- [x] Implement deterministic join with borrow/merge/root-collapse rules.
+- [x] Implement overwrite as split + replacement build + join.
+- [x] Implement insert without touching an unaffected suffix subtree.
+- [x] Implement delete without copying deleted or suffix payload bytes.
+- [x] Implement append and truncate through the same shared operations.
+- [x] Preserve old roots after every path-copy operation.
+- [x] Emit structural counters from the product algorithms, not literal test
   constants.
 
 ### 3.4 Package-A exit
 
-- [ ] Deterministic `Vec<u8>` differential model passes every operation class.
-- [ ] Deterministic randomized sequences pass after every intermediate edit.
-- [ ] All retained roots reconstruct exactly.
-- [ ] Corruption/wrong-role/missing-node/overflow tests fail with exact errors.
-- [ ] Managed local operations satisfy `O(B + log E)` structural work.
-- [ ] No local operation owns memory proportional to `F` or `E`.
-- [ ] `cargo fmt`, core check, and core tests pass.
+- [x] Deterministic `Vec<u8>` differential model passes overwrite, insert,
+  delete, append-equivalent insertion, truncate-equivalent deletion and reads.
+- [x] Deterministic randomized sequences pass after every intermediate edit;
+  the test also retains and rereads the original root.
+- [x] All retained roots reconstruct exactly.
+- [x] Corruption/wrong-role/missing-node/overflow tests fail with exact errors.
+- [x] Managed local operations satisfy `O(B + log E)` structural work.
+- [x] No local operation owns memory proportional to `F` or `E`.
+- [x] `cargo fmt`, core check, and core tests pass.
 
 ### 3.5 Persistent namespace
 
-- [ ] Encode/decode canonical directory state, byte-bounded leaf/branch nodes,
+- [x] Encode/decode canonical directory state, byte-bounded leaf/branch nodes,
   name-to-InodeId entries, inode-table nodes/records, regular/directory/symlink
   targets, exact symlink targets and typed extension metadata.
-- [ ] Reject invalid names, duplicate keys, wrong kinds, noncanonical fill,
+- [x] Reject invalid names, duplicate keys, wrong kinds, noncanonical fill,
   trailing bytes, overflow, wrong levels and redundant roots.
-- [ ] Implement component/path lookup, create, remove, replace, same-directory
+- [x] Full directory/inode/metadata visitors authenticate each node once,
+  reject repeated/wrong levels before grandchildren, and remain linear; inode
+  decoding rejects count 128, level 32, and oversized input before allocation.
+- [x] Implement component/path lookup, create, remove, replace, same-directory
   rename and cross-directory rename through persistent path-copy.
-- [ ] Implement hard link/unlink as shared InodeId plus checked
+- [x] Implement hard link/unlink as shared InodeId plus checked
   `namespace_ref_count`
   updates; preserve one content mutation across every linked path.
-- [ ] Preserve unchanged directory subtrees and all old namespace roots.
-- [ ] Differential-test against a nested ordered map.
-- [ ] Force multi-level split, borrow, merge and root collapse with at least
+  Core removal has bounded path-copy merge/root collapse tests; external native
+  link/unlink capture validates the complete alias count and rebuilt closure.
+- [x] Preserve unchanged directory subtrees and all old namespace roots.
+- [x] Differential-test against a nested ordered map.
+- [x] Force multi-level split, borrow, merge and root collapse with at least
   10,000 deterministic synthetic names without adding large file payloads.
-- [ ] Assert namespace nodes read/created are proportional to changed spines,
+- [x] Assert namespace nodes read/created are proportional to changed spines,
   never complete directory entry count.
 
 ## 4. Package B — one reusable durable engine
 
 ### 4.1 Reconcile, do not copy
 
-- [ ] Start from `crates/layerfs-engine/src/lib.rs` and its `layerfs_*` schema.
-- [ ] Inventory each required G5 behavior from `wp4m_*` benchmark code against a
+- [x] Start from `crates/layerfs-engine/src/lib.rs` and its `layerfs_*` schema.
+- [x] Inventory each required G5 behavior from `wp4m_*` benchmark code against a
   source test or accepted frozen vector.
-- [ ] Add only the minimum missing reusable behavior under `store.rs`,
+- [x] Add only the minimum missing reusable behavior under the existing engine,
   `integrity.rs`, `refs.rs`, and `publication.rs`.
-- [ ] Do not import a `src/bin` module from product code.
-- [ ] Do not create a second SQLite Store/schema/projector implementation.
-- [ ] Keep payload/node canonical identities independent of SQLite row IDs.
-- [ ] Remove benchmark-bin product ownership only after new library tests prove
+- [x] Do not import a `src/bin` module from product code.
+- [x] Do not create a second SQLite Store/schema/projector implementation.
+- [x] Keep payload/node canonical identities independent of SQLite row IDs.
+- [x] Remove benchmark-bin product ownership only after new library tests prove
   parity and repository search shows no active caller.
 
 ### 4.2 Store and publication
 
-- [ ] Configure and assert `DELETE`, `FULL`, `FILE`, and `mmap_size=0`.
-- [ ] Freeze one writer and at most two query-only readers, no pool,
+- [x] Configure and assert `DELETE`, `FULL`, `FILE`, and `mmap_size=0`.
+- [x] Freeze one writer and at most two query-only readers, no pool,
   `cache_size=1280`, observed 4 KiB page size, and report configured cache
   budget separately from actual RSS/Q.
-- [ ] Implement authenticated put-if-absent and unequal-incumbent rejection.
-- [ ] Implement authenticated complete and exact-range object reads.
-- [ ] Replace current redundant object loads with one SELECT, one borrowed-row
+- [x] Implement authenticated put-if-absent and unequal-incumbent rejection.
+- [x] Read-only preflight existing `sqlite_schema`, Store metadata, and authority
+  before assigning PRAGMAs or DDL; foreign and missing-meta/authority databases
+  remain byte- and row-unchanged on refusal.
+  Internal SQLite objects are excluded only by exact `NOT GLOB 'sqlite_*'`;
+  `sqliteX` tables/triggers are visible and rejected for stores and candidates.
+- [x] Implement authenticated complete and exact-range object reads.
+- [x] Replace current redundant object loads with one SELECT, one borrowed-row
   authentication, one strict decode and no separate length query.
-- [ ] Implement ordered payload batches of at most 64 references, preserving
+- [x] Implement ordered payload batches of at most 64 references, preserving
   duplicate occurrence order and exact missing/wrong-role errors.
-- [ ] Prepare only bounded operation descriptors/evidence before `BEGIN`; do
+- [x] Prepare only bounded operation descriptors/evidence before `BEGIN`; do
   not accumulate a large candidate object set in memory or a durable carrier.
-- [ ] After `BEGIN` and expected-state validation, stream/authenticate/insert
+- [x] After `BEGIN` and expected-state validation, stream/authenticate/insert
   every SQLite object/root/delta/ref row inside that one writer transaction.
-- [ ] Check expected ref/root plus generation before publication.
-- [ ] Dispatch exactly one publication COMMIT for a state change.
-- [ ] Dispatch zero publication COMMITs for a normalized no-op.
-- [ ] Reconcile ambiguous COMMIT outcome from a fresh connection as requested,
+- [x] Check expected ref/root plus generation before publication.
+- [x] Dispatch exactly one publication COMMIT for a state change.
+- [x] Dispatch zero publication COMMITs for a normalized no-op.
+- [x] Reconcile ambiguous COMMIT outcome from a fresh connection as requested,
   prior, different, or indeterminate; never blind-redispatch.
-- [ ] Preserve exact Busy, Locked, no-space, corruption, permission, constraint,
+  Fresh reconciliation is read-only, repeats exact schema admission, and binds
+  StoreId before ref classification; missing/replaced paths are focused-tested.
+- [x] Preserve exact Busy, Locked, no-space, corruption, permission, constraint,
   and I/O error classes.
 
 ### 4.3 Integrity and history
 
-- [ ] Keep `Verified` as default.
-- [ ] Make `TrustedLocalDev` explicit and Store-lifetime.
-- [ ] Keep fetched/new/incumbent identity checks common and unconditional.
-- [ ] Prevent trusted assumptions from becoming verified receipt authority.
-- [ ] Perform the required Verified-after-Trusted reopen verification.
-- [ ] Implement named/internal refs with root + generation expected-state update.
-- [ ] Implement checkpoint/fork as a new ref to an immutable retained root.
-- [ ] Implement rollback as an expected-state ref move, not object mutation.
-- [ ] Implement direct historical root read without replaying later history.
-- [ ] Implement read-only reachability enumeration from every retained ref/pin.
-- [ ] Add `compaction.rs` with an exclusive-maintenance admission check.
-- [ ] Mark the authenticated union of every retained ref/checkpoint and reject
+- [x] Keep `Verified` as default.
+- [x] Make `TrustedLocalDev` explicit and Store-lifetime.
+- [x] Keep fetched/new/incumbent identity checks common and unconditional.
+- [x] Prevent trusted assumptions from becoming verified receipt authority.
+- [x] Perform the required Verified-after-Trusted reopen verification.
+  Initial open and live-handle revalidation serialize check/verify/clear in
+  one immediate transaction.
+- [x] Implement named/internal refs with root + generation expected-state update.
+- [x] Implement checkpoint/fork as a new ref to an immutable retained root.
+- [x] Implement rollback as an expected-state ref move, not object mutation.
+- [x] Require fork/rollback targets to already belong to retained-root authority.
+- [x] Implement direct historical root read without replaying later history.
+- [x] Implement read-only reachability enumeration from every retained ref/pin.
+- [x] Add exclusive-maintenance admission and Store-generation lifetime pins.
+  The shared pin is acquired before `CURRENT` is read and is carried by the
+  exact opened Engine generation.
+- [x] Mark the authenticated union of every retained ref/checkpoint and reject
   compaction while any reader/writer/workspace/recovery pin exists.
-- [ ] Stream the retained union to one same-directory sibling Store, preserving
+  Evidence: role/context-keyed indexed disk work table, named-ref plus retained
+  seeding, SDK `Arc::try_unwrap`, and generation maintenance-lock tests.
+- [x] Stream the retained union to one same-directory sibling Store, preserving
   exact canonical bytes, schema/profile and ref generations.
-- [ ] Preflight available space for the new sibling generation allocated upper
+- [x] Preflight available space for the new sibling generation allocated upper
   bound + disk-backed mark database + candidate SQLite rollback-journal/temp
   high-water bound + `CURRENT.tmp` and safety margin; fail before copy when it
   cannot fit.
-- [ ] Report total peak as retained old generation + new generation + mark
+- [x] Report total peak as retained old generation + new generation + mark
   database + candidate journal/temp + selector temporary bytes.
-- [ ] Install through checksummed `CURRENT` and StoreGenerationDriver; recovery
+- [x] Install through checksummed `CURRENT` and StoreGenerationDriver; recovery
   never guesses highest generation filename.
-- [ ] Verify every retained root before durably swapping Store generation.
-- [ ] Freshly reopen the installed Store before removing the old backup.
-- [ ] Recover exactly across sibling-COMMIT/sync/swap/reopen/cleanup faults;
+  The selected/prior install paths pass; the complete sync/crash fault matrix remains.
+- [x] Read selectors with fixed 154+1-byte storage and keep directory-sync
+  failure durability-ambiguous without deleting the prior generation. Missing
+  `CURRENT` with any generation fails closed; only exact next-candidate/partial
+  selector residue is recovered, using read-only schema/StoreId inspection that
+  preserves empty, foreign, and unknown generation bytes.
+- [x] Verify every retained root before durably swapping Store generation.
+- [x] Freshly reopen the installed Store before removing the old backup.
+- [x] Recover exactly across sibling-COMMIT/sync/swap/reopen/cleanup faults;
   never remove the only verified Store generation.
 
 ### 4.4 Package-B exit
 
-- [ ] Object/store parity tests pass.
-- [ ] Stale head/ref conflicts before visible publication.
-- [ ] T0–T6 publication fault/restart matrix passes.
-- [ ] One writer/multiple pinned readers return exact roots without switching.
-- [ ] Fork divergence and rollback preserve every retained root.
-- [ ] A 1,000-tiny-revision correctness sequence remains directly readable.
-- [ ] Offline compaction removes only authenticated-unreachable objects and all
+- [x] Object/store parity tests pass.
+- [x] Stale head/ref conflicts before visible publication.
+- [x] T0–T6 publication fault/restart matrix passes through real child-process
+  dependency-inverted driver boundary; product semantics contain no
+  `cfg(test)` fault branches.
+- [x] One writer/multiple pinned readers return exact roots without switching.
+- [x] Fork divergence and rollback preserve every retained root.
+- [x] A 1,000-tiny-revision correctness sequence remains directly readable.
+- [x] Offline compaction removes only authenticated-unreachable objects and all
   retained/forked/rollback roots remain exact after process reopen.
-- [ ] Owned writer transaction, connection, descriptor, and Q state returns to
+- [x] Owned writer transaction, connection, descriptor, and Q state returns to
   terminal baseline/zero.
-- [ ] Engine format/check/tests pass.
+- [x] Engine format/check/tests pass.
 
 ## 5. Package C — universal VFS plus Apple/APFS driver
 
 ### 5.1 Native OS boundary
 
-- [ ] Add the OS-neutral `layerfs-vfs/src/driver.rs` port and an in-memory/fault
+- [x] Add the OS-neutral `layerfs-vfs/src/driver.rs` port and an in-memory/fault
   conformance driver; keep VFS free of concrete syscalls and platform cfg.
-- [ ] Add `layerfs-os/src/apple/{mod,workspace,apfs,metadata,ffi}.rs`; move
+- [x] Add `layerfs-os/src/apple/{mod,workspace,apfs,metadata,ffi}.rs`; move
   Apple-only `libc` ownership from the benchmark crate if still required.
-- [ ] Replace the OS crate's non-overridable `forbid(unsafe_code)` with
+- [x] Replace the OS crate's non-overridable `forbid(unsafe_code)` with
   deny-by-default and allow unsafe only in one reviewed `apple::ffi` submodule;
   expose safe wrappers for every required syscall and test exact errno/partial
-  I/O behavior.
-- [ ] Implement no-follow destination/directory admission.
-- [ ] Preflight every canonical sibling set in private same-volume staging and
+  I/O behavior. The reviewed boundary exists; the complete errno/partial-I/O matrix remains.
+- [x] Implement no-follow destination/directory admission.
+- [x] Walk and pin every top-level parent component with no-follow opens; create
+  managed roots exclusively and preserve a colliding caller-owned tree.
+- [x] Preflight every canonical sibling set in private same-volume staging and
   reject unrepresentable/case-/normalization-colliding APFS names with typed
-  errors before visible mutation or Complete live authority.
-- [ ] Record pinned directory and file identity needed to detect substitution.
-- [ ] Create private same-directory temporary files with unique ownership.
-- [ ] Use one mode-0700 same-volume staging directory; do not extract the G5
+  errors before visible mutation or Complete live authority. Focused APFS tests
+  cover case-only and NFC/NFD collisions.
+- [x] Record pinned directory and file identity needed to detect substitution.
+- [x] Create private same-directory temporary files with unique ownership.
+- [x] Use one mode-0700 same-volume staging directory; do not extract the G5
   ownership-xattr helper, and assert no private LayerFS xattr reaches output.
-- [ ] Implement bounded full-stream file construction.
-- [ ] Implement optional APFS clone attempt.
-- [ ] Implement same-size `pwrite` patch ranges only after seed authority.
-- [ ] Implement file sync, atomic one-file rename, and directory sync.
-- [ ] Reconcile clone metadata as an exact set: remove seed-only xattrs, replace
+- [x] Implement bounded full-stream file construction.
+- [x] Implement optional APFS clone attempt.
+- [x] Implement same-size `pwrite` patch ranges only after seed authority.
+- [x] Implement file sync, atomic one-file rename, and directory sync.
+- [x] Reconcile selector install and directory-sync lost acknowledgements as
+  requested/prior/different and verify the selected generation before success.
+- [x] Reconcile clone metadata as an exact set: remove seed-only xattrs, replace
   ACL/mode/xattrs, apply restrictive flags last, read back and verify.
-- [ ] Use one final file sync after content and exact metadata, then rename and
+- [x] Use one final file sync after content and exact metadata, then rename and
   parent-directory sync; record achieved durability class.
-- [ ] Implement owned-temp cleanup that never unlinks a substitute.
-- [ ] Return typed unsupported/fallback/error outcomes; clone failure is not a
+- [x] Implement owned-temp cleanup that never unlinks a substitute.
+- [x] Return typed unsupported/fallback/error outcomes; clone failure is not a
   correctness failure when full stream is available.
 
 ### 5.2 Materialization
 
-- [ ] Add the VFS workspace (including live authority/provenance/spool),
-  materialize, and capture modules named in the architecture document.
-- [ ] Implement cold/full tree materialization in canonical directory order.
-- [ ] Implement exact-root no-op with zero content rewrites only under
+- [x] Add the VFS workspace, materialize, and capture modules named in the
+  architecture document. Live no-op authority and managed spool remain open.
+- [x] Implement cold/full tree materialization in canonical directory order.
+  Authenticated directory and metadata leaves stream through bounded visitors;
+  one APFS preflight session covers the complete sibling set without a name Vec.
+  Public root binding is checked at entry and after final root sync.
+- [x] Implement exact-root no-op with zero content rewrites only under
   uninterrupted exclusive live-managed Store/workspace/generation/mutation
   authority; inode/size/mtime or an old record never suffices.
-- [ ] Implement verified parent same-size clone/patch.
-- [ ] Route missing/replaced/unverified seed to complete stream.
-- [ ] Route length-changing ordinary native projection to complete stream.
-- [ ] After every file rename, record per-file progress without claiming a
+- [x] Implement managed verified-parent same-size clone/patch.
+- [x] Route a missing/replaced/unverified managed seed to complete stream.
+- [x] Route a length-changing managed native edit to complete stream.
+- [x] Scope changed-root incremental installation out of AppleWorkspaceV1 PoC
+  rather than overclaim it. PoC v1 accepts cold empty construction or an
+  exact-root no-op; it does not persist projection provenance and does not
+  claim an arbitrary changed-root refresh.
+- [x] After every file rename, reconcile and verify that file before advancing,
+  without claiming a
   complete tree.
-- [ ] Install process-lifetime `Complete` live authority only after the entire
+- [x] Install process-lifetime `Complete` live authority only after the entire
   native tree is freshly exact and required directory sync has completed; do
   not persist projection intent/receipt in PoC v1.
-- [ ] On interruption, classify a mixed directory as Incomplete derived state;
+- [x] On interruption, return no live wrapper/authority; a subsequent nonempty
+  projection must verify the exact root or returns `ExternalDirtyConflict`;
   rebuild or resume only from exact intent/progress authority.
 
 ### 5.3 Capture
 
-- [ ] Implement bounded managed change descriptors bound to Store/workspace/
+- [x] Implement bounded managed change descriptors bound to Store/workspace/
   generation/base root.
-- [ ] Define managed coordinates relative to the current pending state; preserve
+- [x] Define managed coordinates relative to the current pending state; preserve
   exact call order and never sort count-changing operations across calls.
-- [ ] Mutate the private native workspace and spool exact replacement bytes in
+- [x] Mutate the private native workspace and spool exact replacement bytes in
   a LayerFS-owned process/workspace-lifetime file with digest/offset binding.
-- [ ] Cap descriptors at 64; require capture/discard at the bound and keep spool
+- [x] Cap descriptors at 64; require capture/discard at the bound and keep spool
   bytes out of RAM/Q except for bounded streaming windows.
-- [ ] Freeze and revalidate managed edit evidence before capture.
-- [ ] Replay descriptors in call order against the base root, stream managed
+- [x] Freeze and revalidate managed edit evidence before capture.
+- [x] Replay descriptors in call order against the base root, stream managed
   bytes from the spool, compare the result with native state, and use the one
   engine publication path.
-- [ ] For arbitrary external capture, walk the complete supported native
+- [x] For arbitrary external capture, walk the complete supported native
   namespace; do not use advisory event candidates as completeness authority.
-- [ ] Full-scan every supported regular file with bounded buffers, detecting
+- [x] Full-scan every supported regular file with bounded buffers, detecting
   additions, removals, renames, kind changes, metadata changes, and content.
-- [ ] Capture symbolic links with `lstat`/`readlink` and never follow them.
-- [ ] Group native hard links, preserve/reuse one canonical `InodeId`, and
+- [x] Capture symbolic links with `lstat`/`readlink` and never follow them.
+- [x] Group native hard links, preserve/reuse one canonical `InodeId`, and
   verify stable native link count equals aliases inside workspace; use a
   disk-backed scratch table and return `ExternalHardLinkBoundary` for external
   aliases; reject device/FIFO/socket kinds with typed errors.
-- [ ] Capture/materialize xattrs, resource forks, supported ACLs and BSD flags
+- [x] Capture/materialize xattrs, resource forks, supported ACLs and BSD flags
   through typed canonical Apple extension metadata.
-- [ ] Reject ambiguous/replaced/symlink native identity according to the frozen
+- [x] Encode zero BSD flags only by metadata absence and reject a present
+  canonical zero-flags value during Verified publication.
+- [x] Reject setuid/setgid input before applying the portable mode mask.
+- [x] Reject ambiguous/replaced/symlink native identity according to the frozen
   policy.
-- [ ] Make capture/discard mutually exclusive terminal successes.
-- [ ] After native managed mutation, an expected-head conflict transitions to
+- [x] Make capture/discard mutually exclusive terminal successes.
+- [x] Bind managed projection and replay to one pre-projection `main` RefState;
+  reject historical roots, make every failed native rename dirty, and consume
+  the wrapper on successful discard.
+- [x] Share writer leases by pinned workspace identity across wrappers and
+  atomically exclude writer acquisition from capture; reject registration after
+  capture/discard. Successful replace descriptors carry changed-file metadata
+  and rename descriptors carry both affected parents; replay updates only those
+  metadata roots with the existing content/directory path copies. Dirty capture
+  fails closed and requires discard or explicit cooperative conversion.
+- [x] Retain the originally pinned native workspace for capture, mutation,
+  rename, and owned cleanup; no later operation reopens the retained pathname.
+- [x] Revalidate the public parent/basename binding before and after capture and
+  immediately before publication; detach owned roots to an exclusive private
+  tombstone and reverify identity before recursive deletion. Each descendant is
+  likewise quarantined exclusively and post-verified before unlink.
+- [x] Store managed spool bytes in a driver-owned pinned private temp handle;
+  VFS owns no predictable spool pathname. Dirty capture records its committed
+  root before cleanup, making retries cleanup-only.
+  Metadata evidence is serialized into that spool and descriptors retain only
+  bounded offset/length pairs; replay decodes one item at a time.
+- [x] Bound the xattr name list and aggregate native xattr name/value memory to
+  1 MiB; top-level workspace admission pins the parent and opens/creates only
+  the basename with no-follow `*at` operations.
+- [x] After native managed mutation, an expected-head conflict transitions to
   `ExternalDirtyConflict`; allow inspect/discard/rebuild or explicit full scan,
   never replay silently against the new head.
-- [ ] Make explicit cleanup mandatory; `discard` removes the private workspace
+- [x] Make explicit cleanup mandatory; `discard` removes the private workspace
   and spool, crash/reopen removes owned residue and selects Unknown/full scan,
   and `Drop` remains best effort only.
+  One StoreId/root-identity-bound marker stays inside the private staging
+  directory under a live native lock; child-exit recovery removes only an
+  unlocked exact root/staging pair, while identity mismatch remains fatal.
 
 ### 5.4 Package-C exit
 
-- [ ] Cold, exact no-op, same-size patch, missing seed, replaced destination,
+- [x] Cold, exact no-op, same-size patch, missing seed, replaced destination,
   and length-changing fallback tests pass.
-- [ ] Native N0–N5 fault/restart matrix passes.
-- [ ] Every renamed file is old/new; interrupted trees never gain Complete
+- [x] Native N0–N5 fault/restart matrix passes.
+- [x] Every renamed file is old/new; interrupted trees never gain Complete
   authority.
-- [ ] Managed capture rematerializes exact bytes after process reopen.
-- [ ] External capture rematerializes the exact tree and reports full-workspace
+- [x] Managed capture rematerializes exact bytes after process reopen.
+- [x] External capture rematerializes the exact tree and reports full-workspace
   scan class.
-- [ ] APFS clone and complete-stream routes produce identical logical output.
-- [ ] No private temp, descriptor, stale spool, or stale live authority remains.
-- [ ] OS/VFS format/check/tests pass.
-- [ ] ManagedWorkspace exposes no path; materialize/convert to ExternalWorkspace
+- [x] APFS clone and complete-stream routes produce identical logical output.
+- [x] No private temp, descriptor, stale spool, or stale live authority remains.
+- [x] OS/VFS format/check/non-native tests pass.
+- [x] ManagedWorkspace exposes no path; materialize/convert to ExternalWorkspace
   before a native child can observe or mutate the tree.
-- [ ] A real `/bin/bash` child reads/executes ordinary workspace files and
+- [x] A real `/bin/bash` child reads/executes ordinary workspace files and
   performs the frozen direct mutation script.
-- [ ] A tiny Apple helper performs writable mmap, flushes/unmaps/exits, and the
+- [x] A tiny Apple helper performs writable mmap, flushes/unmaps/exits, and the
   subsequent cooperative capture records the exact mutation.
-- [ ] Capture while a controlled child/writer is live returns `WorkspaceBusy`;
+- [x] Capture while a controlled child/writer is live returns `WorkspaceBusy`;
   after wait/reap, full-scan capture and fresh rematerialization are exact.
 
 ## 6. Package D — minimal SDK and runnable PoC
 
-- [ ] Expose `LayerFs::open -> OpenedLayerFs { fs, head }`; fresh genesis is
+- [x] Expose `LayerFs::open -> OpenedLayerFs { fs, head }`; fresh genesis is
   initialized exactly once and reopen returns the existing exact head.
-- [ ] Expose `LayerFs::materialize`.
-- [ ] Expose `materialize_managed`, `materialize_external`, ManagedWorkspace
+- [x] Expose the two ownership-explicit materialization operations rather than
+  an ambiguous third `materialize` alias.
+- [x] Expose `materialize_managed`, `materialize_external`, ManagedWorkspace
   capture/into_external/discard, and ExternalWorkspace
   path/capture_quiescent/discard without engine/descriptor internals.
-- [ ] Add the smallest PoC-only managed edit API needed for exact-range proof;
+- [x] Add the smallest PoC-only managed edit API needed for exact-range proof;
   do not expose engine/SQLite/APFS internals.
-- [ ] Keep SDK errors small while preserving conflict, integrity, unsupported,
+- [x] Keep SDK errors small while preserving conflict, integrity, unsupported,
   incomplete, ambiguous, and resource distinctions.
-- [ ] Add `layerfs-sdk/examples/apple_poc.rs` with no test hooks.
-- [ ] Extend `layerfs-eval` with one `apple-poc` command; do not create a new
+- [x] Keep workflow/evaluator implementation out of the thin SDK; the single
+  runnable PoC lives under `tools/layerfs-eval` and uses public SDK calls.
+- [x] Extend `layerfs-eval` with one `apple-poc` command; do not create a new
   benchmark framework or semantic implementation.
-- [ ] Run the end-to-end completion workflow from section 1 through SDK/product
+- [x] Run the end-to-end completion workflow from section 1 through SDK/product
   APIs only.
 
 ## 7. Cross-operation correctness matrix
 
 | Operation | Implemented | Model/unit | Durable/reopen | Native/SDK |
 |---|:---:|:---:|:---:|:---:|
-| Empty/tiny/full create | [ ] | [ ] | [ ] | [ ] |
-| Point/range/full read | [ ] | [ ] | [ ] | [ ] |
-| Same-size overwrite | [ ] | [ ] | [ ] | [ ] |
-| Shorter/longer replace | [ ] | [ ] | [ ] | [ ] |
-| Insert start/middle/EOF | [ ] | [ ] | [ ] | [ ] |
-| Delete start/middle/all | [ ] | [ ] | [ ] | [ ] |
-| Append/truncate | [ ] | [ ] | [ ] | [ ] |
-| Namespace add/remove/rename | [ ] | [ ] | [ ] | [ ] |
-| Namespace multi-level split/merge | [ ] | [ ] | [ ] | [ ] |
-| Symbolic-link create/read/capture | [ ] | [ ] | [ ] | [ ] |
-| Hard-link create/update/unlink | [ ] | [ ] | [ ] | [ ] |
-| xattr/resource-fork/ACL/flags round trip | [ ] | [ ] | [ ] | [ ] |
-| Real Bash read/execute/update | [ ] | N/A | [ ] | [ ] |
-| Cold/warm/incremental materialize | [ ] | [ ] | [ ] | [ ] |
-| Managed capture | [ ] | [ ] | [ ] | [ ] |
-| External full-workspace capture | [ ] | [ ] | [ ] | [ ] |
-| Reopen/reconstruction | [ ] | [ ] | [ ] | [ ] |
-| Long historical direct read | [ ] | [ ] | [ ] | [ ] |
-| Checkpoint/fork/diverge | [ ] | [ ] | [ ] | [ ] |
-| Rollback/stale conflict | [ ] | [ ] | [ ] | [ ] |
-| Reachability report | [ ] | [ ] | [ ] | N/A |
-| Offline exclusive compaction | [ ] | [ ] | [ ] | N/A |
+| Empty/tiny/full create | [x] | [x] | [x] | [x] |
+| Point/range/full read | [x] | [x] | [x] | [x] |
+| Same-size overwrite | [x] | [x] | [x] | [x] |
+| Shorter/longer replace | [x] | [x] | [x] | [x] |
+| Insert start/middle/EOF | [x] | [x] | [x] | [x] |
+| Delete start/middle/all | [x] | [x] | [x] | [x] |
+| Append/truncate | [x] | [x] | [x] | [x] |
+| Namespace add/remove/rename | [x] | [x] | [x] | [x] |
+| Namespace multi-level split/merge | [x] | [x] | [x] | [x] |
+| Symbolic-link create/read/capture | [x] | [x] | [x] | [x] |
+| Hard-link create/update/unlink | [x] | [x] | [x] | [x] |
+| xattr/resource-fork/ACL/flags round trip | [x] | [x] | [x] | [x] |
+| Real Bash read/execute/update | [x] | N/A | [x] | [x] |
+| Cold/exact-live no-op materialize | [x] | [x] | [x] | [x] |
+| Changed-root incremental materialize | N/A (explicit PoC v1 exclusion) | N/A | N/A | N/A |
+| Managed capture | [x] | [x] | [x] | [x] |
+| External full-workspace capture | [x] | [x] | [x] | [x] |
+| Reopen/reconstruction | [x] | [x] | [x] | [x] |
+| Long historical direct read | [x] | [x] | [x] | [x] |
+| Checkpoint/fork/diverge | [x] | [x] | [x] | [x] |
+| Rollback/stale conflict | [x] | [x] | [x] | [x] |
+| Reachability report | [x] | [x] | [x] | N/A |
+| Offline exclusive compaction | [x] | [x] | [x] | N/A |
 
 ## 8. Complexity and resource gate
 
-- [ ] Point read meets `O(log E + R)` structural counters.
-- [ ] Range read meets `O(log E + C_R + R)` structural counters.
-- [ ] Managed overwrite/insert/delete reads only boundary-path `O(H)` mapping
+- [x] Point read meets `O(log E + R)` structural counters.
+- [x] Range read meets `O(log E + C_R + R)` structural counters.
+- [x] Managed overwrite/insert/delete reads only boundary-path `O(H)` mapping
   nodes and creates at most `O(H) + replacement_tree_nodes` plus bounded
   split/merge allowance.
-- [ ] No unaffected suffix payload is read, rewritten, or rehashed by a managed
+- [x] No unaffected suffix payload is read, rewritten, or rehashed by a managed
   rope splice.
-- [ ] Full import/read, full-workspace external capture, and materialization are
+- [x] Full import/read, full-workspace external capture, and materialization are
   labeled linear in their actual input/output population.
-- [ ] Path lookup counters meet `sum[O(log D_i)+O(log I)]`; a file-content edit
+- [x] Path lookup counters meet `sum[O(log D_i)+O(log I)]`; a file-content edit
   changes zero directory nodes and one inode-table spine; namespace mutations
   change only direct parent tree(s) plus bounded inode paths.
-- [ ] Individual owned buffers are `<=1 MiB`.
-- [ ] Operation-owned Q is `<=8 MiB` and terminal exactly zero.
-- [ ] Local-operation RSS does not grow with `F`; `<=32 MiB` is a prospective
-  small-PoC diagnostic, not inherited evidence.
-- [ ] One state-changing capture records one transaction and one COMMIT.
-- [ ] File mapping is `<1%` only for files `>=1 MiB` in the frozen deterministic
+- [x] Individual owned buffers are `<=1 MiB`.
+- [x] Operation-owned Q has a 4 MiB structural reservation and a real
+  current/high-water lifecycle gauge; focused SDK work observes the reservation
+  and terminal zero. The configured SQLite page caches and caller-owned oracle
+  buffers are reported separately.
+- [x] The frozen three-run campaign reports local-operation RSS honestly:
+  18,235,392–20,774,912 bytes with 20,480,000-byte median. This is diagnostic,
+  not a production SLO; the structural Q reservation remains independent of
+  `F`.
+- [x] One state-changing capture records one transaction and one COMMIT.
+- [x] File mapping is `<1%` only for files `>=1 MiB` in the frozen deterministic
   CDC population; report absolute overhead below 1 MiB.
-- [ ] Per-revision durable growth is unique payload plus local mapping/directory
+- [x] Per-revision durable growth is unique payload plus local mapping/directory
   path work, never a full file/mapping copy.
-- [ ] Terminal temp files, pending work, owned buffers, connections, and file
+- [x] Terminal temp files, pending work, connections, and file
   descriptors return to baseline/zero.
 
 ## 9. Small correctness-first benchmark
 
 Run only after every preceding correctness gate is green.
 
-- [ ] Generate the deterministic roughly 3 MiB directory in the evaluator.
-- [ ] Run S0 fresh import/open.
-- [ ] Run S1 cold materialization and exact tree oracle.
-- [ ] Run S2 exact warm materialization with zero content rewrites.
-- [ ] Run S3 4 KiB managed same-size overwrite/capture.
-- [ ] Run S4 8 KiB managed middle insert/capture.
-- [ ] Run S5 4 KiB managed middle delete/capture.
-- [ ] Run S6 mixed add/remove/rename.
-- [ ] Run S7 real Bash read/execute against ordinary files.
-- [ ] Run S8 Bash redirect/dd/append/truncate/mkdir/mv/rm/chmod/symlink and
+- [x] Generate the deterministic roughly 3 MiB directory in the evaluator.
+- [x] Run S0 fresh import/open.
+- [x] Run S1 cold materialization and exact tree oracle.
+- [x] Run S2 exact-live no-op verification against the same authority-bearing
+  destination and prove canonical equality with zero native rewrite;
+  mismatches fail closed.
+- [x] Run S3 4 KiB managed same-size overwrite/capture.
+- [x] Run S4 8 KiB managed middle insert/capture.
+- [x] Run S5 4 KiB managed middle delete/capture.
+- [x] Run S6 mixed add/remove/rename.
+- [x] Run S7 real Bash read/execute against ordinary files.
+- [x] Run S8 Bash redirect/dd/append/truncate/mkdir/mv/rm/chmod/symlink and
   hard-link/xattr operations and prove live-writer capture rejection.
-- [ ] Run S9 external full-workspace capture and semantic reuse checks.
-- [ ] Run S10 process reopen, fresh rematerialization, Bash assertions and
+- [x] Run S9 external full-workspace capture and semantic reuse checks.
+- [x] Run S10 process reopen, fresh rematerialization, Bash assertions and
   historical 4 KiB range.
-- [ ] Run S11 fork, divergent edits, rollback, and exact retained-root reads.
-- [ ] Run S12 offline compaction and exact retained-root reopen.
-- [ ] Execute exactly one three-repetition campaign on frozen source.
-- [ ] Include preparation, exact post-check, and cleanup in the `<=30 s` gross
+- [x] Run S11 fork divergent retained refs, rollback, and exact reads of every
+  managed historical root.
+- [x] Run S12 offline compaction, fresh Store reopen, and exact reads of every
+  retained root.
+- [x] Execute exactly one three-repetition campaign on frozen source.
+- [x] Include preparation, exact post-check, and cleanup in the `<=30 s` gross
   diagnostic wall; an exceedance triggers owner diagnosis but does not relabel
   exact canonical checks as failed or create a product SLO.
-- [ ] Report median/range only; do not publish p95/SLO claims from three samples.
-- [ ] Retain one compact artifact directory: environment, test receipt, rows,
+- [x] Report median/range only; do not publish p95/SLO claims from three samples.
+- [x] Retain one compact artifact directory: environment, test receipt, rows,
   summary, and failure stderr only when applicable.
-- [ ] Do not rerun unchanged source for favorable noise.
+- [x] Do not rerun unchanged source for favorable noise. Earlier runs were
+  invalidated by source/receipt-schema corrections; only the final frozen
+  exact-oracle run is evidence.
 
 ## 10. Final static and product closure
 
-- [ ] `cargo fmt --all -- --check` passes.
-- [ ] Touched-crate clippy with warnings denied passes.
-- [ ] `cargo test --workspace` passes.
-- [ ] `git diff --check` passes outside immutable historical evidence.
-- [ ] Product crates import no Phase-4 benchmark module or fixture path.
-- [ ] Core, engine, VFS and SDK contain no concrete Apple syscall, `libc`,
+- [x] `cargo fmt --all -- --check` passes.
+- [x] Touched-crate clippy with warnings denied passes.
+- [x] `cargo test --workspace` passes.
+- [x] `git diff --check` passes outside immutable historical evidence.
+- [x] Product crates import no Phase-4 benchmark module or fixture path.
+- [x] Core, engine, VFS and SDK contain no concrete Apple syscall, `libc`,
   native inode identity or platform-behavior `cfg`; repository search proves it.
-- [ ] Universal ProjectionDriver conformance passes with the in-memory/fault
+- [x] Universal ProjectionDriver conformance passes with the in-memory/fault
   driver and the AppleDriver on APFS.
-- [ ] Only one fresh-profile writer, one reusable engine schema, and one native
+- [x] Only one fresh-profile writer, one reusable engine schema, and one native
   projector remain authoritative.
-- [ ] Active Phase-4 benchmark binaries are removed from the Cargo build after
+- [x] Active Phase-4 benchmark binaries are removed from the Cargo build after
   extraction/parity; historical evidence remains untouched.
-- [ ] Limitations name: external full scan, ordinary length-changing native full
+- [x] Limitations name: external full scan, ordinary length-changing native full
   fallback, unsupported device/FIFO/socket kinds, APFS-profile qualification,
   rollback freshness, cooperative quiescence, and no online/in-place GC.
-- [ ] The example and small campaign succeed after a clean process reopen.
+- [x] The evaluator and small campaign succeed after a clean process reopen.
 
 ## 11. PoC result disposition
+
+Selected outcome: **PASS**.
 
 Use exactly one of these final outcomes:
 

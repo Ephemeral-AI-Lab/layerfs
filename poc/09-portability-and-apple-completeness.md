@@ -318,14 +318,14 @@ driver to prove platform independence without requiring APFS.
 
 ## 10. AppleWorkspaceV1 exact exit ledger
 
-- [ ] no Apple import, syscall, `cfg(target_os)`, or native inode in core/engine/vfs;
-- [ ] `ProjectionDriver` conformance passes with the in-memory/fault driver;
-- [ ] `AppleDriver` passes the same conformance suite on observed APFS;
-- [ ] ordinary files/directories/symlinks/hard links and supported metadata round-trip;
-- [ ] Bash/editor/build-tool workflows pass through ordinary APFS paths;
-- [ ] every canonical file/namespace/inode/metadata structure passes differential and corruption tests;
-- [ ] crash/reopen/publication/native-replace/compaction matrices pass;
-- [ ] G5 trust, one-COMMIT, reconciliation and resource invariants remain;
-- [ ] no benchmark binary owns product semantics;
-- [ ] one compact real-workspace measurement passes; no production SLO inferred;
-- [ ] only packaging, signing, mount integration, tuning and explicit exclusions remain.
+- [x] no Apple import, syscall, `cfg(target_os)`, or native inode in core/engine/vfs;
+- [x] `ProjectionDriver` conformance passes with the in-memory/fault driver;
+- [x] `AppleDriver` passes the same conformance suite on observed APFS;
+- [x] ordinary files/directories/symlinks/hard links and supported metadata round-trip;
+- [x] Bash and writable-mmap workflows pass through ordinary APFS paths;
+- [x] every canonical file/namespace/inode/metadata structure passes differential and corruption tests;
+- [x] crash/reopen/publication/native-replace/compaction matrices pass;
+- [x] G5 trust, one-COMMIT, reconciliation and resource invariants remain;
+- [x] no benchmark binary owns product semantics;
+- [x] one compact real-workspace measurement passes; no production SLO inferred;
+- [x] only packaging, signing, mount integration, tuning and explicit exclusions remain.

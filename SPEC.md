@@ -338,6 +338,12 @@ The operation automatically handles:
 
 The caller does not select separate cold, warm, or incremental endpoints.
 
+Apple/APFS PoC status: cold construction and exact-live no-op verification are
+implemented. A different target root against a nonempty destination currently
+fails closed; the PoC does not persist projection provenance, so it does not
+claim changed-root incremental materialization yet. Managed edits separately
+exercise the qualified clone/same-offset and full-stream fallback routes.
+
 ### 6.1 Required behavior
 
 - Cold materialization reads only the authenticated objects required by the
@@ -451,7 +457,8 @@ The first implementation must measure, separately:
 
 - cold materialization latency and bytes read/written;
 - warm no-op materialization latency and bytes rewritten;
-- incremental materialization latency by changed-path count;
+- incremental materialization latency by changed-path count once that route is
+  implemented (not claimed by the current Apple/APFS PoC);
 - range-read latency and throughput for small and large files;
 - small edit capture latency as file size grows;
 - object reuse ratio;
@@ -512,3 +519,96 @@ rescans a complete large file.
 The first implementation must not carry forward the old custom engine merely
 because it already has code. Preserve useful canonical algorithms and tests;
 replace backend-specific persistence machinery with the SQLite engine.
+
+## 13. AppleWorkspaceV1 implementation disposition (2026-08-24)
+
+Current outcome: **PASS for the frozen AppleWorkspaceV1 PoC scope**. This is
+not a production or portability qualification.
+
+Implemented and focused-test proven:
+
+- mode-free v3 file state, strict extent codecs, persistent bounded extent
+  rope, logarithmic range reads, local overwrite/insert/delete/truncate, and
+  retained-root structural counters;
+- strict directory/inode/metadata/symlink/Apple ACL value codecs, persistent
+  directory and inode-table path copying, 10,000-entry split/merge/root-collapse
+  models, recursively derived true child minima and nonoverlapping level-2
+  ranges, disk-backed streaming NamespaceRoot graph/link closure for Verified
+  authority, root-to-leaf lookup/update reads bounded by tree height, and
+  single-pass linear full visitors with pre-descent level checks, bounded inode
+  node decoding, and preserved v1/v2 read goldens;
+- zero-wait rollback-journal SQLite configuration, one-row/one-auth reads,
+  ordered payload batches capped at 64, transactional inode allocation, one
+  named-ref publication COMMIT, retained refs, fork/rollback, and
+  centralized Verified semantic admission for publish/fork/move plus atomic
+  initial and live Verified-after-Trusted scrub transactions; existing SQLite
+  stores receive an exact read-only schema-definition/row fingerprint before
+  assigning PRAGMAs or DDL, durable refs validate name/generation/membership,
+  and fork/move accepts only already-retained roots;
+  failed publication COMMIT reconciliation opens the Store read-only, repeats
+  exact admission, verifies StoreId, and only then classifies the ref; missing
+  and substituted Store paths cannot be created or accepted;
+  SQLite internal-object filtering uses an exact `sqlite_*` GLOB prefix, so
+  `sqliteX` tables/triggers cannot escape admission or candidate preservation;
+- authenticated retained-union marking, exact same-directory generation copy,
+  strict 154-byte checksummed `CURRENT`, neutral install port, selected-generation
+  reopen, maintenance-locked cleanup of only verified same-StoreId residue,
+  fresh requested/prior/different selector reconciliation, and live
+  Verified-after-concurrent-Trusted revalidation; generation handles acquire
+  SQLite shared lifetime pins before reading `CURRENT`, compaction requires an exclusive pin, and a
+  conservative available-space admission runs before candidate creation;
+  selector reads use a fixed 154+1-byte probe, directory-sync failure remains
+  durability-ambiguous with the prior generation preserved, missing `CURRENT`
+  with any generation fails closed, and only exact next-candidate/partial-selector
+  residue is recovered without deleting or mutating unknown generations;
+- OS-neutral projection handles, FD-relative Apple enumeration/open/link/rename,
+  expected-token capture opens, pinned-identity same-volume staging cleanup,
+  final file sync, reconciled atomic replace,
+  directory sync, hard links, symlinks, negative mtimes, ordered ACLs, exact
+  xattr/resource-fork/BSD-flag restore and verification, disk-backed external
+  enumeration plus capture/materialization hard-link grouping, terminal
+  capture/discard lifecycle, managed spool/replay with dirty fail-closed fallback
+  requiring discard or explicit cooperative conversion, committed-cleanup
+  outcomes, set-ID rejection before projection, APFS
+  case/normalization sibling preflight, fd-only xattr/ACL/flag/root metadata,
+  descriptor-relative identity-checked owned-tree/staging cleanup, streaming
+  directory/metadata visitors, one capture enumeration scratch connection,
+  driver-owned pinned managed spools, no-follow top-level parent/basename
+  admission across every parent component, an aggregate 1 MiB xattr memory
+  ceiling, identity-shared writer leases, exclusive managed-root creation, and
+  metadata-aware incremental replay after successful managed mutations so
+  changed file/parent metadata roots reflect native mtimes; capture, mutation,
+  rename, and cleanup retain the
+  originally pinned workspace handle rather than reopening its pathname, and
+  writer/capture admission uses one atomic shared state transition;
+  capture revalidates the public parent/basename binding before and after walk
+  and immediately before publication, owned cleanup first detaches to an
+  exclusive identity-verified tombstone, dirty managed capture fails closed,
+  and successful replace/rename replay carries bounded changed-file/affected-
+  parent metadata without a full scan;
+  materialization also revalidates the public binding at entry and after final
+  root sync, recursive cleanup quarantines and post-verifies every child before
+  unlink, and descriptor metadata is serialized into the pinned spool so 64
+  edits do not multiply the in-memory xattr ceiling;
+
+On this host, new objects under `/tmp`, `/private/tmp`, and the repository all
+acquire exact `com.apple.provenance`; the attribute immediately reappears after
+a successful removal. The Apple adapter now treats only that exact name as
+environmental metadata: it is never canonicalized or restored and is filtered
+from native equality. The remaining exclusion list stays fail-closed, with no
+prefix filtering. This pre-release correction does not change the canonical
+profile because provenance was never encoded by an accepted root and the
+profile preimage does not bind native xattr admission policy. Focused metadata
+tests and the SDK Bash/capture/reopen workflow pass without deletion hacks.
+
+The Apple/APFS PoC includes runtime APFS clone with typed fallback, same-offset
+managed patch, final-reachable mutation emission, test-only legacy writers,
+exact constructor/genesis/crash-owned cleanup, StoreId-bound staging custody,
+and one evaluator-owned S0-S12 workflow. Concurrent Verified snapshot readers,
+1,000 retained revisions, real child-process publication restart faults, and
+the frozen three-run terminal campaign pass. The campaign observed gross wall
+3.34–5.76 seconds, RSS 18,235,392–20,774,912 bytes, operation-Q current/high
+water 0/4,194,304 bytes, FD 4→4, and zero owned residue. Changed-root
+incremental materialization is explicitly outside PoC v1; no claims are made
+for hardware power loss, production packaging, hostile writers, or non-Apple
+performance.

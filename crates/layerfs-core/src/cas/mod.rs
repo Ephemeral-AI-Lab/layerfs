@@ -186,9 +186,9 @@ mod tests {
         let bytes = b"authenticated";
         let mut cas = InMemoryCas::new();
         let (id, _) = cas.put_chunk(bytes).unwrap();
-        let file = crate::LogicalFile::from_chunks(
+        let file = crate::content::LogicalFile::from_chunks(
             &cas,
-            vec![crate::ChunkReference::new(id, bytes.len() as u64)],
+            vec![crate::content::ChunkReference::new(id, bytes.len() as u64)],
         )
         .unwrap();
         cas.objects

@@ -1107,11 +1107,20 @@ fn canonical_v2_shadow_closes_format_authority_edit_and_range_questions() {
     let truncated = &encode_leaf(&direct).expect("leaf")[..20];
     assert_eq!(parse_leaf(truncated, true), Err(CoreError::UnexpectedEof));
 
-    let v1_leaf = encode_object(
-        &Object::bytes(v1::encode_file_leaf(&v1_references).expect("v1 leaf"))
-            .expect("v1 mapping object"),
-    )
-    .expect("v1 canonical leaf");
+    let mut v1_body = Vec::new();
+    v1_body.extend_from_slice(&(v1_references.len() as u32).to_be_bytes());
+    for reference in &v1_references {
+        v1_body.extend_from_slice(reference.raw_id.as_bytes());
+        v1_body.extend_from_slice(&reference.raw_length.to_be_bytes());
+        v1_body.extend_from_slice(reference.object_id.as_bytes());
+    }
+    let mut v1_inner = Vec::new();
+    v1_inner.extend_from_slice(&v1::MAPPING_MAGIC);
+    v1_inner.extend_from_slice(&v1::MAPPING_VERSION.to_be_bytes());
+    v1_inner.push(v1::FILE_LEAF_TAG);
+    v1_inner.extend_from_slice(&v1_body);
+    let v1_leaf =
+        encode_object(&Object::bytes(v1_inner).expect("v1 mapping object")).expect("v1 leaf");
     assert_eq!(
         parse_leaf(&v1_leaf, true),
         Err(CoreError::UnsupportedMappingVersion { version: 1 })

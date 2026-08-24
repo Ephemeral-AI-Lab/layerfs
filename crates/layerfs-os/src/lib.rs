@@ -3,7 +3,10 @@
 //! This crate deliberately exposes observations, not LayerFS identity or
 //! projection policy. Platform-specific behavior stays behind this boundary.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
+
+#[cfg(target_os = "macos")]
+pub mod apple;
 
 use std::fmt;
 use std::fs::{self, OpenOptions};

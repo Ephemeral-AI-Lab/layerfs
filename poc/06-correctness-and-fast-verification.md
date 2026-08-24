@@ -586,22 +586,22 @@ preparatory copies of the repository.
 
 ## 14. Release checklist
 
-- [ ] one fresh-profile codec/validator; no dual new-write codec
-- [ ] no product import from `src/bin` or fixed benchmark fixture
-- [ ] deterministic model, goldens, corruption and retained-root tests pass
-- [ ] one reusable `layerfs_*` schema and one publication path
-- [ ] stale head, one transaction/COMMIT and ambiguous reconciliation pass
-- [ ] Verified/Trusted boundary and Verified-after-Trusted scrub pass
-- [ ] cold/warm materialize, managed capture and external full-workspace-scan fallback pass
-- [ ] persistent namespace model and structural path-copy bounds pass
-- [ ] real `/bin/bash` read/edit/path/mode/symlink/hard-link/xattr workflow captures and rematerializes exactly
-- [ ] APFS acceleration is optional and output-identical to full fallback
-- [ ] fault/restart/temp cleanup, per-file old-or-new and incomplete-tree live-authority handling pass
-- [ ] reader/writer, history, fork and rollback tests pass
-- [ ] reachability marks all retained/pinned roots
-- [ ] offline compaction rejects pins and passes mark/copy/verify/swap/reopen fault recovery
-- [ ] ordinary managed edits meet structural and owned-memory bounds
-- [ ] SDK example runs without test hooks
-- [ ] workspace format/test/clippy/diff closure passes once
-- [ ] one `<=30 s` small smoke invocation passes; no unchanged rerun
-- [ ] limitations list external full-workspace scan, unsupported device/FIFO/socket kinds, rollback freshness, frozen Apple-profile qualification, cooperative shell quiescence and no online/in-place GC
+- [x] one fresh-profile codec/validator; no dual new-write codec
+- [x] no product import from `src/bin` or fixed benchmark fixture
+- [x] deterministic model, goldens, corruption and retained-root tests pass
+- [x] one reusable `layerfs_*` schema and one publication path
+- [x] stale head, one transaction/COMMIT and ambiguous reconciliation pass
+- [x] Verified/Trusted boundary and Verified-after-Trusted scrub pass
+- [x] cold/exact-live no-op materialize, managed capture and external full-workspace-scan fallback pass
+- [x] persistent namespace model and structural path-copy bounds pass
+- [x] real `/bin/bash` read/edit/path/mode/symlink/hard-link/xattr workflow captures and rematerializes exactly
+- [x] APFS acceleration is optional and output-identical to full fallback
+- [x] fault/restart/temp cleanup, per-file old-or-new and incomplete-tree live-authority handling pass
+- [x] reader/writer, history, fork and rollback tests pass
+- [x] reachability marks all retained/pinned roots
+- [x] offline compaction rejects pins and passes mark/copy/verify/swap/reopen fault recovery
+- [x] ordinary managed edits meet structural and owned-memory bounds
+- [x] evaluator runs through only public thin-SDK APIs without test hooks
+- [x] workspace format/test/clippy/diff closure passes once
+- [x] one three-repetition `<=30 s` small campaign passes; no unchanged rerun
+- [x] limitations list external full-workspace scan, changed-root incremental projection, unsupported device/FIFO/socket kinds, rollback freshness, frozen Apple-profile qualification, cooperative shell quiescence and no online/in-place GC

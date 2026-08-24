@@ -234,14 +234,21 @@ exclusion list:
 
 ```text
 com.apple.decmpfs
-com.apple.provenance
 com.apple.quarantine
 com.apple.macl
 com.apple.rootless
 com.layerfs.projection-owner-v1
 ```
 
-Encountering an excluded, unreadable, oversize, NUL-containing, or
+`com.apple.provenance` is Apple environmental metadata: the Apple adapter
+recognizes only that exact name, never canonicalizes or restores it, and
+filters it from native exact-set comparison. No `com.apple.*` prefix rule is
+permitted. This is a pre-release adapter-admission correction; provenance was
+never encoded by an accepted root and the canonical namespace profile preimage
+does not bind the native xattr admission table, so no profile/version migration
+is required.
+
+Encountering any remaining excluded, unreadable, oversize, NUL-containing, or
 non-restorable attribute returns `UnsupportedAppleMetadata`; nothing is
 silently dropped. If the OS synthesizes an excluded/system attribute on a new
 temp, exact verification fails and the temp is not published. Unknown ordinary
@@ -770,18 +777,18 @@ Compaction has a separate candidate-generation transaction and selector install.
 
 ## 15. Handoff hard gates
 
-- [ ] no conflicting older passage remains;
-- [ ] exact codecs/profile preimages/goldens frozen;
-- [ ] no platform syscall/cfg above `layerfs-os`;
-- [ ] handle-anchored driver and Store-generation ports compile with fault drivers;
-- [ ] sole Publication and transactional inode allocation;
-- [ ] one-fetch/one-auth batch-64 object reads;
-- [ ] `ManagedWorkspace` cannot expose a resolvable native path;
+- [x] no conflicting older passage remains;
+- [x] exact codecs/profile preimages/goldens frozen;
+- [x] no platform syscall/cfg above `layerfs-os`;
+- [x] handle-anchored driver and Store-generation ports compile with fault drivers;
+- [x] sole Publication and transactional inode allocation;
+- [x] one-fetch/one-auth batch-64 object reads;
+- [x] `ManagedWorkspace` cannot expose a resolvable native path;
       `ExternalWorkspace` may expose one and never carries managed fast authority;
-- [ ] hard-link closure and metadata set authority exact;
-- [ ] no G5 private ownership xattr reaches product output;
-- [ ] durability class explicit; no power-loss overclaim;
-- [ ] external capture formula/counters honest;
-- [ ] namespace/inode complexities corrected;
-- [ ] compaction selector recovery exact;
-- [ ] AppleWorkspaceV1 ledger is 100% green before the “99% complete” label.
+- [x] hard-link closure and metadata set authority exact;
+- [x] no G5 private ownership xattr reaches product output;
+- [x] durability class explicit; no power-loss overclaim;
+- [x] external capture formula/counters honest;
+- [x] namespace/inode complexities corrected;
+- [x] compaction selector recovery exact;
+- [x] AppleWorkspaceV1 ledger is 100% green for the explicitly frozen PoC v1 scope.

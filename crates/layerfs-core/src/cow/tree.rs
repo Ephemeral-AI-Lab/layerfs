@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use crate::content::LogicalFile;
 use crate::identity::{ObjectHashWriter, ObjectId};
-use crate::{CanonicalName, CanonicalPath, CoreError, CoreResult, LogicalFile};
+use crate::{CanonicalName, CanonicalPath, CoreError, CoreResult};
 
 pub type NodeId = ObjectId;
 pub type RootId = ObjectId;
@@ -50,11 +51,12 @@ struct NodeDataWithId {
 }
 
 impl TreeNode {
-    pub fn file(content: LogicalFile) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn file(content: LogicalFile) -> Self {
         Self::file_with_metadata(content, Metadata::default())
     }
 
-    pub fn file_with_metadata(content: LogicalFile, metadata: Metadata) -> Self {
+    pub(crate) fn file_with_metadata(content: LogicalFile, metadata: Metadata) -> Self {
         Self::from_data(NodeData::File { content, metadata })
     }
 
@@ -116,7 +118,7 @@ impl TreeNode {
         }
     }
 
-    pub fn file_content(&self) -> Option<&LogicalFile> {
+    pub(crate) fn file_content(&self) -> Option<&LogicalFile> {
         match &self.0.data {
             NodeData::File { content, .. } => Some(content),
             NodeData::Directory { .. } => None,

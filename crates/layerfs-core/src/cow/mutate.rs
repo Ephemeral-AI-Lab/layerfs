@@ -260,9 +260,9 @@ mod tests {
 
     use super::*;
     use crate::cas::InMemoryCas;
+    use crate::content::LogicalFile;
     use crate::delta::DeltaEntry;
     use crate::limits::MAX_CHILD_REFERENCES;
-    use crate::LogicalFile;
 
     fn path(value: &str) -> CanonicalPath {
         CanonicalPath::new(value).unwrap()

@@ -11,12 +11,5 @@ blake3 = { workspace = true }
 layerfs-core = { path = "../layerfs-core" }
 rusqlite = { version = "=0.40.2", default-features = false, features = ["cache", "blob", "hooks"] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-libc = "=0.2.189"
-
 [lib]
 path = "src/lib.rs"
-
-[[bin]]
-name = "phase4_create_edit_benchmark"
-path = "src/bin/phase4_create_edit_benchmark.rs"

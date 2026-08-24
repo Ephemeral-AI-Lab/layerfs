@@ -5,6 +5,7 @@ use crate::limits::{
     DIRECTORY_PAGE_CEILING, FILE_BRANCH_CAPACITY, FILE_LEAF_CAPACITY, MAPPING_PROFILE_FIELD_BYTES,
     MAX_CHILD_REFERENCES,
 };
+#[cfg(test)]
 use crate::object::{encode_object, Object};
 use crate::{CoreError, CoreResult};
 
@@ -43,7 +44,8 @@ pub struct FileReference {
 }
 
 impl FileReference {
-    pub fn encode(self, output: &mut Vec<u8>) {
+    #[cfg(test)]
+    pub(crate) fn encode(self, output: &mut Vec<u8>) {
         output.extend_from_slice(self.raw_id.as_bytes());
         output.extend_from_slice(&self.raw_length.to_be_bytes());
         output.extend_from_slice(self.object_id.as_bytes());
@@ -72,7 +74,8 @@ pub struct FileChild {
 }
 
 impl FileChild {
-    pub fn encode(self, output: &mut Vec<u8>) {
+    #[cfg(test)]
+    pub(crate) fn encode(self, output: &mut Vec<u8>) {
         output.extend_from_slice(&self.cumulative_end.to_be_bytes());
         output.extend_from_slice(self.object_id.as_bytes());
     }
@@ -92,7 +95,8 @@ impl FileChild {
     }
 }
 
-pub fn mapping_bytes(tag: u8, body: &[u8]) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn mapping_bytes(tag: u8, body: &[u8]) -> CoreResult<Vec<u8>> {
     let mut output = Vec::with_capacity(
         MAPPING_MAGIC
             .len()
@@ -108,7 +112,8 @@ pub fn mapping_bytes(tag: u8, body: &[u8]) -> CoreResult<Vec<u8>> {
     Ok(output)
 }
 
-pub fn canonical_mapping(tag: u8, body: &[u8]) -> CoreResult<(ObjectId, Vec<u8>)> {
+#[cfg(test)]
+pub(crate) fn canonical_mapping(tag: u8, body: &[u8]) -> CoreResult<(ObjectId, Vec<u8>)> {
     let bytes = encode_object(&Object::bytes(mapping_bytes(tag, body)?)?)?;
     let id = ObjectId::for_bytes(&bytes);
     Ok((id, bytes))
@@ -136,7 +141,8 @@ pub fn decode_mapping(bytes: &[u8], expected_tag: u8) -> CoreResult<&[u8]> {
     Ok(&payload[11..])
 }
 
-pub fn encode_file_leaf(references: &[FileReference]) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn encode_file_leaf(references: &[FileReference]) -> CoreResult<Vec<u8>> {
     let count = u32::try_from(references.len()).map_err(|_| CoreError::LengthOverflow)?;
     let mut body = Vec::with_capacity(
         4usize
@@ -155,7 +161,8 @@ pub fn encode_file_leaf(references: &[FileReference]) -> CoreResult<Vec<u8>> {
     mapping_bytes(FILE_LEAF_TAG, &body)
 }
 
-pub fn encode_file_branch(level: u8, children: &[FileChild]) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn encode_file_branch(level: u8, children: &[FileChild]) -> CoreResult<Vec<u8>> {
     let count = u32::try_from(children.len()).map_err(|_| CoreError::LengthOverflow)?;
     let mut body = Vec::with_capacity(
         1usize
@@ -171,7 +178,8 @@ pub fn encode_file_branch(level: u8, children: &[FileChild]) -> CoreResult<Vec<u
     mapping_bytes(FILE_BRANCH_TAG, &body)
 }
 
-pub fn encode_file_root(
+#[cfg(test)]
+pub(crate) fn encode_file_root(
     mode: u32,
     total_raw: u64,
     reference_count: u64,

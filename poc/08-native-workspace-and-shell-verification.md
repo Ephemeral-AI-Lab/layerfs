@@ -349,15 +349,15 @@ database snapshot consistency, or arbitrary POSIX metadata claims.
 
 ## 13. PASS boundary
 
-- [ ] ordinary files/directories/symlinks and supported modes round-trip;
-- [ ] a real Bash child reads, executes and mutates the physical workspace;
-- [ ] writable mmap mutation is flushed/unmapped and captured after process exit;
-- [ ] capture refuses LayerFS-owned/registered writers and succeeds after caller-attested cooperative quiescence;
-- [ ] Bash changes become one exact immutable root through full-scan capture;
-- [ ] unchanged history-shaped files retain their prior `FileStateRoot`;
-- [ ] process reopen plus fresh rematerialization reproduces the physical oracle;
-- [ ] managed edits still retain their local structural path;
-- [ ] persistent namespace structural tests are independent of small fixture size;
-- [ ] hard-link topology and common Apple metadata round-trip; unsupported special files fail typed without head movement;
-- [ ] one compact campaign passes with terminal owned state zero.
-- [ ] offline compaction preserves every retained workspace and removes only authenticated-unreachable objects.
+- [x] ordinary files/directories/symlinks and supported modes round-trip;
+- [x] a real Bash child reads, executes and mutates the physical workspace;
+- [x] writable mmap mutation is flushed/unmapped and captured after process exit;
+- [x] capture refuses LayerFS-owned/registered writers and succeeds after caller-attested cooperative quiescence;
+- [x] Bash changes become one exact immutable root through full-scan capture;
+- [x] unchanged history-shaped files retain their prior `FileStateRoot`;
+- [x] process reopen plus fresh rematerialization reproduces the physical oracle;
+- [x] managed edits still retain their local structural path;
+- [x] persistent namespace structural tests are independent of small fixture size;
+- [x] hard-link topology and common Apple metadata round-trip; unsupported special files fail typed without head movement;
+- [x] one compact campaign passes with terminal owned state zero.
+- [x] offline compaction preserves every retained workspace and removes only authenticated-unreachable objects.

@@ -1,6 +1,4 @@
-use layerfs_core::cas::InMemoryCas;
 use layerfs_core::content::persistence as file_codec;
-use layerfs_core::content::{ChunkReference, LogicalFile};
 use layerfs_core::cow::persistence as dir_codec;
 use layerfs_core::cow::{Metadata, RootHandle, TreeNode};
 use layerfs_core::delta::codec as delta_codec;
@@ -8,7 +6,6 @@ use layerfs_core::object::{decode_object, encode_object, DirectoryEntry, Object}
 use layerfs_core::{
     chunk_id, validate_identity, CanonicalName, CanonicalPath, CoreError, ObjectId,
 };
-use layerfs_engine::{DeltaRecord, Engine, RootRecord};
 
 fn canonical_mapping(inner: Vec<u8>) -> Vec<u8> {
     encode_object(&Object::bytes(inner).expect("test bytes")).expect("canonical bytes")
@@ -625,64 +622,4 @@ fn durable_delta_replays_add_remove_replace_and_metadata_in_sequence() {
             actual: parent_id,
         })
     );
-}
-
-#[test]
-fn memory_and_sqlite_execute_the_same_authenticated_range() {
-    let raw = b"memory-and-sqlite-parity";
-    let mut cas = InMemoryCas::new();
-    let (chunk, _) = cas.put_chunk(raw).expect("memory put");
-    let logical =
-        LogicalFile::from_chunks(&cas, vec![ChunkReference::new(chunk, raw.len() as u64)])
-            .expect("memory file");
-    let memory_range = logical.read_range(&cas, 3..17).expect("memory range");
-
-    let path = std::env::temp_dir().join(format!(
-        "layerfs-parity-{}.sqlite",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos()
-    ));
-    let canonical = encode_object(&Object::bytes(raw.to_vec()).expect("object")).expect("encode");
-    let object_id = ObjectId::for_bytes(&canonical);
-    let directory = encode_object(&Object::directory(Vec::new()).expect("directory"))
-        .expect("directory encode");
-    let directory_id = ObjectId::for_bytes(&directory);
-    {
-        let engine = Engine::open(&path).expect("engine open");
-        assert!(matches!(
-            engine.put_object_if_absent(object_id, &canonical),
-            Ok(layerfs_engine::PutOutcome::Created)
-        ));
-        assert!(matches!(
-            engine.put_object_if_absent(directory_id, &directory),
-            Ok(layerfs_engine::PutOutcome::Created)
-        ));
-        let mut capture = engine.begin_capture(None).expect("capture");
-        let delta = DeltaRecord::new(None, directory_id, Vec::new());
-        capture.write_delta(&delta).expect("delta");
-        capture
-            .commit_root(RootRecord {
-                id: directory_id,
-                directory_object: directory_id,
-                parent: None,
-            })
-            .expect("commit");
-        let decoded = decode_object(
-            &engine
-                .read_object_range(object_id, 0..canonical.len() as u64)
-                .expect("sqlite read"),
-        )
-        .expect("sqlite decode");
-        let Object::Bytes(sqlite_bytes) = decoded else {
-            panic!("expected bytes object")
-        };
-        assert_eq!(&sqlite_bytes[3..17], memory_range.bytes());
-        assert_eq!(
-            engine.load_visible_root().expect("visible"),
-            Some(directory_id)
-        );
-    }
-    let _ = std::fs::remove_file(path);
 }

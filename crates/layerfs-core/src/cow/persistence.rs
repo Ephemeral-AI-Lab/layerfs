@@ -1,10 +1,13 @@
 //! Selected directory page/index/wrapper bytes.
 
+#[cfg(test)]
 use crate::content::persistence::{mapping_bytes, DIR_INDEX_TAG, DIR_METADATA_TAG};
 use crate::format::CanonicalName;
 use crate::identity::ObjectId;
 use crate::limits::{DIRECTORY_PAGE_CEILING, MAX_CHILD_REFERENCES};
-use crate::object::{encode_object, DirectoryEntry, Object, ObjectKind, ObjectReference};
+use crate::object::DirectoryEntry;
+#[cfg(test)]
+use crate::object::{encode_object, Object, ObjectKind, ObjectReference};
 use crate::{CoreError, CoreResult};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -14,11 +17,13 @@ pub struct DirectoryPageRef {
     pub object_id: ObjectId,
 }
 
-pub fn encode_directory_metadata(mode: u32) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn encode_directory_metadata(mode: u32) -> CoreResult<Vec<u8>> {
     mapping_bytes(DIR_METADATA_TAG, &mode.to_be_bytes())
 }
 
-pub fn encode_directory_index(
+#[cfg(test)]
+pub(crate) fn encode_directory_index(
     total_entries: u32,
     pages: &[DirectoryPageRef],
 ) -> CoreResult<Vec<u8>> {
@@ -37,11 +42,13 @@ pub fn encode_directory_index(
     mapping_bytes(DIR_INDEX_TAG, &body)
 }
 
-pub fn encode_directory_page(entries: &[DirectoryEntry]) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn encode_directory_page(entries: &[DirectoryEntry]) -> CoreResult<Vec<u8>> {
     encode_object(&Object::directory(entries.to_vec())?)
 }
 
-pub fn encode_directory_wrapper(metadata: ObjectId, index: ObjectId) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn encode_directory_wrapper(metadata: ObjectId, index: ObjectId) -> CoreResult<Vec<u8>> {
     let m = CanonicalName::from_bytes(b"m")?;
     let t = CanonicalName::from_bytes(b"t")?;
     encode_object(&Object::Directory(vec![

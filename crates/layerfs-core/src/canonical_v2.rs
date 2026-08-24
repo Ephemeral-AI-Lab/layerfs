@@ -3,7 +3,9 @@
 pub mod file_codec {
     use crate::cdc::MAXIMUM_CHUNK_BYTES;
     use crate::content::persistence as v1;
-    use crate::limits::{FILE_BRANCH_CAPACITY, FILE_LEAF_CAPACITY, MAX_CHILD_REFERENCES};
+    #[cfg(test)]
+    use crate::limits::FILE_BRANCH_CAPACITY;
+    use crate::limits::{FILE_LEAF_CAPACITY, MAX_CHILD_REFERENCES};
     use crate::{decode_bytes_object, CoreError, CoreResult, ObjectId};
 
     pub use v1::{
@@ -30,7 +32,8 @@ pub mod file_codec {
         ObjectId::from_bytes(hasher.finalize().as_bytes()).expect("BLAKE3 is 32 bytes")
     }
 
-    pub fn mapping_bytes(tag: u8, body: &[u8]) -> CoreResult<Vec<u8>> {
+    #[cfg(test)]
+    pub(crate) fn mapping_bytes(tag: u8, body: &[u8]) -> CoreResult<Vec<u8>> {
         let capacity = 11usize
             .checked_add(body.len())
             .ok_or(CoreError::LengthOverflow)?;
@@ -69,7 +72,8 @@ pub mod file_codec {
         Ok(&inner[11..])
     }
 
-    pub fn encode_file_leaf(references: &[FileReference]) -> CoreResult<Vec<u8>> {
+    #[cfg(test)]
+    pub(crate) fn encode_file_leaf(references: &[FileReference]) -> CoreResult<Vec<u8>> {
         validate_file_leaf(references, true)?;
         let capacity = 4usize
             .checked_add(
@@ -165,6 +169,7 @@ pub mod file_codec {
         ))
     }
 
+    #[cfg(test)]
     fn strict_children(children: &[FileChild]) -> CoreResult<()> {
         if children.is_empty() || children.len() > FILE_BRANCH_CAPACITY {
             return Err(CoreError::NonCanonicalPagePartition);
@@ -178,7 +183,8 @@ pub mod file_codec {
         Ok(())
     }
 
-    pub fn encode_file_branch(level: u8, children: &[FileChild]) -> CoreResult<Vec<u8>> {
+    #[cfg(test)]
+    pub(crate) fn encode_file_branch(level: u8, children: &[FileChild]) -> CoreResult<Vec<u8>> {
         if level == 0 {
             return Err(CoreError::NonCanonicalPagePartition);
         }
@@ -205,7 +211,8 @@ pub mod file_codec {
         mapping_bytes(FILE_BRANCH_TAG, &body)
     }
 
-    pub fn encode_file_root(
+    #[cfg(test)]
+    pub(crate) fn encode_file_root(
         mode: u32,
         total_raw: u64,
         reference_count: u64,
@@ -256,58 +263,39 @@ pub mod file_codec {
 }
 
 pub mod dir_codec {
-    use crate::canonical_v2::file_codec::{mapping_bytes, DIR_INDEX_TAG, DIR_METADATA_TAG};
+    #[cfg(test)]
+    use crate::canonical_v2::file_codec::{mapping_bytes, DIR_METADATA_TAG};
     use crate::cow::persistence as v1;
-    use crate::{CoreError, CoreResult};
+    #[cfg(test)]
+    use crate::CoreResult;
 
-    pub use v1::{
-        encode_directory_page, encode_directory_wrapper, parse_directory_index, DirectoryPageRef,
-        DirectoryPartitionValidator,
-    };
+    pub use v1::{parse_directory_index, DirectoryPageRef, DirectoryPartitionValidator};
 
-    pub fn encode_directory_metadata(mode: u32) -> CoreResult<Vec<u8>> {
+    #[cfg(test)]
+    pub(crate) fn encode_directory_metadata(mode: u32) -> CoreResult<Vec<u8>> {
         mapping_bytes(DIR_METADATA_TAG, &mode.to_be_bytes())
-    }
-
-    pub fn encode_directory_index(
-        total_entries: u32,
-        pages: &[DirectoryPageRef],
-    ) -> CoreResult<Vec<u8>> {
-        let mut body = Vec::new();
-        body.extend_from_slice(&total_entries.to_be_bytes());
-        body.extend_from_slice(
-            &u32::try_from(pages.len())
-                .map_err(|_| CoreError::LengthOverflow)?
-                .to_be_bytes(),
-        );
-        for page in pages {
-            body.extend_from_slice(&page.count.to_be_bytes());
-            body.extend_from_slice(
-                &u16::try_from(page.first_name.len())
-                    .map_err(|_| CoreError::LengthOverflow)?
-                    .to_be_bytes(),
-            );
-            body.extend_from_slice(&page.first_name);
-            body.extend_from_slice(page.object_id.as_bytes());
-        }
-        parse_directory_index(&body)?;
-        mapping_bytes(DIR_INDEX_TAG, &body)
     }
 }
 
 pub mod delta_codec {
-    use crate::canonical_v2::file_codec::{decode_mapping, mapping_bytes};
+    use crate::canonical_v2::file_codec::decode_mapping;
+    #[cfg(test)]
+    use crate::canonical_v2::file_codec::mapping_bytes;
     use crate::content::persistence::{DELTA_INDEX_TAG, DELTA_PAGE_TAG};
     use crate::delta::codec as v1;
-    use crate::{CanonicalPath, CoreError, CoreResult, ObjectId};
+    #[cfg(test)]
+    use crate::ObjectId;
+    use crate::{CoreError, CoreResult};
 
     pub use v1::{replay_durable_transition, DecodedTransition, TransitionOperation};
 
-    pub fn encode_genesis(child: ObjectId) -> CoreResult<Vec<u8>> {
+    #[cfg(test)]
+    pub(crate) fn encode_genesis(child: ObjectId) -> CoreResult<Vec<u8>> {
         encode_transition(None, child, 0, &[])
     }
 
-    pub fn encode_change(
+    #[cfg(test)]
+    pub(crate) fn encode_change(
         parent: ObjectId,
         child: ObjectId,
         entry_count: u32,
@@ -316,6 +304,7 @@ pub mod delta_codec {
         encode_transition(Some(parent), child, entry_count, pages)
     }
 
+    #[cfg(test)]
     fn encode_transition(
         parent: Option<ObjectId>,
         child: ObjectId,
@@ -355,23 +344,6 @@ pub mod delta_codec {
         Ok(decode_mapping_transition(canonical)?.pages.len())
     }
 
-    pub fn encode_delta_page(entries: &[TransitionOperation]) -> CoreResult<Vec<u8>> {
-        if entries.is_empty() {
-            return Err(CoreError::NonCanonicalPagePartition);
-        }
-        let mut body = Vec::new();
-        body.extend_from_slice(
-            &u32::try_from(entries.len())
-                .map_err(|_| CoreError::LengthOverflow)?
-                .to_be_bytes(),
-        );
-        for entry in entries {
-            encode_entry(entry, &mut body)?;
-        }
-        v1::decode_delta_page(&body)?;
-        mapping_bytes(DELTA_PAGE_TAG, &body)
-    }
-
     pub fn decode_mapping_delta_page(canonical: &[u8]) -> CoreResult<Vec<TransitionOperation>> {
         v1::decode_delta_page(decode_mapping(canonical, DELTA_PAGE_TAG)?)
     }
@@ -388,54 +360,6 @@ pub mod delta_codec {
             sum.checked_add(path.len()).ok_or(CoreError::LengthOverflow)
         })?;
         Ok((entries.len(), path_bytes))
-    }
-
-    fn encode_entry(entry: &TransitionOperation, output: &mut Vec<u8>) -> CoreResult<()> {
-        match entry {
-            TransitionOperation::Add { path, after } => {
-                encode_path(output, 0x01, path)?;
-                output.extend_from_slice(after.as_bytes());
-            }
-            TransitionOperation::Remove { path, before } => {
-                encode_path(output, 0x02, path)?;
-                output.extend_from_slice(before.as_bytes());
-            }
-            TransitionOperation::Replace {
-                path,
-                before,
-                after,
-            } => {
-                encode_path(output, 0x03, path)?;
-                output.extend_from_slice(before.as_bytes());
-                output.extend_from_slice(after.as_bytes());
-            }
-            TransitionOperation::Metadata {
-                path,
-                before,
-                before_mode,
-                after,
-                after_mode,
-            } => {
-                encode_path(output, 0x04, path)?;
-                output.extend_from_slice(before.as_bytes());
-                output.extend_from_slice(&before_mode.to_be_bytes());
-                output.extend_from_slice(after.as_bytes());
-                output.extend_from_slice(&after_mode.to_be_bytes());
-            }
-        }
-        Ok(())
-    }
-
-    fn encode_path(output: &mut Vec<u8>, tag: u8, path: &[u8]) -> CoreResult<()> {
-        CanonicalPath::from_bytes(path)?;
-        output.push(tag);
-        output.extend_from_slice(
-            &u32::try_from(path.len())
-                .map_err(|_| CoreError::LengthOverflow)?
-                .to_be_bytes(),
-        );
-        output.extend_from_slice(path);
-        Ok(())
     }
 }
 

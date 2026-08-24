@@ -2,24 +2,34 @@
 
 #![forbid(unsafe_code)]
 
-use layerfs_core::{
-    validate_identity, validate_object_from, CoreError, ObjectId, ObjectKind, ObjectSummary,
-};
-use rusqlite::{params, Connection, OptionalExtension};
+use layerfs_core::content::rope::ObjectRead;
+use layerfs_core::{validate_identity, CoreError, ObjectId, ObjectKind};
+use rusqlite::types::{Value, ValueRef};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use std::fmt;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::ops::Range;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
+// ponytail: serialize Verified admission in-process; use per-Store locks only if
+// parallel open throughput becomes a measured requirement.
+static VERIFIED_OPEN_LOCK: Mutex<()> = Mutex::new(());
+
+pub mod generation;
+pub mod integrity;
+pub mod publication;
+pub mod refs;
+pub mod scratch;
+
 pub const COMPONENT: &str = "layerfs-engine";
 const FORMAT_MARKER: &str = "layerfs-phase4a-sqlite-blob";
 const SCHEMA_VERSION: i64 = 1;
-const BUSY_TIMEOUT: Duration = Duration::from_millis(100);
+const BUSY_TIMEOUT: Duration = Duration::ZERO;
+#[cfg(test)]
 const ROOT_RECORD_BASE_BYTES: u64 = 64;
-const OBJECTS_TABLE: &str = "layerfs_objects";
-const OBJECTS_BLOB_COLUMN: &str = "canonical_bytes";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SqliteErrorKind {
@@ -70,6 +80,8 @@ pub enum EngineError {
     ProfileMismatch,
     InvalidRecord(&'static str),
     InvalidTransaction,
+    PublicationConflict,
+    AmbiguousDurability,
     CounterOverflow,
     InjectedFailure(&'static str),
 }
@@ -113,6 +125,10 @@ impl fmt::Display for EngineError {
             Self::ProfileMismatch => formatter.write_str("SQLite profile mismatch"),
             Self::InvalidRecord(name) => write!(formatter, "invalid durable {name} record"),
             Self::InvalidTransaction => formatter.write_str("capture transaction is not active"),
+            Self::PublicationConflict => {
+                formatter.write_str("publication expected ref does not match")
+            }
+            Self::AmbiguousDurability => formatter.write_str("publication outcome is ambiguous"),
             Self::CounterOverflow => formatter.write_str("counter arithmetic overflow"),
             Self::InjectedFailure(point) => write!(formatter, "injected failure at {point}"),
         }
@@ -208,6 +224,8 @@ pub struct SqliteProfile {
     pub synchronous: i64,
     pub temp_store: i64,
     pub mmap_size: i64,
+    pub page_size: i64,
+    pub cache_pages: i64,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -228,6 +246,7 @@ pub struct EngineCounters {
     pub logical_object_bytes: u64,
     pub logical_root_bytes: u64,
     pub logical_delta_bytes: u64,
+    pub retained_union_scrubs: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -238,31 +257,157 @@ pub struct StorageObservation {
     pub logical_engine_bytes: Option<u64>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CompactionStorageObservation {
+    pub old_generation_bytes: u64,
+    pub new_generation_bytes: u64,
+    pub mark_database_bytes: u64,
+    pub candidate_journal_temp_peak_bytes: u64,
+    pub verification_scratch_peak_bytes: u64,
+    pub selector_temporary_bytes: u64,
+    pub total_peak_bytes: u64,
+}
+
 pub type EngineResult<T> = Result<T, EngineError>;
 
 pub struct Engine {
     path: PathBuf,
-    connection: Mutex<Connection>,
+    connection: Mutex<Option<Connection>>,
     counters: Mutex<EngineCounters>,
     rollback_journal_sample: Mutex<Option<u64>>,
     profile: SqliteProfile,
+    mode: integrity::IntegrityMode,
+    maintenance_pin: Option<Mutex<Connection>>,
+    last_compaction: Option<CompactionStorageObservation>,
+    commit_dispatch: std::sync::Arc<dyn CommitDispatch>,
+}
+
+trait CommitDispatch: Send + Sync {
+    fn commit(&self, connection: &Connection) -> rusqlite::Result<()>;
+}
+
+struct SqliteCommit;
+impl CommitDispatch for SqliteCommit {
+    fn commit(&self, connection: &Connection) -> rusqlite::Result<()> {
+        connection.execute_batch("COMMIT")
+    }
+}
+
+pub(crate) struct ConnectionGuard<'a> {
+    guard: MutexGuard<'a, Option<Connection>>,
+    transaction: bool,
+    commit_scrub_on_drop: bool,
+}
+
+impl Deref for ConnectionGuard<'_> {
+    type Target = Connection;
+    fn deref(&self) -> &Self::Target {
+        self.guard.as_ref().expect("checked when locked")
+    }
+}
+
+impl DerefMut for ConnectionGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.guard.as_mut().expect("checked when locked")
+    }
+}
+
+impl Drop for ConnectionGuard<'_> {
+    fn drop(&mut self) {
+        if self.transaction {
+            if let Some(connection) = self.guard.as_ref() {
+                let result = connection.execute_batch(if self.commit_scrub_on_drop {
+                    "COMMIT"
+                } else {
+                    "ROLLBACK"
+                });
+                if result.is_err() {
+                    self.guard.take();
+                }
+            }
+            self.transaction = false;
+        }
+    }
+}
+
+impl ObjectRead for Engine {
+    fn get(&self, id: ObjectId) -> Result<Vec<u8>, CoreError> {
+        self.load_object(id)
+            .map(|object| object.canonical_bytes)
+            .map_err(core_store_error)
+    }
+
+    fn get_authenticated_batch<F>(&self, ids: &[ObjectId], mut callback: F) -> Result<(), CoreError>
+    where
+        F: FnMut(ObjectId, &[u8]) -> Result<(), CoreError>,
+    {
+        self.for_each_authenticated_payload_batch(ids, |id, bytes| {
+            callback(id, bytes).map_err(EngineError::Core)
+        })
+        .map_err(core_store_error)
+    }
+}
+
+fn core_store_error(error: EngineError) -> CoreError {
+    match error {
+        EngineError::Core(error) | EngineError::MalformedObject { cause: error, .. } => error,
+        EngineError::MissingObject(_) => CoreError::MissingObject,
+        EngineError::IdentityMismatch { .. } | EngineError::ImmutableConflict(_, _) => {
+            CoreError::IdentityMismatch
+        }
+        EngineError::CounterOverflow => CoreError::LengthOverflow,
+        _ => CoreError::Io,
+    }
 }
 
 impl Engine {
     pub fn open(path: impl AsRef<Path>) -> EngineResult<Self> {
+        Self::open_with_mode(path, integrity::IntegrityMode::Verified)
+    }
+
+    pub fn open_with_mode(
+        path: impl AsRef<Path>,
+        mode: integrity::IntegrityMode,
+    ) -> EngineResult<Self> {
         let path = path.as_ref().to_owned();
-        let connection = Connection::open(&path).map_err(map_sqlite_error)?;
+        if path.exists() {
+            let admission = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(map_sqlite_error)?;
+            admission
+                .busy_timeout(BUSY_TIMEOUT)
+                .map_err(map_sqlite_error)?;
+            preflight_schema(&admission)
+                .map_err(|error| engine_step("read-only preflight", error))?;
+        }
+        let connection = Connection::open(&path)
+            .map_err(map_sqlite_error)
+            .map_err(|error| engine_step("primary open", error))?;
         connection
             .busy_timeout(BUSY_TIMEOUT)
             .map_err(map_sqlite_error)?;
-        let profile = configure_profile(&connection)?;
-        initialize_schema(&connection, &profile)?;
+        preflight_schema(&connection).map_err(|error| engine_step("primary preflight", error))?;
+        let profile =
+            configure_profile(&connection).map_err(|error| engine_step("profile", error))?;
+        initialize_schema(&connection, &profile)
+            .map_err(|error| engine_step("schema initialization", error))?;
+        if mode == integrity::IntegrityMode::Verified {
+            let _admission = VERIFIED_OPEN_LOCK.lock().map_err(|_| EngineError::Sqlite {
+                kind: SqliteErrorKind::Other,
+                message: "Verified admission mutex poisoned".to_owned(),
+            })?;
+            initial_verified_scrub(&connection, &path)
+                .map_err(|error| engine_step("initial verified scrub", error))?;
+        }
         Ok(Self {
             path,
-            connection: Mutex::new(connection),
+            connection: Mutex::new(Some(connection)),
             counters: Mutex::new(EngineCounters::default()),
             rollback_journal_sample: Mutex::new(None),
             profile,
+            mode,
+            maintenance_pin: None,
+            last_compaction: None,
+            commit_dispatch: std::sync::Arc::new(SqliteCommit),
         })
     }
 
@@ -272,6 +417,146 @@ impl Engine {
 
     pub fn profile(&self) -> &SqliteProfile {
         &self.profile
+    }
+
+    pub fn last_compaction_observation(&self) -> Option<CompactionStorageObservation> {
+        self.last_compaction
+    }
+
+    pub fn store_id(&self) -> EngineResult<[u8; 32]> {
+        let connection = self.lock_connection()?;
+        let bytes = connection
+            .query_row(
+                "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
+                [],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .map_err(map_sqlite_error)?;
+        bytes
+            .try_into()
+            .map_err(|_| EngineError::InvalidRecord("StoreId"))
+    }
+
+    pub fn active_connection_count(&self) -> EngineResult<u64> {
+        let primary = u64::from(
+            self.connection
+                .lock()
+                .map_err(|_| EngineError::InvalidRecord("connection lock"))?
+                .is_some(),
+        );
+        Ok(primary + u64::from(self.maintenance_pin.is_some()))
+    }
+
+    pub fn compact_to(&self, destination: &Path) -> EngineResult<()> {
+        self.compact_to_observed(destination).map(drop)
+    }
+
+    pub(crate) fn compact_to_observed(
+        &self,
+        destination: &Path,
+    ) -> EngineResult<CompactionStorageObservation> {
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(destination)
+            .map_err(io_engine_error)?;
+        let result = self.compact_to_created(destination);
+        if result.is_err() {
+            let _ = fs::remove_file(destination);
+            let mut journal = destination.as_os_str().to_os_string();
+            journal.push("-journal");
+            let _ = fs::remove_file(PathBuf::from(journal));
+        }
+        result
+    }
+
+    fn compact_to_created(&self, destination: &Path) -> EngineResult<CompactionStorageObservation> {
+        let old_generation_bytes = fs::metadata(&self.path).map_err(io_engine_error)?.len();
+        let source = self.lock_connection()?;
+        let retained = integrity::retained_union(&source, &self.path)?;
+        let mark_database_bytes = retained.work.storage_bytes()?;
+        let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
+        candidate
+            .busy_timeout(BUSY_TIMEOUT)
+            .map_err(map_sqlite_error)?;
+        let profile = configure_profile(&candidate)?;
+        initialize_schema(&candidate, &profile)?;
+        let source_path = self
+            .path
+            .to_str()
+            .ok_or(EngineError::InvalidRecord("non-UTF-8 Store path"))?;
+        candidate
+            .execute("ATTACH DATABASE ?1 AS source", params![source_path])
+            .map_err(map_sqlite_error)?;
+        candidate.execute_batch("BEGIN").map_err(map_sqlite_error)?;
+        let copied = (|| {
+            candidate
+                .execute_batch(
+                    "DELETE FROM layerfs_store_meta;
+                 DELETE FROM layerfs_authority;
+                 INSERT INTO layerfs_store_meta SELECT * FROM source.layerfs_store_meta;
+                 UPDATE layerfs_store_meta SET visible_root = NULL;
+                 INSERT INTO layerfs_authority SELECT * FROM source.layerfs_authority;
+                 INSERT INTO layerfs_refs SELECT * FROM source.layerfs_refs;
+                 INSERT INTO layerfs_retained_roots SELECT * FROM source.layerfs_retained_roots;",
+                )
+                .map_err(map_sqlite_error)?;
+            retained.work.for_each_key(|key| {
+                if key.len() != 34 {
+                    return Err(EngineError::InvalidRecord("closure key"));
+                }
+                let id = &key[..32];
+                let row = source
+                    .query_row(
+                        "SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
+                        params![id],
+                        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, Vec<u8>>(2)?)),
+                    )
+                    .map_err(map_sqlite_error)?;
+                candidate
+                    .execute(
+                        "INSERT INTO layerfs_objects (object_id, kind, canonical_length, canonical_bytes) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(object_id) DO NOTHING",
+                        params![id, row.0, row.1, row.2],
+                    )
+                    .map_err(map_sqlite_error)?;
+                Ok(())
+            })
+        })();
+        if let Err(error) = copied {
+            let _ = candidate.execute_batch("ROLLBACK");
+            return Err(error);
+        }
+        let candidate_journal_temp_peak_bytes = candidate_auxiliary_bytes(destination);
+        candidate
+            .execute_batch("COMMIT")
+            .map_err(map_sqlite_error)?;
+        let verification_scratch_peak_bytes =
+            integrity::verify_retained_union_observed(&candidate, destination)?;
+        candidate
+            .execute_batch("DETACH DATABASE source")
+            .map_err(map_sqlite_error)?;
+        drop(candidate);
+        fs::File::open(destination)
+            .and_then(|file| file.sync_all())
+            .map_err(io_engine_error)?;
+        let new_generation_bytes = fs::metadata(destination).map_err(io_engine_error)?.len();
+        let selector_temporary_bytes = generation::SELECTOR_BYTES as u64;
+        let total_peak_bytes = old_generation_bytes
+            .checked_add(new_generation_bytes)
+            .and_then(|value| value.checked_add(mark_database_bytes))
+            .and_then(|value| value.checked_add(candidate_journal_temp_peak_bytes))
+            .and_then(|value| value.checked_add(verification_scratch_peak_bytes))
+            .and_then(|value| value.checked_add(selector_temporary_bytes))
+            .ok_or(EngineError::CounterOverflow)?;
+        Ok(CompactionStorageObservation {
+            old_generation_bytes,
+            new_generation_bytes,
+            mark_database_bytes,
+            candidate_journal_temp_peak_bytes,
+            verification_scratch_peak_bytes,
+            selector_temporary_bytes,
+            total_peak_bytes,
+        })
     }
 
     pub fn counters(&self) -> EngineResult<EngineCounters> {
@@ -323,6 +608,7 @@ impl Engine {
 
     fn logical_engine_bytes(&self) -> Option<u64> {
         let connection = self.connection.lock().ok()?;
+        let connection = connection.as_ref()?;
         let objects = connection
             .query_row(
                 "SELECT COALESCE(SUM(canonical_length), 0) FROM layerfs_objects",
@@ -375,38 +661,131 @@ impl Engine {
     }
 
     pub fn load_object(&self, id: ObjectId) -> EngineResult<ObjectRecord> {
-        let length = self.object_length(id)?;
-        let bytes = self.read_object_range(id, 0..length)?;
-        ObjectRecord::new(id, bytes)
+        let connection = self.lock_connection()?;
+        with_authenticated_canonical_on_connection(self, &connection, id, |kind, bytes| {
+            Ok(ObjectRecord {
+                id,
+                kind,
+                canonical_len: bytes.len() as u64,
+                canonical_bytes: bytes.to_vec(),
+            })
+        })
     }
 
     pub fn object_length(&self, id: ObjectId) -> EngineResult<u64> {
         let connection = self.lock_connection()?;
-        Ok(object_meta(self, &connection, id)?
-            .ok_or(EngineError::MissingObject(id))?
-            .canonical_len)
+        with_authenticated_canonical_on_connection(self, &connection, id, |_, bytes| {
+            Ok(bytes.len() as u64)
+        })
     }
 
     pub fn read_object_range(&self, id: ObjectId, range: Range<u64>) -> EngineResult<Vec<u8>> {
         let connection = self.lock_connection()?;
-        read_object_range_on_connection(self, &connection, id, range)
+        with_authenticated_canonical_on_connection(self, &connection, id, |_, bytes| {
+            let length = bytes.len() as u64;
+            if range.start > range.end || range.end > length {
+                return Err(EngineError::InvalidRange {
+                    start: range.start,
+                    end: range.end,
+                    length,
+                });
+            }
+            let start = usize::try_from(range.start).map_err(|_| EngineError::CounterOverflow)?;
+            let end = usize::try_from(range.end).map_err(|_| EngineError::CounterOverflow)?;
+            let output = bytes[start..end].to_vec();
+            let requested = range.end - range.start;
+            self.bump(|counters| {
+                checked_add(&mut counters.range_bytes_requested, requested)?;
+                checked_add(&mut counters.range_bytes_returned, requested)
+            })?;
+            Ok(output)
+        })
     }
 
-    pub fn put_object_if_absent(
+    pub fn for_each_authenticated_payload_batch<F>(
+        &self,
+        ids: &[ObjectId],
+        mut callback: F,
+    ) -> EngineResult<()>
+    where
+        F: FnMut(ObjectId, &[u8]) -> EngineResult<()>,
+    {
+        if ids.len() > 64 {
+            return Err(EngineError::InvalidRecord("payload batch exceeds 64"));
+        }
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let connection = self.lock_connection()?;
+        let values = (0..ids.len())
+            .map(|index| format!("({index}, ?{})", index + 1))
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!("WITH requested(ord, object_id) AS (VALUES {values}) SELECT requested.ord, layerfs_objects.kind, layerfs_objects.canonical_length, layerfs_objects.canonical_bytes FROM requested LEFT JOIN layerfs_objects ON layerfs_objects.object_id = requested.object_id ORDER BY requested.ord");
+        self.mark_statement()?;
+        let mut statement = connection.prepare(&sql).map_err(map_sqlite_error)?;
+        let parameters = ids
+            .iter()
+            .map(|id| Value::Blob(id.as_bytes().to_vec()))
+            .collect::<Vec<_>>();
+        let mut rows = statement
+            .query(rusqlite::params_from_iter(parameters))
+            .map_err(map_sqlite_error)?;
+        let mut ordinal = 0;
+        while let Some(row) = rows.next().map_err(map_sqlite_error)? {
+            if row.get::<_, i64>(0).map_err(map_sqlite_error)? != ordinal as i64 {
+                return Err(EngineError::InvalidRecord("payload batch order"));
+            }
+            let id = ids[ordinal];
+            let kind = row
+                .get::<_, Option<i64>>(1)
+                .map_err(map_sqlite_error)?
+                .ok_or(EngineError::MissingObject(id))?;
+            let length = row
+                .get::<_, Option<i64>>(2)
+                .map_err(map_sqlite_error)?
+                .ok_or(EngineError::MissingObject(id))?;
+            let bytes = match row.get_ref(3).map_err(map_sqlite_error)? {
+                ValueRef::Blob(bytes) => bytes,
+                _ => return Err(EngineError::InvalidRecord("object bytes")),
+            };
+            authenticate_borrowed(self, id, kind, length, bytes)?;
+            callback(id, bytes)?;
+            ordinal += 1;
+        }
+        if ordinal != ids.len() {
+            return Err(EngineError::InvalidRecord("payload batch length"));
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn put_object_if_absent(
         &self,
         id: ObjectId,
         canonical_bytes: &[u8],
     ) -> EngineResult<PutOutcome> {
-        let connection = self.lock_connection()?;
-        put_object_on_connection(self, &connection, id, canonical_bytes)
+        let mut connection = self.lock_write_connection()?;
+        let outcome = put_object_on_connection(self, &connection, id, canonical_bytes)?;
+        if connection.transaction {
+            connection
+                .execute_batch("COMMIT")
+                .map_err(map_sqlite_error)?;
+            connection.transaction = false;
+        }
+        Ok(outcome)
     }
 
-    pub fn begin_capture(&self, parent: Option<RootId>) -> EngineResult<Capture<'_>> {
-        let connection = self.lock_connection()?;
+    #[cfg(test)]
+    fn begin_capture(&self, parent: Option<RootId>) -> EngineResult<Capture<'_>> {
+        let mut connection = self.lock_write_connection()?;
         self.mark_statement()?;
-        if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
-            self.note_sqlite_error(&error)?;
-            return Err(map_sqlite_error(error));
+        if !connection.transaction {
+            if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
+                self.note_sqlite_error(&error)?;
+                return Err(map_sqlite_error(error));
+            }
+            connection.transaction = true;
         }
         self.bump(|counters| checked_add(&mut counters.transactions_started, 1))?;
 
@@ -414,6 +793,7 @@ impl Engine {
             Ok(current) => current,
             Err(error) => {
                 let _ = connection.execute_batch("ROLLBACK");
+                connection.transaction = false;
                 self.bump_best_effort(|counters| {
                     checked_add(&mut counters.transactions_rolled_back, 1)
                 });
@@ -422,6 +802,7 @@ impl Engine {
         };
         if current != parent {
             let _ = connection.execute_batch("ROLLBACK");
+            connection.transaction = false;
             self.bump_best_effort(|counters| {
                 checked_add(&mut counters.transactions_rolled_back, 1)
             });
@@ -435,6 +816,7 @@ impl Engine {
                 Ok(record) => record,
                 Err(error) => {
                     let _ = connection.execute_batch("ROLLBACK");
+                    connection.transaction = false;
                     self.bump_best_effort(|counters| {
                         checked_add(&mut counters.transactions_rolled_back, 1)
                     });
@@ -445,6 +827,7 @@ impl Engine {
                 authenticate_directory_object(self, &connection, record.directory_object)
             {
                 let _ = connection.execute_batch("ROLLBACK");
+                connection.transaction = false;
                 self.bump_best_effort(|counters| {
                     checked_add(&mut counters.transactions_rolled_back, 1)
                 });
@@ -462,17 +845,57 @@ impl Engine {
         })
     }
 
-    fn lock_connection(&self) -> EngineResult<MutexGuard<'_, Connection>> {
-        self.connection.lock().map_err(|_| EngineError::Sqlite {
+    fn lock_connection(&self) -> EngineResult<ConnectionGuard<'_>> {
+        self.lock_connection_mode(false)
+    }
+
+    fn lock_write_connection(&self) -> EngineResult<ConnectionGuard<'_>> {
+        self.lock_connection_mode(true)
+    }
+
+    fn lock_connection_mode(&self, write: bool) -> EngineResult<ConnectionGuard<'_>> {
+        let connection = self.connection.lock().map_err(|_| EngineError::Sqlite {
             kind: SqliteErrorKind::Other,
             message: "connection mutex poisoned".to_owned(),
-        })
+        })?;
+        if connection.is_none() {
+            return Err(EngineError::AmbiguousDurability);
+        }
+        let mut connection = ConnectionGuard {
+            guard: connection,
+            transaction: false,
+            commit_scrub_on_drop: false,
+        };
+        if self.mode == integrity::IntegrityMode::Verified {
+            connection
+                .execute_batch(if write { "BEGIN IMMEDIATE" } else { "BEGIN" })
+                .map_err(map_sqlite_error)?;
+            connection.transaction = true;
+            if trusted_history(&connection)? {
+                if !write {
+                    connection
+                        .execute_batch("ROLLBACK; BEGIN IMMEDIATE")
+                        .map_err(map_sqlite_error)?;
+                }
+                self.bump(|counters| checked_add(&mut counters.retained_union_scrubs, 1))?;
+                if let Err(error) = integrity::verify_retained_union(&connection, &self.path)
+                    .and_then(|_| clear_trusted_history(&connection))
+                {
+                    let _ = connection.execute_batch("ROLLBACK");
+                    connection.transaction = false;
+                    return Err(error);
+                }
+                connection.commit_scrub_on_drop = true;
+            }
+        }
+        Ok(connection)
     }
 
     fn mark_statement(&self) -> EngineResult<()> {
         self.bump(|counters| checked_add(&mut counters.statements, 1))
     }
 
+    #[cfg(test)]
     fn sample_rollback_journal(&self) {
         let mut sample = match self.rollback_journal_sample.lock() {
             Ok(sample) => sample,
@@ -518,6 +941,145 @@ impl Engine {
     }
 }
 
+fn engine_step(step: &'static str, error: EngineError) -> EngineError {
+    match error {
+        EngineError::Sqlite { kind, message } => EngineError::Sqlite {
+            kind,
+            message: format!("{step}: {message}"),
+        },
+        error => error,
+    }
+}
+
+pub(crate) fn inspect_store_id_readonly(path: &Path) -> EngineResult<[u8; 32]> {
+    open_store_readonly(path).map(|(_, store_id)| store_id)
+}
+
+fn open_store_readonly(path: &Path) -> EngineResult<(Connection, [u8; 32])> {
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(map_sqlite_error)?;
+    connection
+        .busy_timeout(BUSY_TIMEOUT)
+        .map_err(map_sqlite_error)?;
+    preflight_schema(&connection)?;
+    let bytes = connection
+        .query_row(
+            "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
+            [],
+            |row| row.get::<_, Vec<u8>>(0),
+        )
+        .map_err(map_sqlite_error)?;
+    let store_id = bytes
+        .try_into()
+        .map_err(|_| EngineError::InvalidRecord("StoreId"))?;
+    Ok((connection, store_id))
+}
+
+pub(crate) fn read_ref_reconcile_readonly(
+    path: &Path,
+    name: &str,
+    expected_store_id: [u8; 32],
+) -> EngineResult<Option<refs::RefState>> {
+    let (connection, store_id) = open_store_readonly(path)?;
+    if store_id != expected_store_id {
+        return Err(EngineError::InvalidRecord("reconciliation StoreId"));
+    }
+    refs::read_ref_on_connection(&connection, name)
+}
+
+fn reopen_store_primary(
+    path: &Path,
+    expected_store_id: [u8; 32],
+    ref_name: &str,
+    expected_ref: &Option<refs::RefState>,
+) -> EngineResult<Connection> {
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+        .map_err(map_sqlite_error)?;
+    connection
+        .busy_timeout(BUSY_TIMEOUT)
+        .map_err(map_sqlite_error)?;
+    preflight_schema(&connection)?;
+    let store_id = connection
+        .query_row(
+            "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
+            [],
+            |row| row.get::<_, Vec<u8>>(0),
+        )
+        .map_err(map_sqlite_error)?;
+    if store_id.as_slice() != expected_store_id {
+        return Err(EngineError::InvalidRecord("reopened StoreId"));
+    }
+    if &refs::read_ref_on_connection(&connection, ref_name)? != expected_ref {
+        return Err(EngineError::AmbiguousDurability);
+    }
+    configure_profile(&connection)?;
+    Ok(connection)
+}
+
+fn io_engine_error(error: std::io::Error) -> EngineError {
+    EngineError::Sqlite {
+        kind: SqliteErrorKind::Io,
+        message: error.to_string(),
+    }
+}
+
+fn candidate_auxiliary_bytes(path: &Path) -> u64 {
+    ["-journal", "-wal", "-shm"]
+        .into_iter()
+        .filter_map(|suffix| {
+            let mut name = path.as_os_str().to_os_string();
+            name.push(suffix);
+            fs::metadata(PathBuf::from(name))
+                .ok()
+                .map(|value| value.len())
+        })
+        .sum()
+}
+
+fn clear_trusted_history(connection: &Connection) -> EngineResult<()> {
+    if !trusted_history(connection)? {
+        return Ok(());
+    }
+    connection
+        .execute(
+            "UPDATE layerfs_authority SET trusted_history = 0 WHERE authority_id = 1",
+            [],
+        )
+        .map_err(map_sqlite_error)?;
+    Ok(())
+}
+
+fn initial_verified_scrub(connection: &Connection, path: &Path) -> EngineResult<()> {
+    connection
+        .execute_batch("BEGIN IMMEDIATE")
+        .map_err(map_sqlite_error)?;
+    let result = trusted_history(connection).and_then(|dirty| {
+        if dirty {
+            integrity::verify_retained_union(connection, path)
+                .and_then(|_| clear_trusted_history(connection))
+        } else {
+            Ok(())
+        }
+    });
+    match result {
+        Ok(()) => connection.execute_batch("COMMIT").map_err(map_sqlite_error),
+        Err(error) => {
+            let _ = connection.execute_batch("ROLLBACK");
+            Err(error)
+        }
+    }
+}
+
+fn trusted_history(connection: &Connection) -> EngineResult<bool> {
+    connection
+        .query_row(
+            "SELECT trusted_history FROM layerfs_authority WHERE authority_id = 1",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(map_sqlite_error)
+}
+
 pub type RootId = ObjectId;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -526,9 +1088,10 @@ pub enum PutOutcome {
     Reused,
 }
 
-pub struct Capture<'a> {
+#[cfg(test)]
+struct Capture<'a> {
     engine: &'a Engine,
-    connection: MutexGuard<'a, Connection>,
+    connection: ConnectionGuard<'a>,
     parent: Option<RootId>,
     delta: Option<DeltaRecord>,
     active: bool,
@@ -536,8 +1099,9 @@ pub struct Capture<'a> {
     fault: Option<FaultPoint>,
 }
 
+#[cfg(test)]
 impl<'a> Capture<'a> {
-    pub fn put_object_if_absent(
+    fn put_object_if_absent(
         &mut self,
         id: ObjectId,
         canonical_bytes: &[u8],
@@ -546,7 +1110,7 @@ impl<'a> Capture<'a> {
         put_object_on_connection(self.engine, &self.connection, id, canonical_bytes)
     }
 
-    pub fn write_delta(&mut self, delta: &DeltaRecord) -> EngineResult<()> {
+    fn write_delta(&mut self, delta: &DeltaRecord) -> EngineResult<()> {
         self.ensure_active()?;
         delta.validate()?;
         if delta.parent != self.parent {
@@ -604,7 +1168,7 @@ impl<'a> Capture<'a> {
         Ok(())
     }
 
-    pub fn commit_root(mut self, root: RootRecord) -> EngineResult<()> {
+    fn commit_root(mut self, root: RootRecord) -> EngineResult<()> {
         self.ensure_active()?;
         if root.parent != self.parent {
             return Err(EngineError::ParentMismatch {
@@ -636,12 +1200,14 @@ impl<'a> Capture<'a> {
         if changed != 1 {
             return Err(EngineError::SchemaMismatch);
         }
+        drop(update);
         self.engine.sample_rollback_journal();
         self.engine.mark_statement()?;
         self.connection
             .execute_batch("COMMIT")
             .map_err(map_sqlite_error)?;
         self.active = false;
+        self.connection.transaction = false;
         self.engine.bump(|counters| {
             checked_add(&mut counters.transactions_committed, 1)?;
             checked_add(&mut counters.logical_root_bytes, root_record_len(&root)?)
@@ -663,10 +1229,12 @@ impl<'a> Capture<'a> {
     }
 }
 
+#[cfg(test)]
 impl Drop for Capture<'_> {
     fn drop(&mut self) {
         if self.active && self.connection.execute_batch("ROLLBACK").is_ok() {
             self.active = false;
+            self.connection.transaction = false;
             self.engine.bump_best_effort(|counters| {
                 checked_add(&mut counters.transactions_rolled_back, 1)
             });
@@ -680,6 +1248,177 @@ enum FaultPoint {
     BeforeVisibleRoot,
 }
 
+const TABLE_NAMES: [&str; 7] = [
+    "layerfs_authority",
+    "layerfs_deltas",
+    "layerfs_objects",
+    "layerfs_refs",
+    "layerfs_retained_roots",
+    "layerfs_roots",
+    "layerfs_store_meta",
+];
+const TABLE_SCHEMAS: [(&str, &str); 7] = [
+    (
+        "layerfs_store_meta",
+        "CREATE TABLE IF NOT EXISTS layerfs_store_meta (
+            store_id INTEGER PRIMARY KEY CHECK (store_id = 1),
+            format_marker TEXT NOT NULL,
+            schema_version INTEGER NOT NULL,
+            journal_mode TEXT NOT NULL,
+            synchronous INTEGER NOT NULL,
+            temp_store INTEGER NOT NULL,
+            mmap_size INTEGER NOT NULL,
+            visible_root BLOB
+        )",
+    ),
+    (
+        "layerfs_objects",
+        "CREATE TABLE IF NOT EXISTS layerfs_objects (
+            rowid INTEGER PRIMARY KEY,
+            object_id BLOB NOT NULL UNIQUE,
+            kind INTEGER NOT NULL,
+            canonical_length INTEGER NOT NULL,
+            canonical_bytes BLOB NOT NULL
+        )",
+    ),
+    (
+        "layerfs_roots",
+        "CREATE TABLE IF NOT EXISTS layerfs_roots (
+            root_id BLOB PRIMARY KEY,
+            directory_object BLOB NOT NULL,
+            parent_root BLOB
+        )",
+    ),
+    (
+        "layerfs_deltas",
+        "CREATE TABLE IF NOT EXISTS layerfs_deltas (
+            delta_id BLOB PRIMARY KEY,
+            parent_root BLOB,
+            child_root BLOB NOT NULL,
+            payload BLOB NOT NULL
+        )",
+    ),
+    (
+        "layerfs_authority",
+        "CREATE TABLE IF NOT EXISTS layerfs_authority (
+            authority_id INTEGER PRIMARY KEY CHECK (authority_id = 1),
+            store_id BLOB NOT NULL CHECK (length(store_id) = 32),
+            next_inode_serial INTEGER NOT NULL,
+            trusted_history INTEGER NOT NULL CHECK (trusted_history IN (0, 1))
+        )",
+    ),
+    (
+        "layerfs_refs",
+        "CREATE TABLE IF NOT EXISTS layerfs_refs (
+            name TEXT PRIMARY KEY,
+            generation INTEGER NOT NULL,
+            root_id BLOB NOT NULL CHECK (length(root_id) = 32)
+        )",
+    ),
+    (
+        "layerfs_retained_roots",
+        "CREATE TABLE IF NOT EXISTS layerfs_retained_roots (
+            root_id BLOB PRIMARY KEY CHECK (length(root_id) = 32)
+        )",
+    ),
+];
+
+fn preflight_schema(connection: &Connection) -> EngineResult<()> {
+    let mut statement = connection
+        .prepare(
+            "SELECT type, name FROM sqlite_schema
+             WHERE name NOT GLOB 'sqlite_*'
+             ORDER BY type, name",
+        )
+        .map_err(map_sqlite_error)?;
+    let mut rows = statement.query([]).map_err(map_sqlite_error)?;
+    let Some(first) = rows.next().map_err(map_sqlite_error)? else {
+        return Ok(());
+    };
+    if first.get::<_, String>(0).map_err(map_sqlite_error)? != "table"
+        || first.get::<_, String>(1).map_err(map_sqlite_error)? != TABLE_NAMES[0]
+    {
+        return Err(EngineError::SchemaMismatch);
+    }
+    for expected_name in TABLE_NAMES.into_iter().skip(1) {
+        let row = rows
+            .next()
+            .map_err(map_sqlite_error)?
+            .ok_or(EngineError::SchemaMismatch)?;
+        if row.get::<_, String>(0).map_err(map_sqlite_error)? != "table"
+            || row.get::<_, String>(1).map_err(map_sqlite_error)? != expected_name
+        {
+            return Err(EngineError::SchemaMismatch);
+        }
+    }
+    if rows.next().map_err(map_sqlite_error)?.is_some() {
+        return Err(EngineError::SchemaMismatch);
+    }
+    for (name, expected) in TABLE_SCHEMAS {
+        let actual = connection
+            .query_row(
+                "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+                params![name],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|_| EngineError::SchemaMismatch)?;
+        if schema_shape(&actual) != schema_shape(expected) {
+            return Err(EngineError::SchemaMismatch);
+        }
+    }
+    let metadata = connection
+        .query_row(
+            "SELECT format_marker, schema_version, journal_mode, synchronous, temp_store, mmap_size
+             FROM layerfs_store_meta WHERE store_id = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|_| EngineError::SchemaMismatch)?;
+    if !matches!(metadata, Some((ref marker, SCHEMA_VERSION, ref journal, 2, 1, 0))
+        if marker == FORMAT_MARKER && journal.eq_ignore_ascii_case("DELETE"))
+    {
+        return Err(EngineError::SchemaMismatch);
+    }
+    let authority = connection
+        .query_row(
+            "SELECT length(store_id), next_inode_serial, trusted_history
+             FROM layerfs_authority WHERE authority_id = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|_| EngineError::SchemaMismatch)?;
+    if !matches!(authority, Some((32, serial, trusted)) if serial >= 0 && matches!(trusted, 0 | 1))
+    {
+        return Err(EngineError::SchemaMismatch);
+    }
+    Ok(())
+}
+
+fn schema_shape(sql: &str) -> String {
+    sql.chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect::<String>()
+        .replace("ifnotexists", "")
+}
+
 fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
     let journal_mode = connection
         .query_row("PRAGMA journal_mode=DELETE", [], |row| {
@@ -687,7 +1426,9 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
         })
         .map_err(map_sqlite_error)?;
     connection
-        .execute_batch("PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0;")
+        .execute_batch(
+            "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0; PRAGMA cache_size=1280;",
+        )
         .map_err(map_sqlite_error)?;
     let synchronous = connection
         .query_row("PRAGMA synchronous", [], |row| row.get::<_, i64>(0))
@@ -698,16 +1439,26 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
     let mmap_size = connection
         .query_row("PRAGMA mmap_size", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
+    let page_size = connection
+        .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
+        .map_err(map_sqlite_error)?;
+    let cache_pages = connection
+        .query_row("PRAGMA cache_size", [], |row| row.get::<_, i64>(0))
+        .map_err(map_sqlite_error)?;
     let profile = SqliteProfile {
         journal_mode,
         synchronous,
         temp_store,
         mmap_size,
+        page_size,
+        cache_pages,
     };
     if !profile.journal_mode.eq_ignore_ascii_case("DELETE")
         || profile.synchronous != 2
         || profile.temp_store != 1
         || profile.mmap_size != 0
+        || profile.page_size != 4096
+        || profile.cache_pages != 1280
     {
         return Err(EngineError::ProfileMismatch);
     }
@@ -715,38 +1466,9 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
 }
 
 fn initialize_schema(connection: &Connection, profile: &SqliteProfile) -> EngineResult<()> {
-    connection
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS layerfs_store_meta (
-                store_id INTEGER PRIMARY KEY CHECK (store_id = 1),
-                format_marker TEXT NOT NULL,
-                schema_version INTEGER NOT NULL,
-                journal_mode TEXT NOT NULL,
-                synchronous INTEGER NOT NULL,
-                temp_store INTEGER NOT NULL,
-                mmap_size INTEGER NOT NULL,
-                visible_root BLOB
-            );
-            CREATE TABLE IF NOT EXISTS layerfs_objects (
-                rowid INTEGER PRIMARY KEY,
-                object_id BLOB NOT NULL UNIQUE,
-                kind INTEGER NOT NULL,
-                canonical_length INTEGER NOT NULL,
-                canonical_bytes BLOB NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS layerfs_roots (
-                root_id BLOB PRIMARY KEY,
-                directory_object BLOB NOT NULL,
-                parent_root BLOB
-            );
-            CREATE TABLE IF NOT EXISTS layerfs_deltas (
-                delta_id BLOB PRIMARY KEY,
-                parent_root BLOB,
-                child_root BLOB NOT NULL,
-                payload BLOB NOT NULL
-            );",
-        )
-        .map_err(map_sqlite_error)?;
+    for (_, schema) in TABLE_SCHEMAS {
+        connection.execute_batch(schema).map_err(map_sqlite_error)?;
+    }
     let existing = connection
         .query_row(
             "SELECT format_marker, schema_version, journal_mode, synchronous, temp_store, mmap_size
@@ -795,56 +1517,78 @@ fn initialize_schema(connection: &Connection, profile: &SqliteProfile) -> Engine
                 .map_err(map_sqlite_error)?;
         }
     }
+    let authority_exists = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM layerfs_authority WHERE authority_id = 1)",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(map_sqlite_error)?;
+    if !authority_exists {
+        let store_id = connection
+            .query_row("SELECT randomblob(32)", [], |row| row.get::<_, Vec<u8>>(0))
+            .map_err(map_sqlite_error)?;
+        connection.execute("INSERT INTO layerfs_authority (authority_id, store_id, next_inode_serial, trusted_history) VALUES (1, ?1, 0, 0)", params![store_id.as_slice()]).map_err(map_sqlite_error)?;
+    }
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug)]
-struct ObjectMeta {
-    row_id: i64,
-    kind: ObjectKind,
-    canonical_len: u64,
-    blob_len: u64,
-}
-
-fn object_meta(
+fn with_authenticated_canonical_on_connection<T>(
     engine: &Engine,
     connection: &Connection,
     id: ObjectId,
-) -> EngineResult<Option<ObjectMeta>> {
+    callback: impl FnOnce(ObjectKind, &[u8]) -> EngineResult<T>,
+) -> EngineResult<T> {
     engine.mark_statement()?;
     let mut statement = connection
-        .prepare_cached(
-            "SELECT rowid, kind, canonical_length, length(canonical_bytes)
-             FROM layerfs_objects WHERE object_id = ?1",
-        )
+        .prepare_cached("SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1")
         .map_err(map_sqlite_error)?;
-    let row = statement
-        .query_row(params![id.as_bytes().as_slice()], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, i64>(3)?,
-            ))
-        })
-        .optional()
+    let mut rows = statement
+        .query(params![id.as_bytes().as_slice()])
         .map_err(map_sqlite_error)?;
-    row.map(|(row_id, kind, canonical_len, blob_len)| {
-        let kind = ObjectKind::try_from(
-            u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
-        )?;
-        let canonical_len = u64::try_from(canonical_len)
-            .map_err(|_| EngineError::InvalidRecord("object length"))?;
-        let blob_len =
-            u64::try_from(blob_len).map_err(|_| EngineError::InvalidRecord("blob length"))?;
-        Ok(ObjectMeta {
-            row_id,
-            kind,
-            canonical_len,
-            blob_len,
-        })
-    })
-    .transpose()
+    let row = rows
+        .next()
+        .map_err(map_sqlite_error)?
+        .ok_or(EngineError::MissingObject(id))?;
+    let kind = row.get::<_, i64>(0).map_err(map_sqlite_error)?;
+    let length = row.get::<_, i64>(1).map_err(map_sqlite_error)?;
+    let bytes = match row.get_ref(2).map_err(map_sqlite_error)? {
+        ValueRef::Blob(bytes) => bytes,
+        _ => return Err(EngineError::InvalidRecord("object bytes")),
+    };
+    let kind = authenticate_borrowed(engine, id, kind, length, bytes)?;
+    callback(kind, bytes)
+}
+
+fn authenticate_borrowed(
+    engine: &Engine,
+    id: ObjectId,
+    kind: i64,
+    length: i64,
+    bytes: &[u8],
+) -> EngineResult<ObjectKind> {
+    let expected_kind = ObjectKind::try_from(
+        u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
+    )?;
+    let expected_length =
+        u64::try_from(length).map_err(|_| EngineError::InvalidRecord("object length"))?;
+    let object =
+        validate_identity(bytes, id).map_err(|cause| EngineError::MalformedObject { id, cause })?;
+    let actual_length = u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
+    if object.kind() != expected_kind || actual_length != expected_length {
+        return Err(EngineError::MalformedObject {
+            id,
+            cause: CoreError::LengthMismatch {
+                expected: expected_length,
+                actual: actual_length,
+            },
+        });
+    }
+    engine.bump(|counters| {
+        checked_add(&mut counters.objects_validated, 1)?;
+        checked_add(&mut counters.object_bytes_read, actual_length)
+    })?;
+    Ok(expected_kind)
 }
 
 fn put_object_on_connection(
@@ -858,32 +1602,18 @@ fn put_object_on_connection(
     let canonical_len =
         u64::try_from(canonical_bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
     engine.bump(|counters| checked_add(&mut counters.objects_validated, 1))?;
-    if let Some(meta) = object_meta(engine, connection, id)? {
-        if meta.canonical_len != canonical_len
-            || meta.kind != object.kind()
-            || meta.blob_len != canonical_len
-        {
+    match with_authenticated_canonical_on_connection(engine, connection, id, |kind, stored| {
+        if kind != object.kind() || stored != canonical_bytes {
             return Err(EngineError::ImmutableConflict("object", id));
         }
-        engine.mark_statement()?;
-        let mut select = connection
-            .prepare_cached("SELECT canonical_bytes FROM layerfs_objects WHERE object_id = ?1")
-            .map_err(map_sqlite_error)?;
-        let stored = select
-            .query_row(params![id.as_bytes().as_slice()], |row| {
-                row.get::<_, Vec<u8>>(0)
-            })
-            .map_err(map_sqlite_error)?;
-        if stored != canonical_bytes {
-            return Err(EngineError::ImmutableConflict("object", id));
+        Ok(())
+    }) {
+        Ok(()) => {
+            engine.bump(|counters| checked_add(&mut counters.objects_reused, 1))?;
+            return Ok(PutOutcome::Reused);
         }
-        validate_identity(&stored, id)
-            .map_err(|cause| EngineError::MalformedObject { id, cause })?;
-        engine.bump(|counters| {
-            checked_add(&mut counters.objects_reused, 1)?;
-            checked_add(&mut counters.object_bytes_read, canonical_len)
-        })?;
-        return Ok(PutOutcome::Reused);
+        Err(EngineError::MissingObject(missing)) if missing == id => {}
+        Err(error) => return Err(error),
     }
 
     engine.mark_statement()?;
@@ -909,124 +1639,18 @@ fn put_object_on_connection(
     Ok(PutOutcome::Created)
 }
 
-fn read_object_range_on_connection(
-    engine: &Engine,
-    connection: &Connection,
-    id: ObjectId,
-    range: Range<u64>,
-) -> EngineResult<Vec<u8>> {
-    let meta = object_meta(engine, connection, id)?.ok_or(EngineError::MissingObject(id))?;
-    if meta.canonical_len != meta.blob_len {
-        return Err(EngineError::ShortRead {
-            expected: meta.canonical_len,
-            actual: meta.blob_len,
-        });
-    }
-    if range.start > range.end || range.end > meta.canonical_len {
-        return Err(EngineError::InvalidRange {
-            start: range.start,
-            end: range.end,
-            length: meta.canonical_len,
-        });
-    }
-    authenticate_blob(engine, connection, id, meta)?;
-    let requested = range
-        .end
-        .checked_sub(range.start)
-        .ok_or(EngineError::CounterOverflow)?;
-    let requested_usize = usize::try_from(requested).map_err(|_| EngineError::CounterOverflow)?;
-    let start_usize = usize::try_from(range.start).map_err(|_| EngineError::CounterOverflow)?;
-    let mut output = vec![0_u8; requested_usize];
-    if requested_usize != 0 {
-        let blob = connection
-            .blob_open(
-                "main",
-                OBJECTS_TABLE,
-                OBJECTS_BLOB_COLUMN,
-                meta.row_id,
-                true,
-            )
-            .map_err(map_sqlite_error)?;
-        match blob.read_at_exact(&mut output, start_usize) {
-            Ok(()) => {}
-            Err(rusqlite::Error::BlobSizeError) => {
-                return Err(EngineError::ShortRead {
-                    expected: requested,
-                    actual: 0,
-                })
-            }
-            Err(error) => return Err(map_sqlite_error(error)),
-        }
-    }
-    engine.bump(|counters| {
-        checked_add(&mut counters.range_bytes_requested, requested)?;
-        checked_add(&mut counters.range_bytes_returned, requested)
-    })?;
-    Ok(output)
-}
-
-fn authenticate_blob(
-    engine: &Engine,
-    connection: &Connection,
-    id: ObjectId,
-    meta: ObjectMeta,
-) -> EngineResult<ObjectSummary> {
-    let blob = connection
-        .blob_open(
-            "main",
-            OBJECTS_TABLE,
-            OBJECTS_BLOB_COLUMN,
-            meta.row_id,
-            true,
-        )
-        .map_err(map_sqlite_error)?;
-    let actual = ObjectId::from_reader(blob).map_err(|error| EngineError::Sqlite {
-        kind: SqliteErrorKind::Io,
-        message: error.to_string(),
-    })?;
-    if actual != id {
-        return Err(EngineError::IdentityMismatch {
-            expected: id,
-            actual,
-        });
-    }
-    let blob = connection
-        .blob_open(
-            "main",
-            OBJECTS_TABLE,
-            OBJECTS_BLOB_COLUMN,
-            meta.row_id,
-            true,
-        )
-        .map_err(map_sqlite_error)?;
-    let summary =
-        validate_object_from(blob).map_err(|cause| EngineError::MalformedObject { id, cause })?;
-    if summary.kind != meta.kind || summary.canonical_len != meta.canonical_len {
-        return Err(EngineError::MalformedObject {
-            id,
-            cause: CoreError::LengthMismatch {
-                expected: meta.canonical_len,
-                actual: summary.canonical_len,
-            },
-        });
-    }
-    engine.bump(|counters| {
-        checked_add(&mut counters.objects_validated, 1)?;
-        checked_add(&mut counters.object_bytes_read, meta.canonical_len)
-    })?;
-    Ok(summary)
-}
-
 fn authenticate_directory_object(
     engine: &Engine,
     connection: &Connection,
     id: ObjectId,
 ) -> EngineResult<()> {
-    let meta = object_meta(engine, connection, id)?.ok_or(EngineError::MissingObject(id))?;
-    if meta.kind != ObjectKind::Directory {
-        return Err(EngineError::InvalidRecord("root directory object"));
-    }
-    authenticate_blob(engine, connection, id, meta).map(|_| ())
+    with_authenticated_canonical_on_connection(engine, connection, id, |kind, _| {
+        if kind == ObjectKind::Directory {
+            Ok(())
+        } else {
+            Err(EngineError::InvalidRecord("root directory object"))
+        }
+    })
 }
 
 fn visible_root_on_connection(
@@ -1120,6 +1744,7 @@ fn decode_delta_parts(
     Ok(delta)
 }
 
+#[cfg(test)]
 fn write_root_on_connection(
     engine: &Engine,
     connection: &Connection,
@@ -1167,12 +1792,14 @@ fn write_root_on_connection(
     Ok(())
 }
 
+#[cfg(test)]
 fn root_record_len(root: &RootRecord) -> EngineResult<u64> {
     ROOT_RECORD_BASE_BYTES
         .checked_add(if root.parent.is_some() { 32 } else { 0 })
         .ok_or(EngineError::CounterOverflow)
 }
 
+#[cfg(test)]
 fn delta_record_len(delta: &DeltaRecord) -> EngineResult<u64> {
     let payload = u64::try_from(delta.payload.len()).map_err(|_| EngineError::CounterOverflow)?;
     let parent = if delta.parent.is_some() { 32 } else { 0 };
@@ -1221,13 +1848,27 @@ fn map_sqlite_error(error: rusqlite::Error) -> EngineError {
 mod tests {
     use super::*;
     use layerfs_core::{encode_object, Object};
+    use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
 
+    #[test]
+    fn foreign_hot_journal_child() {
+        let Some(path) = std::env::var_os("LAYERFS_FOREIGN_HOT_JOURNAL") else {
+            return;
+        };
+        let connection = Connection::open(path).unwrap();
+        connection.execute_batch("BEGIN IMMEDIATE").unwrap();
+        connection
+            .execute("UPDATE foreign_table SET value = 'mutated'", [])
+            .unwrap();
+        std::process::exit(92);
+    }
+
     fn test_path() -> PathBuf {
         let id = NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!("layerfs-engine-{id}.sqlite"))
+        std::env::temp_dir().join(format!("layerfs-engine-{}-{id}.sqlite", std::process::id()))
     }
 
     fn bytes_object(value: &[u8]) -> (ObjectId, Vec<u8>) {
@@ -1406,34 +2047,248 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_error_mapping_preserves_busy_and_no_space() {
-        let busy = rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error {
-                code: rusqlite::ErrorCode::DatabaseBusy,
-                extended_code: 5,
-            },
-            None,
-        );
+    fn sqlite_error_mapping_preserves_required_classes() {
+        for (code, expected) in [
+            (rusqlite::ErrorCode::DatabaseBusy, SqliteErrorKind::Busy),
+            (rusqlite::ErrorCode::DatabaseLocked, SqliteErrorKind::Locked),
+            (
+                rusqlite::ErrorCode::PermissionDenied,
+                SqliteErrorKind::PermissionDenied,
+            ),
+            (rusqlite::ErrorCode::DiskFull, SqliteErrorKind::NoSpace),
+            (
+                rusqlite::ErrorCode::DatabaseCorrupt,
+                SqliteErrorKind::Corrupt,
+            ),
+            (rusqlite::ErrorCode::ReadOnly, SqliteErrorKind::ReadOnly),
+            (
+                rusqlite::ErrorCode::ConstraintViolation,
+                SqliteErrorKind::Constraint,
+            ),
+            (rusqlite::ErrorCode::SystemIoFailure, SqliteErrorKind::Io),
+        ] {
+            assert!(matches!(
+                map_sqlite_error(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error {
+                        code,
+                        extended_code: 0,
+                    },
+                    None,
+                )),
+                EngineError::Sqlite { kind, .. } if kind == expected
+            ));
+        }
+    }
+
+    #[test]
+    fn admission_never_mutates_foreign_or_incomplete_databases() {
+        let foreign = test_path();
+        let connection = Connection::open(&foreign).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE foreign_data (value TEXT); INSERT INTO foreign_data VALUES ('keep');",
+            )
+            .unwrap();
+        drop(connection);
+        let before = fs::read(&foreign).unwrap();
         assert!(matches!(
-            map_sqlite_error(busy),
-            EngineError::Sqlite {
-                kind: SqliteErrorKind::Busy,
-                ..
-            }
+            Engine::open(&foreign),
+            Err(EngineError::SchemaMismatch)
         ));
-        let full = rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error {
-                code: rusqlite::ErrorCode::DiskFull,
-                extended_code: 13,
-            },
-            None,
+        assert_eq!(fs::read(&foreign).unwrap(), before);
+        let connection = Connection::open(&foreign).unwrap();
+        assert_eq!(
+            connection
+                .query_row("SELECT value FROM foreign_data", [], |row| row
+                    .get::<_, String>(0))
+                .unwrap(),
+            "keep"
         );
+        drop(connection);
+        fs::remove_file(&foreign).unwrap();
+
+        for table in ["layerfs_store_meta", "layerfs_authority"] {
+            let path = test_path();
+            drop(Engine::open(&path).unwrap());
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute(&format!("DELETE FROM {table}"), [])
+                .unwrap();
+            drop(connection);
+            let before = fs::read(&path).unwrap();
+            assert!(matches!(
+                Engine::open(&path),
+                Err(EngineError::SchemaMismatch)
+            ));
+            assert_eq!(fs::read(&path).unwrap(), before, "opening replaced {table}");
+            let connection = Connection::open(&path).unwrap();
+            let count = connection
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .unwrap();
+            assert_eq!(count, 0);
+            drop(connection);
+            fs::remove_file(path).unwrap();
+        }
+
+        let impostor = test_path();
+        drop(Engine::open(&impostor).unwrap());
+        let connection = Connection::open(&impostor).unwrap();
+        connection
+            .execute_batch(
+                "ALTER TABLE layerfs_authority RENAME TO saved_authority;
+                 CREATE TABLE layerfs_authority (
+                    authority_id INTEGER PRIMARY KEY,
+                    store_id BLOB NOT NULL,
+                    next_inode_serial INTEGER NOT NULL,
+                    trusted_history INTEGER NOT NULL
+                 );
+                 INSERT INTO layerfs_authority SELECT * FROM saved_authority;
+                 DROP TABLE saved_authority;",
+            )
+            .unwrap();
+        let authority = connection
+            .query_row(
+                "SELECT authority_id, store_id, next_inode_serial, trusted_history FROM layerfs_authority",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, i64>(3)?,
+                    ))
+                },
+            )
+            .unwrap();
+        drop(connection);
+        let before = fs::read(&impostor).unwrap();
         assert!(matches!(
-            map_sqlite_error(full),
-            EngineError::Sqlite {
-                kind: SqliteErrorKind::NoSpace,
-                ..
-            }
+            Engine::open(&impostor),
+            Err(EngineError::SchemaMismatch)
         ));
+        assert_eq!(fs::read(&impostor).unwrap(), before);
+        let connection = Connection::open(&impostor).unwrap();
+        let after = connection
+            .query_row(
+                "SELECT authority_id, store_id, next_inode_serial, trusted_history FROM layerfs_authority",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, i64>(3)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(after, authority);
+        drop(connection);
+        fs::remove_file(impostor).unwrap();
+
+        let escaped = test_path();
+        drop(Engine::open(&escaped).unwrap());
+        let connection = Connection::open(&escaped).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE sqliteX_data (value TEXT);
+                 INSERT INTO sqliteX_data VALUES ('keep');
+                 CREATE TRIGGER sqliteX_trigger AFTER INSERT ON sqliteX_data
+                 BEGIN UPDATE sqliteX_data SET value = value; END;",
+            )
+            .unwrap();
+        drop(connection);
+        let before = fs::read(&escaped).unwrap();
+        assert!(matches!(
+            Engine::open(&escaped),
+            Err(EngineError::SchemaMismatch)
+        ));
+        assert_eq!(fs::read(&escaped).unwrap(), before);
+        let connection = Connection::open(&escaped).unwrap();
+        assert_eq!(
+            connection
+                .query_row("SELECT value FROM sqliteX_data", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap(),
+            "keep"
+        );
+        drop(connection);
+        fs::remove_file(escaped).unwrap();
+    }
+
+    #[test]
+    fn reconciliation_read_never_creates_missing_or_accepts_replaced_store() {
+        let path = test_path();
+        let original = Engine::open(&path).unwrap();
+        let store_id = original.store_id().unwrap();
+        drop(original);
+        let saved = path.with_extension("saved");
+        fs::rename(&path, &saved).unwrap();
+        assert!(read_ref_reconcile_readonly(&path, "main", store_id).is_err());
+        assert!(
+            !path.exists(),
+            "read-only reconciliation created a database"
+        );
+
+        let replacement = Engine::open(&path).unwrap();
+        assert_ne!(replacement.store_id().unwrap(), store_id);
+        drop(replacement);
+        assert!(matches!(
+            read_ref_reconcile_readonly(&path, "main", store_id),
+            Err(EngineError::InvalidRecord("reconciliation StoreId"))
+        ));
+        fs::remove_file(path).unwrap();
+        fs::remove_file(saved).unwrap();
+    }
+
+    #[test]
+    fn read_only_admission_preserves_foreign_hot_journal_bytes() {
+        let path = test_path();
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "PRAGMA journal_mode=DELETE;
+                 CREATE TABLE foreign_table (value TEXT NOT NULL);
+                 INSERT INTO foreign_table VALUES ('prior');",
+            )
+            .unwrap();
+        drop(connection);
+        let database_before = fs::read(&path).unwrap();
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tests::foreign_hot_journal_child"])
+            .env("LAYERFS_FOREIGN_HOT_JOURNAL", &path)
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(92));
+        let journal = PathBuf::from(format!("{}-journal", path.display()));
+        let journal_before = fs::read(&journal).unwrap();
+        assert!(Engine::open(&path).is_err());
+        assert_eq!(fs::read(&path).unwrap(), database_before);
+        assert_eq!(fs::read(&journal).unwrap(), journal_before);
+        fs::remove_file(journal).unwrap();
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn two_verified_snapshot_readers_coexist() {
+        let path = test_path();
+        let first = Engine::open(&path).unwrap();
+        let second = Engine::open(&path).unwrap();
+        let guard = first.lock_connection().unwrap();
+        guard
+            .query_row(
+                "SELECT trusted_history FROM layerfs_authority WHERE authority_id = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap();
+        assert_eq!(second.read_ref("main").unwrap(), None);
+        drop(guard);
+        drop(first);
+        drop(second);
+        fs::remove_file(path).unwrap();
     }
 }

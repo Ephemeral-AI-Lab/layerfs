@@ -1,8 +1,8 @@
 //! Candidate authenticated transition bytes.  Semantic ordering remains in `Delta`.
 
-use crate::content::persistence::{
-    canonical_mapping, decode_mapping, mapping_bytes, DELTA_INDEX_TAG, DELTA_PAGE_TAG,
-};
+#[cfg(test)]
+use crate::content::persistence::mapping_bytes;
+use crate::content::persistence::{decode_mapping, DELTA_INDEX_TAG, DELTA_PAGE_TAG};
 use crate::cow::{RootHandle, TreeNode};
 use crate::format::CanonicalPath;
 use crate::identity::ObjectId;
@@ -41,34 +41,13 @@ pub struct DecodedTransition {
     pub pages: Vec<ObjectId>,
 }
 
-pub fn encode_genesis(child: ObjectId) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn encode_genesis(child: ObjectId) -> CoreResult<Vec<u8>> {
     encode_transition(None, child, 0, &[])
 }
 
-pub fn encode_genesis_with_pages(
-    child: ObjectId,
-    entry_count: u32,
-    pages: &[ObjectId],
-) -> CoreResult<Vec<u8>> {
-    if entry_count != 0 || !pages.is_empty() {
-        return Err(CoreError::DeltaConflict);
-    }
-    encode_transition(None, child, entry_count, pages)
-}
-
-pub fn encode_genesis_with_operations(
-    child: ObjectId,
-    entry_count: u32,
-    pages: &[ObjectId],
-    operations: &[TransitionOperation],
-) -> CoreResult<Vec<u8>> {
-    if !operations.is_empty() || entry_count != 0 || !pages.is_empty() {
-        return Err(CoreError::DeltaConflict);
-    }
-    encode_transition(None, child, entry_count, pages)
-}
-
-pub fn encode_change(
+#[cfg(test)]
+pub(crate) fn encode_change(
     parent: ObjectId,
     child: ObjectId,
     entry_count: u32,
@@ -77,6 +56,7 @@ pub fn encode_change(
     encode_transition(Some(parent), child, entry_count, pages)
 }
 
+#[cfg(test)]
 fn encode_transition(
     parent: Option<ObjectId>,
     child: ObjectId,
@@ -96,10 +76,6 @@ fn encode_transition(
         body.extend_from_slice(page.as_bytes());
     }
     mapping_bytes(DELTA_INDEX_TAG, &body)
-}
-
-pub fn canonical_genesis(child: ObjectId) -> CoreResult<(ObjectId, Vec<u8>)> {
-    canonical_mapping(DELTA_INDEX_TAG, &encode_genesis_body(child)?)
 }
 
 pub fn decode_transition(payload: &[u8]) -> CoreResult<DecodedTransition> {
@@ -184,16 +160,8 @@ pub fn decode_mapping_transition(bytes: &[u8]) -> CoreResult<DecodedTransition> 
     decode_transition(payload)
 }
 
-fn encode_genesis_body(child: ObjectId) -> CoreResult<Vec<u8>> {
-    let mut body = Vec::with_capacity(1 + 32 + 8);
-    body.push(0);
-    body.extend_from_slice(child.as_bytes());
-    body.extend_from_slice(&0_u32.to_be_bytes());
-    body.extend_from_slice(&0_u32.to_be_bytes());
-    Ok(body)
-}
-
-pub fn encode_delta_page(entries: &[TransitionOperation]) -> CoreResult<Vec<u8>> {
+#[cfg(test)]
+pub(crate) fn encode_delta_page(entries: &[TransitionOperation]) -> CoreResult<Vec<u8>> {
     let count = u32::try_from(entries.len()).map_err(|_| CoreError::LengthOverflow)?;
     let mut body = Vec::new();
     body.extend_from_slice(&count.to_be_bytes());
@@ -359,6 +327,7 @@ pub fn decode_delta_page(payload: &[u8]) -> CoreResult<Vec<TransitionOperation>>
     Ok(entries)
 }
 
+#[cfg(test)]
 fn encode_entry(entry: &TransitionOperation, output: &mut Vec<u8>) -> CoreResult<()> {
     match entry {
         TransitionOperation::Add { path, after } => {
@@ -395,6 +364,7 @@ fn encode_entry(entry: &TransitionOperation, output: &mut Vec<u8>) -> CoreResult
     Ok(())
 }
 
+#[cfg(test)]
 fn encode_path(output: &mut Vec<u8>, kind: u8, path: &[u8]) -> CoreResult<()> {
     CanonicalPath::from_bytes(path)?;
     output.push(kind);

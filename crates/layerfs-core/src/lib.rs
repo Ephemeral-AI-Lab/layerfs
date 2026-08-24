@@ -13,14 +13,14 @@ pub mod delta;
 mod error;
 pub mod format;
 pub mod identity;
+pub mod inode;
 pub mod limits;
+pub mod metadata;
+pub mod namespace;
+pub mod namespace_codec;
 pub mod object;
 pub mod validation;
 
-pub use content::{
-    ChunkReference, EditCounters, EditResult, FullReplaceTiming, LogicalFile, RangeRead,
-    MAX_REJOIN_WINDOW_BYTES,
-};
 pub use error::{CoreError, CoreResult};
 pub use format::{CanonicalName, CanonicalPath};
 pub use identity::{chunk_id, ChunkId, ObjectId};
@@ -30,3 +30,14 @@ pub use object::{
     validate_identity, validate_object_from, DirectoryEntry, Object, ObjectKind, ObjectReference,
     ObjectSummary,
 };
+
+#[cfg(test)]
+extern crate self as layerfs_core;
+
+#[cfg(test)]
+mod legacy_selected_goldens {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/phase4_selected_goldens.rs.inc"
+    ));
+}

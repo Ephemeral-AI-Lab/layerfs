@@ -1,0 +1,14 @@
+stage	transactions	commits	objects_created	objects_reused	connections	q_current	q_high_water	root_relation
+S0	1	1	12	0	2	0	0	fresh canonical empty root
+S1	3	3	127	156	2	0	4194304	root A, exact cold oracle
+S2	5	3	127	698	2	0	4194304	same authority-bearing root A, exact-live no-write verification
+S3	6	4	137	701	2	0	4194304	single-link APFS same-size clone/patch
+S4	7	5	147	704	2	0	4194304	middle insert
+S5	8	6	156	707	2	0	4194304	middle delete
+S6	9	7	173	713	2	0	4194304	truncate plus managed rename and immediate retained-root oracle
+S7	9	7	173	713	2	0	4194304	Bash execute, no publication
+S8	9	7	173	713	2	0	4194304	Bash/direct/mmap native mutations, no publication
+S9	10	8	277	941	2	0	4194304	external full scan, semantic reuse, one publication COMMIT
+S10	0	0	0	0	2	0	4194304	fresh Store reopen and exact native/tree/history oracles
+S11	5	5	10	3	2	0	4194304	genuinely divergent retained branch plus protected rollback
+S12	0	0	0	0	2	0	4194304	fresh post-compaction reopen and every retained root

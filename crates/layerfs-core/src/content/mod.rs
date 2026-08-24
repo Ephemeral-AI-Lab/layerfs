@@ -1,5 +1,7 @@
 //! Unencoded logical file content over immutable CAS chunks.
 
+#![allow(dead_code)] // Private v1/v2 compatibility model retained for goldens only.
+
 use std::io::{Cursor, Read};
 use std::ops::Range;
 use std::time::Instant;
@@ -9,13 +11,16 @@ use crate::cdc::FastCdc;
 use crate::limits::MAX_CHILD_REFERENCES;
 use crate::{CoreError, CoreResult, ObjectId};
 
+pub mod extent;
+pub mod extent_codec;
 pub mod persistence;
+pub mod rope;
 
-pub const MAX_REJOIN_WINDOW_BYTES: u64 = 1024 * 1024;
+pub(crate) const MAX_REJOIN_WINDOW_BYTES: u64 = 1024 * 1024;
 const REJOIN_CONFIRM_CHUNKS: usize = 2;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct FullReplaceTiming {
+pub(crate) struct FullReplaceTiming {
     pub source_read_ns: u128,
     pub cdc_ns: u128,
     pub cas_publish_ns: u128,
@@ -23,7 +28,7 @@ pub struct FullReplaceTiming {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ChunkReference {
+pub(crate) struct ChunkReference {
     object_id: ObjectId,
     length: u64,
 }
@@ -43,7 +48,7 @@ impl ChunkReference {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LogicalFile {
+pub(crate) struct LogicalFile {
     chunks: Vec<ChunkReference>,
     length: u64,
 }
@@ -417,7 +422,7 @@ impl LogicalFile {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct EditCounters {
+pub(crate) struct EditCounters {
     pub cdc_bytes_scanned: u64,
     pub chunks_reused: u64,
     pub chunks_created: u64,
@@ -426,7 +431,7 @@ pub struct EditCounters {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EditResult {
+pub(crate) struct EditResult {
     file: LogicalFile,
     counters: EditCounters,
 }
@@ -618,7 +623,7 @@ fn validate_chunk(cas: &InMemoryCas, reference: ChunkReference) -> CoreResult<&[
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct RangeRead {
+pub(crate) struct RangeRead {
     bytes: Vec<u8>,
     chunks_read: usize,
 }
